@@ -24,7 +24,7 @@ struct ProviderListPage {
   build() {
     Column() {
       Row() {
-        Text('供应商')
+        Text('AI 服务商')
           .fontSize(Tokens.title)
           .fontWeight(FontWeight.Bold)
           .fontColor(Tokens.text)
@@ -138,7 +138,7 @@ struct ProviderListPage {
   @Builder
   empty() {
     Column() {
-      Text('还没有供应商')
+      Text('还没有 AI 服务商')
         .fontSize(16)
         .fontColor(Tokens.text)
       Text('点右上角添加，先选 OpenAI / Anthropic / Gemini / xAI / Kimi / OpenRouter。')
@@ -168,7 +168,7 @@ struct ProviderListPage {
       this.rows = providerStore.instances.slice();
       this.ready = true;
       if (providerStore.jsonLoadFailed) {
-        this.message = '供应商档案读坏了，先别保存';
+        this.message = 'AI 服务商档案读坏了，先别保存';
       }
     });
   }

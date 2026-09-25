@@ -62,7 +62,7 @@ export function requireProviderRoot(raw: string): string {
   if (lower.startsWith('https://')) {
     const rest = root.substring('https://'.length);
     if (!rest || rest.indexOf('@') >= 0 || rest.indexOf(' ') >= 0 || rest.indexOf('#') >= 0) {
-      throw new Error('供应商根不合法');
+      throw new Error('AI 服务商地址不合法');
     }
     return root;
   }
@@ -78,9 +78,9 @@ export function requireProviderRoot(raw: string): string {
     if (isPrivateHttpHost(host)) {
       return root;
     }
-    throw new Error('供应商根只有 https，或本机/局域网 http');
+    throw new Error('AI 服务商地址只能是 https，或本机/局域网 http');
   }
-  throw new Error('供应商根必须是 https://');
+  throw new Error('AI 服务商地址必须是 https://');
 }
 
 export function chatCompletionsUrl(root: string): string {
@@ -377,6 +377,28 @@ export class LoopTurn {
 
 export const WRITE_GRANT_MARK: string = '__NEED_WRITE_GRANT__';
 
+/** 一次任务最多几轮工具。安卓、iOS 是 200 轮加重复检测;原来的 8 轮,稍复杂的任务就会半路停。 */
+export const MAX_TOOL_ROUNDS: number = 50;
+/** 同一个工具、同样的参数:第 3 次起提醒模型换做法,第 6 次停下。 */
+export const LOOP_WARN_AT: number = 3;
+export const LOOP_STOP_AT: number = 6;
+
+export class ToolLoopGuard {
+  private counts: Map<string, number> = new Map();
+
+  /** 记一次已经执行的调用,返回这是第几次用同样的参数调用它。 */
+  note(name: string, args: string): number {
+    const key = `${name}\u0000${args}`;
+    const times = (this.counts.get(key) ?? 0) + 1;
+    this.counts.set(key, times);
+    return times;
+  }
+}
+
+export function loopWarning(name: string, times: number): string {
+  return `\n(提醒:这是第 ${times} 次用同样的参数调用 ${name},结果不会变。换个做法,或者直接回答用户。)`;
+}
+
 export function htmlToText(raw: string): string {
   return raw
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -463,6 +485,22 @@ export function applyToolDelta(acc: ToolCall[], json: object): ToolCall[] {
   return next;
 }
 
+/**
+ * 工具参数是不是完整的 JSON。模型写参数写到一半被截断(输出上限、断流)时是半截 JSON,
+ * 这种调用不能执行:每个参数都会读成空,memory_write 会存一条空记忆还报「已写入」。
+ */
+export function toolArgsComplete(raw: string): boolean {
+  if (raw.trim().length === 0) {
+    return true;
+  }
+  try {
+    JSON.parse(raw);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
 export function toolArg(raw: string, key: string): string {
   try {
     const obj = JSON.parse(raw) as Record<string, Object>;
@@ -517,7 +555,18 @@ export function localToolSchemaJson(): string {
     '{"type":"function","function":{"name":"open_url","description":"Open an http(s) link in the in-app browser.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
     '{"type":"function","function":{"name":"web_fetch","description":"Download a public https page as text.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
     '{"type":"function","function":{"name":"browser_use","description":"Open or manage up to 3 in-app browser tabs.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"action":{"type":"string"},"url":{"type":"string"},"tab_id":{"type":"string"}},"required":["tool_title","action"]}}},' +
-    '{"type":"function","function":{"name":"mcp_call","description":"Call a configured HTTP MCP tool.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"},"name":{"type":"string"},"arguments":{"type":"string"}},"required":["tool_title","server","name"]}}}' +
+    '{"type":"function","function":{"name":"mcp_call","description":"Call a configured HTTP MCP tool.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"},"name":{"type":"string"},"arguments":{"type":"string"}},"required":["tool_title","server","name"]}}},' +
+    // 手机能力(PhoneTools.ets)。安卓、iOS 用沙箱里的设备命令做同样的事。
+    '{"type":"function","function":{"name":"device_info","description":"Battery level and charging state, device model, OS version and the current local time.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
+    '{"type":"function","function":{"name":"clipboard_write","description":"Copy text to the phone clipboard.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"text":{"type":"string"}},"required":["tool_title","text"]}}},' +
+    '{"type":"function","function":{"name":"set_alarm","description":"Set a phone alarm at hour:minute (24h), next occurrence.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"hour":{"type":"integer"},"minute":{"type":"integer"},"label":{"type":"string"}},"required":["tool_title","hour","minute"]}}},' +
+    '{"type":"function","function":{"name":"set_reminder","description":"One-time reminder notification at a local date and time, format YYYY-MM-DD HH:mm.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"time":{"type":"string"},"title":{"type":"string"}},"required":["tool_title","time","title"]}}},' +
+    '{"type":"function","function":{"name":"notify","description":"Post a notification on this phone now.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"}},"required":["tool_title","text"]}}},' +
+    '{"type":"function","function":{"name":"flashlight","description":"Turn the flashlight on or off.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"on":{"type":"boolean"}},"required":["tool_title","on"]}}},' +
+    '{"type":"function","function":{"name":"open_app_link","description":"Open a link or app URL with the system (browser, maps, other apps). For pages to read inside this app use open_url.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
+    '{"type":"function","function":{"name":"dial","description":"Open the phone dialer with a number filled in; the user presses call.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"number":{"type":"string"}},"required":["tool_title","number"]}}},' +
+    '{"type":"function","function":{"name":"location","description":"Current location of this phone: coordinates and, when available, the place name.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
+    '{"type":"function","function":{"name":"weather","description":"Current weather and a 3-day forecast. Uses the phone location unless a city is given.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"city":{"type":"string"}},"required":["tool_title"]}}}' +
     ']';
 }
 
@@ -885,7 +934,34 @@ export function shouldFailover(message: string): boolean {
     text.indexOf('rate limit') >= 0 ||
     text.indexOf('rate_limit') >= 0 ||
     text.indexOf('429') >= 0 ||
-    text.indexOf('timeout') >= 0;
+    text.indexOf('timeout') >= 0 ||
+    text.indexOf('stream ended') >= 0;
+}
+
+/**
+ * 给人看的报错。内部判断(shouldFailover)仍用原文,只在显示时换成中文,并说下一步怎么做。
+ */
+export function friendlyModelError(message: string): string {
+  const text = message.toLowerCase();
+  if (text.indexOf('unauthorized') >= 0 || text.indexOf('http 401') >= 0 || text.indexOf('http 403') >= 0) {
+    return 'AI 服务商拒绝了钥匙:到「AI 服务商」里检查钥匙或重新登录';
+  }
+  if (text.indexOf('429') >= 0 || text.indexOf('rate limit') >= 0 || text.indexOf('rate_limit') >= 0) {
+    return 'AI 服务商说请求太频繁,稍后再试';
+  }
+  if (text.indexOf('overloaded') >= 0) {
+    return 'AI 服务商现在太忙,稍后再试或换一个模型';
+  }
+  if (text.indexOf('stream ended') >= 0) {
+    return '回答中途断了,点「重新生成」再试';
+  }
+  if (text.indexOf('http 5') >= 0) {
+    return 'AI 服务商那边出错了,稍后再试';
+  }
+  if (text.indexOf('timeout') >= 0) {
+    return '等 AI 服务商回话超时了,检查网络后再试';
+  }
+  return message;
 }
 
 export function usageFromJson(json: object): number[] {
@@ -1102,7 +1178,14 @@ export function responsesErrorFromJson(json: object): string {
     return text.length > 0 ? text : 'response.failed';
   }
   if (`${obj['type'] ?? ''}` === 'error') {
-    return `${obj['message'] ?? ''}`.trim();
+    // Codex 把原因放在顶层 message;Anthropic 流中途出错(比如 overloaded)是
+    // {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}。
+    // 原来只读顶层,Anthropic 的读成空串,半截回答被当成完整回答。
+    const err = obj['error'] as Record<string, Object> | undefined;
+    const kind = err ? `${err['type'] ?? ''}`.trim() : '';
+    const text = `${obj['message'] ?? (err ? err['message'] ?? '' : '')}`.trim();
+    const joined = kind.length > 0 ? `${kind}: ${text}` : text;
+    return joined.length > 0 ? joined : 'error';
   }
   return '';
 }
@@ -1177,4 +1260,132 @@ export function accountIdFromIdToken(token: string): string {
   } catch (_err) {
     return '';
   }
+}
+
+/** 公历时间点(本地时区),给定时提醒用。 */
+export class LocalDateTime {
+  year: number = 0;
+  month: number = 0;
+  day: number = 0;
+  hour: number = 0;
+  minute: number = 0;
+}
+
+/** 读「YYYY-MM-DD HH:mm」或 ISO「YYYY-MM-DDTHH:mm」;读不出来或已经过去返回 null。 */
+export function parseReminderTime(raw: string, now: number): LocalDateTime | null {
+  const m = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})/.exec(raw);
+  if (!m) {
+    return null;
+  }
+  const out = new LocalDateTime();
+  out.year = Number(m[1]);
+  out.month = Number(m[2]);
+  out.day = Number(m[3]);
+  out.hour = Number(m[4]);
+  out.minute = Number(m[5]);
+  if (out.month < 1 || out.month > 12 || out.day < 1 || out.day > 31 || out.hour > 23 || out.minute > 59) {
+    return null;
+  }
+  const when = new Date(out.year, out.month - 1, out.day, out.hour, out.minute, 0, 0).getTime();
+  return when > now ? out : null;
+}
+
+/** 系统提示里的「现在」:模型要靠它把「明天九点」换成具体时间。 */
+export function nowLine(now: number): string {
+  const d = new Date(now);
+  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  const pad = (n: number): string => (n < 10 ? `0${n}` : `${n}`);
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const zone = `UTC${sign}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+  return `现在是 ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 周${week} ${pad(d.getHours())}:${pad(d.getMinutes())}(${zone})。`;
+}
+
+/** WMO 天气代码(Open-Meteo)→ 中文,和安卓 WeatherManager 同一套。 */
+export function wmoText(code: number): string {
+  if (code === 0) { return '晴'; }
+  if (code === 1) { return '大致晴'; }
+  if (code === 2) { return '局部多云'; }
+  if (code === 3) { return '阴'; }
+  if (code === 45 || code === 48) { return '雾'; }
+  if (code >= 51 && code <= 55) { return '毛毛雨'; }
+  if (code === 56 || code === 57) { return '冻毛毛雨'; }
+  if (code === 61) { return '小雨'; }
+  if (code === 63) { return '中雨'; }
+  if (code === 65) { return '大雨'; }
+  if (code === 66 || code === 67) { return '冻雨'; }
+  if (code === 71) { return '小雪'; }
+  if (code === 73) { return '中雪'; }
+  if (code === 75) { return '大雪'; }
+  if (code === 77) { return '雪粒'; }
+  if (code >= 80 && code <= 82) { return '阵雨'; }
+  if (code === 85 || code === 86) { return '阵雪'; }
+  if (code === 95) { return '雷阵雨'; }
+  if (code === 96 || code === 99) { return '雷阵雨伴冰雹'; }
+  return `天气代码 ${code}`;
+}
+
+/** Open-Meteo forecast 的 JSON → 一段给模型和人都能读的中文摘要。 */
+export function weatherSummary(json: object, place: string): string {
+  const obj = json as Record<string, Object>;
+  const cur = obj['current'] as Record<string, Object> | undefined;
+  const daily = obj['daily'] as Record<string, Object> | undefined;
+  const lines: string[] = [];
+  if (cur) {
+    const temp = Math.round(Number(cur['temperature_2m'] ?? 0));
+    const feels = Math.round(Number(cur['apparent_temperature'] ?? temp));
+    const hum = Math.round(Number(cur['relative_humidity_2m'] ?? 0));
+    const wind = Math.round(Number(cur['wind_speed_10m'] ?? 0));
+    lines.push(`${place} · 现在 ${temp}°C(体感 ${feels}°C),${wmoText(Number(cur['weather_code'] ?? -1))},湿度 ${hum}%,风 ${wind} km/h`);
+  }
+  if (daily) {
+    const days = (daily['time'] as string[] | undefined) ?? [];
+    const codes = (daily['weather_code'] as number[] | undefined) ?? [];
+    const highs = (daily['temperature_2m_max'] as number[] | undefined) ?? [];
+    const lows = (daily['temperature_2m_min'] as number[] | undefined) ?? [];
+    const rain = (daily['precipitation_probability_max'] as number[] | undefined) ?? [];
+    const names = ['今天', '明天', '后天'];
+    for (let i = 0; i < Math.min(3, days.length); i++) {
+      const chance = rain.length > i ? `,降水概率 ${Math.round(rain[i])}%` : '';
+      lines.push(`${names[i]}(${days[i]}) ${wmoText(codes[i] ?? -1)},${Math.round(lows[i] ?? 0)}–${Math.round(highs[i] ?? 0)}°C${chance}`);
+    }
+  }
+  return lines.length > 0 ? lines.join('\n') : '天气服务没有返回数据';
+}
+
+/** 环境变量:只列名字给模型;值由本机在执行工具时替换。 */
+export function envPromptBlock(names: string[]): string {
+  if (names.length === 0) {
+    return '';
+  }
+  return `环境变量(只给名字,值留在本机):${names.join('、')}。工具参数里要用时写 $$名字,执行时换成真实值;不要让用户把值念出来。`;
+}
+
+/** 把工具参数(JSON 文本)里的 $$名字 换成值;值按 JSON 字符串转义,不认识的名字原样留着。 */
+export function expandEnvPlaceholders(args: string, values: Map<string, string>): string {
+  if (values.size === 0 || args.indexOf('$$') < 0) {
+    return args;
+  }
+  return args.replace(/\$\$([A-Za-z_][A-Za-z0-9_]*)/g, (whole: string, name: string): string => {
+    const value = values.get(name);
+    if (value === undefined) {
+      return whole;
+    }
+    const quoted = JSON.stringify(value);
+    return quoted.substring(1, quoted.length - 1);
+  });
+}
+
+/** 对话档案:{"title","messages":[{"role","content"}]},和 sessionArchiveFromJson 互为逆操作。 */
+export function sessionArchiveJson(title: string, messages: LocalChatMessage[]): string {
+  const rows: string[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const line = messages[i];
+    if (line.role !== 'user' && line.role !== 'assistant' && line.role !== 'system') {
+      continue;
+    }
+    const text = line.text.length > 0 ? line.text : '[图片]';
+    rows.push(`{"role":${JSON.stringify(line.role)},"content":${JSON.stringify(text)}}`);
+  }
+  return `{"title":${JSON.stringify(title)},"messages":[${rows.join(',')}]}`;
 }

@@ -137,7 +137,14 @@ export function responsesErrorFromJson(json: unknown): string {
     const message = typeof err?.message === "string" ? err.message : "response.failed"
     return message
   }
-  if (obj.type === "error" && typeof obj.message === "string") return obj.message
+  if (obj.type === "error") {
+    // Codex 把原因放在顶层 message;Anthropic 流中途出错是 {"type":"error","error":{"type","message"}}。
+    const err = obj.error as Record<string, unknown> | undefined
+    const kind = typeof err?.type === "string" ? err.type.trim() : ""
+    const text = (typeof obj.message === "string" ? obj.message : typeof err?.message === "string" ? err.message : "").trim()
+    const joined = kind.length > 0 ? `${kind}: ${text}` : text
+    return joined.length > 0 ? joined : "error"
+  }
   return ""
 }
 

@@ -58,21 +58,21 @@ struct AppearancePage {
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
 
-        this.section('启动会话')
+        this.section('打开 App 时')
         Column() {
-          this.choice('auto', this.launch, '自动', '系统决定', '#007AFF', 'restore',
+          this.choice('auto', this.launch, '自动', '一天内回到上次的对话，否则停在首页', '#007AFF', 'restore',
             () => {
               this.pickLaunch('auto');
             })
-          this.choice('last', this.launch, '上次会话', '打开最近一条', '#5AC8FA', 'clock',
+          this.choice('last', this.launch, '上次对话', '打开最近一条', '#5AC8FA', 'clock',
             () => {
               this.pickLaunch('last');
             })
-          this.choice('new', this.launch, '新任务', '每次开一条空会话', '#34C759', 'add',
+          this.choice('new', this.launch, '新任务', '每次开一条新对话', '#34C759', 'add',
             () => {
               this.pickLaunch('new');
             })
-          this.choice('home', this.launch, '主页', '停在会话列表', '#007AFF', 'more',
+          this.choice('home', this.launch, '首页', '停在对话列表', '#007AFF', 'more',
             () => {
               this.pickLaunch('home');
             })
@@ -98,7 +98,7 @@ struct AppearancePage {
 
         this.section('对话')
         Column() {
-          this.toggle('显示会话标题', this.showTitle, (on: boolean) => {
+          this.toggle('显示对话标题', this.showTitle, (on: boolean) => {
             this.showTitle = on;
             this.persist();
           })

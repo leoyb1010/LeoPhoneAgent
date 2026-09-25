@@ -1,5 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
+import { envPromptBlock, expandEnvPlaceholders } from '../local/LocalProtocol';
 
 export class EnvEntry {
   name: string = '';
@@ -81,15 +82,20 @@ export class EnvStore {
     await this.save(context);
   }
 
+  /**
+   * 只告诉模型有哪些变量,不发值(原来把「名字=值」明文写进系统提示,钥匙会跟着对话发给 AI 服务商)。
+   * 模型在工具参数里写 $$名字,执行时由 expand 换成真实值,和 iOS 的占位写法一样。
+   */
   promptBlock(): string {
-    if (this.rows.length === 0) {
-      return '';
-    }
-    const lines: string[] = ['环境变量'];
+    return envPromptBlock(this.rows.map((row: EnvEntry) => row.name));
+  }
+
+  expand(args: string): string {
+    const values: Map<string, string> = new Map();
     for (let i = 0; i < this.rows.length; i++) {
-      lines.push(`${this.rows[i].name}=${this.rows[i].value}`);
+      values.set(this.rows[i].name, this.rows[i].value);
     }
-    return lines.join('\n');
+    return expandEnvPlaceholders(args, values);
   }
 
   private static parse(raw: Object | undefined): EnvEntry[] {

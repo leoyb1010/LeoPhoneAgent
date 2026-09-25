@@ -32,6 +32,7 @@ import {
   wireMessagesJson
 } from './LocalProtocol';
 import { OAuthSession, OAuthToken } from './OAuthSession';
+import { CODEX_MODELS_URL, codexCatalogIds } from './ProviderModels';
 import { providerStore } from '../store/ProviderStore';
 
 export class StreamTurn {
@@ -60,6 +61,42 @@ export class OpenAICompatClient {
       providerStore.rememberKey(instanceId, key);
     }
     return new OpenAICompatClient(baseUrl, key, model, type, credential, account);
+  }
+
+  /** ChatGPT 登录的模型目录(和 Codex CLI 同一份)。拉不到就抛错,调用方保留原来的列表。 */
+  static async codexModels(instanceId: string): Promise<string[]> {
+    const fresh: OAuthToken = await OAuthSession.ensure(instanceId, providerStore.keyFor(instanceId), 'openAI');
+    providerStore.rememberKey(instanceId, fresh.access);
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${fresh.access}`,
+      'Version': CODEX_CLIENT_VERSION,
+      'User-Agent': `codex_cli_rs/${CODEX_CLIENT_VERSION} (Linux; arm64)`,
+      'Originator': 'codex_cli_rs',
+      'Accept': 'application/json'
+    };
+    if (fresh.account.length > 0) {
+      headers['Chatgpt-Account-Id'] = fresh.account;
+    }
+    const req = http.createHttp();
+    try {
+      const resp = await req.request(`${CODEX_MODELS_URL}?client_version=${CODEX_CLIENT_VERSION}`, {
+        method: http.RequestMethod.GET,
+        header: headers,
+        connectTimeout: 20000,
+        readTimeout: 20000
+      });
+      if (resp.responseCode < 200 || resp.responseCode >= 300) {
+        throw new Error(`http ${resp.responseCode}`);
+      }
+      const ids = codexCatalogIds(typeof resp.result === 'string' ? JSON.parse(resp.result) as object :
+        resp.result as object);
+      if (ids.length === 0) {
+        throw new Error('目录是空的');
+      }
+      return ids;
+    } finally {
+      req.destroy();
+    }
   }
 
   constructor(baseUrl: string, apiKey: string, model: string, type: string, credential: string,
@@ -93,7 +130,15 @@ export class OpenAICompatClient {
     let calls: ToolCall[] = [];
     let promptTokens = 0;
     let completionTokens = 0;
+    // Anthropic 的一轮以 message_delta(带 stop_reason)/ message_stop 收尾;没见到就是中途断了。
+    let ended = false;
     const decoder = util.TextDecoder.create('utf-8', { ignoreBOM: true });
+    const noteEnd = (obj: object): void => {
+      const type = `${(obj as Record<string, Object>)['type'] ?? ''}`;
+      if (type === 'message_delta' || type === 'message_stop') {
+        ended = true;
+      }
+    };
     const consume = (chunk: string): void => {
       leftover += chunk;
       const parts = leftover.split('\n');
@@ -115,6 +160,7 @@ export class OpenAICompatClient {
             promptTokens = used[0];
             completionTokens = used[1];
           }
+          noteEnd(obj);
           const delta = this.readDelta(obj);
           if (delta.length > 0) {
             assembled += delta;
@@ -161,6 +207,10 @@ export class OpenAICompatClient {
         fail(`http ${status}`);
         return;
       }
+      if (this.mode === 'anthropic' && !ended) {
+        fail('stream ended early');
+        return;
+      }
       succeed();
     };
     req.on('dataReceive', (chunk: ArrayBuffer) => {
@@ -184,6 +234,7 @@ export class OpenAICompatClient {
               fail(err);
               return;
             }
+            noteEnd(obj);
             const extra = this.readDelta(obj);
             if (extra.length > 0) {
               assembled += extra;

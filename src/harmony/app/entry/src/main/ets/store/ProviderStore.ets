@@ -295,7 +295,21 @@ export class ProviderStore {
   async remove(context: common.UIAbilityContext, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
+    const gone = this.instances.find((row: ProviderInstance) => row.id === id);
     this.instances = this.instances.filter((row: ProviderInstance) => row.id !== id);
+    // 模型组里这一家的条目(`${标签}/${模型}`)一起清掉;清空了的组连同「当前组」指针一起去掉。
+    // 原来留着,组看着还在,实际一个条目都对不上(iOS、安卓删服务商时同样清理)。
+    const tag = gone ? (gone.label.length > 0 ? gone.label : gone.type) : '';
+    const shared = this.instances.some((row: ProviderInstance) => (row.label.length > 0 ? row.label : row.type) === tag);
+    if (tag.length > 0 && !shared) {
+      for (let i = 0; i < this.groups.length; i++) {
+        this.groups[i].modelIds = this.groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${tag}/`));
+      }
+      this.groups = this.groups.filter((row: ModelGroup) => row.modelIds.length > 0);
+      if (!this.groups.some((row: ModelGroup) => row.id === this.activeGroupId)) {
+        this.activeGroupId = '';
+      }
+    }
     this.keys.delete(id);
     // 之前只清了内存里的 Map，Asset 库里这个实例的 API Key 和 OAuth refresh_token 都还留着。
     // 删了供应商却把凭据留在设备上，属于该清没清。
@@ -432,7 +446,7 @@ export class ProviderStore {
     throw new Error(lastError.length > 0 ? lastError : '上游没有返回模型');
   }
 
-  private applyModels(row: ProviderInstance, ids: string[]): void {
+  applyModels(row: ProviderInstance, ids: string[]): void {
     row.models = ids;
     if (ids.indexOf(row.model) < 0) {
       row.model = ids[0];
@@ -501,7 +515,7 @@ export class ProviderStore {
       }
       const row = new ProviderInstance();
       row.id = 'legacy';
-      row.label = '本机供应商';
+      row.label = '本机 AI 服务商';
       row.type = 'custom';
       row.baseUrl = baseUrl;
       row.model = model;
@@ -534,7 +548,7 @@ export class ProviderStore {
 
   private assertWritable(): void {
     if (this.jsonLoadFailed) {
-      throw new Error('供应商档案读坏了，先别保存，避免覆盖');
+      throw new Error('AI 服务商档案读坏了，先别保存，避免覆盖');
     }
   }
 

@@ -7,6 +7,7 @@ import {
   bucketTitle,
   dateBucket,
   sessionArchiveFromJson,
+  sessionArchiveJson,
   titleFromPrompt
 } from '../local/LocalProtocol';
 
@@ -194,7 +195,7 @@ export class SessionStore {
     imageB64: string = '', imageMime: string = '', imagePath: string = ''): Promise<void> {
     const session = await this.get(context, id);
     if (!session) {
-      throw new Error('会话不存在');
+      throw new Error('对话不存在');
     }
     this.assertWritable();
     const line = new LocalChatMessage();
@@ -263,7 +264,7 @@ export class SessionStore {
   async duplicate(context: common.UIAbilityContext, id: string): Promise<LocalSession> {
     const src = await this.get(context, id);
     if (!src) {
-      throw new Error('会话不存在');
+      throw new Error('对话不存在');
     }
     const copy = await this.create(context);
     copy.title = `${src.title} 副本`;
@@ -286,8 +287,13 @@ export class SessionStore {
     this.persist(context, session);
   }
 
-  exportActive(): string {
-    return JSON.stringify(this.listActive());
+  /** 一条对话导出成「导入对话」认的档案(不带图片,图片太大)。 */
+  async exportSession(context: common.UIAbilityContext, id: string): Promise<string> {
+    const session = await this.get(context, id);
+    if (!session) {
+      throw new Error('对话不存在');
+    }
+    return sessionArchiveJson(session.title, session.messages);
   }
 
   async importArchive(context: common.UIAbilityContext, raw: string): Promise<LocalSession> {
@@ -441,7 +447,7 @@ export class SessionStore {
 
   private assertWritable(): void {
     if (this.jsonLoadFailed) {
-      throw new Error('会话档案读坏了，先别保存，避免覆盖');
+      throw new Error('对话档案读坏了，先别保存，避免覆盖');
     }
   }
 

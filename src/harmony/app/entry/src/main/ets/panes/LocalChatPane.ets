@@ -9,13 +9,21 @@ import { InAppBrowser } from '../local/InAppBrowser';
 import { Voice } from '../local/Voice';
 import { MarkdownText } from '../theme/Markdown';
 import {
+  LOOP_STOP_AT,
+  LOOP_WARN_AT,
   LocalChatMessage,
   LoopTurn,
+  MAX_TOOL_ROUNDS,
   ToolCall,
+  ToolLoopGuard,
   extractLinks,
+  friendlyModelError,
+  loopWarning,
   nextThinking,
+  sandboxFileName,
   shouldFailover,
-  thinkingLabel
+  thinkingLabel,
+  toolArg
 } from '../local/LocalProtocol';
 import { usageStore } from '../store/UsageStore';
 import { FastLocalActions } from '../local/FastLocalActions';
@@ -40,8 +48,10 @@ export struct LocalChatPane {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
   @Prop @Watch('onSessionChange') sessionId: string = '';
+  @StorageProp('approvalTick') @Watch('onApprovalTick') approvalTick: number = 0;
   @Prop compact: boolean = false;
   @State lines: LocalChatMessage[] = [];
+  @State fullAuto: boolean = false;
   @State title: string = '本机 Agent';
   @State draft: string = '';
   @State status: string = '准备中';
@@ -72,6 +82,12 @@ export struct LocalChatPane {
   private rounds: number = 0;
   private failIndex: number = 0;
   private stopListen: (() => void) | null = null;
+  // 这一轮还算不算数:停止、换对话、离开页面、发新消息都会让 runGen 前进,
+  // 旧一轮的回调和还没跑的工具看到 myGen 对不上就收手。
+  private runGen: number = 0;
+  private myGen: number = 0;
+  private loopGuard: ToolLoopGuard = new ToolLoopGuard();
+  private nearBottom: boolean = true;
 
   aboutToAppear(): void {
     this.boot();
@@ -81,14 +97,19 @@ export struct LocalChatPane {
     if (this.alive) {
       this.configured = providerStore.configured();
       this.refreshSlot();
-      if (this.status === '未配置供应商' && this.configured) {
+      if (this.status === '未配置 AI 服务商' && this.configured) {
         this.status = this.currentId ? '空闲' : '本机就绪';
       }
     }
   }
 
+  onApprovalTick(): void {
+    this.fullAuto = SensitiveToolGate.fullAuto;
+  }
+
   aboutToDisappear(): void {
     this.alive = false;
+    this.runGen += 1;
     this.stopStream();
     if (this.stopListen) {
       this.stopListen();
@@ -98,16 +119,12 @@ export struct LocalChatPane {
   }
 
   onSessionChange(): void {
-    this.stopStream();
+    // 切会话时正在跑的一轮连同挂着的审批一起作废:之前只停了网络流,
+    // 还在跑的工具和它的回答会写进新会话;没答完的审批横条留到新会话里,点允许跑的是旧会话的工具。
+    this.cancelRun();
     this.lines = [];
     this.draft = '';
     this.assistantOpen = false;
-    // 切会话时这几个也得清。之前只清了 lines/draft，
-    // 于是上一个会话没答完的「允许写这次」横条和它挂着的 pendingCalls 会留到新会话里，
-    // 用户在新会话点允许，跑的是旧会话的工具调用。
-    this.askWrite = false;
-    taskStatus.setPendingWrite(false);
-    this.pendingCalls = [];
     this.loopTurns = [];
     this.rounds = 0;
     this.failIndex = 0;
@@ -164,7 +181,8 @@ export struct LocalChatPane {
           }
         })
           .margin({ left: 8 })
-        if (this.status === '空闲' && this.hasUser()) {
+        // 出错、停止之后也能重新生成(原来只在「空闲」时出现,报错后反而没有)。
+        if (this.status !== '进行中' && !this.askWrite && this.hasUser()) {
           IconBtn({
             name: 'restore',
             box: 32,
@@ -185,7 +203,7 @@ export struct LocalChatPane {
 
       if (this.hasProviders) {
         Row() {
-          Text(this.slotLabel.length > 0 ? this.slotLabel : '还没选好当前供应商')
+          Text(this.slotLabel.length > 0 ? this.slotLabel : '还没选好当前 AI 服务商')
             .fontSize(12)
             .fontColor(Tokens.link)
             .layoutWeight(1)
@@ -210,7 +228,7 @@ export struct LocalChatPane {
       }
 
       if (!this.configured) {
-        this.centerCopy('先配本机供应商', '设置 → 管理供应商，先选类型再填钥匙。不连中继也能聊。')
+        this.centerCopy('先配一个 AI 服务商', '设置 → AI 服务商，先选类型再填钥匙。不连中继也能聊。')
       } else if (this.currentId.length === 0) {
         this.emptyWorkspace()
       } else if (this.lines.length === 0) {
@@ -231,35 +249,78 @@ export struct LocalChatPane {
         .layoutWeight(1)
         .width('100%')
         .scrollBar(BarState.Off)
+        .onScrollIndex((start: number, end: number) => {
+          // 往上翻着看旧消息时,流式输出不再把你拽回底部。
+          this.nearBottom = end >= this.lines.length - 2;
+        })
       }
 
       if (this.askWrite) {
-        Row() {
-          Text('写沙箱文件需要你点头')
+        Column() {
+          Text(this.writeAskTitle())
             .fontSize(13)
             .fontColor(Tokens.warn)
-            .layoutWeight(1)
-          Button('允许写这次')
-            .height(36)
-            .backgroundColor(Tokens.online)
-            .fontColor('#000000')
+            .width('100%')
+          Row() {
+            Button('允许一次')
+              .layoutWeight(1)
+              .height(36)
+              .fontSize(14)
+              .backgroundColor(Tokens.online)
+              .fontColor('#000000')
+              .onClick(() => {
+                this.allowWrite(false);
+              })
+            Button('本次会话允许')
+              .layoutWeight(1)
+              .height(36)
+              .fontSize(14)
+              .margin({ left: 8 })
+              .backgroundColor(Tokens.surface2)
+              .fontColor(Tokens.text)
+              .onClick(() => {
+                this.allowWrite(true);
+              })
+            Button('拒绝')
+              .layoutWeight(1)
+              .height(36)
+              .fontSize(14)
+              .margin({ left: 8 })
+              .backgroundColor(Tokens.surface2)
+              .fontColor(Tokens.text)
+              .onClick(() => {
+                this.denyWrite(false);
+              })
+          }
+          .width('100%')
+          .margin({ top: 8 })
+          Text('拒绝并停止任务')
+            .fontSize(13)
+            .fontColor(Tokens.muted)
+            .margin({ top: 8 })
             .onClick(() => {
-              // 授权带上本会话 id，避免被同时在跑的远程/定时回合抢走（见 SensitiveToolGate 注释）
-              SensitiveToolGate.grantWriteOnce(this.grantOwner());
-              this.askWrite = false;
-              taskStatus.setPendingWrite(false);
-              this.status = '已允许写这次';
-              if (this.pendingCalls.length > 0) {
-                const ctx = getContext(this) as common.UIAbilityContext;
-                this.runTools(ctx, this.pendingCalls.slice());
-              }
+              this.denyWrite(true);
             })
         }
         .width('100%')
+        .alignItems(HorizontalAlign.Start)
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
       }
 
       if (this.currentId.length > 0) {
+        Row() {
+          Text(`审批 · ${this.fullAuto ? '全自动' : '逐项确认'}`)
+            .fontSize(12)
+            .fontColor(this.fullAuto ? Tokens.warn : Tokens.muted)
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            .backgroundColor(Tokens.surface)
+            .borderRadius(50)
+            .onClick(() => {
+              this.toggleFullAuto();
+            })
+        }
+        .width('100%')
+        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 4 })
         if (this.imageHint.length > 0) {
           Text(this.imageHint)
             .fontSize(12)
@@ -316,8 +377,7 @@ export struct LocalChatPane {
               .backgroundColor(Tokens.surface2)
               .fontColor(Tokens.text)
               .onClick(() => {
-                this.stopStream();
-                taskStatus.setRunning(false);
+                this.cancelRun();
                 this.status = '已停止';
               })
           } else {
@@ -584,7 +644,7 @@ export struct LocalChatPane {
       this.configured = providerStore.configured();
       this.refreshSlot();
       this.pickerOpen = false;
-      this.status = this.configured ? (this.currentId ? '空闲' : '本机就绪') : '未配置供应商';
+      this.status = this.configured ? (this.currentId ? '空闲' : '本机就绪') : '未配置 AI 服务商';
     }).catch((err: Error) => {
       this.status = `${err}`;
     });
@@ -596,7 +656,8 @@ export struct LocalChatPane {
   }
 
   private badStatus(): boolean {
-    return this.status.indexOf('失败') >= 0 || this.status === 'unauthorized';
+    return this.status.indexOf('失败') >= 0 || this.status.indexOf('AI 服务商') >= 0 ||
+      this.status.indexOf('断了') >= 0;
   }
 
   private boot(): void {
@@ -612,17 +673,18 @@ export struct LocalChatPane {
         return;
       }
       this.configured = providerStore.configured();
+      this.fullAuto = SensitiveToolGate.fullAuto;
       this.refreshSlot();
       this.ready = true;
       if (themeStore.expandThinking && this.thinking.length === 0) {
         this.thinking = 'medium';
       }
       if (sessionStore.jsonLoadFailed) {
-        this.status = '会话档案读坏了，先别保存';
+        this.status = '对话档案读坏了，先别保存';
         return;
       }
       if (!this.configured) {
-        this.status = '未配置供应商';
+        this.status = '未配置 AI 服务商';
         return;
       }
       if (!this.currentId) {
@@ -632,13 +694,13 @@ export struct LocalChatPane {
       }
       return sessionStore.get(ctx, this.currentId).then((session: LocalSession | null) => {
         if (!this.alive || !session) {
-          this.status = '会话不在了';
+          this.status = '这个对话不在了';
           return;
         }
         this.title = session.title;
         this.lines = session.messages.slice();
         this.status = '空闲';
-        this.followTail();
+        this.followTail(true);
       });
     }).catch((err: Error) => {
       this.status = `${err}`;
@@ -708,6 +770,7 @@ export struct LocalChatPane {
       if (session) {
         this.title = session.title;
       }
+      this.beginRun();
       this.status = '进行中';
       taskStatus.setRunning(true);
       this.rounds = 0;
@@ -763,16 +826,16 @@ export struct LocalChatPane {
       } else if (cmd === '/write') {
         const space = rest.indexOf(' ');
         if (space < 0) {
-          out = '用法：/write 文件名 内容。写之前先点允许写这次。';
+          out = '用法：/write 文件名 内容';
         } else if (!SensitiveToolGate.hasWriteGrant(this.grantOwner())) {
           this.askWrite = true;
-          out = '写文件需要你先点「允许写这次」';
+          out = '写文件要你先确认:点下面的「允许一次」或「本次会话允许」,再发一次 /write';
         } else {
           out = LocalTools.writeSandbox(ctx, rest.substring(0, space), rest.substring(space + 1),
             this.grantOwner());
           if (out === '__NEED_WRITE_GRANT__') {
             this.askWrite = true;
-            out = '写文件需要你先点「允许写这次」';
+            out = '写文件要你先确认:点下面的「允许一次」或「本次会话允许」,再发一次 /write';
           }
         }
       } else if (cmd === '/remember') {
@@ -781,8 +844,12 @@ export struct LocalChatPane {
         out = '已写入今日记忆';
       } else if (cmd === '/open') {
         out = LocalTools.openLink(rest);
+      } else if (cmd === '/auto') {
+        await SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
+        this.fullAuto = SensitiveToolGate.fullAuto;
+        out = this.fullAuto ? '已切到全自动:写文件不再逐项确认。再发 /auto 切回。' : '已切回逐项确认:写文件前先问你。';
       } else {
-        out = '本机命令：/ls /read /write /remember /open';
+        out = '本机命令：/ls /read /write /remember /open /auto';
       }
     } catch (err) {
       out = `${err}`;
@@ -797,6 +864,13 @@ export struct LocalChatPane {
     for (let i = 0; i < this.lines.length; i++) {
       const line = this.lines[i];
       if (line.role !== 'user' && line.role !== 'assistant') {
+        continue;
+      }
+      // 带工具的一轮里模型先说的话和最后的回答是两条 assistant(中间隔着工具行),合成一条,
+      // 有的服务商不收连续两条同角色的消息。
+      const prev = out.length > 0 ? out[out.length - 1] : null;
+      if (prev && prev.role === 'assistant' && line.role === 'assistant' && line.imageB64.length === 0) {
+        prev.content = `${prev.content}\n\n${line.text}`;
         continue;
       }
       const turn = new LoopTurn();
@@ -817,14 +891,16 @@ export struct LocalChatPane {
 
   private async beginModel(ctx: common.UIAbilityContext): Promise<void> {
     this.stopStream();
-    if (this.rounds >= 8) {
-      this.status = '工具轮次用完了';
+    if (this.rounds >= MAX_TOOL_ROUNDS) {
+      taskStatus.setRunning(false);
+      this.status = `一次任务最多 ${MAX_TOOL_ROUNDS} 轮工具,已经停下`;
+      this.push('system', this.status);
       return;
     }
     this.rounds += 1;
     const queue = providerStore.queue();
     if (this.failIndex >= queue.length) {
-      this.status = '供应商都试过了';
+      this.status = '所有 AI 服务商都试过了,都没成功';
       return;
     }
     const slot = queue[this.failIndex];
@@ -832,15 +908,25 @@ export struct LocalChatPane {
     const client = await OpenAICompatClient.open(providerStore.slotRoot(slot.instanceId), key, slot.model,
       providerStore.slotType(slot.instanceId), providerStore.slotCredential(slot.instanceId),
       slot.instanceId);
+    // 登录态刷新要走网络,这期间点了停止或换了对话就不再开流。
+    if (!this.live()) {
+      return;
+    }
     this.assistantOpen = false;
     this.streamBuf = '';
     this.streamDone = false;
     this.clearStreamTick();
     this.stream = client.streamTurn(this.loopTurns, LocalTools.systemPrompt(), this.thinking,
       (delta: string) => {
+        if (!this.live()) {
+          return;
+        }
         this.appendAssistant(delta);
         this.status = '进行中';
       }, (turn: StreamTurn) => {
+        if (!this.live()) {
+          return;
+        }
         this.stream = null;
         this.streamDone = true;
         if (turn.calls.length > 0) {
@@ -854,7 +940,12 @@ export struct LocalChatPane {
           if (turn.text.length === 0) {
             this.push('system', themeStore.toolPreview ? `工具 · ${turn.calls[0].name}` : '在用工具');
           }
-          this.runTools(ctx, turn.calls);
+          const calls = turn.calls;
+          this.saveToolRound(ctx, turn.text, calls).then(() => {
+            if (this.live()) {
+              this.runTools(ctx, calls);
+            }
+          });
           return;
         }
         taskStatus.setRunning(false);
@@ -864,6 +955,9 @@ export struct LocalChatPane {
           this.status = '空闲';
         }
       }, (message: string) => {
+        if (!this.live()) {
+          return;
+        }
         this.stream = null;
         this.flushStream();
         this.assistantOpen = false;
@@ -877,14 +971,19 @@ export struct LocalChatPane {
           return;
         }
         taskStatus.setRunning(false);
-        this.push('system', message);
-        this.status = message;
+        const shown = friendlyModelError(message);
+        this.push('system', shown);
+        this.status = shown;
       });
   }
 
   private async runTools(ctx: common.UIAbilityContext, calls: ToolCall[]): Promise<void> {
     this.pendingCalls = [];
     for (let i = 0; i < calls.length; i++) {
+      // 点了停止或换了对话,剩下的工具不再执行。
+      if (!this.live()) {
+        return;
+      }
       const call = calls[i];
       const result: ToolResult = await LocalTools.run(ctx, call.name, call.args, this.grantOwner());
       if (themeStore.toolPreview) {
@@ -897,11 +996,12 @@ export struct LocalChatPane {
         this.status = '等待写文件';
         return;
       }
+      const times = this.loopGuard.note(call.name, call.args);
       const tool = new LoopTurn();
       tool.role = 'tool';
       tool.toolCallId = call.id.length > 0 ? call.id : `call_${i}`;
       tool.toolName = call.name;
-      tool.content = result.text;
+      tool.content = times >= LOOP_WARN_AT ? result.text + loopWarning(call.name, times) : result.text;
       this.loopTurns = this.loopTurns.concat([tool]);
       this.push('system', result.text.length > 240 ? `${result.text.substring(0, 240)}…` : result.text);
       if (this.currentId) {
@@ -909,8 +1009,121 @@ export struct LocalChatPane {
           // keep chatting even if archive write fails
         });
       }
+      if (times >= LOOP_STOP_AT) {
+        this.cancelRun();
+        this.status = `${call.name} 用同样的参数调用了 ${times} 次,已经停下`;
+        this.push('system', this.status);
+        return;
+      }
     }
+    if (this.live()) {
+      this.startModel(ctx);
+    }
+  }
+
+  /**
+   * 工具执行前先把这一步存下来:模型这一步说的话,和要调用哪些工具。
+   * 原来只存工具结果和最后一轮的回答,带工具的几轮里模型说的话重开对话就没了;
+   * App 在工具跑到一半被杀,也看不出哪一步没跑完。
+   */
+  private async saveToolRound(ctx: common.UIAbilityContext, text: string, calls: ToolCall[]): Promise<void> {
+    if (!this.currentId) {
+      return;
+    }
+    try {
+      if (text.length > 0) {
+        await sessionStore.append(ctx, this.currentId, 'assistant', text);
+      }
+      await sessionStore.append(ctx, this.currentId, 'system',
+        `将调用工具:${calls.map((call: ToolCall) => call.name).join('、')}`);
+    } catch (_err) {
+      // 存档失败也接着跑
+    }
+  }
+
+  private live(): boolean {
+    return this.alive && this.myGen === this.runGen;
+  }
+
+  /** 作废正在跑的一轮,连同挂着的写文件审批。 */
+  private cancelRun(): void {
+    this.runGen += 1;
+    this.stopStream();
+    this.askWrite = false;
+    this.pendingCalls = [];
+    taskStatus.setPendingWrite(false);
+    taskStatus.setRunning(false);
+  }
+
+  /** 开新的一轮:上一轮(和它挂着的审批)作废,新的一轮算数。 */
+  private beginRun(): void {
+    this.cancelRun();
+    this.myGen = this.runGen;
+    this.loopGuard = new ToolLoopGuard();
+  }
+
+  private writeAskTitle(): string {
+    const call = this.pendingCalls.length > 0 ? this.pendingCalls[0] : null;
+    const path = call ? sandboxFileName(toolArg(call.args, 'path')) : '';
+    return path.length > 0 ? `要写文件:${path}` : '要写沙箱文件,等你确认';
+  }
+
+  private allowWrite(session: boolean): void {
+    // 授权带上本会话 id，避免被同时在跑的远程/定时回合抢走（见 SensitiveToolGate 注释）
+    const owner = this.grantOwner();
+    if (session) {
+      SensitiveToolGate.grantSession(owner);
+    } else {
+      SensitiveToolGate.grantWriteOnce(owner);
+    }
+    this.askWrite = false;
+    taskStatus.setPendingWrite(false);
+    this.status = session ? '这个对话里写文件不再问' : '已允许这一次';
+    if (this.pendingCalls.length > 0) {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      this.runTools(ctx, this.pendingCalls.slice());
+    }
+  }
+
+  private denyWrite(stop: boolean): void {
+    const calls = this.pendingCalls.slice();
+    if (stop || calls.length === 0) {
+      this.cancelRun();
+      this.status = stop ? '已停止' : '空闲';
+      return;
+    }
+    this.askWrite = false;
+    this.pendingCalls = [];
+    taskStatus.setPendingWrite(false);
+    // 每个没执行的调用都要回一条结果,不然下一轮请求会因为「有调用没有结果」被服务商拒掉。
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i];
+      const tool = new LoopTurn();
+      tool.role = 'tool';
+      tool.toolCallId = call.id.length > 0 ? call.id : `call_${i}`;
+      tool.toolName = call.name;
+      tool.content = (call.name === 'file_write' || call.name === 'file_edit') ?
+        SensitiveToolGate.denialMessage(sandboxFileName(toolArg(call.args, 'path'))) :
+        '没有执行:前面的写文件被用户拒绝了。';
+      this.loopTurns = this.loopTurns.concat([tool]);
+    }
+    this.push('system', '已拒绝写文件');
+    this.status = '进行中';
+    const ctx = getContext(this) as common.UIAbilityContext;
     this.startModel(ctx);
+  }
+
+  private async toggleFullAuto(): Promise<void> {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    await SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
+    this.fullAuto = SensitiveToolGate.fullAuto;
+    this.status = this.fullAuto ? '已切到全自动:写文件不再逐项确认' : '已切回逐项确认';
+    // 刚切到全自动:正在等的这次写文件一并放行(Mac 端也是这么做的)。
+    if (this.fullAuto && this.askWrite && this.pendingCalls.length > 0) {
+      this.askWrite = false;
+      taskStatus.setPendingWrite(false);
+      this.runTools(ctx, this.pendingCalls.slice());
+    }
   }
 
   private persistAssistant(ctx: common.UIAbilityContext, output: string, prompt: number = 0,
@@ -948,7 +1161,8 @@ export struct LocalChatPane {
     line.imageMime = imageMime;
     line.imagePath = imagePath;
     this.lines = this.lines.concat([line]);
-    this.followTail();
+    // 自己发的消息总是滚到底;别的只在本来就在底部附近时跟随。
+    this.followTail(role === 'user');
   }
 
   private hasUser(): boolean {
@@ -1039,10 +1253,12 @@ export struct LocalChatPane {
       session.messages = this.lines.slice();
       await sessionStore.replaceMessages(ctx, session);
     }
+    this.beginRun();
     this.rounds = 0;
     this.failIndex = 0;
     this.loopTurns = this.historyTurns();
     this.status = '进行中';
+    taskStatus.setRunning(true);
     this.startModel(ctx);
   }
 
@@ -1151,10 +1367,11 @@ export struct LocalChatPane {
     this.followTail();
   }
 
-  private followTail(): void {
-    if (this.lines.length === 0) {
+  private followTail(force: boolean = false): void {
+    if (this.lines.length === 0 || (!force && !this.nearBottom)) {
       return;
     }
+    this.nearBottom = true;
     const index = this.lines.length - 1;
     setTimeout(() => {
       try {

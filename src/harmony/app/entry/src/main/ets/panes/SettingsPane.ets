@@ -10,7 +10,7 @@ import { Tokens } from '../theme/Tokens';
 export struct SettingsPane {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
-  @State providerLine: string = '还没有供应商';
+  @State providerLine: string = '还没有 AI 服务商';
   @State query: string = '';
 
   aboutToAppear(): void {
@@ -93,15 +93,15 @@ export struct SettingsPane {
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
 
-        if (this.hit('供应商', '模型组', '技能', '人格', '记忆', '环境变量', 'MCP', '定时', Copy.sectionAgent)) {
+        if (this.hit('AI 服务商 供应商', '模型组', '技能', '人格', '记忆', '环境变量', 'MCP', '定时', Copy.sectionAgent)) {
           this.section(Copy.sectionAgent)
         }
         Column() {
-          if (this.hit('管理供应商', this.providerLine)) {
+          if (this.hit('AI 服务商 供应商', this.providerLine)) {
             SettingsRow({
               icon: 'web',
               color: '#007AFF',
-              title: '管理供应商',
+              title: 'AI 服务商',
               subtitle: this.providerLine,
               onOpen: () => {
                 router.pushUrl({ url: 'pages/ProviderListPage' });
@@ -247,12 +247,12 @@ export struct SettingsPane {
               }
             })
           }
-          if (this.hit('用量', '本机会话统计')) {
+          if (this.hit('用量', '本机对话统计')) {
             SettingsRow({
               icon: 'text',
               color: '#007AFF',
               title: '用量',
-              subtitle: '本机会话统计',
+              subtitle: '本机对话统计',
               onOpen: () => {
                 router.pushUrl({ url: 'pages/UsagePage' });
               }
@@ -271,7 +271,7 @@ export struct SettingsPane {
           Text(`版本 ${ReleaseCatalog.currentVersion}  ·  ${ReleaseCatalog.currentBuild}`)
             .fontSize(14)
             .fontColor(Tokens.text)
-          Text('本机 Agent：设备码、语音、Push token、多供应商、模型组失败换、官方 Anthropic/Gemini、Markdown、识图落盘、用量 token、浏览器、HTTP MCP、前台定时。远程机器仍是第二个入口。')
+          Text('本机 Agent：设备码、语音、Push token、多个 AI 服务商、模型组失败换、官方 Anthropic/Gemini、Markdown、识图落盘、用量 token、浏览器、HTTP MCP、前台定时。远程机器仍是第二个入口。')
             .fontSize(13)
             .fontColor(Tokens.muted)
             .margin({ top: 8 })

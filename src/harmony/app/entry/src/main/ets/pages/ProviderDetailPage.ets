@@ -7,6 +7,7 @@ import { DeviceAuth } from '../local/LocalProtocol';
 import { OAuthLoginSheet } from '../local/OAuthLoginSheet';
 import { OAuthSession } from '../local/OAuthSession';
 import { skipUpstreamModels } from '../local/ProviderModels';
+import { OpenAICompatClient } from '../local/OpenAICompatClient';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
 import { Tokens } from '../theme/Tokens';
 
@@ -48,7 +49,7 @@ struct ProviderDetailPage {
         }
       }
       if (!row) {
-        this.message = '供应商不在了';
+        this.message = '这个 AI 服务商不在了';
         return;
       }
       this.label = row.label;
@@ -63,8 +64,8 @@ struct ProviderDetailPage {
       this.keyDraft = providerStore.keyFor(row.id);
       this.isActive = providerStore.activeId === this.rowId;
       if (this.fromAdd) {
-        this.message = this.isActive ? '已设为当前供应商。选一个模型再保存，就能去聊天和执行任务。' :
-          '选一个模型，打开「用作当前供应商」，再保存。';
+        this.message = this.isActive ? '已设为当前 AI 服务商。选一个模型再保存，就能去聊天和执行任务。' :
+          '选一个模型，打开「用作当前 AI 服务商」，再保存。';
       }
     });
   }
@@ -104,7 +105,7 @@ struct ProviderDetailPage {
     Column() {
       Scroll() {
         Column() {
-          Text(this.label.length > 0 ? this.label : '供应商')
+          Text(this.label.length > 0 ? this.label : 'AI 服务商')
             .fontSize(Tokens.title)
             .fontWeight(FontWeight.Bold)
             .fontColor(Tokens.text)
@@ -116,7 +117,7 @@ struct ProviderDetailPage {
             .width('100%')
             .padding({ bottom: 12 })
           if (this.fromAdd) {
-            Text('下一步：选模型 → 确认当前供应商 → 保存')
+            Text('下一步：选模型 → 确认当前 AI 服务商 → 保存')
               .fontSize(13)
               .fontColor(Tokens.link)
               .width('100%')
@@ -194,10 +195,19 @@ struct ProviderDetailPage {
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
           if (skipUpstreamModels(this.type, this.credential)) {
-            Text('OpenAI OAuth / Codex 没有 /models 列表，用内置模型即可。')
+            Button('拉取 ChatGPT 模型目录')
+              .width('100%')
+              .height(40)
+              .margin({ top: 12 })
+              .backgroundColor(Tokens.surface2)
+              .fontColor(Tokens.text)
+              .onClick(() => {
+                this.pullModels();
+              })
+            Text('和 Codex 用的是同一份目录,新模型(比如 GPT-6)出来就能选。拉不到时保留现在的列表。')
               .fontSize(12)
               .fontColor(Tokens.muted)
-              .padding({ top: 10, bottom: 4 })
+              .padding({ top: 8, bottom: 4 })
           } else {
             Button('从上游拉取 /models')
               .width('100%')
@@ -210,7 +220,7 @@ struct ProviderDetailPage {
               })
           }
           Row() {
-            Text('用作当前供应商')
+            Text('用作当前 AI 服务商')
               .fontSize(Tokens.rowTitle)
               .fontColor(Tokens.text)
               .layoutWeight(1)
@@ -260,7 +270,7 @@ struct ProviderDetailPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          Button('删除这个供应商')
+          Button('删除这个 AI 服务商')
             .width('100%')
             .height(44)
             .margin({ top: 12, bottom: 12 })
@@ -393,7 +403,12 @@ struct ProviderDetailPage {
       if (!live) {
         throw new Error('先保存再拉模型');
       }
-      this.models = await providerStore.refreshModels(live);
+      if (skipUpstreamModels(live.type, live.credential)) {
+        providerStore.applyModels(live, await OpenAICompatClient.codexModels(live.id));
+        this.models = live.models.slice();
+      } else {
+        this.models = await providerStore.refreshModels(live);
+      }
       this.model = live.model;
       await providerStore.save(ctx);
       this.message = `已拉取 ${this.models.length} 个模型`;

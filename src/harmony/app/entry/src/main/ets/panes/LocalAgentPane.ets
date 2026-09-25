@@ -491,13 +491,13 @@ export struct LocalAgentPane {
   @Builder
   importSheet() {
     Column() {
-      Text('导入会话')
+      Text('导入对话')
         .fontSize(Tokens.title)
         .fontWeight(FontWeight.Bold)
         .fontColor(Tokens.text)
         .width('100%')
         .margin({ bottom: 10 })
-      Text('只接受带 messages 的 JSON。没有消息的档案不会建空会话。')
+      Text('只接受带 messages 的 JSON。没有消息的档案不会建空对话。')
         .fontSize(12)
         .fontColor(Tokens.muted)
         .width('100%')
@@ -545,7 +545,7 @@ export struct LocalAgentPane {
           this.menuOpen = false;
           this.pinSession(this.menuId);
         })
-      Text('复制会话')
+      Text('复制对话')
         .fontSize(16)
         .fontColor(Tokens.text)
         .width('100%')
@@ -553,6 +553,15 @@ export struct LocalAgentPane {
         .onClick(() => {
           this.menuOpen = false;
           this.duplicateSession(this.menuId);
+        })
+      Text('导出对话')
+        .fontSize(16)
+        .fontColor(Tokens.text)
+        .width('100%')
+        .padding({ top: 14, bottom: 14 })
+        .onClick(() => {
+          this.menuOpen = false;
+          this.exportSession(this.menuId);
         })
       Text('归档')
         .fontSize(16)
@@ -588,15 +597,17 @@ export struct LocalAgentPane {
       this.createSession();
       return;
     }
-    if (themeStore.launch === 'last') {
-      const id = this.lastSessionId();
+    // 「自动」和 iOS 一样:一天内打开就回到上次的对话,隔得久了停在首页(原来选了也不生效)。
+    if (themeStore.launch === 'last' || themeStore.launch === 'auto') {
+      const id = this.lastSessionId(themeStore.launch === 'auto' ? 24 * 3600 * 1000 : 0);
       if (id.length > 0) {
         this.openSession(id);
       }
     }
   }
 
-  private lastSessionId(): string {
+  /** 最近更新的对话;withinMs > 0 时只认这段时间内动过的。 */
+  private lastSessionId(withinMs: number = 0): string {
     const rows = sessionStore.listActive();
     let best = '';
     let stamp = 0;
@@ -605,6 +616,9 @@ export struct LocalAgentPane {
         stamp = rows[i].updatedAt;
         best = rows[i].id;
       }
+    }
+    if (withinMs > 0 && Date.now() - stamp > withinMs) {
+      return '';
     }
     return best;
   }
@@ -642,7 +656,7 @@ export struct LocalAgentPane {
       this.groups = sessionStore.grouped(this.query);
       this.ready = true;
       if (sessionStore.jsonLoadFailed) {
-        this.message = '会话档案读坏了，先别保存，避免覆盖';
+        this.message = '对话档案读坏了，先别保存，避免覆盖';
       }
       this.applyLaunch();
     }).catch((err: Error) => {
@@ -705,6 +719,18 @@ export struct LocalAgentPane {
         this.sessionId = '';
       }
       this.groups = sessionStore.grouped(this.query);
+    } catch (err) {
+      this.message = `${err}`;
+    }
+  }
+
+  /** 复制成档案放进剪贴板;另一台设备「导入对话」粘贴就能接着聊。 */
+  private async exportSession(id: string): Promise<void> {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    try {
+      const archive = await sessionStore.exportSession(ctx, id);
+      this.message = await FastLocalActions.copyText(archive) ?
+        '已复制这条对话,在另一台设备的「导入对话」里粘贴' : '没复制上,再试一次';
     } catch (err) {
       this.message = `${err}`;
     }

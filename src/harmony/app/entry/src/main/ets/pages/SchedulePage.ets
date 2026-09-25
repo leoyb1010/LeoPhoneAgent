@@ -28,7 +28,7 @@ struct SchedulePage {
         .fontColor(Tokens.text)
         .width('100%')
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
-      Text('目前仅 App 在前台时执行。锁屏、切后台或杀进程都不会跑。结果写入「定时·标题」会话，失败原因也在下面。')
+      Text('目前仅 App 在前台时执行。锁屏、切后台或杀进程都不会跑。结果写入「定时·标题」对话，失败原因也在下面。')
         .fontSize(13)
         .fontColor(Tokens.warn)
         .width('100%')

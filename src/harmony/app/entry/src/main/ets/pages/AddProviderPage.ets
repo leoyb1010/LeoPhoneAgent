@@ -142,7 +142,7 @@ struct AddProviderPage {
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
         .margin({ left: Tokens.pagePad, right: Tokens.pagePad })
-        Text('语音供应商模板')
+        Text('语音服务商模板')
           .fontSize(13)
           .fontColor(Tokens.muted)
           .width('100%')
@@ -320,7 +320,7 @@ struct AddProviderPage {
       .layoutWeight(1)
       .align(Alignment.Top)
       .scrollBar(BarState.Off)
-      Button('添加供应商')
+      Button('添加 AI 服务商')
         .width('100%')
         .height(44)
         .margin({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 20 })
@@ -426,7 +426,7 @@ struct AddProviderPage {
 
   private header(): string {
     if (this.step === 0) {
-      return '选择供应商';
+      return '选择 AI 服务商';
     }
     if (this.step === 1) {
       return '选择凭证';

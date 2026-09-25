@@ -98,11 +98,11 @@ export class HarmonyMinisRouter {
         `{"status":"ok","platform":"harmony","version":${JSON.stringify(PROTOCOL_VERSION)},"server":"minis","app_version":${JSON.stringify(ReleaseCatalog.currentVersion)}}`);
     }
     if (verb === 'GET' && path === '/v1/capabilities') {
-      // features 的七个键与 Mac(leophone.routes.ts)对齐,不支持的显式写 false
+      // features 的键与 Mac(Leo Link 桥接 bridge.ts)对齐,不支持的显式写 false
       // 而不是省略 —— Android 就是这么做的。省略在 iOS 上等价于 false
       // (LeoAgentClient `features[feature] == true`),但别的消费者未必。
       return HarmonyMinisRouter.json(200,
-        `{"object":"leoagent.capabilities","platform":"harmony","version":${JSON.stringify(PROTOCOL_VERSION)},"server":"minis","app_version":${JSON.stringify(ReleaseCatalog.currentVersion)},"features":{"harness_sessions":true,"resumable_events":true,"approval_events":false,"session_steering":true,"session_digest":false,"task_receipts":false,"artifacts":false,"exact_window":false},"harnesses":[{"key":"minis","name":"LeoPhoneAgent"}]}`);
+        `{"object":"leoagent.capabilities","platform":"harmony","version":${JSON.stringify(PROTOCOL_VERSION)},"server":"minis","app_version":${JSON.stringify(ReleaseCatalog.currentVersion)},"features":{"harness_sessions":true,"resumable_events":true,"approval_events":false,"session_steering":true,"task_scope_approval":false,"full_auto":false,"session_digest":false,"task_receipts":false,"artifacts":false,"exact_window":false},"harnesses":[{"key":"minis","name":"LeoPhoneAgent"}]}`);
     }
     if (verb === 'GET' && path === '/harness/sessions') {
       return HarmonyMinisRouter.json(200, `{"sessions":[${this.summaries()}]}`);

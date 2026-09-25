@@ -3,7 +3,18 @@ import { http } from '@kit.NetworkKit';
 import { OpenAICompatClient, StreamTurn } from './OpenAICompatClient';
 import { FastLocalActions } from './FastLocalActions';
 import { LocalTools, ToolResult } from './LocalTools';
-import { FailoverSlot, LoopTurn, ToolCall, shouldFailover } from './LocalProtocol';
+import { SensitiveToolGate } from './SensitiveToolGate';
+import {
+  FailoverSlot,
+  LOOP_STOP_AT,
+  LOOP_WARN_AT,
+  LoopTurn,
+  MAX_TOOL_ROUNDS,
+  ToolCall,
+  ToolLoopGuard,
+  loopWarning,
+  shouldFailover
+} from './LocalProtocol';
 import { providerStore } from '../store/ProviderStore';
 import { usageStore } from '../store/UsageStore';
 import { taskStatus } from '../store/TaskStatus';
@@ -11,6 +22,7 @@ import { taskStatus } from '../store/TaskStatus';
 export class LocalAgentEngine {
   private static gen: Map<string, number> = new Map();
   private static reqs: Map<string, http.HttpRequest> = new Map();
+  private static guards: Map<string, ToolLoopGuard> = new Map();
 
   static bump(sessionKey: string): number {
     const next = (LocalAgentEngine.gen.get(sessionKey) ?? 0) + 1;
@@ -63,6 +75,7 @@ export class LocalAgentEngine {
   static forget(sessionKey: string): void {
     LocalAgentEngine.release(sessionKey);
     LocalAgentEngine.gen.delete(sessionKey);
+    LocalAgentEngine.guards.delete(sessionKey);
   }
 
   static run(context: common.UIAbilityContext, sessionKey: string, mine: number, text: string,
@@ -72,6 +85,7 @@ export class LocalAgentEngine {
       return null;
     }
     taskStatus.setRunning(true);
+    LocalAgentEngine.guards.set(sessionKey, new ToolLoopGuard());
     FastLocalActions.tryRoute(context, text, 0).then((spoken: string) => {
       if (!LocalAgentEngine.alive(sessionKey, mine)) {
         return;
@@ -113,23 +127,24 @@ export class LocalAgentEngine {
       return;
     }
     await providerStore.ensureLoaded(context);
+    await SensitiveToolGate.load(context);
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
       return;
     }
     if (!providerStore.configured()) {
       taskStatus.setRunning(false);
-      onError('这台鸿蒙还没配供应商');
+      onError('这台鸿蒙还没配 AI 服务商');
       return;
     }
-    if (rounds >= 8) {
+    if (rounds >= MAX_TOOL_ROUNDS) {
       taskStatus.setRunning(false);
-      onError('工具轮次用完了');
+      onError(`一次任务最多 ${MAX_TOOL_ROUNDS} 轮工具,已经停下`);
       return;
     }
     const queue: FailoverSlot[] = providerStore.queue();
     if (failIndex >= queue.length) {
       taskStatus.setRunning(false);
-      onError('供应商都试过了');
+      onError('所有 AI 服务商都试过了,都没成功');
       return;
     }
     const slot = queue[failIndex];
@@ -193,18 +208,26 @@ export class LocalAgentEngine {
         return;
       }
       // owner 传 sessionKey：远程/定时这两条链路没有 UI 授权入口，
-      // 传了也永远配不上本机聊天页的授权，file_write 会照常落到 needWrite 分支被拒。
+      // 传了也永远配不上本机聊天页的授权;只有这台鸿蒙开了「全自动」时才能写。
       const result: ToolResult = await LocalTools.run(context, calls[i].name, calls[i].args, sessionKey);
       if (result.needWrite) {
-        onError('远程指挥写文件需要本机先点允许');
+        onError('这台鸿蒙是「逐项确认」,远程和定时任务不能写文件;在鸿蒙上切到「全自动」后可以');
         return;
       }
+      const guard = LocalAgentEngine.guards.get(sessionKey) ?? new ToolLoopGuard();
+      LocalAgentEngine.guards.set(sessionKey, guard);
+      const times = guard.note(calls[i].name, calls[i].args);
       const tool = new LoopTurn();
       tool.role = 'tool';
       tool.toolCallId = calls[i].id.length > 0 ? calls[i].id : `call_${i}`;
       tool.toolName = calls[i].name;
-      tool.content = result.text;
+      tool.content = times >= LOOP_WARN_AT ? result.text + loopWarning(calls[i].name, times) : result.text;
       turns.push(tool);
+      if (times >= LOOP_STOP_AT) {
+        taskStatus.setRunning(false);
+        onError(`${calls[i].name} 用同样的参数调用了 ${times} 次,已经停下`);
+        return;
+      }
     }
     LocalAgentEngine.loop(context, sessionKey, mine, turns, thinking, rounds, failIndex, onDelta, onDone, onError);
   }

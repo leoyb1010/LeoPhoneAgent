@@ -10,8 +10,17 @@ import { soulStore } from '../store/SoulStore';
 import { browserStore } from '../store/BrowserStore';
 import { WorkspaceStore } from '../store/WorkspaceStore';
 import { InAppBrowser } from './InAppBrowser';
+import { PhoneTools } from './PhoneTools';
 import { SensitiveToolGate } from './SensitiveToolGate';
-import { WRITE_GRANT_MARK, allowOpenUrl, htmlToText, sandboxFileName, toolArg } from './LocalProtocol';
+import {
+  WRITE_GRANT_MARK,
+  allowOpenUrl,
+  htmlToText,
+  nowLine,
+  sandboxFileName,
+  toolArg,
+  toolArgsComplete
+} from './LocalProtocol';
 
 export class ToolResult {
   text: string = '';
@@ -36,7 +45,8 @@ export class LocalTools {
       collectionStore.load(context),
       soulStore.load(context),
       envStore.load(context),
-      mcpStore.load(context)
+      mcpStore.load(context),
+      SensitiveToolGate.load(context)
     ]);
   }
 
@@ -45,8 +55,10 @@ export class LocalTools {
       '你是 LeoPhoneAgent 的本机 Agent，跑在这台鸿蒙手机上。',
       '不连中继也能工作。远程机器是另一条入口。',
       Copy.noLinux,
-      '需要读文件、写文件、记事、打开链接或抓网页时，直接用 function calling，不要把工具写成普通文字。',
-      '写沙箱文件必须等人确认。文件路径只用沙箱文件名，例如 notes.md。',
+      nowLine(Date.now()),
+      '需要读文件、写文件、记事、打开链接、抓网页，或者用手机能力(闹钟、提醒、通知、手电、剪贴板、拨号、定位、天气、设备信息)时，直接用 function calling，不要把工具写成普通文字。',
+      SensitiveToolGate.fullAuto ? '写沙箱文件不用等确认(用户开了全自动)。文件路径只用沙箱文件名，例如 notes.md。' :
+        '写沙箱文件要等用户确认。文件路径只用沙箱文件名，例如 notes.md。',
       '本机斜杠命令仍可用：/ls /read /write /remember /open。'
     ];
     const soul = soulStore.promptBlock();
@@ -104,10 +116,17 @@ export class LocalTools {
   }
 
   /** owner：发起这次工具调用的会话。写沙箱的授权按它配对，远程/定时链路拿不到本机用户的授权。 */
-  static async run(context: common.UIAbilityContext, name: string, args: string,
+  static async run(context: common.UIAbilityContext, name: string, raw: string,
     owner: string = ''): Promise<ToolResult> {
+    // 模型写的是 $$名字,真实值只在本机这一步换进去。
+    const args = envStore.expand(raw);
     const out = new ToolResult();
     out.title = toolArg(args, 'tool_title') || name;
+    if (!toolArgsComplete(args)) {
+      // 参数写到一半被截断:不补全、不执行,让模型重发(iOS、安卓同样处理)。
+      out.text = '参数不完整(输出被截断),这次没有执行。请把完整参数重新发一次。';
+      return out;
+    }
     try {
       if (name === 'file_list') {
         out.text = LocalTools.listSandbox(context);
@@ -129,7 +148,7 @@ export class LocalTools {
           owner);
         if (written === WRITE_GRANT_MARK) {
           out.needWrite = true;
-          out.text = '写文件需要你先点「允许写这次」';
+          out.text = '写文件要等用户确认';
         } else {
           out.text = written;
         }
@@ -144,15 +163,20 @@ export class LocalTools {
           const written = LocalTools.writeSandbox(context, path, body.split(old).join(next), owner);
           if (written === WRITE_GRANT_MARK) {
             out.needWrite = true;
-            out.text = '改文件需要你先点「允许写这次」';
+            out.text = '改文件要等用户确认';
           } else {
             out.text = written;
           }
         }
       } else if (name === 'memory_write') {
-        await memoryStore.load(context);
-        await memoryStore.appendToday(context, toolArg(args, 'content'));
-        out.text = '已写入今日记忆';
+        const content = toolArg(args, 'content').trim();
+        if (content.length === 0) {
+          out.text = '内容是空的,没有写入';
+        } else {
+          await memoryStore.load(context);
+          await memoryStore.appendToday(context, content);
+          out.text = '已写入今日记忆';
+        }
       } else if (name === 'memory_get') {
         await memoryStore.load(context);
         out.text = memoryStore.search(toolArg(args, 'scope') || 'all', toolArg(args, 'keywords'));
@@ -162,6 +186,8 @@ export class LocalTools {
         out.text = await LocalTools.fetchPage(toolArg(args, 'url'));
       } else if (name === 'browser_use') {
         out.text = LocalTools.browser(toolArg(args, 'action'), toolArg(args, 'url'), toolArg(args, 'tab_id'));
+      } else if (PhoneTools.NAMES.indexOf(name) >= 0) {
+        out.text = await PhoneTools.run(context, name, args);
       } else if (name === 'mcp_call') {
         const server = mcpStore.find(toolArg(args, 'server'));
         if (!server) {

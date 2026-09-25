@@ -106,3 +106,27 @@ function uniqueIds(ids: string[]): string[] {
   }
   return seen;
 }
+
+export const CODEX_MODELS_URL: string = 'https://chatgpt.com/backend-api/codex/models';
+
+/**
+ * ChatGPT 登录(Codex)的模型目录 {models:[{slug, visibility, priority}]} → 可列出的 slug,按 priority 排。
+ * 和 iOS 同一个来源(Codex CLI 用的那份);服务端隐藏的(visibility 不是 list)不列。
+ */
+export function codexCatalogIds(json: object): string[] {
+  const rows = (json as Record<string, Object>)['models'];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  const listed: Record<string, Object>[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] as Record<string, Object>;
+    const visibility = `${row['visibility'] ?? 'list'}`;
+    if (visibility === 'list' && `${row['slug'] ?? ''}`.length > 0) {
+      listed.push(row);
+    }
+  }
+  listed.sort((a: Record<string, Object>, b: Record<string, Object>): number =>
+    Number(a['priority'] ?? Number.MAX_SAFE_INTEGER) - Number(b['priority'] ?? Number.MAX_SAFE_INTEGER));
+  return uniqueIds(listed.map((row: Record<string, Object>) => `${row['slug']}`));
+}

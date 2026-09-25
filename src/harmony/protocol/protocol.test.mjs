@@ -42,6 +42,20 @@ import {
   parseTableRows,
   resolveFailoverQueue,
   shouldFailover,
+  friendlyModelError,
+  toolArgsComplete,
+  ToolLoopGuard,
+  LOOP_WARN_AT,
+  LOOP_STOP_AT,
+  MAX_TOOL_ROUNDS,
+  loopWarning,
+  parseReminderTime,
+  nowLine,
+  wmoText,
+  weatherSummary,
+  envPromptBlock,
+  expandEnvPlaceholders,
+  sessionArchiveJson,
   usageFromJson,
   fileReadPage,
   formatFileReadOutput,
@@ -56,6 +70,7 @@ import {
   modelsDevProviderKey,
   idsFromModelsDevJson,
   fallbackModelIds,
+  codexCatalogIds,
 } from "./providerModels.ts";
 import { voiceTemplates, voiceCapabilityLabel, matchVoiceTemplate } from "./voiceTemplates.ts";
 import { parseDeviceAuth, classifyDevicePoll, accessTokenFromJson, httpsHost, hostEndsWith } from "./deviceOAuth.ts";
@@ -96,7 +111,7 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
 {
   const rows = parseMachines({
     machines: [
-      { name: "LeodeMac-mini-2", online: true, server: "leocodebox" },
+      { name: "LeodeMac-mini-2", online: true, server: "leophoneagent" },
       { name: "LeoFold8", online: true, platform: "android", server: "minis", version: "1.0.0-alpha.6" },
       { name: "LeoMate", online: true, platform: "harmony", server: "minis", version: "0.1.0-alpha.1" },
       { name: "" },
@@ -210,7 +225,7 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.throws(() => requireHttpsRoot("https://user:pass@evil.example/relay/api"));
   const next = applyDiscovery(
     [{ name: "LeoFold8", online: true }, { name: "Mac", online: true }],
-    [{ name: "Mac", online: true, platform: null, server: "leocodebox", version: null }],
+    [{ name: "Mac", online: true, platform: null, server: "leophoneagent", version: null }],
   );
   assert.equal(next.find((row) => row.name === "LeoFold8")?.online, false);
   assert.equal(next.find((row) => row.name === "Mac")?.online, true);
@@ -498,8 +513,10 @@ const harmonyRouter = src("../app/entry/src/main/ets/local/HarmonyMinisRouter.et
 const harmonyCodec = src("../app/entry/src/main/ets/net/OutboundCodec.ets");
 const harmonyOutbound = src("../app/entry/src/main/ets/net/OutboundClient.ets");
 const androidRouter = src("../../android/app/src/main/java/com/leoyuan/leophoneagent/relay/MinisHarnessRouter.kt");
-const macRoutes = src("../../mac/leocodebox/server/modules/leophone/leophone.routes.ts");
-const macSession = src("../../mac/leocodebox/server/modules/leophone/harness-session.service.ts");
+// Mac 端是 Leo Link 桥接(src/mac/leophone);旧的 src/mac/leocodebox 只作回退,不再代表线上协议。
+const macRoutes = src("../../mac/leophone/packages/desktop/src/host/leo/link/bridge.ts");
+const macSession = src("../../mac/leophone/packages/desktop/src/host/leo/link/session.ts");
+const macJournal = src("../../mac/leophone/packages/desktop/src/host/leo/link/journal.ts");
 
 /** 把 ArkTS 的模板串还原成能 JSON.parse 的形状:`${JSON.stringify(x)}` → "<x>"。 */
 function wireShape(source, startsWith) {
@@ -514,7 +531,7 @@ function wireShape(source, startsWith) {
   // --- 协议版本:四端同一个号,且不是 App 版本 ---
   const harmonyVersion = /PROTOCOL_VERSION:\s*string\s*=\s*'([^']+)'/.exec(harmonyRouter);
   const androidVersion = /const val PROTOCOL_VERSION = "([^"]+)"/.exec(androidRouter);
-  const macVersion = /const VERSION = '([^']+)'/.exec(macRoutes);
+  const macVersion = /const VERSION = ["']([^"']+)["']/.exec(macRoutes);
   assert.ok(harmonyVersion && androidVersion && macVersion, "三端都要有协议版本常量");
   assert.equal(harmonyVersion[1], androidVersion[1]);
   assert.equal(harmonyVersion[1], macVersion[1]);
@@ -539,8 +556,8 @@ function wireShape(source, startsWith) {
   assert.equal(caps.version, health.version, "capabilities 与 health 的 version 同源");
   assert.deepEqual(caps.harnesses, [{ key: "minis", name: "LeoPhoneAgent" }]);
 
-  // features 的七个键要跟 Mac 一字不差(值可以不同,键不能少)。
-  const macFeatures = /features:\s*\{([\s\S]*?)\n    \}/.exec(macRoutes);
+  // features 的键要跟 Mac 一字不差(值可以不同,键不能少)。
+  const macFeatures = /features:\s*\{([\s\S]*?)\n\s*\}/.exec(macRoutes);
   assert.ok(macFeatures, "读不到 Mac 的 features");
   const macKeys = [...macFeatures[1].matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]).sort();
   assert.deepEqual(Object.keys(caps.features).sort(), macKeys);
@@ -556,9 +573,9 @@ function wireShape(source, startsWith) {
   const harmonyPush = /const PUSH_EVENTS: string\[\] = \[([^\]]*)\]/.exec(harmonyRouter);
   assert.ok(harmonyPush, "鸿蒙缺 PUSH_EVENTS");
   const harmonyNames = [...harmonyPush[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort();
-  const macPush = /const PUSHABLE_EVENTS = new Set\(\[([\s\S]*?)\]\)/.exec(macSession);
-  assert.ok(macPush, "读不到 Mac 的 PUSHABLE_EVENTS");
-  const macNames = [...macPush[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort();
+  const macPush = /const PUSHABLE(?:_EVENTS)? = new Set\(\[([\s\S]*?)\]\)/.exec(macSession);
+  assert.ok(macPush, "读不到 Mac 的 PUSHABLE");
+  const macNames = [...macPush[1].matchAll(/["']([^"']+)["']/g)].map((m) => m[1]).sort();
   assert.deepEqual(harmonyNames, macNames);
 
   // 名单要真的接上出线口,否则等于没推(eventJson 曾经定义了却没人调用)。
@@ -586,7 +603,7 @@ function wireShape(source, startsWith) {
 
   // --- 补齐语义:严格大于 ---
   assert.ok(/if \(i \+ 1 > after\)/.test(harmonyRouter), "replay 必须是严格大于 after");
-  assert.ok(/> afterSeq/.test(macSession), "Mac 也是严格大于");
+  assert.ok(/\.seq\) > after\b/.test(macJournal), "Mac 也是严格大于");
 
   // --- stream_open 的每一条出路都要收尾 ---
   // 中继挂在 stream 队列上等 stream_data/stream_close,`resp` 帧会被丢掉。
@@ -613,7 +630,7 @@ function wireShape(source, startsWith) {
   assert.equal(isHarmonyBody(harmonyMachine), true);
   assert.equal(isAndroidBody(harmonyMachine), false);
   assert.equal(isAndroidBody({ name: "Fold8", online: true, platform: "android", server: "minis", version: "1" }), true);
-  assert.equal(isAndroidBody({ name: "Mac", online: true, platform: "leoagent", server: "leocodebox", version: "1" }), false);
+  assert.equal(isAndroidBody({ name: "Mac", online: true, platform: "leoagent", server: "leophoneagent", version: "1" }), false);
 }
 
 {
@@ -678,7 +695,7 @@ function wireShape(source, startsWith) {
 
   assert.equal(decide("帮我看看这张图", 1).path, "agent");
   assert.equal(decide("设个闹钟", 0).path, "agent");
-  assert.equal(parseTime("没有时间"), null);
+  assert.deepEqual(parseTime("没有时间"), []);
 
   const on = decide("打开手电筒", 0);
   assert.equal(on.kind, "toggleFlashlight");
@@ -693,7 +710,202 @@ function wireShape(source, startsWith) {
   assert.equal(enTodo.kind, "createTodo");
   assert.equal(enTodo.label, "call mom");
   assert.equal(decide("手电筒坏了怎么办", 0).path, "agent");
-  assert.equal(decide("帮我记一下今天的会", 0).path, "agent");
+  // 和 iOS、安卓一样:「帮我记一下」是记待办。
+  assert.equal(decide("帮我记一下今天的会", 0).kind, "createTodo");
+
+  // --- 0.3.0-alpha.18:和安卓 ActionRouter 对齐 ---
+  const sat = new Date(2026, 8, 26, 10, 0); // 周六
+  const later = decide("提醒我后天下午3点交报告", 0, sat);
+  assert.equal(later.path, "native");
+  assert.equal(later.kind, "createTodo");
+  assert.equal(later.dayOffset, 2);
+  assert.equal(later.hour, 15);
+  assert.equal(later.label, "交报告");
+  assert.match(spokenOf(later), /后天 15:00 提醒你/);
+  assert.equal(decide("3天后 9:00 加到日历 复诊", 0, sat).dayOffset, 3);
+  assert.equal(decide("10月1日 8:00 加到日历 出发", 0, sat).dayOffset, 5);
+  assert.equal(decide("9月1日 8:00 加到日历 体检", 0, sat).dayOffset, 340, "过了的日期算明年");
+  assert.equal(decide("周一 9:00 加到日历 周会", 0, sat).dayOffset, 2);
+  assert.equal(decide("下周一 9:00 加到日历 周会", 0, sat).dayOffset, 9);
+  assert.equal(decide("周六 9:00 加到日历 爬山", 0, sat).dayOffset, 0);
+
+  // 缺信息只追问缺的那一项,不交给模型去猜。
+  const noTime = decide("把项目评审加到日历", 0, sat);
+  assert.equal(noTime.path, "clarify");
+  assert.deepEqual(noTime.missing, ["开始时间"]);
+  assert.match(spokenOf(noTime), /还需要：开始时间/);
+  const noTitle = decide("提醒我", 0, sat);
+  assert.equal(noTitle.path, "clarify");
+  assert.deepEqual(noTitle.missing, ["要提醒的事情"]);
+
+  // 出行记录
+  const trip = decide("帮我记录明天 8:30 去杭州的高铁 G7311 座位 05车12F", 0, sat);
+  assert.equal(trip.kind, "createTravel");
+  assert.equal(trip.path, "native");
+  assert.equal(trip.location, "杭州");
+  assert.match(trip.notes, /车次：G7311/);
+  assert.match(trip.notes, /座位：05车12F/);
+  const tripNoTime = decide("记一下去上海的航班", 0, sat);
+  assert.equal(tripNoTime.path, "clarify");
+  assert.ok(tripNoTime.missing.includes("开车时间"));
+
+  // 剪贴板和设备信息
+  const copy = decide("把 SN-2026-0926 复制到剪贴板", 0, sat);
+  assert.equal(copy.kind, "writeClipboard");
+  assert.equal(copy.label, "SN-2026-0926");
+  assert.equal(decide("Copy Hello World to the clipboard", 0).label, "Hello World");
+  assert.equal(decide("看看设备信息", 0).kind, "deviceInfo");
+  assert.equal(decide("读取剪贴板", 0).path, "agent", "鸿蒙读剪贴板要受限权限,交给模型");
+
+  // 执行凭证:和安卓同一个格式
+  const receiptSrc = readFileSync(new URL("../app/entry/src/main/ets/local/ActionRouter.ets", import.meta.url), "utf8");
+  assert.match(receiptSrc, /执行凭证\\n- 路径：/);
+  // 镜像必须原样包含 ArkTS 源码,两边不会各改各的。
+  const mirror = readFileSync(new URL("./actionRouter.ts", import.meta.url), "utf8");
+  assert.ok(mirror.includes(receiptSrc), "protocol/actionRouter.ts 要和 ActionRouter.ets 一字不差");
+}
+
+{
+  // --- 0.3.0-alpha.18 对齐:本机 Agent ---
+  const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const chatPane = etsSrc("panes/LocalChatPane.ets");
+  const tools = etsSrc("local/LocalTools.ets");
+  const client = etsSrc("local/OpenAICompatClient.ets");
+  const gate = etsSrc("local/SensitiveToolGate.ets");
+  const protocolEts = etsSrc("local/LocalProtocol.ets");
+
+  // Anthropic 流中途 overloaded:要当成错误(还能换一家),不能把半截回答当完整回答。
+  const overloaded = responsesErrorFromJson({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } });
+  assert.match(overloaded, /overloaded/);
+  assert.ok(shouldFailover(overloaded));
+  assert.equal(responsesErrorFromJson({ type: "error", message: "boom" }), "boom", "Codex 顶层 message 照旧");
+  assert.ok(shouldFailover("stream ended early"));
+  assert.ok(/err\['type'\]/.test(protocolEts), "LocalProtocol.ets 也要读 Anthropic 的 error 对象");
+  assert.ok(/this\.mode === 'anthropic' && !ended/.test(client), "没收到 message_delta/message_stop 的 Anthropic 流算中途断了");
+  assert.match(friendlyModelError("unauthorized"), /AI 服务商/);
+  assert.equal(friendlyModelError("没有这个模型"), "没有这个模型");
+
+  // 半截参数的工具调用:不补全、不执行。
+  assert.equal(toolArgsComplete('{"path":"a.md","content":"hal'), false);
+  assert.equal(toolArgsComplete('{"path":"a.md"}'), true);
+  assert.equal(toolArgsComplete(""), true);
+  const runBody = tools.slice(tools.indexOf("static async run("));
+  assert.ok(runBody.indexOf("toolArgsComplete(args)") >= 0 &&
+    runBody.indexOf("toolArgsComplete(args)") < runBody.indexOf("name === 'file_list'"),
+    "LocalTools.run 要在执行任何工具之前检查参数完整");
+
+  // 审批:和 iOS 同样的选项,永远有全自动。
+  for (const label of ["允许一次", "本次会话允许", "拒绝", "拒绝并停止任务"]) {
+    assert.ok(chatPane.includes(`'${label}'`), `本机审批栏要有「${label}」`);
+  }
+  assert.ok(!chatPane.includes("允许写这次"), "旧的单按钮文案要去掉");
+  assert.ok(/static fullAuto: boolean/.test(gate) && /'全自动'/.test(gate), "要有全自动");
+  assert.ok(/cmd === '\/auto'/.test(chatPane), "/auto 切换全自动");
+  assert.match(gate, /用户拒绝了「写文件」/, "拒绝回执和 iOS 同一句话");
+
+  // 停止真的停:剩下的工具和下一轮都要看这一轮还算不算数。
+  const runTools = chatPane.slice(chatPane.indexOf("private async runTools("));
+  assert.ok(/if \(!this\.live\(\)\) \{\s*return;/.test(runTools.slice(0, 400)), "runTools 每个工具前检查");
+  assert.ok(/cancelRun\(\)/.test(chatPane.slice(chatPane.indexOf("onSessionChange()"), chatPane.indexOf("onSessionChange()") + 400)),
+    "换对话作废正在跑的一轮");
+  // 工具执行前先存这一步。
+  assert.ok(/saveToolRound\(ctx, turn\.text, calls\)\.then/.test(chatPane), "工具执行前先存模型这一步");
+}
+
+{
+  // --- 0.3.0-alpha.18 对齐:轮数、重复检测、手机工具 ---
+  const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const protocolEts = etsSrc("local/LocalProtocol.ets");
+  const phone = etsSrc("local/PhoneTools.ets");
+  const tools = etsSrc("local/LocalTools.ets");
+  const fast = etsSrc("local/FastLocalActions.ets");
+  const moduleJson = readFileSync(new URL("../app/entry/src/main/module.json5", import.meta.url), "utf8");
+
+  assert.equal(MAX_TOOL_ROUNDS, 50);
+  assert.ok(/MAX_TOOL_ROUNDS: number = 50/.test(protocolEts), "ETS 与 TS 同一个上限");
+  const guard = new ToolLoopGuard();
+  assert.equal(guard.note("web_fetch", '{"url":"a"}'), 1);
+  assert.equal(guard.note("web_fetch", '{"url":"b"}'), 1, "参数不同不算重复");
+  assert.equal(guard.note("web_fetch", '{"url":"a"}'), 2);
+  assert.ok(LOOP_WARN_AT < LOOP_STOP_AT);
+  assert.match(loopWarning("web_fetch", 3), /第 3 次/);
+
+  // 手机工具:工具清单(ETS)、TS 镜像、PhoneTools.NAMES 三处一致,分发也接上了。
+  const schemaNames = [...protocolEts.slice(protocolEts.indexOf("export function localToolSchemaJson"),
+    protocolEts.indexOf("export function anthropicToolSchemaJson")).matchAll(/"name":"([a-z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...schemaNames].sort(), [...localToolNames()].sort(), "ETS 工具清单与 TS 镜像一致");
+  const phoneNames = [...phone.match(/NAMES: string\[\] = \[([\s\S]*?)\]/)[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+  for (const name of phoneNames) {
+    assert.ok(schemaNames.includes(name), `${name} 要在工具清单里`);
+  }
+  assert.ok(/PhoneTools\.NAMES\.indexOf\(name\) >= 0/.test(tools), "LocalTools.run 要把手机工具交给 PhoneTools");
+  assert.ok(/ohos\.permission\.APPROXIMATELY_LOCATION/.test(moduleJson) && /ohos\.permission\.LOCATION"/.test(moduleJson),
+    "定位要在 module.json5 里声明");
+  // 待办发不出去不能报成功。
+  const todo = fast.slice(fast.indexOf("static async postNotice("), fast.indexOf("static async addAlarm("));
+  assert.ok(/catch \(_err\) \{\s*return false;/.test(todo), "通知失败要如实返回 false");
+
+  // 提醒时间:只收具体的将来时间。
+  const now = new Date(2026, 8, 26, 10, 0).getTime();
+  assert.deepEqual(parseReminderTime("2026-09-27 09:30", now), { year: 2026, month: 9, day: 27, hour: 9, minute: 30 });
+  assert.deepEqual(parseReminderTime("2026-09-27T09:30:00", now), { year: 2026, month: 9, day: 27, hour: 9, minute: 30 });
+  assert.equal(parseReminderTime("2026-09-25 09:30", now), null, "过去的时间不收");
+  assert.equal(parseReminderTime("明天九点", now), null);
+  assert.equal(parseReminderTime("2026-13-01 09:30", now), null);
+  assert.match(nowLine(now), /2026-09-26 周六 10:00/);
+
+  // 天气:WMO 代码和摘要,和安卓同一套代码表。
+  assert.equal(wmoText(0), "晴");
+  assert.equal(wmoText(63), "中雨");
+  assert.equal(wmoText(95), "雷阵雨");
+  const summary = weatherSummary({
+    current: { temperature_2m: 22.6, apparent_temperature: 23.1, relative_humidity_2m: 61, weather_code: 2, wind_speed_10m: 11.4 },
+    daily: { time: ["2026-09-26", "2026-09-27", "2026-09-28"], weather_code: [2, 61, 0],
+      temperature_2m_max: [27, 24, 26], temperature_2m_min: [18, 17, 16], precipitation_probability_max: [10, 80, 0] },
+  }, "杭州");
+  assert.match(summary, /^杭州 · 现在 23°C\(体感 23°C\),局部多云,湿度 61%,风 11 km\/h/);
+  assert.match(summary, /明天\(2026-09-27\) 小雨,17–24°C,降水概率 80%/);
+  assert.equal(weatherSummary({}, "x"), "天气服务没有返回数据");
+}
+
+{
+  // --- 0.3.0-alpha.18 对齐:环境变量、导出、ChatGPT 目录、启动、服务商清理、滚动 ---
+  const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+
+  // 环境变量:只给模型名字,执行时才换值。
+  const block = envPromptBlock(["GITHUB_TOKEN", "HOME_WIFI"]);
+  assert.match(block, /GITHUB_TOKEN、HOME_WIFI/);
+  assert.ok(!/=/.test(block.replace(/\$\$名字/, "")), "系统提示里不出现 名字=值");
+  const values = new Map([["GITHUB_TOKEN", 'ab"c'], ["X", "1"]]);
+  assert.equal(expandEnvPlaceholders('{"url":"https://x/?t=$$GITHUB_TOKEN&u=$$NOPE"}', values),
+    '{"url":"https://x/?t=ab\\"c&u=$$NOPE"}', "值按 JSON 转义,不认识的名字原样留着");
+  assert.ok(!/\$\{this\.rows\[i\]\.value\}/.test(etsSrc("store/EnvStore.ets")), "EnvStore 不再把值写进提示");
+  assert.ok(/envStore\.expand\(raw\)/.test(etsSrc("local/LocalTools.ets")), "工具执行前替换 $$名字");
+
+  // 导出的档案能原样导回来。
+  const exported = sessionArchiveJson("周末计划", [
+    { role: "user", text: "周末去哪" }, { role: "assistant", text: "去西湖" }, { role: "tool", text: "x" },
+  ]);
+  const back = sessionArchiveFromJson(JSON.parse(exported));
+  assert.equal(back.title, "周末计划");
+  assert.deepEqual(back.messages.map((m) => [m.role, m.text]), [["user", "周末去哪"], ["assistant", "去西湖"]]);
+  assert.ok(/'导出对话'/.test(etsSrc("panes/LocalAgentPane.ets")), "对话菜单里有导出");
+
+  // ChatGPT 登录的模型目录:只列 visibility=list,按 priority。
+  assert.deepEqual(codexCatalogIds({ models: [
+    { slug: "gpt-5.5", priority: 3 }, { slug: "gpt-6-sol", priority: 1 },
+    { slug: "hidden", visibility: "hide", priority: 0 }, { slug: "gpt-6-astra", priority: 2 },
+  ] }), ["gpt-6-sol", "gpt-6-astra", "gpt-5.5"]);
+  assert.deepEqual(codexCatalogIds({}), []);
+  assert.ok(/'gpt-6-astra'/.test(etsSrc("local/ProviderCatalog.ets")) && /'grok-4\.6'/.test(etsSrc("local/ProviderCatalog.ets")),
+    "内置目录有 GPT-6 和 Grok 4.6");
+
+  // 启动「自动」生效;删服务商清模型组;流式不硬拽到底。
+  assert.ok(/themeStore\.launch === 'auto'/.test(etsSrc("panes/LocalAgentPane.ets")), "「自动」要生效");
+  const remove = etsSrc("store/ProviderStore.ets");
+  assert.ok(/startsWith\(`\$\{tag\}\/`\)/.test(remove.slice(remove.indexOf("async remove("), remove.indexOf("async setActive("))),
+    "删服务商时清掉它在模型组里的条目");
+  assert.ok(/!force && !this\.nearBottom/.test(etsSrc("panes/LocalChatPane.ets")), "不在底部时不跟随");
 }
 
 console.log("PROTOCOL_MACHINES_OK");

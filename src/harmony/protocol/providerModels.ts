@@ -90,3 +90,14 @@ function uniqueIds(ids: string[]): string[] {
   }
   return seen
 }
+
+export const CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
+
+/** 与 ProviderModels.ets 保持一致:Codex 模型目录 → 可列出的 slug,按 priority 排。 */
+export function codexCatalogIds(json: any): string[] {
+  const rows = json?.models
+  if (!Array.isArray(rows)) return []
+  const listed = rows.filter((row: any) => `${row?.visibility ?? "list"}` === "list" && `${row?.slug ?? ""}`.length > 0)
+  listed.sort((a: any, b: any) => Number(a.priority ?? Number.MAX_SAFE_INTEGER) - Number(b.priority ?? Number.MAX_SAFE_INTEGER))
+  return [...new Set(listed.map((row: any) => `${row.slug}`))]
+}
