@@ -86,6 +86,8 @@ class MinisHarnessRouter(
                             .put("resumable_events", true)
                             .put("approval_events", false)
                             .put("session_steering", true)
+                            .put("task_scope_approval", false)
+                            .put("full_auto", false)
                             .put("session_digest", false)
                             .put("task_receipts", false)
                             .put("artifacts", false)
