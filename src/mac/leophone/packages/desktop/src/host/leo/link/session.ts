@@ -30,6 +30,8 @@ export const APPROVAL_CHOICES: ApprovalChoice[] = ["once", "session", "deny"];
 
 /** 值得推给手机的:要人拍板的审批、要人知道结果的终态。进度帧不推。 */
 const PUSHABLE = new Set(["approval.request", "run.completed", "run.failed", "run.cancelled"]);
+/** 一轮结束的三种事件。 */
+const RUN_END = new Set(["run.completed", "run.failed", "run.cancelled"]);
 /** 手机端 reconcile 视为结束的状态;订阅流在这些状态下读完就关。 */
 const TERMINAL = new Set(["cancelled", "failed", "completed", "orphaned"]);
 /** 旧通道只能批这些只读工具;联网的 WebFetch / WebSearch 不在内。 */
@@ -82,6 +84,10 @@ export class LinkSession {
   private readonly journal: HarnessJournal;
   private subscription: { dispose(): void } | null = null;
   private stopTimer: NodeJS.Timeout | null = null;
+  /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问不代答,审批和完成不推手机。 */
+  private phoneTurn = false;
+  /** 发出时就定好要推的事件;落盘回调来得晚,那时 phoneTurn 可能已经清掉。 */
+  private readonly pushSeqs = new Set<number>();
 
   constructor(
     args: { taskId: string; cwd: string; mode?: ZCodeTaskMode },
@@ -92,7 +98,7 @@ export class LinkSession {
     if (args.mode) this.mode = args.mode;
     this.journal = new HarnessJournal(path.join(deps.journalDir, `${safeFileName(args.taskId)}.ndjson`), {
       onCommitted: (event) => {
-        if (PUSHABLE.has(event.event)) {
+        if (this.pushSeqs.delete(Number(event["seq"]))) {
           try {
             deps.push(event);
           } catch {
@@ -143,19 +149,26 @@ export class LinkSession {
 
   async send(text: string, caller: Caller): Promise<void> {
     this.lastCaller = caller;
+    this.phoneTurn = true;
     this.emit({ event: "user.message", text });
     this.status = "running";
-    if (this.needsResume) {
-      await this.deps.taskService.resumeTask({ taskId: this.sessionId, workspacePath: this.cwd });
-      this.needsResume = false;
+    try {
+      if (this.needsResume) {
+        await this.deps.taskService.resumeTask({ taskId: this.sessionId, workspacePath: this.cwd });
+        this.needsResume = false;
+      }
+      // sendPrompt 在远端 ACK 后就返回,不等这一轮跑完。
+      await this.deps.taskService.sendPrompt({
+        taskId: this.sessionId,
+        traceId: generateTraceId(this.sessionId),
+        content: text,
+        clientLabel: "leo-link",
+      });
+    } catch (cause) {
+      // 没送进内核:写个终态,不然首页和手机上一直显示「运行中」。
+      this.emit({ event: "run.failed", error: `发送失败:${cause instanceof Error ? cause.message : String(cause)}` });
+      throw cause;
     }
-    // sendPrompt 在远端 ACK 后就返回,不等这一轮跑完。
-    await this.deps.taskService.sendPrompt({
-      taskId: this.sessionId,
-      traceId: generateTraceId(this.sessionId),
-      content: text,
-      clientLabel: "leo-link",
-    });
   }
 
   async setMode(mode: ZCodeTaskMode): Promise<void> {
@@ -218,6 +231,8 @@ export class LinkSession {
         return;
       case "elicitation_request":
         for (const flushed of this.mapper.flushThought()) this.emit(flushed);
+        // Mac 上自己发起的轮次,提问留给 Mac 上的人答。
+        if (!this.phoneTurn) return;
         // 手机端还不会答提问和计划审批;挂着会把任务卡死,先自动取消并说一声。
         void this.deps.taskService
           .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: event.requestId, action: "cancel" })
@@ -285,6 +300,14 @@ export class LinkSession {
   // -- 编号、落盘、扇出 -----------------------------------------------------
 
   emit(event: HarnessEvent): void {
+    if (RUN_END.has(event.event) && this.pendingApprovals.size) {
+      // 这一轮结束了,还挂着的审批随之作废:发回执让手机收卡,不然重放日志时卡片又冒出来。
+      const stale = [...this.pendingApprovals];
+      this.pendingApprovals.clear();
+      for (const [approvalId, pending] of stale) {
+        if (pending.announced) this.emit({ event: "approval.responded", approval_id: approvalId, choice: "deny" });
+      }
+    }
     this.seq += 1;
     const enriched: HarnessEvent = { ...event, seq: this.seq, session_id: this.sessionId, timestamp: Date.now() / 1000 };
     const name = enriched.event;
@@ -292,15 +315,15 @@ export class LinkSession {
     if (name === "approval.request") this.status = "waiting_for_approval";
     else if (name === "approval.responded") {
       if (this.pendingApprovals.size === 0 && this.status === "waiting_for_approval") this.status = "running";
-    } else if (name === "run.completed" || name === "run.failed") {
-      this.status = "idle";
-      this.pendingApprovals.clear();
-    } else if (name === "run.cancelled") {
-      this.status = "cancelled";
-      this.pendingApprovals.clear();
+    }
+    if (RUN_END.has(name)) {
+      this.status = name === "run.cancelled" ? "cancelled" : "idle";
+      // 停止和正常结束撞上时,兜底计时器别再补一个 run.cancelled。
       if (this.stopTimer) clearTimeout(this.stopTimer);
       this.stopTimer = null;
     }
+    if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
+    if (RUN_END.has(name)) this.phoneTurn = false;
     if (name === "user.message") {
       const text = String(enriched["text"] ?? "").replace(/\s+/g, " ").trim();
       if (!this.title) this.title = text.slice(0, 80);

@@ -494,3 +494,64 @@ test("full_auto:false on every phone message leaves plan/edit tasks alone and on
     assert.equal(zcode.named("setMode").length, 0, "plan 任务不该被改成 build");
   }, { recentWorkspaces: [workspace] });
 });
+
+test("a turn that ends with an approval still pending closes the card; a late answer gets 409", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir, { prompt: "跑命令" });
+    zcode.fire(id, permission("p1", "Bash", { command: "rm -rf build" }));
+    zcode.fire(id, { type: "task_complete", stopReason: "cancelled" });
+    const events = await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.cancelled"));
+    assert.deepEqual(
+      events.filter((e) => e.event.startsWith("approval.") || e.event.startsWith("run.")).map((e) => [e.event, e["choice"] ?? null]),
+      [["approval.request", null], ["approval.responded", "deny"], ["run.cancelled", null]],
+    );
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { choice: "once", approval_id: "p1" }))).status, 409);
+  });
+});
+
+test("a send the Mac can't take ends the turn instead of leaving it running", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir);
+    (zcode.service as unknown as { sendPrompt: () => Promise<never> }).sendPrompt = async () => {
+      throw new Error("agent runtime not ready");
+    };
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/send`, { text: "在吗" }))).status, 409);
+    const events = await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.failed"));
+    assert.match(String(events.at(-1)?.["error"]), /agent runtime not ready/);
+    const list = (await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] };
+    assert.equal(list.sessions.find((s) => s["session_id"] === id)?.["status"], "idle");
+  });
+});
+
+test("turns started on the Mac keep their questions and don't push the phone", async () => {
+  await withBridge(async ({ bridge, zcode, dir, pushed }) => {
+    const id = await createSession(bridge, dir, { prompt: "手机发的" });
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(pushed.filter((e) => e.event === "run.completed").length, 1, "手机发起的一轮照常推");
+
+    // 之后在 Mac 桌面上接着聊:提问留给 Mac,审批与完成不推手机
+    zcode.fire(id, { type: "task_run_started" });
+    zcode.fire(id, { type: "elicitation_request", requestId: "q1", message: "选哪个方案?", options: [] });
+    zcode.fire(id, permission("m1", "Bash", { command: "make" }));
+    zcode.fire(id, { type: "permission_response", requestId: "m1", optionId: "allow_once", response: { decision: "allow" } });
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(zcode.named("respondElicitation").length, 0);
+    assert.equal(pushed.filter((e) => e.event === "run.completed").length, 1);
+    assert.ok(!pushed.some((e) => e["approval_id"] === "m1"));
+  });
+});
+
+test("stop racing a normal finish leaves the turn completed", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir, { prompt: "快完了" });
+    await bridge.handle(req("POST", `/harness/sessions/${id}/stop`, {}));
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    await new Promise((resolve) => setTimeout(resolve, 5_300));
+    const events = await collect(bridge, id, 0, () => false, 1000);
+    assert.deepEqual(events.filter((e) => e.event.startsWith("run.")).map((e) => e.event), ["run.completed"]);
+  });
+});

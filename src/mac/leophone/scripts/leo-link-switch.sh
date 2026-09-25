@@ -60,6 +60,34 @@ reload_leoagent() {
   return 1
 }
 
+# 中继 0.2 把机器名钉在桥接领到的专属钥匙上:回滚前先解钉,不然 leoagent 回来一直被拒(4003 名字已钉)。
+# 钥匙在 Python 里从钥匙串读出、放进请求头,不上命令行。
+unpin_machine() {
+  python3 - "$1" <<'PY' || echo "解钉没成功;leoagent 若一直连不上中继,到中继上解除这台机器的钉扎" >&2
+import json, os, plistlib, re, socket, subprocess, sys, urllib.error, urllib.parse, urllib.request
+env = plistlib.load(open(sys.argv[1], "rb")).get("EnvironmentVariables", {})
+name = os.environ.get("LEOAGENT_RELAY_NAME", "").strip() or socket.gethostname().split(".")[0]
+account = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "mac"
+key = subprocess.run(["/usr/bin/security", "find-generic-password", "-s", "com.leoyuan.leophoneagent.link",
+                      "-a", account, "-w"], capture_output=True, text=True).stdout.strip()
+if not key:
+    print("桥接没领过机器专属钥匙,不用解钉")
+    sys.exit(0)
+base = re.sub(r"/relay/agent$", "", env["LEOAGENT_RELAY_URL"].strip().rstrip("/"))
+base = base.replace("wss://", "https://").replace("ws://", "http://")
+req = urllib.request.Request(f"{base}/relay/api/machines/{urllib.parse.quote(name)}/unpin", data=b"{}",
+                             method="POST", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+try:
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        print("已解除机器名钉扎:", json.load(resp).get("ok"))
+except urllib.error.HTTPError as error:
+    if error.code == 404:
+        print("中继还是 0.1,没有钉扎")
+    else:
+        raise
+PY
+}
+
 case "${1:-}" in
   --status)
     status
@@ -75,6 +103,7 @@ case "${1:-}" in
     print '{"enabled": false}' > "$SWITCH"
     echo "桥接开关已关,等 App 让出机器名…"
     sleep 20
+    unpin_machine "$backup"
     cp "$backup" "$PLIST"
     echo "已恢复 $backup"
     if ! reload_leoagent; then

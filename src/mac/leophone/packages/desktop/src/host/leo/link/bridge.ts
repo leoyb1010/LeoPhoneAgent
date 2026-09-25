@@ -389,11 +389,8 @@ export class LinkBridge {
     }
     session.emit({ event: "session.created", harness: ZCODE, cwd, full_auto: fullAuto });
     if (prompt) {
-      try {
-        await session.send(prompt, req.caller);
-      } catch (cause) {
-        session.emit({ event: "run.failed", error: `发送失败:${cause instanceof Error ? cause.message : String(cause)}` });
-      }
+      // 失败时 send() 已经写了 run.failed。
+      await session.send(prompt, req.caller).catch(() => undefined);
     }
     void this.saveIndex();
     return { status: 202, body: { session_id: taskId, harness: ZCODE, status: session.status, full_auto: fullAuto } };

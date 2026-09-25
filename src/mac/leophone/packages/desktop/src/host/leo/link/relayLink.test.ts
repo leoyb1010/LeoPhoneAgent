@@ -155,6 +155,17 @@ test("RelayLink against the real relay 0.2: pin, caller, request id, stream, pus
     link = new RelayLink({ ...config, registerKey: "wrong-key-0123456789abcdef" }, bridge, keys, silent, "test");
     link.start();
     await waitFor(async () => (await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) })).status === 200);
+
+    // 中继解了钉(或丢了状态):存着的机器钥匙不再被认(4001),链路改用注册钥匙重新领一把,而不是一直被拒
+    link.stop();
+    const unpinned = await fetch(`${base}/relay/api/machines/TestMac/unpin`, { method: "POST", headers: auth(MASTER) });
+    assert.equal(unpinned.status, 200);
+    const stale = keys.value;
+    link = new RelayLink(config, bridge, keys, silent, "test");
+    link.start();
+    const fresh = await waitFor(async () => (keys.value !== stale ? keys.value : null), 15_000);
+    assert.ok(fresh && fresh.length >= 16);
+    await waitFor(async () => (await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) })).status === 200);
   } finally {
     link.stop();
     relay.kill();

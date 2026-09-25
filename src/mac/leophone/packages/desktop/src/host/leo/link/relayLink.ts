@@ -71,6 +71,8 @@ export function callerFrom(frame: Record<string, unknown>): Caller {
 export class RelayLink {
   private stopped = false;
   private activeWs: WebSocket | null = null;
+  /** 中继拒了存着的机器钥匙;领到新钥匙前改用注册钥匙。 */
+  private machineKeyRejected = false;
   private readonly outbox: Record<string, unknown>[] = [];
   private readonly streamAborts = new Map<string, AbortController>();
 
@@ -127,7 +129,7 @@ export class RelayLink {
   }
 
   private async runOnce(): Promise<void> {
-    const machineKey = await this.machineKeys.get();
+    const machineKey = this.machineKeyRejected ? null : await this.machineKeys.get();
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000, lookup: tailnetLookup() });
       this.activeWs = ws;
@@ -193,6 +195,7 @@ export class RelayLink {
             // 0.2 起回执带 version,并且每个请求都附调用方:从此认不出身份的请求按旧版设备对待。
             this.bridge.strictCallers = typeof frame["version"] === "string";
             if (typeof frame["machine_key"] === "string" && frame["machine_key"]) {
+              this.machineKeyRejected = false;
               void this.machineKeys.set(frame["machine_key"]).catch((error: unknown) =>
                 this.logger.warn("[leo/link] storing machine key failed", { error: String(error) }));
             }
@@ -212,6 +215,9 @@ export class RelayLink {
         }
       });
       ws.on("close", (code, reason) => {
+        // 中继不认存着的机器钥匙(4001:被解钉、中继状态丢了、首次存钥匙没存上):下一次用注册钥匙重新领,
+        // 不然永远 4001、手机一直看到 Mac 离线。
+        if (code === 4001 && machineKey) this.machineKeyRejected = true;
         finish(new Error(`relay closed (${code}${reason?.length ? ` ${reason.toString()}` : ""})`));
       });
       ws.on("error", (error) => finish(error instanceof Error ? error : new Error(String(error))));
