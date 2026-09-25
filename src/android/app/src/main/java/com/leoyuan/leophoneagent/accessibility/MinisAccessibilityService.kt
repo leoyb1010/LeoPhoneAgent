@@ -353,8 +353,13 @@ class MinisAccessibilityService : AccessibilityService() {
      * a TYPE_ACCESSIBILITY_OVERLAY owned by this service (no SYSTEM_ALERT_WINDOW); it is
      * non-touchable and a trusted overlay, so it neither eats nor obscures the gesture
      * that follows. Callable from any thread; silently skipped once disconnected.
+     *
+     * Android 11+ only. Below that the `ui screenshot` fallback (shizuku screencap)
+     * doesn't hide the overlay, so the box would end up in what the agent sees, and
+     * on 8.0 the overlay isn't trusted: a tap during its 600 ms is "obscured".
      */
     fun highlightTarget(bounds: Rect) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val target = Rect(bounds)
         if (target.width() <= 0 || target.height() <= 0) {
             // A bare point (tap xy) or a zero-size node: box 48dp around it.
