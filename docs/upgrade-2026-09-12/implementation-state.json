@@ -1,0 +1,174 @@
+{
+  "objective": "全面落地已批准的iOS与Mac升级方案",
+  "baseline": "094d4f8c97656366ec3a7858f9b0bd1b368ab7d2",
+  "started_at": "2026-09-12T15:32:45.044350+08:00",
+  "scope": "W01-W23，系统受限/硬件/SDK项须按原方案验证；不擅自缩小",
+  "work_packages": [
+    {
+      "id": "W01",
+      "title": "动作级能力目录与执行时授权",
+      "status": "implemented_pending_runtime_integration",
+      "evidence": []
+    },
+    {
+      "id": "W02",
+      "title": "统一run终态与结果收据",
+      "status": "implemented_pending_final_verification",
+      "evidence": []
+    },
+    {
+      "id": "W03",
+      "title": "跨轮游标、数据队列、多观察者与审批",
+      "status": "implemented_pending_cross_device_verification",
+      "evidence": []
+    },
+    {
+      "id": "W04",
+      "title": "日志持久性与有界异步回放",
+      "status": "implemented_mac_released_ios_followup_pending",
+      "evidence": [
+        "docs/upgrade-2026-09-12/W04_JOURNAL_IMPLEMENTATION.md",
+        "outputs/implementation-2026-09-12/mac-release-1.85.0/server.log"
+      ]
+    },
+    {
+      "id": "W05",
+      "title": "精确窗口能力如实降级",
+      "status": "implemented_pending_native_verification",
+      "evidence": []
+    },
+    {
+      "id": "W06",
+      "title": "依赖通告与IPC写入来源",
+      "status": "implemented_verified_mac_released",
+      "evidence": [
+        "outputs/implementation-2026-09-12/mac-security/audit-after.json",
+        "outputs/implementation-2026-09-12/mac-security/desktop.log",
+        "outputs/implementation-2026-09-12/mac-security/real-electron-ipc.log",
+        "docs/upgrade-2026-09-12/W06_SECURITY_IMPLEMENTATION.md"
+      ]
+    },
+    {
+      "id": "W07",
+      "title": "手电筒与高频设备动作闭环",
+      "status": "implemented_pending_hardware_verification",
+      "evidence": []
+    },
+    {
+      "id": "W08",
+      "title": "拍摄扫码取消与首次权限",
+      "status": "implemented_pending_hardware_verification",
+      "evidence": []
+    },
+    {
+      "id": "W09",
+      "title": "严格离线语音与系统转写升级",
+      "status": "in_progress_ios_asr_and_capture_lifecycle_implemented",
+      "evidence": [
+        "docs/upgrade-2026-09-12/W09_SYSTEM_SPEECH_PROGRESS.md",
+        "outputs/implementation-2026-09-12/ios-system-speech/test-summary.json",
+        "outputs/implementation-2026-09-12/ios-system-speech/device-build.log",
+        "docs/upgrade-2026-09-12/W09_CAPTURE_LIFECYCLE.md",
+        "outputs/implementation-2026-09-12/ios-capture-lifecycle/test-summary.json",
+        "docs/upgrade-2026-09-12/W09_MODE_SELECTION.md"
+      ],
+      "next_check": "Real-device language resources and transcription; mode selection UI and Mac voice adaptation remain to verify."
+    },
+    {
+      "id": "W10",
+      "title": "Shortcut外部接续与后台grant",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W11",
+      "title": "首页一次开始、能力发现、全局查找",
+      "status": "implemented_pending_render_verification",
+      "evidence": []
+    },
+    {
+      "id": "W12",
+      "title": "设置归属与统一模态焦点",
+      "status": "implemented_pending_render_verification",
+      "evidence": []
+    },
+    {
+      "id": "W13",
+      "title": "流式列表、动效与能耗策略",
+      "status": "implemented_pending_render_verification",
+      "evidence": []
+    },
+    {
+      "id": "W14",
+      "title": "藏宝阁全库分页与阅读工作区",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W15",
+      "title": "原生增强与HTML/图片/PDF产物链",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W16",
+      "title": "公开API窗口与系统helper",
+      "status": "implemented_runtime_hold",
+      "evidence": []
+    },
+    {
+      "id": "W17",
+      "title": "系统入口与状态面深化",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W18",
+      "title": "上游备份恢复与iSH固定点",
+      "status": "in_progress",
+      "evidence": []
+    },
+    {
+      "id": "W19",
+      "title": "Provider会话fork与CodexHost兼容",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W20",
+      "title": "性能、故障、签名与升级验收",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W21",
+      "title": "单一可选离线ASR模型",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W22",
+      "title": "近场/家庭高级能力专项",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "W23",
+      "title": "新SDK系统能力影子验证",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "corrections": [
+    "Torch already existed through FastLocalActions; W07 unifies and verifies it rather than claiming a new capability from zero."
+  ],
+  "delivery_decision": {
+    "user_instruction": "就先这样交付吧",
+    "current_delivery_accepted": true,
+    "further_work_deferred": true,
+    "ios": "1.36.0 (111), installed; launch accepted",
+    "mac": "1.85.0, published update feed",
+    "unreleased_backup_stash": "34fb67862a59e8d077342ac4a576040ed0ba9cad",
+    "note": "End this delivery at the user's explicit request. The original W01-W23 plan is not fully complete. Do not resume deferred development without a new user instruction."
+  }
+}

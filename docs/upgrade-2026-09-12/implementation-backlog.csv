@@ -1,0 +1,24 @@
+id,stage,priority,platform,work_package,finding_ids,code_scope,depends_on,effort_min_person_days,effort_max_person_days,acceptance,compatibility_rollback,simplification
+W01,A,P0,iOS+shared,动作级能力目录与执行时授权,IOS-01/06,"OffloadPermissionManager/Policy, native dispatch, src/shared",无,2,4,复合命令、脚本、并发、撤销在真实dispatch守住产品禁用；系统TCC独立,保留原CLI接口；目录及grant增量兼容,删除仅靠首命令预检保证权限的假设
+W02,A,P0,iOS+Mac,统一run终态与结果收据,IOS-02/M05/M12,"AgentRunState, QuickTaskIntent, WidgetRunner, harness events",W01契约,2,3,失败/取消/暂停/外部交接不报success；无文本artifact可成功,未知结果显式保留；旧状态字段暂兼容,收敛多处isProcessing/text判断
+W03,A,P0,Mac+shared+iOS消费,跨轮游标、数据队列、多观察者与审批,M01/02/03,"chat-run-registry, chat-websocket, writer, iOS解码",W02,3,5,runID/epoch游标，排队重连后只执行一次，多观察者不抢流,版本握手；旧客户端有界REST降级,队列不再保存ws闭包；单writer假设删除
+W04,A,P0,Mac,日志持久性与有界异步回放,M12,"harness-session.service, Python兼容schema",W02,2,4,关键事件有durableSeq；ENOSPC可见；读尾100帧不全量同步阻塞,保留旧NDJSON读取及恢复入口,同步全量read/parse与静默catch收敛
+W05,A,P0,Mac+iOS消费,精确窗口能力如实降级,M05,"exact-window routes/store, capabilities",W02,0.5,1,未实现的观察/动作返回unsupported；不会刷新旧快照伪装新观测,metadata/bind功能保留,移除内存更新即success的生产语义
+W06,A,P0,Mac,依赖通告与IPC写入来源,M11/14,"package-lock/overrides, multer入口, Electron IPC",无,1,2,修复线兼容验证、官方生产audit或不可达证据；通知写IPC验源,按包独立提交及锁文件回退,不运行无差别npm audit fix
+W07,B,P0/P1,iOS,手电筒与高频设备动作闭环,C01-08,"NativeOffloads, Device service, UI入口",W01/W02,2,3,torch set/status/level幂等；无灯/占用/过热降级；热路径不启动LLM/iSH,硬件feature gate；旧设备unsupported,CLI/快捷/UI共享一个原生服务
+W08,B,P1,iOS,拍摄扫码取消与首次权限,IOS-04/07,"CameraOffload, CameraOffloadBridge",W01/W02,1,2,先权限后available；operationID统一cancel；迟到结果不串新任务,原拍摄与扫描界面保留,超时和取消不再共用错误/遗漏清理
+W09,B,P0/P1,iOS+Mac,严格离线语音与系统转写升级,IOS-08,"VoiceProviderSystem, audio session, Mac语音适配",W02,2,4,Offline不支持不联网；SpeechAnalyzer能力检查；电话/耳机中断恢复,明确Auto/Online政策，旧API仅合法降级,不同时保留重复音频状态机
+W10,B,P1,iOS+Mac,Shortcut外部接续与后台grant,IOS-03/05,"ShortcutsOffload, DeepLinkRouter, BackgroundTask",W01/W02,2,3,一次性回执/迟到/重放/无回调明确；过期先checkpoint,保留launched兼容；不自动重试副作用,开关配置不再等于实际后台执行权
+W11,C,P1,iOS+Mac,首页一次开始、能力发现、全局查找,UI-01/04,"ContentView, CommandBar, CommandPalette",W07/W02,2,3,草稿不丢、重复提交0、无项目藏宝阁可达、中文动作找到正确页,保留历史折叠与现有主导航,删除重复解释与错误label直出
+W12,C,P1,iOS+Mac,设置归属与统一模态焦点,M09/UI-03,"SettingsHomeView, MacSettings, ProjectDrawer/Dialog",W11,1,2,Agent默认值归位，搜索中文，Tab不穿透，Esc恢复焦点,保存用户展开/外观偏好,共用现有Dialog原语而非每页手写
+W13,C,P1,iOS+Mac,流式列表、动效与能耗策略,M08/UI-motion,"RemoteSessionPanel, virtua, LeoMotion, CSS tokens",W03/W02,2,4,400→401稳定跟随，读旧消息不跳，离屏/ReduceMotion停装饰,可单独关闭新动效；不改变内容持久化,去掉seq-index key和回放逐行入场
+W14,C,P1,iOS+Mac,藏宝阁全库分页与阅读工作区,UI-05,"CollectionsMirror, treasury.routes/db, CollectionsView",W02/W11,2,4,SQL先筛再页、合集独立facet；1万条/旧合集可达；键盘/高亮保留,旧查询参数兼容；cursor为新增字段,不以无界全量拉取修分页
+W15,C,P1,iOS+Mac,原生增强与HTML/图片/PDF产物链,C14/17/36-45,"treasury jobs, native Vision/PDF/audio, ArtifactRepository",W08/W09/W14,3,5,原件先保存；Mac OCR/音频补齐；生成/预览/导出分别验证,失败仍保留原件与partial；格式白名单,复用现有job队列与artifact模型
+W16,D,P1,Mac+iOS消费,公开API窗口与系统helper,M05/06/C79,"窄Swift helper, Electron bridge, exact-window",W05/W01/W02,4,7,真实窗口身份/观测/动作/回读；TCC撤销/遮挡/重建停止；无同步IO,按动作协商，未支持分支始终关闭,不引入通用代码执行接口或私有API
+W17,D,P1,iOS+iPadOS,系统入口与状态面深化,C62-70,现有Intents/Control/Widget/Spotlight/Activity,W02/W07/W10,1,2,新动作共用服务，冷启动与锁屏交接，隐私快照与终态一致,旧Intent标识/深链保留,不重复创建Target或工具名单
+W18,D,P1,iOS,上游备份恢复与iSH固定点,upstream1/3,"BackupZipWriter, RestoreJournal, deps/ish, build脚本",W04后契约稳定,3,5,流式备份/中断恢复；保留cancellable补丁；真机命令压力；解决UI可测试构建,备份格式版本门禁；submodule可回退,不整树merge或直接换master指针
+W19,D,P1,Mac,Provider会话fork与CodexHost兼容,upstream2/4/5/7,"codex-runtime adapter, app-server schema, desktop bridge",W03/W06,2,4,固定CLI版本fork/resume/approval/cancel；CodexHost兼容与载荷notice,SDK旧通道保留能力降级，逐版本切换,不复制上游auth或堆第二任务框架
+W20,E,P0放行,iOS+Mac,性能、故障、签名与升级验收,全体,基准数据集、真实设备、发布脚本,W01-W19,5,8,60场景+真实设备+旧版覆盖+签名/公证/版本/digest；评分证据完整,备份与已验证回退；不恢复暂停自动化,不以源码PASS替代设备PASS
+W21,可选,P2,iOS+Mac,单一可选离线ASR模型,C20/upstream11/13,现有VoiceProvider一个新adapter,W09,3,5,同语料System/WhisperA/B选优；权重许可/下载/能耗达标,按需下载，可删除，不改变严格离线政策,最多一种正式附加引擎
+W22,可选,P2,iOS+Mac,近场/家庭高级能力专项,C47/50/53-58/75,对应公开框架adapter,W01/W02+具体硬件需求,2,4,此估算仅单个明确外设/场景PoC；资格、权限、取消通过,未支持始终标unsupported,不将整个硬件平台默认打包
+W23,可选,27轨,iOS+iPadOS,新SDK系统能力影子验证,C25/71,版本隔离adapter和构建目标,新SDK与目标设备,2,4,ScreenCaptureKit/LongRunningIntent编译+系统UI+生命周期独立验证,26线不受影响，按能力启用,不使用availability注解掩盖旧SDK缺符号
