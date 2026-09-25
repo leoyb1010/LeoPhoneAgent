@@ -1,3 +1,4 @@
+import { deviceInfo } from '@kit.BasicServicesKit';
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import {
@@ -139,14 +140,26 @@ export class GatewayStore {
     }
   }
 
-  async scanPairCode(raw: string): Promise<string> {
+  async scanPairCode(raw: string, onProgress: (text: string) => void = () => {}): Promise<string> {
     const pair = decodePair(raw);
     if (!pair) {
       return '不是本 App 的配对码。码里应是中继根和机器名。';
     }
     if (pair.join.length > 0) {
       try {
-        const joined = await MachinesClient.join(pair.apiRoot, pair.join);
+        const joined = await MachinesClient.join(pair.apiRoot, pair.join, `鸿蒙 · ${deviceInfo.marketName}`);
+        if (joined.pendingId.length > 0) {
+          // Mac 1.2 出的码:在 Mac 上点「允许」后才发钥匙,发的是和 iPhone 同等的钥匙(能批命令、能用全自动)。
+          onProgress('等 Mac 批准:在 Mac 上点「允许」');
+          const deadline = Date.now() + 5 * 60 * 1000;
+          while (joined.accessKey.length < 16 && Date.now() < deadline) {
+            await new Promise<void>((resolve: () => void) => setTimeout(resolve, 2000));
+            joined.accessKey = await MachinesClient.joinStatus(pair.apiRoot, joined.pendingId, joined.pollSecret);
+          }
+          if (joined.accessKey.length < 16) {
+            return '等 Mac 批准超时了,请让 Mac 重新出码';
+          }
+        }
         this.key = joined.accessKey;
         this.apiRoot = pair.apiRoot;
         const machine = new RelayDiscoveredMachine();
@@ -154,8 +167,8 @@ export class GatewayStore {
         machine.online = false;
         this.upsertDiscovered([machine], false);
         return `已加入 ${pair.machine}`;
-      } catch (_err) {
-        return '短码已过期或无效，请让对端重新出示。';
+      } catch (err) {
+        return `没加入:${err instanceof Error ? err.message : err}`;
       }
     }
     if (sanitizeKey(this.key).length < 16) {

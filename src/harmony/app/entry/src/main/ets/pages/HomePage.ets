@@ -22,6 +22,7 @@ struct HomePage {
   @State wide: boolean = false;
   @State tab: number = 0;
   @State chatMachine: string = '';
+  @State chatLaunch: number = 0;
   private foldCb: ((status: display.FoldStatus) => void) | null = null;
 
   aboutToAppear(): void {
@@ -123,6 +124,7 @@ struct HomePage {
           wide: true,
           onOpen: () => {
             this.chatMachine = ChatLaunch.machine;
+            this.chatLaunch += 1;
           },
           onLocal: () => {
             this.tab = 0;
@@ -136,7 +138,7 @@ struct HomePage {
           .width(Tokens.divider)
           .height('100%')
           .backgroundColor(Tokens.surface2)
-        ChatPane({ machine: this.chatMachine })
+        ChatPane({ machine: this.chatMachine, launch: this.chatLaunch })
           .layoutWeight(1)
       }
       .width('100%')
@@ -160,7 +162,6 @@ struct HomePage {
     if (this.tab === 1) {
       FleetPane({
         onOpen: () => {
-          this.chatMachine = ChatLaunch.machine;
           router.pushUrl({ url: 'pages/RemoteChatPage' });
         }
       })

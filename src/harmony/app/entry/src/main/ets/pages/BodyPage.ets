@@ -69,9 +69,11 @@ struct BodyPage {
           .backgroundColor(Tokens.surface)
           .fontColor(Tokens.text)
           .borderRadius(Tokens.settingsRadius)
-        Text(this.bodyTick >= 0 && bodyStore.online ? '在线，iPhone 能指挥这台机' : this.line)
+        // 离线时把原因说出来(钥匙不对、名字被占用……),不再一直停在「正在注册」。
+        Text(this.bodyTick >= 0 && bodyStore.online ? '在线，iPhone 能指挥这台机' :
+          (bodyStore.lastError.length > 0 ? bodyStore.lastError : this.line))
           .fontSize(13)
-          .fontColor(bodyStore.online ? Tokens.online : Tokens.muted)
+          .fontColor(bodyStore.online ? Tokens.online : (bodyStore.lastError.length > 0 ? Tokens.warn : Tokens.muted))
           .padding({ top: 12 })
         Text('配对码（没有钥匙）')
           .fontSize(13)

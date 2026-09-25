@@ -1389,3 +1389,22 @@ export function sessionArchiveJson(title: string, messages: LocalChatMessage[]):
   }
   return `{"title":${JSON.stringify(title)},"messages":[${rows.join(',')}]}`;
 }
+
+/**
+ * 远程控制端已经看到 sent,回答现在是 text:还要发出去的那一段;没有新内容返回 ''。
+ * 和安卓 HeadlessChatRunner.nextDelta 同一个规则:换模型重来时追上之前不重发,
+ * 走了不同的路也只发共同开头之后的部分(增量没法收回已经发出去的字)。
+ */
+export function nextDelta(sent: string, text: string): string {
+  if (text.startsWith(sent)) {
+    return text.substring(sent.length);
+  }
+  if (sent.startsWith(text)) {
+    return '';
+  }
+  let common = 0;
+  while (common < sent.length && common < text.length && sent.charAt(common) === text.charAt(common)) {
+    common++;
+  }
+  return text.substring(common);
+}

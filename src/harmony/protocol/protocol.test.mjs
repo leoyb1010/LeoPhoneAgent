@@ -14,7 +14,7 @@ import {
 import { encodePair, decodePair } from "./relayPair.ts";
 import { resumeEnvelope, parseResumeEnvelope, applySeq, nextAfter } from "./resumeEnvelope.ts";
 import { agentWsUrl, registerFrame, parseSseData, parseAgentFrame, respFrame } from "./relayOutbound.ts";
-import { capabilitiesFromJson, sessionSummaryFromJson } from "./harnessTypes.ts";
+import { capabilitiesFromJson, parseRemoteTasks, sessionSummaryFromJson } from "./harnessTypes.ts";
 import {
   requireProviderRoot,
   chatCompletionsUrl,
@@ -56,6 +56,7 @@ import {
   envPromptBlock,
   expandEnvPlaceholders,
   sessionArchiveJson,
+  nextDelta,
   usageFromJson,
   fileReadPage,
   formatFileReadOutput,
@@ -216,6 +217,44 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   });
   assert.equal(summary && summary.id, "hs_1");
   assert.equal(summary && summary.pendingApprovalId, "ap_1");
+}
+
+{
+  // 打开远程机器时的任务菜单:同一个 Agent、没结束的,最近的在前,最多 5 个;Mac 桌面任务也列出来。
+  const protocolSrc = readFileSync(new URL("../app/entry/src/main/ets/net/Protocol.ets", import.meta.url), "utf8");
+  const mirror = readFileSync(new URL("./harnessTypes.ts", import.meta.url), "utf8");
+  assert.ok(protocolSrc.includes(mirror.slice(mirror.indexOf("export class RemoteTask {"))),
+    "harnessTypes.ts 的 parseRemoteTasks 要和 Protocol.ets 一字不差");
+  const tasks = parseRemoteTasks({
+    sessions: [
+      { session_id: "a1", harness: "zcode", status: "idle", title: "整理周报", updated_at: 100 },
+      { session_id: "a2", harness: "zcode", status: "cancelled", title: "已停", updated_at: 300 },
+      { session_id: "a3", harness: "codex", status: "running", title: "别的 Agent", updated_at: 400 },
+      { session_id: "t9", harness: "zcode", status: "available", source: "desktop", title: "桌面上开的一个很长很长很长很长很长的任务标题", updated_at: 200 },
+      { session_id: "t8", harness: "zcode", status: "running", source: "desktop", title: "", updated_at: 50 },
+      { session_id: "a4", harness: "zcode", status: "waiting_for_approval", title: "等批准", updated_at: 250 },
+    ],
+  }, "zcode");
+  assert.deepEqual(tasks.map((task) => task.id), ["a4", "t9", "a1", "t8"]);
+  assert.equal(tasks[0].label, "等批准 · 等你批准");
+  assert.equal(tasks[1].label, "桌面上开的一个很长很长很长很长很长的… · Mac 桌面任务");
+  assert.equal(tasks[3].label, "任务 t8 · Mac 上在跑");
+  // 手机端没有时间戳、按先后排:新的在前;最多 5 个(留一格给「新任务」)。
+  const phone = parseRemoteTasks({
+    sessions: [1, 2, 3, 4, 5, 6].map((n) => ({ session_id: `hs_000${n}`, harness: "minis", status: "idle" })),
+  }, "minis");
+  assert.deepEqual(phone.map((task) => task.id), ["hs_0006", "hs_0005", "hs_0004", "hs_0003", "hs_0002"]);
+  assert.deepEqual(parseRemoteTasks({}, "minis"), []);
+  const fleet = readFileSync(new URL("../app/entry/src/main/ets/panes/FleetPane.ets", import.meta.url), "utf8");
+  assert.match(fleet, /client\.tasks\(harness\)/);
+  assert.match(fleet, /ChatLaunch\.sessions\.set\(key, tasks\[index - 1\]\.id\)/);
+  assert.match(fleet, /ChatLaunch\.sessions\.delete\(key\)/);
+  const chat = readFileSync(new URL("../app/entry/src/main/ets/panes/ChatPane.ets", import.meta.url), "utf8");
+  // 平板两栏:同一台机器换任务也要重新接上;旧流迟到的回调不能动新流。
+  assert.match(chat, /@Prop @Watch\('onLaunch'\) launch/);
+  assert.match(chat, /if \(this\.stream === req\) \{\s*this\.onStreamEnd/);
+  const home = readFileSync(new URL("../app/entry/src/main/ets/pages/HomePage.ets", import.meta.url), "utf8");
+  assert.match(home, /this\.chatLaunch \+= 1/);
 }
 
 {
@@ -906,6 +945,63 @@ function wireShape(source, startsWith) {
   assert.ok(/startsWith\(`\$\{tag\}\/`\)/.test(remove.slice(remove.indexOf("async remove("), remove.indexOf("async setActive("))),
     "删服务商时清掉它在模型组里的条目");
   assert.ok(/!force && !this\.nearBottom/.test(etsSrc("panes/LocalChatPane.ets")), "不在底部时不跟随");
+}
+
+{
+  // --- 0.3.0-alpha.18 对齐:远控(鸿蒙指挥 Mac)和被控(别人指挥这台鸿蒙) ---
+  const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const harness = etsSrc("net/HarnessClient.ets");
+  const chat = etsSrc("panes/ChatPane.ets");
+  const machines = etsSrc("net/MachinesClient.ets");
+  const outbound = etsSrc("net/OutboundClient.ets");
+  const codec = etsSrc("net/OutboundCodec.ets");
+  const router = etsSrc("local/HarmonyMinisRouter.ets");
+  const engine = etsSrc("local/LocalAgentEngine.ets");
+
+  // 403 是 Mac 自己的答复,不能再报成「钥匙不对」;请求带编号、等够 60 秒。
+  const throwIfBad = harness.slice(harness.indexOf("private throwIfBad("));
+  assert.ok(/if \(code === 401\) \{\s*throw new HttpError\(HarnessClient\.KEY_REJECTED/.test(throwIfBad), "只有 401 是钥匙不对");
+  assert.ok(!/code === 403\) \{\s*throw/.test(throwIfBad));
+  assert.ok(/'X-Leo-Request-Id': util\.generateRandomUUID/.test(harness), "每个请求带编号,Mac 按它去重");
+  assert.ok(/readTimeout: 65000/.test(harness), "等够中继的 60 秒");
+  // 打开机器不再建空任务;第一条消息才建(带着这句话)。
+  const start = chat.slice(chat.indexOf("private startSession("), chat.indexOf("private teardown("));
+  assert.ok(!/client\.create\(/.test(start), "打开机器时不在 Mac 上建任务");
+  assert.ok(/this\.client\.create\(ChatLaunch\.harness, text, ''\)/.test(chat), "第一条消息建任务并直接跑这一句");
+  // 回放的旧帧不重置重连计数;一轮结束后正常关流就不再重连。
+  assert.ok(!/this\.reconnects = 0;\s*this\.onEvent/.test(chat), "不再每来一帧就清零重连计数");
+  assert.ok(/if \(this\.ended && message === '已断开'\)/.test(chat));
+  // 一轮结束清掉审批卡;409 当作已处理;按 Mac 给的答法出按钮。
+  assert.ok(/name === 'run\.completed' \|\| name === 'run\.failed' \|\| name === 'run\.cancelled'\) \{\s*\/\/[^\n]*\n\s*this\.approvalQueue = \[\]/.test(chat));
+  assert.ok(/err\.code === 409/.test(chat));
+  assert.ok(/ForEach\(this\.approval\.choices/.test(chat) && /'本次会话允许'/.test(chat) && /'拒绝并停止任务'/.test(chat));
+  assert.ok(/name === 'session\.note'/.test(chat), "Mac 的提示要显示");
+  assert.ok(/'status'\] \?\? ''\}` === 'gap'/.test(chat), "续传缺口要处理");
+  // 配对:等 Mac 批准,错误用中继给的原因。
+  assert.ok(/responseCode === 202/.test(machines) && /joinStatus\(/.test(machines));
+  assert.ok(/HarnessClient\.messageFrom\(raw, resp\.responseCode\)/.test(machines), "配对失败说真实原因");
+
+  // 被控:缺口在流里说,未知会话在流里 run.failed,25 秒保活,关闭码看得见,请求编号去重。
+  assert.ok(!/json\(410/.test(router), "不再回 410(到不了控制端)");
+  const openStream = /private openStream\([\s\S]*?\n  \}/.exec(outbound)[0];
+  const nonStream = openStream.slice(0, openStream.indexOf("harmonyRouter.replay"));
+  assert.ok(!/respJson\(/.test(nonStream) && /run\.failed/.test(nonStream) && /streamCloseJson\(id\)/.test(nonStream));
+  assert.ok(/stream_keepalive/.test(codec));
+  const androidOutbound = readFileSync(new URL("../../android/app/src/main/java/com/leoyuan/leophoneagent/relay/RelayOutboundClient.kt", import.meta.url), "utf8");
+  assert.equal(/STREAM_KEEPALIVE_MS: number = (\d+)/.exec(outbound)[1], /STREAM_KEEPALIVE_MS = ([\d_]+)L/.exec(androidOutbound)[1].replace(/_/g, ""), "和安卓同一个保活间隔");
+  assert.ok(/code === 4001/.test(outbound) && /code === 4003/.test(outbound));
+  assert.ok(/frame\.requestId/.test(outbound) && /request_id/.test(codec));
+
+  // 控制端看到的文字不重复:和安卓 HeadlessDeltaTest 同样的用例。
+  assert.equal(nextDelta("", "Hello"), "Hello");
+  assert.equal(nextDelta("Hello", "Hello world"), " world");
+  assert.equal(nextDelta("Hello", "Hello"), "");
+  assert.equal(nextDelta("Hello wor", ""), "");
+  assert.equal(nextDelta("Hello wor", "Hel"), "");
+  assert.equal(nextDelta("Hello wor", "Hello world"), "ld");
+  assert.equal(nextDelta("Hello", "Hi there"), "i there");
+  assert.ok(/draft\.text = draft\.base/.test(engine), "换模型重来时退回这一轮开头");
+  assert.ok(/shown\.length > 0 \? shown : output/.test(router), "完成时给控制端已显示的全文");
 }
 
 console.log("PROTOCOL_MACHINES_OK");

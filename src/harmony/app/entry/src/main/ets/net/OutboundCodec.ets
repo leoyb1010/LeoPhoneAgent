@@ -7,6 +7,8 @@ export class AgentFrame {
   method: string = 'GET';
   path: string = '/';
   body: string = '';
+  /** 中继转来的请求编号:同一个 POST 因断线重投时,按它认出来,不再执行第二遍。 */
+  requestId: string = '';
 }
 
 export function agentWsUrl(apiBase: string): string {
@@ -35,6 +37,7 @@ export function parseAgentFrame(raw: string): AgentFrame | null {
     frame.id = `${obj['id'] ?? ''}`;
     frame.method = `${obj['method'] ?? 'GET'}`;
     frame.path = `${obj['path'] ?? '/'}`;
+    frame.requestId = `${obj['request_id'] ?? ''}`;
     const body = obj['body'];
     frame.body = body === undefined || body === null ? '' : JSON.stringify(body);
     return frame;
@@ -49,6 +52,11 @@ export function respJson(id: string, status: number, body: string): string {
 
 export function streamDataJson(id: string, data: string): string {
   return `{"type":"stream_data","id":${JSON.stringify(id)},"data":${JSON.stringify(data)}}`;
+}
+
+/** 流上的保活:中继把它转成 SSE 注释行,长时间没输出时控制端和代理不会断开(Mac、安卓每 25 秒一条)。 */
+export function streamKeepaliveJson(id: string): string {
+  return `{"type":"stream_keepalive","id":${JSON.stringify(id)}}`;
 }
 
 export function streamCloseJson(id: string): string {

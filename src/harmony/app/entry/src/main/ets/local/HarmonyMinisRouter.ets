@@ -150,6 +150,11 @@ export class HarmonyMinisRouter {
     this.lives = this.lives.concat([row]);
   }
 
+  /** 还开着的流(发保活用)。 */
+  liveIds(): string[] {
+    return this.lives.map((row: LiveStream) => row.streamId);
+  }
+
   unsubscribe(streamId: string): void {
     const next: LiveStream[] = [];
     for (let i = 0; i < this.lives.length; i++) {
@@ -299,18 +304,13 @@ export class HarmonyMinisRouter {
     if (!row) {
       return HarmonyMinisRouter.json(404, errorBody('No such session'));
     }
-    // 要的区段已经被环形缓冲丢掉了。静默地"从还剩下的最老一条开始发"会让控制端
-    // 以为中间本来就没有事件,拼出来的正文是残缺的且它毫无感知 —— 显式回 410 +
-    // 水位,让它按新的 after 重新订阅。与 Android(MinisHarnessRouter 的 410)一致。
-    if (after < row.evictedThrough) {
-      const oldest = row.evictedThrough;
-      const message = `events up to seq=${oldest} were evicted; re-subscribe with after=${oldest}`;
-      return HarmonyMinisRouter.json(410,
-        `{"type":"resume","status":"gap","after":${after},"min_after":${oldest},"error":{"message":${JSON.stringify(message)}},"evicted_through":${oldest}}`);
-    }
+    // 流的第一帧是续传信封:要的区段已经被环形缓冲丢掉时是 gap(带可用的最小水位),
+    // 控制端据此知道中间缺了一段。原来回 410,经中继开的流早已回了 200,410 到不了控制端,
+    // 它只看到空流、无限重连。与 Android(MinisHarnessRouter)一致。
+    const gap = after < row.evictedThrough;
     const out = new RouterResult();
     out.status = 200;
-    out.body = '{"streaming":true}';
+    out.body = `{"type":"resume","event":"resume","status":"${gap ? 'gap' : 'ok'}","after":${after},"min_after":${row.evictedThrough}}`;
     out.stream = true;
     out.sessionId = id;
     out.after = after;
@@ -344,11 +344,15 @@ export class HarmonyMinisRouter {
       if (LocalAgentEngine.current(row.id) !== mine) {
         return;
       }
+      // 控制端气泡里已经有的全文。完成时 output 给这一份:原来只给最后一轮的话,
+      // 带工具的回答在 iPhone 上会把最终答复再显示一遍。
+      let shown = '';
       LocalAgentEngine.run(ctx, row.id, mine, text, thinking, (delta: string) => {
+        shown += delta;
         this.emit(row, `{"event":"message.delta","delta":${JSON.stringify(delta)}}`);
       }, (output: string) => {
         row.status = 'idle';
-        this.emit(row, `{"event":"run.completed","output":${JSON.stringify(output)},"usage":{}}`);
+        this.emit(row, `{"event":"run.completed","output":${JSON.stringify(shown.length > 0 ? shown : output)},"usage":{}}`);
         if (row.localId) {
           sessionStore.append(ctx, row.localId, 'assistant', output).catch(() => {
             // keep relay alive

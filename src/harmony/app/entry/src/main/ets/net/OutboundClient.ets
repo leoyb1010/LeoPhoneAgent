@@ -1,4 +1,5 @@
 import { webSocket } from '@kit.NetworkKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { harmonyRouter } from '../local/HarmonyMinisRouter';
 import { bodyStore } from '../store/BodyStore';
@@ -11,7 +12,8 @@ import {
   registerJson,
   respJson,
   streamCloseJson,
-  streamDataJson
+  streamDataJson,
+  streamKeepaliveJson
 } from './OutboundCodec';
 
 /** 断线期间攒下的外推事件上限。Mac(relay_client.py / relay-client.service.ts)与 Android 都是 200。 */
@@ -19,6 +21,15 @@ const OUTBOX_LIMIT: number = 200;
 /** 重连退避。另外三端都是 1s 起、翻倍、封顶 30s;固定间隔会在钥匙错时变成永久风暴。 */
 const BACKOFF_MIN_MS: number = 1000;
 const BACKOFF_MAX_MS: number = 30000;
+/** 流保活间隔,和 Mac(relayLink.ts)、安卓(RelayOutboundClient)一样。 */
+const STREAM_KEEPALIVE_MS: number = 25000;
+/** 记住最近这么多个已答复的 POST(按请求编号),重投时直接回同一个答复。 */
+const ANSWERED_LIMIT: number = 200;
+
+class Answered {
+  status: number = 200;
+  body: string = '';
+}
 
 export class OutboundClient {
   private sock: webSocket.WebSocket | null = null;
@@ -29,6 +40,8 @@ export class OutboundClient {
   // 每次 connect() 递增。旧 socket 的 close/error 回调只有代号对得上才算数，
   // 否则它会在新 socket 已经建好之后再触发一次重连，把刚连上的连接又拆掉（见 dropSocket 注释）。
   private gen: number = 0;
+  private keepAlive: number = -1;
+  private answered: Map<string, Answered> = new Map();
 
   start(context: common.UIAbilityContext): void {
     this.context = context;
@@ -117,6 +130,7 @@ export class OutboundClient {
 
   private dropSocket(): void {
     this.clearTimer();
+    this.stopKeepAlive();
     // streamId 是中继给这条连接分配的,连接没了就全作废。不清的话重连后
     // 还会往死 id 上推 stream_data(中继按 id 查不到队列直接丢),订阅表只增不减。
     // Android 在 connectOnce 的 finally 里 cancelStreams(),Python 客户端同理。
@@ -172,12 +186,23 @@ export class OutboundClient {
       }
       this.onMessage(text);
     });
-    sock.on('close', () => {
+    sock.on('close', (_err: BusinessError, result: webSocket.CloseResult) => {
       if (!this.retire(mine)) {
         return;
       }
       bodyStore.online = false;
+      // 中继的拒绝要让人看见:原来不看关闭码,身体页一直停在「正在注册」。
+      const code = result ? result.code : 0;
+      if (code === 4001) {
+        bodyStore.lastError = '中继不认这把钥匙:到「远程机器」里重新配对或换钥匙';
+      } else if (code === 4003) {
+        bodyStore.lastError = '这个名字已被另一台设备占用:换一个名字';
+      }
       AppStorage.setOrCreate('bodyTick', Date.now());
+      if (code === 4003) {
+        // 名字被钉给了别的设备,重试只会一直被拒。
+        return;
+      }
       this.schedule();
     });
     sock.on('error', (err: Error) => {
@@ -226,10 +251,26 @@ export class OutboundClient {
       this.backoff = BACKOFF_MIN_MS;
       AppStorage.setOrCreate('bodyTick', Date.now());
       this.flushOutbox();
+      this.startKeepAlive();
       return;
     }
     if (frame.type === 'http') {
+      // 同一个请求编号再来一次(中继断线后重投排队的消息):回上次的答复,不再跑第二遍。
+      const cached = frame.requestId.length > 0 ? this.answered.get(frame.requestId) : undefined;
+      if (cached) {
+        this.send(respJson(frame.id, cached.status, cached.body));
+        return;
+      }
       const result = harmonyRouter.handle(frame.method, frame.path, frame.body);
+      if (frame.requestId.length > 0 && frame.method !== 'GET') {
+        const done = new Answered();
+        done.status = result.status;
+        done.body = result.body;
+        this.answered.set(frame.requestId, done);
+        if (this.answered.size > ANSWERED_LIMIT) {
+          this.answered.delete(Array.from(this.answered.keys())[0]);
+        }
+      }
       this.send(respJson(frame.id, result.status, result.body));
       return;
     }
@@ -246,22 +287,48 @@ export class OutboundClient {
   private openStream(id: string, path: string): void {
     const result = harmonyRouter.handle('GET', path, '');
     if (!result.stream) {
-      // 中继此刻挂在这条 stream 的队列上等 stream_data / stream_close。
-      // `resp` 帧走的是另一张表(按 request_id 找 future),查不到就被直接丢掉 ——
-      // 不补一条 stream_close,手机那侧的 SSE 会一直空转到自己超时。
-      // 会话是纯内存态的,App 一重启 iPhone 手里的旧 session 全部落到这条
-      // 404 分支,所以这不是边角情况。Mac(relay_client.py 的 finally、
-      // relay-client.service.ts 的 finally)和 Android
-      // (RelayOutboundClient.handleStream 的 finally)都保证发这一条。
-      this.send(respJson(id, result.status, result.body));
+      // 中继此刻挂在这条 stream 的队列上等 stream_data / stream_close,已经给控制端回了 200;
+      // `resp` 帧走的是另一张表,到不了控制端。会话是纯内存态的,App 一重启
+      // 控制端手里的旧会话全部落到这里 —— 在流里给一个 run.failed 让它停下,
+      // 不然它看到空流就一直重连(安卓同样处理)。
+      const hit = /[?&]after=(\d+)/.exec(path);
+      const after = hit ? Number(hit[1]) : 0;
+      let reason = `HTTP ${result.status}`;
+      try {
+        const err = (JSON.parse(result.body) as Record<string, Object>)['error'] as Record<string, Object> | undefined;
+        reason = err ? `${err['message'] ?? reason}` : reason;
+      } catch (_err) {
+        // 保留状态码
+      }
+      this.send(streamDataJson(id,
+        `{"event":"run.failed","seq":${after + 1},"error":${JSON.stringify(reason)},"message":${JSON.stringify(reason)}}`));
       this.send(streamCloseJson(id));
       return;
     }
+    // 第一帧是续传信封(ok 或 gap),然后补发 after 之后还留着的事件。
+    this.send(streamDataJson(id, result.body));
     const rows = harmonyRouter.replay(result.sessionId, result.after);
     for (let i = 0; i < rows.length; i++) {
       this.send(streamDataJson(id, rows[i]));
     }
     harmonyRouter.subscribe(id, result.sessionId);
+  }
+
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    this.keepAlive = setInterval(() => {
+      const ids = harmonyRouter.liveIds();
+      for (let i = 0; i < ids.length; i++) {
+        this.send(streamKeepaliveJson(ids[i]));
+      }
+    }, STREAM_KEEPALIVE_MS);
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepAlive >= 0) {
+      clearInterval(this.keepAlive);
+      this.keepAlive = -1;
+    }
   }
 
   private send(text: string): void {

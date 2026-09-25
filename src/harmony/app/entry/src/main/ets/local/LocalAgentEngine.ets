@@ -13,16 +13,28 @@ import {
   ToolCall,
   ToolLoopGuard,
   loopWarning,
+  nextDelta,
   shouldFailover
 } from './LocalProtocol';
 import { providerStore } from '../store/ProviderStore';
 import { usageStore } from '../store/UsageStore';
 import { taskStatus } from '../store/TaskStatus';
 
+/**
+ * 远程控制端看到的文字:base 是前面几轮已经定下的,text 是到现在为止的全文,sent 是已经发出去的。
+ * 换模型重来时 text 退回 base,追上之前不重发;原来会把半截回答和重来的整段都发一遍。
+ */
+class DeltaDraft {
+  base: string = '';
+  text: string = '';
+  sent: string = '';
+}
+
 export class LocalAgentEngine {
   private static gen: Map<string, number> = new Map();
   private static reqs: Map<string, http.HttpRequest> = new Map();
   private static guards: Map<string, ToolLoopGuard> = new Map();
+  private static drafts: Map<string, DeltaDraft> = new Map();
 
   static bump(sessionKey: string): number {
     const next = (LocalAgentEngine.gen.get(sessionKey) ?? 0) + 1;
@@ -76,6 +88,7 @@ export class LocalAgentEngine {
     LocalAgentEngine.release(sessionKey);
     LocalAgentEngine.gen.delete(sessionKey);
     LocalAgentEngine.guards.delete(sessionKey);
+    LocalAgentEngine.drafts.delete(sessionKey);
   }
 
   static run(context: common.UIAbilityContext, sessionKey: string, mine: number, text: string,
@@ -86,6 +99,7 @@ export class LocalAgentEngine {
     }
     taskStatus.setRunning(true);
     LocalAgentEngine.guards.set(sessionKey, new ToolLoopGuard());
+    LocalAgentEngine.drafts.set(sessionKey, new DeltaDraft());
     FastLocalActions.tryRoute(context, text, 0).then((spoken: string) => {
       if (!LocalAgentEngine.alive(sessionKey, mine)) {
         return;
@@ -155,9 +169,17 @@ export class LocalAgentEngine {
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
       return;
     }
+    const draft = LocalAgentEngine.drafts.get(sessionKey) ?? new DeltaDraft();
+    LocalAgentEngine.drafts.set(sessionKey, draft);
     const req = client.streamTurn(turns, LocalTools.systemPrompt(), thinking, (delta: string) => {
-      if (LocalAgentEngine.alive(sessionKey, mine)) {
-        onDelta(delta);
+      if (!LocalAgentEngine.alive(sessionKey, mine)) {
+        return;
+      }
+      draft.text += delta;
+      const fresh = nextDelta(draft.sent, draft.text);
+      if (fresh.length > 0) {
+        draft.sent = draft.text;
+        onDelta(fresh);
       }
     }, (turn: StreamTurn) => {
       // 之前只 delete、不 destroy：http.createHttp() 拿到的原生句柄每轮对话漏一个。
@@ -174,6 +196,8 @@ export class LocalAgentEngine {
         onDone(turn.text);
         return;
       }
+      // 这一轮说的话定下来了,下一轮接在后面。
+      draft.base = draft.text;
       LocalAgentEngine.tools(context, sessionKey, mine, turns, turn.calls, thinking, rounds + 1,
         failIndex, onDelta, onDone, onError);
     }, (message: string) => {
@@ -182,6 +206,8 @@ export class LocalAgentEngine {
         return;
       }
       if (shouldFailover(message) && failIndex + 1 < providerStore.queue().length) {
+        // 换下一个模型重来这一轮:文字退回这一轮开头。
+        draft.text = draft.base;
         LocalAgentEngine.loop(context, sessionKey, mine, turns, thinking, 0, failIndex + 1,
           onDelta, onDone, onError);
         return;

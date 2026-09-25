@@ -1,6 +1,8 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
-import { HarnessKind, harnessURL, parseHarnessKinds, parseSseData, requireHttpsRoot, sanitizeKey } from './Protocol';
+import {
+  HarnessKind, harnessURL, parseHarnessKinds, parseRemoteTasks, parseSseData, RemoteTask, requireHttpsRoot, sanitizeKey
+} from './Protocol';
 
 export class ChatLine {
   role: string = 'system';
@@ -10,6 +12,18 @@ export class ChatLine {
 export class ApprovalState {
   id: string = '';
   command: string = '';
+  /** Mac 给的答法(once / session / always / deny);没给时按 once / deny。 */
+  choices: string[] = [];
+}
+
+/** 带状态码的请求错误:401 是中继钥匙不对,403 / 409 是 Mac 自己的答复(原因在 message 里)。 */
+export class HttpError extends Error {
+  code: number = 0;
+
+  constructor(message: string, code: number) {
+    super(message);
+    this.code = code;
+  }
 }
 
 class EmptyJson {
@@ -34,6 +48,11 @@ export class HarnessClient {
     return parseHarnessKinds(json);
   }
 
+  async tasks(harness: string): Promise<RemoteTask[]> {
+    return parseRemoteTasks(await this.getJson('/harness/sessions'), harness);
+  }
+
+  /** 有 prompt 时桥接建好任务就直接跑这一句,不用再单独发一次。 */
   async create(harness: string, prompt: string, thinking: string): Promise<string> {
     const body: Record<string, string> = {
       'harness': harness,
@@ -76,8 +95,9 @@ export class HarnessClient {
     await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/approval`, body);
   }
 
+  /** onEnd(原因, 是否不必再连):钥匙不对、任务不在了就别再重连。 */
   startEvents(sessionId: string, after: number, onEvent: (obj: Record<string, Object>) => void,
-    onError: (message: string) => void): http.HttpRequest {
+    onEnd: (message: string, final: boolean) => void): http.HttpRequest {
     const req = http.createHttp();
     let leftover = '';
     const decoder = util.TextDecoder.create('utf-8', { ignoreBOM: true });
@@ -98,12 +118,12 @@ export class HarnessClient {
       }
     };
     let finished = false;
-    const fail = (message: string): void => {
+    const fail = (message: string, final: boolean = false): void => {
       if (finished) {
         return;
       }
       finished = true;
-      onError(message);
+      onEnd(message, final);
     };
     req.on('dataReceive', (chunk: ArrayBuffer) => {
       consume(decoder.decodeToString(new Uint8Array(chunk), { stream: true }));
@@ -123,8 +143,12 @@ export class HarnessClient {
       connectTimeout: 12000,
       readTimeout: 3600000
     }).then((code: number) => {
-      if (code === 401 || code === 403) {
-        fail('unauthorized');
+      if (code === 401) {
+        fail(HarnessClient.KEY_REJECTED, true);
+        return;
+      }
+      if (code === 403 || code === 404) {
+        fail(code === 404 ? '这个任务在远程机器上已经不在了' : '远程机器拒绝了这台设备', true);
         return;
       }
       if (code < 200 || code >= 300) {
@@ -137,6 +161,8 @@ export class HarnessClient {
     });
     return req;
   }
+
+  static readonly KEY_REJECTED: string = '中继钥匙不对:到「远程机器」里重新配对或换钥匙';
 
   private async getJson(path: string): Promise<object> {
     const req = http.createHttp();
@@ -165,11 +191,14 @@ export class HarnessClient {
         header: {
           'Authorization': `Bearer ${this.key}`,
           'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Mac 按请求编号去重:中继断线重投、手机重试都不会让同一句话跑两次(iOS 同样带)。
+          'X-Leo-Request-Id': util.generateRandomUUID(false)
         },
         extraData: JSON.stringify(body),
         connectTimeout: 12000,
-        readTimeout: 20000
+        // 中继最多等 Mac 60 秒;原来 20 秒就放弃,慢一点的 Mac 看起来像失败,重发又跑一遍。
+        readTimeout: 65000
       });
       this.throwIfBad(resp.responseCode, `${resp.result ?? ''}`);
       if (!resp.result) {
@@ -207,12 +236,16 @@ export class HarnessClient {
     return `http ${code}`;
   }
 
+  /**
+   * 只有 401 是中继不认钥匙。403 是 Mac 自己的答复(比如「这台设备只能拒绝这类操作」),
+   * 原来也报成钥匙不对,真正的原因丢了。
+   */
   private throwIfBad(code: number, raw: string = ''): void {
-    if (code === 401 || code === 403) {
-      throw new Error('unauthorized');
+    if (code === 401) {
+      throw new HttpError(HarnessClient.KEY_REJECTED, code);
     }
     if (code < 200 || code >= 300) {
-      throw new Error(HarnessClient.messageFrom(raw, code));
+      throw new HttpError(HarnessClient.messageFrom(raw, code), code);
     }
   }
 }
@@ -220,4 +253,10 @@ export class HarnessClient {
 export class ChatLaunch {
   static machine: string = '';
   static harness: string = 'minis';
+  /** 每台机器(和 Agent)上次用的任务:再点进来接着看,不再每次新建一个空任务。 */
+  static sessions: Map<string, string> = new Map();
+
+  static key(machine: string, harness: string): string {
+    return `${machine}\u0000${harness}`;
+  }
 }

@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
-import { HarnessKind, displayName, sanitizeKey } from '../net/Protocol';
+import { promptAction } from '@kit.ArkUI';
+import { HarnessKind, RemoteTask, displayName, sanitizeKey } from '../net/Protocol';
 import { MachinesClient } from '../net/MachinesClient';
 import { ChatLaunch, HarnessClient } from '../net/HarnessClient';
 import { gatewayStore, SavedHost } from '../store/GatewayStore';
@@ -258,7 +259,9 @@ export struct FleetPane {
   private async joinPair(): Promise<void> {
     const ctx = getContext(this) as common.UIAbilityContext;
     await gatewayStore.ensureLoaded(ctx);
-    this.message = await gatewayStore.scanPairCode(this.pairDraft);
+    this.message = await gatewayStore.scanPairCode(this.pairDraft, (text: string) => {
+      this.message = text;
+    });
     this.hosts = gatewayStore.hosts.slice();
     await gatewayStore.save(ctx);
   }
@@ -297,21 +300,75 @@ export struct FleetPane {
       this.message = '这台机器现在离线';
       return;
     }
+    const client = new HarnessClient(gatewayStore.apiRoot, host.name, gatewayStore.key);
     let harness = 'minis';
     const platform = host.platform;
     if (platform !== 'android' && platform !== 'harmony') {
+      let kinds: HarnessKind[] = [];
       try {
-        const client = new HarnessClient(gatewayStore.apiRoot, host.name, gatewayStore.key);
-        const kinds: HarnessKind[] = await client.kinds();
-        if (kinds.length > 0) {
-          harness = kinds[0].key;
+        kinds = await client.kinds();
+      } catch (err) {
+        // 读不到就说出来,不再猜 claude(新版 Mac 自己的 Agent 是 LeoPhoneAgent)。
+        this.message = `读不到这台机器上的 Agent:${err instanceof Error ? err.message : err}`;
+        return;
+      }
+      if (kinds.length === 0) {
+        this.message = '这台机器没有可用的 Agent';
+        return;
+      }
+      harness = kinds[0].key;
+      if (kinds.length > 1) {
+        // Mac 1.2 起列出 LeoPhoneAgent、Claude Code、Codex、Grok:让你挑,不再默默用第一个。
+        const index = await FleetPane.pick('用哪个 Agent',
+          kinds.map((kind: HarnessKind) => kind.name.length > 0 ? kind.name : kind.key));
+        if (index < 0) {
+          return;
         }
-      } catch (_err) {
-        harness = 'claude';
+        harness = kinds[index].key;
+      }
+    }
+    // 这台机器上还没结束的任务(含 Mac 桌面上的):挑一个接着看,或者开新任务。列不出来就照旧。
+    const key = ChatLaunch.key(host.name, harness);
+    let tasks: RemoteTask[] = [];
+    try {
+      tasks = await client.tasks(harness);
+    } catch (_err) {
+      tasks = [];
+    }
+    if (tasks.length > 0) {
+      const index = await FleetPane.pick('接着哪个任务',
+        ['新任务'].concat(tasks.map((task: RemoteTask) => task.label)));
+      if (index < 0) {
+        return;
+      }
+      if (index === 0) {
+        ChatLaunch.sessions.delete(key);
+      } else {
+        ChatLaunch.sessions.set(key, tasks[index - 1].id);
       }
     }
     ChatLaunch.machine = host.name;
     ChatLaunch.harness = harness;
     this.onOpen();
+  }
+
+  /** 系统操作菜单,最多 6 项;取消返回 -1。 */
+  private static async pick(title: string, labels: string[]): Promise<number> {
+    const items: promptAction.Button[] = labels.slice(0, 6).map((text: string) => {
+      const item: promptAction.Button = { text: text, color: '#007AFF' };
+      return item;
+    });
+    const buttons: [promptAction.Button, promptAction.Button?, promptAction.Button?, promptAction.Button?,
+      promptAction.Button?, promptAction.Button?] = [items[0]];
+    for (let i = 1; i < items.length; i++) {
+      buttons.push(items[i]);
+    }
+    try {
+      const picked: promptAction.ActionMenuSuccessResponse =
+        await promptAction.showActionMenu({ title: title, buttons: buttons });
+      return picked.index;
+    } catch (_err) {
+      return -1;
+    }
   }
 }

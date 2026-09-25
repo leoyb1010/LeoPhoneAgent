@@ -796,3 +796,12 @@ export function sessionArchiveJson(title: string, messages: { role: string, text
   }
   return `{"title":${JSON.stringify(title)},"messages":[${rows.join(",")}]}`
 }
+
+/** 与 LocalProtocol.ets 保持一致:和安卓 HeadlessChatRunner.nextDelta 同一个规则。 */
+export function nextDelta(sent: string, text: string): string {
+  if (text.startsWith(sent)) return text.substring(sent.length)
+  if (sent.startsWith(text)) return ""
+  let common = 0
+  while (common < sent.length && common < text.length && sent.charAt(common) === text.charAt(common)) common++
+  return text.substring(common)
+}
