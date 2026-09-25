@@ -71,7 +71,14 @@ struct FileBrowserView: View {
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(rootPath: path, initialPath: initialPath, rootLabel: rootLabel))
     }
 
+    /// iPad: a page-sized sheet, not a small card in the middle of the screen
+    /// (no effect when embedded, e.g. in the inspector).
     var body: some View {
+        sheetContent.modifier(WideSheetSizingModifier())
+    }
+
+    @ViewBuilder
+    private var sheetContent: some View {
         VStack(spacing: 0) {
             // Path breadcrumb
             ScrollView(.horizontal, showsIndicators: false) {

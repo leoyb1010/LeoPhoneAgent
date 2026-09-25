@@ -14,10 +14,13 @@ struct CommandPaletteView: View {
     @State private var query = ""
     @State private var searchActive = false
 
+    /// The real session list (the widget's copy says "会话" for every row
+    /// while Task Status Privacy is on).
+    let sessions: [(id: String, title: String)]
     /// Actions the host wires: open session / run quick task / open surface.
     let openSession: (String) -> Void
     let runQuickTask: (String) -> Void
-    let openSurface: (String) -> Void   // "automations" | "remoteHosts" | "timeline" | "artifacts" | "scheduled"
+    let openSurface: (SettingsDeepLinkTarget) -> Void
     /// Closes the sheet. Not `dismiss`: with the search field active that only
     /// ends the search, so a picked row ran but the palette stayed open.
     let close: () -> Void
@@ -32,7 +35,7 @@ struct CommandPaletteView: View {
 
     private var items: [Item] {
         var all: [Item] = []
-        for session in WidgetRecentSessionsStore.load().prefix(12) {
+        for session in sessions.prefix(12) {
             all.append(Item(id: "s-" + session.id, title: session.title,
                             subtitle: String(localized: "Session"), symbol: "bubble.left.and.bubble.right") {
                 openSession(session.id)
@@ -44,16 +47,16 @@ struct CommandPaletteView: View {
                 runQuickTask(task.id)
             })
         }
-        let surfaces: [(String, String, String)] = [
-            ("automations", String(localized: "Automations"), "bolt.badge.clock"),
-            ("remoteHosts", String(localized: "Remote Hosts"), "server.rack"),
-            ("timeline", String(localized: "Agent Timeline"), "list.bullet.rectangle.portrait"),
-            ("scheduled", String(localized: "Scheduled Tasks"), "clock.badge.checkmark"),
+        let surfaces: [(String, SettingsDeepLinkTarget, String, String)] = [
+            ("automations", .automations, String(localized: "Automations"), "bolt.badge.clock"),
+            ("mac", .macConsole, String(localized: "Mac 控制台"), "desktopcomputer"),
+            ("timeline", .timeline, String(localized: "Agent Timeline"), "list.bullet.rectangle.portrait"),
+            ("scheduled", .scheduledTasks, String(localized: "Scheduled Tasks"), "clock.badge.checkmark"),
         ]
-        for (key, title, symbol) in surfaces {
+        for (key, target, title, symbol) in surfaces {
             all.append(Item(id: "p-" + key, title: title,
                             subtitle: String(localized: "Open"), symbol: symbol) {
-                openSurface(key)
+                openSurface(target)
             })
         }
         guard !query.isEmpty else { return all }

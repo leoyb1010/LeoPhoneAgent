@@ -6,7 +6,7 @@
 //  完全没运行时也推到锁屏。
 //
 //  两种 token,用途不同:
-//  - device token:普通远程通知。审批请求走它,带「批准一次/拒绝」按钮,
+//  - device token:普通远程通知。审批请求走它,带「允许一次/拒绝」按钮,
 //    锁屏直接按,不用开 app。
 //  - push-to-start token(iOS 17.2+):远程拉起 Live Activity。任务开跑时
 //    灵动岛/锁屏出现任务卡,后续状态用 activity 自己的 update token 推。

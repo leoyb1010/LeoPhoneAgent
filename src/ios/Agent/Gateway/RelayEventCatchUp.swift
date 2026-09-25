@@ -87,7 +87,6 @@ final class RelayEventCatchUp: ObservableObject {
             switch item.eventName {
             case "approval.request":
                 approvals.append(item)
-                postApproval(item, hostName: item.machine)
             case "run.failed":
                 postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "")
             case "run.completed":
@@ -96,9 +95,19 @@ final class RelayEventCatchUp: ObservableObject {
                 break
             }
         }
-        // 前台时通知发不出去(系统会压掉),改由界面显示这批待审批。
         if !approvals.isEmpty {
-            missedApprovals = approvals
+            // Only what the Mac is still waiting on: one already answered on the
+            // lock screen, the watch or the Mac itself must not come back as a
+            // banner. A session the store doesn't know (Mac unreachable) stays.
+            await MacLiveSessionsStore.shared.refresh()
+            let live = MacLiveSessionsStore.shared.rows
+            approvals = approvals.filter { item in
+                guard let row = live.first(where: { $0.session.id == item.sessionId }) else { return true }
+                return row.session.pendingApprovalId == item.approvalId
+            }
+            for item in approvals { postApproval(item, hostName: item.machine) }
+            // 前台时通知发不出去(系统会压掉),改由界面显示这批待审批。
+            if !approvals.isEmpty { missedApprovals = approvals }
         }
         lastSeenAt = highWater
     }

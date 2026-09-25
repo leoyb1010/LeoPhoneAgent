@@ -29,6 +29,10 @@ final class HarnessLiveActivityBridge {
     }
 
     private var entries: [ObjectIdentifier: Entry] = [:]
+    /// Mac sessions with a console on screen (a driver registers on appear and
+    /// leaves on disappear). Read by the notification delegate, which isn't
+    /// main-actor isolated; written on main only.
+    nonisolated(unsafe) static var onScreenSessionIds: Set<String> = []
     /// 只有这里拉起的 activity 才由这里结束,不碰聊天任务的。
     private var startedByBridge = false
 
@@ -77,6 +81,7 @@ final class HarnessLiveActivityBridge {
     /// driver 状态变化时喊一声(update 在后台也合法,start 只在前台发生)。
     func refresh() {
         entries = entries.filter { $0.value.driver != nil }
+        Self.onScreenSessionIds = Set(entries.values.compactMap { $0.driver?.sessionId })
         let snapshots: [LiveSessionSnapshot] = entries.values.compactMap { entry in
             guard let d = entry.driver, d.isRunning, let sid = d.sessionId else { return nil }
             let waiting = d.pendingApproval

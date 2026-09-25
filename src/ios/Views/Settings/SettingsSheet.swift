@@ -34,6 +34,9 @@ enum SettingsDestination: Hashable {
     case selfTest
     // [T-mac-console-deeplink] leophoneagent://settings/mac
     case macConsole
+    case automations
+    case scheduledTasks
+    case timeline
 }
 
 struct SettingsSheet: View {
@@ -161,6 +164,12 @@ struct SettingsSheet: View {
             CapabilitySelfTestView()
         case .macConsole:
             GatewayEntryView()
+        case .automations:
+            AutomationSettingsView()
+        case .scheduledTasks:
+            ScheduledTaskSettingsView()
+        case .timeline:
+            AgentTimelineView()
         case .logs:
             // Pull a one-shot tab hint from the deep link router
             // (e.g. `?tab=config-audit`). LogManagementView clears
@@ -259,6 +268,9 @@ struct SettingsSheet: View {
             CapabilitySelfTest.shared.autoRunRequested = true
             show(.selfTest)
         case .macConsole: show(.macConsole)
+        case .automations: show(.automations)
+        case .scheduledTasks: show(.scheduledTasks)
+        case .timeline: show(.timeline)
         }
         deepLink.pendingSettingsTarget = nil
     }
@@ -283,6 +295,7 @@ struct SettingsSheet: View {
         .memory: "记忆", .storage: "存储", .mountedFolders: "挂载外部文件夹", .sharedFolders: "共享文件夹",
         .appearance: "外观", .background: "后台与通知", .about: "关于", .permissions: "权限",
         .environments: "环境变量", .mcpIntegrations: "MCP 集成", .selfTest: "能力自检", .macConsole: "Mac 控制台",
+        .automations: "自动化", .scheduledTasks: "定时任务", .timeline: "Agent 时间线",
     ]
 
     /// Build the GitHub Issue URL with a bilingual bug-report template

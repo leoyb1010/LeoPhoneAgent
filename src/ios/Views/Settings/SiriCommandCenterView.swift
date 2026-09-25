@@ -71,7 +71,7 @@ struct SiriCommandCenterView: View {
             Section("审批不用打开 App") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Mac 任务需要审批时,本机会收到时效性通知:")
-                    Text("• 锁屏/横幅上直接按「批准一次」(需 Face ID)或「拒绝」")
+                    Text("• 锁屏或横幅上直接按「允许一次」或「拒绝」，不用解锁")
                     Text("• 戴 AirPods 时开启「Siri 播报通知」,Siri 会念出来,回一句「批准」即可")
                     Text("• 手表上也有同款审批卡")
                 }

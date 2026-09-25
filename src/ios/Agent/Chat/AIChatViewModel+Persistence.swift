@@ -587,7 +587,7 @@ extension AIChatViewModel {
             let compactedUICount = insertIdx
             logger.info("[Compact] UI: insertIdx=\(insertIdx) compactedUI=\(compactedUICount) totalUI=\(loadedUIMessages.count)")
 
-            let divider = ChatMessage(role: .compactDivider, content: "\(compactedUICount) messages compacted")
+            let divider = ChatMessage(role: .compactDivider, content: String(localized: "已压缩 \(compactedUICount) 条消息"))
             divider.compactSummary = marker.summary
             loadedUIMessages.insert(divider, at: insertIdx)
             for i in 0..<insertIdx {

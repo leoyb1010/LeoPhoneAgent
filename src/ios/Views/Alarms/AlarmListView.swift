@@ -69,9 +69,9 @@ struct AlarmItem: Identifiable {
             f.timeStyle = .none
             return f.string(from: d)
         case "relative":
-            return "Daily"
+            return String(localized: "每天")
         case "timer":
-            return "Timer"
+            return String(localized: "计时器")
         default:
             return ""
         }
@@ -81,20 +81,19 @@ struct AlarmItem: Identifiable {
     var weekdayLabel: String? {
         let allDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+        // Stored as English codes; shown as the calendar's own names (周一 …).
+        let symbols = Calendar.current.shortWeekdaySymbols
+        func name(_ day: String) -> String { allDays.firstIndex(of: day).map { symbols[$0] } ?? day }
 
         if scheduleType == "relative", let days = repeatDays, !days.isEmpty {
             if days.count == 7 {
-                return "Everyday"
+                return String(localized: "每天")
             } else if days == weekdays {
-                return "Weekdays"
+                return String(localized: "工作日")
             } else if days == ["Sat", "Sun"] || days == ["Sun", "Sat"] {
-                return "Weekends"
-            } else if days.count == 1 {
-                return days[0]
+                return String(localized: "周末")
             } else {
-                // Show abbreviated: Mon, Wed, Fri
-                let ordered = allDays.filter { days.contains($0) }
-                return ordered.joined(separator: ", ")
+                return allDays.filter { days.contains($0) }.map(name).joined(separator: "、")
             }
         } else if scheduleType == "fixed", let d = fireDate {
             let f = DateFormatter()
@@ -198,7 +197,7 @@ class AlarmListViewModel: ObservableObject {
 
         // Repeating / timer alarms first
         if !undated.isEmpty {
-            sections.append((title: "Repeating & Timers", alarms: undated))
+            sections.append((title: String(localized: "重复与计时器"), alarms: undated))
         }
 
         for weekStart in sortedWeeks {
@@ -206,9 +205,9 @@ class AlarmListViewModel: ObservableObject {
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
             let title: String
             if weekStart == startOfThisWeek {
-                title = "This Week"
+                title = String(localized: "本周")
             } else if weekStart == calendar.date(byAdding: .weekOfYear, value: 1, to: startOfThisWeek) {
-                title = "Next Week"
+                title = String(localized: "下周")
             } else {
                 title = "\(dateFormatter.string(from: weekStart)) – \(dateFormatter.string(from: weekEnd))"
             }

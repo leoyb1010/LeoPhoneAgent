@@ -287,10 +287,6 @@ struct AIChatView: View {
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
     @State private var showClearChatConfirm = false
-    /// [T-new-chat-menu-entry] Confirmation gate for "New Chat" from the "…"
-    /// menu while the current session is still streaming: stopping the task is
-    /// destructive enough to warrant an explicit confirm.
-    @State private var showNewChatStopConfirm = false
     @State private var showForcePullConfirm = false
     // [inline-voice] Inline voice input mode: the composer's text area becomes a
     // VAD waveform + live transcript when active. Backed by a shared in-memory
@@ -355,6 +351,10 @@ struct AIChatView: View {
     /// Intent-based auto-scroll: stays true until the user actively scrolls up
     @State private var topSafeAreaInset: CGFloat = 59
     @Environment(\.horizontalSizeClass) private var hSizeClass
+    /// Landscape phone: with the keyboard up the chat has ~170 pt, so the
+    /// composer drops its extras (tool bar, status card, working row, strip).
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    private var isShortHeight: Bool { vSizeClass == .compact }
     @Environment(\.scenePhase) private var scenePhase
     /// Face ID lock state — observed so the navbar title can blur in
     /// lockstep with the chat-body SessionLockGateOverlay (both read
@@ -767,17 +767,6 @@ struct AIChatView: View {
             }
         } message: {
             Text(String(localized: "The conversation context has reached its limit. Start a new session or clear the chat to continue."))
-        }
-        // [T-new-chat-menu-entry] Streaming guard for the "…" menu's New Chat:
-        // confirm → stop the running task, then create; cancel → stay put.
-        .alert(String(localized: "Task Running"), isPresented: $showNewChatStopConfirm) {
-            Button(String(localized: "Stop & New Chat"), role: .destructive) {
-                vm.cancel()
-                NotificationCenter.default.post(name: .newChatRequested, object: nil)
-            }
-            Button(String(localized: "Cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "A task is running in this chat. Starting a new chat will stop it."))
         }
         .alert(String(localized: "Clear Chat"), isPresented: $showClearChatConfirm) {
             Button(String(localized: "Clear"), role: .destructive) { vm.clearChat() }
@@ -1787,18 +1776,13 @@ struct AIChatView: View {
 
     // MARK: - New Chat (menu entry)
 
-    /// [T-new-chat-menu-entry] "New Chat" from the "…" menu. Streaming sessions
-    /// get a confirm first (stopping the task is destructive); idle sessions go
-    /// straight to the shared `.newChatRequested` path, which replaces the
-    /// current chat with a fresh draft. Drafts aren't persisted until the first
-    /// message, so leaving an empty/draft session this way leaves no residue,
-    /// and a double-tap just re-mints the draft instead of creating two rows.
+    /// [T-new-chat-menu-entry] "New Chat" from the "…" menu: the shared
+    /// `.newChatRequested` path, same as ⌘N. A running task keeps going in the
+    /// background (ViewModelCache never evicts a processing chat), so there is
+    /// nothing to confirm. Drafts aren't persisted until the first message, and a
+    /// double-tap just re-mints the draft instead of creating two rows.
     private func requestNewChatFromMenu() {
-        if vm.isProcessing {
-            showNewChatStopConfirm = true
-        } else {
-            NotificationCenter.default.post(name: .newChatRequested, object: nil)
-        }
+        NotificationCenter.default.post(name: .newChatRequested, object: nil)
     }
 
     // MARK: - Force Sync / Pull
@@ -1952,7 +1936,7 @@ struct AIChatView: View {
             hasProviders: !configStore.instances.isEmpty,
             showThinkingBadge: !vm.availableThinkingLevels.isEmpty && vm.currentThinkingLevel.isEnabled,
             thinkingLevelName: vm.thinkingWasClamped
-                ? "\(vm.currentThinkingLevel.displayName) · 已夹到此档"
+                ? "\(vm.currentThinkingLevel.displayName) · 已降到该模型上限"
                 : vm.currentThinkingLevel.displayName,
             fallbackTrigger: vm.fallbackTrigger,
             fallbackPulse: fallbackPulseOpacity,
@@ -2275,7 +2259,7 @@ struct AIChatView: View {
             Image("ThinkingIcon")
                 .resizable()
                 .frame(width: 6, height: 6)
-            Text(vm.thinkingWasClamped ? "\(level.displayName)·夹" : level.displayName)
+            Text(vm.thinkingWasClamped ? "\(level.displayName)(上限)" : level.displayName)
                 .font(.system(size: 8, weight: .medium))
         }
         .foregroundStyle(ChatColors.secondaryText)
@@ -2400,8 +2384,15 @@ struct AIChatView: View {
                 .lineLimit(2)
             Spacer()
             Button {
-                vm.retry()
-                vm.forceScrollToBottom.send()
+                // A kernel that failed to boot is what needs another try; retry()
+                // has no reply to redo and did nothing.
+                if case .failed = vm.kernelStatus {
+                    vm.errorMessage = nil
+                    vm.retryKernelBoot()
+                } else {
+                    vm.retry()
+                    vm.forceScrollToBottom.send()
+                }
             } label: {
                 Label("Retry", systemImage: "arrow.clockwise")
                     .labelStyle(.titleAndIcon)
@@ -2532,9 +2523,12 @@ struct AIChatView: View {
             // Every true draft starts as an iPhone workspace, not a blank
             // remote-control screen. Existing sessions never flash this card
             // during load because they already have a real session id.
+            // Gone once you type (they only fill the composer) and on a landscape
+            // phone, where the keyboard leaves no room for them.
             if vm.sessionId == nil
                 && vm.messages.isEmpty
-                && !vm.isLoadingSession {
+                && !vm.isLoadingSession
+                && vm.inputText.isEmpty && !isShortHeight {
                 EmptyChatWorkspaceCard(
                     mounts: MountedFoldersManager.shared.entries.map { ($0.id, $0.name) },
                     selectedMountId: vm.pendingWorkspaceMountId,
@@ -2710,7 +2704,7 @@ struct AIChatView: View {
         let allToolBlocks = vm.messages
             .filter { $0.role == .assistant && !$0.isCompactedHistory }
             .flatMap { $0.blocks.filter { $0.toolStatus != nil } }
-        if !allToolBlocks.isEmpty {
+        if !allToolBlocks.isEmpty, !isShortHeight {
             FloatingToolBar(toolBlocks: allToolBlocks, toolSnapshots: vm.toolSnapshots, browserPool: vm.browserTabPool, onBrowserTakeover: {
                 vm.browserTakeoverActive = true
             }, onTakeoverDone: {
@@ -3641,7 +3635,7 @@ struct AIChatView: View {
             let ok = await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
             await MainActor.run {
                 LeoHaptics.selection()
-                if !ok { vm.appendSystemInfo("这个模型当前不可用(供应商已停用,或已被删除)。", icon: "cpu") }
+                if !ok { vm.appendSystemInfo("这个模型当前不可用(服务商已停用,或已被删除)。", icon: "cpu") }
             }
         }
     }
@@ -3710,33 +3704,35 @@ struct AIChatView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 0)
                 .onAppear { LeoPerf.coldStep("inputReady") }
-            AgentCurrentStatusCard(
-                sessionId: vm.sessionId ?? sessionId ?? draftId,
-                isProcessing: vm.isProcessing,
-                isSuspended: vm.isSuspended,
-                canResume: vm.canResume,
-                failureReason: currentFailureReason,
-                onRetry: {
-                    vm.retry()
-                    vm.forceScrollToBottom.send()
-                },
-                onResume: {
-                    vm.resume()
-                    vm.forceScrollToBottom.send()
-                },
-                onReviewProvider: {
-                    DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
-                },
-                onRetryKernel: {
-                    vm.retryKernelBoot()
-                }
-            )
+            if !isShortHeight {
+                AgentCurrentStatusCard(
+                    sessionId: vm.sessionId ?? sessionId ?? draftId,
+                    isProcessing: vm.isProcessing,
+                    isSuspended: vm.isSuspended,
+                    canResume: vm.canResume,
+                    failureReason: currentFailureReason,
+                    onRetry: {
+                        vm.retry()
+                        vm.forceScrollToBottom.send()
+                    },
+                    onResume: {
+                        vm.resume()
+                        vm.forceScrollToBottom.send()
+                    },
+                    onReviewProvider: {
+                        DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
+                    },
+                    onRetryKernel: {
+                        vm.retryKernelBoot()
+                    }
+                )
+            }
 
             VStack(spacing: 5) {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
                 // Lives in the SwiftUI composer area, not the UIKit list.
-                if vm.isProcessing, !voiceInputActive {
+                if vm.isProcessing, !voiceInputActive, !isShortHeight {
                     HStack(spacing: 6) {
                         LeoTypingIndicator()
                         Text("Working…")
@@ -3747,7 +3743,7 @@ struct AIChatView: View {
                     .padding(.horizontal, 14)
                     .transition(.opacity)
                 }
-                if !voiceInputActive, vm.editingMessageIndex == nil {
+                if !voiceInputActive, vm.editingMessageIndex == nil, !isShortHeight {
                     composerQuickTaskStrip
                 }
 
@@ -4265,7 +4261,7 @@ struct AIChatView: View {
                 }
             }
             .scrollIndicators(.visible)
-            .frame(height: Self.slashPickerFixedHeight)
+            .frame(maxHeight: Self.slashPickerFixedHeight)
         }
     }
 
@@ -4301,7 +4297,7 @@ struct AIChatView: View {
                         .padding(.vertical, 10)
                         Spacer(minLength: 0)
                     }
-                    .frame(height: Self.slashPickerFixedHeight)
+                    .frame(maxHeight: Self.slashPickerFixedHeight)
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -4335,7 +4331,7 @@ struct AIChatView: View {
                         // exactly 4 rows tall, scrolls on overflow with the
                         // visible indicator above.
                         .scrollIndicators(.visible)
-                        .frame(height: Self.slashPickerFixedHeight)
+                        .frame(maxHeight: Self.slashPickerFixedHeight)
                         .onChange(of: vm.mentionSelectedIndex) { newIndex in
                             guard newIndex >= 0, newIndex < rows.count else { return }
                             withAnimation(.easeOut(duration: 0.12)) {
@@ -4480,7 +4476,13 @@ struct AIChatView: View {
         var onSetThinkingLevel: ((ThinkingLevel) -> Void)?
         var onToggleThinking: (() -> Void)?
 
+        /// The thinking row isn't wrapped in SlashMenuButtonStyle (it has its own
+        /// controls), so it draws the keyboard-selection highlight itself.
         var body: some View {
+            rowContent.background(cmd.id == "thinking" && isSelected ? Color.accentColor : Color.clear)
+        }
+
+        private var rowContent: some View {
             HStack(spacing: 8) {
                 // Label area — tap to toggle thinking on/off and dismiss
                 HStack(spacing: 8) {
@@ -5832,11 +5834,11 @@ private struct TokenUsageSheet: View {
 
                 if let thinkingInfo = vm.currentModelThinkingInfo {
                     Section("Thinking") {
-                        StatRow(label: "Thinking", value: thinkingInfo.enabled ? "On" : "Off", icon: "lightbulb", customIcon: Image("ThinkingIcon"))
+                        StatRow(label: "Thinking", value: thinkingInfo.enabled ? String(localized: "开") : String(localized: "关"), icon: "lightbulb", customIcon: Image("ThinkingIcon"))
                         if thinkingInfo.enabled {
                             StatRow(label: "Level", value: thinkingInfo.level, icon: "slider.horizontal.3")
                         }
-                        StatRow(label: "Supported", value: thinkingInfo.supported ? "Yes" : "No", icon: "checkmark.circle")
+                        StatRow(label: "Supported", value: thinkingInfo.supported ? String(localized: "是") : String(localized: "否"), icon: "checkmark.circle")
                     }
                 }
 

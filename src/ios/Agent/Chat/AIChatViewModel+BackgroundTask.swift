@@ -314,7 +314,7 @@ extension AIChatViewModel {
                         : responseSummary
                     BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
                         sessionTitle: sessionTitle, responseSummary: summary, sessionId: sid,
-                        isError: hasError || interrupted, wasBackground: wasBackground
+                        isError: hasError, interrupted: interrupted, wasBackground: wasBackground
                     )
                 } else {
                     logger.info("[BackgroundNotification] suppressed — suspended=\(wasSuspended) stopped=\(userStopped) hasError=\(hasError) interrupted=\(interrupted)")

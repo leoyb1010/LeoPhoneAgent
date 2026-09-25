@@ -13,7 +13,14 @@ struct BrowserSheetView: View {
 
     private var manager: BrowserUseManager? { pool.activeManager }
 
+    /// iPad: a page-sized sheet, not a small card in the middle of the screen
+    /// (no effect when embedded, e.g. in the inspector).
     var body: some View {
+        sheetContent.modifier(WideSheetSizingModifier())
+    }
+
+    @ViewBuilder
+    private var sheetContent: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !isFullscreen {

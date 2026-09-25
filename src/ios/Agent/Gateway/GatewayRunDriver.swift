@@ -36,6 +36,15 @@ final class GatewayRunDriver: ObservableObject {
     @Published private(set) var items: [GatewayTranscriptItem] = []
     @Published private(set) var isRunning = false
     @Published private(set) var status: String = "idle"
+
+    /// The typing row's words; `status` is the wire value.
+    var statusLabel: String {
+        switch status {
+        case "submitting": String(localized: "正在交给 Mac…")
+        case "waiting_for_approval": String(localized: "等你审批")
+        default: String(localized: "Mac 正在处理…")
+        }
+    }
     @Published private(set) var usage: GatewayUsage?
     /// Non-nil while the remote agent is blocked waiting on the operator.
     @Published private(set) var pendingApproval: GatewayApprovalRequest?
@@ -283,7 +292,7 @@ final class GatewayRunDriver: ObservableObject {
             pendingApproval = nil
             status = "running"
             if let choice {
-                note(String(localized: "Approval: \(choice)"))
+                note(String(localized: "Approval: \(GatewayApprovalRequest.title(forChoice: choice))"))
             }
 
         case .runCompleted(let output, let usage):

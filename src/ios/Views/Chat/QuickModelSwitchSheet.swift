@@ -219,7 +219,7 @@ struct QuickModelSwitchSheet: View {
             let ok = await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
             await MainActor.run {
                 // 切失败还关面板,用户会以为切好了 —— 留在原地并说明原因。
-                if ok { dismiss() } else { failure = "这个模型当前不可用(供应商已停用,或已被删除)。" }
+                if ok { dismiss() } else { failure = "这个模型当前不可用(服务商已停用,或已被删除)。" }
             }
         }
     }

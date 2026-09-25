@@ -173,7 +173,7 @@ struct SendPromptIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: "LeoPhoneAgent Task Started",
+            title: String(localized: "LeoPhoneAgent 任务已开始"),
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -182,7 +182,7 @@ struct SendPromptIntent: AppIntent {
             let settle = {
                 await Self.settleRun(
                     sessionId: sid, runId: runId, pendingId: pendingId,
-                    title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
+                    title: String(localized: "LeoPhoneAgent 任务"), notificationId: "shortcut-done")
             }
             // [T-ios27-long-running] iOS 27 lets a waiting shortcut outlive the
             // ~30 s intent budget instead of being cut off mid-answer.
@@ -212,7 +212,7 @@ struct SendPromptIntent: AppIntent {
         Task { @MainActor in
             _ = await Self.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
+                title: String(localized: "LeoPhoneAgent 任务"), notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(
@@ -305,7 +305,7 @@ struct SendPromptIntent: AppIntent {
         // notification or mutate the state of the still-running task.
         if !outcome.shouldKeepObserving {
             ShortcutNotification.post(id: "\(notificationId)-\(runId)",
-                                      title: "\(title) · \(outcome.shortcutStatus)",
+                                      title: "\(title) · \(outcome.statusLabel)",
                                       body: String(text.prefix(200)), sessionId: sessionId)
         }
         return (outcome, text)
@@ -372,6 +372,17 @@ final class NotificationNavigationStore {
     private var pendingSessionId: String?
     private var pendingSetAt: Date?
     private var handledAt: Date?
+    /// A Mac session tapped in a notification (host + the Mac's session id).
+    private var pendingMac: (target: [String: String], at: Date)?
+
+    func setPendingMac(_ target: [String: String]) { pendingMac = (target, Date()) }
+
+    /// Cold-launch consume, same 30 s rule as `takePending()`.
+    func takePendingMac() -> [String: String]? {
+        defer { pendingMac = nil }
+        guard let pendingMac, Date().timeIntervalSince(pendingMac.at) < 30 else { return nil }
+        return pendingMac.target
+    }
 
     /// Buffer a tap target (called from didReceive before posting the event).
     func setPending(_ sessionId: String) {
@@ -396,6 +407,7 @@ final class NotificationNavigationStore {
     func markHandled() {
         pendingSessionId = nil
         pendingSetAt = nil
+        pendingMac = nil
         handledAt = Date()
     }
 
@@ -460,6 +472,15 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
                     userInfo: ["sessionId": sessionId]
                 )
             }
+        } else if let macSessionId = userInfo["harnessSessionId"] as? String, !macSessionId.isEmpty {
+            // A Mac's "waiting for you" / "done": open that Mac session, not just the app.
+            let target = ["macSessionId": macSessionId,
+                          "hostId": userInfo["hostId"] as? String ?? "",
+                          "machine": userInfo["machine"] as? String ?? ""]
+            DispatchQueue.main.async {
+                NotificationNavigationStore.shared.setPendingMac(target)
+                NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
+            }
         }
         completionHandler()
     }
@@ -475,7 +496,9 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         // [T-presence] You're looking at that very session: keep it in the
         // list, but no banner or sound over what's already on screen.
         let sessionId = (info["sessionId"] ?? info["harnessSessionId"] ?? info["session_id"]) as? String
-        if let sessionId, !sessionId.isEmpty, sessionId == AIChatViewModel.activeSessionId {
+        if let sessionId, !sessionId.isEmpty,
+           sessionId == AIChatViewModel.activeSessionId
+            || HarnessLiveActivityBridge.onScreenSessionIds.contains(sessionId) {
             completionHandler([.list])
             return
         }

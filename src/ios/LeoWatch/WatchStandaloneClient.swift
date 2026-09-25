@@ -36,7 +36,7 @@ enum WatchStandaloneError: LocalizedError {
             return reason
         case .http(let status, let detail):
             switch status {
-            case 401, 403: return "API Key 无效或没有权限。请在 iPhone 上检查这个模型的供应商。"
+            case 401, 403: return "API Key 无效或没有权限。请在 iPhone 上检查这个模型的服务商。"
             case 404: return "模型或接口地址不存在（\(detail)）。"
             case 429: return "请求太频繁，或额度已用完。稍后再试。"
             case 500...599: return "模型服务暂时不可用（\(status)）。"

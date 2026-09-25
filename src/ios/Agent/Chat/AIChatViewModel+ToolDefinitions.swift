@@ -29,12 +29,12 @@ extension AIChatViewModel {
         let entry = resolveCurrentEntry()
         let modelName = entry?.model.displayName ?? entry?.model.id ?? selectedModel.id
         var text = "当前模型「\(modelName)」没有被标成支持读图,附件已保留。"
-            + "如果它其实能看图,去「设置 → 供应商 → \(modelName) → Image input」把开关打开"
+            + "如果它其实能看图,去「设置 → AI 服务商 → 该服务商 → \(modelName) → 图片输入」把开关打开"
         if let instanceId = entry?.providerInstanceId, !instanceId.isEmpty,
            let encoded = instanceId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
-            text += ":[打开该供应商设置](leophoneagent://settings/providers/\(encoded))"
+            text += ":[打开该服务商设置](leophoneagent://settings/providers/\(encoded))"
         } else {
-            text += ":[打开供应商列表](leophoneagent://settings/providers)"
+            text += ":[打开 AI 服务商列表](leophoneagent://settings/providers)"
         }
         text += "。确实不支持时再换一个能读图的模型。"
         return text

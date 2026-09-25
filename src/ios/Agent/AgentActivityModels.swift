@@ -66,20 +66,21 @@ enum AgentRecoveryAction: String, Codable, CaseIterable, Sendable {
 enum AgentActivityFailureClassifier {
     static func reason(for message: String?) -> AgentActivityReason {
         let text = (message ?? "").lowercased()
-        if text.contains("kernel") || text.contains("rootfs") || text.contains("ish") {
+        if text.contains("kernel") || text.contains("rootfs") || text.contains("ish") || text.contains("执行环境") {
             return .kernelUnavailable
         }
         if text.contains("unauthorized") || text.contains("authentication")
             || text.contains("api key") || text.contains("credential")
-            || text.contains("401") || text.contains("403") {
+            || text.contains("401") || text.contains("403") || text.contains("登录") {
             return .authenticationRequired
         }
-        if text.contains("rate limit") || text.contains("quota") || text.contains("429") {
+        if text.contains("rate limit") || text.contains("quota") || text.contains("429") || text.contains("限流") || text.contains("频繁") {
             return .rateLimited
         }
         if text.contains("timed out") || text.contains("timeout")
             || text.contains("offline") || text.contains("network")
-            || text.contains("connection") {
+            || text.contains("connection") || text.contains("网络") || text.contains("超时")
+            || text.contains("连接") {
             return .connectionDropped
         }
         if text.contains("tool") || text.contains("command") || text.contains("process") {
@@ -238,6 +239,21 @@ enum AgentRunOutcome: String, Codable, Sendable {
         case .awaitingApproval: "Awaiting Approval"
         case .running: "Running"
         case .unknown: "Unknown"
+        }
+    }
+
+    /// The same outcome in the owner's words, for notification titles
+    /// (`shortcutStatus` stays English: Shortcuts branch on it).
+    var statusLabel: String {
+        switch self {
+        case .succeeded: String(localized: "已完成")
+        case .failed: String(localized: "失败")
+        case .cancelled: String(localized: "已取消")
+        case .suspended: String(localized: "已暂停")
+        case .waitingForUser: String(localized: "等你处理")
+        case .awaitingApproval: String(localized: "等你批准")
+        case .running: String(localized: "进行中")
+        case .unknown: String(localized: "结果未知")
         }
     }
 

@@ -338,6 +338,7 @@ private struct MemoryWriteDetailView: View {
     @State private var editedContent: String = ""
     @State private var showRevokeAlert = false
     @State private var revokeResult: String?
+    @State private var revokeRemoved = false
     @State private var showResultAlert = false
     @State private var saved = false
 
@@ -351,7 +352,7 @@ private struct MemoryWriteDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if let written = item.writtenContent {
-                            SectionHeader(title: "Written Content")
+                            SectionHeader(title: String(localized: "写入的内容"))
                             Text(written)
                                 .font(.system(.caption, design: .monospaced))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -359,7 +360,7 @@ private struct MemoryWriteDetailView: View {
                                 .textSelection(.enabled)
                         }
 
-                        SectionHeader(title: "Tool Result")
+                        SectionHeader(title: String(localized: "工具结果"))
                         Text(item.content)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
@@ -409,7 +410,7 @@ private struct MemoryWriteDetailView: View {
         .alert("Revoke Memory", isPresented: $showRevokeAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Revoke", role: .destructive) {
-                revokeResult = revokeEntry()
+                (revokeRemoved, revokeResult) = revokeEntry()
                 showResultAlert = true
             }
         } message: {
@@ -417,9 +418,7 @@ private struct MemoryWriteDetailView: View {
         }
         .alert(revokeResult ?? "", isPresented: $showResultAlert) {
             Button("OK") {
-                if revokeResult?.hasPrefix("Removed") == true {
-                    dismiss()
-                }
+                if revokeRemoved { dismiss() }
             }
         }
     }
@@ -487,9 +486,9 @@ private struct MemoryWriteDetailView: View {
         return nil
     }
 
-    private func revokeEntry() -> String {
+    private func revokeEntry() -> (removed: Bool, message: String) {
         guard let written = item.writtenContent else {
-            return "No written content to revoke."
+            return (false, String(localized: "这条没有写入的内容，不用撤销。"))
         }
 
         let fm = FileManager.default
@@ -544,15 +543,15 @@ private struct MemoryWriteDetailView: View {
 
                     do {
                         try newFileContent.write(to: fileURL, atomically: true, encoding: .utf8)
-                        return "Removed from \(dateStr).md"
+                        return (true, String(localized: "已从 \(dateStr).md 移除"))
                     } catch {
-                        return "Error writing file: \(error.localizedDescription)"
+                        return (false, String(localized: "写文件出错：\(error.localizedDescription)"))
                     }
                 }
             }
         }
 
-        return "Entry not found in recent daily logs."
+        return (false, String(localized: "最近两天的日志里没找到这一条。"))
     }
 }
 

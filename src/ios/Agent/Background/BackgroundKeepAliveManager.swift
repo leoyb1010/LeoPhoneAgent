@@ -857,7 +857,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     ///   - sessionId: The session ID for tap-to-open navigation
     ///   - isError: Whether the task ended with an error
     /// [T-ios-live-activity-privacy-mode] Content-free notification body:
-    /// "1 task completed · 2m 15s". The duration is appended only when a start
+    /// "已完成 1 个任务 · 2 分 15 秒". The duration is appended only when a start
     /// time is available (a Live Activity run was in flight); otherwise the body
     /// degrades to just the count, per spec — no extra time tracking is added.
     private static func privacyNotificationBody(isError: Bool, startedAt: Date?) -> String {
@@ -865,20 +865,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             ? String(localized: "1 task failed")
             : String(localized: "1 task completed")
         guard let startedAt else { return base }
-        let elapsed = Int(Date().timeIntervalSince(startedAt).rounded())
+        let elapsed = Date().timeIntervalSince(startedAt).rounded()
         guard elapsed > 0 else { return base }
-        let formatted: String
-        if elapsed >= 3600 {
-            formatted = String(format: "%dh %dm", elapsed / 3600, (elapsed % 3600) / 60)
-        } else if elapsed >= 60 {
-            formatted = String(format: "%dm %ds", elapsed / 60, elapsed % 60)
-        } else {
-            formatted = String(format: "%ds", elapsed)
-        }
-        return "\(base) · \(formatted)"
+        return "\(base) · \(LeoDuration.short(elapsed))"
     }
 
-    func postBackgroundTaskNotification(sessionTitle: String, responseSummary: String, sessionId: String, isError: Bool = false, wasBackground: Bool? = nil) {
+    /// - Parameter interrupted: stopped but resumable (connection drop, output
+    ///   limit): says so instead of "failed".
+    func postBackgroundTaskNotification(sessionTitle: String, responseSummary: String, sessionId: String,
+                                        isError: Bool = false, interrupted: Bool = false, wasBackground: Bool? = nil) {
         guard backgroundNotificationsEnabled else { return }
         // Use the caller-captured snapshot when available (the async Task in
         // endBackgroundProcessing may not run until the app is already active).
@@ -893,7 +888,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
-        if liveActivityPrivacyMode {
+        if liveActivityPrivacyMode && interrupted && !isError {
+            content.title = String(localized: "⏸ 任务中断")
+            content.body = String(localized: "回到 App 点「继续」")
+        } else if liveActivityPrivacyMode {
             // [T-ios-live-activity-privacy-mode] Neutral report only: no session
             // title, no reply summary. sessionId stays in userInfo below so the
             // tap-to-open jump keeps working, and the badge logic is untouched.
@@ -905,7 +903,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 startedAt: AgentLiveActivityManager.shared.taskStartTime
             )
         } else {
-            content.title = "\(isError ? "❌" : "✅") \(sessionTitle)"
+            content.title = "\(isError ? "❌" : interrupted ? "⏸" : "✅") \(sessionTitle)"
             content.body = responseSummary
         }
         content.sound = .default

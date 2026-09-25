@@ -497,7 +497,7 @@ final class GrokViaMacBroker: @unchecked Sendable {
             return host.flatMap { store.client(for: $0) }
         }
         guard let client else {
-            throw LLMError.providerError(message: "没有可用的 Mac:去 设置 → 我的 Mac 配置后再用 Grok")
+            throw LLMError.providerError(message: "没有可用的 Mac:去 设置 → 远程机器 配置后再用 Grok")
         }
         let obj = try await client.getJSON("/v1/grok/token", service: .harness)
         guard let token = obj["access_token"] as? String, !token.isEmpty else {

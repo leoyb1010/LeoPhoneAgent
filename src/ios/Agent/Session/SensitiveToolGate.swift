@@ -25,10 +25,10 @@
 //    · .inactive(下拉通知中心、来电横幅、App 切换器)同样被拒 → 随机失败。
 //
 //  现在的分级:
-//    · readCredentials / writeCredentials / remoteShell / remoteAgent
-//      —— 高危且低频,后台仍然直接拒,并回一句让模型转述的人话。
-//      读写登录凭证、以及在别人的机器上执行命令/起 Agent,值得用户
-//      专门回一次前台。
+//    · readCredentials / writeCredentials —— 后台仍然直接拒,并回一句让模型
+//      转述的人话(浏览器凭证本来就要前台的页面)。
+//    · remoteShell / remoteAgent —— 1.44 起和本机一样发通知等批准:锁屏上
+//      一步就能批,直接拒只会让锁屏后的远程任务莫名失败。
 //    · shell / fileWrite —— 这两条是本机 iSH 沙盒内的操作,也是任务能不能
 //      跑完的命脉。后台不再硬拒:先沿用本会话已有授权;没有授权就把请求
 //      挂进队列、发一条本地通知叫用户回来处理,并给一个超时上限(到点判拒,
@@ -92,9 +92,9 @@ final class SensitiveToolGate: ObservableObject {
 
         var backgroundPolicy: BackgroundPolicy {
             switch self {
-            case .shell, .fileWrite:
+            case .shell, .fileWrite, .remoteShell, .remoteAgent:
                 return .notifyAndWait
-            case .readCredentials, .writeCredentials, .remoteShell, .remoteAgent:
+            case .readCredentials, .writeCredentials:
                 return .denyImmediately
             }
         }

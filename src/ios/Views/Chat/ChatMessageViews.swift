@@ -665,7 +665,7 @@ struct ChatMessageRow: View {
                         Text("Resume")
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.orange)

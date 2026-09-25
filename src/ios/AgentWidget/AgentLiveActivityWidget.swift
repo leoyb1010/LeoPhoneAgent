@@ -376,7 +376,7 @@ struct AgentLiveActivityWidget: Widget {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.white.opacity(0.15), in: Capsule())
+                    .background(.fill.tertiary, in: Capsule())
                     .padding(.leading, 8)
                 }
                   .leoWidgetLocale()
@@ -406,7 +406,7 @@ struct AgentLiveActivityWidget: Widget {
                             }
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.white.opacity(0.15), in: Capsule())
+                            .background(.fill.tertiary, in: Capsule())
                             // [T-la-stop-button] Stop, right where the count is.
                             if context.state.activeSessionCount > 0 {
                                 StopTasksPill()
@@ -443,7 +443,7 @@ struct AgentLiveActivityWidget: Widget {
                                 // even after "Completed" showed). Matches the Lock
                                 // Screen view's guard.
                                 if !session.isCompleted {
-                                    Text("00:00")
+                                    Text("0:00:00")
                                         .font(.caption2.monospacedDigit())
                                         .hidden()
                                         .padding(.horizontal, 6)
@@ -630,14 +630,16 @@ struct AudioTogglePill: View {
         // speaking, slash = muted/paused.
         Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.slash.fill")
             .font(.caption2.bold())
-            .foregroundStyle(.white)
+            // .primary, not .white: the Lock Screen card is light in light mode
+            // (the Dynamic Island is always dark and still gets white).
+            .foregroundStyle(.primary)
             // The two speaker glyphs have different intrinsic widths (the wave
             // variant is wider), so a fixed 16pt box would clip one of them and
             // make the capsule jump on toggle. Give it room and center.
             .frame(width: 20, height: 16)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(.white.opacity(0.15), in: Capsule())
+            .background(.fill.tertiary, in: Capsule())
             // Swap the glyph with a fade so the icon flips smoothly when the
             // toggle intent lands. `.id` forces the transition per state.
             .id(isPlaying)
@@ -709,7 +711,7 @@ struct AgentLockScreenView: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(.white.opacity(0.15), in: Capsule())
+                .background(.fill.tertiary, in: Capsule())
                 // [T-ios-live-activity-audio-toggle] Audio play/pause control on
                 // the Lock Screen too, beside the identity capsule.
                 if state.isAudioLoaded {
@@ -746,7 +748,7 @@ struct AgentLockScreenView: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.white.opacity(0.15), in: Capsule())
+                    .background(.fill.tertiary, in: Capsule())
                 }
             }
 
@@ -767,7 +769,7 @@ struct AgentLockScreenView: View {
                         Spacer(minLength: 6)
                         // A stale card stops the clock — it would count time nobody is spending.
                         if !session.isCompleted, !isStale {
-                            Text("00:00")
+                            Text("0:00:00")
                                 .font(.caption2.monospacedDigit())
                                 .hidden()
                                 .padding(.horizontal, 6)

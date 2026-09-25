@@ -3734,13 +3734,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已使用 %2$@ 启动 %1$@。"
+            "value": "「%1$@」已开始（%2$@）。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已使用 %2$@ 啓動 %1$@。"
+            "value": "「%1$@」已開始（%2$@）。"
           }
         }
       }
@@ -8173,58 +8173,6 @@
         }
       }
     },
-    "A task is running in this chat. Starting a new chat will stop it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In diesem Chat läuft eine Aufgabe. Ein neuer Chat beendet sie."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A task is running in this chat. Starting a new chat will stop it."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une tâche est en cours dans cette conversation. Démarrer une nouvelle conversation l’arrêtera."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このチャットではタスクが実行中です。新しいチャットを開始すると中断されます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 채팅에서 작업이 실행 중입니다. 새 채팅을 시작하면 중단됩니다."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "В этом чате выполняется задача. Начало нового чата остановит её."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此对话中有任务正在运行。开始新对话会将其停止。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此對話中有任務正在執行。開始新對話會將其停止。"
-          }
-        }
-      }
-    },
     "A voice service is configured more than once. Voice is merged into a single row here; you can delete the extra provider above if you want.": {
       "comment": "Duplicate voice provider hint",
       "localizations": {
@@ -11027,13 +10975,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此会话中的所有消息将被永久删除。"
+            "value": "此对话中的所有消息将被永久删除。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此工作階段中的所有訊息將被永久刪除。"
+            "value": "此對話中的所有訊息將被永久刪除。"
           }
         }
       }
@@ -22114,7 +22062,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "上下文已满且无法进一步压缩。请开始新会话或清空对话以继续。"
+            "value": "上下文已满，也无法再压缩。请新建对话，或清空当前对话后继续。"
           }
         },
         "zh-Hant": {
@@ -24286,13 +24234,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法导入该供应商配置。"
+            "value": "无法导入这个 AI 服务商配置。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "無法匯入該供應商設定。"
+            "value": "無法匯入這個 AI 服務商設定。"
           }
         }
       }
@@ -39747,13 +39695,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导入为供应商"
+            "value": "导入为 AI 服务商"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "匯入為供應商"
+            "value": "匯入為 AI 服務商"
           }
         }
       }
@@ -50196,13 +50144,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "多供应商聚合路由（openrouter.ai）"
+            "value": "多服务商聚合路由（openrouter.ai）"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "多供應商聚合路由（openrouter.ai）"
+            "value": "多服務商聚合路由（openrouter.ai）"
           }
         }
       }
@@ -51273,13 +51221,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "新建会话"
+            "value": "新对话"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "新建工作階段"
+            "value": "新對話"
           }
         }
       }
@@ -55390,13 +55338,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在"
+            "value": "开"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在"
+            "value": "開"
           }
         }
       }
@@ -60899,13 +60847,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "检测到供应商配置"
+            "value": "检测到 AI 服务商配置"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "偵測到供應商設定"
+            "value": "偵測到 AI 服務商設定"
           }
         }
       }
@@ -61003,13 +60951,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导入供应商"
+            "value": "导入 AI 服务商"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "匯入供應商"
+            "value": "匯入 AI 服務商"
           }
         }
       }
@@ -73446,13 +73394,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示 %lldK 个字符中的最后 %lldK 个"
+            "value": "仅显示最后 %1$lldK 字（共 %2$lldK 字）"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "顯示 %lldK 個字元中的最後 %lldK 個"
+            "value": "僅顯示最後 %1$lldK 字（共 %2$lldK 字）"
           }
         }
       }
@@ -76925,58 +76873,6 @@
         }
       }
     },
-    "Stop & New Chat": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stoppen & neuer Chat"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stop & New Chat"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrêter et nouvelle conversation"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止して新しいチャット"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "중지하고 새 채팅"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Остановить и новый чат"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止并新建对话"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止並新建對話"
-          }
-        }
-      }
-    },
     "Stop recording": {
       "extractionState": "stale",
       "localizations": {
@@ -79602,58 +79498,6 @@
         }
       }
     },
-    "Task Running": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufgabe läuft"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Task Running"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tâche en cours"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タスク実行中"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "작업 실행 중"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Задача выполняется"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任务运行中"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任務執行中"
-          }
-        }
-      }
-    },
     "Task started with %@. I'll notify you when it's done.": {
       "localizations": {
         "de": {
@@ -79695,13 +79539,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "任务已使用 %@ 启动。完成后我会通知您。"
+            "value": "已交给 %@，做完通知你。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "任務已使用 %@ 啓動。完成後我會通知您。"
+            "value": "已交給 %@，做完通知你。"
           }
         }
       }
@@ -79938,13 +79782,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "测试并添加提供商"
+            "value": "测试并添加"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "測試並新增提供者"
+            "value": "測試並新增"
           }
         }
       }
@@ -79984,13 +79828,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "测试并保存提供商"
+            "value": "测试并保存"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "測試並保存提供者"
+            "value": "測試並儲存"
           }
         }
       }
@@ -80769,7 +80613,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "对话上下文已达上限。请开始新会话或清空聊天以继续。"
+            "value": "对话上下文已达上限。请新建对话，或清空当前对话后继续。"
           }
         },
         "zh-Hant": {
@@ -82660,13 +82504,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 JSON 文件看起来是导出的供应商配置。是否导入为新供应商，还是作为文件附件添加到聊天？"
+            "value": "这个 JSON 文件像是导出的 AI 服务商配置。要导入为新的服务商，还是作为附件发给对话？"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 JSON 檔案看起來是匯出的供應商設定。是否匯入為新供應商，還是作為檔案附件新增到聊天？"
+            "value": "這個 JSON 檔案像是匯出的 AI 服務商設定。要匯入為新的服務商，還是作為附件傳給對話？"
           }
         }
       }
@@ -87272,13 +87116,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "解锁此聊天会话"
+            "value": "解锁此对话"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "解鎖此聊天會話"
+            "value": "解鎖此對話"
           }
         }
       }
@@ -91653,13 +91497,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "您想发送什么后续问题？"
+            "value": "还想追问什么？"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "您想發送什麼後續問題？"
+            "value": "還想追問什麼？"
           }
         }
       }
@@ -91797,13 +91641,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "您想问 LeoPhoneAgent 什么？"
+            "value": "想让 Leo 做什么？"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "您想問 LeoPhoneAgent 什麼？"
+            "value": "想讓 Leo 做什麼？"
           }
         }
       }
@@ -92869,13 +92713,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "处理中…"
+            "value": "进行中…"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "處理中…"
+            "value": "進行中…"
           }
         }
       }
@@ -100173,13 +100017,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行中"
+            "value": "进行中"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "執行中"
+            "value": "進行中"
           }
         }
       }
@@ -105118,13 +104962,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行快速任务"
+            "value": "运行快捷任务"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "執行快速任務"
+            "value": "執行快捷任務"
           }
         }
       }
@@ -105140,13 +104984,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在后台运行一个 LeoPhoneAgent 快速任务。"
+            "value": "在后台运行一个 LeoPhoneAgent 快捷任务。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在背景執行一個 LeoPhoneAgent 快速任務。"
+            "value": "在背景執行一個 LeoPhoneAgent 快捷任務。"
           }
         }
       }
@@ -108913,24 +108757,24 @@
         }
       }
     },
-    "密钥被拒绝。机器与中继共用同一把钥匙:在 cortex 终端运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。": {
+    "密钥被拒绝。在那台 Mac 的终端里运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The key was rejected. Machines and the relay share one key: run cat ~/.leoagent/key in a terminal on cortex and paste the result into Settings → Remote Machines."
+            "value": "The key was rejected. On that Mac, run cat ~/.leoagent/key in a terminal and paste the result into Settings → Remote Machines."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "密钥被拒绝。机器与中继共用同一把钥匙:在 cortex 终端运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。"
+            "value": "密钥被拒绝。在那台 Mac 的终端里运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "金鑰被拒絕。機器與中繼共用同一把鑰匙：在 cortex 終端機執行 cat ~/.leoagent/key，把結果重新貼到「設定 → 遠端機器」。"
+            "value": "金鑰被拒絕。在那台 Mac 的終端機執行 cat ~/.leoagent/key，把結果重新貼到「設定 → 遠端機器」。"
           }
         }
       }
@@ -109019,6 +108863,512 @@
           "stringUnit": {
             "state": "translated",
             "value": "LeoAgent 回傳了意外的內容：%@"
+          }
+        }
+      }
+    },
+    "Access depends on the selected media file": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access depends on the selected media file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取决于所选的媒体文件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取決於所選的媒體檔案"
+          }
+        }
+      }
+    },
+    "Approval: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已回复审批：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已回覆審批：%@"
+          }
+        }
+      }
+    },
+    "Decoding error: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decoding error: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法解析回复：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法解析回覆：%@"
+          }
+        }
+      }
+    },
+    "Invalid API key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid API key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key 无效"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key 無效"
+          }
+        }
+      }
+    },
+    "Invalid API key: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid API key: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key 无效：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key 無效：%@"
+          }
+        }
+      }
+    },
+    "Lost contact with that Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lost contact with that Mac."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和这台 Mac 失去联系了。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和這台 Mac 失去聯繫了。"
+          }
+        }
+      }
+    },
+    "Network error: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network error: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络错误：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "網路錯誤：%@"
+          }
+        }
+      }
+    },
+    "Per-folder grants via the system picker": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per-folder grants via the system picker"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过系统选择器按文件夹授权"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透過系統選擇器按資料夾授權"
+          }
+        }
+      }
+    },
+    "Provider error: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider error: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务商报错：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服務商回報錯誤：%@"
+          }
+        }
+      }
+    },
+    "Rate limited — please try again later": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate limited — please try again later"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求太频繁（限流），请稍后再试"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求太頻繁（限流），請稍後再試"
+          }
+        }
+      }
+    },
+    "Request was cancelled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request was cancelled"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求已取消"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求已取消"
+          }
+        }
+      }
+    },
+    "Run Due Scheduled Tasks": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run Due Scheduled Tasks"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行到点的定时任务"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行到點的定時任務"
+          }
+        }
+      }
+    },
+    "Run ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行 ID"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行 ID"
+          }
+        }
+      }
+    },
+    "Runs any LeoPhoneAgent scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs any LeoPhoneAgent scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行所有到点的 LeoPhoneAgent 定时任务。在快捷指令里给它建一个个人自动化，定时运行更可靠。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行所有到點的 LeoPhoneAgent 定時任務。在捷徑裡給它建一個個人自動化，定時執行更可靠。"
+          }
+        }
+      }
+    },
+    "Runs through the Shortcuts app": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs through the Shortcuts app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过「快捷指令」App 运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透過「捷徑」App 執行"
+          }
+        }
+      }
+    },
+    "Scan Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "掃碼"
+          }
+        }
+      }
+    },
+    "Selected contacts only": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected contacts only"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅限所选联系人"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅限所選聯絡人"
+          }
+        }
+      }
+    },
+    "Service temporarily unavailable: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Service temporarily unavailable: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务暂时不可用：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服務暫時無法使用：%@"
+          }
+        }
+      }
+    },
+    "Unknown error: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown error: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知错误：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知錯誤：%@"
+          }
+        }
+      }
+    },
+    "%lld tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld tokens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Token"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Token"
+          }
+        }
+      }
+    },
+    "%lld ms": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 毫秒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 毫秒"
+          }
+        }
+      }
+    },
+    "iCloud rejected the request (code 15). Automatic recovery is skipped for large pending queues — use Force Full Sync in Sync Settings if this persists.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud rejected the request (code 15). Automatic recovery is skipped for large pending queues — use Force Full Sync in Sync Settings if this persists."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 拒绝了请求（代码 15）。待上传的内容太多时不会自动恢复；一直这样的话，到同步设置里点「强制完整同步」。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 拒絕了請求（代碼 15）。待上傳的內容太多時不會自動恢復；一直這樣的話，到同步設定裡點「強制完整同步」。"
+          }
+        }
+      }
+    },
+    "Google rejected the OAuth client (invalid_client). Add your own Google Cloud OAuth client under Add Provider → Google sign-in setup. An \"iOS\" application type (bundle ID com.leoyuan.leophoneagent, no secret) is recommended; a \"Desktop app\" client with its secret also works.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google rejected the OAuth client (invalid_client). Add your own Google Cloud OAuth client under Add Provider → Google sign-in setup. An \"iOS\" application type (bundle ID com.leoyuan.leophoneagent, no secret) is recommended; a \"Desktop app\" client with its secret also works."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google 拒绝了这个 OAuth 客户端（invalid_client）。到「添加 AI 服务商 → Google 登录设置」里填上你自己的 Google Cloud OAuth 客户端：推荐「iOS」类型（包 ID com.leoyuan.leophoneagent，不需要密钥）；带密钥的「桌面应用」客户端也可以。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google 拒絕了這個 OAuth 用戶端（invalid_client）。到「新增 AI 服務商 → Google 登入設定」裡填上你自己的 Google Cloud OAuth 用戶端：建議「iOS」類型（套件 ID com.leoyuan.leophoneagent，不需要密鑰）；帶密鑰的「桌面應用程式」用戶端也可以。"
           }
         }
       }

@@ -33,10 +33,10 @@ extension AIChatViewModel {
     }
 
     static let availableSlashCommands: [SlashCommand] = [
-        SlashCommand(id: "clear", icon: "trash", title: "Clear", subtitle: "Clear all messages in this session"),
-        SlashCommand(id: "compact", icon: "arrow.down.right.and.arrow.up.left", title: "Compact", subtitle: "Compress conversation history into summary"),
-        SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "Toggle memory writes on/off (reads unaffected)"),
-        SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "Toggle deep thinking mode on/off"),
+        SlashCommand(id: "clear", icon: "trash", title: "Clear", subtitle: "清空本对话的全部消息"),
+        SlashCommand(id: "compact", icon: "arrow.down.right.and.arrow.up.left", title: "Compact", subtitle: "把对话历史压缩成摘要"),
+        SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "记忆写入开 / 关(读取不受影响)"),
+        SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "深度思考开 / 关"),
         // [T-model-quickswitch] /model kimi 一步切换;单独 /model 打开快切面板
         SlashCommand(id: "model", icon: "cpu", title: "Model", subtitle: "切换本会话模型,可直接跟名字:/model kimi"),
         // [T-composer-simplify-1.41] 原来输入框上方的两个 chip 收进 "/":快捷任务、交给 Mac。
@@ -173,8 +173,8 @@ extension AIChatViewModel {
         let filter = slashFilter.lowercased()
         var commands = Self.availableSlashCommands.map { cmd -> SlashCommand in
             if cmd.id == "memory" {
-                let status = memoryEnabled ? "on" : "off"
-                return SlashCommand(id: cmd.id, icon: cmd.icon, title: cmd.title, subtitle: "Writes \(status) — tap to toggle")
+                let status = memoryEnabled ? "已开" : "已关"
+                return SlashCommand(id: cmd.id, icon: cmd.icon, title: cmd.title, subtitle: "记忆写入\(status) · 点按切换")
             }
             return cmd
         }
@@ -412,8 +412,8 @@ extension AIChatViewModel {
             if let sid = sessionId {
                 Task { await ChatStore.shared.setMemoryEnabled(sessionId: sid, enabled: memoryEnabled) }
             }
-            let status = memoryEnabled ? "enabled" : "disabled"
-            appendSystemInfo("Memory writes \(status). Reads are unaffected.", icon: "brain.head.profile")
+            appendSystemInfo(memoryEnabled ? "已开启记忆写入,读取不受影响。" : "已关闭记忆写入,读取不受影响。",
+                             icon: "brain.head.profile")
         case "clear":
             clearChatConfirmRequested = true
         case "model":
@@ -496,7 +496,7 @@ extension AIChatViewModel {
             await MainActor.run {
                 // 切失败还报"已切到"= 假装成功;分组成员全停用时就会走到这里
                 self.appendSystemInfo(ok ? "已切到 \(target.title)。"
-                                         : "没能切到 \(target.title):当前不可用(供应商停用或分组无可用成员)。",
+                                         : "没能切到 \(target.title):当前不可用(服务商停用或分组无可用成员)。",
                                       icon: "cpu")
             }
         }

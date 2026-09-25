@@ -4,8 +4,12 @@ import Foundation
 /// lightweight logic-test target. Device names are deliberately irrelevant:
 /// Stage Manager, Split View and mirrored windows can all resize continuously.
 enum LeoWorkspaceLayoutPolicy {
-    static func usesSplit(width: CGFloat, height: CGFloat, regularWidth: Bool) -> Bool {
-        guard regularWidth, width.isFinite, height.isFinite, height >= 480 else { return false }
+    /// `regularHeight` is the vertical size class, not a measured height: the
+    /// on-screen keyboard shrinks the measured height (an 11" iPad in landscape
+    /// fell under the old 480 pt floor), and flipping to one column tore down the
+    /// composer being typed in. Landscape phones are compact-height either way.
+    static func usesSplit(width: CGFloat, regularWidth: Bool, regularHeight: Bool) -> Bool {
+        guard regularWidth, regularHeight, width.isFinite else { return false }
         let sidebar = min(max(width * 0.38, 300), 380)
         let detail = width - sidebar
         return sidebar >= 300 && detail >= 440

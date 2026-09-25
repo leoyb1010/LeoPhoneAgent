@@ -7,7 +7,7 @@ private let logger = AppLogger(category: "AIChatVM")
 private struct StreamStallError: Error, LocalizedError {
     let seconds: Int
     var errorDescription: String? {
-        "No response from the server for \(seconds) seconds. The connection may have been dropped silently. Please try again."
+        String(localized: "服务器 \(seconds) 秒没有回应，连接可能已经悄悄断开。请重试。")
     }
 }
 
@@ -400,7 +400,8 @@ extension AIChatViewModel {
                             )
                             logger.info("[TextDrift] New empty text block appended at idx=\(blockCount) prevBlockKind=\(prevBlockKind) totalBlocks=\(blockCount + 1)")
                             if let sid = self.sessionId {
-                                SessionActivityTracker.shared.updateToolInfo(sessionId: sid, toolName: "text", toolStatus: "streaming")
+                                // No status word: the surfaces show the tool name ("正在回复") on its own.
+                                SessionActivityTracker.shared.updateToolInfo(sessionId: sid, toolName: "text", toolStatus: "")
                             }
                             return messages[msgIdx].blocks.count - 1
                         }

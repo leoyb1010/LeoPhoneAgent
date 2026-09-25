@@ -471,15 +471,10 @@ private struct SkillDetailView: View {
         store.listSkillFiles(skillId)
     }
 
-    private static func relativeTime(_ date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes) min ago" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours) hr ago" }
-        let days = hours / 24
-        return "\(days) day\(days == 1 ? "" : "s") ago"
+    /// "刚刚" / "5 分钟前" / "3 天前", in the app's language.
+    static func relativeTime(_ date: Date) -> String {
+        guard Date().timeIntervalSince(date) >= 60 else { return String(localized: "刚刚") }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
     /// Latest modification date across all files in the skill directory.
@@ -860,13 +855,7 @@ private struct SkillDetailView: View {
 
     private func refreshUpdatedAgo() {
         guard let skill else { updatedAgoText = ""; return }
-        let elapsed = Date().timeIntervalSince(skill.updatedAt)
-        switch elapsed {
-        case ..<60:      updatedAgoText = "just now"
-        case ..<3600:    updatedAgoText = "\(Int(elapsed / 60)) min ago"
-        case ..<86400:   updatedAgoText = "\(Int(elapsed / 3600)) hr ago"
-        default:         updatedAgoText = "\(Int(elapsed / 86400)) days ago"
-        }
+        updatedAgoText = SkillDetailView.relativeTime(skill.updatedAt)
     }
 }
 

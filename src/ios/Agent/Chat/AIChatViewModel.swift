@@ -2677,7 +2677,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
 
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = "Kernel not available: \(msg)"
+                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -2859,7 +2859,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = "Kernel not available: \(msg)"
+                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -2942,6 +2942,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         canResume = false
         userDidCancel = false
+        // The dropped-connection / output-limit error offers Resume; it's handled now.
+        lastMsg.error = nil
 
         // Safety: trim any uncommitted blocks (should be no-op with new cancel flow).
         // [T-ios-retry-wipes-prior-text] Same fix as retry(): the blind
@@ -2995,7 +2997,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = "Kernel not available: \(msg)"
+                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -3303,7 +3305,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if case .failed(let msg) = self.kernelStatus {
-                self.errorMessage = "Kernel not available: \(msg)"
+                self.errorMessage = String(localized: "本机执行环境不可用：\(msg)")
                 self.isProcessing = false
                 self.endBackgroundProcessing()
                 return
@@ -4954,7 +4956,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // empty we report an error (below) instead of a silent stall.
                     guard !didInjectEmptyToolReminderThisRun, lastEffectiveMessageIsToolResult() else {
                         logger.error("🔁STREAM empty response (no content, no stop reason) — treating as transient error")
-                        throw LLMError.transientError(message: "Server returned an empty response (overloaded or upstream error)")
+                        throw LLMError.transientError(message: String(localized: "服务器返回了空回复（负载过高或上游出错）"))
                     }
                     didInjectEmptyToolReminderThisRun = true
                     logger.error("🔁STREAM empty after tool result — injecting <system-reminder> and retrying one round")
@@ -4977,7 +4979,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // transient blip. Surface it clearly instead of silently
                         // looping so the user knows why the chat stopped.
                         logger.error("🔁STREAM still empty after <system-reminder> retry — reporting error")
-                        throw LLMError.providerError(message: "The model returned no response after a tool result, even after a reminder. It may be overloaded — please retry or switch models.")
+                        throw LLMError.providerError(message: String(localized: "模型在工具结果之后没有再回应，提醒过一次也没有。可能负载过高——请重试或换个模型。"))
                     }
                     // Recovered — proceed with the reminder round's content.
                     streamResult = reminderResult
@@ -5070,7 +5072,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // failing (e.g. Anthropic overloaded).  Trigger group fallback.
                         if isEmptyResponse(retryResult) {
                             logger.error("🔁STREAM autoRetry also returned empty — triggering group fallback")
-                            throw LLMError.providerError(message: "Server is overloaded")
+                            throw LLMError.providerError(message: String(localized: "服务器负载过高"))
                         }
                         streamResult = retryResult
                     } catch let retryError as LLMError where retryError.isFallbackable || retryError.isRetryable {
@@ -5677,10 +5679,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // ordinary completion — exactly the v1.4.0-dev bug user hit.)
         if hitTurnLimit, msgIdx >= 0, msgIdx < messages.count {
             logger.warning("⚠️ runAgentLoop hit maxAgentTurns=\(Self.maxAgentTurns) — finalizing as resumable")
-            messages[msgIdx].error =
-                "Stopped after \(Self.maxAgentTurns) agent turns to prevent runaway tool use. " +
-                "The model kept calling tools without finishing — tap Resume to continue from here, " +
-                "or send a new message to start over."
+            messages[msgIdx].error = String(localized:
+                "为防止工具调用失控，已在 \(Self.maxAgentTurns) 轮后停下：模型一直在调用工具没有收尾。点「继续」从这里接着做，或者发条新消息重新开始。")
             canResume = true
         }
 

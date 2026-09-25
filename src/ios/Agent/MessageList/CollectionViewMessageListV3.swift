@@ -824,6 +824,20 @@ private struct BridgedAssistantFooterV3: View {
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
+            } else if AgentActivityFailureClassifier.reason(for: error) == .authenticationRequired {
+                // Retrying a rejected key just fails again: go fix it.
+                Button {
+                    DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
+                } label: {
+                    Text("检查 AI 服务商").font(.caption.weight(.semibold))
+                        .foregroundStyle(ChatColors.primaryText)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(ChatColors.primaryText.opacity(0.15)).clipShape(Capsule())
+                }
+            } else if bridge.canResume, let onResume = bridge.onResume {
+                // The error says "tap Resume" (connection dropped, output limit): offer
+                // that. Retry would stream a whole new answer under the partial one.
+                resumeButton(onResume)
             } else if let onRetry = bridge.onRetry {
                 Button(action: onRetry) {
                     HStack(spacing: 4) {
@@ -847,20 +861,22 @@ private struct BridgedAssistantFooterV3: View {
                 Text(String(localized: "Interrupted — tap Resume to continue")).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if let onResume = bridge.onResume {
-                Button(action: onResume) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.fill").font(.caption.weight(.semibold))
-                        Text(String(localized: "Resume")).font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color.orange).clipShape(Capsule())
-                }
-            }
+            if let onResume = bridge.onResume { resumeButton(onResume) }
         }
         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func resumeButton(_ onResume: @escaping () -> Void) -> some View {
+        Button(action: onResume) {
+            HStack(spacing: 4) {
+                Image(systemName: "play.fill").font(.caption.weight(.semibold))
+                Text(String(localized: "Resume")).font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.black)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Color.orange).clipShape(Capsule())
+        }
     }
 
     @ViewBuilder

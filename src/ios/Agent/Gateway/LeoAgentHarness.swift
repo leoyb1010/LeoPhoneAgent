@@ -239,8 +239,19 @@ final class HarnessSessionDriver: ObservableObject {
     /// unanswerable from any surface, CLI blocked forever.
     @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
+    /// A follow-up that never reached the Mac; the console puts it back in its input.
+    @Published var unsentText: String?
     /// How the last turn ended; "idle" alone can't tell a finished turn from a failed one.
     private(set) var lastTurnFailed = false
+
+    /// The typing row's words; `status` is the wire value ("running", …).
+    var statusLabel: String {
+        switch status {
+        case "starting": String(localized: "正在连接 Mac…")
+        case "waiting_for_approval": String(localized: "等你审批")
+        default: String(localized: "Mac 正在处理…")
+        }
+    }
     @Published private(set) var resumeCount = 0
     @Published private(set) var journalStatus = HarnessJournalStatus()
 
@@ -343,10 +354,19 @@ final class HarnessSessionDriver: ObservableObject {
                 if try await client.steerHarness(sessionId: sessionId, text: text) {
                     note(Self.queuedWhileOfflineNote)
                 }
-            } catch { lastError = error.localizedDescription }
+            } catch { steerFailed(text, error) }
         } catch {
-            lastError = error.localizedDescription
+            steerFailed(text, error)
         }
+    }
+
+    /// The Mac never got it: say so, stop claiming it's working, give the text back.
+    private func steerFailed(_ text: String, _ error: Error) {
+        lastError = error.localizedDescription
+        items.append(GatewayTranscriptItem(kind: .failure,
+                                           text: String(localized: "没送到 Mac：\(error.localizedDescription)")))
+        if status == "running" { status = "idle" }
+        unsentText = text
     }
 
     private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，这条已排队，上线后自动送达。")
@@ -370,7 +390,10 @@ final class HarnessSessionDriver: ObservableObject {
             return true
         }
         items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
+        lastError = nil
         if status == "idle" { status = "running" }
+        // Reconnects gave up earlier: follow the stream again, or the reply never shows.
+        if status == "detached" { resumeIfNeeded() }
         // 每条后续消息都带上全自动开关的当前状态(LeoPhoneAgent 任务):开关关着时 Mac 会把全自动任务切回先问我。
         Task { await self.sendSteer(sessionId: sessionId, text: text) }
         return true

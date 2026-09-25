@@ -428,6 +428,7 @@ struct ContentView: View {
     /// layout. Replaces the old `isIPad && width >= 700` rule, which locked
     /// iPhone into single-column even on a 956pt landscape Pro Max.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     /// Whether the current window is wide enough for two-column layout.
     @State private var isWideLayout = false
     /// Navigation path for stack (compact) layout.
@@ -483,8 +484,8 @@ struct ContentView: View {
         GeometryReader { geo in
             let wide = LeoWorkspaceLayoutPolicy.usesSplit(
                 width: geo.size.width,
-                height: geo.size.height,
-                regularWidth: horizontalSizeClass == .regular
+                regularWidth: horizontalSizeClass == .regular,
+                regularHeight: verticalSizeClass != .compact
             )
             // [T-conditional-onappear] ZStack, not Group: the lifecycle
             // modifiers below hang off this container, and a bare conditional's
@@ -748,6 +749,16 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent)) { note in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                if let mac = note.userInfo as? [String: String], mac["macSessionId"] != nil {
+                    NotificationNavigationStore.shared.markHandled()
+                    // The console is a presentation too: let a closing sheet finish first.
+                    if dismissSheetsForNavigation() {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { openMacSession(mac) }
+                    } else {
+                        openMacSession(mac)
+                    }
+                    return
+                }
                 guard let sessionId = (note.userInfo as? [String: String])?["sessionId"] else { return }
                 // [T-notification-tap-vs-launch-session] Warm path owns this
                 // navigation: drop the cold-launch buffer copy and stamp the
@@ -778,13 +789,14 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showCommandPalette) {
             CommandPaletteView(
+                sessions: sessions.prefix(12).map { ($0.id, $0.title ?? String(localized: "New Chat")) },
                 openSession: { sid in jumpToSession(sid) },
                 runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
-                openSurface: { key in
-                    // Palette surfaces live in Settings; open the settings
-                    // sheet (deep-link to the page: follow-up).
-                    activeToolSheet = .settings
-                    _ = key
+                openSurface: { target in
+                    // The page itself, once the palette has finished closing.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        DeepLinkCoordinator.shared.pendingSettingsTarget = target
+                    }
                 },
                 close: { showCommandPalette = false }
             )
@@ -981,6 +993,8 @@ struct ContentView: View {
                     var tx = Transaction()
                     tx.disablesAnimations = true
                     withTransaction(tx) { openSession(notificationTarget) }
+                } else if let mac = NotificationNavigationStore.shared.takePendingMac() {
+                    openMacSession(mac)
                 } else if NotificationNavigationStore.shared.handledRecently {
                     shareLog.info("[Share] .task: notification navigation just handled — skipping launchScreen logic")
                 } else if collectionsPending {
@@ -1678,7 +1692,10 @@ struct ContentView: View {
                             harness: HarnessKind(key: target.cliKey, name: target.cliName),
                             cwd: "~"),
                         firstPrompt: target.firstPrompt,
-                        thinking: target.thinking)
+                        thinking: target.thinking,
+                        onSessionCreated: {
+                            if !target.firstPrompt.isEmpty, homeDraft.trimmed == target.firstPrompt { homeDraft.text = "" }
+                        })
                     .navigationTitle("\(target.host.name) · \(target.cliName)")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -1757,7 +1774,8 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 10) {
                             Circle()
-                                .fill(row.isWaiting ? Color.orange : Color.green)
+                                // Idle = a turn finished, the CLI waits for you: not "working".
+                                .fill(row.isWaiting ? Color.orange : row.session.status == "idle" ? Color.gray : Color.green)
                                 .frame(width: 7, height: 7)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(row.hostName) · \(row.session.displayTitle)")
@@ -3020,7 +3038,7 @@ struct ContentView: View {
         list += [
             HomeAction(id: "files", title: "本机文件", icon: "folder.fill", tint: .blue) { activeToolSheet = .rootfsManagement },
             HomeAction(id: "web", title: "网页研究", icon: "globe", tint: .teal) { activeToolSheet = .browser },
-            HomeAction(id: "automation", title: "自动化", icon: "bolt.fill", tint: .indigo) { activeToolSheet = .quickTasks },
+            HomeAction(id: "automation", title: "快捷任务", icon: "bolt.fill", tint: .indigo) { activeToolSheet = .quickTasks },
             HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .green) { showTerminal = true },
             HomeAction(id: "clipboard", title: "读剪贴板", icon: "doc.on.clipboard", tint: .gray) {
                 runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
@@ -3203,7 +3221,7 @@ struct ContentView: View {
             homeRoutingError = nil
             // [T-quick-1.39.1] 先发后验:不再先探测(最长 8 秒)。连不上时 Mac 会话里报错,
             // 任务留在那里可重试(HarnessSessionDriver 失败后保持 pending 并保留首条)。
-            homeDraft.text = ""
+            // The home draft clears once the Mac has the session (onSessionCreated).
             LeoHaptics.impact(.medium)
             openMacChat(host, cliKey, cliName, prompt: prompt)
         }
@@ -3414,15 +3432,23 @@ struct ContentView: View {
     }
 
     private func openMissedRelayApproval(_ item: RelayEventItem) {
-        let host = GatewayHostStore.shared.hostMatching(machine: item.machine)
-        if let host, let sid = item.sessionId,
-           let live = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid }) {
-            macAttachTarget = live
-            relayCatchUp.clearMissedApprovals()
-            return
-        }
-        if let host, let sid = item.sessionId {
-            macAttachTarget = MacLiveSessionsStore.Row(
+        guard let sid = item.sessionId else { return }
+        openMacSession(hostId: nil, machine: item.machine, sessionId: sid, seq: item.seq,
+                       approvalId: item.approvalId, command: item.command)
+    }
+
+    /// A Mac session tapped in a notification (see ShortcutNotificationDelegate).
+    private func openMacSession(_ target: [String: String]) {
+        guard let sid = target["macSessionId"], !sid.isEmpty else { return }
+        openMacSession(hostId: target["hostId"], machine: target["machine"] ?? "", sessionId: sid)
+    }
+
+    /// The live row when the store has it, else a stub the console fills in on attach.
+    private func openMacSession(hostId: String?, machine: String, sessionId sid: String, seq: Int = 0,
+                                approvalId: String? = nil, command: String? = nil) {
+        guard let host = GatewayHostStore.shared.hostMatching(hostId: hostId ?? "", machine: machine) else { return }
+        macAttachTarget = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid })
+            ?? MacLiveSessionsStore.Row(
                 hostId: host.id,
                 hostName: host.name,
                 session: HarnessSessionSummary(
@@ -3431,14 +3457,13 @@ struct ContentView: View {
                     name: "远程会话",
                     cwd: "~",
                     status: "running",
-                    seq: item.seq,
-                    waitingForApproval: true,
-                    pendingApprovalId: item.approvalId,
-                    pendingApprovalCommand: item.command
+                    seq: seq,
+                    waitingForApproval: approvalId != nil,
+                    pendingApprovalId: approvalId,
+                    pendingApprovalCommand: command
                 )
             )
-            relayCatchUp.clearMissedApprovals()
-        }
+        relayCatchUp.clearMissedApprovals()
     }
 
     private func focusSearch() {
@@ -4420,8 +4445,8 @@ private struct DeleteConfirmSheet: View {
                         VStack(alignment: .leading, spacing: 16) {
                             // Sessions
                             infoRow(
-                                title: "Sessions",
-                                value: "\(info.sessionCount) session\(info.sessionCount == 1 ? "" : "s") and all messages"
+                                title: "会话",
+                                value: String(localized: "\(info.sessionCount) 个会话及其全部消息")
                             )
 
                             // Files
@@ -4441,7 +4466,7 @@ private struct DeleteConfirmSheet: View {
                                         }
                                     }
                                     if info.totalFileCount > info.fileNames.count {
-                                        Text("and \(info.totalFileCount - info.fileNames.count) more file\(info.totalFileCount - info.fileNames.count == 1 ? "" : "s")")
+                                        Text("以及另外 \(info.totalFileCount - info.fileNames.count) 个文件")
                                             .font(.caption)
                                             .foregroundStyle(.tertiary)
                                     }
@@ -4449,7 +4474,7 @@ private struct DeleteConfirmSheet: View {
                             }
 
                             // Storage
-                            infoRow(title: "Releases Storage", value: info.formattedSize)
+                            infoRow(title: "可释放空间", value: info.formattedSize)
                         }
                         .padding(20)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -4489,7 +4514,7 @@ private struct DeleteConfirmSheet: View {
         }
     }
 
-    private func infoRow(title: String, value: String) -> some View {
+    private func infoRow(title: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.subheadline.bold())

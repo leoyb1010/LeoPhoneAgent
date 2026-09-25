@@ -358,7 +358,7 @@ struct CapabilitySelfTestView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(test.isRunning)
                 }
-                Toggle("同时真发一句话测模型(每个供应商几十个 token)", isOn: $test.includeChat)
+                Toggle("同时真发一句话测模型(每个服务商几十个 token)", isOn: $test.includeChat)
                     .font(.footnote)
                     .disabled(test.isRunning)
             } footer: {

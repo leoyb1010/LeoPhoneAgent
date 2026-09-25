@@ -210,6 +210,7 @@ struct HomeComposerBar: View {
             .foregroundStyle(.primary)
             .frame(width: 36, height: 36)
             .contentShape(Circle())
+            .hoverEffect(.highlight)
     }
 }
 

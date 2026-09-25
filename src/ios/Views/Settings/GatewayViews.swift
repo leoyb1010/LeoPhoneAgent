@@ -91,7 +91,7 @@ struct GatewaySettingsView: View {
                         Button {
                             scanPairCode()
                         } label: {
-                            Label("扫码加身体", systemImage: "qrcode.viewfinder")
+                            Label("扫码添加机器", systemImage: "qrcode.viewfinder")
                                 .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
                         }
                         .buttonStyle(.bordered)
@@ -130,10 +130,10 @@ struct GatewaySettingsView: View {
                     Button {
                         scanPairCode()
                     } label: {
-                        Label("扫码加身体", systemImage: "qrcode.viewfinder")
+                        Label("扫码添加机器", systemImage: "qrcode.viewfinder")
                     }
                 } footer: {
-                    Text("码里只有中继根和机器名，钥匙不进码。Mac 端可由 leocodebox 或 leoagent 承载。")
+                    Text("码里只有中继地址和机器名，钥匙不进码。")
                 }
             }
         }
@@ -284,7 +284,7 @@ private struct QuickFleetSetupSheet: View {
                 } header: {
                     Text("找不到中继列表时，可一键填这三台 Mac")
                 } footer: {
-                    Text("优先读 /machines。预设只是快捷填充，新 Android 上线不用改仓库字符串。")
+                    Text("列表来自中继上在线的机器；预设只是快捷填充。")
                 }
                 Section {
                     SecureField("粘贴密钥", text: $key)
@@ -624,7 +624,7 @@ struct GatewayConsoleView: View {
                     if driver.isRunning && driver.pendingApproval == nil {
                         HStack(spacing: 8) {
                             LeoTypingIndicator()
-                            Text(driver.status)
+                            Text(driver.statusLabel)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
@@ -735,11 +735,9 @@ struct GatewayItemView: View {
 /// it narrows the set for risky commands (a "smart denied" one only ever
 /// offers once/deny), so a hardcoded four-button row would offer permissions
 /// the server would then reject.
-struct GatewayApprovalCard: View {
-    let approval: GatewayApprovalRequest
-    let onChoose: (String) -> Void
-
-    private func label(for choice: String) -> String {
+extension GatewayApprovalRequest {
+    /// The owner's words for a CLI's approval choice (the card, the transcript).
+    static func title(forChoice choice: String) -> String {
         switch choice {
         case "once": return String(localized: "Allow Once")
         case "session": return String(localized: "Allow This Session")
@@ -748,6 +746,13 @@ struct GatewayApprovalCard: View {
         default: return choice
         }
     }
+}
+
+struct GatewayApprovalCard: View {
+    let approval: GatewayApprovalRequest
+    let onChoose: (String) -> Void
+
+    private func label(for choice: String) -> String { GatewayApprovalRequest.title(forChoice: choice) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -765,7 +770,7 @@ struct GatewayApprovalCard: View {
                     .textSelection(.enabled)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
             }
             HStack(spacing: 8) {
                 ForEach(approval.choices, id: \.self) { choice in
@@ -1032,6 +1037,9 @@ struct HarnessConsoleView: View {
     /// 接管时列表里看到的状态(idle / available 直接显示空闲)。
     var attachStatus: String? = nil
     var thinking: String? = nil
+    /// The Mac accepted the first prompt (a session exists): Home clears its draft
+    /// only now, so a failed start closed right away doesn't lose the text.
+    var onSessionCreated: (() -> Void)? = nil
     @State private var input = ""
     @State private var started = false
 
@@ -1050,7 +1058,7 @@ struct HarnessConsoleView: View {
                             && driver.status != "idle" {
                             HStack(spacing: 8) {
                                 LeoTypingIndicator()
-                                Text(driver.status)
+                                Text(driver.statusLabel)
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundStyle(.secondary)
                             }
@@ -1087,7 +1095,7 @@ struct HarnessConsoleView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
-            } else if let err = driver.lastError, driver.status == "failed" || driver.status == "pending" {
+            } else if let err = driver.lastError {
                 Text(err)
                     .font(.caption).foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1130,15 +1138,24 @@ struct HarnessConsoleView: View {
                 started = true
                 if let attachSessionId {
                     driver.attach(existingSessionId: attachSessionId, knownStatus: attachStatus)
-                } else {
+                } else if !firstPrompt.isEmpty {
                     driver.start(prompt: firstPrompt, thinking: thinking)
                 }
+                // No first prompt (/mac): the first message creates the session,
+                // so opening and closing leaves no empty session on the Mac.
             } else { driver.resumeIfNeeded() }
         }
         .onDisappear { driver.detach() }
         // 建任务失败(Mac 离线、钥匙不对):把第一条指令放回输入框,改一下或直接再发,不会丢。
         .onChange(of: driver.status) { newStatus in
             if newStatus == "pending", input.isEmpty, !firstPrompt.isEmpty { input = firstPrompt }
+            if newStatus != "starting", newStatus != "pending", driver.sessionId != nil { onSessionCreated?() }
+        }
+        // A follow-up that didn't reach the Mac comes back to the input, not lost.
+        .onChange(of: driver.unsentText) { _, text in
+            guard let text else { return }
+            if input.isEmpty { input = text }
+            driver.unsentText = nil
         }
     }
 }

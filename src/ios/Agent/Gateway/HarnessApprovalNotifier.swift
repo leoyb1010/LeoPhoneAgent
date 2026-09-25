@@ -6,14 +6,14 @@
 //
 //  以前审批只活在 app 内的卡片和手表上;app 一旦退到后台,审批请求
 //  对用户是不可见的(任务就此挂住)。现在:
-//  - app 非前台时收到 approval.request → 发时效性通知,带「批准一次/拒绝」
+//  - app 非前台时收到 approval.request → 发时效性通知,带「允许一次/拒绝」
 //    按钮,锁屏/横幅/CarPlay/AirPods 播报直达;
 //  - 按钮回调不开 app,直接经中继把决定送回那台 Mac;
 //  - 审批被任何端解决(手机/手表/桌面)→ 撤回对应通知,不留死卡。
 //
-//  [T-approval-vocab] 按钮和 App 里一致:批准一次 / 本次会话允许 / 拒绝 /
+//  [T-approval-vocab] 按钮和 App 里一致:允许一次 / 本次会话允许 / 拒绝 /
 //  拒绝并停止。个人工具以方便为先:批准不再要求先解锁,手表上双指互点
-//  就是「批准一次」(排第一)。
+//  就是「允许一次」(排第一)。
 //
 
 import Foundation
@@ -33,7 +33,7 @@ enum HarnessApprovalNotifier {
         UNNotificationCategory(
             identifier: categoryId,
             actions: [
-                UNNotificationAction(identifier: approveAction, title: String(localized: "批准一次")),
+                UNNotificationAction(identifier: approveAction, title: String(localized: "允许一次")),
                 UNNotificationAction(identifier: approveSessionAction, title: String(localized: "本次会话允许")),
                 UNNotificationAction(identifier: denyAction, title: String(localized: "拒绝"), options: [.destructive]),
                 UNNotificationAction(identifier: denyAndStopAction, title: String(localized: "拒绝并停止任务"),
@@ -71,10 +71,11 @@ enum HarnessApprovalNotifier {
 
     /// 审批已被任何一端解决:撤掉横幅与通知中心里的卡。
     static func clear(sessionId: String, approvalId: String) {
-        let id = notificationId(sessionId: sessionId, approvalId: approvalId)
+        // Ours, and the relay's push of the same approval (its apns-collapse-id).
+        let ids = [notificationId(sessionId: sessionId, approvalId: approvalId), "approval.request-\(approvalId)"]
         let center = UNUserNotificationCenter.current()
-        center.removeDeliveredNotifications(withIdentifiers: [id])
-        center.removePendingNotificationRequests(withIdentifiers: [id])
+        center.removeDeliveredNotifications(withIdentifiers: ids)
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Tapping an action removes the notification; show it again when the answer
@@ -121,7 +122,7 @@ enum HarnessApprovalNotifier {
         //   3. **现场向该主机拉一次 /harness/sessions** 。
         //
         // 第 3 步是这条路径能不能用的关键。APNs 审批要覆盖的场景恰恰是「app 没在
-        // 运行」:锁屏点「批准一次」时进程是被系统冷起来处理这一次 action 的,
+        // 运行」:锁屏点「允许一次」时进程是被系统冷起来处理这一次 action 的,
         // MacLiveSessionsStore 必然是空的。只查内存 store 的写法在冷启动下会直接
         // 走 `guard let sessionId else { return }` 静默返回 —— 看起来修了、实际
         // 和没修一样。这里用一次真实网络查询把 approvalId 反查成 sessionId;

@@ -525,14 +525,10 @@ struct ToolCapsuleView: View {
         }
     }
 
-    /// Formatted execution duration (e.g. "1.2s", "45s", "2m 10s").
+    /// Execution time in the app's words ("0.3 秒", "2 分 10 秒"), like 思考了 / 已工作.
     private var durationText: String? {
-        guard let dur = block.toolDuration else { return nil }
-        if dur < 1 { return String(format: "%.1fs", dur) }
-        if dur < 60 { return String(format: "%.0fs", dur) }
-        let mins = Int(dur) / 60
-        let secs = Int(dur) % 60
-        return "\(mins)m \(secs)s"
+        guard let dur = block.toolDuration, dur > 0 else { return nil }
+        return LeoDuration.short(dur)
     }
 
 }

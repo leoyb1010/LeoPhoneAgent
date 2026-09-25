@@ -1886,18 +1886,17 @@ struct ToolLiveSheet: View {
         }
     }
 
+    /// The same names the tool pills, status card and Live Activity use.
     private var toolTitle: String {
         switch block.kind {
-        case .shellTool: return "LeoPhoneAgent is using Shell"
-        case .fileReadTool: return "LeoPhoneAgent is reading File"
-        case .fileWriteTool: return "LeoPhoneAgent is using Editor"
-        case .fileEditTool: return "LeoPhoneAgent is editing File"
-        case .browserTool: return "LeoPhoneAgent is using Browser"
-        case .readImageTool: return "LeoPhoneAgent is reading Image"
-        case .memoryTool: return "LeoPhoneAgent is using Memory"
-        case .info: return "LeoPhoneAgent"
-        case .text: return "LeoPhoneAgent"
-        case .thinking: return "LeoPhoneAgent"
+        case .shellTool: return AgentToolPresentation.displayName(for: "shell")
+        case .fileReadTool: return AgentToolPresentation.displayName(for: "file_read")
+        case .fileWriteTool: return AgentToolPresentation.displayName(for: "file_write")
+        case .fileEditTool: return AgentToolPresentation.displayName(for: "file_edit")
+        case .browserTool: return AgentToolPresentation.displayName(for: "browser")
+        case .readImageTool: return AgentToolPresentation.displayName(for: "read_image")
+        case .memoryTool: return AgentToolPresentation.displayName(for: "memory")
+        case .info, .text, .thinking: return "LeoPhoneAgent"
         }
     }
 
@@ -1935,11 +1934,7 @@ struct ToolLiveSheet: View {
     }
 
     private static func formatDuration(_ dur: TimeInterval) -> String {
-        if dur < 1 { return String(format: "%.1fs", dur) }
-        if dur < 60 { return String(format: "%.0fs", dur) }
-        let mins = Int(dur) / 60
-        let secs = Int(dur) % 60
-        return "\(mins)m \(secs)s"
+        LeoDuration.short(dur)
     }
 
     // MARK: - Browser snapshot timer

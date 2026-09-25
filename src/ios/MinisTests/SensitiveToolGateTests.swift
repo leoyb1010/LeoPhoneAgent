@@ -76,17 +76,17 @@ final class SensitiveToolGateTests: XCTestCase {
 
     // MARK: - [T-gate-bg-policy] 后台策略分级
 
-    /// 锁屏 / Siri 派发时 agent 循环必须还能跑:本机 shell 与写文件
-    /// 不能后台硬拒,否则「手机休眠后任务继续执行」直接失效。
-    func testLocalExecutionIsNotHardDeniedInBackground() {
-        XCTAssertEqual(SensitiveToolGate.Category.shell.backgroundPolicy, .notifyAndWait)
-        XCTAssertEqual(SensitiveToolGate.Category.fileWrite.backgroundPolicy, .notifyAndWait)
+    /// 锁屏 / Siri 派发时 agent 循环必须还能跑:本机和远程的命令、写文件
+    /// 都发通知等批准,不后台硬拒,否则「手机休眠后任务继续执行」直接失效。
+    func testExecutionIsNotHardDeniedInBackground() {
+        for category: SensitiveToolGate.Category in [.shell, .fileWrite, .remoteShell, .remoteAgent] {
+            XCTAssertEqual(category.backgroundPolicy, .notifyAndWait, "\(category.rawValue)")
+        }
     }
 
-    /// 凭证读写与远程执行是高危低频动作,后台仍然硬拒。
-    func testCredentialAndRemoteCategoriesStayHardDeniedInBackground() {
-        for category: SensitiveToolGate.Category in
-            [.readCredentials, .writeCredentials, .remoteShell, .remoteAgent] {
+    /// 浏览器凭证读写后台仍然硬拒(要前台的页面)。
+    func testCredentialCategoriesStayHardDeniedInBackground() {
+        for category: SensitiveToolGate.Category in [.readCredentials, .writeCredentials] {
             XCTAssertEqual(category.backgroundPolicy, .denyImmediately, "\(category.rawValue)")
         }
     }

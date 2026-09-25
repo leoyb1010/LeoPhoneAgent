@@ -125,11 +125,12 @@ final class AgentChatCorrectnessTests: XCTestCase {
     }
 
     func testResizableWorkspaceLayoutPolicy() {
-        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 700, height: 900, regularWidth: true))
-        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 820, height: 1_100, regularWidth: true))
-        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, height: 650, regularWidth: true))
-        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, height: 650, regularWidth: false))
-        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 1_000, height: 430, regularWidth: true))
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 700, regularWidth: true, regularHeight: true))
+        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 820, regularWidth: true, regularHeight: true))
+        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, regularWidth: true, regularHeight: true))
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, regularWidth: false, regularHeight: true))
+        // Pro Max phone in landscape: regular width, compact height.
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 932, regularWidth: true, regularHeight: false))
     }
 
     func testStreamDeltaDroppedAfterCancelOrIdentityMismatch() {

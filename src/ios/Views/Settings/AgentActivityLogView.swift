@@ -65,7 +65,9 @@ struct AgentActivityLogView: View {
                     Button {
                         LeoHaptics.impact(.medium)
                         dismiss()
-                        onRecovery()
+                        // "Check the provider" presents Settings; asked for while this
+                        // sheet is still closing, it never appears.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { onRecovery() }
                     } label: {
                         Label(recoveryTitle(recoveryAction), systemImage: recoverySymbol(recoveryAction))
                             .font(.body.weight(.semibold))
@@ -133,7 +135,7 @@ struct AgentActivityLogView: View {
                 Text(title(for: event))
                     .font(.subheadline.weight(.medium))
                 HStack(spacing: 6) {
-                    Text(event.sessionId.hasPrefix("__new__") ? "New session" : String(event.sessionId.prefix(8)))
+                    Text(event.sessionId.hasPrefix("__new__") ? String(localized: "新对话") : String(event.sessionId.prefix(8)))
                     Text("•")
                     Text(event.at, style: .relative)
                 }

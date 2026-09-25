@@ -259,7 +259,7 @@ struct MacFleetStatusIntent: AppIntent {
 @available(iOS 16.0, *)
 struct ApprovePendingMacIntent: AppIntent {
     static var title: LocalizedStringResource = "批准 Mac 待审批"
-    static var description = IntentDescription("批准最近一条等待审批的 Mac 任务操作(批准一次)。")
+    static var description = IntentDescription("批准最近一条等待审批的 Mac 任务操作(允许一次)。")
     static var openAppWhenRun = false
 
     @MainActor

@@ -188,7 +188,7 @@ final class ConfigConfirmationGate: ObservableObject {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "⚙️ Config change awaiting approval"
+        content.title = String(localized: "⚙️ 有设置改动等你确认")
         // Show the caption (e.g. "Update multi-model writing workflow: …") so
         // the user gets the gist without opening the app; fall back to a
         // row-count summary when there's no caption.
@@ -197,8 +197,8 @@ final class ConfigConfirmationGate: ObservableObject {
             content.body = caption
         } else {
             content.body = change.items.count > 1
-                ? "\(change.items.count) changes need your review — open LeoPhoneAgent to approve or reject."
-                : "A change needs your review — open LeoPhoneAgent to approve or reject."
+                ? String(localized: "\(change.items.count) 项改动等你确认，打开 LeoPhoneAgent 批准或拒绝。")
+                : String(localized: "有一项改动等你确认，打开 LeoPhoneAgent 批准或拒绝。")
         }
         content.sound = .default
         content.categoryIdentifier = Self.notifyCategoryId

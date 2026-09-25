@@ -1404,6 +1404,13 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ tv: PastableUITextView, context: Context) {
+        // Landscape phone: the keyboard leaves ~170 pt, so the text grows to
+        // three lines, not six, before it scrolls.
+        let maxHeight: CGFloat = context.environment.verticalSizeClass == .compact ? 60 : 120
+        if tv.maxHeight != maxHeight {
+            tv.maxHeight = maxHeight
+            tv.invalidateIntrinsicContentSize()
+        }
         if tv.text != text, tv.markedTextRange == nil || text.isEmpty {
             // [T-ios-composer-residual-text-33549] Clearing the composer
             // post-send is the race-prone path: an in-flight IME

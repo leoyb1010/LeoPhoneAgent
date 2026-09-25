@@ -1041,45 +1041,82 @@ struct MinisApp: App {
     }
 }
 
-/// [T-cred-approval] 凭证审批弹窗的独立宿主。挂在根视图的 background 上,
-/// alert 的泛型负载留在这个小类型里,不加深根修饰链——那条链的嵌套深度
-/// 已经贴着 Swift 运行时类型元数据解码的栈上限,再加层真机启动就爆栈。
-/// 按钮 action 与 dismiss setter 会各回调一次且顺序未定义:全部带
-/// requestId 走幂等 resolve;dismiss 的兜底拒绝推迟一轮 runloop,只在该
-/// 请求确实没被任何按钮裁决时才生效。
+/// [T-cred-approval] 审批弹窗的独立宿主。挂在根视图的 background 上,不加深
+/// 根修饰链——那条链的嵌套深度已经贴着 Swift 运行时类型元数据解码的栈上限。
+/// 它只盯着 pending;弹窗本身由下面的 ApprovalAlertPresenter 用 UIKit 弹出,
+/// 按钮都带 requestId 走幂等 resolve。
 private struct CredentialGateAlertHost: View {
     @ObservedObject private var credGate = SensitiveToolGate.shared
 
     var body: some View {
         Color.clear
-            .alert(credGate.pending?.risk == .high ? "高风险操作，需要确认" : "需要确认",
-                   isPresented: Binding(
-                    get: { credGate.pending != nil },
-                    set: { presented in
-                        guard !presented else { return }
-                        let dismissedId = credGate.pending?.id
-                        Task { @MainActor in
-                            if let id = dismissedId {
-                                credGate.resolve(.deny, requestId: id)
-                            }
-                        }
-                    }),
-                   presenting: credGate.pending) { p in
-                // [T-approval-vocab] 统一措辞:允许一次 / 本次会话允许 / 拒绝 / 拒绝并停止。
-                // 风险只影响标题和说明,不减选项。
-                Button("允许一次") { credGate.resolve(.allowOnce, requestId: p.id) }
-                Button("本次会话允许") { credGate.resolve(.allowSession, requestId: p.id) }
-                if let sid = p.sessionId {
-                    Button("拒绝并停止任务", role: .destructive) {
-                        credGate.resolve(.deny, requestId: p.id)
-                        ViewModelCache.shared.get(for: sid)?.cancel()
-                    }
-                }
-                Button("拒绝", role: .cancel) { credGate.resolve(.deny, requestId: p.id) }
-            } message: { p in
-                Text(p.risk == .high
-                     ? "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
-                     : "有一个任务想\(p.category.humanName)：\(p.host)。")   // host is a site, a command or a path
-            }
+            .onChange(of: credGate.pending?.id) { _, _ in ApprovalAlertPresenter.update(credGate.pending) }
+            .onAppear { ApprovalAlertPresenter.update(credGate.pending) }
+    }
+}
+
+/// [T-approval-over-sheets] A UIKit alert on the top-most presented controller.
+/// The SwiftUI `.alert` lived on the root, which can't present while it is
+/// already showing a sheet (Settings, a Mac console, a tool sheet…): the task
+/// then waited ten minutes on an alert nobody could see, and was denied.
+@MainActor
+private enum ApprovalAlertPresenter {
+    private static weak var shown: UIAlertController?
+    private static var shownId: UUID?
+
+    static func update(_ pending: SensitiveToolGate.PendingApproval?) {
+        guard pending?.id != shownId else { return }
+        // Answered elsewhere (notification, watch) or replaced by the next request.
+        if let shown, shown.presentingViewController != nil, !shown.isBeingDismissed {
+            shown.dismiss(animated: true)
+        }
+        shown = nil
+        shownId = nil
+        guard let p = pending else { return }
+        guard let top = topController() else {
+            // The previous alert is still animating out: try again in a moment.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { update(SensitiveToolGate.shared.pending) }
+            return
+        }
+        let gate = SensitiveToolGate.shared
+        // [T-approval-vocab] 统一措辞:允许一次 / 本次会话允许 / 拒绝 / 拒绝并停止。
+        // 风险只影响标题和说明,不减选项。
+        let alert = UIAlertController(
+            title: p.risk == .high ? String(localized: "高风险操作，需要确认") : String(localized: "需要确认"),
+            message: p.risk == .high
+                ? String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
+                : String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "允许一次"), style: .default) { _ in
+            gate.resolve(.allowOnce, requestId: p.id)
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "本次会话允许"), style: .default) { _ in
+            gate.resolve(.allowSession, requestId: p.id)
+        })
+        if let sid = p.sessionId {
+            alert.addAction(UIAlertAction(title: String(localized: "拒绝并停止任务"), style: .destructive) { _ in
+                gate.resolve(.deny, requestId: p.id)
+                ViewModelCache.shared.get(for: sid)?.cancel()
+            })
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "拒绝"), style: .cancel) { _ in
+            gate.resolve(.deny, requestId: p.id)
+        })
+        shown = alert
+        shownId = p.id
+        top.present(alert, animated: true)
+    }
+
+    /// The front-most controller of the active window; nil while something is
+    /// still being dismissed (presenting then would fail).
+    private static func topController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
+        while let next = top?.presentedViewController {
+            if next.isBeingDismissed { return nil }
+            top = next
+        }
+        return top
     }
 }
