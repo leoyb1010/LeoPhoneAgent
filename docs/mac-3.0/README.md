@@ -36,6 +36,9 @@ SSH / Docker 远程工作区(远端运行时原本从官方 CDN 下载,后续改
 ## 常用命令(在 `src/mac/leophone/` 下,Node 24 + pnpm 10.33)
 ```bash
 corepack pnpm@10.33.2 bootstrap                       # 首次
+xcrun notarytool store-credentials leocodebox --apple-id <Apple ID> --team-id 48H5Y3LNUK
+                                                      # 每台 Mac 一次:公证凭据进钥匙串(要本人输 App 专用密码);
+                                                      # 没有它公证那步报 No Keychain password item found
 corepack pnpm@10.33.2 typecheck && corepack pnpm@10.33.2 lint && corepack pnpm@10.33.2 architecture:check -- --changed
 ZCODE_ENABLE_MAC_SIGN=1 APPLE_SIGNING_IDENTITY="Developer ID Application: leo yuan (48H5Y3LNUK)" \
   pnpm leo:bundle:mac                # 闸门 + 构建 + 签名(脚本里固定打开签名;不要经 corepack 调,嵌套的 pnpm 会变成 11.x 直接报错)
