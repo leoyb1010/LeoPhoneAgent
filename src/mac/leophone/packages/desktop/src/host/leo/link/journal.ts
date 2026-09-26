@@ -100,6 +100,7 @@ export class HarnessJournal {
   private readonly pending: PendingRecord[] = [];
   private pendingBytes = 0;
   private latestSeq = 0;
+  private lastTimestamp = 0;
   private persistedSeq = 0;
   private committedOffset = 0;
   private rowCount = 0;
@@ -141,6 +142,11 @@ export class HarnessJournal {
     };
   }
 
+  /** 已落盘的最后一条事件的时间(秒),没有就是 0。Mac 重启后认回任务时拿它当「最后活动时间」。 */
+  lastEventAt(): number {
+    return this.lastTimestamp;
+  }
+
   private notify(): void {
     for (const resolve of this.waiters) resolve();
     this.waiters.clear();
@@ -180,6 +186,8 @@ export class HarnessJournal {
     }
     this.persistedSeq = Math.max(this.persistedSeq, seq);
     this.latestSeq = Math.max(this.latestSeq, seq);
+    const at = Number(event['timestamp']);
+    if (Number.isFinite(at) && at > this.lastTimestamp) this.lastTimestamp = at;
   }
 
   async initialize(): Promise<void> {

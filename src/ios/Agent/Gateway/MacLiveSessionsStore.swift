@@ -45,6 +45,16 @@ final class MacLiveSessionsStore: ObservableObject {
     }
 
     @Published private(set) var rows: [Row] = []
+    /// 点了「停止」、Mac 还没报停下来的行:显示「正在停止…」。
+    @Published private(set) var stopping: Set<String> = []
+
+    /// 算「进行中」的状态。Mac 1.3.1 起,跑完半小时没动的任务报 available,不在其中。
+    private static let liveStatuses: Set<String> = ["starting", "running", "idle", "waiting_for_approval"]
+
+    /// 在这台设备上「清理」掉的行:行 id → 清理时的 seq。老版 Mac 不认 /archive,只能靠它在本机藏起来;
+    /// 之后有新动静(seq 变了)、要审批或又跑起来,就重新出现。
+    private var dismissed: [String: Int] = UserDefaults.standard.dictionary(forKey: MacLiveSessionsStore.dismissedKey) as? [String: Int] ?? [:]
+    private static let dismissedKey = "macLive.dismissed.v1"
 
     private var pollTask: Task<Void, Never>?
 
@@ -92,30 +102,66 @@ final class MacLiveSessionsStore: ObservableObject {
         // 否则整节一闪一闪;只有确认成功且为空才移除。
         var collected: [Row] = []
         var failedHosts: Set<String> = []
-        await withTaskGroup(of: (String, [Row]?).self) { group in
+        /// 成功的主机列出的全部会话(任何状态):不再出现的,「已清理」记录随之删掉。
+        var listed: Set<String> = []
+        await withTaskGroup(of: (GatewayHost, [HarnessSessionSummary]?).self) { group in
             for host in hosts {
                 guard let client = GatewayHostStore.shared.client(for: host) else { continue }
-                group.addTask {
-                    guard let sessions = try? await client.harnessSessions() else {
-                        return (host.id, nil)
-                    }
-                    let rows = sessions
-                        .filter { ["starting", "running", "idle", "waiting_for_approval"].contains($0.status) }
-                        .map { Row(hostId: host.id, hostName: host.name, session: $0) }
-                    return (host.id, rows)
-                }
+                group.addTask { (host, try? await client.harnessSessions()) }
             }
-            for await (hostId, batch) in group {
-                if let batch { collected.append(contentsOf: batch) }
-                else { failedHosts.insert(hostId) }
+            for await (host, sessions) in group {
+                guard let sessions else { failedHosts.insert(host.id); continue }
+                for session in sessions {
+                    let row = Row(hostId: host.id, hostName: host.name, session: session)
+                    listed.insert(row.id)
+                    if Self.liveStatuses.contains(session.status), !isDismissed(row) { collected.append(row) }
+                }
             }
         }
         collected.append(contentsOf: rows.filter { failedHosts.contains($0.hostId) })
+        if failedHosts.isEmpty, dismissed.keys.contains(where: { !listed.contains($0) }) {
+            dismissed = dismissed.filter { listed.contains($0.key) }
+            UserDefaults.standard.set(dismissed, forKey: Self.dismissedKey)
+        }
+        let busy = Set(collected.filter { $0.isWaiting || ["running", "starting"].contains($0.session.status) }.map(\.id))
+        if !stopping.isSubset(of: busy) { stopping.formIntersection(busy) }
         // 等审批的排最前(要人拍板的最要紧),其余按 seq 新的在前
         collected.sort { a, b in
             if a.isWaiting != b.isWaiting { return a.isWaiting }
             return a.session.seq > b.session.seq
         }
         if collected != rows { rows = collected }
+    }
+
+    private func isDismissed(_ row: Row) -> Bool {
+        row.session.status == "idle" && !row.isWaiting && dismissed[row.id] == row.session.seq
+    }
+
+    private func client(for hostId: String) -> LeoAgentClient? {
+        guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == hostId }) else { return nil }
+        return GatewayHostStore.shared.client(for: host)
+    }
+
+    /// 「清理」:先在这台设备上藏起来(立刻生效),再请 Mac 把它从列表里拿掉 ——
+    /// Mac 1.3.1 起照做,iPad 上也跟着消失;老版 Mac 不认,就只在这台设备上藏着。
+    func dismiss(_ row: Row) {
+        dismissed[row.id] = row.session.seq
+        UserDefaults.standard.set(dismissed, forKey: Self.dismissedKey)
+        rows.removeAll { $0.id == row.id }
+        guard let client = client(for: row.hostId) else { return }
+        Task { try? await client.archiveHarness(sessionId: row.session.id) }
+    }
+
+    /// 「停止」:让 Mac 停下这一轮。停下后它不再算进行中;Mac 最迟 5 秒兜底报停,之后再刷一次。
+    func stop(_ row: Row) async throws {
+        guard let client = client(for: row.hostId) else { throw GatewayError.notConfigured }
+        try await client.stopHarness(sessionId: row.session.id)
+        stopping.insert(row.id)
+        Task {
+            for delay in [1.5, 5.0] {
+                try? await Task.sleep(for: .seconds(delay))
+                await refresh()
+            }
+        }
     }
 }

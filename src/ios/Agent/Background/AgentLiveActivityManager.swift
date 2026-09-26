@@ -811,7 +811,9 @@ final class AgentLiveActivityManager {
         let newlyWaiting = state.sessions.filter { snap in
             snap.needsApproval && !(previous?.sessions.contains { $0.sessionId == snap.sessionId && $0.needsApproval } ?? false)
         }
-        let alert = newlyWaiting.isEmpty ? nil : AlertConfiguration(
+        // [T-presence-quiet] 正在用 App 时不带提醒更新:App 里的审批卡已经在眼前,灵动岛再展开一次
+        // 只会挡住正在看的内容(用户 2026-09-26 反馈)。离开 App 后还没批的,由审批通知接着提醒。
+        let alert = newlyWaiting.isEmpty || UIApplication.shared.leoIsInUse ? nil : AlertConfiguration(
             title: LocalizedStringResource("需要你批准"),
             body: LocalizedStringResource(stringLiteral: state.privacyMode ? String(localized: "有一步在等你批准") : newlyWaiting[0].title),
             sound: .default)

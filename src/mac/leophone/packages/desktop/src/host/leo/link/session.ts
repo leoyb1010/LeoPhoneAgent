@@ -36,6 +36,8 @@ const RUN_END = new Set(["run.completed", "run.failed", "run.cancelled"]);
 /** 手机端 reconcile 视为结束的状态;订阅流在这些状态下读完就关。 */
 const TERMINAL = new Set(["cancelled", "failed", "completed", "orphaned"]);
 const STOP_FALLBACK_MS = 5_000;
+/** 跑完一轮后这么久没动静,就不再算「进行中」(见 reportedStatus)。 */
+const IDLE_STALE_S = 30 * 60;
 const SUBSCRIBER_QUEUE_LIMIT = 512;
 
 type Subscriber = { queue: HarnessEvent[]; wake: (() => void) | null; closed: boolean };
@@ -118,6 +120,8 @@ export class LinkSession {
   async open(): Promise<void> {
     await this.journal.initialize();
     this.seq = Math.max(this.seq, this.journal.health().latest_seq);
+    // 最后活动时间以日志里最后一条事件为准(认回来的任务在 restore 里先置成创建时间)。
+    this.updatedAt = Math.max(this.updatedAt, this.journal.lastEventAt());
     this.subscription ??= this.deps.taskService.onDynamicTaskEvent({
       workspacePath: this.cwd,
       taskId: this.sessionId,
@@ -411,13 +415,23 @@ export class LinkSession {
     return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt };
   }
 
+  /**
+   * 跑完一轮、半小时没再动的任务报 "available"(和没在跑的桌面任务一样)。
+   * 手机首页「进行中」和 Siri 把 idle 当成还在进行:以前跑完的任务永远占着那一节,清不掉
+   * (用户 2026-09-26 报的四条)。手机点开照样能接着聊 —— 它把 available 当 idle 接。
+   */
+  private reportedStatus(): string {
+    if (this.status === "idle" && Date.now() / 1000 - this.updatedAt > IDLE_STALE_S) return "available";
+    return this.status;
+  }
+
   summary(): Record<string, unknown> {
     return {
       session_id: this.sessionId,
       harness: "zcode",
       name: "LeoPhoneAgent",
       cwd: this.cwd,
-      status: this.status,
+      status: this.reportedStatus(),
       title: this.title,
       full_auto: this.isFullAuto,
       last_event: this.lastEvent,

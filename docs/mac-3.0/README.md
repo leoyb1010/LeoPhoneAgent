@@ -53,5 +53,11 @@ gh release create v<版本> -R leoyb1010/leocodebox-updates <dmg> <zip> \
 每次发版都必须在 `packages/ui/src/leo/leoReleaseNotes.ts` 最前面加一条,版本号等于根 `package.json` 的
 version,内容写这一版真实改了什么。`leo:bundle:mac` 链首就是闸门,漏写打不出包(已反向验证会红)。
 
+## 手机远程控制(Leo Link)
+中继帧在进程内交给 `packages/desktop/src/host/leo/link/`(手机协议 v0.4)。对手机只开放 `/health`、`/v1/capabilities`、
+`/v1/grok/token`、`/harness/full-auto`、`/harness/sessions` 及其 `events | send | approval | stop | archive`,其余一律 404。
+跑完一轮后 30 分钟没动的任务报 `available`(手机首页「进行中」只放在跑的和刚跑完的);Mac 重启认回的任务保留日志里最后一条事件的时间。
+`archive` 只把任务从手机列表里拿掉:不动 Mac 上的对话,日志留着(再接管时编号接得上);还在跑的回 409。
+
 ## 这一版没有的
-手机远程控制(中继)暂停,下一轮对齐。2.2.x 的会话不迁移,翻旧记录用保留的 leocodebox 2.2。
+2.2.x 的会话不迁移,翻旧记录用保留的 leocodebox 2.2。

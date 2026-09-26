@@ -275,6 +275,7 @@ struct ContentView: View {
     @AppStorage("home.history.week.expanded") private var weekExpanded = false
     @AppStorage("home.history.month.expanded") private var monthExpanded = false
     @AppStorage("home.history.earlier.expanded") private var earlierExpanded = false
+    @AppStorage("home.macLive.collapsed") private var macLiveCollapsed = false
 
     enum SyncSubtitleState: Equatable {
         case paused
@@ -1764,38 +1765,125 @@ struct ContentView: View {
     ///
     /// 以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步。
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
+    /// 1.46.1:标题点一下折叠;每行左滑(或长按)——在跑的「停止」,跑完的「清理」。
     @ViewBuilder
     private var macLiveSection: some View {
         if homeCardsEnabled, !isSelecting, !macLive.rows.isEmpty {
-            Section("进行中") {
-                ForEach(macLive.rows) { row in
-                    Button {
-                        macAttachTarget = row
-                    } label: {
-                        HStack(spacing: 10) {
-                            Circle()
-                                // Idle = a turn finished, the CLI waits for you: not "working".
-                                .fill(row.isWaiting ? Color.orange : row.session.status == "idle" ? Color.gray : Color.green)
-                                .frame(width: 7, height: 7)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(row.hostName) · \(row.session.displayTitle)")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(.primary)
-                                Text(row.isWaiting
-                                     ? (row.session.pendingApprovalCommand.map { "等你审批:" + String($0.prefix(40)) } ?? "等你审批")
-                                     : row.statusText)
-                                    .font(.caption)
-                                    .foregroundStyle(row.isWaiting ? .orange : .secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                        }
+            Section {
+                if !macLiveCollapsed {
+                    ForEach(macLive.rows) { row in
+                        macLiveRow(row)
                     }
-                    .buttonStyle(.plain)
                 }
+            } header: {
+                macLiveHeader
+            }
+        }
+    }
+
+    private var macLiveHeader: some View {
+        let waiting = macLive.rows.filter(\.isWaiting).count
+        return Button {
+            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { macLiveCollapsed.toggle() }
+            LeoHaptics.selection()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                Text("进行中")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                Text("\(macLive.rows.count)")
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                // 折起来也要看得见有事等你拍板
+                if macLiveCollapsed, waiting > 0 {
+                    Text("\(waiting) 个等你审批")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(macLiveCollapsed ? 0 : 90))
+                    .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: macLiveCollapsed)
+            }
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+            .textCase(nil)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(macLiveCollapsed ? Text("已折叠") : Text("已展开"))
+    }
+
+    private func macLiveRow(_ row: MacLiveSessionsStore.Row) -> some View {
+        let busy = row.isWaiting || ["running", "starting"].contains(row.session.status)
+        let stopping = macLive.stopping.contains(row.id)
+        return Button {
+            macAttachTarget = row
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    // Idle = a turn finished, the CLI waits for you: not "working".
+                    .fill(row.isWaiting ? Color.orange : row.session.status == "idle" ? Color.gray : Color.green)
+                    .frame(width: 7, height: 7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(row.hostName) · \(row.session.displayTitle)")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text(stopping ? "正在停止…"
+                         : row.isWaiting
+                         ? (row.session.pendingApprovalCommand.map { "等你审批:" + String($0.prefix(40)) } ?? "等你审批")
+                         : row.statusText)
+                        .font(.caption)
+                        .foregroundStyle(row.isWaiting && !stopping ? .orange : .secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(.plain)
+        // 不用 .destructive:那会让 List 当成删除、先把行滑走;停止后这行还在,只是变成「正在停止…」。
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if busy {
+                if !stopping {
+                    Button { stopMacLive(row) } label: { Label("停止", systemImage: "stop.fill") }
+                        .tint(.red)
+                }
+            } else {
+                Button { dismissMacLive(row) } label: { Label("清理", systemImage: "checkmark") }
+                    .tint(.gray)
+            }
+        }
+        .contextMenu {
+            Button { macAttachTarget = row } label: { Label("打开", systemImage: "arrow.up.right.square") }
+            if busy {
+                if !stopping {
+                    Button(role: .destructive) { stopMacLive(row) } label: { Label("停止这一轮", systemImage: "stop.fill") }
+                }
+            } else {
+                Button { dismissMacLive(row) } label: { Label("从进行中清理", systemImage: "checkmark.circle") }
+            }
+        }
+    }
+
+    private func dismissMacLive(_ row: MacLiveSessionsStore.Row) {
+        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { macLive.dismiss(row) }
+        LeoHaptics.selection()
+    }
+
+    private func stopMacLive(_ row: MacLiveSessionsStore.Row) {
+        Task { @MainActor in
+            do {
+                try await macLive.stop(row)
+                LeoHaptics.selection()
+            } catch {
+                homeRoutingError = "没能停下 Mac 上的任务:\(error.localizedDescription)"
             }
         }
     }

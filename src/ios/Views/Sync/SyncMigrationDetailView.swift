@@ -534,7 +534,7 @@ struct SyncMigrationDetailView: View {
                     Text("Loading zones…").foregroundStyle(.secondary)
                 }
             } else if let err = zonesLoadError {
-                Text(err).font(.caption).foregroundStyle(.red)
+                Text(err).font(.caption).foregroundStyle(.red).textSelection(.enabled)
             } else if zonesList.isEmpty {
                 Text("No zones found.").foregroundStyle(.secondary)
             } else {
@@ -736,7 +736,7 @@ struct SyncMigrationDetailView: View {
                 return a.name < b.name
             }
         } catch {
-            zonesLoadError = error.localizedDescription
+            zonesLoadError = cloudKitProblemDescription(error)
         }
     }
 

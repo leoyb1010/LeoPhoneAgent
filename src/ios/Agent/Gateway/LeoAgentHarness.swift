@@ -155,6 +155,13 @@ extension LeoAgentClient {
                                service: .harness)
     }
 
+    /// 手机「清理」:请 Mac 把这个任务从手机的列表里拿掉(Mac 上的对话不动;还在跑的 Mac 回 409)。
+    /// Mac 1.3.1 起才有这条路,老版本 404 —— 调用方那时只在本机藏起来。
+    func archiveHarness(sessionId: String) async throws {
+        _ = try await postJSON("/harness/sessions/\(sessionId)/archive", body: [:],
+                               service: .harness)
+    }
+
     // MARK: Resumable stream
 
     /// Events from `after` onwards: replay first, then follow live.

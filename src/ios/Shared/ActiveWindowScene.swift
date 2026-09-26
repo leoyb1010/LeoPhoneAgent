@@ -28,6 +28,11 @@ extension Array where Element == UIWindowScene {
 }
 
 extension UIApplication {
+    /// [T-presence-quiet] 有窗口正在前台、用户正在用 App(iPad 多窗口时任何一个都算)。
+    var leoIsInUse: Bool {
+        connectedScenes.contains { $0.activationState == .foregroundActive }
+    }
+
     /// The window scene a modal should be presented from.
     var leoActiveWindowScene: UIWindowScene? {
         connectedScenes.compactMap { $0 as? UIWindowScene }.activeFirst

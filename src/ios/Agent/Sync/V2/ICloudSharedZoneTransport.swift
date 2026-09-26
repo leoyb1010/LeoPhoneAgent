@@ -1595,6 +1595,11 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 // failed, server didn't change anything).
                 pendingRecords.append(failed.record)
                 syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
+            } else if failed.error.code == .serverRejectedRequest {
+                // [T-ck15-keep-dirty] 服务器整体拒收(错误 15)不是这条记录本身的错。不在引擎里马上重排
+                // (那就是重试风暴),但也不能按永久失败把改动丢掉:以前 SyncCore 收到永久失败会清掉脏标记,
+                // 拒收期间改的东西之后再也不会上传。报暂时失败,脏标记留着,下一轮发送再带上(与 V1 的 502c9da1 同理)。
+                pendingOutcomes[failed.record.recordID.recordName] = .transientFailure(id, retryAfter: 60)
             } else if failed.error.code == .unknownItem,
                       unknownItemRecreateAttempted.insert(failed.record.recordID.recordName).inserted {
                 // NOT_FOUND (Code 11 UnknownItem / "recordChangeTag specified,

@@ -18,6 +18,9 @@ struct CloudSyncSettingsV2View: View {
     @State private var maxArtifactSizeMB: Int = 25
     @State private var remoteDevices: [SyncDevice] = []
     @State private var statusText: String = ""
+    /// [T-ck15-explain] 打开页面时查一次 iCloud 通不通;不通就把原因摆出来(以前照样显示「运行中」,设备列表空着,看不出为什么)。
+    @State private var cloudProblem: String?
+    @State private var checkingCloud = false
     // [T-ios-migration-timer-sessionlist-uaf-crash] 5s refresh cadence is driven by
     // a `.task` async loop (see refreshLoop), NOT a process-lived
     // `Timer.publish(every:5).autoconnect()` + `.onReceive`. A graph-bound Combine
@@ -149,6 +152,21 @@ struct CloudSyncSettingsV2View: View {
                         .font(.caption)
                 }
 
+                if let cloudProblem {
+                    Section {
+                        Text(cloudProblem)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                        Button(checkingCloud ? "正在检查…" : "重新检查") {
+                            Task { await checkCloud() }
+                        }
+                        .disabled(checkingCloud)
+                    } header: {
+                        Text("iCloud 连接")
+                    }
+                }
+
                 Section {
                     if remoteDevices.isEmpty {
                         Text("No other devices found yet. Devices appear here once they enable iCloud Sync.")
@@ -218,6 +236,7 @@ struct CloudSyncSettingsV2View: View {
     @MainActor
     private func refreshLoop() async {
         await refresh()
+        await checkCloud()
         while !Task.isCancelled {
             do {
                 try await Task.sleep(nanoseconds: Self.refreshIntervalSeconds * 1_000_000_000)
@@ -252,10 +271,25 @@ struct CloudSyncSettingsV2View: View {
         let all = await ChatStore.shared.listSyncDevices()
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
         if #available(iOS 17.0, *), v2Enabled {
-            statusText = SyncCore.shared.isRunning ? "Running" : "Starting"
+            statusText = cloudProblem != nil ? "iCloud 出错" : SyncCore.shared.isRunning ? "Running" : "Starting"
         } else {
             statusText = "Off"
         }
+    }
+
+    /// [T-ck15-explain] 一次最便宜的只读请求(列出本 App 的 iCloud 区域),看 iCloud 通不通。
+    @MainActor
+    private func checkCloud() async {
+        guard #available(iOS 17.0, *), v2Enabled, !checkingCloud else { return }
+        checkingCloud = true
+        defer { checkingCloud = false }
+        do {
+            _ = try await V1FetcherShim.listAllZones()
+            cloudProblem = nil
+        } catch {
+            cloudProblem = cloudKitProblemDescription(error)
+        }
+        statusText = cloudProblem != nil ? "iCloud 出错" : SyncCore.shared.isRunning ? "Running" : "Starting"
     }
 
     /// Whenever the user changes their upload preferences or device

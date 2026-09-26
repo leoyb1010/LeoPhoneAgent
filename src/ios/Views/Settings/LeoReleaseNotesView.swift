@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.46.1",
+            date: "2026-09-26",
+            title: "「进行中」能折叠、能清理;在 App 里不再被灵动岛和横幅打扰;iCloud 同步说清楚错在哪",
+            highlights: [
+                "首页「进行中」:点标题折叠 / 展开,折起来时有等你审批的会标出来。每一行左滑或长按:在跑的可以「停止」,跑完的可以「清理」——只从手机的列表里拿掉,Mac 上的对话原样保留(Mac 升到 1.3.1 后 iPad 上也一起消失;旧版 Mac 只在这台设备上藏起来)。",
+                "Mac 1.3.1(已推送更新)起,跑完半小时没再动的任务不再算「进行中」,Mac 重启也不会把旧任务刷成刚动过;点开照样能接着聊。一直占着首页的那几条会自己退出去。",
+                "正在用 App 时更安静:有步骤等你批准时,灵动岛不再展开大提示(App 里的审批卡已经在眼前);通知只有「别的任务在等你批准」才弹横幅,而且不响,任务完成、快捷指令结果这类只进通知中心。离开 App 后照旧提醒。",
+                "iCloud 同步:设置 → iCloud 同步 打开时先检查一次 iCloud 通不通,不通就直接写明原因和能做什么,附上服务器返回的详情(以前只有「CKErrorDomain 错误 15」);iCloud 拒收期间改的内容不再丢,恢复后自动补传。"
+            ]
+        ),
+        LeoRelease(
             version: "1.46.0",
             date: "2026-09-26",
             title: "Apple Watch 边答边显示、边答边读;离开 iPhone 也能联网搜索",

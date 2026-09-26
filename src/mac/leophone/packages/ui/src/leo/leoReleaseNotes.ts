@@ -13,6 +13,14 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.3.1",
+    date: "2026-09-26",
+    items: [
+      "手机首页「进行中」不再被早就跑完的任务占住:从手机发起、跑完一轮后半小时没再动的任务,不再算进行中(手机里点开照样能接着聊);Mac 重启后认回来的任务也保留真实的最后活动时间,不再像刚动过。",
+      "手机上可以把 Mac 的任务从「进行中」里清理掉(新版 iPhone App 左滑「清理」):只从手机的列表里拿掉,Mac 上的对话原样保留;还在跑的要先停止。",
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-09-26",
     items: [

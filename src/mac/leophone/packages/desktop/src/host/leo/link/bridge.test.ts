@@ -553,3 +553,49 @@ test("stop racing a normal finish leaves the turn completed", async () => {
     assert.deepEqual(events.filter((e) => e.event.startsWith("run.")).map((e) => e.event), ["run.completed"]);
   });
 });
+
+test("finished tasks keep their real last activity across restarts, leave 进行中 after 30 minutes, and can be archived", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-link-stale-"));
+  const realNow = Date.now;
+  const listed = async (bridge: LinkBridge, id: string) =>
+    ((await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] }).sessions.find(
+      (row) => row["session_id"] === id,
+    );
+  try {
+    let id = "";
+    let finishedAt = 0;
+    await withBridge(async ({ bridge, zcode }) => {
+      id = await createSession(bridge, dir, { prompt: "跑一轮" });
+      zcode.fire(id, { type: "task_complete", stopReason: "success" });
+      const events = await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+      finishedAt = Number(events.at(-1)?.["timestamp"]);
+      assert.equal((await listed(bridge, id))?.["status"], "idle");
+      // 在跑的不让清理:先停止。
+      const busy = await createSession(bridge, dir, { prompt: "还在跑" });
+      assert.equal((await bridge.handle(req("POST", `/harness/sessions/${busy}/archive`, {}))).status, 409);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }, { dir });
+
+    // 31 分钟后 Mac 重启:认回来的任务保留真实的最后活动时间,不再报成 idle(手机上的「进行中」)。
+    Date.now = () => realNow() + 31 * 60_000;
+    await withBridge(async ({ bridge }) => {
+      await bridge.restore();
+      const row = await listed(bridge, id);
+      assert.equal(row?.["updated_at"], finishedAt);
+      assert.equal(row?.["status"], "available");
+      const archived = await bridge.handle(req("POST", `/harness/sessions/${id}/archive`, {}));
+      assert.equal(archived.status, 200);
+      assert.equal((archived.body as Record<string, unknown>)["archived"], true);
+      assert.equal(await listed(bridge, id), undefined);
+    }, { dir });
+
+    // 清理过的,再重启也不回来。
+    await withBridge(async ({ bridge }) => {
+      await bridge.restore();
+      assert.equal(await listed(bridge, id), undefined);
+    }, { dir });
+  } finally {
+    Date.now = realNow;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

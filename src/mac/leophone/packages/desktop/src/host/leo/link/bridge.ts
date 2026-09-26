@@ -61,7 +61,7 @@ export function isLinkPath(pathname: string): boolean {
     pathname === "/v1/grok/token" ||
     pathname === "/harness/full-auto" ||
     pathname === "/harness/sessions" ||
-    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop)$/.test(pathname)
+    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname)
   );
 }
 
@@ -116,10 +116,12 @@ export class LinkBridge {
       const session = this.newSession(taskId, cwd, entry["mode"] === "yolo" ? "yolo" : "build");
       session.title = typeof entry["title"] === "string" ? entry["title"] : "";
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
+      // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
+      // 每次 Mac 重启,手机上的旧任务都像刚动过,一直占着首页「进行中」。
+      session.updatedAt = session.createdAt;
       session.needsResume = true;
       try {
         await session.open();
-        session.updatedAt = Math.max(session.createdAt, session.updatedAt);
         this.sessions.set(taskId, session);
       } catch (cause) {
         this.deps.logger.warn("[leo/link] restore failed", { taskId, error: String(cause) });
@@ -222,10 +224,12 @@ export class LinkBridge {
       if (method === "POST") return this.create(req);
       return error(405, "Method not allowed");
     }
-    const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop)$/.exec(pathname);
+    const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop|archive)$/.exec(pathname);
     if (!match || method !== "POST") return error(405, "Method not allowed");
     const sessionId = decodeURIComponent(match[1]!);
     if (!validSessionId(sessionId)) return error(400, "会话 id 不合法");
+    // 清理不接管桌面任务:没接过来的本来就不在手机的「进行中」里。
+    if (match[2] === "archive") return this.archive(sessionId, url.pathname, req.body);
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) return this.forward("POST", url.pathname, req.body);
     const body = record(req.body);
@@ -441,6 +445,25 @@ export class LinkBridge {
     if (result === "forbidden") return error(403, "认不出是哪台设备,只能拒绝;请在 Mac 上批准,或把中继升级到 0.2");
     if (result === "undelivered") return error(502, "Approval could not be delivered to the task");
     return { status: 200, body: { ok: true, choice, approval_id: approvalId } };
+  }
+
+  /**
+   * 手机「清理」:把任务从手机的列表里拿掉。只动 Leo Link 这一层 —— Mac 桌面上的任务和对话原样保留,
+   * 在最近的项目里的话之后仍以 available 出现在 Mac 控制台。日志留着:将来再接管时编号接得上,手机的游标不乱。
+   */
+  private async archive(sessionId: string, pathname: string, body: unknown): Promise<LinkResponse> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      if (this.desktopTasks.has(sessionId)) return { status: 200, body: { ok: true, archived: false } };
+      return this.forward("POST", pathname, body);
+    }
+    if (session.status === "running" || session.status === "waiting_for_approval") {
+      return error(409, "任务还在跑:先停止,再清理");
+    }
+    this.sessions.delete(sessionId);
+    await session.close();
+    await this.saveIndex();
+    return { status: 200, body: { ok: true, archived: true } };
   }
 
   /** 手机关掉全自动:它发起、还在跑的全自动任务切回「先问我」。 */
