@@ -375,6 +375,53 @@ export class LoopTurn {
   imageMime: string = 'image/jpeg';
 }
 
+/**
+ * 每次发给模型的历史上限。鸿蒙不知道每个模型的上下文窗口,按字数估(中文一个字约一个 token):
+ * 超出就从最早的整轮丢起,最新一句总会发;图片只发最近两张,更早的换成一句说明
+ * (安卓按请求总量先省最早的图,同一个思路)。原来整段历史连同每张旧图每轮都重发,聊久了必然超限报错。
+ * ponytail: 直接丢弃,不像 iOS 先让模型写摘要;要摘要时在这里接 /compact。
+ */
+export const HISTORY_CHAR_BUDGET: number = 60000;
+export const HISTORY_IMAGE_KEEP: number = 2;
+const IMAGE_CHAR_COST: number = 1500;
+
+export function trimHistory(turns: LoopTurn[], maxChars: number): LoopTurn[] {
+  const out: LoopTurn[] = [];
+  let used = 0;
+  let images = 0;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = new LoopTurn();
+    turn.role = turns[i].role;
+    turn.content = turns[i].content;
+    turn.toolCallId = turns[i].toolCallId;
+    turn.toolName = turns[i].toolName;
+    turn.calls = turns[i].calls;
+    if (turns[i].imageB64.length > 0) {
+      if (images < HISTORY_IMAGE_KEEP) {
+        turn.imageB64 = turns[i].imageB64;
+        turn.imageMime = turns[i].imageMime;
+        images += 1;
+      } else {
+        turn.content = `${turn.content}\n(这里原来有一张图片,太早了没再发)`;
+      }
+    }
+    const cost = turn.content.length + (turn.imageB64.length > 0 ? IMAGE_CHAR_COST : 0);
+    if (out.length > 0 && used + cost > maxChars) {
+      break;
+    }
+    used += cost;
+    out.unshift(turn);
+  }
+  // 有的服务商要求第一条是用户说的话
+  while (out.length > 1 && out[0].role !== 'user') {
+    out.shift();
+  }
+  if (out.length < turns.length && out.length > 0) {
+    out[0].content = `(更早的对话太长,已省略)\n\n${out[0].content}`;
+  }
+  return out;
+}
+
 export const WRITE_GRANT_MARK: string = '__NEED_WRITE_GRANT__';
 
 /** 一次任务最多几轮工具。安卓、iOS 是 200 轮加重复检测;原来的 8 轮,稍复杂的任务就会半路停。 */

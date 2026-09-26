@@ -57,6 +57,7 @@ import {
   expandEnvPlaceholders,
   sessionArchiveJson,
   nextDelta,
+  trimHistory,
   usageFromJson,
   fileReadPage,
   formatFileReadOutput,
@@ -945,6 +946,40 @@ function wireShape(source, startsWith) {
   assert.ok(/startsWith\(`\$\{tag\}\/`\)/.test(remove.slice(remove.indexOf("async remove("), remove.indexOf("async setActive("))),
     "删服务商时清掉它在模型组里的条目");
   assert.ok(/!force && !this\.nearBottom/.test(etsSrc("panes/LocalChatPane.ets")), "不在底部时不跟随");
+}
+
+{
+  // 发给模型的历史有上限:从最早的整轮丢起,最新一句总会发,图片只发最近两张。
+  const turn = (role, content, imageB64 = "") => ({ role, content, imageB64, imageMime: "image/jpeg" });
+  const ten = (tag) => tag.padEnd(10, ".");
+  const short = [turn("user", "你好"), turn("assistant", "在")];
+  assert.deepEqual(trimHistory(short, 60000).map((row) => row.content), ["你好", "在"]);
+  const five = [turn("user", ten("u1")), turn("assistant", ten("a1")), turn("user", ten("u2")),
+    turn("assistant", ten("a2")), turn("user", ten("u3"))];
+  const cut = trimHistory(five, 35);
+  assert.deepEqual(cut.map((row) => row.role), ["user", "assistant", "user"]);
+  assert.ok(cut[0].content.startsWith("(更早的对话太长,已省略)"));
+  assert.ok(cut[0].content.endsWith(ten("u2")));
+  // 留下的第一条是模型说的:去掉,让用户那句打头。
+  assert.deepEqual(trimHistory(five, 25).map((row) => row.role), ["user"]);
+  // 最新一句再长也发。
+  const huge = trimHistory([turn("user", "旧"), turn("user", "x".repeat(100))], 50);
+  assert.equal(huge.length, 1);
+  assert.ok(huge[0].content.endsWith("x".repeat(100)));
+  const pics = trimHistory([turn("user", "图1", "AAA"), turn("assistant", "看到了"), turn("user", "图2", "BBB"),
+    turn("user", "图3", "CCC")], 60000);
+  assert.deepEqual(pics.map((row) => row.imageB64), ["", "", "BBB", "CCC"]);
+  assert.equal(pics[0].content, "图1\n(这里原来有一张图片,太早了没再发)");
+  // ETS 版同一组数、同两句话,并且真的接在发给模型的历史上。
+  const protoSrc = readFileSync(new URL("../app/entry/src/main/ets/local/LocalProtocol.ets", import.meta.url), "utf8");
+  assert.match(protoSrc, /HISTORY_CHAR_BUDGET: number = 60000;/);
+  assert.match(protoSrc, /HISTORY_IMAGE_KEEP: number = 2;/);
+  assert.match(protoSrc, /IMAGE_CHAR_COST: number = 1500;/);
+  assert.ok(protoSrc.includes("(这里原来有一张图片,太早了没再发)"));
+  assert.ok(protoSrc.includes("(更早的对话太长,已省略)"));
+  assert.match(protoSrc, /while \(out\.length > 1 && out\[0\]\.role !== 'user'\)/);
+  const chatSrc = readFileSync(new URL("../app/entry/src/main/ets/panes/LocalChatPane.ets", import.meta.url), "utf8");
+  assert.match(chatSrc, /return trimHistory\(out, HISTORY_CHAR_BUDGET\);/);
 }
 
 {

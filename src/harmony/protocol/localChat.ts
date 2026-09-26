@@ -805,3 +805,35 @@ export function nextDelta(sent: string, text: string): string {
   while (common < sent.length && common < text.length && sent.charAt(common) === text.charAt(common)) common++
   return text.substring(common)
 }
+
+export type HistoryTurn = { role: string, content: string, imageB64: string, imageMime: string }
+export const HISTORY_CHAR_BUDGET = 60000
+export const HISTORY_IMAGE_KEEP = 2
+const IMAGE_CHAR_COST = 1500
+
+export function trimHistory(turns: HistoryTurn[], maxChars: number): HistoryTurn[] {
+  const out: HistoryTurn[] = []
+  let used = 0
+  let images = 0
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = { role: turns[i].role, content: turns[i].content, imageB64: "", imageMime: "image/jpeg" }
+    if (turns[i].imageB64.length > 0) {
+      if (images < HISTORY_IMAGE_KEEP) {
+        turn.imageB64 = turns[i].imageB64
+        turn.imageMime = turns[i].imageMime
+        images += 1
+      } else {
+        turn.content = `${turn.content}\n(这里原来有一张图片,太早了没再发)`
+      }
+    }
+    const cost = turn.content.length + (turn.imageB64.length > 0 ? IMAGE_CHAR_COST : 0)
+    if (out.length > 0 && used + cost > maxChars) break
+    used += cost
+    out.unshift(turn)
+  }
+  while (out.length > 1 && out[0].role !== "user") out.shift()
+  if (out.length < turns.length && out.length > 0) {
+    out[0].content = `(更早的对话太长,已省略)\n\n${out[0].content}`
+  }
+  return out
+}

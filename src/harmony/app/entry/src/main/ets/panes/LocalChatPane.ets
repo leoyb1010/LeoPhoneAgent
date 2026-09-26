@@ -9,6 +9,7 @@ import { InAppBrowser } from '../local/InAppBrowser';
 import { Voice } from '../local/Voice';
 import { MarkdownText } from '../theme/Markdown';
 import {
+  HISTORY_CHAR_BUDGET,
   LOOP_STOP_AT,
   LOOP_WARN_AT,
   LocalChatMessage,
@@ -23,7 +24,8 @@ import {
   sandboxFileName,
   shouldFailover,
   thinkingLabel,
-  toolArg
+  toolArg,
+  trimHistory
 } from '../local/LocalProtocol';
 import { usageStore } from '../store/UsageStore';
 import { FastLocalActions } from '../local/FastLocalActions';
@@ -880,7 +882,7 @@ export struct LocalChatPane {
       turn.imageMime = line.imageMime.length > 0 ? line.imageMime : 'image/jpeg';
       out.push(turn);
     }
-    return out;
+    return trimHistory(out, HISTORY_CHAR_BUDGET);
   }
 
   private startModel(ctx: common.UIAbilityContext): void {
