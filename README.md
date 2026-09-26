@@ -3,7 +3,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.44.0%20(126)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.18-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.19-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -49,7 +49,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.18`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.19`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -57,12 +57,13 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.18
+## HarmonyOS 0.3.0-alpha.19
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
 本机 Agent 能用手机能力（天气、定位、闹钟、提醒、通知、手电、复制、拨号盘、打开链接），
-写文件审批分「逐项确认 / 全自动」两档。离线快捷动作和安卓同一套说法。
-远控 Mac 可以接着没做完的任务或接手桌面任务，审批按钮跟 Mac 给的一样。
+能附文件、看图、搜网页；写文件审批分「逐项确认 / 全自动」两档。离开聊天页、退到后台都接着跑，
+没做完的点「继续」，太长自动压缩。定时任务在 App 关着时也会被系统唤起补跑。
+远控 Mac 可以接着没做完的任务或接手桌面任务。
 这一版只编译和跑了协议测试，还没在鸿蒙设备上装过。竖屏单列，横屏/宽屏才左右分栏。
 
 OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。

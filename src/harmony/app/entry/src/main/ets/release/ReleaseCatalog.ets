@@ -6,15 +6,26 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.18';
-  static readonly currentBuild: number = 100023;
+  static readonly currentVersion: string = '0.3.0-alpha.19';
+  static readonly currentBuild: number = 100024;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.18';
+    first.version = '0.3.0-alpha.19';
     first.date = '2026-09-26';
-    first.title = '本机能用手机能力，远控接得上';
+    first.title = '离开页面也接着跑，没做完能继续';
     first.highlights = [
+      '本机任务离开聊天页、切到别的对话都接着跑；App 退到后台还能再跑一会儿，说完了发通知，点开回到那个对话。',
+      '上一轮没做完（App 被杀、出错、点了停止）会显示「继续」，接着做、不重来。聊得太长会先把前面的对话压成摘要，也可以发 /compact；第一轮说完自动起个标题。',
+      '能附文件（PDF、文档、图片）让它读，它能自己看沙箱里的图片，能直接搜网页。技能只把名字和说明放进对话，用到时再读全文。',
+      'MCP 服务器按标准握手，模型能先查工具和参数再调用；加了智谱网页搜索预设。',
+      '定时任务在 App 关着时也会被系统唤起补跑（时间不精确），跑完发通知。远控 Mac 上的 LeoPhoneAgent 任务跟着这台的「全自动」开关走。'
+    ];
+    const t8 = new LeoRelease();
+    t8.version = '0.3.0-alpha.18';
+    t8.date = '2026-09-26';
+    t8.title = '本机能用手机能力，远控接得上';
+    t8.highlights = [
       '本机对话能查天气和位置、设闹钟和提醒、发通知、开手电、复制、打开拨号盘和链接。写文件前先问你；输入框上方可以切成「全自动」，也可以「本次会话允许」。',
       '「后天八点」「下周三」这类时间都听得懂，出行会在出发前一小时再提醒一次；缺时间会先问，不让模型瞎猜。模型卡在同一步会先提醒、再停下；聊得再久也不会因为太长报错。',
       '打开 Mac 不再每次建一个空任务：可以接着没做完的任务，或接手 Mac 桌面上的任务。审批按钮和 Mac 给的一样，多了「拒绝并停止任务」。',
@@ -199,6 +210,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }
