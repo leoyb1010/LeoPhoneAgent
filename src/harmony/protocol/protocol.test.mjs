@@ -1187,17 +1187,17 @@ function wireShape(source, startsWith) {
 
   // 继续:一轮开始时落盘 running,被杀后读回来就知道没做完;停下存半截回答
   assert.ok(/sessionStore\.setRunning\(this\.context, this\.sessionId, true\)/.test(run));
-  assert.ok(/this\.interrupted = session\.running \|\| unfinishedTail\(texts\(session\.messages\)\)/.test(run));
+  assert.ok(/this\.interrupted = session\.running \|\| unfinishedTail\(textLines\(session\.messages\)\)/.test(run));
   assert.ok(/session\.running = obj\['running'\] === true/.test(sessions));
   assert.ok(/line\.kind = 'partial'/.test(run) && /line\.kind = 'resume'/.test(run));
   assert.ok(/content = resumeNote\(all, i\)/.test(run) && /\$\{line\.text\}\\n\\n\$\{STOPPED_NOTE\}/.test(run));
-  assert.ok(/this\.run\.resume\(this\.thinking\)/.test(pane) && pane.includes("已中断 · 点「继续」接着做"));
+  assert.ok(/this\.run\.resume\(this\.thinking\)/.test(pane) && pane.includes("已中断 - 点击「继续」以恢复"), "和安卓同一句");
 
   // 压缩:发送前超过门槛先压;摘要包进第一句用户消息;/compact 手动
-  assert.ok(/historyChars\(texts\(session\.messages\)\) > COMPACT_AT_CHARS/.test(run));
+  assert.ok(/historyChars\(textLines\(session\.messages\)\) > COMPACT_AT_CHARS/.test(run));
   assert.ok(/const wrapped = summaryWrapper\(messages\[start\]\.text\)/.test(run));
   assert.ok(/cmd === '\/compact'/.test(run) && /marker\.kind = 'summary'/.test(run));
-  assert.ok(pane.includes("已压缩前面 ${line.count} 条消息"));
+  assert.ok(etsSrc("chat/ChatViews.ets").includes("已压缩前面 ${this.item.count} 条消息"));
   // 写摘要、起标题不带工具
   assert.ok(/}, false\);/.test(etsSrc("local/SideModel.ets")) && /const tools = withTools \?/.test(client));
   const noTools = JSON.parse(responsesBodyJson("m", "s", [{ role: "user", content: "hi" }], "[]", ""));
@@ -1237,7 +1237,8 @@ function wireShape(source, startsWith) {
   assert.equal((proto.match(/flushImages\(\);/g) ?? []).length >= 6, true, "OpenAI、Gemini、Responses 三处都在工具串后补图");
 
   // 附件:进沙箱,消息里只带清单
-  assert.ok(/WorkspaceStore\.saveUpload\(ctx, name, buf\)/.test(pane) && /attachedFilesBlock\(line\.files\)/.test(run));
+  assert.ok(/WorkspaceStore\.saveUpload\(ctx, name, buf\)/.test(etsSrc("chat/Attachments.ets")) &&
+    /Attachments\.pickFiles\(/.test(pane) && /attachedFilesBlock\(line\.files\)/.test(run));
   const archive = sessionArchiveFromJson({ messages: [{ role: "user", text: "看", files: ["a.pdf"] }, { role: "system", text: "摘要", kind: "summary", count: 4 }] });
   assert.deepEqual(archive.messages[0].files, ["a.pdf"]);
   assert.equal(archive.messages[1].kind, "summary");
@@ -1250,6 +1251,132 @@ function wireShape(source, startsWith) {
   assert.ok(/scheduleDue\(row\.hour, row\.minute, row\.on, row\.lastDay, now\)/.test(schedule));
   assert.ok(/if \(retimed && fire\.getTime\(\) <= Date\.now\(\)\)/.test(schedule), "新建时今天的点已过,从明天开始");
   assert.ok(/await sessionStore\.reload\(this\.context\);/.test(entry), "后台进程写过档案,回前台重读");
+}
+
+{
+  // 聊天界面的纯逻辑(AgentText.ets):Markdown、工具行、条目分组和折叠
+  const t = agentText;
+  const L = (role, text, kind = "", at = 0) => Object.assign(new t.TextLine(), { role, text, kind, at });
+
+  // Markdown 块
+  const blocks = t.mdBlocks("# 标题\n正文第一行\n第二行\n\n```Swift\nlet a = 1\n```\n| a | b |\n| --- | --- |\n| 1 | 2 |\n> 引用\n- 项\n  - 子项\n- [x] 完成\n2. 第二\n---\n```py\n没收尾");
+  assert.deepEqual(blocks.map((b) => b.kind), ["h1", "p", "code", "table", "quote", "li", "li", "li", "ol", "hr", "code"]);
+  assert.equal(blocks[1].text, "正文第一行\n第二行");
+  assert.equal(blocks[2].lang, "swift");
+  assert.equal(blocks[2].text, "let a = 1");
+  assert.deepEqual(t.mdTableRows(blocks[3].text), [["a", "b"], ["1", "2"]]);
+  assert.equal(blocks[6].level, 1);
+  assert.equal(blocks[7].text, "☑ 完成");
+  assert.equal(blocks[8].ordinal, "2");
+  assert.equal(blocks[10].text, "没收尾", "流式时没收尾的代码块照样是代码块");
+  // 行内
+  const runs = t.mdInline("用 `ls` 看，**重要**，*斜*，~~删~~，[文档](https://a.cn/x)，见 https://b.cn/y。");
+  assert.deepEqual(runs.map((r) => [r.kind, r.text]), [["text", "用 "], ["code", "ls"], ["text", " 看，"], ["bold", "重要"], ["text", "，"],
+    ["italic", "斜"], ["text", "，"], ["strike", "删"], ["text", "，"], ["link", "文档"], ["text", "，见 "], ["link", "https://b.cn/y"], ["text", "。"]]);
+  assert.equal(runs[9].url, "https://a.cn/x");
+  assert.deepEqual(t.mdInline("snake_case_name 不是斜体").map((r) => r.kind), ["text"]);
+
+  // 工具结果行带标题,续跑和显示都读得回
+  assert.equal(t.toolResultLine("web_search", "3 条", "搜北京天气"), "工具 web_search「搜北京天气」: 3 条");
+  assert.equal(t.toolResultLine("file_list", "空", "file_list"), "工具 file_list: 空");
+  const row = t.parseToolRow("web_search「搜: 天气」: 3 条");
+  assert.deepEqual([row.name, row.title, row.result], ["web_search", "搜: 天气", "3 条"]);
+  assert.deepEqual([t.parseToolRow("file_list: a.md").name, t.parseToolRow("file_list: a.md").result], ["file_list", "a.md"]);
+  assert.ok(t.resumeNote([L("user", "q"), L("system", t.toolPlanLine(["web_search"])),
+    L("system", t.toolResultLine("web_search", "3 条", "搜天气"))], 3).includes("[Result] web_search: 3 条"));
+
+  // 分组:第一轮两步工具、有回答、不是最新一轮 → 折成「已工作 2 步」;点开后工具胶囊回来
+  const convo = [
+    L("user", "查天气然后记下来", "", 1000),
+    L("assistant", "我先查一下", "", 2000),
+    L("system", t.toolPlanLine(["weather", "memory_write"]), "", 2000),
+    L("system", t.toolResultLine("weather", "晴 20 度", "查北京天气"), "", 5000),
+    L("system", t.toolResultLine("memory_write", "已写入今日记忆"), "", 6000),
+    L("assistant", "北京晴,20 度,已经记下。", "", 8000),
+    L("user", "再搜一下明天", "", 9000),
+    L("system", t.toolPlanLine(["web_search"]), "", 9500),
+  ];
+  const folded = t.chatItems(convo, true, []);
+  assert.deepEqual(folded.map((i) => i.kind), ["user", "assistant", "worked", "assistant", "user", "tool"]);
+  assert.equal(folded[1].head, true, "回答头画在这一轮第一条");
+  assert.equal(folded[2].count, 2);
+  assert.equal(folded[2].seconds, 4, "两步工具各 3 秒、1 秒");
+  assert.equal(folded[3].last, true, "说完的一轮最后一段回答下面有操作");
+  assert.equal(folded[5].status, "running", "最新一轮还在跑");
+  assert.equal(folded[5].head, true);
+  const opened = t.chatItems(convo, true, [0]);
+  assert.deepEqual(opened.map((i) => i.kind), ["user", "assistant", "worked", "tool", "tool", "assistant", "user", "tool"]);
+  assert.equal(opened[3].title, "查北京天气");
+  assert.equal(opened[3].seconds, 3);
+  // 关掉「工具预览」:说完的都折,正在跑的那一轮不折
+  assert.deepEqual(t.chatItems(convo, true, [], true).map((i) => i.kind), ["user", "assistant", "worked", "assistant", "user", "tool"]);
+  const oneTool = [L("user", "q"), L("system", t.toolPlanLine(["file_list"])), L("system", t.toolResultLine("file_list", "a.md")), L("assistant", "有 a.md")];
+  assert.deepEqual(t.chatItems(oneTool, false, [], true).map((i) => i.kind), ["user", "worked", "assistant"]);
+  assert.deepEqual(t.chatItems(oneTool, false, [], false).map((i) => i.kind), ["user", "tool", "assistant"]);
+  const stopped = t.chatItems(convo, false, []);
+  assert.equal(stopped[stopped.length - 1].status, "lost", "App 停了还没配上结果的算没跑完");
+  // 只有一步工具不折;最新一轮不折;等模型时有「正在思考」
+  const one = t.chatItems([L("user", "q"), L("system", t.toolPlanLine(["file_list"])), L("system", t.toolResultLine("file_list", "a.md")),
+    L("assistant", "有 a.md"), L("user", "q2")], true, []);
+  assert.deepEqual(one.map((i) => i.kind), ["user", "tool", "assistant", "user", "typing"]);
+  assert.equal(one[1].status, "ok");
+  assert.equal(t.chatItems([L("user", "q"), L("system", t.toolPlanLine(["x"])), L("system", t.toolResultLine("x", "没有这个工具：x"))], false, [])[1].status, "fail");
+  // 摘要、错误、说到一半的回答
+  const misc = t.chatItems([L("system", "摘要", "summary"), L("user", "q"), L("assistant", "说到一半", "partial"), L("system", "网络断了", "error"), L("system", "换到 gpt")], false, []);
+  assert.deepEqual(misc.map((i) => i.kind), ["summary", "user", "assistant", "error", "notice"]);
+  assert.equal(misc[2].partial, true);
+  assert.equal(t.chatItems([], true, []).length, 0);
+
+  assert.equal(t.durationText(-1), "");
+  assert.equal(t.durationText(42), "42 秒");
+  assert.equal(t.durationText(72), "1 分 12 秒");
+  assert.equal(t.durationText(120), "2 分钟");
+  assert.equal(t.toolLabel("web_search", ""), "搜网页");
+  assert.equal(t.toolLabel("web_search", "搜北京天气"), "搜北京天气");
+  assert.equal(t.toolLabel("custom_tool", ""), "custom_tool");
+}
+
+{
+  // 界面:用到的每个图标名都在 Symbols.ets 里(写错会悄悄变成「⋯」);折叠屏展开按宽度分栏;首页导航
+  const etsRoot = new URL("../app/entry/src/main/ets/", import.meta.url);
+  const src = (rel) => readFileSync(new URL(rel, etsRoot), "utf8");
+  const symbols = new Set([...src("theme/Symbols.ets").matchAll(/this\.name === '([a-z0-9_]+)'/g)].map((m) => m[1]));
+  const used = new Set();
+  const files = ["chat/ChatViews.ets", "chat/Composer.ets", "panes/LocalChatPane.ets", "panes/LocalAgentPane.ets",
+    "panes/SettingsPane.ets", "panes/FleetPane.ets", "panes/ChatPane.ets", "theme/Markdown.ets", "theme/Widgets.ets"];
+  for (const f of files) {
+    const text = src(f);
+    for (const m of text.matchAll(/Sym\(\{\s*name:\s*'([a-z0-9_]+)'/g)) used.add(m[1]);
+    for (const m of text.matchAll(/name:\s*this\.[a-zA-Z]+ \? '([a-z0-9_]+)' : '([a-z0-9_]+)'/g)) { used.add(m[1]); used.add(m[2]); }
+    for (const m of text.matchAll(/(?:barIcon|menuRow|chip)\((?:'[^']*', )?'([a-z0-9_]+)'/g)) if (m[1] !== "dot") used.add(m[1]);
+    for (const m of text.matchAll(/this\.quickTask\([^)]*?, '([a-z0-9_]+)', [^)]*\)/g)) used.add(m[1]);
+    for (const m of text.matchAll(/row\('([a-z0-9_]+)', '#/g)) used.add(m[1]);
+  }
+  for (const m of src("chat/ChatViews.ets").matchAll(/return '([a-z0-9_]+)';/g)) used.add(m[1]);
+  const legacy = src("theme/Widgets.ets");
+  for (const m of legacy.slice(legacy.indexOf("function symbolFor"), legacy.indexOf("@Component\nexport struct IconCircle")).matchAll(/: '([a-z0-9_]+)'/g)) used.add(m[1]);
+  assert.ok(used.size > 40, `找到的图标太少(${used.size}),正则可能失效`);
+  const missing = [...used].filter((name) => !symbols.has(name));
+  assert.deepEqual(missing, [], "这些图标名不在 Symbols.ets 里");
+
+  // 折叠屏展开(近似正方形、略高)也分栏:不再要求横着拿
+  const fold = src("layout/FoldLayout.ets");
+  assert.ok(!/width < height/.test(fold), "分栏只看宽度");
+  assert.ok(/width < Tokens\.wideBreak/.test(fold) && /height < Tokens\.tallBreak/.test(fold));
+  // 手机首页:没有「本机 / 远程」文字页签,远程是顶栏的电脑图标
+  const home = src("pages/HomePage.ets");
+  assert.ok(!/tabLabel\(/.test(home) && /pushUrl\(\{ url: 'pages\/FleetPage' \}\)/.test(home));
+  // 输入框:在跑且没打字时是红色停止;芯片在卡片里
+  const composer = src("chat/Composer.ets");
+  assert.ok(/this\.running && this\.draft\.trim\(\)\.length === 0/.test(composer) && /backgroundColor\(Tokens\.danger\)/.test(composer));
+  assert.ok(/'全自动' : '逐项确认'/.test(composer));
+  // 回答不套气泡:直接画 Markdown,上面一行「✦ LeoPhoneAgent」
+  const pane = src("panes/LocalChatPane.ets");
+  assert.ok(/AssistantHead\(\{ name: this\.agentName\(\) \}\)/.test(pane) && /MarkdownText\(\{ text: item\.text \}\)/.test(pane));
+  assert.ok(/chatItems\(textLines\(run\.lines\), run\.active \|\| run\.askWrite, this\.openTurns, !themeStore\.toolPreview\)/.test(pane));
+  // 设置四组,和 iOS / 安卓同顺序
+  const settings = src("panes/SettingsPane.ets");
+  assert.ok(/const all: SetGroup\[\] = \[device, agent, look, data\]/.test(settings));
 }
 
 console.log("PROTOCOL_MACHINES_OK");

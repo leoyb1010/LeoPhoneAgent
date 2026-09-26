@@ -13,6 +13,8 @@ export class TextLine {
   role: string = '';
   text: string = '';
   kind: string = '';
+  /** 这条消息的时间(毫秒);老档案里没有,是 0。 */
+  at: number = 0;
 }
 
 // ---- 工具行:存档里怎么记工具,续跑和压缩都按这两个前缀认 ----
@@ -24,8 +26,34 @@ export function toolPlanLine(names: string[]): string {
   return `${TOOL_PLAN_PREFIX}${names.join('、')}`;
 }
 
-export function toolResultLine(name: string, text: string): string {
-  return `${TOOL_RESULT_PREFIX}${name}: ${text}`;
+/** 工具结果行;title 是模型给这一步起的短标题(tool_title),和名字一样时不写。 */
+export function toolResultLine(name: string, text: string, title: string = ''): string {
+  const label = title.trim().length > 0 && title.trim() !== name ? `「${title.trim()}」` : '';
+  return `${TOOL_RESULT_PREFIX}${name}${label}: ${text}`;
+}
+
+export class ToolRow {
+  name: string = '';
+  title: string = '';
+  result: string = '';
+}
+
+/** 读回一条工具结果行(去掉「工具 」前缀之后的部分)。 */
+export function parseToolRow(body: string): ToolRow {
+  const row = new ToolRow();
+  const colon = body.indexOf(':');
+  const quote = body.indexOf('「');
+  if (quote > 0 && (colon < 0 || quote < colon)) {
+    const close = body.indexOf('」', quote);
+    row.name = body.substring(0, quote);
+    row.title = close > quote ? body.substring(quote + 1, close) : '';
+    const rest = close > quote ? body.substring(close + 1) : '';
+    row.result = rest.startsWith(':') ? rest.substring(1).trim() : rest.trim();
+    return row;
+  }
+  row.name = colon > 0 ? body.substring(0, colon) : body;
+  row.result = colon > 0 ? body.substring(colon + 1).trim() : '';
+  return row;
 }
 
 function cut(text: string, max: number): string {
@@ -288,14 +316,12 @@ export function resumeNote(lines: TextLine[], upTo: number): string {
       pending = text.substring(TOOL_PLAN_PREFIX.length).split('、').filter((name: string) => name.length > 0);
       rows.push(`[Tool] ${pending.join(', ')}`);
     } else if (text.startsWith(TOOL_RESULT_PREFIX)) {
-      const body = text.substring(TOOL_RESULT_PREFIX.length);
-      const colon = body.indexOf(':');
-      const name = colon > 0 ? body.substring(0, colon) : body;
-      const at = pending.indexOf(name);
+      const row = parseToolRow(text.substring(TOOL_RESULT_PREFIX.length));
+      const at = pending.indexOf(row.name);
       if (at >= 0) {
         pending.splice(at, 1);
       }
-      rows.push(`[Result] ${cut(body, 1000)}`);
+      rows.push(`[Result] ${row.name}: ${cut(row.result, 1000)}`);
     }
   }
   for (let i = 0; i < pending.length; i++) {
@@ -696,4 +722,425 @@ export function doneNotice(outcome: string, title: string, reply: string): strin
     return [`❌ ${name}`, preview.length > 0 ? preview : '任务执行失败。'];
   }
   return [`✅ ${name}`, preview.length > 0 ? preview : '任务已完成。'];
+}
+
+// ---- Markdown:回答里的块和行内样式(和 iOS / 安卓画法一致:代码块带语言和复制、表格、行内代码、链接) ----
+
+export class MdPart {
+  /** p / h1 / h2 / h3 / li / ol / quote / code / table / hr */
+  kind: string = 'p';
+  text: string = '';
+  lang: string = '';
+  level: number = 0;
+  ordinal: string = '';
+}
+
+function mdPart(kind: string, text: string): MdPart {
+  const part = new MdPart();
+  part.kind = kind;
+  part.text = text;
+  return part;
+}
+
+/** 按行切成块。流式输出时代码块还没收尾,也当代码块画(不会一闪一闪地变成正文)。 */
+export function mdBlocks(raw: string): MdPart[] {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const out: MdPart[] = [];
+  let para: string[] = [];
+  const flush = (): void => {
+    if (para.length > 0) {
+      out.push(mdPart('p', para.join('\n')));
+      para = [];
+    }
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const fence = trimmed.match(/^(```|~~~)\s*([A-Za-z0-9_+#.-]*)/);
+    if (fence) {
+      flush();
+      const code: string[] = [];
+      i += 1;
+      while (i < lines.length && !lines[i].trim().startsWith(fence[1])) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      i += 1;
+      const part = mdPart('code', code.join('\n'));
+      part.lang = fence[2].toLowerCase();
+      out.push(part);
+      continue;
+    }
+    if (trimmed.length === 0) {
+      flush();
+      i += 1;
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      flush();
+      out.push(mdPart(`h${Math.min(3, heading[1].length)}`, heading[2].replace(/\s+#+$/, '')));
+      i += 1;
+      continue;
+    }
+    if (/^([-*_])(\s*\1){2,}$/.test(trimmed)) {
+      flush();
+      out.push(mdPart('hr', ''));
+      i += 1;
+      continue;
+    }
+    if (trimmed.startsWith('|') && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i + 1].trim())) {
+      flush();
+      const rows: string[] = [trimmed];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        rows.push(lines[i].trim());
+        i += 1;
+      }
+      out.push(mdPart('table', rows.join('\n')));
+      continue;
+    }
+    const quote = line.match(/^\s*>\s?(.*)$/);
+    if (quote) {
+      flush();
+      const rows: string[] = [];
+      while (i < lines.length) {
+        const hit = lines[i].match(/^\s*>\s?(.*)$/);
+        if (!hit) {
+          break;
+        }
+        rows.push(hit[1]);
+        i += 1;
+      }
+      out.push(mdPart('quote', rows.join('\n')));
+      continue;
+    }
+    const bullet = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (bullet) {
+      flush();
+      const part = mdPart('li', bullet[2].replace(/^\[ \]\s*/, '☐ ').replace(/^\[[xX]\]\s*/, '☑ '));
+      part.level = Math.min(3, Math.floor(bullet[1].length / 2));
+      out.push(part);
+      i += 1;
+      continue;
+    }
+    const ordered = line.match(/^(\s*)(\d{1,3})[.)]\s+(.*)$/);
+    if (ordered) {
+      flush();
+      const part = mdPart('ol', ordered[3]);
+      part.level = Math.min(3, Math.floor(ordered[1].length / 2));
+      part.ordinal = ordered[2];
+      out.push(part);
+      i += 1;
+      continue;
+    }
+    para.push(trimmed);
+    i += 1;
+  }
+  flush();
+  return out;
+}
+
+export function mdTableRows(raw: string): string[][] {
+  return raw.split('\n').map((row: string) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
+    .map((cell: string) => cell.trim()));
+}
+
+export class MdRun {
+  /** text / bold / italic / code / strike / link */
+  kind: string = 'text';
+  text: string = '';
+  url: string = '';
+}
+
+function mdRun(kind: string, text: string, url: string): MdRun {
+  const run = new MdRun();
+  run.kind = kind;
+  run.text = text;
+  run.url = url;
+  return run;
+}
+
+/** 行内样式:`代码`、**粗体**、*斜体*、~~删除线~~、[文字](链接)、裸链接。不嵌套。 */
+export function mdInline(raw: string): MdRun[] {
+  const out: MdRun[] = [];
+  const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(~~[^~\n]+~~)|(\[[^\]\n]+\]\([^)\s]+\))|(\*[^*\s][^*\n]*\*)|(https?:\/\/[^\s<>()\[\]"'，。、；：！？）]+)/g;
+  let last = 0;
+  let hit = re.exec(raw);
+  while (hit) {
+    if (hit.index > last) {
+      out.push(mdRun('text', raw.substring(last, hit.index), ''));
+    }
+    const token = hit[0];
+    if (hit[1]) {
+      out.push(mdRun('code', token.substring(1, token.length - 1), ''));
+    } else if (hit[2] || hit[3]) {
+      out.push(mdRun('bold', token.substring(2, token.length - 2), ''));
+    } else if (hit[4]) {
+      out.push(mdRun('strike', token.substring(2, token.length - 2), ''));
+    } else if (hit[5]) {
+      const link = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+      out.push(link ? mdRun('link', link[1], link[2]) : mdRun('text', token, ''));
+    } else if (hit[6]) {
+      out.push(mdRun('italic', token.substring(1, token.length - 1), ''));
+    } else {
+      const clean = token.replace(/[.,;:!?]+$/, '');
+      out.push(mdRun('link', clean, clean));
+      if (clean.length < token.length) {
+        out.push(mdRun('text', token.substring(clean.length), ''));
+      }
+    }
+    last = hit.index + token.length;
+    hit = re.exec(raw);
+  }
+  if (last < raw.length) {
+    out.push(mdRun('text', raw.substring(last), ''));
+  }
+  return out;
+}
+
+// ---- 聊天列表:把消息排成要画的条目(工具胶囊、「已工作 N 步」折叠、回答头和操作栏) ----
+
+export class ChatItem {
+  /** user / assistant / tool / worked / notice / error / summary / typing */
+  kind: string = '';
+  text: string = '';
+  /** 对应消息在列表里的下标(复制、朗读、展开用)。 */
+  index: number = -1;
+  name: string = '';
+  title: string = '';
+  /** 工具:running / ok / fail / lost(App 停了没跑完) */
+  status: string = '';
+  /** 工具或整轮用了几秒;不知道是 -1。 */
+  seconds: number = -1;
+  /** 已工作:几步;摘要:压掉几条。 */
+  count: number = 0;
+  /** 这一轮从哪条用户消息开始(折叠按它记)。 */
+  turn: number = -1;
+  open: boolean = false;
+  /** 这一轮回答的第一条:上面画「LeoPhoneAgent」头。 */
+  head: boolean = false;
+  /** 说完的一轮的最后一段回答:下面画复制、朗读。 */
+  last: boolean = false;
+  /** 回答说到一半停下的。 */
+  partial: boolean = false;
+}
+
+const FAIL_RESULT = /^(失败|错误|Error|error|没有这个|参数不完整|没做成|拿不到|找不到|读不了|http [45]\d\d|MCP 调用失败|拉不到)/;
+
+function item(kind: string, index: number, turn: number): ChatItem {
+  const row = new ChatItem();
+  row.kind = kind;
+  row.index = index;
+  row.turn = turn;
+  return row;
+}
+
+function seconds(from: number, to: number): number {
+  return from > 0 && to >= from ? Math.round((to - from) / 1000) : -1;
+}
+
+/**
+ * 消息 → 要画的条目。工具行变成胶囊(将调用 + 结果配对,没配上的:最后一轮还在跑就是 running,否则是没跑完);
+ * 不是最新一轮、至少两步工具、最后有回答的,工具胶囊折成一条「已工作 N 步」(iOS 同样规则),openTurns 里的展开。
+ * foldAll(关掉了「工具预览」):除了正在跑的那一轮,有工具的都折起来。
+ */
+export function chatItems(lines: TextLine[], active: boolean, openTurns: number[], foldAll: boolean = false): ChatItem[] {
+  // 先按用户消息切成一轮一轮
+  const starts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].role === 'user') {
+      starts.push(i);
+    }
+  }
+  const out: ChatItem[] = [];
+  const bounds: number[] = [0].concat(starts.filter((at: number) => at > 0)).concat([lines.length]);
+  for (let b = 0; b + 1 < bounds.length; b++) {
+    const from = bounds[b];
+    const to = bounds[b + 1];
+    const turn = lines.length > 0 && lines[from].role === 'user' ? from : -1;
+    const latest = to === lines.length;
+    const rows: ChatItem[] = [];
+    let pending: ChatItem[] = [];
+    let clock = 0;
+    for (let i = from; i < to; i++) {
+      const line = lines[i];
+      if (line.role === 'user') {
+        const row = item('user', i, turn);
+        row.text = line.kind === 'resume' ? '继续' : line.text;
+        rows.push(row);
+        clock = line.at;
+      } else if (line.role === 'assistant') {
+        const row = item('assistant', i, turn);
+        row.text = line.text;
+        row.partial = line.kind === 'partial';
+        rows.push(row);
+        clock = line.at > 0 ? line.at : clock;
+      } else if (line.kind === 'summary') {
+        const row = item('summary', i, turn);
+        row.text = line.text;
+        rows.push(row);
+      } else if (line.kind === 'error') {
+        const row = item('error', i, turn);
+        row.text = line.text;
+        rows.push(row);
+      } else if (line.text.startsWith(TOOL_PLAN_PREFIX)) {
+        const names = line.text.substring(TOOL_PLAN_PREFIX.length).split('、').filter((n: string) => n.length > 0);
+        for (let n = 0; n < names.length; n++) {
+          const row = item('tool', i, turn);
+          row.name = names[n];
+          row.status = 'running';
+          rows.push(row);
+          pending.push(row);
+        }
+        clock = line.at > 0 ? line.at : clock;
+      } else if (line.text.startsWith(TOOL_RESULT_PREFIX)) {
+        const parsed = parseToolRow(line.text.substring(TOOL_RESULT_PREFIX.length));
+        let row: ChatItem | null = null;
+        for (let p = 0; p < pending.length; p++) {
+          if (pending[p].name === parsed.name) {
+            row = pending[p];
+            pending.splice(p, 1);
+            break;
+          }
+        }
+        if (!row) {
+          row = item('tool', i, turn);
+          row.name = parsed.name;
+          rows.push(row);
+        }
+        row.index = i;
+        row.title = parsed.title;
+        row.text = parsed.result;
+        row.status = FAIL_RESULT.test(parsed.result) ? 'fail' : 'ok';
+        row.seconds = seconds(clock, line.at);
+        clock = line.at > 0 ? line.at : clock;
+      } else {
+        const row = item('notice', i, turn);
+        row.text = line.text;
+        rows.push(row);
+      }
+    }
+    for (let p = 0; p < pending.length; p++) {
+      pending[p].status = latest && active ? 'running' : 'lost';
+    }
+    // 回答头:这一轮第一条不是用户消息的(回答、工具都算)
+    for (let r = 0; r < rows.length; r++) {
+      if (rows[r].kind === 'assistant' || rows[r].kind === 'tool') {
+        rows[r].head = true;
+        break;
+      }
+      if (rows[r].kind !== 'user') {
+        break;
+      }
+    }
+    // 说完的一轮:最后一段回答下面画操作
+    const finished = !(latest && active);
+    let lastAnswer = -1;
+    for (let r = rows.length - 1; r >= 0; r--) {
+      if (rows[r].kind === 'assistant') {
+        lastAnswer = r;
+        break;
+      }
+      if (rows[r].kind === 'tool') {
+        break;
+      }
+    }
+    if (finished && lastAnswer >= 0 && rows[lastAnswer].text.trim().length > 0) {
+      rows[lastAnswer].last = true;
+    }
+    // 折叠:不是最新一轮、至少两步工具、最后有回答
+    const tools = rows.filter((row: ChatItem) => row.kind === 'tool');
+    if ((!latest && tools.length >= 2 && lastAnswer >= 0) || (foldAll && tools.length >= 1 && !(latest && active))) {
+      const open = openTurns.indexOf(turn) >= 0;
+      const worked = item('worked', tools[0].index, turn);
+      worked.count = tools.length;
+      worked.open = open;
+      worked.status = tools.some((row: ChatItem) => row.status === 'fail' || row.status === 'lost') ? 'fail' : 'ok';
+      const first = lines[tools[0].index].at;
+      const end = lines[tools[tools.length - 1].index].at;
+      let spent = 0;
+      let known = true;
+      for (let t = 0; t < tools.length; t++) {
+        if (tools[t].seconds < 0) {
+          known = false;
+        } else {
+          spent += tools[t].seconds;
+        }
+      }
+      worked.seconds = known ? spent : seconds(first, end);
+      worked.head = tools[0].head;
+      tools[0].head = false;
+      const firstTool = rows.indexOf(tools[0]);
+      const kept: ChatItem[] = [];
+      for (let r = 0; r < rows.length; r++) {
+        if (r === firstTool) {
+          kept.push(worked);
+        }
+        if (rows[r].kind !== 'tool' || open) {
+          kept.push(rows[r]);
+        }
+      }
+      out.push(...kept);
+    } else {
+      out.push(...rows);
+    }
+  }
+  // 在等模型(刚发出去、工具跑完等下一轮):画「正在思考」
+  if (active && out.length > 0) {
+    const tail = out[out.length - 1];
+    if (tail.kind === 'user' || (tail.kind === 'tool' && tail.status !== 'running') || tail.kind === 'notice') {
+      out.push(item('typing', -1, tail.turn));
+    }
+  }
+  return out;
+}
+
+/** 「已工作 N 步 · 用时」里的用时。 */
+export function durationText(secs: number): string {
+  if (secs < 0) {
+    return '';
+  }
+  if (secs < 60) {
+    return `${secs} 秒`;
+  }
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分钟`;
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  'file_list': '看沙箱文件',
+  'file_read': '读文件',
+  'read_image': '看图片',
+  'file_write': '写文件',
+  'file_edit': '改文件',
+  'memory_write': '记下来',
+  'memory_get': '查记忆',
+  'open_url': '打开网页',
+  'web_fetch': '抓网页',
+  'web_search': '搜网页',
+  'browser_use': '浏览器',
+  'mcp_tools': '查 MCP 工具',
+  'mcp_call': '调用 MCP',
+  'device_info': '设备信息',
+  'clipboard_write': '复制到剪贴板',
+  'set_alarm': '设闹钟',
+  'set_reminder': '设提醒',
+  'notify': '发通知',
+  'flashlight': '手电筒',
+  'open_app_link': '打开 App',
+  'dial': '拨号',
+  'location': '定位',
+  'weather': '天气'
+};
+
+/** 胶囊上的字:模型起的短标题优先,其次中文工具名。 */
+export function toolLabel(name: string, title: string): string {
+  if (title.trim().length > 0) {
+    return title.trim();
+  }
+  const known = TOOL_LABELS[name];
+  return known !== undefined ? known : name;
 }

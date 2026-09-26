@@ -70,13 +70,19 @@ struct HomePage {
 
   build() {
     Column() {
-      if (!this.wide) {
-        this.coverBar()
-      }
       if (this.wide) {
         this.wideBody()
       } else {
-        this.narrowBody()
+        LocalAgentPane({
+          wide: false,
+          onSettings: () => {
+            router.pushUrl({ url: 'pages/SettingsPage' });
+          },
+          onRemote: () => {
+            router.pushUrl({ url: 'pages/FleetPage' });
+          }
+        })
+          .layoutWeight(1)
       }
     }
     .width('100%')
@@ -86,47 +92,21 @@ struct HomePage {
       this.syncWide(Number(now.width), Number(now.height));
     })
     .bindSheet($$this.showNotes, this.notesSheet(), {
-      height: SheetSize.MEDIUM,
+      height: SheetSize.FIT_CONTENT,
       dragBar: true
     })
   }
 
-  @Builder
-  coverBar() {
-    Row() {
-      this.tabLabel('本机', 0)
-      this.tabLabel('远程', 1)
-      Blank()
-      Text('设置')
-        .fontSize(15)
-        .fontColor(Tokens.accent)
-        .fontWeight(FontWeight.Medium)
-        .onClick(() => {
-          router.pushUrl({ url: 'pages/SettingsPage' });
-        })
-    }
-    .width('100%')
-    .height(Tokens.topBar)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
-  }
-
-  @Builder
-  tabLabel(title: string, index: number) {
-    Text(title)
-      .fontSize(this.tab === index ? Tokens.title : 16)
-      .fontColor(this.tab === index ? Tokens.text : Tokens.muted)
-      .fontWeight(this.tab === index ? FontWeight.Bold : FontWeight.Regular)
-      .margin({ right: 18 })
-      .onClick(() => {
-        this.tab = index;
-      })
-  }
-
+  /** 展开的折叠屏、平板:本机(列表 + 对话)、远程(机器 + 远程对话)、设置,三者之间用各自顶栏的图标切换。 */
   @Builder
   wideBody() {
     if (this.tab === 2) {
-      SettingsPane()
+      SettingsPane({
+        showBack: true,
+        onBack: () => {
+          this.tab = 0;
+        }
+      })
     } else if (this.tab === 1) {
       Row() {
         FleetPane({
@@ -142,11 +122,11 @@ struct HomePage {
             this.tab = 2;
           }
         })
-          .layoutWeight(1)
+          .width('40%')
         Column()
-          .width(Tokens.divider)
+          .width(Tokens.hairline)
           .height('100%')
-          .backgroundColor(Tokens.surface2)
+          .backgroundColor(Tokens.separator)
         ChatPane({ machine: this.chatMachine, launch: this.chatLaunch })
           .layoutWeight(1)
       }
@@ -167,47 +147,45 @@ struct HomePage {
   }
 
   @Builder
-  narrowBody() {
-    if (this.tab === 1) {
-      FleetPane({
-        onOpen: () => {
-          router.pushUrl({ url: 'pages/RemoteChatPage' });
-        }
-      })
-        .layoutWeight(1)
-    } else {
-      LocalAgentPane({
-        wide: false,
-        onSettings: () => {
-          router.pushUrl({ url: 'pages/SettingsPage' });
-        }
-      })
-        .layoutWeight(1)
-    }
-  }
-
-  @Builder
   notesSheet() {
     Column() {
       Text('本次更新')
         .fontSize(13)
-        .fontColor(Tokens.muted)
+        .fontColor(Tokens.secondary)
       Text(this.notesTitle)
         .fontSize(22)
+        .fontWeight(FontWeight.Bold)
         .fontColor(Tokens.text)
-        .margin({ top: 8, bottom: 16 })
+        .margin({ top: 6, bottom: 18 })
       ForEach(this.notesLines, (line: string) => {
-        Text(line)
-          .fontSize(15)
-          .fontColor(Tokens.muted)
-          .margin({ bottom: 10 })
-      }, (line: string) => line)
-      Button('知道了')
+        Row() {
+          Column()
+            .width(6)
+            .height(6)
+            .borderRadius(3)
+            .backgroundColor(Tokens.accent)
+            .margin({ top: 9 })
+          Text(line)
+            .fontSize(15)
+            .lineHeight(23)
+            .fontColor(Tokens.text)
+            .margin({ left: 10 })
+            .layoutWeight(1)
+        }
         .width('100%')
-        .height(44)
-        .margin({ top: 12 })
-        .backgroundColor(Tokens.accent)
+        .alignItems(VerticalAlign.Top)
+        .margin({ bottom: 12 })
+      }, (line: string) => line)
+      Text('知道了')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
         .fontColor('#FFFFFF')
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .height(48)
+        .backgroundColor(Tokens.accent)
+        .borderRadius(24)
+        .margin({ top: 10 })
         .onClick(() => {
           const ctx = getContext(this) as common.UIAbilityContext;
           ReleaseNotesStore.markSeen(ctx).then(() => {
@@ -215,10 +193,11 @@ struct HomePage {
           });
         })
     }
-    .padding(20)
     .width('100%')
-    .backgroundColor(Tokens.surface)
+    .alignItems(HorizontalAlign.Start)
+    .padding({ left: 24, right: 24, top: 4, bottom: 28 })
   }
+
 
   private syncWide(width: number, height: number): void {
     this.wide = FoldLayout.isWide(width, height);

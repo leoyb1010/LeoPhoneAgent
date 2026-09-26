@@ -52,17 +52,18 @@ import { memoryStore } from '../store/MemoryStore';
 import { providerStore } from '../store/ProviderStore';
 import { LocalSession, sessionStore } from '../store/SessionStore';
 import { taskStatus } from '../store/TaskStatus';
-import { themeStore } from '../store/ThemeStore';
 import { usageStore } from '../store/UsageStore';
 
 const PKG = 'com.leoyuan.leophoneagent.harmony';
 
-function texts(messages: LocalChatMessage[]): TextLine[] {
+/** 会话消息 → 纯文本逻辑(AgentText)用的行。 */
+export function textLines(messages: LocalChatMessage[]): TextLine[] {
   return messages.map((row: LocalChatMessage) => {
     const line = new TextLine();
     line.role = row.role;
     line.text = row.text;
     line.kind = row.kind;
+    line.at = row.at;
     return line;
   });
 }
@@ -142,7 +143,7 @@ export class ChatRun {
     }
     this.title = session.title;
     this.lines = session.messages.slice();
-    this.interrupted = session.running || unfinishedTail(texts(session.messages));
+    this.interrupted = session.running || unfinishedTail(textLines(session.messages));
     this.status = this.interrupted ? '上一轮没做完,可以点「继续」' : '空闲';
     this.changed();
   }
@@ -325,7 +326,7 @@ export class ChatRun {
     if (!session) {
       return false;
     }
-    const all = texts(session.messages);
+    const all = textLines(session.messages);
     let at = compactCut(all, COMPACT_KEEP_USER_TURNS);
     if (at < 0 && manual) {
       at = compactCut(all, 1);
@@ -405,7 +406,7 @@ export class ChatRun {
       // 标记写不进去也照样跑,只是被杀后看不出没做完
     });
     let session = await sessionStore.get(this.context, this.sessionId);
-    if (session && historyChars(texts(session.messages)) > COMPACT_AT_CHARS) {
+    if (session && historyChars(textLines(session.messages)) > COMPACT_AT_CHARS) {
       await this.compact(false);
       if (gen !== this.runGen) {
         return;
@@ -425,7 +426,7 @@ export class ChatRun {
 
   /** 发给模型的历史:从最后一个摘要之后开始,摘要包进第一句用户消息;附件清单、没说完的标记、继续都在这里换成模型看的话。 */
   private historyTurns(messages: LocalChatMessage[]): LoopTurn[] {
-    const all = texts(messages);
+    const all = textLines(messages);
     const start = lastSummaryIndex(all);
     const out: LoopTurn[] = [];
     for (let i = start + 1; i < messages.length; i++) {
@@ -479,7 +480,7 @@ export class ChatRun {
     this.stopStream();
     if (this.rounds >= MAX_TOOL_ROUNDS) {
       const text = `一次任务最多 ${MAX_TOOL_ROUNDS} 轮工具,已经停下`;
-      this.push('system', text);
+      this.push('system', text, 'error');
       this.finish(gen, 'failed', text);
       return;
     }
@@ -521,9 +522,8 @@ export class ChatRun {
           assistant.content = turn.text;
           assistant.calls = turn.calls;
           this.loopTurns = this.loopTurns.concat([assistant]);
-          if (turn.text.length === 0) {
-            this.push('system', themeStore.toolPreview ? `工具 · ${turn.calls[0].name}` : '在用工具');
-          }
+          // 和存档里同一行:页面上画成工具胶囊,重开对话也一样
+          this.push('system', toolPlanLine(turn.calls.map((call: ToolCall) => call.name)));
           const calls = turn.calls;
           this.saveToolRound(turn.text, calls).then(() => {
             if (gen === this.runGen) {
@@ -551,7 +551,7 @@ export class ChatRun {
           return;
         }
         const shown = friendlyModelError(message);
-        this.push('system', shown);
+        this.push('system', shown, 'error');
         this.finish(gen, 'failed', shown);
       });
   }
@@ -581,9 +581,6 @@ export class ChatRun {
       if (gen !== this.runGen) {
         return;
       }
-      if (themeStore.toolPreview) {
-        this.push('system', `工具 · ${result.title || call.name}`);
-      }
       if (result.needWrite) {
         this.askWrite = true;
         this.active = false;
@@ -604,13 +601,14 @@ export class ChatRun {
       tool.imageB64 = result.imageB64;
       tool.imageMime = result.imageMime;
       this.loopTurns = this.loopTurns.concat([tool]);
-      this.push('system', result.text.length > 240 ? `${result.text.substring(0, 240)}…` : result.text);
-      sessionStore.append(this.context, this.sessionId, 'system', toolResultLine(call.name, result.text)).catch(() => {
+      const row = toolResultLine(call.name, result.text, result.title);
+      this.push('system', row);
+      sessionStore.append(this.context, this.sessionId, 'system', row).catch(() => {
         // 存档写不进去也接着跑
       });
       if (times >= LOOP_STOP_AT) {
         const text = `${call.name} 用同样的参数调用了 ${times} 次,已经停下`;
-        this.push('system', text);
+        this.push('system', text, 'error');
         this.cancelRun();
         this.finishNow('failed', text);
         return;
@@ -783,7 +781,7 @@ export class ChatRun {
     if (before !== '新任务' && before !== titleFromPrompt(firstUser)) {
       return;
     }
-    const excerpt = titleExcerpt(texts(session.messages));
+    const excerpt = titleExcerpt(textLines(session.messages));
     if (excerpt.length === 0) {
       return;
     }
@@ -871,6 +869,8 @@ export class ChatRun {
     next.imageB64 = last.imageB64;
     next.imageMime = last.imageMime;
     next.imagePath = last.imagePath;
+    next.kind = last.kind;
+    next.at = last.at;
     copy[copy.length - 1] = next;
     this.lines = copy;
     this.changed();
@@ -882,13 +882,16 @@ export class ChatRun {
     }
   }
 
-  private push(role: string, text: string): void {
+  /** 只在页面上显示、不存档的一行(工具行和存档里同一格式;kind 为 error 的画成红色错误条)。 */
+  private push(role: string, text: string, kind: string = ''): void {
     if (!text) {
       return;
     }
     const line = new LocalChatMessage();
     line.role = role;
     line.text = text;
+    line.kind = kind;
+    line.at = Date.now();
     this.lines = this.lines.concat([line]);
     this.changed();
   }

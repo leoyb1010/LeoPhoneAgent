@@ -7,6 +7,7 @@ export type LocalChatMessage = {
   kind?: string
   count?: number
   files?: string[]
+  at?: number
 }
 
 export type LocalSessionArchive = {
@@ -150,6 +151,7 @@ export function sessionArchiveFromJson(json: unknown): LocalSessionArchive | nul
       kind,
       count: Number(item.count ?? 0) || 0,
       files,
+      at: Number(item.at ?? 0) || 0,
     })
   }
   if (messages.length === 0) return null

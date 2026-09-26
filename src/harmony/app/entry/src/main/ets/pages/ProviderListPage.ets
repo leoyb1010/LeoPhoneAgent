@@ -3,6 +3,7 @@ import { router } from '@kit.ArkUI';
 import { kindByKey, providerKinds, ProviderKind } from '../local/ProviderCatalog';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
 import { IconCircle } from '../theme/Widgets';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -23,23 +24,14 @@ struct ProviderListPage {
 
   build() {
     Column() {
-      Row() {
-        Text('AI 服务商')
-          .fontSize(Tokens.title)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Tokens.text)
-        Blank()
-        Text('+ 添加')
-          .fontSize(14)
-          .fontColor(Tokens.link)
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/AddProviderPage' });
-          })
-      }
-      .width('100%')
-      .height(Tokens.topBar)
-      .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
-      Text('和 Fold8 一样：先选类型，再选 API Key 或 OAuth，再填模型和根。')
+      NavBar({
+        title: 'AI 服务商',
+        action: '添加',
+        onAction: () => {
+          router.pushUrl({ url: 'pages/AddProviderPage' });
+        }
+      })
+      Text('先选类型，再选 API Key 或 OAuth 登录，最后填模型和地址。')
         .fontSize(13)
         .fontColor(Tokens.muted)
         .width('100%')

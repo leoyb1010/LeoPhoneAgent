@@ -9,6 +9,7 @@ import { OAuthSession } from '../local/OAuthSession';
 import { skipUpstreamModels } from '../local/ProviderModels';
 import { OpenAICompatClient } from '../local/OpenAICompatClient';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -103,6 +104,7 @@ struct ProviderDetailPage {
   @Builder
   detail() {
     Column() {
+      NavBar({ title: '' })
       Scroll() {
         Column() {
           Text(this.label.length > 0 ? this.label : 'AI 服务商')

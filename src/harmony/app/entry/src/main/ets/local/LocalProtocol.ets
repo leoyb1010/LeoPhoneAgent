@@ -17,6 +17,8 @@ export class LocalChatMessage {
   count: number = 0;
   /** 随这句话附上的沙箱文件名(模型用 file_read / read_image 自己读,和 iOS、安卓一样只给清单)。 */
   files: string[] = [];
+  /** 什么时候说的(毫秒)。老档案里没有,是 0;工具胶囊和「已工作 N 步」的用时靠它。 */
+  at: number = 0;
 
   static pack(messages: LocalChatMessage[], systemPrompt: string): PackedTurn[] {
     const out: PackedTurn[] = [];
@@ -214,6 +216,7 @@ export function sessionArchiveFromJson(json: object): LocalSessionArchive | null
     const kind = `${item['kind'] ?? ''}`;
     line.kind = kind === 'summary' || kind === 'resume' || kind === 'partial' ? kind : '';
     line.count = Number(item['count'] ?? 0) || 0;
+    line.at = Number(item['at'] ?? 0) || 0;
     const files = item['files'];
     if (Array.isArray(files)) {
       for (let j = 0; j < files.length; j++) {
@@ -1165,17 +1168,18 @@ export function accessTokenFromJson(json: object): string {
   return `${(json as Record<string, Object>)['access_token'] ?? ''}`;
 }
 
+/** 思考强度的短写,配着灯泡图标显示(原来的「思考中」读起来像「正在思考」)。 */
 export function thinkingLabel(level: string): string {
   if (level === 'low') {
-    return '思考低';
+    return '低';
   }
   if (level === 'medium') {
-    return '思考中';
+    return '中';
   }
   if (level === 'high') {
-    return '思考高';
+    return '高';
   }
-  return '思考关';
+  return '关';
 }
 
 export const CODEX_RESPONSES_URL: string = 'https://chatgpt.com/backend-api/codex/responses';

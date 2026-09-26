@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { DEFAULT_API_ROOT, requireHttpsRoot, sanitizeKey } from '../net/Protocol';
 import { gatewayStore } from '../store/GatewayStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -25,12 +26,7 @@ struct RelayPage {
 
   build() {
     Column() {
-      Text('中继')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '中继' })
       Text('远程机器走这条中继。钥匙至少 16 位，不会写进配对码。')
         .fontSize(13)
         .fontColor(Tokens.muted)

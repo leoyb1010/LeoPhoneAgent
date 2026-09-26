@@ -13,7 +13,7 @@ struct RemoteChatPage {
 
   build() {
     Column() {
-      ChatPane({ machine: this.machine })
+      ChatPane({ machine: this.machine, showBack: true })
     }
     .width('100%')
     .height('100%')

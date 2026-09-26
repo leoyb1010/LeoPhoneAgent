@@ -1,5 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
+import { parseSkillMeta } from '../local/AgentText';
 
 export class SoulStore {
   text: string = '';
@@ -32,6 +33,11 @@ export class SoulStore {
     } finally {
       fileIo.closeSync(file);
     }
+  }
+
+  /** SOUL.md 的 --- 头里写的名字(回答头、「正在思考」用它,和 iOS 一样);没写返回空。 */
+  name(): string {
+    return parseSkillMeta(this.text, '').name;
   }
 
   promptBlock(): string {

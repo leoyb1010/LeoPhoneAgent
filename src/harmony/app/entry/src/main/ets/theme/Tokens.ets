@@ -1,23 +1,57 @@
+/**
+ * 颜色和尺寸。颜色对齐安卓 Theme.kt / ChatColors.kt(它们照着 iOS 系统色取的):
+ * 聊天页白底、设置这类分组页浅灰底配白卡片;强调色青绿;发送按钮黑白;链接和思考用系统蓝。
+ */
 export class Tokens {
   static bg: string = '#FFFFFF';
+  /** 设置这类分组页面的底色。 */
+  static grouped: string = '#F2F2F7';
+  /** 分组页上的白卡片。 */
+  static card: string = '#FFFFFF';
   static surface: string = '#F2F2F7';
   static surface2: string = '#E5E5EA';
+  static raised: string = '#F7F7FA';
+  static separator: string = '#D1D1D6';
   static input: string = '#FFFFFF';
   static accent: string = '#2E8B8B';
+  static accentSoft: string = '#1F2E8B8B';
   static fab: string = '#B7AF96';
   static heroA: string = '#6157F5';
   static heroB: string = '#18BFD0';
   static text: string = '#000000';
+  static secondary: string = '#993C3C43';
   static muted: string = '#8E8E93';
-  static online: string = '#30D158';
-  static warn: string = '#FF9F0A';
+  static online: string = '#34C759';
+  static warn: string = '#FF9500';
+  static danger: string = '#FF3B30';
   static link: string = '#007AFF';
-  static userBubble: string = '#E8E8ED';
+  static userBubble: string = '#1F787880';
   static userText: string = '#000000';
   static send: string = '#000000';
   static sendGlyph: string = '#FFFFFF';
+  static sendOff: string = '#C7C7CC';
+  static toolCapsule: string = '#F2F2F7';
+  static codeBg: string = '#000000';
+  static codeText: string = '#34C759';
+  static inlineCodeBg: string = '#F2F2F7';
+  static inlineCodeText: string = '#FF9500';
+  static errorTint: string = '#1FFF3B30';
+  static warnTint: string = '#1FFF9500';
+  static composer: string = '#FFFFFF';
+  /** 卡片里的芯片、圆按钮(深色时卡片本身就是 #1C1C1E,要再亮一档才看得见)。 */
+  static chip: string = '#F2F2F7';
+  static composerShadow: string = '#1A000000';
+  static sparkleA: string = '#B8B096';
+  static sparkleB: string = '#99998C';
   static dividerColor: string = '#4D3C3C43';
+  static dark: boolean = false;
+  /** 宽度到这个值(vp)就左右分栏:平板横竖、折叠屏展开都算(原来还要求横着拿,展开的折叠屏近似正方形、略高,一直是被拉宽的手机版)。 */
   static readonly wideBreak: number = 600;
+  /** 再宽(大平板、三折叠全展开):列表固定宽,正文限宽。 */
+  static readonly largeBreak: number = 840;
+  static readonly listWide: number = 360;
+  /** 正文最宽多少,再宽读着累(iOS 可读宽度 800pt)。 */
+  static readonly readable: number = 760;
   static readonly tallBreak: number = 480;
   static readonly pagePad: number = 16;
   static readonly rowHPad: number = 16;
@@ -26,28 +60,33 @@ export class Tokens {
   static readonly iconCircle: number = 44;
   static readonly iconGlyph: number = 20;
   static readonly settingsIcon: number = 30;
-  static readonly settingsGlyph: number = 16;
+  static readonly settingsGlyph: number = 17;
   static readonly fabSize: number = 56;
   static readonly fabGlyph: number = 24;
   static readonly fabPadH: number = 16;
   static readonly fabPadV: number = 20;
-  static readonly searchField: number = 48;
+  static readonly searchField: number = 44;
   static readonly title: number = 20;
+  static readonly largeTitle: number = 30;
   static readonly welcome: number = 27;
+  static readonly body: number = 16;
   static readonly rowTitle: number = 16;
   static readonly rowSub: number = 14;
   static readonly section: number = 14;
   static readonly time: number = 13;
+  static readonly caption: number = 12;
   static readonly pill: number = 12;
-  static readonly topBar: number = 44;
-  static readonly chatBar: number = 68;
+  static readonly topBar: number = 52;
+  static readonly chatBar: number = 56;
   static readonly composerH: number = 44;
-  static readonly sendSize: number = 40;
-  static readonly bubbleMax: string = '78%';
+  static readonly sendSize: number = 34;
+  static readonly bubbleMax: string = '80%';
   static readonly bubbleRadius: number = 18;
   static readonly cardRadius: number = 16;
+  static readonly groupRadius: number = 14;
   static readonly settingsRadius: number = 12;
   static readonly composerRadius: number = 20;
+  static readonly capsule: number = 36;
   static readonly hero: number = 72;
   static readonly heroRadius: number = 23;
   static readonly heroGlyph: number = 32;
@@ -58,38 +97,84 @@ export class Tokens {
   static readonly chatMark: string = '#34C759';
   static readonly pinBadge: number = 14;
   static readonly divider: number = 1;
+  static readonly hairline: number = 0.5;
 
   static apply(dark: boolean): void {
+    Tokens.dark = dark;
     if (dark) {
       Tokens.bg = '#000000';
-      Tokens.surface = '#26262A';
-      Tokens.surface2 = '#2C2C30';
-      Tokens.input = '#2C2C30';
+      Tokens.grouped = '#000000';
+      Tokens.card = '#1C1C1E';
+      Tokens.surface = '#1C1C1E';
+      Tokens.surface2 = '#2C2C2E';
+      Tokens.raised = '#2C2C2E';
+      Tokens.separator = '#38383A';
+      Tokens.input = '#1C1C1E';
       Tokens.accent = '#4DD9D9';
+      Tokens.accentSoft = '#264DD9D9';
       Tokens.fab = '#504C42';
       Tokens.text = '#FFFFFF';
+      Tokens.secondary = '#99EBEBF5';
       Tokens.muted = '#8E8E93';
+      Tokens.online = '#30D158';
+      Tokens.warn = '#FF9F0A';
+      Tokens.danger = '#FF453A';
       Tokens.link = '#0A84FF';
       Tokens.userBubble = '#2F3A5C';
       Tokens.userText = '#FFFFFF';
       Tokens.send = '#FFFFFF';
       Tokens.sendGlyph = '#000000';
+      Tokens.sendOff = '#3A3A3C';
+      Tokens.toolCapsule = '#28282C';
+      Tokens.codeBg = '#262626';
+      Tokens.codeText = '#8CF38C';
+      Tokens.inlineCodeBg = '#2C2C2E';
+      Tokens.inlineCodeText = '#FF9F0A';
+      Tokens.errorTint = '#26FF453A';
+      Tokens.warnTint = '#26FF9F0A';
+      Tokens.composer = '#1C1C1E';
+      Tokens.chip = '#2C2C2E';
+      Tokens.composerShadow = '#00000000';
+      Tokens.sparkleA = '#8E8A7A';
+      Tokens.sparkleB = '#6E6E66';
       Tokens.dividerColor = '#99545458';
       return;
     }
     Tokens.bg = '#FFFFFF';
+    Tokens.grouped = '#F2F2F7';
+    Tokens.card = '#FFFFFF';
     Tokens.surface = '#F2F2F7';
     Tokens.surface2 = '#E5E5EA';
+    Tokens.raised = '#F7F7FA';
+    Tokens.separator = '#D1D1D6';
     Tokens.input = '#FFFFFF';
     Tokens.accent = '#2E8B8B';
+    Tokens.accentSoft = '#1F2E8B8B';
     Tokens.fab = '#B7AF96';
     Tokens.text = '#000000';
+    Tokens.secondary = '#993C3C43';
     Tokens.muted = '#8E8E93';
+    Tokens.online = '#34C759';
+    Tokens.warn = '#FF9500';
+    Tokens.danger = '#FF3B30';
     Tokens.link = '#007AFF';
-    Tokens.userBubble = '#E8E8ED';
+    Tokens.userBubble = '#1F787880';
     Tokens.userText = '#000000';
     Tokens.send = '#000000';
     Tokens.sendGlyph = '#FFFFFF';
+    Tokens.sendOff = '#C7C7CC';
+    Tokens.toolCapsule = '#F2F2F7';
+    Tokens.codeBg = '#000000';
+    Tokens.codeText = '#34C759';
+    Tokens.inlineCodeBg = '#F2F2F7';
+    Tokens.inlineCodeText = '#FF9500';
+    Tokens.errorTint = '#1FFF3B30';
+    Tokens.warnTint = '#1FFF9500';
+    Tokens.composer = '#FFFFFF';
+    Tokens.chip = '#F2F2F7';
+    Tokens.composerShadow = '#1A000000';
+    Tokens.sparkleA = '#B8B096';
+    Tokens.sparkleB = '#99998C';
     Tokens.dividerColor = '#4D3C3C43';
   }
 }

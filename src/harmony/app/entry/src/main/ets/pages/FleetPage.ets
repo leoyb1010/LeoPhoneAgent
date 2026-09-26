@@ -8,6 +8,7 @@ struct FleetPage {
   build() {
     Column() {
       FleetPane({
+        showBack: true,
         onOpen: () => {
           router.pushUrl({ url: 'pages/RemoteChatPage' });
         }

@@ -1,22 +1,41 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
-import { LocalChatLaunch, LocalChatPane } from './LocalChatPane';
-import { ChatRuns } from '../local/ChatRun';
+import { FirstMessage, LocalChatLaunch, LocalChatPane } from './LocalChatPane';
+import { Attachments } from '../chat/Attachments';
+import { Composer } from '../chat/Composer';
+import { ChatRuns, PendingImage } from '../local/ChatRun';
 import { FastLocalActions } from '../local/FastLocalActions';
 import { relativeTime } from '../local/LocalProtocol';
+import { SensitiveToolGate } from '../local/SensitiveToolGate';
 import { sessionStore, LocalSession, LocalSessionSummary, SessionGroup } from '../store/SessionStore';
 import { providerStore, ProviderLaunch } from '../store/ProviderStore';
 import { taskStatus } from '../store/TaskStatus';
 import { themeStore } from '../store/ThemeStore';
 import { Copy } from '../theme/Copy';
-import { IconBtn, IconCircle, SysIcon } from '../theme/Widgets';
+import { Sym } from '../theme/Symbols';
 import { Tokens } from '../theme/Tokens';
 
+/** 对话头像的颜色:按标题挑一个,同一个对话每次一样。 */
+const AVATAR_COLORS: string[] = ['#2E8B8B', '#5B7CFA', '#8E6CEF', '#F08A24', '#E5577A', '#34A853', '#0FA3C8'];
+
+function avatarColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = (hash * 31 + title.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+/**
+ * 首页:本机对话列表。和 iOS / 安卓一样,顶上是设置、搜索、远程;按置顶 / 今天 / 昨天…分组;
+ * 手机上最下面是一个输入框,说一句就开新对话。展开的折叠屏、平板上左边是列表、右边是对话。
+ */
 @Component
 export struct LocalAgentPane {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
   @StorageProp('taskTick') @Watch('onTaskTick') taskTick: number = 0;
+  @StorageProp('approvalTick') approvalTick: number = 0;
   /** 点通知回来要打开的对话(EntryAbility 放进来,用完清空)。 */
   @StorageProp('openSession') @Watch('onOpenSession') openRequest: string = '';
   /** 正在跑(或等你确认)的对话:列表里标出来。 */
@@ -38,6 +57,10 @@ export struct LocalAgentPane {
   @State menuId: string = '';
   @State menuTitle: string = '';
   @State menuPinned: boolean = false;
+  @State draft: string = '';
+  @State homeFiles: string[] = [];
+  @State homeImagePath: string = '';
+  private homeImage: PendingImage | null = null;
   private launched: boolean = false;
 
   aboutToAppear(): void {
@@ -74,13 +97,18 @@ export struct LocalAgentPane {
         Column() {
           this.listColumn()
         }
-        .layoutWeight(1)
+        .width(this.listWidth())
+        .height('100%')
         Column()
-          .width(Tokens.divider)
+          .width(Tokens.hairline)
           .height('100%')
-          .backgroundColor(Tokens.surface2)
-        LocalChatPane({ sessionId: this.sessionId, compact: true })
-          .layoutWeight(1)
+          .backgroundColor(Tokens.separator)
+        if (this.sessionId.length > 0) {
+          LocalChatPane({ sessionId: this.sessionId, compact: true })
+            .layoutWeight(1)
+        } else {
+          this.pickHint()
+        }
       }
       .width('100%')
       .height('100%')
@@ -91,42 +119,82 @@ export struct LocalAgentPane {
 
   @Builder
   listColumn() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-        if (this.wide) {
-          this.wideHeader()
-        }
-        if (this.message.length > 0) {
-          Text(this.message)
-            .fontSize(Tokens.time)
-            .fontColor(Tokens.warn)
-            .width('100%')
-            .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
-        }
-        Scroll() {
-          Column() {
-            this.homeCards()
-            if (this.groups.length === 0) {
-              this.emptyState()
+    Column() {
+      this.topBar()
+      if (this.searchOpen) {
+        this.searchBar()
+      }
+      if (this.message.length > 0) {
+        Text(this.message)
+          .fontSize(Tokens.time)
+          .fontColor(Tokens.warn)
+          .width('100%')
+          .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 6 })
+      }
+      Scroll() {
+        Column() {
+          if (!this.configured && this.ready) {
+            this.onboarding()
+          } else {
+            this.statusChips()
+            if (this.groups.length === 0 && this.ready) {
+              this.emptyList()
             } else {
               ForEach(this.groups, (group: SessionGroup) => {
                 this.section(group)
-              }, (group: SessionGroup) => group.key)
+              }, (group: SessionGroup) => `${group.key}:${group.rows.length}`)
             }
           }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding({ bottom: 96 })
         }
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .align(Alignment.Top)
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding({ bottom: 24 })
       }
-      .width('100%')
-      .height('100%')
-
-      if (this.ready && this.configured && (this.hasSessions() || this.searchOpen)) {
-        this.fabRow()
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
+      .edgeEffect(EdgeEffect.Spring)
+      if (!this.wide && this.configured) {
+        Column() {
+          Composer({
+            draft: $draft,
+            placeholder: '问 Leo，或直接说要做的事',
+            modelLabel: this.modelLine,
+            showApproval: true,
+            fullAuto: SensitiveToolGate.fullAuto && this.approvalTick >= 0,
+            files: this.homeFiles,
+            imagePath: this.homeImagePath,
+            returnSend: themeStore.returnSend,
+            onSend: () => {
+              this.sendFromHome();
+            },
+            onPickImage: () => {
+              this.pickHomeImage();
+            },
+            onPickFiles: () => {
+              this.pickHomeFiles();
+            },
+            onSlash: () => {
+              this.draft = '/';
+            },
+            onModel: () => {
+              this.openModelPick();
+            },
+            onApproval: () => {
+              const ctx = getContext(this) as common.UIAbilityContext;
+              SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
+            },
+            onRemoveFile: (index: number) => {
+              this.homeFiles = this.homeFiles.filter((_name: string, i: number) => i !== index);
+            },
+            onRemoveImage: () => {
+              this.homeImage = null;
+              this.homeImagePath = '';
+            }
+          })
+        }
+        .width('100%')
+        .padding({ left: 10, right: 10, top: 4, bottom: 10 })
       }
     }
     .width('100%')
@@ -134,7 +202,8 @@ export struct LocalAgentPane {
     .backgroundColor(Tokens.bg)
     .bindSheet($$this.importOpen, this.importSheet(), {
       height: SheetSize.FIT_CONTENT,
-      dragBar: true
+      dragBar: true,
+      title: { title: '导入对话' }
     })
     .bindSheet($$this.menuOpen, this.menuSheet(), {
       height: SheetSize.FIT_CONTENT,
@@ -143,125 +212,189 @@ export struct LocalAgentPane {
   }
 
   @Builder
-  wideHeader() {
+  topBar() {
     Row() {
-      Text('Leo')
-        .fontSize(Tokens.title)
+      // 分栏时这一列窄,设置收进 ··· 菜单,给标题留地方
+      if (!this.wide) {
+        this.barIcon('gearshape', () => {
+          this.onSettings();
+        })
+      }
+      Text(this.wide ? '对话' : 'LeoPhoneAgent')
+        .fontSize(this.wide ? 20 : 19)
         .fontWeight(FontWeight.Bold)
         .fontColor(Tokens.text)
-      Blank()
-      Text('导入')
-        .fontSize(Tokens.time)
-        .fontColor(Tokens.accent)
-        .margin({ right: 14 })
-        .onClick(() => {
-          this.importOpen = true;
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .margin({ left: this.wide ? 10 : 4 })
+        .layoutWeight(1)
+      if (this.configured) {
+        this.barIcon('magnifyingglass', () => {
+          this.searchOpen = !this.searchOpen;
+          if (!this.searchOpen) {
+            this.query = '';
+            this.groups = sessionStore.grouped('');
+          }
         })
-      Text('远程')
-        .fontSize(14)
-        .fontColor(Tokens.muted)
-        .margin({ right: 14 })
-        .onClick(() => {
-          this.onRemote();
+      }
+      this.barIcon('computer', () => {
+        this.onRemote();
+      })
+      if (this.wide && this.configured) {
+        this.barIcon('square_and_pencil', () => {
+          this.createSession();
         })
-      this.settingsDot()
+      }
+      Stack() {
+        Sym({ name: 'ellipsis_circle', dim: 21, color: Tokens.text })
+      }
+      .width(40)
+      .height(40)
+      .bindMenu(this.wide ? [
+        {
+          value: '设置',
+          action: () => {
+            this.onSettings();
+          }
+        },
+        {
+          value: '导入对话',
+          action: () => {
+            this.importOpen = true;
+          }
+        }
+      ] : [
+        {
+          value: '新对话',
+          action: () => {
+            this.createSession();
+          }
+        },
+        {
+          value: '导入对话',
+          action: () => {
+            this.importOpen = true;
+          }
+        }
+      ])
     }
     .width('100%')
     .height(Tokens.topBar)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+    .padding({ left: 6, right: 8 })
   }
 
   @Builder
-  settingsDot() {
-    IconBtn({
-      name: 'more',
-      box: Tokens.settingsIcon,
-      glyph: Tokens.settingsGlyph,
-      color: Tokens.accent,
-      fill: Tokens.surface2,
-      onTap: () => {
-        this.onSettings();
-      }
+  barIcon(name: string, tap: () => void) {
+    Stack() {
+      Sym({ name: name, dim: 20, color: Tokens.text })
+    }
+    .width(40)
+    .height(40)
+    .onClick(() => {
+      tap();
     })
   }
 
   @Builder
-  fabRow() {
+  searchBar() {
     Row() {
-      this.plusFab()
-      if (this.searchOpen) {
+      Row() {
+        Sym({ name: 'magnifyingglass', dim: 15, color: Tokens.muted })
         TextInput({ placeholder: Copy.searchPlaceholder, text: this.query })
           .onChange((value: string) => {
             this.query = value;
             this.groups = sessionStore.grouped(this.query);
           })
-          .height(Tokens.searchField)
           .layoutWeight(1)
-          .margin({ left: 10, right: 10 })
-          .backgroundColor(Tokens.surface)
+          .height(36)
+          .fontSize(15)
+          .backgroundColor('#00000000')
           .fontColor(Tokens.text)
           .placeholderColor(Tokens.muted)
-          .borderRadius(Tokens.searchField / 2)
-        Stack() {
-          SysIcon({
-            name: 'close',
-            dim: 20,
-            color: Tokens.muted
-          })
-        }
-        .width(Tokens.fabSize)
-        .height(Tokens.fabSize)
+          .padding({ left: 6 })
+      }
+      .layoutWeight(1)
+      .height(38)
+      .padding({ left: 10, right: 6 })
+      .backgroundColor(Tokens.surface)
+      .borderRadius(19)
+      Text('取消')
+        .fontSize(15)
+        .fontColor(Tokens.accent)
+        .margin({ left: 12 })
         .onClick(() => {
           this.query = '';
           this.searchOpen = false;
           this.groups = sessionStore.grouped('');
         })
-      } else if (this.hasSessions()) {
-        this.searchFab()
-      }
     }
     .width('100%')
-    .justifyContent(FlexAlign.SpaceBetween)
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: Tokens.fabPadH, right: Tokens.fabPadH, top: Tokens.fabPadV, bottom: Tokens.fabPadV })
+    .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
   }
 
+  /** 进行中、等你批准、手电筒:一排小胶囊(安卓首页的主动卡、iOS 的「N 个会话等你处理」)。 */
   @Builder
-  plusFab() {
-    Stack() {
-      Column()
-        .width(Tokens.fabSize)
-        .height(Tokens.fabSize)
-        .borderRadius(Tokens.fabSize / 2)
-        .backgroundColor(Tokens.fab)
-        .shadow({ radius: 8, color: '#33000000', offsetY: 4 })
-      SysIcon({
-        name: 'add',
-        dim: Tokens.fabGlyph,
-        color: '#FFFFFF'
-      })
+  statusChips() {
+    if (taskStatus.cardsEnabled && this.taskTick >= 0) {
+      Scroll() {
+        Row() {
+          if (this.activeIds.length > 0) {
+            this.chip('dot', `进行中 · ${this.activeIds.length}`, Tokens.accent, () => {
+              this.openSession(this.activeIds[0]);
+            })
+          }
+          if (taskStatus.pendingWrite) {
+            this.chip('hand', '等你批准', Tokens.warn, () => {
+              const id = this.lastSessionId();
+              if (id.length > 0) {
+                this.openSession(id);
+              }
+            })
+          }
+          this.chip('flashlight_on_fill', taskStatus.torchOn ? Copy.cardTorchOff : Copy.cardTorchOn,
+            taskStatus.torchOn ? Tokens.warn : Tokens.secondary, () => {
+              const ctx = getContext(this) as common.UIAbilityContext;
+              FastLocalActions.setTorch(ctx, !taskStatus.torchOn).catch(() => {
+                // 开不了就算了
+              });
+            })
+        }
+        .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+      }
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .align(Alignment.Start)
+      .margin({ top: 2, bottom: 6 })
     }
-    .width(Tokens.fabSize)
-    .height(Tokens.fabSize)
-    .onClick(() => {
-      this.createSession();
-    })
   }
 
   @Builder
-  searchFab() {
-    Text('搜索')
-      .fontSize(15)
-      .fontColor(Tokens.text)
-      .fontWeight(FontWeight.Medium)
-      .padding({ left: 18, right: 18, top: 12, bottom: 12 })
-      .backgroundColor(Tokens.surface)
-      .borderRadius(22)
-      .shadow({ radius: 6, color: '#26000000', offsetY: 3 })
-      .onClick(() => {
-        this.searchOpen = true;
-      })
+  chip(icon: string, label: string, color: string, tap: () => void) {
+    Row() {
+      if (icon === 'dot') {
+        Column()
+          .width(7)
+          .height(7)
+          .borderRadius(3.5)
+          .backgroundColor(color)
+      } else {
+        Sym({ name: icon, dim: 13, color: color })
+      }
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(icon === 'dot' ? color : Tokens.text)
+        .margin({ left: 6 })
+    }
+    .height(32)
+    .padding({ left: 12, right: 12 })
+    .backgroundColor(Tokens.surface)
+    .borderRadius(16)
+    .margin({ right: 8 })
+    .onClick(() => {
+      tap();
+    })
   }
 
   @Builder
@@ -269,46 +402,50 @@ export struct LocalAgentPane {
     Column() {
       Row() {
         if (group.key === 'pinned') {
-          Text('📌')
-            .fontSize(Tokens.section)
+          Sym({ name: 'pin_fill', dim: 12, color: Tokens.secondary })
             .margin({ right: 4 })
         }
         Text(group.title)
-          .fontSize(Tokens.section)
+          .fontSize(13)
           .fontWeight(FontWeight.Medium)
+          .fontColor(Tokens.secondary)
+        Text(`${group.rows.length}`)
+          .fontSize(12)
           .fontColor(Tokens.muted)
+          .margin({ left: 6 })
       }
       .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .padding({
-        left: Tokens.pagePad,
-        right: Tokens.pagePad,
-        top: 16,
-        bottom: 8
-      })
-      Column() {
-        ForEach(group.rows, (row: LocalSessionSummary) => {
-          this.sessionRow(row)
-        }, (row: LocalSessionSummary) => row.id)
-      }
-      .width('100%')
-      .backgroundColor(Tokens.surface)
-      .borderRadius(Tokens.cardRadius)
-      .clip(true)
-      .margin({ left: Tokens.pagePad, right: Tokens.pagePad })
+      .padding({ left: Tokens.pagePad + 4, right: Tokens.pagePad, top: 14, bottom: 4 })
+      ForEach(group.rows, (row: LocalSessionSummary) => {
+        this.sessionRow(row)
+      }, (row: LocalSessionSummary) => `${row.id}:${row.title}:${row.updatedAt}:${row.pinned}`)
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   sessionRow(row: LocalSessionSummary) {
     Row() {
-      IconCircle({
-        color: Tokens.chatMark,
-        icon: 'email',
-        pinned: row.pinned
-      })
+      Stack() {
+        Column()
+          .width(Tokens.iconCircle)
+          .height(Tokens.iconCircle)
+          .borderRadius(Tokens.iconCircle / 2)
+          .backgroundColor(avatarColor(row.title))
+          .opacity(0.16)
+        Text(row.title.length > 0 ? row.title.substring(0, 1) : '新')
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(avatarColor(row.title))
+        if (this.activeIds.indexOf(row.id) >= 0) {
+          LoadingProgress()
+            .width(Tokens.iconCircle + 6)
+            .height(Tokens.iconCircle + 6)
+            .color(Tokens.accent)
+        }
+      }
+      .width(Tokens.iconCircle + 6)
+      .height(Tokens.iconCircle + 6)
       Column() {
         Text(row.title)
           .fontSize(Tokens.rowTitle)
@@ -316,30 +453,34 @@ export struct LocalAgentPane {
           .fontColor(Tokens.text)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(row.lastMessage.length > 0 ? row.lastMessage : '还没有消息')
+        Text(row.lastMessage.length > 0 ? row.lastMessage : '暂无消息')
           .fontSize(Tokens.rowSub)
-          .fontColor(Tokens.muted)
+          .fontColor(Tokens.secondary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ top: 1 })
+          .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)
-      .margin({ left: Tokens.rowGap })
+      .margin({ left: 10 })
       .layoutWeight(1)
-      Text(this.activeIds.indexOf(row.id) >= 0 ? '进行中' : relativeTime(row.updatedAt))
-        .fontSize(Tokens.time)
-        .fontColor(this.activeIds.indexOf(row.id) >= 0 ? Tokens.online : Tokens.muted)
-        .margin({ left: 8 })
+      Column() {
+        Text(this.activeIds.indexOf(row.id) >= 0 ? '进行中' : relativeTime(row.updatedAt))
+          .fontSize(Tokens.time)
+          .fontColor(this.activeIds.indexOf(row.id) >= 0 ? Tokens.accent : Tokens.muted)
+        if (row.pinned) {
+          Sym({ name: 'pin_fill', dim: 11, color: Tokens.muted })
+            .margin({ top: 6 })
+        }
+      }
+      .alignItems(HorizontalAlign.End)
+      .margin({ left: 8 })
     }
-    .width('100%')
-    .alignItems(VerticalAlign.Center)
-    .padding({
-      left: 14,
-      right: 14,
-      top: Tokens.rowVPad,
-      bottom: Tokens.rowVPad
-    })
-    .backgroundColor(this.sessionId === row.id ? Tokens.surface2 : '#00000000')
+    .width(this.wide ? 'calc(100% - 16vp)' : '100%')
+    .height(70)
+    .padding({ left: this.wide ? 6 : 10, right: this.wide ? 10 : 16 })
+    .margin({ left: this.wide ? 8 : 0, right: this.wide ? 8 : 0 })
+    .backgroundColor(this.wide && this.sessionId === row.id ? Tokens.surface : '#00000000')
+    .borderRadius(this.wide ? 14 : 0)
     .gesture(
       LongPressGesture({ repeat: false })
         .onAction(() => {
@@ -355,56 +496,81 @@ export struct LocalAgentPane {
   }
 
   @Builder
-  homeCards() {
-    if (taskStatus.cardsEnabled) {
-      Column() {
-        if (taskStatus.running) {
-          this.cardLine(Copy.cardRunning, () => {
-            const id = this.lastSessionId();
-            if (id.length > 0) {
-              this.openSession(id);
-            }
-          })
-        }
-        if (taskStatus.pendingWrite) {
-          this.cardLine(Copy.cardPending, () => {
-            const id = this.lastSessionId();
-            if (id.length > 0) {
-              this.openSession(id);
-            }
-          })
-        }
-        this.cardLine(taskStatus.torchOn ? Copy.cardTorchOff : Copy.cardTorchOn, () => {
-          const ctx = getContext(this) as common.UIAbilityContext;
-          FastLocalActions.setTorch(ctx, !taskStatus.torchOn).catch(() => {
-            // keep the card
-          });
-        })
+  emptyList() {
+    Column() {
+      Stack() {
+        Column()
+          .width(64)
+          .height(64)
+          .borderRadius(32)
+          .backgroundColor(Tokens.accentSoft)
+        Sym({ name: 'wand_and_stars_fill', dim: 28, color: Tokens.accent })
+      }
+      .width(64)
+      .height(64)
+      Text('有什么要我做的？')
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Tokens.text)
+        .margin({ top: 14 })
+      Text('在下面说一句就开始，也可以试试：')
+        .fontSize(14)
+        .fontColor(Tokens.secondary)
+        .margin({ top: 6, bottom: 16 })
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center }) {
+        this.suggestion('整理今天要做的事')
+        this.suggestion('查一下明天的天气')
+        this.suggestion('搜一搜最新的新闻')
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 8, bottom: 4 })
     }
+    .width('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ left: 24, right: 24, top: 64 })
   }
 
   @Builder
-  cardLine(title: string, onTap: () => void) {
-    Text(title)
-      .fontSize(15)
-      .fontWeight(FontWeight.Medium)
+  suggestion(text: string) {
+    Text(text)
+      .fontSize(14)
       .fontColor(Tokens.text)
-      .width('100%')
-      .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+      .padding({ left: 14, right: 14, top: 8, bottom: 8 })
       .backgroundColor(Tokens.surface)
-      .borderRadius(Tokens.cardRadius)
-      .margin({ bottom: 8 })
+      .borderRadius(18)
+      .margin(4)
       .onClick(() => {
-        onTap();
+        this.draft = text;
       })
   }
 
   @Builder
-  emptyState() {
+  pickHint() {
+    Column() {
+      Sym({ name: 'text_bubble_left_2', dim: 40, color: Tokens.muted })
+      Text('选一个对话，或新建一个')
+        .fontSize(16)
+        .fontColor(Tokens.secondary)
+        .margin({ top: 12 })
+      Text('新对话')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#FFFFFF')
+        .padding({ left: 18, right: 18, top: 9, bottom: 9 })
+        .backgroundColor(Tokens.accent)
+        .borderRadius(20)
+        .margin({ top: 16 })
+        .onClick(() => {
+          this.createSession();
+        })
+    }
+    .layoutWeight(1)
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(Tokens.bg)
+  }
+
+  @Builder
+  onboarding() {
     Column() {
       Stack() {
         Column()
@@ -415,25 +581,22 @@ export struct LocalAgentPane {
             angle: 135,
             colors: [[Tokens.heroA, 0], [Tokens.heroB, 1]]
           })
-        Text('本')
-          .fontSize(Tokens.heroGlyph)
-          .fontColor('#FFFFFF')
-          .fontWeight(FontWeight.Bold)
+        Sym({ name: 'wand_and_stars_fill', dim: 32, color: '#FFFFFF' })
       }
       .width(Tokens.hero)
       .height(Tokens.hero)
       .margin({ bottom: 20 })
-
       Text(Copy.welcomeTitle)
         .fontSize(Tokens.welcome)
         .fontWeight(FontWeight.Bold)
         .fontColor(Tokens.text)
         .textAlign(TextAlign.Center)
       Text(Copy.welcomeSubtitle)
-        .fontSize(14)
-        .fontColor(Tokens.muted)
+        .fontSize(15)
+        .lineHeight(22)
+        .fontColor(Tokens.secondary)
         .textAlign(TextAlign.Center)
-        .margin({ top: 8, bottom: 26 })
+        .margin({ top: 8, bottom: 22 })
       Row() {
         Column()
           .width(7)
@@ -442,25 +605,39 @@ export struct LocalAgentPane {
           .backgroundColor(Tokens.stepGreen)
         Text(Copy.localRuntime)
           .fontSize(Tokens.pill)
-          .fontColor(Tokens.muted)
+          .fontColor(Tokens.secondary)
           .fontWeight(FontWeight.Medium)
           .margin({ left: 7 })
       }
       .padding({ left: 12, right: 12, top: 7, bottom: 7 })
       .backgroundColor(Tokens.surface)
       .borderRadius(50)
-      .margin({ bottom: 22 })
-      this.stepCard('1', Copy.step1, this.configured ? Copy.stepDone : Copy.step1sub, this.configured, false)
-      this.stepCard('2', Copy.step2, this.step2Sub(), false, !this.configured)
-      this.stepCard('3', Copy.step3, this.configured ? Copy.step3sub : Copy.stepLocked, false, !this.configured)
+      .margin({ bottom: 24 })
+      Column() {
+        this.stepRow('1', Copy.step1, this.configured ? Copy.stepDone : Copy.step1sub, this.configured, false)
+        Divider()
+          .strokeWidth(Tokens.hairline)
+          .color(Tokens.separator)
+          .margin({ left: 66 })
+        this.stepRow('2', Copy.step2, this.step2Sub(), false, !this.configured)
+        Divider()
+          .strokeWidth(Tokens.hairline)
+          .color(Tokens.separator)
+          .margin({ left: 66 })
+        this.stepRow('3', Copy.step3, this.configured ? Copy.step3sub : Copy.stepLocked, false, !this.configured)
+      }
+      .width('100%')
+      .backgroundColor(Tokens.surface)
+      .borderRadius(Tokens.cardRadius)
     }
     .width('100%')
+    .constraintSize({ maxWidth: 560 })
     .alignItems(HorizontalAlign.Center)
-    .padding({ left: 24, right: 24, top: this.wide ? 24 : 22, bottom: 48 })
+    .padding({ left: 24, right: 24, top: this.wide ? 24 : 36, bottom: 48 })
   }
 
   @Builder
-  stepCard(index: string, title: string, subtitle: string, done: boolean, locked: boolean) {
+  stepRow(index: string, title: string, subtitle: string, done: boolean, locked: boolean) {
     Row() {
       Stack() {
         Column()
@@ -468,10 +645,14 @@ export struct LocalAgentPane {
           .height(Tokens.stepIcon)
           .borderRadius(Tokens.stepRadius)
           .backgroundColor(done ? Tokens.stepGreen : (locked ? Tokens.surface2 : Tokens.heroA))
-        Text(done ? '✓' : index)
-          .fontSize(15)
-          .fontColor('#FFFFFF')
-          .fontWeight(FontWeight.Medium)
+        if (done) {
+          Sym({ name: 'checkmark', dim: 16, color: '#FFFFFF' })
+        } else {
+          Text(index)
+            .fontSize(15)
+            .fontColor(locked ? Tokens.muted : '#FFFFFF')
+            .fontWeight(FontWeight.Medium)
+        }
       }
       .width(Tokens.stepIcon)
       .height(Tokens.stepIcon)
@@ -479,29 +660,22 @@ export struct LocalAgentPane {
         Text(title)
           .fontSize(Tokens.rowTitle)
           .fontWeight(FontWeight.Medium)
-          .fontColor(done ? Tokens.muted : Tokens.text)
+          .fontColor(locked ? Tokens.muted : Tokens.text)
         Text(subtitle)
-          .fontSize(12)
+          .fontSize(12.5)
           .fontColor(Tokens.muted)
           .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
-      .height(52)
       .margin({ left: 14 })
       .layoutWeight(1)
       if (!done && !locked) {
-        Text('›')
-          .fontSize(18)
-          .fontColor(Tokens.muted)
+        Sym({ name: 'chevron_right', dim: 13, color: Tokens.muted })
       }
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-    .margin({ bottom: 10 })
-    .backgroundColor(Tokens.surface)
-    .borderRadius(18)
-    .opacity(locked ? 0.55 : 1)
+    .height(68)
+    .padding({ left: 14, right: 14 })
     .onClick(() => {
       if (index === '1') {
         this.onSettings();
@@ -516,101 +690,138 @@ export struct LocalAgentPane {
   @Builder
   importSheet() {
     Column() {
-      Text('导入对话')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .margin({ bottom: 10 })
-      Text('只接受带 messages 的 JSON。没有消息的档案不会建空对话。')
-        .fontSize(12)
-        .fontColor(Tokens.muted)
+      Text('只接受带 messages 的 JSON(「导出对话」复制出来的那种)。')
+        .fontSize(13)
+        .fontColor(Tokens.secondary)
         .width('100%')
         .margin({ bottom: 10 })
       TextArea({ placeholder: '{"messages":[{"role":"user","content":"..."}]}', text: this.importDraft })
         .onChange((value: string) => {
           this.importDraft = value;
         })
-        .height(88)
-        .backgroundColor(Tokens.bg)
+        .height(120)
+        .backgroundColor(Tokens.surface)
         .fontColor(Tokens.text)
         .placeholderColor(Tokens.muted)
-        .borderRadius(10)
-      Button('导入')
-        .width('100%')
-        .height(40)
-        .margin({ top: 8 })
-        .backgroundColor(Tokens.accent)
+        .borderRadius(12)
+      Text('导入')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
         .fontColor('#FFFFFF')
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .height(46)
+        .backgroundColor(Tokens.accent)
+        .borderRadius(23)
+        .margin({ top: 12 })
         .onClick(() => {
           this.importSession();
         })
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(Tokens.pagePad)
-    .backgroundColor(Tokens.surface)
+    .padding({ left: 20, right: 20, bottom: 24 })
   }
 
   @Builder
   menuSheet() {
     Column() {
       Text(this.menuTitle)
-        .fontSize(Tokens.rowTitle)
+        .fontSize(15)
         .fontWeight(FontWeight.Medium)
-        .fontColor(Tokens.text)
+        .fontColor(Tokens.secondary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
-        .margin({ bottom: 12 })
-      Text(this.menuPinned ? '取消置顶' : '置顶')
-        .fontSize(16)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ top: 14, bottom: 14 })
-        .onClick(() => {
-          this.menuOpen = false;
-          this.pinSession(this.menuId);
-        })
-      Text('复制对话')
-        .fontSize(16)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ top: 14, bottom: 14 })
-        .onClick(() => {
-          this.menuOpen = false;
-          this.duplicateSession(this.menuId);
-        })
-      Text('导出对话')
-        .fontSize(16)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ top: 14, bottom: 14 })
-        .onClick(() => {
-          this.menuOpen = false;
-          this.exportSession(this.menuId);
-        })
-      Text('归档')
-        .fontSize(16)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ top: 14, bottom: 14 })
-        .onClick(() => {
-          this.menuOpen = false;
-          this.archiveSession(this.menuId);
-        })
-      Text('删除')
-        .fontSize(16)
-        .fontColor(Tokens.accent)
-        .width('100%')
-        .padding({ top: 14, bottom: 14 })
-        .onClick(() => {
-          this.menuOpen = false;
-          this.removeSession(this.menuId);
-        })
+        .padding({ bottom: 8 })
+      this.menuRow(this.menuPinned ? '取消置顶' : '置顶', 'pin_fill', Tokens.text, () => {
+        this.pinSession(this.menuId);
+      })
+      this.menuRow('复制一份', 'doc_filled_on_doc', Tokens.text, () => {
+        this.duplicateSession(this.menuId);
+      })
+      this.menuRow('导出对话', 'square_and_arrow_down', Tokens.text, () => {
+        this.exportSession(this.menuId);
+      })
+      this.menuRow('归档', 'rectangle_stack', Tokens.text, () => {
+        this.archiveSession(this.menuId);
+      })
+      this.menuRow('删除', 'trash', Tokens.danger, () => {
+        this.removeSession(this.menuId);
+      })
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(Tokens.pagePad)
-    .backgroundColor(Tokens.surface)
+    .padding({ left: 20, right: 20, top: 4, bottom: 24 })
+  }
+
+  @Builder
+  menuRow(label: string, icon: string, color: string, tap: () => void) {
+    Row() {
+      Sym({ name: icon, dim: 18, color: color })
+      Text(label)
+        .fontSize(16)
+        .fontColor(color)
+        .margin({ left: 14 })
+    }
+    .width('100%')
+    .height(50)
+    .onClick(() => {
+      this.menuOpen = false;
+      tap();
+    })
+  }
+
+  /** 展开的折叠屏(约 700–840vp)左边四成;再宽固定 360。 */
+  private listWidth(): string | number {
+    return '40%';
+  }
+
+  private async sendFromHome(): Promise<void> {
+    const text = this.draft.trim();
+    if (!text && !this.homeImage && this.homeFiles.length === 0) {
+      return;
+    }
+    const ctx = getContext(this) as common.UIAbilityContext;
+    try {
+      const session = await sessionStore.create(ctx);
+      const first = new FirstMessage();
+      first.sessionId = session.id;
+      first.text = text;
+      first.files = this.homeFiles;
+      first.image = this.homeImage;
+      LocalChatLaunch.first = first;
+      this.draft = '';
+      this.homeFiles = [];
+      this.homeImage = null;
+      this.homeImagePath = '';
+      this.groups = sessionStore.grouped(this.query);
+      this.openSession(session.id);
+    } catch (err) {
+      this.message = `${err}`;
+    }
+  }
+
+  private async pickHomeImage(): Promise<void> {
+    try {
+      const image = await Attachments.pickImage(getContext(this) as common.UIAbilityContext);
+      if (image) {
+        this.homeImage = image;
+        this.homeImagePath = image.path;
+      }
+    } catch (err) {
+      this.message = err instanceof Error ? err.message : `${err}`;
+    }
+  }
+
+  private async pickHomeFiles(): Promise<void> {
+    try {
+      const picked = await Attachments.pickFiles(getContext(this) as common.UIAbilityContext);
+      this.homeFiles = this.homeFiles.concat(picked.names);
+      if (picked.skipped > 0) {
+        this.message = `有 ${picked.skipped} 个文件超过 20MB,没带上`;
+      }
+    } catch (err) {
+      this.message = err instanceof Error ? err.message : `${err}`;
+    }
   }
 
   private applyLaunch(): void {

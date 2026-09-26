@@ -1,128 +1,43 @@
+import { router } from '@kit.ArkUI';
+import { Sym } from './Symbols';
 import { Tokens } from './Tokens';
 
-@Component
-export struct SysIcon {
-  @Prop name: string = 'more';
-  @Prop dim: number = 22;
-  @Prop color: string = Tokens.text;
-
-  build() {
-    Image(this.res())
-      .width(this.dim)
-      .height(this.dim)
-      .fillColor(this.color)
-      .objectFit(ImageFit.Contain)
-      .draggable(false)
-  }
-
-  private res(): Resource {
-    if (this.name === 'add') {
-      return $r('sys.media.ohos_ic_public_add');
-    }
-    if (this.name === 'search') {
-      return $r('sys.media.ohos_ic_public_search_filled');
-    }
-    if (this.name === 'back') {
-      return $r('sys.media.ohos_ic_public_arrow_left');
-    }
-    if (this.name === 'up') {
-      return $r('sys.media.ohos_ic_public_arrow_up');
-    }
-    if (this.name === 'right') {
-      return $r('sys.media.ohos_ic_public_arrow_right');
-    }
-    if (this.name === 'close') {
-      return $r('sys.media.ohos_ic_public_close');
-    }
-    if (this.name === 'camera') {
-      return $r('sys.media.ohos_ic_public_camera');
-    }
-    if (this.name === 'voice') {
-      return $r('sys.media.ohos_ic_public_voice');
-    }
-    if (this.name === 'sound') {
-      return $r('sys.media.ohos_ic_public_sound');
-    }
-    if (this.name === 'clock') {
-      return $r('sys.media.ohos_ic_public_clock');
-    }
-    if (this.name === 'phone') {
-      return $r('sys.media.ohos_ic_public_device_phone');
-    }
-    if (this.name === 'pad') {
-      return $r('sys.media.ohos_ic_public_device_pad');
-    }
-    if (this.name === 'laptop') {
-      return $r('sys.media.ohos_ic_public_device_matebook');
-    }
-    if (this.name === 'web') {
-      return $r('sys.media.ohos_ic_public_web');
-    }
-    if (this.name === 'edit') {
-      return $r('sys.media.ohos_ic_public_edit');
-    }
-    if (this.name === 'text') {
-      return $r('sys.media.ohos_ic_public_text');
-    }
-    if (this.name === 'restore') {
-      return $r('sys.media.ohos_ic_public_restore');
-    }
-    if (this.name === 'albums') {
-      return $r('sys.media.ohos_ic_public_albums');
-    }
-    if (this.name === 'ok') {
-      return $r('sys.media.ohos_ic_public_ok');
-    }
-    if (this.name === 'share') {
-      return $r('sys.media.ohos_ic_public_share');
-    }
-    if (this.name === 'scan') {
-      return $r('sys.media.ohos_ic_public_scan');
-    }
-    if (this.name === 'email') {
-      return $r('sys.media.ohos_ic_public_email');
-    }
-    if (this.name === 'copy') {
-      return $r('sys.media.ohos_ic_public_copy');
-    }
-    if (this.name === 'pause') {
-      return $r('sys.media.ohos_ic_public_pause');
-    }
-    return $r('sys.media.ohos_ic_public_more');
-  }
-}
-
-@Component
-export struct IconBtn {
-  @Prop name: string = 'more';
-  @Prop box: number = 40;
-  @Prop glyph: number = 20;
-  @Prop color: string = Tokens.text;
-  @Prop fill: string = Tokens.surface2;
-  onTap: () => void = () => {
+/** 老代码里的图标名 → 系统符号名。 */
+function symbolFor(icon: string): string {
+  const map: Record<string, string> = {
+    'add': 'plus',
+    'search': 'magnifyingglass',
+    'back': 'chevron_left',
+    'up': 'chevron_up',
+    'right': 'chevron_right',
+    'close': 'xmark',
+    'camera': 'camera',
+    'voice': 'mic',
+    'sound': 'speaker_wave_2',
+    'clock': 'clock',
+    'phone': 'phone',
+    'pad': 'display',
+    'laptop': 'computer',
+    'web': 'globe_badge_message',
+    'edit': 'square_and_pencil',
+    'text': 'doc_text',
+    'restore': 'arrow_counterclockwise',
+    'albums': 'photo',
+    'ok': 'checkmark',
+    'share': 'dot_radiowaves_left_and_right',
+    'scan': 'puzzle',
+    'email': 'text_bubble_left_2',
+    'copy': 'doc_filled_on_doc',
+    'pause': 'pause'
   };
-
-  build() {
-    Stack() {
-      Column()
-        .width(this.box)
-        .height(this.box)
-        .borderRadius(this.box / 2)
-        .backgroundColor(this.fill)
-      SysIcon({
-        name: this.name,
-        dim: this.glyph,
-        color: this.color
-      })
-    }
-    .width(this.box)
-    .height(this.box)
-    .onClick(() => {
-      this.onTap();
-    })
-  }
+  const hit = map[icon];
+  return hit !== undefined ? hit : icon;
 }
 
+/**
+ * 列表行前面的图标块:有图标时是实心圆角方块 + 白色符号(和设置页一样);
+ * 只有字(服务商缩写)时是浅色底 + 彩色字。
+ */
 @Component
 export struct IconCircle {
   @Prop box: number = Tokens.iconCircle;
@@ -133,41 +48,20 @@ export struct IconCircle {
   @Prop pinned: boolean = false;
 
   build() {
-    Stack({ alignContent: Alignment.BottomEnd }) {
-      Stack() {
-        Column()
-          .width(this.box)
-          .height(this.box)
-          .borderRadius(this.box / 2)
-          .backgroundColor(this.color)
-          .opacity(0.18)
-        if (this.icon.length > 0) {
-          SysIcon({
-            name: this.icon,
-            dim: this.glyph + 2,
-            color: this.color
-          })
-        } else {
-          Text(this.mark)
-            .fontSize(this.glyph)
-            .fontColor(this.color)
-            .fontWeight(FontWeight.Medium)
-        }
-      }
-      .width(this.box)
-      .height(this.box)
-      if (this.pinned) {
-        Column()
-          .width(Tokens.pinBadge)
-          .height(Tokens.pinBadge)
-          .borderRadius(Tokens.pinBadge / 2)
-          .backgroundColor(Tokens.warn)
-          .border({ width: 1.5, color: Tokens.bg })
-          .margin({ right: -2, bottom: -2 })
+    Stack() {
+      if (this.icon.length > 0) {
+        Sym({ name: symbolFor(this.icon), dim: this.glyph, color: '#FFFFFF' })
+      } else {
+        Text(this.mark)
+          .fontSize(this.glyph - 2)
+          .fontColor('#FFFFFF')
+          .fontWeight(FontWeight.Bold)
       }
     }
     .width(this.box)
     .height(this.box)
+    .backgroundColor(this.color)
+    .borderRadius(this.box >= 40 ? this.box / 2 : 8)
   }
 }
 
@@ -197,46 +91,103 @@ export struct StatusPill {
 
 @Component
 export struct SettingsRow {
-  @Prop icon: string = 'more';
+  /** 系统符号名(见 Symbols.ets)。 */
+  @Prop icon: string = 'ellipsis_circle';
   @Prop color: string = Tokens.accent;
   @Prop title: string = '';
   @Prop subtitle: string = '';
+  /** 不是第一行:上面画一条缩进的细线(和 iOS 设置一样)。 */
+  @Prop divider: boolean = false;
   onOpen: () => void = () => {
   };
 
   build() {
-    Row() {
-      IconCircle({
-        box: Tokens.settingsIcon,
-        glyph: Tokens.settingsGlyph,
-        color: this.color,
-        icon: this.icon
-      })
-      Column() {
-        Text(this.title)
-          .fontSize(Tokens.rowTitle)
-          .fontColor(Tokens.text)
-        if (this.subtitle.length > 0) {
-          Text(this.subtitle)
-            .fontSize(12)
-            .fontColor(Tokens.muted)
-            .margin({ top: 2 })
-        }
+    Column() {
+      if (this.divider) {
+        Divider()
+          .strokeWidth(Tokens.hairline)
+          .color(Tokens.separator)
+          .margin({ left: 58 })
       }
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: Tokens.rowGap })
-      .layoutWeight(1)
-      SysIcon({
-        name: 'right',
-        dim: 16,
-        color: Tokens.muted
-      })
+      Row() {
+        Stack() {
+          Sym({ name: this.icon, dim: Tokens.settingsGlyph, color: '#FFFFFF' })
+        }
+        .width(Tokens.settingsIcon)
+        .height(Tokens.settingsIcon)
+        .backgroundColor(this.color)
+        .borderRadius(8)
+        Column() {
+          Text(this.title)
+            .fontSize(Tokens.rowTitle)
+            .fontColor(Tokens.text)
+          if (this.subtitle.length > 0) {
+            Text(this.subtitle)
+              .fontSize(12.5)
+              .fontColor(Tokens.secondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .margin({ top: 2 })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 14 })
+        .layoutWeight(1)
+        Sym({ name: 'chevron_right', dim: 13, color: Tokens.muted })
+      }
+      .width('100%')
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .constraintSize({ minHeight: 52 })
     }
     .width('100%')
-    .alignItems(VerticalAlign.Center)
-    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
     .onClick(() => {
       this.onOpen();
     })
+  }
+}
+
+/** 二级页面的顶栏:左边返回、中间标题、右边可选一个文字按钮(和 iOS / 安卓的导航栏一样)。 */
+@Component
+export struct NavBar {
+  @Prop title: string = '';
+  @Prop action: string = '';
+  onAction: () => void = () => {
+  };
+
+  build() {
+    Stack() {
+      Text(this.title)
+        .fontSize(17)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Tokens.text)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .padding({ left: 72, right: 72 })
+      Row() {
+        Stack() {
+          Sym({ name: 'chevron_left', dim: 20, color: Tokens.text })
+        }
+        .width(40)
+        .height(40)
+        .onClick(() => {
+          router.back();
+        })
+        Blank()
+        if (this.action.length > 0) {
+          Text(this.action)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Tokens.accent)
+            .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+            .onClick(() => {
+              this.onAction();
+            })
+        }
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .height(52)
+    .padding({ left: 6, right: 8 })
   }
 }

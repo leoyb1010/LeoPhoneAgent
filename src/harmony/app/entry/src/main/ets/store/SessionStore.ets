@@ -215,6 +215,9 @@ export class SessionStore {
     if (line.imagePath.length === 0) {
       line.imagePath = SessionStore.writeImageB64(context, line.imageB64, line.imageMime);
     }
+    if (line.at <= 0) {
+      line.at = Date.now();
+    }
     session.messages = session.messages.concat([line]);
     if (session.title === '新任务' && line.role === 'user' && line.kind === '') {
       session.title = titleFromPrompt(line.text);

@@ -1,15 +1,17 @@
 import { common } from '@kit.AbilityKit';
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { HarnessKind, RemoteTask, displayName, sanitizeKey } from '../net/Protocol';
 import { MachinesClient } from '../net/MachinesClient';
 import { ChatLaunch, HarnessClient } from '../net/HarnessClient';
 import { gatewayStore, SavedHost } from '../store/GatewayStore';
-import { IconCircle } from '../theme/Widgets';
+import { Sym } from '../theme/Symbols';
 import { Tokens } from '../theme/Tokens';
 
 @Component
 export struct FleetPane {
   @Prop wide: boolean = false;
+  /** 从首页推进来的一页(手机上):左上角返回。 */
+  @Prop showBack: boolean = false;
   onOpen: () => void = () => {};
   onLocal: () => void = () => {};
   onSettings: () => void = () => {};
@@ -37,202 +39,262 @@ export struct FleetPane {
     Column() {
       Row() {
         if (this.wide) {
-          Text('远程')
-            .fontSize(Tokens.title)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Tokens.text)
+          this.barIcon('house', () => {
+            this.onLocal();
+          })
+        } else if (this.showBack) {
+          this.barIcon('chevron_left', () => {
+            router.back();
+          })
         }
-        Blank()
-        Text(this.busy ? '刷新中' : '刷新')
-          .fontSize(15)
-          .fontColor(this.ready && !this.busy ? Tokens.accent : Tokens.muted)
-          .onClick(() => {
-            if (this.ready && !this.busy) {
+        Text('远程')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Tokens.text)
+          .margin({ left: 4 })
+          .layoutWeight(1)
+        if (this.busy) {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color(Tokens.muted)
+            .margin({ right: 10 })
+        } else {
+          this.barIcon('arrow_clockwise', () => {
+            if (this.ready) {
               this.refresh();
             }
           })
+        }
         if (this.wide) {
-          Text('本机')
-            .fontSize(14)
-            .fontColor(Tokens.muted)
-            .margin({ left: 14 })
-            .onClick(() => {
-              this.onLocal();
-            })
-          Text('设置')
-            .fontSize(14)
-            .fontColor(Tokens.accent)
-            .margin({ left: 14 })
-            .onClick(() => {
-              this.onSettings();
-            })
+          this.barIcon('gearshape', () => {
+            this.onSettings();
+          })
         }
       }
       .width('100%')
-      .height(this.wide ? Tokens.topBar : 36)
-      .alignItems(VerticalAlign.Center)
-      .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+      .height(Tokens.topBar)
+      .padding({ left: 6, right: 8 })
 
       Scroll() {
         Column() {
-          this.setupCard()
           if (this.message.length > 0) {
             Text(this.message)
               .fontSize(13)
               .fontColor(this.message === '钥匙已保存' || this.message.startsWith('已加入') ? Tokens.online : Tokens.warn)
               .width('100%')
-              .padding({ left: 4, right: 4, top: 4, bottom: 12 })
+              .padding({ left: 4, right: 4, bottom: 10 })
           }
           if (this.hosts.length === 0) {
             this.emptyState()
           } else {
-            ForEach(this.hosts, (host: SavedHost) => {
-              this.machineCard(host)
-            }, (host: SavedHost) => host.name)
+            Text('机器')
+              .fontSize(13)
+              .fontColor(Tokens.secondary)
+              .width('100%')
+              .padding({ left: 16, bottom: 7 })
+            Column() {
+              ForEach(this.hosts, (host: SavedHost, index: number) => {
+                this.machineCard(host, index > 0)
+              }, (host: SavedHost, index: number) => `${host.name}:${host.online}:${index}`)
+            }
+            .width('100%')
+            .backgroundColor(Tokens.card)
+            .borderRadius(Tokens.groupRadius)
+            .clip(true)
           }
+          this.setupCard()
         }
         .width('100%')
+        .constraintSize({ maxWidth: Tokens.readable })
         .alignItems(HorizontalAlign.Start)
-        .padding({ bottom: 24 })
+        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 4, bottom: 32 })
       }
       .layoutWeight(1)
+      .width('100%')
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Tokens.bg)
+    .backgroundColor(Tokens.grouped)
+  }
+
+  @Builder
+  barIcon(name: string, tap: () => void) {
+    Stack() {
+      Sym({ name: name, dim: 20, color: Tokens.text })
+    }
+    .width(40)
+    .height(40)
+    .onClick(() => {
+      tap();
+    })
   }
 
   @Builder
   setupCard() {
     Column() {
       Row() {
-        Text('中继')
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Tokens.text)
-        Blank()
-        Text(this.setupOpen ? '收起' : '展开')
-          .fontSize(13)
-          .fontColor(Tokens.accent)
+        Stack() {
+          Sym({ name: 'dot_radiowaves_left_and_right', dim: 16, color: '#FFFFFF' })
+        }
+        .width(Tokens.settingsIcon)
+        .height(Tokens.settingsIcon)
+        .backgroundColor('#30B0C7')
+        .borderRadius(8)
+        Column() {
+          Text('中继钥匙与配对')
+            .fontSize(16)
+            .fontColor(Tokens.text)
+          Text(this.setupOpen ? '钥匙至少 16 位，不会写进配对码' : '换钥匙、粘贴配对码加入')
+            .fontSize(12.5)
+            .fontColor(Tokens.secondary)
+            .margin({ top: 2 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 14 })
+        .layoutWeight(1)
+        Sym({ name: this.setupOpen ? 'chevron_up' : 'chevron_down', dim: 13, color: Tokens.muted })
       }
       .width('100%')
       .onClick(() => {
         this.setupOpen = !this.setupOpen;
       })
       if (this.setupOpen) {
-        Text('钥匙至少 16 位，不会写进配对码')
-          .fontSize(12)
-          .fontColor(Tokens.muted)
-          .width('100%')
-          .margin({ top: 8, bottom: 10 })
         TextInput({ placeholder: '中继钥匙', text: this.keyDraft })
           .onChange((value: string) => {
             this.keyDraft = value;
           })
           .type(InputType.Password)
           .height(44)
-          .backgroundColor(Tokens.bg)
+          .margin({ top: 14 })
+          .backgroundColor(Tokens.surface)
           .fontColor(Tokens.text)
           .placeholderColor(Tokens.muted)
           .borderRadius(10)
-        Button('保存钥匙')
-          .width('100%')
-          .height(40)
-          .margin({ top: 8 })
-          .backgroundColor(Tokens.surface2)
-          .fontColor(Tokens.text)
-          .enabled(this.ready)
-          .onClick(() => {
-            this.saveKey();
-          })
-        TextInput({ placeholder: '粘贴身体配对码', text: this.pairDraft })
+        this.pillButton('保存钥匙', () => {
+          this.saveKey();
+        })
+        TextInput({ placeholder: '粘贴配对码（Mac 或手机上生成的）', text: this.pairDraft })
           .onChange((value: string) => {
             this.pairDraft = value;
           })
           .height(44)
-          .margin({ top: 12 })
-          .backgroundColor(Tokens.bg)
+          .margin({ top: 16 })
+          .backgroundColor(Tokens.surface)
           .fontColor(Tokens.text)
           .placeholderColor(Tokens.muted)
           .borderRadius(10)
-        Button('加入')
-          .width('100%')
-          .height(40)
-          .margin({ top: 8 })
-          .backgroundColor(Tokens.surface2)
-          .fontColor(Tokens.text)
-          .enabled(this.ready)
-          .onClick(() => {
-            this.joinPair();
-          })
+        this.pillButton('加入', () => {
+          this.joinPair();
+        })
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .padding(Tokens.pagePad)
-    .margin({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 14 })
-    .backgroundColor(Tokens.surface)
-    .borderRadius(Tokens.cardRadius)
+    .padding(14)
+    .margin({ top: 20 })
+    .backgroundColor(Tokens.card)
+    .borderRadius(Tokens.groupRadius)
+  }
+
+  @Builder
+  pillButton(label: string, tap: () => void) {
+    Text(label)
+      .fontSize(15)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(this.ready ? Tokens.accent : Tokens.muted)
+      .textAlign(TextAlign.Center)
+      .width('100%')
+      .height(40)
+      .backgroundColor(Tokens.accentSoft)
+      .borderRadius(20)
+      .margin({ top: 8 })
+      .onClick(() => {
+        if (this.ready) {
+          tap();
+        }
+      })
   }
 
   @Builder
   emptyState() {
     Column() {
+      Sym({ name: 'computer', dim: 40, color: Tokens.muted })
       Text('还没有远程机器')
         .fontSize(18)
+        .fontWeight(FontWeight.Medium)
         .fontColor(Tokens.text)
-      Text('保存中继钥匙后点刷新。也可以粘贴身体配对码加入一台离线机器。')
+        .margin({ top: 12 })
+      Text('保存中继钥匙后点右上角刷新；也可以粘贴配对码加入一台机器。')
         .fontSize(14)
-        .fontColor(Tokens.muted)
-        .margin({ top: 8 })
+        .lineHeight(20)
+        .fontColor(Tokens.secondary)
+        .margin({ top: 6 })
         .textAlign(TextAlign.Center)
     }
     .width('100%')
-    .padding({ top: 48, bottom: 32, left: 12, right: 12 })
+    .padding({ top: 40, bottom: 12, left: 12, right: 12 })
     .alignItems(HorizontalAlign.Center)
   }
 
   @Builder
-  machineCard(host: SavedHost) {
-    Row() {
-      IconCircle({
-        color: host.online ? Tokens.online : Tokens.muted,
-        icon: host.platform === 'android' ? 'phone' : (host.platform === 'harmony' ? 'pad' : 'laptop')
-      })
-      Column() {
-        Text(host.displayName.length > 0 ? host.displayName : displayName(host.name))
-          .fontSize(Tokens.rowTitle)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Tokens.text)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(`${host.platform.length > 0 ? host.platform : 'mac'} · ${host.name}`)
-          .fontSize(Tokens.rowSub)
-          .fontColor(Tokens.muted)
-          .margin({ top: 1 })
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+  machineCard(host: SavedHost, divider: boolean) {
+    Column() {
+      if (divider) {
+        Divider()
+          .strokeWidth(Tokens.hairline)
+          .color(Tokens.separator)
+          .margin({ left: 62 })
       }
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: Tokens.rowGap })
-      .layoutWeight(1)
-      Text(host.online ? '在线' : '离线')
-        .fontSize(Tokens.time)
-        .fontColor(host.online ? Tokens.online : Tokens.muted)
+      Row() {
+        Stack() {
+          Sym({
+            name: host.platform === 'android' || host.platform === 'harmony' ? 'phone' : 'computer',
+            dim: 18,
+            color: '#FFFFFF'
+          })
+        }
+        .width(34)
+        .height(34)
+        .backgroundColor(host.online ? '#30B0C7' : Tokens.muted)
+        .borderRadius(9)
+        Column() {
+          Text(host.displayName.length > 0 ? host.displayName : displayName(host.name))
+            .fontSize(Tokens.rowTitle)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Tokens.text)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(`${host.platform.length > 0 ? host.platform : 'mac'} · ${host.name}`)
+            .fontSize(12.5)
+            .fontColor(Tokens.secondary)
+            .margin({ top: 2 })
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 14 })
+        .layoutWeight(1)
+        Row() {
+          Column()
+            .width(7)
+            .height(7)
+            .borderRadius(3.5)
+            .backgroundColor(host.online ? Tokens.online : Tokens.muted)
+          Text(host.online ? '在线' : '离线')
+            .fontSize(12.5)
+            .fontColor(host.online ? Tokens.online : Tokens.muted)
+            .margin({ left: 5 })
+        }
+        .margin({ right: 6 })
+        Sym({ name: 'chevron_right', dim: 13, color: Tokens.muted })
+      }
+      .width('100%')
+      .padding({ left: 14, right: 14, top: 12, bottom: 12 })
     }
     .width('100%')
-    .alignItems(VerticalAlign.Center)
-    .padding({
-      left: Tokens.rowHPad,
-      right: Tokens.rowHPad,
-      top: Tokens.rowVPad,
-      bottom: Tokens.rowVPad
-    })
-    .margin({ bottom: 0 })
-    .backgroundColor(Tokens.surface)
-    .borderRadius(0)
     .onClick(() => {
       this.openMachine(host);
     })

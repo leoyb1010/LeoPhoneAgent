@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { ModelGroup, ProviderInstance, providerStore } from '../store/ProviderStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -22,12 +23,7 @@ struct ModelGroupsPage {
 
   build() {
     Column() {
-      Text('模型组')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '模型组' })
       Text('新任务可以绑一组模型，失败时按顺序换下一个。')
         .fontSize(13)
         .fontColor(Tokens.muted)

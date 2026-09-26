@@ -1,5 +1,6 @@
 import { abilityAccessCtrl, common, Permissions, Want } from '@kit.AbilityKit';
 import { PushRegistrar } from '../push/PushRegistrar';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -20,12 +21,7 @@ struct RuntimePage {
   build() {
     Scroll() {
       Column() {
-        Text('本机运行时')
-          .fontSize(Tokens.title)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Tokens.text)
-          .width('100%')
-          .padding({ bottom: 8 })
+        NavBar({ title: '本机运行时' })
         Text('OAuth、语音、Push 在这一页接。Linux / stdio MCP 受鸿蒙进程模型挡住，不是先不做。')
           .fontSize(13)
           .fontColor(Tokens.muted)

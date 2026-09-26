@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { bodyStore } from '../store/BodyStore';
 import { gatewayStore } from '../store/GatewayStore';
 import { outboundClient, startBody } from '../net/OutboundClient';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -31,12 +32,7 @@ struct BodyPage {
   build() {
     Scroll() {
       Column() {
-        Text('当身体')
-          .fontSize(Tokens.title)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Tokens.text)
-          .width('100%')
-          .padding({ bottom: 8 })
+        NavBar({ title: '当身体' })
         Text('打开后向中继注册 platform=harmony。iPhone 列表会出现这台机。Push token 在「本机运行时」。')
           .fontSize(13)
           .fontColor(Tokens.muted)

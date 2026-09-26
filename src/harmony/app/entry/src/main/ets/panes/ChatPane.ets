@@ -1,5 +1,10 @@
 import { http } from '@kit.NetworkKit';
 import { common } from '@kit.AbilityKit';
+import { router } from '@kit.ArkUI';
+import { Composer } from '../chat/Composer';
+import { AssistantHead, NoticeRow, UserBubble } from '../chat/ChatViews';
+import { MarkdownText } from '../theme/Markdown';
+import { Sym } from '../theme/Symbols';
 import { displayName } from '../net/Protocol';
 import { ApprovalState, ChatLaunch, ChatLine, HarnessClient, HttpError } from '../net/HarnessClient';
 import { SensitiveToolGate } from '../local/SensitiveToolGate';
@@ -27,7 +32,10 @@ function choiceLabel(choice: string): string {
 
 @Component
 export struct ChatPane {
+  @StorageProp('approvalTick') approvalTick: number = 0;
   @Prop machine: string = '';
+  /** 手机上推进来的一页:左上角返回。 */
+  @Prop showBack: boolean = false;
   /** 每次从列表打开都会变:同一台机器换 Agent、换任务也要重新接上(平板两栏时这一栏不会重建)。 */
   @Prop @Watch('onLaunch') launch: number = 0;
   @State lines: ChatLine[] = [];
@@ -36,6 +44,7 @@ export struct ChatPane {
   @State approval: ApprovalState = new ApprovalState();
   @State lastSeq: number = 0;
   private sessionId: string = '';
+  private scroller: Scroller = new Scroller();
   private client: HarnessClient | null = null;
   private stream: http.HttpRequest | null = null;
   private assistantOpen: boolean = false;
@@ -76,134 +85,203 @@ export struct ChatPane {
 
   build() {
     Column() {
-      Row() {
+      Stack() {
         Column() {
-          Text(this.machine.length > 0 ? displayName(this.machine) : '新任务')
-            .fontSize(20)
+          Text(this.machine.length > 0 ? displayName(this.machine) : '远程')
+            .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor(Tokens.text)
-          Text(this.status)
-            .fontSize(12)
-            .fontColor(this.status === '需要审批' ? Tokens.warn : Tokens.muted)
-            .margin({ top: 4 })
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row() {
+            Column()
+              .width(6)
+              .height(6)
+              .borderRadius(3)
+              .backgroundColor(this.status === '需要审批' ? Tokens.warn : (this.badStatus() ? Tokens.danger : Tokens.online))
+            Text(`${this.agentName()} · ${this.status}`)
+              .fontSize(12)
+              .fontColor(this.status === '需要审批' ? Tokens.warn : Tokens.secondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .margin({ left: 5 })
+          }
+          .margin({ top: 2 })
         }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
+        .padding({ left: 56, right: 56 })
+        Row() {
+          if (this.showBack) {
+            Stack() {
+              Sym({ name: 'chevron_left', dim: 20, color: Tokens.text })
+            }
+            .width(40)
+            .height(40)
+            .onClick(() => {
+              router.back();
+            })
+          }
+          Blank()
+        }
+        .width('100%')
       }
       .width('100%')
-      .padding({ left: 20, right: 20, top: 8, bottom: 12 })
+      .height(Tokens.chatBar)
+      .padding({ left: 6, right: 8 })
+      .border({ width: { bottom: Tokens.hairline }, color: Tokens.separator })
 
       if (this.machine.length === 0) {
         Column() {
+          Sym({ name: 'computer', dim: 40, color: Tokens.muted })
           Text('选一台在线机器')
-            .fontSize(20)
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
             .fontColor(Tokens.text)
-          Text('外屏点进机器就是这一页。展开内屏后，左边列表、右边对话。')
+            .margin({ top: 12 })
+          Text('左边点一台机器，就在这里指挥它。')
             .fontSize(14)
-            .fontColor(Tokens.muted)
-            .margin({ top: 8 })
-            .textAlign(TextAlign.Center)
+            .fontColor(Tokens.secondary)
+            .margin({ top: 6 })
         }
         .layoutWeight(1)
         .width('100%')
         .justifyContent(FlexAlign.Center)
         .padding(24)
       } else {
-        List() {
+        List({ scroller: this.scroller }) {
           ForEach(this.lines, (line: ChatLine, index: number) => {
             ListItem() {
-              Text(line.text)
-                .fontSize(16)
-                .fontColor(line.role === 'user' ? '#FFFFFF' : Tokens.text)
-                .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-                .backgroundColor(line.role === 'user' ? Tokens.accent :
-                  (line.role === 'system' ? Tokens.surface2 : Tokens.surface))
-                .borderRadius(14)
-                .constraintSize({ maxWidth: '78%' })
+              Column() {
+                if (line.role === 'user') {
+                  Row() {
+                    Blank()
+                    UserBubble({ text: line.text })
+                  }
+                  .width('100%')
+                  .margin({ top: 12, bottom: 4 })
+                } else if (line.role === 'assistant') {
+                  if (index === 0 || this.lines[index - 1].role !== 'assistant') {
+                    AssistantHead({ name: this.agentName() })
+                      .margin({ top: 10 })
+                  }
+                  MarkdownText({ text: line.text })
+                } else {
+                  NoticeRow({ text: line.text })
+                }
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+              .constraintSize({ maxWidth: Tokens.readable })
             }
-            .align(line.role === 'user' ? Alignment.End : Alignment.Start)
-            .padding({ left: 16, right: 16, top: 6, bottom: 6 })
+            .width('100%')
             // 同 LocalChatPane：key 里带 text.length 会让流式中的最后一条气泡被反复销毁重建
           }, (line: ChatLine, index: number) => `${index}:${line.role}`)
         }
         .layoutWeight(1)
         .width('100%')
+        .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+        .contentStartOffset(8)
+        .contentEndOffset(16)
+        .alignListItem(ListItemAlign.Center)
         .scrollBar(BarState.Off)
-      }
-
-      if (this.approval.id.length > 0) {
-        Column() {
-          Text(this.approvalQueue.length > 1 ? `需要审批 · 还有 ${this.approvalQueue.length - 1} 条` : '需要审批')
-            .fontSize(13)
-            .fontColor(Tokens.warn)
-          Text(this.approval.command)
-            .fontSize(14)
-            .fontColor(Tokens.text)
-            .margin({ top: 6, bottom: 12 })
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.approval.choices, (choice: string) => {
-              Button(choiceLabel(choice))
-                .height(40)
-                .margin({ right: 8, bottom: 8 })
-                .backgroundColor(choice === 'deny' ? Tokens.surface2 : Tokens.online)
-                .fontColor(choice === 'deny' ? Tokens.text : '#000000')
-                .onClick(() => {
-                  this.answer(choice, false);
-                })
-            }, (choice: string) => choice)
-          }
-          .width('100%')
-          Text('拒绝并停止任务')
-            .fontSize(13)
-            .fontColor(Tokens.muted)
-            .onClick(() => {
-              this.answer('deny', true);
-            })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(16)
-        .margin({ left: 12, right: 12, bottom: 8 })
-        .backgroundColor(Tokens.surface)
-        .borderRadius(16)
+        .edgeEffect(EdgeEffect.Spring)
       }
 
       if (this.machine.length > 0) {
-        Row() {
-          TextInput({ placeholder: '发一条新任务', text: this.draft })
-            .layoutWeight(1)
-            .height(44)
-            .backgroundColor(Tokens.surface)
-            .fontColor(Tokens.text)
-            .placeholderColor(Tokens.muted)
-            .borderRadius(12)
-            .onChange((value: string) => {
-              this.draft = value;
-            })
-          Button('发送')
-            .height(44)
-            .margin({ left: 8 })
-            .backgroundColor(Tokens.accent)
-            .fontColor('#FFFFFF')
-            .onClick(() => {
+        Column() {
+          if (this.approval.id.length > 0) {
+            Column() {
+              Row() {
+                Sym({ name: 'hand', dim: 15, color: Tokens.warn })
+                Text(this.approvalQueue.length > 1 ? `需要审批 · 还有 ${this.approvalQueue.length - 1} 条` : '需要审批')
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Tokens.text)
+                  .margin({ left: 6 })
+              }
+              Text(this.approval.command)
+                .fontSize(13)
+                .lineHeight(19)
+                .fontFamily('monospace')
+                .fontColor(Tokens.secondary)
+                .maxLines(4)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+                .padding(10)
+                .backgroundColor(Tokens.chip)
+                .borderRadius(10)
+                .margin({ top: 8 })
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(this.approval.choices, (choice: string) => {
+                  Text(choiceLabel(choice))
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(choice === 'deny' ? Tokens.text : '#FFFFFF')
+                    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+                    .backgroundColor(choice === 'deny' ? Tokens.chip : Tokens.accent)
+                    .borderRadius(18)
+                    .margin({ right: 8, top: 10 })
+                    .onClick(() => {
+                      this.answer(choice, false);
+                    })
+                }, (choice: string) => choice)
+              }
+              .width('100%')
+              Text('拒绝并停止任务')
+                .fontSize(13)
+                .fontColor(Tokens.danger)
+                .margin({ top: 10 })
+                .onClick(() => {
+                  this.answer('deny', true);
+                })
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start)
+            .padding(14)
+            .backgroundColor(Tokens.card)
+            .borderRadius(16)
+            .border({ width: Tokens.hairline, color: Tokens.separator })
+            .shadow({ radius: 12, color: Tokens.composerShadow, offsetY: 2 })
+            .margin({ bottom: 8 })
+          }
+          Composer({
+            draft: $draft,
+            placeholder: `给 ${this.machine.length > 0 ? displayName(this.machine) : '远程机器'} 发任务`,
+            running: this.status === '进行中',
+            showApproval: ChatLaunch.harness === 'zcode',
+            fullAuto: SensitiveToolGate.fullAuto && this.approvalTick >= 0,
+            tools: false,
+            showMic: false,
+            onSend: () => {
               this.send();
-            })
-          Button('停止')
-            .height(44)
-            .margin({ left: 8 })
-            .backgroundColor(Tokens.surface2)
-            .fontColor(Tokens.text)
-            .onClick(() => {
+            },
+            onStop: () => {
               this.stop();
-            })
+            },
+            onApproval: () => {
+              const ctx = getContext(this) as common.UIAbilityContext;
+              SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
+            }
+          })
         }
         .width('100%')
-        .padding({ left: 16, right: 16, bottom: 16, top: 4 })
+        .constraintSize({ maxWidth: Tokens.readable + 24 })
+        .padding({ left: 10, right: 10, top: 4, bottom: 10 })
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Tokens.bg)
+  }
+
+  private agentName(): string {
+    return ChatLaunch.harness === 'zcode' || ChatLaunch.harness === 'minis' ? 'LeoPhoneAgent' :
+      (ChatLaunch.harness === 'claude' ? 'Claude Code' : (ChatLaunch.harness === 'codex' ? 'Codex' :
+        (ChatLaunch.harness.length > 0 ? ChatLaunch.harness : 'LeoPhoneAgent')));
+  }
+
+  private badStatus(): boolean {
+    return this.status.indexOf('失败') >= 0 || this.status.indexOf('不对') >= 0 || this.status.indexOf('连不上') >= 0 ||
+      this.status.indexOf('没送到') >= 0;
   }
 
   private startSession(): void {
@@ -406,7 +484,18 @@ export struct ChatPane {
     line.role = role;
     line.text = text;
     this.lines = this.lines.concat([line]);
+    this.scrollTail();
     return line;
+  }
+
+  private scrollTail(): void {
+    setTimeout(() => {
+      try {
+        this.scroller.scrollEdge(Edge.Bottom);
+      } catch (_err) {
+        // 列表还没挂上
+      }
+    }, 0);
   }
 
   private appendAssistant(delta: string): void {
@@ -422,6 +511,7 @@ export struct ChatPane {
     const last = copy[copy.length - 1];
     last.text += delta;
     this.lines = copy;
+    this.scrollTail();
   }
 
   private async send(): Promise<void> {

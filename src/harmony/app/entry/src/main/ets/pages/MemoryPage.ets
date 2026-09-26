@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { memoryStore } from '../store/MemoryStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -19,12 +20,7 @@ struct MemoryPage {
 
   build() {
     Column() {
-      Text('记忆')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 12 })
+      NavBar({ title: '记忆' })
       Scroll() {
         Column() {
           Text('GLOBAL.md')

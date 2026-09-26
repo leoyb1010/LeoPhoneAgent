@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { EnvEntry, envStore } from '../store/EnvStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -20,12 +21,7 @@ struct EnvPage {
 
   build() {
     Column() {
-      Text('环境变量')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '环境变量' })
       Text('注入本机对话。没有 Linux 进程环境，只给模型看。')
         .fontSize(13)
         .fontColor(Tokens.muted)

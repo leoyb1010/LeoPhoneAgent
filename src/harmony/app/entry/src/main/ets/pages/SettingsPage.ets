@@ -8,7 +8,7 @@ struct SettingsPage {
 
   build() {
     Column() {
-      SettingsPane()
+      SettingsPane({ showBack: true })
     }
     .width('100%')
     .height('100%')

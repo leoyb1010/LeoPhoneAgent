@@ -15,7 +15,7 @@ import { OAuthLoginSheet } from '../local/OAuthLoginSheet';
 import { DeviceAuth } from '../local/LocalProtocol';
 import { VoiceTemplate, voiceCapabilityLabel, voiceTemplates } from '../local/VoiceCatalog';
 import { ProviderInstance, ProviderLaunch, providerStore } from '../store/ProviderStore';
-import { IconCircle } from '../theme/Widgets';
+import { IconCircle, NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -61,24 +61,13 @@ struct AddProviderPage {
           }
         })
       } else {
-        Row() {
-          Text(this.header())
-            .fontSize(Tokens.title)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Tokens.text)
-          Blank()
-          if (this.step > 0) {
-            Text('上一步')
-              .fontSize(13)
-              .fontColor(Tokens.link)
-              .onClick(() => {
-                this.backStep();
-              })
+        NavBar({
+          title: this.header(),
+          action: this.step > 0 ? '上一步' : '',
+          onAction: () => {
+            this.backStep();
           }
-        }
-        .width('100%')
-        .height(Tokens.topBar)
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+        })
         if (this.step === 0) {
           this.chooseType()
         } else if (this.step === 1) {
@@ -160,7 +149,7 @@ struct AddProviderPage {
                 Text(tpl.name)
                   .fontSize(Tokens.rowTitle)
                   .fontColor(Tokens.text)
-                Text(`${voiceCapabilityLabel(tpl.capability)} · 预填根和模型`)
+                Text(`${voiceCapabilityLabel(tpl.capability)} · 预填地址和模型`)
                   .fontSize(12)
                   .fontColor(Tokens.muted)
                   .margin({ top: 2 })

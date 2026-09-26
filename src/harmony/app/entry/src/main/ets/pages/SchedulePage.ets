@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { ScheduleRunner } from '../local/ScheduleRunner';
 import { ScheduleStore, ScheduleTask, scheduleStore } from '../store/ScheduleStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -23,12 +24,7 @@ struct SchedulePage {
 
   build() {
     Column() {
-      Text('定时任务')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '定时任务' })
       Text('App 在前台时到点就跑。App 关着或在后台时，系统会隔一阵唤起它补跑今天到点的任务（常用的 App 大约两小时一次，时间不精确），跑完发通知。结果写入「定时·标题」对话，失败原因也在下面。')
         .fontSize(13)
         .fontColor(Tokens.muted)

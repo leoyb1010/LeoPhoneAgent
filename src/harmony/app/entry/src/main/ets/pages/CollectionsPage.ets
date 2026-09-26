@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { CollectionItem, collectionStore } from '../store/CollectionStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -19,12 +20,7 @@ struct CollectionsPage {
 
   build() {
     Column() {
-      Text('藏宝阁')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 12 })
+      NavBar({ title: '藏宝阁' })
       Scroll() {
         Column() {
           TextInput({ text: this.title, placeholder: '标题' })

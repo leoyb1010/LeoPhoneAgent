@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { WorkspaceFile, WorkspaceStore } from '../store/WorkspaceStore';
 import { Copy } from '../theme/Copy';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -16,12 +17,7 @@ struct WorkspacePage {
 
   build() {
     Column() {
-      Text('沙箱文件')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '沙箱文件' })
       Text(Copy.noLinux)
         .fontSize(13)
         .fontColor(Tokens.muted)

@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { soulStore } from '../store/SoulStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -18,12 +19,7 @@ struct SoulPage {
 
   build() {
     Column() {
-      Text('Soul')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: 'Soul' })
       Text('SOUL.md 会注入本机对话，用来写你是谁、默认怎么做事。')
         .fontSize(13)
         .fontColor(Tokens.muted)

@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { sessionStore } from '../store/SessionStore';
 import { usageStore } from '../store/UsageStore';
+import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -27,12 +28,7 @@ struct UsagePage {
 
   build() {
     Column() {
-      Text('用量')
-        .fontSize(Tokens.title)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Tokens.text)
-        .width('100%')
-        .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
+      NavBar({ title: '用量' })
       Text('本机只统计这台鸿蒙上的对话和 token。没有云端账单。')
         .fontSize(13)
         .fontColor(Tokens.muted)

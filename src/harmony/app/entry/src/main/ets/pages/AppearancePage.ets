@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { themeStore } from '../store/ThemeStore';
 import { Copy } from '../theme/Copy';
-import { IconCircle } from '../theme/Widgets';
+import { IconCircle, NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
 @Entry
@@ -27,13 +27,8 @@ struct AppearancePage {
   build() {
     Scroll() {
       Column() {
-        Text('外观')
-          .fontSize(Tokens.title)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Tokens.text)
-          .width('100%')
-          .padding({ bottom: 8 })
-        Text('跟 Fold8 一样：跟随系统，或锁定浅色 / 深色。')
+        NavBar({ title: '外观' })
+        Text('跟随系统，或锁定浅色 / 深色。')
           .fontSize(13)
           .fontColor(Tokens.muted)
           .width('100%')
