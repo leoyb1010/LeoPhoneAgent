@@ -39,6 +39,7 @@ export struct ChatPane {
   /** 每次从列表打开都会变:同一台机器换 Agent、换任务也要重新接上(平板两栏时这一栏不会重建)。 */
   @Prop @Watch('onLaunch') launch: number = 0;
   @State lines: ChatLine[] = [];
+  @State liveText: string = '';
   @State draft: string = '';
   @State status: string = '准备中';
   @State approval: ApprovalState = new ApprovalState();
@@ -47,7 +48,8 @@ export struct ChatPane {
   private scroller: Scroller = new Scroller();
   private client: HarnessClient | null = null;
   private stream: http.HttpRequest | null = null;
-  private assistantOpen: boolean = false;
+  /** 正在流式输出的那段回答:字走 liveText 原地刷新,不每来几个字整个列表重排。 */
+  private liveLine: ChatLine | null = null;
   private alive: boolean = false;
   private reconnects: number = 0;
   private reconnectTimer: number = -1;
@@ -76,7 +78,8 @@ export struct ChatPane {
     this.pendingEcho = [];
     this.lastSeq = 0;
     this.sessionId = '';
-    this.assistantOpen = false;
+    this.liveLine = null;
+    this.liveText = '';
     this.ended = false;
     this.reconnects = 0;
     this.fullAutoRefused = false;
@@ -163,7 +166,7 @@ export struct ChatPane {
                     AssistantHead({ name: this.agentName() })
                       .margin({ top: 10 })
                   }
-                  MarkdownText({ text: line.text })
+                  MarkdownText({ text: line === this.liveLine ? this.liveText : line.text })
                 } else {
                   NoticeRow({ text: line.text })
                 }
@@ -173,8 +176,8 @@ export struct ChatPane {
               .constraintSize({ maxWidth: Tokens.readable })
             }
             .width('100%')
-            // 同 LocalChatPane：key 里带 text.length 会让流式中的最后一条气泡被反复销毁重建
-          }, (line: ChatLine, index: number) => `${index}:${line.role}`)
+            // key 带上字:key 不变 ForEach 就不重画(流式输出被截断就是这么来的);在流的那段走 liveText
+          }, (line: ChatLine, index: number) => `${index}|${line.role}|${line.text}`)
         }
         .layoutWeight(1)
         .width('100%')
@@ -424,7 +427,7 @@ export struct ChatPane {
       this.approval = new ApprovalState();
       if (name === 'run.completed') {
         const output = `${obj['output'] ?? ''}`;
-        if (output.length > 0 && !this.assistantOpen) {
+        if (output.length > 0 && !this.liveLine) {
           this.push('assistant', output);
         }
         this.status = '空闲';
@@ -435,7 +438,8 @@ export struct ChatPane {
         this.push('system', '已停止');
         this.status = '已停止';
       }
-      this.assistantOpen = false;
+      this.liveLine = null;
+      this.liveText = '';
       this.ended = true;
     } else if (name === 'approval.request') {
       this.ended = false;
@@ -502,16 +506,16 @@ export struct ChatPane {
     if (!delta) {
       return;
     }
-    if (!this.assistantOpen) {
-      this.push('assistant', delta);
-      this.assistantOpen = true;
+    const live = this.liveLine;
+    if (live && this.lines.length > 0 && this.lines[this.lines.length - 1] === live) {
+      live.text += delta;
+      this.liveText = live.text;
+      this.scrollTail();
       return;
     }
-    const copy = this.lines.slice();
-    const last = copy[copy.length - 1];
-    last.text += delta;
-    this.lines = copy;
-    this.scrollTail();
+    // 第一段,或中间插进来一条说明:另起一段(原来会接在那条说明后面)
+    this.liveLine = this.push('assistant', delta);
+    this.liveText = delta;
   }
 
   private async send(): Promise<void> {

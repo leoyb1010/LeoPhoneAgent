@@ -53,7 +53,7 @@ struct WorkspacePage {
                 this.preview = `${err}`;
               }
             })
-          }, (row: WorkspaceFile) => row.name)
+          }, (row: WorkspaceFile) => `${row.name}|${row.size}`)
           if (this.preview.length > 0) {
             Text(this.preview)
               .fontSize(14)

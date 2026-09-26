@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { router } from '@kit.ArkUI';
-import { ChatItem, chatItems } from '../local/AgentText';
+import { ChatItem, chatItemKey, chatItems } from '../local/AgentText';
 import { ChatRun, ChatRuns, PendingImage, textLines } from '../local/ChatRun';
 import { Voice } from '../local/Voice';
 import { LocalChatMessage, nextThinking, thinkingLabel } from '../local/LocalProtocol';
@@ -83,6 +83,8 @@ export struct LocalChatPane {
   @Prop compact: boolean = false;
   @State lines: LocalChatMessage[] = [];
   @State items: ChatItem[] = [];
+  /** 正在流式输出的那段回答的字(见 chatItemKey)。 */
+  @State liveText: string = '';
   @State fullAuto: boolean = false;
   @State title: string = 'LeoPhoneAgent';
   @State draft: string = '';
@@ -113,6 +115,8 @@ export struct LocalChatPane {
   private currentId: string = '';
   /** 这个页面在看的对话。一轮跑在它里面,离开页面、切走都不作废(见 ChatRun)。 */
   private run: ChatRun | null = null;
+  /** 上次抄到页面上的 run.lines(比对「是不是只有最后一段多了几个字」用)。 */
+  private shown: LocalChatMessage[] = [];
   private stopListen: (() => void) | null = null;
   private nearBottom: boolean = true;
 
@@ -154,6 +158,8 @@ export struct LocalChatPane {
     this.detach();
     this.lines = [];
     this.items = [];
+    this.liveText = '';
+    this.shown = [];
     this.draft = '';
     this.image = null;
     this.pendingFiles = [];
@@ -183,8 +189,7 @@ export struct LocalChatPane {
                 this.itemView(item)
               }
               .width('100%')
-              // key 不带文字长度:流式输出时最后一条只更新,不整条销毁重建
-            }, (item: ChatItem, i: number) => `${i}:${item.kind}:${item.index}:${item.name}`)
+            }, (item: ChatItem, i: number) => chatItemKey(item, i))
           }
           .width('100%')
           .height('100%')
@@ -401,7 +406,7 @@ export struct LocalChatPane {
         .width('100%')
         .margin({ top: 12, bottom: 4 })
       } else if (item.kind === 'assistant') {
-        MarkdownText({ text: item.text })
+        MarkdownText({ text: item.live ? this.liveText : item.text })
         if (item.partial) {
           Text('没说完')
             .fontSize(12)
@@ -902,11 +907,19 @@ export struct LocalChatPane {
     }
     const grew = run.lines.length !== this.lines.length;
     const mine = run.lines.length > 0 && run.lines[run.lines.length - 1].role === 'user';
-    if (run.lines !== this.lines || run.active !== this.active || run.askWrite !== this.askWrite) {
+    // 刚说完:回答下面多出复制、朗读那一排,跟着滚到底才看得见
+    const ended = this.active && !run.active;
+    if (this.tailOnly(run)) {
+      this.lines = run.lines;
+      this.liveText = run.lines[run.lines.length - 1].text;
+    } else if (run.lines !== this.lines || run.active !== this.active || run.askWrite !== this.askWrite) {
       this.lines = run.lines;
       // 等你确认写文件时这一轮还没完:没跑的那步算「在跑」,不是「没跑完」
       this.items = chatItems(textLines(run.lines), run.active || run.askWrite, this.openTurns, !themeStore.toolPreview);
+      const tail = this.items.length > 0 ? this.items[this.items.length - 1] : undefined;
+      this.liveText = tail !== undefined && tail.live ? tail.text : '';
     }
+    this.shown = run.lines;
     this.status = run.status;
     this.title = run.title;
     this.active = run.active;
@@ -916,10 +929,26 @@ export struct LocalChatPane {
     if (grew && !this.nearBottom && !mine) {
       this.unseen = true;
     }
-    if (grew || run.active) {
+    if (grew || run.active || ended) {
       // 自己发的消息总是滚到底;别的只在本来就在底部附近时跟随。
       this.followTail(grew && mine);
     }
+  }
+
+  /** 流式输出的一帧:只有最后一段回答多了几个字 —— 只刷那段字,列表不重排。 */
+  private tailOnly(run: ChatRun): boolean {
+    const next = run.lines;
+    const n = next.length;
+    if (this.liveText.length === 0 || !run.active || run.askWrite || n === 0 || n !== this.shown.length ||
+      next[n - 1].role !== 'assistant') {
+      return false;
+    }
+    for (let i = 0; i < n - 1; i++) {
+      if (next[i] !== this.shown[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private toggleTurn(turn: number): void {

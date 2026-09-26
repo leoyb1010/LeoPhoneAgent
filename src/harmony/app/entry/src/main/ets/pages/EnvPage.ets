@@ -82,7 +82,7 @@ struct EnvPage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: EnvEntry) => row.name)
+          }, (row: EnvEntry) => `${row.name}|${row.value}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(this.message === '已保存' ? Tokens.online : Tokens.warn)

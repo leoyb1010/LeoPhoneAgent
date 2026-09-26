@@ -182,7 +182,7 @@ export struct SettingsPane {
             .backgroundColor(Tokens.card)
             .borderRadius(Tokens.groupRadius)
             .clip(true)
-          }, (group: SetGroup) => `${group.title}:${group.rows.length}:${this.providerLine}`)
+          }, (group: SetGroup) => `${group.title}|${group.rows.map((r: SetRow) => `${r.title}:${r.subtitle}`).join('|')}`)
           Text(`LeoPhoneAgent 鸿蒙版 ${ReleaseCatalog.currentVersion}（${ReleaseCatalog.currentBuild}）`)
             .fontSize(12)
             .fontColor(Tokens.muted)

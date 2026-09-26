@@ -104,7 +104,7 @@ struct McpPage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: McpServer) => row.label)
+          }, (row: McpServer) => `${row.label}|${row.url}|${row.tools}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(this.message === '已保存' ? Tokens.online : Tokens.warn)

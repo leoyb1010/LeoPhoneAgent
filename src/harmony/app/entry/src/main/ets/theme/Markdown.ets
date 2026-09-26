@@ -26,9 +26,10 @@ export struct MarkdownText {
 
   build() {
     Column() {
+      // key 带上字:流式输出时只有长了的那一块重画(key 不变 ForEach 就不重画,会停在旧字上)
       ForEach(this.parts, (part: MdPart, index: number) => {
         MdPartView({ part: part, color: this.color, textSize: this.textSize, first: index === 0 })
-      }, (part: MdPart, index: number) => `${index}:${part.kind}`)
+      }, (part: MdPart, index: number) => `${index}|${part.kind}|${part.level}|${part.ordinal}|${part.lang}|${part.text}`)
     }
     .alignItems(HorizontalAlign.Start)
     .width(this.fill ? '100%' : 'auto')

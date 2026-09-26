@@ -112,7 +112,7 @@ struct SchedulePage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: ScheduleTask) => row.rowId)
+          }, (row: ScheduleTask) => `${row.rowId}|${row.title}|${row.prompt}|${row.hour}|${row.minute}|${row.lastRunAt}|${row.lastResult}|${row.lastError}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(this.message === '已保存' ? Tokens.online : Tokens.warn)

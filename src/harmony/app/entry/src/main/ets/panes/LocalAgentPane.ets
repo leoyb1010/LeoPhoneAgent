@@ -26,6 +26,11 @@ function avatarColor(title: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/** 一行对话的 key:画面上用到的都在里面(鸿蒙 ForEach key 不变就不重画,改了标题也还显示旧的)。 */
+function sessionKey(row: LocalSessionSummary): string {
+  return `${row.id}|${row.title}|${row.updatedAt}|${row.pinned}|${row.lastMessage}`;
+}
+
 /**
  * 首页:本机对话列表。和 iOS / 安卓一样,顶上是设置、搜索、远程;按置顶 / 今天 / 昨天…分组;
  * 手机上最下面是一个输入框,说一句就开新对话。展开的折叠屏、平板上左边是列表、右边是对话。
@@ -142,7 +147,7 @@ export struct LocalAgentPane {
             } else {
               ForEach(this.groups, (group: SessionGroup) => {
                 this.section(group)
-              }, (group: SessionGroup) => `${group.key}:${group.rows.length}`)
+              }, (group: SessionGroup) => `${group.key}|${group.rows.map((row: LocalSessionSummary) => sessionKey(row)).join(',')}`)
             }
           }
         }
@@ -418,7 +423,7 @@ export struct LocalAgentPane {
       .padding({ left: Tokens.pagePad + 4, right: Tokens.pagePad, top: 14, bottom: 4 })
       ForEach(group.rows, (row: LocalSessionSummary) => {
         this.sessionRow(row)
-      }, (row: LocalSessionSummary) => `${row.id}:${row.title}:${row.updatedAt}:${row.pinned}`)
+      }, (row: LocalSessionSummary) => sessionKey(row))
     }
     .width('100%')
   }

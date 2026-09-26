@@ -96,7 +96,7 @@ export struct FleetPane {
             Column() {
               ForEach(this.hosts, (host: SavedHost, index: number) => {
                 this.machineCard(host, index > 0)
-              }, (host: SavedHost, index: number) => `${host.name}:${host.online}:${index}`)
+              }, (host: SavedHost, index: number) => `${index}|${host.name}|${host.displayName}|${host.platform}|${host.online}`)
             }
             .width('100%')
             .backgroundColor(Tokens.card)

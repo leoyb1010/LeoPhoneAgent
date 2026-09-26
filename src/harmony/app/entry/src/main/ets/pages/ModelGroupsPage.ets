@@ -96,7 +96,7 @@ struct ModelGroupsPage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: ModelGroup) => row.id)
+          }, (row: ModelGroup) => `${row.id}|${row.name}|${row.modelIds.join(',')}|${providerStore.activeGroupId === row.id}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(Tokens.online)
@@ -151,6 +151,7 @@ struct ModelGroupsPage {
   private async makeDefault(id: string): Promise<void> {
     const ctx = getContext(this) as common.UIAbilityContext;
     await providerStore.setActiveGroup(ctx, id);
+    this.groups = providerStore.groups.slice();
     this.message = '已设为默认，失败会按顺序换';
   }
 

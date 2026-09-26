@@ -82,7 +82,7 @@ struct ProviderListPage {
         Column() {
           ForEach(this.of(kind.key), (row: ProviderInstance) => {
             this.row(row)
-          }, (row: ProviderInstance) => row.id)
+          }, (row: ProviderInstance) => `${row.id}|${row.label}|${row.type}|${row.credential}|${row.model}|${row.enabled}|${providerStore.activeId === row.id}`)
         }
         .width('100%')
         .backgroundColor(Tokens.surface)

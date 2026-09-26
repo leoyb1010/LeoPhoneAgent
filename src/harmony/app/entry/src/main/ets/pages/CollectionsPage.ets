@@ -73,7 +73,7 @@ struct CollectionsPage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: CollectionItem) => row.id)
+          }, (row: CollectionItem) => `${row.id}|${row.title}|${row.body}`)
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)

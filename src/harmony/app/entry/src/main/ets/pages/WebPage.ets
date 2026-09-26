@@ -85,7 +85,7 @@ struct WebPage {
               browserStore.activeId = tab.id;
               this.sync();
             })
-        }, (tab: BrowserTab) => tab.id)
+        }, (tab: BrowserTab) => `${tab.id}|${tab.title}`)
       }
       .width('100%')
       .padding({ left: 12, right: 12, bottom: 8 })

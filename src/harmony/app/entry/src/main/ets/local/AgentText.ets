@@ -921,6 +921,8 @@ export class ChatItem {
   last: boolean = false;
   /** 回答说到一半停下的。 */
   partial: boolean = false;
+  /** 正在流式输出的这一段(页面上它的字原地刷新,见 chatItemKey)。 */
+  live: boolean = false;
 }
 
 const FAIL_RESULT = /^(失败|错误|Error|error|没有这个|参数不完整|没做成|拿不到|找不到|读不了|http [45]\d\d|MCP 调用失败|拉不到)/;
@@ -1088,9 +1090,21 @@ export function chatItems(lines: TextLine[], active: boolean, openTurns: number[
     const tail = out[out.length - 1];
     if (tail.kind === 'user' || (tail.kind === 'tool' && tail.status !== 'running') || tail.kind === 'notice') {
       out.push(item('typing', -1, tail.turn));
+    } else if (tail.kind === 'assistant') {
+      tail.live = true;
     }
   }
   return out;
+}
+
+/**
+ * 列表里一条的 key。鸿蒙的 ForEach 认 key 不认内容:key 没变,这一行就一直画着旧样子 ——
+ * 流式输出被截断、退出再进才完整,就是 key 里少了字。所以画面上用到的都得在里面。
+ * 正在流式输出的那段(live)页面另用 liveText 原地刷新,不用每来几个字整个列表重排一次。
+ */
+export function chatItemKey(row: ChatItem, at: number): string {
+  return `${at}|${row.kind}|${row.index}|${row.name}|${row.title}|${row.status}|${row.seconds}|${row.count}|${row.open}|` +
+    `${row.head}|${row.last}|${row.partial}|${row.live}|${row.text}`;
 }
 
 /** 「已工作 N 步 · 用时」里的用时。 */

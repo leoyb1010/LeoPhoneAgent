@@ -1326,6 +1326,23 @@ function wireShape(source, startsWith) {
   assert.deepEqual(misc.map((i) => i.kind), ["summary", "user", "assistant", "error", "notice"]);
   assert.equal(misc[2].partial, true);
   assert.equal(t.chatItems([], true, []).length, 0);
+  // 流式输出:在跑且最后一条是回答 → live;说完了就不是
+  const streaming = t.chatItems([L("user", "q"), L("assistant", "正在说")], true, []);
+  assert.deepEqual(streaming.map((i) => i.live), [false, true]);
+  assert.equal(t.chatItems([L("user", "q"), L("assistant", "说完了")], false, [])[1].live, false);
+  assert.equal(t.chatItems([L("user", "q"), L("assistant", "先查"), L("system", t.toolPlanLine(["x"]))], true, [])[1].live, false, "后面有工具就不在流了");
+  // key 要跟着画面变(ForEach key 不变就不重画 —— 鸿蒙流式输出截断的根因)
+  const [a1] = t.chatItems([L("assistant", "一二")], false, []);
+  const [a2] = t.chatItems([L("assistant", "一二三")], false, []);
+  assert.notEqual(t.chatItemKey(a1, 0), t.chatItemKey(a2, 0), "字变了 key 就得变");
+  const [s1] = t.chatItems([L("assistant", "对的")], false, []);
+  const [s2] = t.chatItems([L("assistant", "好的")], false, []);
+  assert.notEqual(t.chatItemKey(s1, 0), t.chatItemKey(s2, 0), "同样长的不同字也得变(压缩后换了内容)");
+  assert.notEqual(t.chatItemKey(streaming[1], 1), t.chatItemKey(t.chatItems([L("user", "q"), L("assistant", "正在说")], false, [])[1], 1),
+    "说完那一下(live → last)要重画");
+  const run1 = t.chatItems([L("user", "q"), L("system", t.toolPlanLine(["x"]))], true, [])[1];
+  const lost1 = t.chatItems([L("user", "q"), L("system", t.toolPlanLine(["x"]))], false, [])[1];
+  assert.notEqual(t.chatItemKey(run1, 1), t.chatItemKey(lost1, 1), "工具从在跑变没跑完要重画");
 
   assert.equal(t.durationText(-1), "");
   assert.equal(t.durationText(42), "42 秒");
@@ -1372,7 +1389,14 @@ function wireShape(source, startsWith) {
   assert.ok(/'全自动' : '逐项确认'/.test(composer));
   // 回答不套气泡:直接画 Markdown,上面一行「✦ LeoPhoneAgent」
   const pane = src("panes/LocalChatPane.ets");
-  assert.ok(/AssistantHead\(\{ name: this\.agentName\(\) \}\)/.test(pane) && /MarkdownText\(\{ text: item\.text \}\)/.test(pane));
+  assert.ok(/AssistantHead\(\{ name: this\.agentName\(\) \}\)/.test(pane));
+  // 流式输出不截断:key 用 chatItemKey(带字),在流的那段走 liveText 原地刷新;Markdown 的块 key 也带字
+  assert.ok(/\(item: ChatItem, i: number\) => chatItemKey\(item, i\)\)/.test(pane), "聊天列表 key 用 chatItemKey");
+  assert.ok(/MarkdownText\(\{ text: item\.live \? this\.liveText : item\.text \}\)/.test(pane) && /this\.liveText = run\.lines\[run\.lines\.length - 1\]\.text/.test(pane));
+  const remote = src("panes/ChatPane.ets");
+  assert.ok(/\(line: ChatLine, index: number\) => `\$\{index\}\|\$\{line\.role\}\|\$\{line\.text\}`/.test(remote), "远程对话 key 带字");
+  assert.ok(/MarkdownText\(\{ text: line === this\.liveLine \? this\.liveText : line\.text \}\)/.test(remote));
+  assert.ok(/\$\{part\.kind\}\|\$\{part\.level\}\|\$\{part\.ordinal\}\|\$\{part\.lang\}\|\$\{part\.text\}/.test(src("theme/Markdown.ets")), "Markdown 块 key 带字");
   assert.ok(/chatItems\(textLines\(run\.lines\), run\.active \|\| run\.askWrite, this\.openTurns, !themeStore\.toolPreview\)/.test(pane));
   // 设置四组,和 iOS / 安卓同顺序
   const settings = src("panes/SettingsPane.ets");

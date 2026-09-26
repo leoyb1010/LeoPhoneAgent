@@ -105,7 +105,7 @@ struct SkillsPage {
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: LocalSkill) => `${row.id}:${row.enabled}`)
+          }, (row: LocalSkill) => `${row.id}|${row.enabled}|${row.name}|${row.body}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(Tokens.online)
