@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.46.0",
+            date: "2026-09-26",
+            title: "Apple Watch 边答边显示、边答边读;离开 iPhone 也能联网搜索",
+            highlights: [
+                "手表上的回答不再干等:经 iPhone 回答时,手表实时显示已经写出来的内容和正在做什么(「正在搜索网页」「正在运行命令」这类);手表自己直连模型时也一样是流式的。回答页多了「停止」;还没答完点「收起」只是先收起来,不会丢。",
+                "边答边读:第一句话写完就开始读,不用等整段答完;手表「记录」页可以选只读前几句还是读全文,系统里装了高品质中文语音会自动用上。",
+                "放下手腕也不会错过:答案在手腕放下时到了,手表会震动并弹出通知,5 分钟内抬腕会自动读出来。",
+                "手表离开 iPhone 也能用工具:iPhone 上添加的远程(HTTP)MCP 工具——联网搜索、地图、天气这类——会同步到手表,手表自己回答时需要最新信息就先查再答。在 设置 → Apple Watch 里可以逐个开关;要在 iPhone 本机跑的技能、需要登录授权的工具仍然只能经 iPhone。"
+            ]
+        ),
+        LeoRelease(
             version: "1.45.0",
             date: "2026-09-26",
             title: "Apple Watch 能单独选模型,也能一直自己回答",

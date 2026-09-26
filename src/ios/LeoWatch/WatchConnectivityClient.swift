@@ -73,6 +73,16 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published private(set) var replyPulse = 0
     /// The last reply was an error message, not an answer: shown, not spoken.
     @Published private(set) var lastReplyFailed = false
+    /// [T-watch-stream] The answer so far while waiting, and what is happening
+    /// right now ("正在搜索「…」"). `partialRound` restarts after a tool call;
+    /// `partialPulse` bumps on every update (read-as-it-streams follows it).
+    @Published private(set) var partialText = ""
+    @Published private(set) var partialStep = ""
+    @Published private(set) var partialRound = 0
+    @Published private(set) var partialPulse = 0
+    /// [T-watch-wrist-down] An answer that landed while the app was not on
+    /// screen: read out when the wrist comes back within a few minutes.
+    @Published var pendingSpeech: (text: String, at: Date)?
 
     private static let historyKey = "leo.watch.history.v1"
     private static let historyLimit = 20
@@ -107,6 +117,18 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         session.activate()
         apply(session.receivedApplicationContext)
         isPhoneReachable = session.isReachable
+    }
+
+    /// [T-watch-wrist-down] The system woke us to deliver WatchConnectivity
+    /// data (a queued answer). Keep the task open until it has all arrived.
+    static func drainBackgroundDelivery() async {
+        await MainActor.run {
+            if WCSession.default.delegate == nil { WatchConnectivityClient.shared.activate() }
+        }
+        for _ in 0..<30 {
+            if WCSession.default.activationState == .activated, !WCSession.default.hasContentPending { break }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
     }
 
     /// The route a question would take right now.
@@ -167,7 +189,9 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         requestNotificationPermissionOnce()
         directTask = Task {
             do {
-                let answer = try await WatchStandaloneClient.shared.ask(text, history: context)
+                let answer = try await WatchStandaloneClient.shared.askStreaming(text, history: context) { event in
+                    Task { @MainActor in self.applyPartial(requestId: requestId, event: event) }
+                }
                 self.finish(requestId: requestId, text: answer, sessionId: nil)
             } catch is CancellationError {
                 // cancelAsk() or the background hand-off took over.
@@ -288,6 +312,9 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         askState = .waiting(requestId: requestId, startedAt: Date())
         pendingQuestion = (requestId, text ?? "（语音）", route)
         lastActionMessage = nil
+        resetPartial()
+        // Needed for answers that land with the wrist down, on either route.
+        requestNotificationPermissionOnce()
         WKInterfaceDevice.current().play(.start)
         return requestId
     }
@@ -317,7 +344,11 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         guard case .waiting(let id, _) = askState, id == requestId else { return }
         askState = .replied(text: text)
         lastReplyFailed = failed
+        if !failed, WKApplication.shared().applicationState != .active {
+            rememberForSpeech(text)
+        }
         replyPulse += 1
+        resetPartial()
         WKInterfaceDevice.current().play(failed ? .failure : .success)
         if !failed, let pending = pendingQuestion, pending.requestId == requestId {
             record(WatchHistoryEntry(id: requestId, question: pending.text, answer: text,
@@ -327,6 +358,76 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         directContext = nil
         directTask = nil
         lastActionMessage = nil   // "moved to the background" is over once the answer is here
+    }
+
+    // MARK: - Streaming
+
+    private func resetPartial() {
+        partialText = ""
+        partialStep = ""
+        partialRound = 0
+    }
+
+    /// A direct-route event, only for the question still being waited on.
+    fileprivate func applyPartial(requestId: String, event: WatchAgentEvent) {
+        guard case .waiting(let id, _) = askState, id == requestId else { return }
+        switch event {
+        case .text(let text, let round):
+            partialText = text
+            partialRound = round
+            if !text.isEmpty { partialStep = "" }
+        case .step(let step):
+            partialStep = step
+        }
+        partialPulse += 1
+    }
+
+    // MARK: - Wrist-down delivery
+
+    private static let pendingSpeechKey = "leo.watch.pendingSpeech"
+
+    private func rememberForSpeech(_ text: String) {
+        pendingSpeech = (text, Date())
+        UserDefaults.standard.set(["text": text, "at": Date().timeIntervalSince1970], forKey: Self.pendingSpeechKey)
+    }
+
+    /// The unspoken answer, if it is recent enough to still be wanted; cleared once taken.
+    func takePendingSpeech(maxAge: TimeInterval = 300) -> String? {
+        var pending = pendingSpeech
+        if pending == nil, let saved = UserDefaults.standard.dictionary(forKey: Self.pendingSpeechKey),
+           let text = saved["text"] as? String, let at = saved["at"] as? TimeInterval {
+            pending = (text, Date(timeIntervalSince1970: at))
+        }
+        pendingSpeech = nil
+        UserDefaults.standard.removeObject(forKey: Self.pendingSpeechKey)
+        guard let pending, Date().timeIntervalSince(pending.at) < maxAge else { return nil }
+        return pending.text
+    }
+
+    /// [T-watch-wrist-down] An answer the phone queued with transferUserInfo:
+    /// it arrives even when the app is suspended (the system wakes us for it).
+    /// Delivered live too, so each answer is taken once.
+    fileprivate func applyQueuedReply(_ info: [String: Any]) {
+        let requestId = (info["requestId"] as? String) ?? ""
+        let text = (info["text"] as? String) ?? ""
+        guard !requestId.isEmpty, !text.isEmpty else { return }
+        if case .waiting(let id, _) = askState, id == requestId {
+            finish(requestId: requestId, text: text, sessionId: info["sessionId"] as? String)
+        } else if history.contains(where: { $0.id == requestId }) {
+            return   // already answered through the live channel
+        } else {
+            // The app was relaunched just for this: file it anyway.
+            record(WatchHistoryEntry(id: requestId, question: "（语音）", answer: text, route: .phone,
+                                     date: Date(), sessionId: info["sessionId"] as? String))
+            if WKApplication.shared().applicationState != .active { rememberForSpeech(text) }
+        }
+        guard WKApplication.shared().applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Leo"
+        content.body = String(text.prefix(180))
+        content.sound = .default
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "answer-\(requestId)", content: content, trigger: nil))
     }
 
     // MARK: - History
@@ -422,6 +523,13 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
             finish(requestId: (message["requestId"] as? String) ?? "",
                    text: (message["text"] as? String) ?? "",
                    sessionId: message["sessionId"] as? String)
+        case "askPartial":
+            // [T-watch-stream] The phone's answer so far + current step.
+            guard case .waiting(let id, _) = askState, id == (message["requestId"] as? String) else { break }
+            partialText = (message["text"] as? String) ?? ""
+            partialStep = (message["step"] as? String) ?? ""
+            partialRound = 0
+            partialPulse += 1
         default:
             break
         }
@@ -460,7 +568,13 @@ extension WatchConnectivityClient: WCSessionDelegate {
 
     /// [T-watch-standalone] The direct-answer config (or "forget it").
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        guard (userInfo["kind"] as? String) == "standaloneConfig" else { return }
-        Task { @MainActor in WatchStandaloneClient.shared.apply(userInfo) }
+        switch userInfo["kind"] as? String {
+        case "standaloneConfig":
+            Task { @MainActor in WatchStandaloneClient.shared.apply(userInfo) }
+        case "askReply":
+            Task { @MainActor in WatchConnectivityClient.shared.applyQueuedReply(userInfo) }
+        default:
+            break
+        }
     }
 }

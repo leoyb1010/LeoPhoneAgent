@@ -44,6 +44,8 @@ enum WatchPayloadKey {
     static let kindAsk = "ask"                // watch → phone: run a prompt
     static let kindAskAudio = "askAudio"      // watch → phone: raw audio to transcribe
     static let kindAskReply = "askReply"      // phone → watch: final answer
+    static let kindAskPartial = "askPartial"  // phone → watch: the answer so far (live only)
+    static let step = "step"
     static let kindCancelAsk = "cancelAsk"    // watch → phone: stop the run behind a request
     static let kindWake = "wake"              // watch → phone: recording started, get ready
     // [T-leogateway] Remote-gateway approvals. The wrist is the fastest place
@@ -97,6 +99,67 @@ enum WatchStandalone {
     }
 
     static var isEnabled: Bool { mode != .off }
+
+    /// [T-watch-skills] MCP servers the user switched off for the watch.
+    static let toolsOffKey = "watch.standalone.tools.off"
+
+    /// A remote tool server the wrist can call itself, with credentials filled in.
+    struct ToolServer: Equatable {
+        let id: String
+        let url: String
+        let headers: [String: String]
+    }
+
+    /// One row of the settings list.
+    struct ToolRow: Identifiable, Equatable {
+        let id: String
+        let usable: Bool
+        /// Why it can't go to the watch; nil when it can.
+        let reason: String?
+    }
+
+    static var toolsOff: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: toolsOffKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: toolsOffKey) }
+    }
+
+    /// Every HTTP server on the phone and whether the wrist can use it. stdio
+    /// servers need the phone's Linux; OAuth ones refresh their tokens on the
+    /// phone — both stay phone-only.
+    @MainActor
+    static func toolRows() -> [ToolRow] {
+        MCPStore.shared.servers.filter(\.isHTTP).map { server in
+            if !server.enabled { return ToolRow(id: server.id, usable: false, reason: String(localized: "在 iPhone 上已关闭")) }
+            if server.oauth != nil {
+                return ToolRow(id: server.id, usable: false, reason: String(localized: "要登录授权(OAuth),只能经 iPhone 用"))
+            }
+            do {
+                _ = try NativeMCPClient.resolvedTransport(server)
+                return ToolRow(id: server.id, usable: true, reason: nil)
+            } catch {
+                return ToolRow(id: server.id, usable: false, reason: String(localized: "缺少环境变量,先在 设置 → 环境变量 里补上"))
+            }
+        }
+    }
+
+    /// The servers to hand the watch: usable and not switched off.
+    @MainActor
+    static func toolServers() -> [ToolServer] {
+        let off = toolsOff
+        return MCPStore.shared.servers.compactMap { server in
+            guard server.enabled, server.isHTTP, server.oauth == nil, !off.contains(server.id),
+                  let resolved = try? NativeMCPClient.resolvedTransport(server) else { return nil }
+            return ToolServer(id: server.id, url: resolved.url, headers: resolved.headers)
+        }
+    }
+
+    /// Cheap fingerprint of what the tool list depends on (no Keychain reads).
+    @MainActor
+    static var toolInputs: String {
+        let servers = MCPStore.shared.servers.filter(\.isHTTP)
+            .map { "\($0.id):\($0.enabled):\(Int($0.updatedAt ?? $0.createdAt ?? 0)):\($0.oauth != nil)" }
+        return (servers + toolsOff.sorted()).joined(separator: ",")
+    }
 
     /// The model picked for the watch (`ModelEntry.id`); empty follows the default group.
     static var entryId: String {
@@ -279,6 +342,19 @@ final class WatchBridge: NSObject, ObservableObject {
         ], replyHandler: nil, errorHandler: { _ in })
     }
 
+    /// [T-watch-stream] The answer so far and what the agent is doing, while the
+    /// wrist waits. Live only: a stale partial is worthless, and the final
+    /// answer has its own queued path.
+    func sendAskPartial(requestId: String, text: String, step: String) {
+        guard !requestId.hasPrefix("automation-"), let session, session.isReachable else { return }
+        session.sendMessage([
+            WatchPayloadKey.kind: WatchPayloadKey.kindAskPartial,
+            WatchPayloadKey.requestId: requestId,
+            WatchPayloadKey.text: text,
+            WatchPayloadKey.step: step,
+        ], replyHandler: nil, errorHandler: { _ in })
+    }
+
     /// - Parameter sessionId: the phone session that produced the answer, so a
     ///   follow-up from the wrist continues it.
     func sendAskReply(requestId: String, text: String, sessionId: String = "") {
@@ -286,14 +362,24 @@ final class WatchBridge: NSObject, ObservableObject {
         // path but their answers belong to notifications, not the wrist.
         guard !requestId.hasPrefix("automation-") else { return }
         pendingAskReply = (requestId, text, sessionId)
+        let reply: [String: Any] = [
+            WatchPayloadKey.kind: WatchPayloadKey.kindAskReply,
+            WatchPayloadKey.requestId: requestId,
+            WatchPayloadKey.text: text,
+            WatchPayloadKey.sessionId: sessionId,
+        ]
         if let session, session.isReachable {
-            session.sendMessage([
-                WatchPayloadKey.kind: WatchPayloadKey.kindAskReply,
-                WatchPayloadKey.requestId: requestId,
-                WatchPayloadKey.text: text,
-                WatchPayloadKey.sessionId: sessionId,
-            ], replyHandler: nil, errorHandler: { _ in })
+            session.sendMessage(reply, replyHandler: nil, errorHandler: { _ in })
         }
+        // [T-watch-wrist-down] Queue it as well: a wrist that dropped while
+        // waiting suspends the watch app, which a live message can't reach.
+        // The system delivers this in the background and the watch notifies;
+        // the watch takes each answer once, so the double delivery is harmless.
+        #if os(iOS)
+        if let session, session.activationState == .activated, session.isPaired, session.isWatchAppInstalled {
+            session.transferUserInfo(reply)
+        }
+        #endif
         resetDedupe()
         pushStatus()
     }
@@ -368,7 +454,7 @@ final class WatchBridge: NSObject, ObservableObject {
         guard session.isPaired, session.isWatchAppInstalled else { return }
         #endif
         let store = ProviderConfigStore.shared
-        let inputs = "\(WatchStandalone.mode.rawValue)|\(WatchStandalone.entryId)|\(store.configRevision)|\(store.authRevision)|\(store.defaultPrimaryGroupId ?? "")"
+        let inputs = "\(WatchStandalone.mode.rawValue)|\(WatchStandalone.entryId)|\(store.configRevision)|\(store.authRevision)|\(store.defaultPrimaryGroupId ?? "")|\(WatchStandalone.toolInputs)"
         guard force || inputs != lastStandaloneInputs else { return }
         lastStandaloneInputs = inputs
 
@@ -378,8 +464,13 @@ final class WatchBridge: NSObject, ObservableObject {
         case .success(let config):
             let keyDigest = SHA256.hash(data: Data(config.apiKey.utf8)).map { String(format: "%02x", $0) }.joined()
             let alwaysDirect = WatchStandalone.mode == .always
+            // [T-watch-skills] Remote tools the wrist runs itself (URLs / headers resolved here).
+            let tools = WatchStandalone.toolServers()
+            let toolDigest = SHA256.hash(data: Data(tools.map { "\($0.id)\u{1}\($0.url)\u{1}\($0.headers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" })" }
+                .joined(separator: "\u{2}").utf8)).map { String(format: "%02x", $0) }.joined()
             signature = [config.format, config.endpoint, config.model, config.modelName, config.userAgent ?? "", keyDigest,
-                         "\(alwaysDirect)", "\(config.legacyMaxTokens)"].joined(separator: "|")
+                         "\(alwaysDirect)", "\(config.legacyMaxTokens)", toolDigest].joined(separator: "|")
+            payload["mcpServers"] = tools.map { ["id": $0.id, "url": $0.url, "headers": $0.headers] as [String: Any] }
             payload["alwaysDirect"] = alwaysDirect
             payload["legacyMaxTokens"] = config.legacyMaxTokens
             payload["format"] = config.format
@@ -402,7 +493,7 @@ final class WatchBridge: NSObject, ObservableObject {
             transfer.cancel()
         }
         session.transferUserInfo(payload)
-        logger.info("standalone config sent to watch (clear=\(payload["clear"] != nil))")
+        logger.info("standalone config sent to watch (clear=\(payload["clear"] != nil), tools=\((payload["mcpServers"] as? [Any])?.count ?? 0))")
     }
 }
 
@@ -643,18 +734,29 @@ enum WatchAskRunner {
         // The answer is read on a 45 mm screen and often spoken: ask for it in
         // that shape. Hidden from the chat bubble like every system reminder.
         vm.inputText = prompt + wristReminder
+        // Messages before this turn; the assistant turn it produces comes after.
+        let baseline = vm.messages.count
         vm.send()
         // Wait for the run to settle (same observation pattern as the widget
         // runner): give it up to 3 minutes, then report whatever exists.
         // Startup grace: the send registers as active a beat later — breaking
         // on the FIRST idle tick returned the PREVIOUS turn's text.
+        // [T-watch-stream] Meanwhile the wrist gets the answer as it is written
+        // and what the agent is doing, a few times a second.
         var sawActive = false
-        for tick in 0..<360 {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+        var lastPartial = (text: "", step: "")
+        let started = Date()
+        while Date().timeIntervalSince(started) < 180 {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let partial = partialSnapshot(vm: vm, after: baseline)
+            if partial.text != lastPartial.text || partial.step != lastPartial.step {
+                lastPartial = partial
+                WatchBridge.shared.sendAskPartial(requestId: requestId, text: partial.text, step: partial.step)
+            }
             let active = SessionActivityTracker.shared.activeSessions.contains(sid)
                 || SessionActivityTracker.shared.isActive(sid)
             if active { sawActive = true; continue }
-            if sawActive || tick >= 30 { break }   // ended, or never started within 15s
+            if sawActive || Date().timeIntervalSince(started) >= 15 { break }   // ended, or never started within 15s
         }
         let reply = await lastAssistantText(sessionId: sid, limit: 2000)
         deliver(requestId: requestId,
@@ -662,6 +764,48 @@ enum WatchAskRunner {
                 sessionId: sid)
         WatchBridge.shared.resetDedupe()
         WatchBridge.shared.pushStatus()
+    }
+
+    /// [T-watch-stream] This run's assistant turn so far: its text (flattened
+    /// for the wrist) and a short "what it's doing" line.
+    private static func partialSnapshot(vm: AIChatViewModel, after baseline: Int) -> (text: String, step: String) {
+        let messages = vm.messages
+        guard messages.count > baseline,
+              let turn = messages[baseline...].last(where: { $0.role == .assistant }) else { return ("", "") }
+        let text = turn.blocks
+            .filter { $0.kind == .text }
+            .map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        return (String(WatchTextSanitizer.plain(text).suffix(4000)), stepLabel(turn))
+    }
+
+    private static func stepLabel(_ turn: ChatMessage) -> String {
+        let running = turn.blocks.last { block in
+            switch block.toolStatus {
+            case .some(.running), .some(.streaming): return true
+            default: return false
+            }
+        }
+        if let running {
+            // The model's own one-line summary, when it wrote one in Chinese.
+            if let summary = running.toolSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty,
+               summary.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) {
+                return String(summary.prefix(30))
+            }
+            switch running.kind {
+            case .shellTool: return "正在运行命令"
+            case .fileReadTool: return "正在读文件"
+            case .fileWriteTool, .fileEditTool: return "正在改文件"
+            case .browserTool: return "正在浏览网页"
+            case .readImageTool: return "正在看图片"
+            case .memoryTool: return "正在查记忆"
+            default: return "正在调用工具"
+            }
+        }
+        if turn.isAwaitingModelResponse { return "正在整理结果" }
+        if turn.blocks.last?.kind == .thinking { return "正在思考" }
+        return ""
     }
 
     private static let wristReminder = "\n\n<system-reminder>This message was spoken on the user's Apple Watch. Do the task as usual, but write the final reply for a watch face that may read it aloud: plain Chinese text, no Markdown, tables or code blocks, lead with the answer, at most about 120 characters unless the user asked for detail.</system-reminder>"

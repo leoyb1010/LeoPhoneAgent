@@ -10,8 +10,9 @@
 //  Anthropic Messages) and sends endpoint and key over the encrypted
 //  WatchConnectivity channel. Set to "always", the wrist answers this way even
 //  with the phone in reach. The key is kept in this
-//  watch's Keychain, never synced. Plain chat only: tools, files and sessions
-//  stay on the phone, where the full agent runs.
+//  watch's Keychain, never synced. [T-watch-skills] The phone also shares its
+//  remote (HTTP) MCP tools — web search, maps, weather — which the wrist runs
+//  itself (WatchAgentLoop); files, shell and in-app skills stay on the phone.
 //
 
 import Foundation
@@ -30,34 +31,6 @@ struct WatchStandaloneConfig: Codable, Equatable {
     let legacyMaxTokens: Bool?
 }
 
-enum WatchStandaloneError: LocalizedError {
-    case notConfigured(String)
-    case http(Int, String)
-    case emptyReply
-    case network(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .notConfigured(let reason):
-            return reason
-        case .http(let status, let detail):
-            switch status {
-            case 401, 403: return "API Key 无效或没有权限。请在 iPhone 上检查这个模型的服务商。"
-            case 404: return "模型或接口地址不存在（\(detail)）。"
-            case 429: return "请求太频繁，或额度已用完。稍后再试。"
-            case 500...599: return "模型服务暂时不可用（\(status)）。"
-            default: return "请求失败（\(status)）\(detail.isEmpty ? "" : "：\(detail)")"
-            }
-        case .emptyReply:
-            return "模型没有返回文字。"
-        case .network(let detail):
-            // The watch may be riding a nearby iPhone's connection, and there
-            // is no API to force its own cellular or Wi-Fi (TN3135).
-            return "网络不可用（\(detail)）。手表离开 iPhone 时要靠自己的蜂窝或 Wi-Fi；答案会在联网后送到通知里。"
-        }
-    }
-}
-
 @MainActor
 final class WatchStandaloneClient: ObservableObject {
     static let shared = WatchStandaloneClient()
@@ -66,14 +39,23 @@ final class WatchStandaloneClient: ObservableObject {
     /// Why direct answers are off, in the phone's words ("already disabled",
     /// "only OAuth models in the default group", …). Nil when configured.
     @Published private(set) var unavailableReason: String?
+    /// [T-watch-skills] Names of the phone-shared tool servers ("联网搜索"…), for the status line.
+    @Published private(set) var toolServerNames: [String] = []
 
     private static let configKey = "leo.watch.standalone.config"
     private static let reasonKey = "leo.watch.standalone.reason"
     private static let keychainService = "com.leoyuan.leophoneagent.watch.standalone"
     private static let keychainAccount = "apiKey"
+    /// Resolved MCP servers (URLs / headers may carry keys) — Keychain, not defaults.
+    private static let serversAccount = "mcpServers"
+    private static let toolCacheKey = "leo.watch.tools.cache.v1"
+    /// Tool schemas are refetched at most this often (or when the servers change).
+    private static let toolCacheTTL: TimeInterval = 12 * 3600
 
     /// Small screen, short answers: the wrist is for quick questions.
     static let systemPrompt = "你是 Leo，用户正在 Apple Watch 上问你问题。用简洁的中文纯文本回答，不用 Markdown，尽量控制在 120 字以内；需要列步骤时每步一行。"
+    /// Added when tools are on offer: look things up instead of guessing.
+    static let toolsPrompt = "\n需要实时信息（新闻、天气、价格、比分、营业时间等）时先调用工具查，再用一两句话回答，不要编造。"
 
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -92,6 +74,7 @@ final class WatchStandaloneClient: ObservableObject {
             config = saved
         }
         unavailableReason = defaults.string(forKey: Self.reasonKey)
+        toolServerNames = Self.loadServers().map(\.id)
     }
 
     var isReady: Bool { config != nil }
@@ -104,6 +87,8 @@ final class WatchStandaloneClient: ObservableObject {
         let defaults = UserDefaults.standard
         if (info["clear"] as? Bool) == true {
             Self.deleteKey()
+            Self.saveServers([])
+            toolServerNames = []
             defaults.removeObject(forKey: Self.configKey)
             config = nil
             unavailableReason = info["reason"] as? String
@@ -129,6 +114,17 @@ final class WatchStandaloneClient: ObservableObject {
         defaults.removeObject(forKey: Self.reasonKey)
         config = next
         unavailableReason = nil
+        // [T-watch-skills] Remote tools the phone shared (absent from older phones = none).
+        let servers = ((info["mcpServers"] as? [[String: Any]]) ?? []).compactMap { entry -> WatchMCPServer? in
+            guard let id = entry["id"] as? String, let url = entry["url"] as? String, !url.isEmpty else { return nil }
+            return WatchMCPServer(id: id, url: url, headers: (entry["headers"] as? [String: String]) ?? [:])
+        }
+        if servers != Self.loadServers() {
+            Self.saveServers(servers)
+            defaults.removeObject(forKey: Self.toolCacheKey)
+            Task { for server in servers { await WatchMCPClient.shared.reset(server.id) } }
+        }
+        toolServerNames = servers.map(\.id)
     }
 
     /// One plain-chat turn. `history` is oldest-first (question, answer).
@@ -148,11 +144,65 @@ final class WatchStandaloneClient: ObservableObject {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw WatchStandaloneError.http(status, Self.errorDetail(from: data))
+            throw WatchStandaloneError.http(status, WatchAgentLoop.errorDetail(from: data))
         }
         let reply = Self.replyText(from: data, format: config.format)
         guard !reply.isEmpty else { throw WatchStandaloneError.emptyReply }
-        return Self.plain(reply)
+        return WatchAgentLoop.plain(reply)
+    }
+
+    /// [T-watch-stream] One direct answer, streamed: `onEvent` gets the answer
+    /// so far and what is happening ("正在搜索…"). Tools come from the phone's
+    /// shared servers; a server that can't be reached is left out, never fatal.
+    func askStreaming(_ text: String, history: [(question: String, answer: String)],
+                      onEvent: @escaping (WatchAgentEvent) -> Void) async throws -> String {
+        guard let config, let key = Self.loadKey() else {
+            throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LeoPhoneAgent 同步。")
+        }
+        let servers = Self.loadServers()
+        let tools = await availableTools(servers)
+        let loop = WatchAgentLoop(
+            endpoint: WatchModelEndpoint(format: config.format, endpoint: config.endpoint, model: config.model,
+                                         apiKey: key, userAgent: config.userAgent,
+                                         legacyMaxTokens: config.legacyMaxTokens != false),
+            tools: tools,
+            servers: servers,
+            mcp: WatchMCPClient.shared,
+            session: session,
+            systemPrompt: Self.systemPrompt + (tools.isEmpty ? "" : Self.toolsPrompt)
+        )
+        return try await loop.run(question: text, history: history, onEvent: onEvent)
+    }
+
+    private struct ToolCache: Codable {
+        let signature: String
+        let tools: [WatchMCPTool]
+        let fetchedAt: Date
+    }
+
+    /// Tool schemas for the shared servers, cached (they rarely change and
+    /// listing costs a round trip per server on a watch radio).
+    private func availableTools(_ servers: [WatchMCPServer]) async -> [WatchMCPTool] {
+        guard !servers.isEmpty else { return [] }
+        let signature = servers.map { "\($0.id)|\($0.url.count)|\($0.headers.keys.sorted())" }.joined(separator: ";")
+        if let data = UserDefaults.standard.data(forKey: Self.toolCacheKey),
+           let cache = try? JSONDecoder().decode(ToolCache.self, from: data),
+           cache.signature == signature, Date().timeIntervalSince(cache.fetchedAt) < Self.toolCacheTTL {
+            return cache.tools
+        }
+        var tools: [WatchMCPTool] = []
+        await withTaskGroup(of: [WatchMCPTool].self) { group in
+            for server in servers {
+                group.addTask { (try? await WatchMCPClient.shared.listTools(server)) ?? [] }
+            }
+            for await listed in group { tools += listed }
+        }
+        // Stable order keeps the request prefix identical between asks.
+        tools.sort { ($0.server, $0.name) < ($1.server, $1.name) }
+        if !tools.isEmpty, let data = try? JSONEncoder().encode(ToolCache(signature: signature, tools: tools, fetchedAt: Date())) {
+            UserDefaults.standard.set(data, forKey: Self.toolCacheKey)
+        }
+        return tools
     }
 
     private func makeRequest(_ text: String,
@@ -263,10 +313,10 @@ final class WatchStandaloneClient: ObservableObject {
         if let error {
             result = .failure(WatchStandaloneError.network(error.localizedDescription))
         } else if !(200..<300).contains(status) {
-            result = .failure(WatchStandaloneError.http(status, Self.errorDetail(from: data)))
+            result = .failure(WatchStandaloneError.http(status, WatchAgentLoop.errorDetail(from: data)))
         } else {
             let reply = Self.replyText(from: data, format: ask.format)
-            result = reply.isEmpty ? .failure(WatchStandaloneError.emptyReply) : .success(Self.plain(reply))
+            result = reply.isEmpty ? .failure(WatchStandaloneError.emptyReply) : .success(WatchAgentLoop.plain(reply))
         }
         onBackgroundAnswer?(requestId, ask.question, result)
     }
@@ -300,24 +350,6 @@ final class WatchStandaloneClient: ObservableObject {
         return ((message?["content"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func errorDetail(from data: Data) -> String {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "" }
-        if let error = json["error"] as? [String: Any], let message = error["message"] as? String {
-            return String(message.prefix(80))
-        }
-        return String(((json["message"] as? String) ?? "").prefix(80))
-    }
-
-    /// Models answer in Markdown even when asked not to; a 45 mm screen shows
-    /// the raw markers. Flatten the common ones.
-    static func plain(_ text: String) -> String {
-        var out = text
-        for marker in ["**", "__", "`"] { out = out.replacingOccurrences(of: marker, with: "") }
-        out = out.replacingOccurrences(of: "(?m)^\\s*#{1,6}\\s*", with: "", options: .regularExpression)
-        out = out.replacingOccurrences(of: "(?m)^(\\s*)[-*+]\\s+", with: "$1· ", options: .regularExpression)
-        return out.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     // MARK: - Keychain (this device only, never synced)
 
     private static func baseQuery() -> [String: Any] {
@@ -349,6 +381,31 @@ final class WatchStandaloneClient: ObservableObject {
 
     private static func deleteKey() {
         SecItemDelete(baseQuery() as CFDictionary)
+    }
+
+    private static func serversQuery() -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: keychainService,
+         kSecAttrAccount as String: serversAccount]
+    }
+
+    static func loadServers() -> [WatchMCPServer] {
+        var query = serversQuery()
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data,
+              let servers = try? JSONDecoder().decode([WatchMCPServer].self, from: data) else { return [] }
+        return servers
+    }
+
+    private static func saveServers(_ servers: [WatchMCPServer]) {
+        SecItemDelete(serversQuery() as CFDictionary)
+        guard !servers.isEmpty, let data = try? JSONEncoder().encode(servers) else { return }
+        var add = serversQuery()
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(add as CFDictionary, nil)
     }
 }
 

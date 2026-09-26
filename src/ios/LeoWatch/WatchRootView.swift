@@ -16,10 +16,9 @@ struct WatchRootView: View {
     @EnvironmentObject private var client: WatchConnectivityClient
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("leo.watch.autoSpeak") private var autoSpeak = true
+    /// Read the whole answer instead of its first few sentences.
+    @AppStorage("leo.watch.speakFull") private var speakFull = false
     @ObservedObject private var speaker = WatchSpeaker.shared
-    /// A reply that landed while the wrist was down: spoken if the wrist comes
-    /// back up soon, otherwise left for reading (no audio out of nowhere).
-    @State private var unspokenReply: (text: String, at: Date)?
 
     var body: some View {
         TabView {
@@ -38,23 +37,32 @@ struct WatchRootView: View {
                 client.answerApproval(choice: choice)
             }
         }
+        // [T-watch-speak-stream] Read as it is written: each sentence goes out
+        // the moment it is complete, not after the whole answer.
+        .onChange(of: client.partialPulse) { _, _ in
+            guard autoSpeak, scenePhase == .active, case .waiting = client.askState else { return }
+            speaker.streamFeed(client.partialText, round: client.partialRound, full: speakFull)
+        }
         .onChange(of: client.replyPulse) { _, _ in
-            guard autoSpeak, !client.lastReplyFailed, case .replied(let text) = client.askState else { return }
-            if scenePhase == .active {
-                speaker.speak(text)
-            } else {
-                unspokenReply = (text, Date())
+            guard case .replied(let text) = client.askState, !client.lastReplyFailed else {
+                speaker.stop()
+                return
             }
+            // Wrist down: finish() kept it for the next raise (no audio out of nowhere).
+            guard autoSpeak, scenePhase == .active else { return }
+            speaker.streamFinish(text, full: speakFull)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
-                if let pending = unspokenReply, Date().timeIntervalSince(pending.at) < 30 {
-                    speaker.speak(pending.text)
-                } else {
-                    speaker.resume()
+                // [T-watch-wrist-down] An answer that landed with the wrist
+                // down is read out if the wrist comes back within 5 minutes.
+                // Continue a read that the wrist drop paused, then add what
+                // arrived meanwhile.
+                speaker.resume()
+                if let pending = client.takePendingSpeech(), autoSpeak {
+                    speaker.streamFinish(pending, full: speakFull)
                 }
-                unspokenReply = nil
             case .inactive:
                 speaker.pause()
             case .background:
@@ -160,6 +168,8 @@ private struct AskPage: View {
     @StateObject private var recorder = WatchVoiceRecorder.shared
     @State private var pulseTrigger = 0
     @State private var showReply = false
+    /// The question whose answer page already opened while streaming.
+    @State private var streamSheetShownFor: String?
 
     private var isWaiting: Bool {
         if case .waiting = client.askState { return true }
@@ -185,6 +195,14 @@ private struct AskPage: View {
         }
         .sheet(isPresented: $showReply) { ReplySheet() }
         .onChange(of: client.replyPulse) { _, _ in showReply = true }
+        // [T-watch-stream] Open the answer page as soon as the first words
+        // arrive — once per question, so "收起" sticks.
+        .onChange(of: client.partialPulse) { _, _ in
+            guard case .waiting(let id, _) = client.askState, id != streamSheetShownFor,
+                  !client.partialText.isEmpty else { return }
+            streamSheetShownFor = id
+            showReply = true
+        }
         // Siri / Action Button "问 Leo" can land on a cold launch (appear), on a
         // suspended app coming back (active) or on the app already in front.
         .onAppear(perform: consumePendingVoiceAsk)
@@ -260,6 +278,7 @@ private struct AskPage: View {
     private var statusLine: String {
         if recorder.isRecording { return "说完再点一下发送" }
         if isWaiting {
+            if !client.partialStep.isEmpty { return "\(client.partialStep)… 点一下停止" }
             return client.route == .direct
                 ? "\(standalone.config?.modelName ?? "模型")正在回答… 点一下停止"
                 : "iPhone 上的 Leo 正在处理… 点一下停止"
@@ -272,7 +291,9 @@ private struct AskPage: View {
         }
         switch client.route {
         case .phone: return "点一下说话 · 经 iPhone"
-        case .direct: return "点一下说话 · 直连 \(standalone.config?.modelName ?? "")"
+        case .direct:
+            let tools = standalone.toolServerNames.isEmpty ? "" : " · 可用 \(standalone.toolServerNames.joined(separator: "、"))"
+            return "点一下说话 · 直连 \(standalone.config?.modelName ?? "")\(tools)"
         case nil: return standalone.unavailableReason ?? "iPhone 不在身边，也没有可直连的模型。"
         }
     }
@@ -313,43 +334,81 @@ private struct ReplySheet: View {
     @EnvironmentObject private var client: WatchConnectivityClient
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var speaker = WatchSpeaker.shared
+    @AppStorage("leo.watch.speakFull") private var speakFull = false
+
+    private var isWaiting: Bool {
+        if case .waiting = client.askState { return true }
+        return false
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                if case .replied(let text) = client.askState {
-                    Text(text)
-                        .font(.footnote)
-                        .settleIn(trigger: client.replyPulse)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    HStack {
-                        Button {
-                            speaker.toggle(text)
-                        } label: {
-                            Image(systemName: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
-                                .contentTransition(.symbolEffect(.replace))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if case .replied(let text) = client.askState {
+                        Text(text)
+                            .font(.footnote)
+                            .settleIn(trigger: client.replyPulse)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack {
+                            Button {
+                                speaker.toggle(text, full: speakFull)
+                            } label: {
+                                Image(systemName: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                                    .contentTransition(.symbolEffect(.replace))
+                            }
+                            .accessibilityLabel(speaker.isSpeaking ? "停止朗读" : "朗读")
+                            TextFieldLink(prompt: Text("追问")) {
+                                Image(systemName: "mic.fill")
+                            } onSubmit: { followUp in
+                                speaker.stop()
+                                dismiss()
+                                client.ask(followUp)
+                            }
+                            .accessibilityLabel("追问")
                         }
-                        .accessibilityLabel(speaker.isSpeaking ? "停止朗读" : "朗读")
-                        TextFieldLink(prompt: Text("追问")) {
-                            Image(systemName: "mic.fill")
-                        } onSubmit: { followUp in
+                    } else if isWaiting {
+                        // [T-watch-stream] The answer as it is being written.
+                        if !client.partialText.isEmpty {
+                            Text(client.partialText)
+                                .font(.footnote)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .animation(.easeOut(duration: 0.15), value: client.partialText)
+                        }
+                        HStack(spacing: 6) {
+                            WorkingBars().frame(width: 18, height: 12)
+                            Text(client.partialStep.isEmpty ? "正在回答…" : client.partialStep)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        Button(role: .destructive) {
                             speaker.stop()
+                            client.cancelAsk()
                             dismiss()
-                            client.ask(followUp)
+                        } label: {
+                            Label("停止", systemImage: "stop.fill")
                         }
-                        .accessibilityLabel("追问")
+                    } else {
+                        WorkingBars().padding(.top, 20)
                     }
-                } else {
-                    WorkingBars().padding(.top, 20)
+                    Color.clear.frame(height: 1).id("replyBottom")
                 }
+            }
+            .onChange(of: client.partialPulse) { _, _ in
+                guard isWaiting else { return }
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("replyBottom", anchor: .bottom) }
             }
         }
         .navigationTitle("Leo")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("完成") {
-                    speaker.stop()
-                    client.askState = .idle
+                // While it is still answering, closing only hides the page.
+                Button(isWaiting ? "收起" : "完成") {
+                    if !isWaiting {
+                        speaker.stop()
+                        client.askState = .idle
+                    }
                     dismiss()
                 }
             }
@@ -362,6 +421,7 @@ private struct ReplySheet: View {
 private struct HistoryPage: View {
     @EnvironmentObject private var client: WatchConnectivityClient
     @AppStorage("leo.watch.autoSpeak") private var autoSpeak = true
+    @AppStorage("leo.watch.speakFull") private var speakFull = false
 
     var body: some View {
         NavigationStack {
@@ -383,8 +443,13 @@ private struct HistoryPage: View {
                 Section {
                     Toggle("自动朗读回答", isOn: $autoSpeak)
                         .font(.caption)
+                    Picker("朗读", selection: $speakFull) {
+                        Text("前几句").tag(false)
+                        Text("全文").tag(true)
+                    }
+                    .font(.caption)
                 } footer: {
-                    Text("抬着手腕时收到的回答会自动读出来；放下手腕就暂停。")
+                    Text("边回答边读：第一句写完就开始读。抬着手腕时自动读，放下就暂停；放下手腕时答完的，5 分钟内抬腕会读出来。")
                 }
             }
             .navigationTitle("记录")
@@ -395,6 +460,7 @@ private struct HistoryPage: View {
 private struct HistoryDetail: View {
     let entry: WatchHistoryEntry
     @ObservedObject private var speaker = WatchSpeaker.shared
+    @AppStorage("leo.watch.speakFull") private var speakFull = false
 
     var body: some View {
         ScrollView {
@@ -407,7 +473,7 @@ private struct HistoryDetail: View {
                 }
                 .font(.caption2).foregroundStyle(.tertiary)
                 Button {
-                    speaker.toggle(entry.answer)
+                    speaker.toggle(entry.answer, full: speakFull)
                 } label: {
                     Label(speaker.isSpeaking ? "停止" : "朗读",
                           systemImage: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
@@ -420,50 +486,14 @@ private struct HistoryDetail: View {
 
 // MARK: - Speech out
 
-/// What actually gets spoken: models answer in Markdown and links even when
-/// asked not to, and a speech engine reads "asterisk asterisk". Strip the
-/// markup, drop URLs and emoji, and keep it to a few sentences — the full
-/// answer stays on screen.
-enum WatchSpeechText {
-    static func spoken(_ text: String, maxSentences: Int = 4, maxCharacters: Int = 220) -> String {
-        var out = text
-        out = out.replacingOccurrences(of: "```[\\s\\S]*?```", with: "（代码见屏幕）", options: .regularExpression)
-        out = out.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^)]+\\)", with: "$1", options: .regularExpression)
-        out = out.replacingOccurrences(of: "https?://\\S+", with: "链接", options: .regularExpression)
-        for marker in ["**", "__", "`", "~~"] { out = out.replacingOccurrences(of: marker, with: "") }
-        out = out.replacingOccurrences(of: "(?m)^\\s*(#{1,6}|>|[-*+•·]|\\d+[.)])\\s+", with: "", options: .regularExpression)
-        out = String(String.UnicodeScalarView(out.unicodeScalars.filter { scalar in
-            let props = scalar.properties
-            if props.isEmojiPresentation || (props.isEmoji && scalar.value > 0x2000) { return false }
-            return !(props.generalCategory == .control && scalar != "\n") && props.generalCategory != .format
-        }))
-        out = out.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespaces)
-
-        var sentences: [String] = []
-        var current = ""
-        for character in out {
-            current.append(character)
-            if "。！？!?；;".contains(character) || (character == "." && current.count > 1) {
-                sentences.append(current)
-                current = ""
-                if sentences.count == maxSentences { break }
-            }
-        }
-        if sentences.count < maxSentences, !current.isEmpty { sentences.append(current) }
-        let joined = sentences.joined().trimmingCharacters(in: .whitespaces)
-        return joined.count > maxCharacters ? String(joined.prefix(maxCharacters)) + "…" : joined
-    }
-
-    static func isMostlyChinese(_ text: String) -> Bool {
-        let han = text.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
-        return han * 3 >= text.unicodeScalars.filter { !$0.properties.isWhitespace }.count
-    }
-}
-
 /// Reads an answer aloud — the other half of "a watch you talk to". Ducks
 /// other audio while speaking and hands it back afterwards, pauses when the
 /// wrist drops and resumes when it comes back up.
+///
+/// [T-watch-speak-stream] Sentences are queued as they become complete, so
+/// speech starts with the first sentence of an answer still being written.
+/// Each utterance is tracked by identity: a late callback from a stopped
+/// answer must not count against the next one.
 @MainActor
 final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static let shared = WatchSpeaker()
@@ -471,25 +501,58 @@ final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     @Published private(set) var isSpeaking = false
     private let synthesizer = AVSpeechSynthesizer()
     private var audioActive = false
+    /// The answer being written, while it is still growing.
+    private var stream: WatchSentenceStream?
+    private var streamRound = 0
+    /// Utterances handed to the synthesizer and not yet finished.
+    private var inFlight: Set<ObjectIdentifier> = []
+    /// No more sentences are coming for the current answer.
+    private var inputEnded = true
 
     override private init() {
         super.init()
         synthesizer.delegate = self
     }
 
-    func toggle(_ text: String) {
-        if isSpeaking { stop() } else { speak(text) }
+    func toggle(_ text: String, full: Bool) {
+        if isSpeaking { stop() } else { speak(text, full: full) }
     }
 
-    func speak(_ text: String) {
+    /// The whole answer at once (history, the speaker button, a missed answer).
+    func speak(_ text: String, full: Bool) {
         stop()
-        let spoken = WatchSpeechText.spoken(text)
-        guard !spoken.isEmpty else { return }
-        activateAudio()
-        let utterance = AVSpeechUtterance(string: spoken)
-        utterance.voice = AVSpeechSynthesisVoice(language: WatchSpeechText.isMostlyChinese(spoken) ? "zh-CN" : nil)
-        synthesizer.speak(utterance)
-        isSpeaking = true
+        var sentences = WatchSentenceStream(full: full)
+        for sentence in sentences.take(text, final: true) { enqueue(sentence) }
+        inputEnded = true
+        settleIfDone()
+    }
+
+    /// The answer so far; complete sentences are spoken right away.
+    func streamFeed(_ text: String, round: Int, full: Bool) {
+        if stream == nil {
+            stop()
+            stream = WatchSentenceStream(full: full)
+            streamRound = round
+            inputEnded = false
+        } else if round != streamRound {
+            stream?.startNewRound()
+            streamRound = round
+        }
+        guard var current = stream else { return }
+        let sentences = current.take(text, final: false)
+        stream = current
+        for sentence in sentences { enqueue(sentence) }
+    }
+
+    /// The final answer: speak what the stream hasn't reached yet — or all of
+    /// it when nothing was streamed.
+    func streamFinish(_ text: String, full: Bool) {
+        guard var current = stream else { return speak(text, full: full) }
+        let sentences = current.take(text, final: true)
+        stream = nil
+        inputEnded = true
+        for sentence in sentences { enqueue(sentence) }
+        settleIfDone()
     }
 
     func pause() {
@@ -501,14 +564,48 @@ final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     }
 
     func stop() {
-        guard isSpeaking || synthesizer.isSpeaking || synthesizer.isPaused else { return }
+        stream = nil
+        inputEnded = true
+        guard isSpeaking || synthesizer.isSpeaking || synthesizer.isPaused || !inFlight.isEmpty else { return }
+        inFlight.removeAll()
         synthesizer.stopSpeaking(at: .immediate)
         finished()
+    }
+
+    private func enqueue(_ sentence: String) {
+        if !audioActive { activateAudio() }
+        let utterance = AVSpeechUtterance(string: sentence)
+        utterance.voice = Self.voice(for: sentence)
+        inFlight.insert(ObjectIdentifier(utterance))
+        synthesizer.speak(utterance)
+        isSpeaking = true
+    }
+
+    private func utteranceEnded(_ id: ObjectIdentifier) {
+        guard inFlight.remove(id) != nil else { return }   // from an answer already stopped
+        settleIfDone()
+    }
+
+    /// Release the audio only when the answer is fully spoken; between two
+    /// streamed sentences the session stays up (no duck/unduck flutter).
+    private func settleIfDone() {
+        if inFlight.isEmpty, inputEnded { finished() }
     }
 
     private func finished() {
         isSpeaking = false
         releaseAudio()
+    }
+
+    /// The best installed voice for the language (premium > enhanced > default).
+    private static var voiceCache: [String: AVSpeechSynthesisVoice] = [:]
+    private static func voice(for text: String) -> AVSpeechSynthesisVoice? {
+        guard WatchSpeechText.isMostlyChinese(text) else { return nil }
+        if let cached = voiceCache["zh-CN"] { return cached }
+        let candidates = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == "zh-CN" }
+        let best = candidates.max { $0.quality.rawValue < $1.quality.rawValue } ?? AVSpeechSynthesisVoice(language: "zh-CN")
+        if let best { voiceCache["zh-CN"] = best }
+        return best
     }
 
     private func activateAudio() {
@@ -534,10 +631,12 @@ final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.finished() }
+        let id = ObjectIdentifier(utterance)
+        Task { @MainActor in self.utteranceEnded(id) }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.finished() }
+        let id = ObjectIdentifier(utterance)
+        Task { @MainActor in self.utteranceEnded(id) }
     }
 }

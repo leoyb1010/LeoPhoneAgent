@@ -137,6 +137,13 @@ actor NativeMCPClient {
         initialized.remove(id)
     }
 
+    /// [T-watch-skills] URL + headers with every `$$NAME` filled in, for
+    /// handing a server to the watch (it has no env-var store of its own).
+    /// Throws when a name can't be resolved.
+    nonisolated static func resolvedTransport(_ config: MCPServerConfig) throws -> (url: String, headers: [String: String]) {
+        try resolve(config)
+    }
+
     // MARK: - Internals
 
     /// URL + headers with `$$NAME` / `$NAME` / `${NAME}` placeholders replaced

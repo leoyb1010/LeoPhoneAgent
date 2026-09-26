@@ -21,6 +21,11 @@ struct LeoWatchApp: App {
                 .environmentObject(client)
                 .onAppear { client.activate() }
         }
+        // [T-watch-wrist-down] The system wakes us to deliver an answer the
+        // phone queued while we were suspended (wrist down): take it, notify.
+        .backgroundTask(.watchConnectivity) {
+            await WatchConnectivityClient.drainBackgroundDelivery()
+        }
         // The system relaunches us (possibly in the background) to deliver a
         // direct answer that finished while we were suspended.
         .backgroundTask(.urlSession(WatchStandaloneClient.backgroundSessionId)) {
