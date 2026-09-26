@@ -11,6 +11,7 @@ import {
 } from "@zcode/contracts";
 
 import { estimateTokens } from "../../context/utils.js";
+import { formatLeoReadTextBody } from "../leo/read-body.js"; // [leo] 按模型的行格式
 
 const EMPTY_FILE_REMINDER = formatReadToolResultWarning(
   "Warning: the file exists but the contents are empty.",
@@ -63,6 +64,10 @@ export function formatReadTextOutput(output: ReadTextOutput): string {
   const partialViewPrefix = output.partialViewNotice
     ? `${formatReadToolResultWarning(output.partialViewNotice)}\n\n`
     : "";
+
+  // [leo] hashline（行号#哈希:内容）/ plain（无行号窗口）显示，见 tool/leo/read-body.ts。
+  const leoBody = formatLeoReadTextBody(output);
+  if (leoBody !== undefined) return `${partialViewPrefix}${leoBody}`;
 
   if (!output.content) {
     const warning =

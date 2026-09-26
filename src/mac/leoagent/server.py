@@ -2,7 +2,7 @@
 
 Deliberately small. Hermes remains the general agent engine; this process owns
 the thing Hermes has no concept of: hosting *other* coding agents (Claude Code,
-Codex, pi, Grok) as long-lived, steerable, approvable sessions.
+Codex, Grok) as long-lived, steerable, approvable sessions.
 
 Two properties this has that the Hermes api_server does not:
 

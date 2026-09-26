@@ -13,6 +13,7 @@ import {
 import { omitMcpServers, resolveTrustedOfficialCuaServerNames } from "../mcp-config.js";
 import { resolveDefaultEmbeddedSearchBackend } from "./embedded-search-backend.js";
 import { getProjectMemoryRoot } from "./paths.js";
+import { resolveLeoAgentSettings } from "./leo-agent-config.js"; // [leo]
 import type { ZCodeAppOptions } from "./types.js";
 import {
   resolveRegistryOwnedModelSelection,
@@ -24,6 +25,8 @@ interface ResolvedAppRuntimeConfig {
   configuredMcpServers: Record<string, McpServerConfig>;
   runtimeConfig: AgentRuntimeConfig;
   untrustedProjectMcpServers: Set<string>;
+  /** [leo] config.json "leo" 段 / ZCODE_LEO_AGENT 里被忽略的非法字段，由调用方记日志。 */
+  leoAgentWarnings: string[];
 }
 
 interface ResolvedInitialRegistrySelection extends ResolvedRegistrySelection {
@@ -115,11 +118,14 @@ export function resolveAppRuntimeConfig(input: {
   );
   const runtimeBuiltInModelSelectionOverrides =
     options.runtimeConfig?.subagents?.builtInModelSelectionOverrides ?? {};
+  // [leo] 按模型的编辑格式 / Read 行号 / 精简档 / prompt cache key（config.json 的 leo 段 + ZCODE_LEO_AGENT）
+  const leoAgent = resolveLeoAgentSettings({ configResult, env: options.env ?? process.env });
   const runtimeConfig: AgentRuntimeConfig = {
     ...options.runtimeConfig,
     bashTimeoutPolicy:
       options.runtimeConfig?.bashTimeoutPolicy ??
       resolveBashTimeoutPolicy(options.env ?? process.env),
+    leoAgent: options.runtimeConfig?.leoAgent ?? leoAgent.settings, // [leo]
     mode: options.runtimeConfig?.mode ?? persistedMode ?? configResult.config.permission.mode,
     modelSelection: initialModelSelection,
     // 仅接受显式传入的会话级工具面（ZCode Protocol session/create 或 CLI
@@ -188,6 +194,7 @@ export function resolveAppRuntimeConfig(input: {
     configuredMcpServers,
     runtimeConfig,
     untrustedProjectMcpServers,
+    leoAgentWarnings: leoAgent.warnings, // [leo]
   };
 }
 

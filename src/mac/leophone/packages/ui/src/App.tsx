@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- App 当前集中编排 workspace 级状态、导航、Git 派生数据和 shell wiring；已将新增 side pane memory 桥接抽出，剩余拆分需要按 shell 边界单独重构。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LeoHomeProvider } from "@/leo/LeoHomeContext.js";
 import { useShallow } from "zustand/react/shallow";
 import type { GitChangeSourceId, WorkspacePurpose } from "@zcode/shared";
 import { useZCodeStore } from "@/store/StoreProvider.js";
@@ -1104,8 +1105,13 @@ export function App({
     ],
   );
 
+  const leoHomeValue = useMemo(
+    () => ({ workspaceTabs: commandCenterWorkspaceTabs, onSelectTask: handleSelectTask }),
+    [commandCenterWorkspaceTabs, handleSelectTask],
+  );
   return (
-    <>
+    // [leo] 首页状态清单跨项目读任务、点一下打开:把已打开项目和「打开任务」交给草稿页。
+    <LeoHomeProvider value={leoHomeValue}>
       <CommandCenterDialog
         open={isQuickPickOpen}
         commands={quickPickCommands}
@@ -1275,6 +1281,6 @@ export function App({
         // taskFindDialogProps 是对象 prop，内联创建会让 shell 在流式刷新中每轮都看到新引用。
         taskFindDialogProps={taskFindDialogProps}
       />
-    </>
+    </LeoHomeProvider>
   );
 }

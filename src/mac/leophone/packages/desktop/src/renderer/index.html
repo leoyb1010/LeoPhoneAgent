@@ -49,9 +49,9 @@
         box-shadow:
           0 20px 25px -5px rgb(0 0 0 / 0.2),
           0 8px 10px -6px rgb(0 0 0 / 0.2);
-        transform: scale(0.72);
+        transform: scale(0.94);
         opacity: 0;
-        animation: startup-logo-pop 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        animation: startup-logo-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         transform-origin: center;
       }
 
@@ -72,23 +72,11 @@
         border-radius: inherit;
       }
 
+      /* [leo] 启动标志安静地浮现:轻微放大 + 淡入,不再回弹。 */
       @keyframes startup-logo-pop {
         0% {
           opacity: 0;
-          transform: scale(0.72);
-        }
-
-        38% {
-          opacity: 1;
-          transform: scale(1.045);
-        }
-
-        58% {
-          transform: scale(0.985);
-        }
-
-        76% {
-          transform: scale(1.008);
+          transform: scale(0.94);
         }
 
         100% {

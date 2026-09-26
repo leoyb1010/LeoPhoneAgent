@@ -8,6 +8,8 @@ export * from "./json-schema.js";
 export * from "./read.js";
 export * from "./write.js";
 export * from "./edit.js";
+// [leo] Edit 多段编辑 / hashline 锚点 / 畸形参数修复的扩展入参
+export * from "./leo-edit.js";
 export * from "./apply-patch.js";
 export * from "./bash.js";
 export * from "./node-repl.js";

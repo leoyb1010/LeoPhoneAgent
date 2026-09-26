@@ -43,9 +43,25 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 | `packages/desktop/src/main/{desktopApplicationMenu,desktopCommandHandlers}.ts` | 去掉「反馈」菜单;「更新日志」打开 leocodebox-updates 发布页 |
 | `apps/zcode-cli/**`(约 35 个文件) | 官方 OAuth / 换 Key / 官方网关改写 / 远程供应商目录 / 官方市场 / 官方 MCP 信任 / 遥测全部切断;用户级数据根 `~/.leophoneagent`;`packages/cli/src/main.ts` 第一行 import 网络兜底 |
 | `packages/ui/src/**`(约 34 个文件) | 账号头像与套餐、升级、反馈、分享、官方文档/社区、智谱模板、CDN 图标与官方插件入口移除;设置 → 模型供应商加订阅登录按钮;Root 在欢迎页后按请求打开模型设置 |
+| `apps/zcode-cli/packages/contracts/src/tools/{index,edit,read}.ts` | 导出 `leo-edit.js`;`EditOutput` 加可选 `leo` 摘要(段数 / 匹配策略 / hashline 预览);`ReadTextOutput` 加可选 `lineFormat` |
+| `apps/zcode-cli/packages/core/src/index.ts` | 导出 `tool/leo/index.js`(Leo agent 档位 API) |
+| `apps/zcode-cli/packages/core/src/tool/handlers/edit.ts` | 入参走 `LeoEditInputSchema`(单段 / `edits[]` / hashline 锚点 / 参数修复);多段与锚点交 `leo/edit-plan`;BOM 剥离后匹配再拼回;按文件写队列;匹配策略计数;hashline 模式结果附新锚点 |
+| `apps/zcode-cli/packages/core/src/tool/handlers/write.ts` | handler 套按文件写队列 |
+| `apps/zcode-cli/packages/core/src/tool/edit-matchers.ts` | exact 之后插入 `hashline_prefix_stripped` / `unicode_normalized` 两级窄匹配 |
+| `apps/zcode-cli/packages/core/src/tool/handlers/{read,read-text}.ts` | 文本读取按模型走 hashline / 无行号窗口(2000 行 / 50KB);窗口按 range view 记 read-state;hashline 模式编辑后重读不回“未变”占位 |
+| `apps/zcode-cli/packages/core/src/tool/handlers/index.ts` | 注册选项加 `leoAgent`;Edit / Read 用 `withLeoModelProfile` 包装 |
+| `apps/zcode-cli/packages/core/src/tool/provider-visible-order.ts` | 非内置工具按名排序、码点比较(prompt cache 稳定) |
+| `apps/zcode-cli/packages/core/src/tool/executor/call-runner.ts` | `tool.call.completed` 日志加 `editMatchStrategies` |
+| `apps/zcode-cli/packages/core/src/runtime/{types,helpers/runtime-tools,methods/embedded-search-branch,methods/subagent}.ts` | `AgentRuntimeConfig.leoAgent` 及其透传 |
+| `apps/zcode-cli/packages/core/src/runtime/{helpers/tool-allowlist,methods/mcp,methods/context}.ts` | 精简档:核心工具白名单、不注册 MCP、最小系统提示词 |
+| `apps/zcode-cli/packages/core/src/runtime/methods/turn-model-step.ts` | 记本步输出预算;过早 length 截断先压缩重试;超窗 / 丢弃的尝试收尾并对 provider 隐藏 |
+| `apps/zcode-cli/packages/core/src/runtime/{methods/message-persistence,internal-turn-methods}.ts`、`agent/session-history-hydrator.ts` | assistant 消息可标 `providerVisibility: "hidden"`,冷恢复跳过 |
+| `apps/zcode-cli/packages/adapters/src/model/model-execution.ts` | OpenAI 系 fetch 套 `prompt_cache_key`;openai-compatible 用 `convertLeoOpenAICompatibleUsage` |
+| `apps/zcode-cli/packages/bootstrap/src/app/{runtime-config,create-app}.ts` | 读 `leo` 档位进 `runtimeConfig.leoAgent`;非法字段记 warning;model adapter env 注入合并后的 `ZCODE_LEO_AGENT` |
 
 新增文件(零冲突):`packages/ui/src/leo/`、`packages/desktop/src/host/leo/`、
-`packages/desktop/leo/`、`packages/desktop/src/main/{leoUpdateFeed,leoSessionGuard,leoEarlyEnv}.ts`、
+`packages/desktop/leo/`、`packages/desktop/src/main/{leoUpdateFeed,leoSessionGuard,leoEarlyEnv,leoLinkIpc}.ts`、
+`packages/desktop/src/preload/leoBridge.ts`、
 `packages/shared/src/leoNetworkGuard.ts`、`scripts/leo-*`。
 
 **独立性红线(同步上游后逐条复查)**:不连任何 `*.z.ai / bigmodel.cn / zhipuai.cn / zcode.ai`;
@@ -78,3 +94,30 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 - `apps/zcode-cli/packages/core/src/permission/service.ts` 的 `checkAlwaysAsk`:在硬禁用、auto 保护、项目 deny 之后,
   yolo(界面叫「完全访问」)且非 plan 时直接放行 alwaysAsk 工具(工作流的创建 / 保存 / 修改)。上游在 yolo 下仍会问;
   同步时保留这一段(标了 `[leo]`)。
+
+## Mac 1.3.0 补丁(2026-09-26,界面换皮 + 扫码连手机)
+- 皮肤层全在 `packages/ui/src/leo/skin/`(变量覆盖 + 稳定钩子),由 `leo/LeoWhatsNew.tsx` 引入;不改 `styles.css` 令牌块和 `components/ui/*`。
+  依赖的上游钩子:`.chat-composer-input-surface form > .rounded-2xl`(输入卡)、`[data-testid="v4-stop"]`(在跑)、
+  `[data-testid="v4-composer-send"]`、`.theme-zai-{dark,light}`。同步后这几个选择器若失效,皮肤只是退回上游外观,不会坏功能。
+- 上游文件(都标了 `[leo]`):
+  - `packages/ui/src/v4/ConversationDraftEmptyState.tsx`:去掉大号线框水印,问候上方放实心 `LeoMark`。
+  - `packages/ui/src/v4/SessionPane.tsx`:草稿页输入框下方挂 `LeoDraftStatusList`(等你确认 / 在跑 / 做完待看)。
+  - `packages/ui/src/App.tsx`:最外层包 `LeoHomeProvider`(已打开项目 + 打开任务)。
+  - `packages/ui/src/WelcomeScreen.tsx`、`onboarding/OnboardingWelcomeView.tsx`:图标不再外套深色方块。
+  - `packages/ui/src/WebRemoteControlDialog.tsx`:最前面挂 `LeoPhoneLinkSection`(连接状态 + 扫码加手机)。
+  - `packages/desktop/src/renderer/index.html`:启动标志改为安静浮现,不回弹。
+  - `packages/ui/src/openWorkspacePageThemeHero.tsx`:两套 Zai 主题的欢迎背景从智谱蓝换成暖色 + 青绿。
+  - `packages/ui/src/PermissionDialog.tsx`:根节点加 `data-leo-approval`,皮肤层据此做审批卡滑入。
+  - `packages/ui/src/i18n/locales/{zh-CN,en-US}.ts`:`webRemoteControl.description` 改成「手机 App 或聊天机器人」。
+  - `packages/desktop/src/main/index.ts`:ready 时 `registerLeoLinkIpc()`。
+  - `packages/desktop/src/preload/index.ts`:引入 `./leoBridge.js`(暴露 `window.leoLink`)。
+
+## Agent 编码能力补丁(2026-09-26)
+- 上游文件改动见上表 `apps/zcode-cli/...` 各行,改动处都标了 `[leo]`。`pnpm leo:test:agent` 里的
+  `core/test/leo/runtime-hooks.test.ts` 会检查这些钩子还在,同步上游把它们冲掉时会红。
+- 新增文件(零冲突):`contracts/src/tools/leo-edit.ts`、`core/src/tool/leo/`、`core/src/runtime/leo/`、
+  `adapters/src/model/leo-prompt-cache.ts`、`bootstrap/src/app/leo-agent-config.ts`、`*/test/leo/`(以上都在 `apps/zcode-cli/packages/` 下)、
+  `scripts/leo-eval/`(eval 工具,见其 README);根 `package.json` 加 `leo:test:agent`、`leo:eval`。
+- 配置:`~/.leophoneagent/cli/config.json`(或项目 `zcode.json` / `.zcode/config.json`)的 `"leo"` 段,环境变量 `ZCODE_LEO_AGENT`(同结构 JSON)优先:
+  `{"editMode":{"default":"replace","models":{"*glm*":"hashline"}},"readLineNumbers":{"default":true,"models":{}},"leanProfile":false,"promptCacheKey":true}`。
+  内置默认:所有模型都走 replace(`"hashlineFamilies": true` 才让 GLM / Kimi / MiniMax 走 hashline,评测台在真实模型上跑出提升再考虑默认打开);行号默认保留;精简档默认关;`prompt_cache_key` 默认只发给 api.openai.com / openrouter.ai。

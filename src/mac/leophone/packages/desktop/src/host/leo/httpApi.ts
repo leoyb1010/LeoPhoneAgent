@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LEO_HTTP_PORT, leoLocalKey } from "./leoPaths.js";
+import { createLeoPairingCode, leoLinkStatus } from "./link/index.js";
 import { handleChatCompletions, handleModelsRequest } from "./modelProxy.js";
 import { OAUTH_PAGE_HTML } from "./oauthPage.js";
 import {
@@ -144,6 +145,20 @@ export function startLeoHttpApi(deps: {
       }
       if (url.pathname === "/v1/chat/completions" && req.method === "POST") {
         await handleChatCompletions(req, res, await readBody(req));
+        return;
+      }
+      // 「连接手机」面板(经主进程转过来,带本机 Bearer):连接状态 + 给新手机出一次性配对码。
+      if (url.pathname === "/api/leo/link/status" && req.method === "GET") {
+        json(res, 200, leoLinkStatus());
+        return;
+      }
+      if (url.pathname === "/api/leo/link/pair" && req.method === "POST") {
+        try {
+          json(res, 200, await createLeoPairingCode());
+        } catch (error) {
+          deps.logger.warn("[leo/link] pairing code failed", { error: String(error) });
+          json(res, 502, { error: error instanceof Error ? error.message : String(error) });
+        }
         return;
       }
       if (url.pathname === "/api/leo/treasury/tools" && req.method === "GET") {

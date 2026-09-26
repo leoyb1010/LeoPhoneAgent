@@ -9,6 +9,7 @@ import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { logger } from "@/logger.js";
+import { LeoMark } from "@/leo/LeoMark.js";
 
 const GREETING_BOUNDARY_HOURS = [5, 9, 12, 14, 18, 23] as const;
 const GREETING_MIN_FONT_SIZE_PX = 20;
@@ -169,19 +170,12 @@ export function ConversationDraftEmptyState({ className }: { className?: string 
   return (
     <div
       className={cn(
-        "relative mb-10 flex w-full max-w-2xl flex-col items-center justify-center gap-6 text-foreground sm:mb-8",
+        // [leo] 首页只留标志 + 问候:去掉大号线框水印,标志实心、小尺寸,整体上移让输入框成为焦点。
+        "leo-home-hero relative mb-7 flex w-full max-w-2xl flex-col items-center justify-center gap-5 text-foreground sm:mb-6",
         className,
       )}
     >
-      <div
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute left-1/2 top-1/2 aspect-[5/4] w-[min(72vw,25rem)] -mt-10",
-          "-translate-x-1/2 -translate-y-1/2 text-foreground-subtlest",
-        )}
-      >
-        <ZCodeEmptyStateLogo className="h-full w-full" />
-      </div>
+      <LeoMark className="relative z-10 h-9 w-9 text-foreground" />
       <p
         ref={greetingContainerRef}
         data-v4-draft-greeting="true"
@@ -191,7 +185,7 @@ export function ConversationDraftEmptyState({ className }: { className?: string 
           } as CSSProperties
         }
         className={cn(
-          "relative z-10 w-full px-4 text-center font-medium text-foreground",
+          "relative z-10 w-full px-4 text-center font-medium tracking-[-0.01em] text-foreground",
           "text-[length:var(--v4-draft-greeting-font-size)]/[1.2]",
         )}
       >
@@ -205,34 +199,5 @@ export function ConversationDraftEmptyState({ className }: { className?: string 
         <span>{greeting}</span>
       </p>
     </div>
-  );
-}
-
-function ZCodeEmptyStateLogo({ className }: { className?: string }) {
-  // [leo] 背景水印换成 LeoPhoneAgent 标志(L 形 + 箭头 + 圆点)的细线框;颜色取容器的 currentColor,
-  // 深浅主题共用一套,向下渐隐。
-  return (
-    <svg
-      aria-hidden="true"
-      className={cn(
-        className,
-        "opacity-70",
-        "[-webkit-mask-image:linear-gradient(to_bottom,black_0%,transparent_75%,transparent_100%)]",
-        "[-webkit-mask-repeat:no-repeat] [-webkit-mask-size:100%_100%]",
-        "[mask-image:linear-gradient(to_bottom,black_0%,transparent_75%,transparent_100%)]",
-        "[mask-repeat:no-repeat] [mask-size:100%_100%]",
-      )}
-      width="400"
-      height="320"
-      viewBox="280 290 500 440"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <g stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" strokeLinejoin="round">
-        <path d="M314 314H436V612H650V710H314V314Z" vectorEffect="non-scaling-stroke" />
-        <path d="M562 420L710 512L562 604V514L640 512L562 510V420Z" vectorEffect="non-scaling-stroke" />
-        <circle cx="710" cy="512" r="43" vectorEffect="non-scaling-stroke" />
-      </g>
-    </svg>
   );
 }

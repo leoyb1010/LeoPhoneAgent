@@ -115,6 +115,8 @@ export async function hydrateMessageHistoryFromSession(input: {
       continue;
     }
 
+    // [leo] 标成 provider 不可见的 assistant 消息（被丢弃的截断 / 超窗尝试）不进入冷恢复的请求历史。
+    if (message.info.semantics?.providerVisibility === "hidden") continue;
     const text = assistantTextFromParts(parts);
     const reasoning = assistantReasoningFromParts(parts);
     const toolParts = selectToolPartsForHistory(parts.filter(isToolPart));

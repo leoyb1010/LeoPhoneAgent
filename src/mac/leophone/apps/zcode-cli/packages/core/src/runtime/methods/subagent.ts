@@ -257,6 +257,7 @@ export function createDefaultSubagentPort(
           // Invalid JSON response；继承父配置可让子 agent 与主链路走同一 streamText 语义。
           modelStreaming: this.config.modelStreaming,
           bashTimeoutPolicy: this.config.bashTimeoutPolicy,
+          leoAgent: this.config.leoAgent, // [leo] 子代理沿用同一套按模型档位
           midConversationSystem: this.config.midConversationSystem,
           bashShellSelection,
           // child 只复用父 runtime 已解析的 instructions snapshot；Project Context 仍不继承。

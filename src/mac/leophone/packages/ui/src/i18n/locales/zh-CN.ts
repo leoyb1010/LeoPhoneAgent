@@ -1614,7 +1614,7 @@ const zhCN: Record<string, string> = {
   "remote.connectingStepDescription": "正在建立 {method} 连接，你可以在这里查看实时的连接进度。",
   "webRemoteControl.trigger": "移动端远程控制",
   "webRemoteControl.title": "移动端远程控制",
-  "webRemoteControl.description": "通过聊天机器人控制 LeoPhoneAgent 工作区。",
+  "webRemoteControl.description": "用 LeoPhoneAgent 手机 App 或聊天机器人控制这台 Mac。",
   "webRemoteControl.botChannel.title": "使用 Bot Channel",
   "webRemoteControl.botChannel.description": "连接聊天 Bot，适合更长时间的移动端访问。",
   "webRemoteControl.botChannel.weixin.title": "微信",

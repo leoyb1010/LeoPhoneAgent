@@ -7,6 +7,7 @@ import {
 import { registerMcpTools, traceContextToLogContext } from "../deps.js";
 import type { McpConnectionSnapshot, McpServerConfig, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
+import { applyLeoLeanToolAllowlist } from "../leo/lean-profile.js"; // [leo]
 
 const MCP_SESSION_OAUTH_AUTHORIZATION_TIMEOUT_MS = 15_000;
 
@@ -136,7 +137,8 @@ export async function initializeMcp(
   try {
     const snapshot = await startup;
     const registered = registerMcpTools(this.registry, mcpPort, snapshot.tools, {
-      allowedTools: this.config.toolAllowlist,
+      // [leo] 精简档不注册 MCP 工具
+      allowedTools: applyLeoLeanToolAllowlist(this.config, this.config.toolAllowlist),
       disallowedTools: this.config.toolDisallowlist,
       officialCuaServerNames: computeOfficialCuaServerNames(
         this.config.mcp?.servers ?? {},

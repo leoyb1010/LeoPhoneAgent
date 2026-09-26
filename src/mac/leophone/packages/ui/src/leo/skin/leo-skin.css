@@ -1,0 +1,301 @@
+/*
+ * [leo] LeoPhoneAgent 皮肤层 —— 安静工作台。
+ *
+ * 只改变量和几个稳定钩子(data-*、上游已有的语义 class),不改上游组件源码,
+ * 同步上游时这里基本不冲突。颜色与鸿蒙端同一套青绿(浅 #2E8B8B / 深 #4DD9D9),中性色偏暖。
+ * 全部规则挂在 html[data-leo-skin] 下;localStorage["leo.skin"] = "off" 即整层关闭(见 leoSkin.ts)。
+ */
+
+/* ── 形状与节奏:两套主题共用 ─────────────────────────────── */
+html[data-leo-skin] {
+  /* 圆角整体放大一档:按钮 8/10,卡片 14,输入卡 18,对话框 20 */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.25rem;
+  /* 所有 transition 默认用同一条收尾曲线:起步干脆、落地轻 */
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --leo-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --leo-dur-1: 120ms;
+  --leo-dur-2: 200ms;
+  --leo-dur-3: 280ms;
+  --leo-dur-4: 350ms;
+}
+
+/* ── 深色:暖石墨 + 青绿(与鸿蒙端同一个 #4DD9D9) ───────────────── */
+html[data-leo-skin].theme-zai-dark {
+  --leo-brand: #4dd9d9;
+  --leo-brand-soft: rgba(77, 217, 217, 0.12);
+  --leo-attention: #f0b86e;
+  --leo-mark-from: #a8f1e2;
+  --leo-mark-to: #4dd9d9;
+  --leo-shadow-composer:
+    inset 0 1px 0 rgba(255, 250, 240, 0.035), 0 14px 36px -16px rgba(0, 0, 0, 0.7);
+  --leo-shadow-card: 0 18px 48px -20px rgba(0, 0, 0, 0.75);
+
+  --color-brand: var(--leo-brand);
+  --color-background: #151413;
+  --color-background-win-alt: #2a2825;
+  --color-background-alt: color-mix(in oklab, #2a2825 60%, transparent);
+  --color-header: #1b1a18;
+  --color-panel: #1b1a18;
+  --color-sidebar: #121110;
+  --color-card: #22201e;
+  --color-card-border: var(--color-border);
+  --color-popover: #22201e;
+  --color-popover-header: #1b1a18;
+  --color-input: #1e1c1a;
+  --color-menu: #22201e;
+  --color-menu-hover: #2c2a27;
+  --color-tab: #1b1a18;
+  --color-tab-active: #151413;
+  --color-tooltip: #2a2825;
+  --color-toast: #22201e;
+  --color-secondary: #2c2a27;
+  --color-tag: #2c2a27;
+  --color-tooltip-tag: #33302d;
+  --color-border: rgba(255, 244, 228, 0.085);
+  --color-border-hover: rgba(255, 244, 228, 0.15);
+  --color-hover: rgba(255, 244, 228, 0.05);
+  --color-selected: rgba(255, 244, 228, 0.085);
+  --color-surface: rgba(255, 244, 228, 0.045);
+  --color-surface-hover: rgba(255, 244, 228, 0.08);
+  --color-foreground: #dcd8d2;
+  --color-foreground-subtle: color-mix(in oklab, #dcd8d2 60%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, #dcd8d2 32%, transparent);
+  --color-foreground-inverse: #0e0d0c;
+  --color-primary: #efebe5;
+  --color-primary-foreground: #151413;
+  --color-accent: rgba(77, 217, 217, 0.12);
+  --color-input-border-focused: rgba(77, 217, 217, 0.42);
+  --color-interaction-ask-surface: rgba(77, 217, 217, 0.1);
+  --color-interaction-ask-foreground: #8ee8e8;
+  --color-terminal-cursor: #4dd9d9;
+  --color-terminal-selection: rgba(77, 217, 217, 0.24);
+}
+
+/* ── 浅色:暖纸白 + 青绿(与鸿蒙端同一个 #2E8B8B) ─────────────── */
+html[data-leo-skin].theme-zai-light {
+  --leo-brand: #2e8b8b;
+  --leo-brand-soft: rgba(46, 139, 139, 0.1);
+  --leo-attention: #b86e12;
+  --leo-mark-from: #3cc9b4;
+  --leo-mark-to: #2e8b8b;
+  --leo-shadow-composer:
+    0 1px 2px rgba(40, 32, 20, 0.04), 0 12px 30px -16px rgba(40, 32, 20, 0.22);
+  --leo-shadow-card: 0 18px 44px -22px rgba(40, 32, 20, 0.28);
+
+  --color-brand: var(--leo-brand);
+  --color-background: #f7f6f3;
+  --color-background-win-alt: #e9e6e1;
+  --color-background-alt: color-mix(in oklab, #f7f6f3 70%, transparent);
+  --color-header: #fcfbf9;
+  --color-panel: #fcfbf9;
+  --color-sidebar: #f0eeea;
+  --color-card: #ffffff;
+  --color-popover: #ffffff;
+  --color-popover-header: #f7f6f3;
+  --color-input: #ffffff;
+  --color-menu: #ffffff;
+  --color-menu-hover: #f1efeb;
+  --color-tab: #f0eeea;
+  --color-tab-active: #ffffff;
+  --color-tooltip: #f0eeea;
+  --color-secondary: #e6e3de;
+  --color-tag: #e6e3de;
+  --color-border: rgba(40, 32, 20, 0.1);
+  --color-border-hover: rgba(40, 32, 20, 0.17);
+  --color-hover: rgba(40, 32, 20, 0.045);
+  --color-selected: rgba(40, 32, 20, 0.065);
+  --color-surface: rgba(40, 32, 20, 0.03);
+  --color-surface-hover: rgba(40, 32, 20, 0.055);
+  --color-foreground: #2a2724;
+  --color-foreground-subtle: color-mix(in oklab, #2a2724 62%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, #2a2724 40%, transparent);
+  --color-primary: #1d1b19;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #e3f1f0;
+  --color-input-border-focused: rgba(46, 139, 139, 0.42);
+  --color-interaction-ask-surface: #e3f1f0;
+  --color-interaction-ask-foreground: #1f6b6b;
+  --color-terminal-cursor: #2e8b8b;
+  --color-terminal-selection: rgba(46, 139, 139, 0.2);
+}
+
+/* ── 输入卡:一层柔和投影,聚焦时描边转青 ───────────────────── */
+html[data-leo-skin] .chat-composer-input-surface form > .rounded-2xl {
+  box-shadow: var(--leo-shadow-composer);
+  transition:
+    border-color var(--leo-dur-2) var(--leo-ease),
+    background-color var(--leo-dur-2) var(--leo-ease),
+    box-shadow var(--leo-dur-3) var(--leo-ease);
+}
+
+/* 任务在跑:输入卡顶边一条很细的青色光带缓慢流过(停止按钮在场 = 在跑) */
+html[data-leo-skin] .chat-composer-region:has([data-testid="v4-stop"]) form > .rounded-2xl::before {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 1;
+  height: 1.5px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--leo-brand) 85%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: leo-running-band 2.4s var(--leo-ease) infinite;
+}
+
+@keyframes leo-running-band {
+  0% {
+    background-position: -40% 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    background-position: 140% 0;
+    opacity: 0;
+  }
+}
+
+/* 发送按钮:青色实心,悬停略提亮 */
+html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled) {
+  transition:
+    background-color var(--leo-dur-1) var(--leo-ease),
+    transform var(--leo-dur-1) var(--leo-ease);
+}
+html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+/* ── 视图切换:聊天 / 自动化 / 插件 / 设置各自的 <main> 挂载时淡入 + 轻微上移 ── */
+html[data-leo-skin] main {
+  animation: leo-view-in var(--leo-dur-3) var(--leo-ease) both;
+}
+
+@keyframes leo-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 审批卡:从输入框的位置滑入 ─────────────────────────── */
+html[data-leo-skin] [data-leo-approval] {
+  animation: leo-approval-in var(--leo-dur-3) var(--leo-ease) both;
+}
+
+@keyframes leo-approval-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 首页(草稿态) ───────────────────────────────────────── */
+.leo-home-hero,
+.leo-home-status {
+  animation: leo-rise var(--leo-dur-4, 350ms) var(--leo-ease, ease-out) both;
+}
+.leo-home-status {
+  animation-delay: 60ms;
+}
+
+@keyframes leo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.leo-status-dot[data-state="attention"] {
+  background: var(--leo-attention, #e0a24a);
+}
+.leo-status-dot[data-state="running"] {
+  background: var(--leo-brand, #2e8b8b);
+  animation: leo-breathe 1.8s ease-in-out infinite;
+}
+.leo-status-dot[data-state="done"] {
+  background: color-mix(in oklab, var(--leo-brand, #2e8b8b) 55%, transparent);
+}
+
+@keyframes leo-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+/* 本次更新卡 */
+.leo-whats-new-card {
+  box-shadow: var(--leo-shadow-card, 0 18px 44px -22px rgba(0, 0, 0, 0.4));
+  animation: leo-card-in var(--leo-dur-3, 280ms) var(--leo-ease, ease-out) both;
+}
+.leo-whats-new-scrim {
+  animation: leo-fade-in var(--leo-dur-2, 200ms) ease-out both;
+}
+
+@keyframes leo-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes leo-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-leo-skin] main,
+  html[data-leo-skin] [data-leo-approval],
+  .leo-home-hero,
+  .leo-home-status,
+  .leo-whats-new-card,
+  .leo-whats-new-scrim,
+  .leo-status-dot[data-state="running"] {
+    animation: none;
+  }
+  html[data-leo-skin] .chat-composer-region:has([data-testid="v4-stop"]) form > .rounded-2xl::before {
+    animation: none;
+    background-size: 100% 100%;
+    opacity: 0.6;
+  }
+}

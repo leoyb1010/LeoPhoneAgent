@@ -176,6 +176,8 @@ export interface ReadTextOutput {
   truncated?: boolean;
   truncatedByTokenCap?: boolean;
   partialViewNotice?: string;
+  /** [leo] 模型可见的行格式：缺省为 cat -n 行号；hashline = `行号#哈希:`；plain = 不带行号。 */
+  lineFormat?: "hashline" | "plain";
 }
 
 export interface ReadImageOutput {
@@ -270,6 +272,8 @@ export const ReadTextOutputSchema = z
     truncated: z.boolean().optional(),
     truncatedByTokenCap: z.boolean().optional(),
     partialViewNotice: z.string().optional(),
+    // [leo] 按模型切换的行格式
+    lineFormat: z.enum(["hashline", "plain"]).optional(),
   })
   .strict();
 

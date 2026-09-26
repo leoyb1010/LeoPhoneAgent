@@ -690,7 +690,8 @@ export function PermissionDialog({
   // 保存确认窗同理，但问句、内容与选项都不同：没有图、没有 Refine，主体是落点 + 元数据 + 脚本。
   const shouldUseSaveWorkflowBlock = blockKind === "saveWorkflow";
   return (
-    <div className="w-full shrink-0 relative z-1">
+    // [leo] data-leo-approval:皮肤层让审批卡从输入框位置轻轻滑入。
+    <div data-leo-approval="true" className="w-full shrink-0 relative z-1">
       <div className="w-full overflow-hidden rounded-2xl border border-border bg-popover shadow-xs">
         <div className="flex flex-col gap-3 p-3">
           <div className="space-y-4">

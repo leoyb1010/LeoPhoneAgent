@@ -14,6 +14,7 @@ import {
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { getBotProviderRegionTagLabelId } from "@/botsUi.js";
+import { LeoPhoneLinkSection } from "@/leo/LeoPhoneLinkSection.js";
 
 type RemoteControlBotProvider = Extract<
   BotProvider,
@@ -103,6 +104,8 @@ export const WebRemoteControlDialog = memo(function WebRemoteControlDialogCompon
             </DialogHeader>
 
             <div className="mt-5 grid gap-4">
+              {/* [leo-link] 我们自己的手机 App 放最前:连接状态 + 扫码加手机。 */}
+              <LeoPhoneLinkSection />
               <section className="flex min-h-[360px] flex-col rounded-xl border border-border bg-card p-4">
                 <div className="mb-4 flex items-start gap-2">
                   <BotIcon className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />

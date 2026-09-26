@@ -61,6 +61,7 @@ import { validateInitialModelToolInput, validateInput, validateOutput } from "./
 import type { ExecutableToolCall } from "../types.js";
 import { resolveEmbeddedSearchBranchCapability } from "../../embedded-search/capability.js";
 import { resolveToolEntryModelContract } from "../model-contract.js";
+import { readLeoEditMatchStrategies } from "../leo/edit-match-stats.js"; // [leo]
 
 export async function executeToolCall(
   deps: ToolExecutorDeps,
@@ -543,9 +544,13 @@ async function executeToolCallImpl(
 
     await backgroundTasks.trackBackgroundTask(canonicalToolCall, output, traceContext, turnId);
 
+    const editMatchStrategies =
+      canonicalToolCall.name === "Edit" ? readLeoEditMatchStrategies(output) : undefined; // [leo]
     deps.logger?.info("Tool call completed", {
       ...traceContextToLogContext(traceContext),
       durationMs,
+      // [leo] 每次 Edit 命中的匹配策略，用于统计宽松匹配器的触发频率（不含文件内容）
+      ...(editMatchStrategies ? { editMatchStrategies } : {}),
       event: "tool.call.completed",
       module: "core.tool.executor",
       status: "completed",

@@ -5,7 +5,14 @@ import type { ISettingService, IZCodeTaskService } from "@zcode/services";
 
 import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
-import { keychainMachineKeyStore, RelayLink, type RelayConfig } from "./relayLink.js";
+import {
+  createPairingCode,
+  probePairingSupport,
+  relayHttpBase,
+  type PairingCode,
+  type PairingSupport,
+} from "./pairing.js";
+import { keychainMachineKeyStore, RelayLink, type RelayConfig, type RelayLinkStatus } from "./relayLink.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
@@ -34,12 +41,18 @@ export function machineName(): string {
   return process.env["LEOAGENT_RELAY_NAME"]?.trim() || os.hostname().split(".")[0]!;
 }
 
-/** 中继地址与注册钥匙:`~/.leoagent/relay.json {url, key}`,与 leoagent 共用。 */
-export function resolveRelayConfig(): RelayConfig | null {
+function readRelayJson(): { url: string; key: string } | null {
   const config = readJson(leoPath("relay.json"));
   const url = typeof config?.["url"] === "string" ? config["url"].trim() : "";
   const key = typeof config?.["key"] === "string" ? config["key"].trim() : "";
-  if (!url || !key) return null;
+  return url && key ? { url, key } : null;
+}
+
+/** 中继地址与注册钥匙:`~/.leoagent/relay.json {url, key}`,与 leoagent 共用。 */
+export function resolveRelayConfig(): RelayConfig | null {
+  const raw = readRelayJson();
+  if (!raw) return null;
+  const { url, key } = raw;
   let wsUrl = url.replace(/\/+$/, "");
   if (!wsUrl.endsWith("/relay/agent")) wsUrl = `${wsUrl}/relay/agent`;
   wsUrl = wsUrl.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
@@ -57,6 +70,78 @@ function leoagentKey(): string | null {
     }
   }
   return null;
+}
+
+/** 正在跑的那条中继连接;「连接手机」面板读它的状态、借它的机器钥匙签配对码。 */
+let running: RelayLink | null = null;
+/** 中继支不支持出码:每次连上中继探一次(中继升级会断线重连,换代后重新探)。 */
+let pairingProbe: { connectedAt: number; support: PairingSupport } | null = null;
+
+function pairingSupport(state: RelayLinkStatus): PairingSupport {
+  const raw = readRelayJson();
+  if (!raw || !state.connected || state.connectedAt === null) return "unknown";
+  if (pairingProbe?.connectedAt === state.connectedAt) return pairingProbe.support;
+  const probe = { connectedAt: state.connectedAt, support: "unknown" as PairingSupport };
+  pairingProbe = probe;
+  void probePairingSupport(raw.url).then((support) => {
+    probe.support = support;
+  });
+  return "unknown";
+}
+
+export type LeoLinkStatus = RelayLinkStatus & {
+  enabled: boolean;
+  configured: boolean;
+  running: boolean;
+  /** 中继能不能出配对码(老中继没有这个接口)。 */
+  pairing: PairingSupport;
+  machine: string;
+  /** 只给主机名,不给路径和钥匙。 */
+  relayHost: string | null;
+};
+
+export function leoLinkStatus(): LeoLinkStatus {
+  const raw = readRelayJson();
+  let relayHost: string | null = null;
+  if (raw) {
+    try {
+      relayHost = new URL(relayHttpBase(raw.url)).host;
+    } catch {
+      relayHost = null;
+    }
+  }
+  const state: RelayLinkStatus = running?.status() ?? {
+    connected: false,
+    relayVersion: null,
+    connectedAt: null,
+    lastError: null,
+    lastErrorAt: null,
+  };
+  return {
+    ...state,
+    enabled: linkEnabled(),
+    configured: Boolean(raw),
+    running: Boolean(running),
+    pairing: pairingSupport(state),
+    machine: machineName(),
+    relayHost,
+  };
+}
+
+/** 给新手机出一个一次性配对码。只在这台 Mac 的连接开着、而且连上中继时出码。 */
+export async function createLeoPairingCode(): Promise<PairingCode> {
+  const raw = readRelayJson();
+  if (!raw) throw new Error("这台 Mac 还没配置中继(~/.leoagent/relay.json)");
+  // 手机只接受 https 的中继根(见 iOS RelayPairPayload.parse)。
+  if (!/^(https|wss):\/\//i.test(raw.url)) throw new Error("中继地址不是 https,手机不会接受这个配对码");
+  if (!running) throw new Error("手机连接没有开启");
+  if (!running.status().connected) throw new Error("这台 Mac 现在没连上中继,稍后再试");
+  const machineKey = await running.machineKey();
+  return createPairingCode({
+    relayUrl: raw.url,
+    machine: machineName(),
+    keys: machineKey ? [machineKey, raw.key] : [raw.key],
+  });
 }
 
 /**
@@ -96,9 +181,11 @@ export async function startLeoLink(deps: {
   await bridge.restore();
   link = new RelayLink(relay, bridge, keychainMachineKeyStore(relay.name), deps.logger, deps.appVersion);
   link.start();
+  running = link;
   deps.logger.info("[leo/link] started", { name: relay.name });
   return {
     async stop() {
+      if (running === link) running = null;
       link?.stop();
       await bridge.close();
     },

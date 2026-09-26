@@ -14,17 +14,17 @@ import type {
 } from "../types.js";
 import {
   CoreErrorType,
-  EditInputJsonSchema,
-  EditInputSchema,
   EditOutputJsonSchema,
   EditOutputSchema,
   EditErrorCode,
+  LeoEditInputSchema,
+  LeoEditReplaceModeInputJsonSchema,
   createCoreError,
   isFileSystemPortError,
-  type EditInput,
   type EditOutput,
   type FileSystemReadTextResult,
   type FileSystemStatResult,
+  type LeoEditOutputSummary,
   type TraceContext,
 } from "@zcode/contracts";
 import { createStructuredPatch } from "../diff.js";
@@ -48,6 +48,13 @@ import {
   fileByteCount,
   workspaceKind,
 } from "./tool-perf.js";
+// [leo] 多段 edits[] / hashline 锚点 / 参数修复 / BOM 保留 / 按文件排队 / 匹配策略计数
+import { parseLeoEditRequest } from "../leo/edit-request.js";
+import { planLeoMultiEdit, splitLeoBom } from "../leo/edit-plan.js";
+import { recordLeoEditMatchStrategies } from "../leo/edit-match-stats.js";
+import { leoMutationKey, withLeoFileMutationQueue } from "../leo/file-mutation-queue.js";
+import { getLeoToolProfile } from "../leo/tool-profile.js";
+import { leoSingleEditSummary } from "../leo/hashline-preview.js";
 
 const EDIT_PROVIDER_DESCRIPTION = [
   "Performs exact string replacement in a file.",
@@ -69,6 +76,7 @@ function formatEditModelContent(output: unknown): string {
     isRecord(output) && typeof output.filePath === "string" ? output.filePath : "the file";
   const userModified = isRecord(output) && output.userModified === true;
   const replaceAll = isRecord(output) && output.replaceAll === true;
+  const leoSummary = formatLeoEditSummary(output); // [leo]
   const modifiedNote = userModified
     ? ".  The user modified your proposed changes before accepting them. "
     : "";
@@ -78,13 +86,33 @@ function formatEditModelContent(output: unknown): string {
     return `The file ${filePath} has been updated${modifiedNote}. All occurrences were successfully replaced.${freshnessSuffix}`;
   }
 
-  return `The file ${filePath} has been updated successfully${modifiedNote}.${freshnessSuffix}`;
+  return `The file ${filePath} has been updated successfully${modifiedNote}${leoSummary.count}.${freshnessSuffix}${leoSummary.preview}`;
+}
+
+// [leo] 多段编辑写明段数；hashline 模式附上改动附近的新锚点，模型不必为拿行号再 Read 一次。
+function formatLeoEditSummary(output: unknown): { count: string; preview: string } {
+  const leo = isRecord(output) && isRecord(output.leo) ? output.leo : undefined;
+  const editCount = typeof leo?.editCount === "number" ? leo.editCount : 1;
+  return {
+    count: editCount > 1 ? ` (${editCount} edits applied)` : "",
+    preview:
+      typeof leo?.preview === "string" && leo.preview
+        ? `\n\nCurrent anchors around the change (lines below it may have shifted):\n${leo.preview}`
+        : "",
+  };
 }
 
 const editHandler: ToolHandler = async (input, context) => {
-  const { file_path, old_string, new_string, replace_all } = EditInputSchema.parse(
-    input,
-  ) as EditInput;
+  // [leo] 扩展入参：单段形态走下面的上游逻辑；多段 / hashline 锚点（multi）在读完文件后交给 leo/edit-plan。
+  const request = parseLeoEditRequest(input);
+  if (!request.ok) return editFailure(request.errorCode, request.message);
+  const multi = request.multi;
+  const { file_path, old_string, new_string, replace_all } = request.single ?? {
+    file_path: request.filePath,
+    old_string: "",
+    new_string: "",
+    replace_all: false,
+  };
   const fileSystemPort = context.fileSystemPort;
 
   if (!fileSystemPort) {
@@ -101,7 +129,7 @@ const editHandler: ToolHandler = async (input, context) => {
     );
   }
 
-  if (old_string === new_string) {
+  if (!multi && old_string === new_string) {
     return editFailure(
       EditErrorCode.NO_CHANGE,
       "No changes to make: old_string and new_string are exactly the same.",
@@ -123,7 +151,7 @@ const editHandler: ToolHandler = async (input, context) => {
 
   const stat = await statEditableFile(filePath, context);
   if (!stat) {
-    if (old_string === "") {
+    if (!multi && old_string === "") {
       return writeEditResult({
         context,
         filePath,
@@ -161,11 +189,12 @@ const editHandler: ToolHandler = async (input, context) => {
     { signal: context.abortSignal },
   );
   const fsReadMs = elapsedMsSince(readStartedAt);
-  const content = normalizeLineEndings(read.content);
+  // [leo] BOM 不参与匹配，写回时原样拼回（上游宽松匹配命中首行时会把 BOM 当成行内容一起替换掉）。
+  const { bom, text: content } = splitLeoBom(normalizeLineEndings(read.content));
   const oldString = normalizeLineEndings(old_string);
   const requestedNewString = normalizeLineEndings(new_string);
 
-  if (old_string === "") {
+  if (!multi && old_string === "") {
     if (content.trim() !== "") {
       return editFailure(
         EditErrorCode.FILE_EXISTS_NO_OLD_STRING,
@@ -178,10 +207,10 @@ const editHandler: ToolHandler = async (input, context) => {
       context,
       filePath,
       inputFilePath: file_path,
-      originalFile: content,
+      originalFile: bom + content,
       actualOldString: "",
       actualNewString: requestedNewString,
-      newContent: requestedNewString,
+      newContent: bom + requestedNewString,
       read,
       replaceAll: replace_all,
       fsReadMs,
@@ -199,6 +228,38 @@ const editHandler: ToolHandler = async (input, context) => {
 
   const readStateFailure = getEditableReadStateFailure(filePath, read, context.readFileState);
   if (readStateFailure) return readStateFailure;
+
+  // [leo] 多段 / hashline：全部针对原始内容定位、校验不重叠后一次性应用。
+  if (multi) {
+    const planStartedAt = Date.now();
+    const mode = getLeoToolProfile(context).editMode;
+    const plan = planLeoMultiEdit({ content, operations: multi, mode });
+    const planMs = elapsedMsSince(planStartedAt);
+    if (!plan.ok) return editFailure(plan.errorCode, plan.message);
+    recordLeoEditMatchStrategies(plan.strategies);
+    return writeEditResult({
+      context,
+      filePath,
+      inputFilePath: file_path,
+      originalFile: bom + content,
+      actualOldString: plan.oldString,
+      actualNewString: plan.newString,
+      newContent: bom + plan.newContent,
+      read,
+      replaceAll: false,
+      matchStrategy: plan.strategies.join(","),
+      matchCandidateCount: multi.length,
+      fsReadMs,
+      patchMatchMs: planMs,
+      matchAttempts: multi.length,
+      leo: {
+        editCount: multi.length,
+        strategies: plan.strategies,
+        mode,
+        ...(plan.preview ? { preview: plan.preview } : {}),
+      },
+    });
+  }
 
   const patchMatchStartedAt = Date.now();
   const match = findEditMatch({
@@ -232,15 +293,16 @@ const editHandler: ToolHandler = async (input, context) => {
   const normalizedNewString = normalizeReplacementForMatch(match.strategy, requestedNewString);
   const actualNewString = preserveQuoteStyle(oldString, actualOldString, normalizedNewString);
   const newContent = applyEditToContent(content, actualOldString, actualNewString, replace_all);
+  recordLeoEditMatchStrategies([match.strategy]); // [leo]
 
   return writeEditResult({
     context,
     filePath,
     inputFilePath: file_path,
-    originalFile: content,
+    originalFile: bom + content, // [leo] BOM 原样保留
     actualOldString,
     actualNewString,
-    newContent,
+    newContent: bom + newContent,
     read,
     replaceAll: replace_all,
     matchStrategy: match.strategy,
@@ -248,6 +310,8 @@ const editHandler: ToolHandler = async (input, context) => {
     fsReadMs,
     patchMatchMs,
     matchAttempts: 1,
+    // [leo] hashline 模式附上改动附近的新锚点
+    leo: leoSingleEditSummary(getLeoToolProfile(context).editMode, match.strategy, content, newContent),
   });
 };
 
@@ -265,11 +329,16 @@ export const editToolEntry: ToolEntry = {
     riskLevel: "medium",
     needsApproval: true,
   },
-  handler: editHandler,
+  // [leo] 同一文件的 Edit/Write 串行执行（tool/leo/file-mutation-queue.ts）
+  handler: (input, context) =>
+    withLeoFileMutationQueue(leoMutationKey(input, context.workingDirectory), () =>
+      editHandler(input, context),
+    ),
   formatModelContent: formatEditModelContent,
-  inputSchema: EditInputJsonSchema,
+  // [leo] 入参超集：单段 / edits[] / hashline 锚点；provider 可见 schema 由 tool/leo/tool-profile.ts 按模型投影
+  inputSchema: LeoEditReplaceModeInputJsonSchema,
   outputSchema: EditOutputJsonSchema,
-  runtimeInputSchema: EditInputSchema,
+  runtimeInputSchema: LeoEditInputSchema,
   runtimeOutputSchema: EditOutputSchema,
   permission: {
     permission: "edit",
@@ -482,6 +551,7 @@ async function writeEditResult(input: {
   matchAttempts: number;
   matchStrategy?: string;
   matchCandidateCount?: number;
+  leo?: LeoEditOutputSummary; // [leo]
 }): Promise<EditOutput> {
   const fileSystemPort = input.context.fileSystemPort;
   if (!fileSystemPort) {
@@ -547,6 +617,7 @@ async function writeEditResult(input: {
       replaceAll: input.replaceAll,
       matchStrategy: input.matchStrategy,
       matchCandidateCount: input.matchCandidateCount,
+      ...(input.leo ? { leo: input.leo } : {}), // [leo]
     } satisfies EditOutput,
     {
       detail: {

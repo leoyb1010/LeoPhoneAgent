@@ -2,6 +2,7 @@
 import "@zcode/shared/leo-network-guard";
 import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
+import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
@@ -1930,6 +1931,8 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 app.whenReady().then(async () => {
   // [leo] 窗口创建前装好:界面侧也不能连官方服务。
   installLeoSessionGuard();
+  // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
+  registerLeoLinkIpc();
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,

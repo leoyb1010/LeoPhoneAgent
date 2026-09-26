@@ -27,6 +27,7 @@ export function refreshBranchAwareBuiltInTools(runtime: AgentRuntimeInternal): v
 
   registerBuiltInTools(runtime.registry, {
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
+    leoAgent: runtime.config.leoAgent, // [leo] 按模型的 Edit/Read 档位
     includeSkill: Boolean(runtime.skillPort),
     includeAgent: Boolean(runtime.subagentPort),
     embeddedSearchEnabled,

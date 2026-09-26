@@ -25,6 +25,7 @@ import { resolveEnabledProjectMemoryRoot } from "../helpers/project-memory.js";
 import { buildContextHistoryEntries } from "./context-history-entries.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "./embedded-search-branch.js";
 import { getContextSourceShellDisplayName } from "./session-shell-environment.js";
+import { buildLeoLeanSystemPrompt } from "../leo/lean-profile.js"; // [leo]
 
 export { buildContextHistoryEntries };
 
@@ -133,7 +134,9 @@ export function createContextBuilderFromSnapshot(
     agentProfiles: this.config.subagents?.profiles,
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(this),
     skillMetadataBudget: this.config.skillMetadataBudget,
-    customSystemPrompt: this.config.systemPrompt,
+    // [leo] 精简档：最小系统提示词（runtime/leo/lean-profile.ts）；用户自己的 systemPrompt 优先
+    customSystemPrompt:
+      this.config.systemPrompt ?? buildLeoLeanSystemPrompt(this.config, envInfo, options.model),
     workflowActor: this.config.workflowActor,
     language: this.config.language,
     outputStyle: this.config.outputStyle,

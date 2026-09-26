@@ -83,7 +83,7 @@ class HarnessSpec:
         return shutil.which(self.executable) is not None
 
 
-# The four the user asked for. Each keeps its own native protocol — no
+# The three CLIs we host. Each keeps its own native protocol — no
 # cross-vendor API translation, which is where wrapper products get brittle.
 HARNESSES: Dict[str, HarnessSpec] = {
     "claude": HarnessSpec(
@@ -111,13 +111,6 @@ HARNESSES: Dict[str, HarnessSpec] = {
         # over stdio,与 Cindy 桌面端同一条协议)。
         args=["app-server"],
         dialect="codex_app_server",
-    ),
-    "pi": HarnessSpec(
-        key="pi",
-        display_name="pi",
-        executable="pi",
-        args=["--mode", "rpc"],
-        dialect="pi_rpc",
     ),
     "grok": HarnessSpec(
         key="grok",
@@ -218,49 +211,6 @@ def _translate_claude(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def _translate_pi(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """pi's RPC events → our vocabulary."""
-    out: List[Dict[str, Any]] = []
-    kind = obj.get("type")
-
-    if kind == "message_update":
-        ev = obj.get("assistantMessageEvent") or {}
-        if ev.get("type") == "text_delta" and ev.get("delta"):
-            out.append({"event": EVENT_MESSAGE_DELTA, "delta": ev["delta"]})
-        elif ev.get("type") == "thinking_delta" and ev.get("delta"):
-            out.append({"event": EVENT_REASONING, "text": ev["delta"]})
-    elif kind == "tool_execution_start":
-        out.append({
-            "event": EVENT_TOOL_STARTED,
-            "tool": obj.get("toolName") or "tool",
-            "preview": json.dumps(obj.get("args") or {}, ensure_ascii=False)[:200],
-        })
-    elif kind == "tool_execution_end":
-        out.append({
-            "event": EVENT_TOOL_COMPLETED,
-            "tool": obj.get("toolName") or "tool",
-            "error": bool(obj.get("isError")),
-        })
-    elif kind == "extension_ui_request":
-        # pi blocks on these, so they are exactly an approval in our terms.
-        method = obj.get("method")
-        if method in ("confirm", "select"):
-            out.append({
-                "event": EVENT_APPROVAL_REQUEST,
-                "command": str(obj.get("message") or ""),
-                "description": "",
-                "choices": obj.get("choices") or ["once", "deny"],
-                "request_id": obj.get("id"),
-                "raw": obj,
-            })
-    elif kind in ("turn_end", "response"):
-        out.append({"event": EVENT_RUN_COMPLETED, "output": obj.get("text") or "", "usage": {}})
-
-    if not out and kind:
-        out.append({"event": f"harness.{kind}", "raw": obj})
-    return out
-
-
 def _translate_codex(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Codex CLI's proto stream → our vocabulary.
 
@@ -321,7 +271,6 @@ def _translate_raw(line: str) -> List[Dict[str, Any]]:
 
 TRANSLATORS = {
     "claude_stream_json": _translate_claude,
-    "pi_rpc": _translate_pi,
     "codex_proto": _translate_codex,
 }
 
@@ -807,7 +756,7 @@ class HarnessSession:
                 break
             # Split on \n only. Never use a reader that also breaks on U+2028 /
             # U+2029 — those are legal inside JSON strings and splitting on them
-            # corrupts the frame (pi's own RPC docs call this out explicitly).
+            # corrupts the frame.
             line = raw.decode("utf-8", errors="replace").rstrip("\n")
             if not line.strip():
                 continue
@@ -884,8 +833,6 @@ class HarnessSession:
                 "type": "user",
                 "message": {"role": "user", "content": [{"type": "text", "text": text}]},
             }
-        elif self.spec.dialect == "pi_rpc":
-            payload = {"id": str(uuid.uuid4()), "type": "prompt", "message": text}
         elif self.spec.dialect == "codex_proto":
             payload = {"id": str(uuid.uuid4()), "op": {"type": "user_input",
                                                        "items": [{"type": "text", "text": text}]}}
@@ -940,7 +887,7 @@ class HarnessSession:
             return False
         request_id = pending.get("request_id")
         if request_id is None and self.spec.dialect in (
-                "claude_stream_json", "pi_rpc", "codex_proto", "codex_app_server",
+                "claude_stream_json", "codex_proto", "codex_app_server",
                 "grok_acp"):
             # A minted id is addressable by clients but not routable to the
             # CLI; pretending otherwise clears the card while the CLI waits.
@@ -971,15 +918,6 @@ class HarnessSession:
                 "response": {"subtype": "success", "request_id": request_id,
                              "response": inner},
             }
-        elif self.spec.dialect == "pi_rpc":
-            # A `select` prompt supplied its own labels and wants one back; a
-            # `confirm` prompt wants a boolean.
-            cli_choices = (pending.get("raw") or {}).get("choices")
-            if cli_choices and choice in cli_choices:
-                result: Any = choice
-            else:
-                result = allowed
-            payload = {"id": request_id, "type": "extension_ui_response", "result": result}
         elif self.spec.dialect == "codex_proto":
             decision = {"once": "approved", "session": "approved_for_session",
                         "always": "approved_for_session", "deny": "denied"}.get(choice, "denied")

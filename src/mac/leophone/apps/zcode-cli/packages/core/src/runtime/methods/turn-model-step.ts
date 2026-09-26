@@ -29,6 +29,7 @@ import {
   isModelContextExceededError,
   isTurnCancellationError,
   buildTurnFileChangeSummary,
+  toTokenUsageInfo, // [leo] 丢弃的截断回答仍记下真实 token 用量
 } from "../helpers/index.js";
 import type {
   DrainedPendingInputDiagnostics,
@@ -69,6 +70,13 @@ import {
   recordMainTurnModelUsage,
 } from "./turn-model-step-usage.js";
 import { estimateCurrentModelInputTokens } from "./compact.js";
+// [leo] 过早 length 截断先压缩再重试；超窗 / 丢弃的尝试对 provider 隐藏
+import {
+  LEO_CONTEXT_OVERFLOW_DISCARDED_FINISH,
+  LEO_PREMATURE_LENGTH_DISCARDED_FINISH,
+  recoverLeoPrematureLengthStop,
+  type LeoStepOutputBudget,
+} from "../leo/premature-length.js";
 import {
   resolveModelStepMaxOutputTokens,
   resolveNormalRequestMaxOutputTokens,
@@ -212,6 +220,16 @@ async function runModelBackedTurnStepImpl(
     traceContext: modelTraceContext,
   });
   const networkEventStartIndex = state.events.length;
+  // [leo] 丢弃的尝试（超窗 / 过早截断后已压缩重试）：收尾这条 assistant 消息并对 provider 隐藏
+  const discardLeoAttempt = (finish: string, tokens?: ReturnType<typeof toTokenUsageInfo>) =>
+    this.persistAssistantMessage(
+      assistantMessageId,
+      state.userMessageId,
+      assistantCreatedAt,
+      { completed: Date.now(), finish, providerVisibility: "hidden", ...(tokens ? { tokens } : {}) },
+      modelTraceContext,
+      model,
+    );
   let latestStreamSnapshot: RuntimeModelStreamSnapshot = { reasoning: [], text: "" };
   const streamRecoveryRequest = state.pendingStreamRecoveryRequest;
   state.pendingStreamRecoveryRequest = undefined;
@@ -228,15 +246,14 @@ async function runModelBackedTurnStepImpl(
   };
 
   let result: RuntimeModelTextResult;
+  let leoOutputBudget: LeoStepOutputBudget | undefined; // [leo]
   try {
     const baselineMaxOutputTokens = resolveNormalRequestMaxOutputTokens({
       modelMaxOutputTokens: executionMaxOutputTokens,
     });
-    result = await this.runModelTextRequest({
-      abortSignal: state.turnAbortSignal,
-      assistantMessageId,
-      events: state.events,
-      maxOutputTokens: resolveModelStepMaxOutputTokens({
+    leoOutputBudget = {
+      baseline: baselineMaxOutputTokens,
+      step: resolveModelStepMaxOutputTokens({
         baselineMaxOutputTokens,
         contextWindow: executionContextWindow,
         estimatedCurrentUsage: estimateCurrentModelInputTokens(
@@ -245,6 +262,12 @@ async function runModelBackedTurnStepImpl(
         ),
         modelContextBudgetStrategy: this.config.modelContextBudgetStrategy,
       }),
+    };
+    result = await this.runModelTextRequest({
+      abortSignal: state.turnAbortSignal,
+      assistantMessageId,
+      events: state.events,
+      maxOutputTokens: leoOutputBudget.step, // [leo] 记下本步预算，供过早截断判定
       latestRealUserMessageIndex: options.latestRealUserMessageIndex,
       messages: options.messages,
       sourceEntries: options.sourceEntries,
@@ -518,6 +541,8 @@ async function runModelBackedTurnStepImpl(
         options.requestEntries,
       )
     ) {
+      // [leo] 上游在这里直接重试，超窗那条 assistant 消息一直停在未完成状态；收尾并对 provider 隐藏。
+      await discardLeoAttempt(LEO_CONTEXT_OVERFLOW_DISCARDED_FINISH);
       return "continue";
     }
     throw contextError;
@@ -644,6 +669,26 @@ async function runModelBackedTurnStepImpl(
 
   const executableToolCalls = toolCalls.filter((toolCall) => !toolCall.providerExecuted);
   const streamedToolResults = await streamingToolCoordinator.drain(executableToolCalls);
+  // [leo] 上下文快满导致的过早 length 截断：压缩一次后重试本步，半截回答不进请求历史（见 runtime/leo/premature-length.ts）。
+  if (
+    await recoverLeoPrematureLengthStop({
+      budget: leoOutputBudget,
+      outputTokenContinuation,
+      reactiveCompactAttempted: state.reactiveCompactAttemptedInCurrentModelStep,
+      rapidRefillBlocked: evaluateRapidRefill(state.compactTracking).shouldBlock,
+      finishReason: result.finishReason,
+      rawFinishReason,
+      responseLength,
+      recover: (contextError) =>
+        recoverModelStepAfterContextExceeded.call(this, state, contextError, modelStepIndex, options.requestEntries),
+      discard: () => discardLeoAttempt(LEO_PREMATURE_LENGTH_DISCARDED_FINISH, toTokenUsageInfo(result.usage)),
+      logger: this.logger,
+      logContext: traceContextToLogContext(modelTraceContext),
+    })
+  ) {
+    state.modelResponse = "";
+    return "continue";
+  }
   if (outputTokenContinuation !== "none") {
     // 首次命中 output-limit 时，当前 request 可能带有一次性的 project-memory attachment；
     // query-local 状态必须从实际请求数组推进，不能退回请求前的数组。

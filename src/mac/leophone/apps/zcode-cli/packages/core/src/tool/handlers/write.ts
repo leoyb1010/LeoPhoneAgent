@@ -25,6 +25,7 @@ import {
   normalizeReadFileStateMtimeMs,
 } from "../read-file-state.js";
 import { createReadFileStateMetadataFromEntry } from "../read-file-state-metadata.js";
+import { leoMutationKey, withLeoFileMutationQueue } from "../leo/file-mutation-queue.js"; // [leo]
 import type { ReadFileStateEntry, ReadFileStateMap, ToolExecutionContext } from "../types.js";
 import {
   attachToolExecutionTelemetry,
@@ -222,7 +223,11 @@ export const writeToolEntry: ToolEntry = {
     riskLevel: "medium",
     needsApproval: true,
   },
-  handler: writeHandler,
+  // [leo] 与 Edit 共用按文件的写队列，避免同一文件被并发改写（tool/leo/file-mutation-queue.ts）
+  handler: (input, context) =>
+    withLeoFileMutationQueue(leoMutationKey(input, context.workingDirectory), () =>
+      writeHandler(input, context),
+    ),
   formatModelContent: formatWriteModelContent,
   inputSchema: WriteInputJsonSchema,
   outputSchema: WriteOutputJsonSchema,

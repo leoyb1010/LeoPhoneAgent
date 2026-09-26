@@ -108,6 +108,7 @@ import type {
 import type { AgentProfile } from "../subagent/profile.js";
 import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type { BashTimeoutPolicy } from "../tool/bash-timeout-policy.js";
+import type { LeoAgentSettings } from "../tool/leo/model-profile.js"; // [leo]
 import type { PresentationSurface } from "../context/types.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 
@@ -121,6 +122,8 @@ export interface AgentRuntimeConfig {
   deliveryKind?: "desktop-continuous" | "web-remote-replayable";
   remoteSessionId?: string;
   bashTimeoutPolicy?: BashTimeoutPolicy;
+  /** [leo] 按模型的编辑格式、Read 行号、精简档、prompt cache key（tool/leo/model-profile.ts）。 */
+  leoAgent?: LeoAgentSettings;
   presentationSurface?: PresentationSurface;
   mode?: CollaborationMode;
   planEnabled?: boolean;

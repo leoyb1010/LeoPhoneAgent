@@ -37,7 +37,12 @@ import { createReadFileStateMetadata } from "../read-file-state-metadata.js";
 import { inferImageMimeFromPath, readImageFile } from "./read-image.js";
 import { inferVideoMimeFromPath } from "../../runtime/helpers/attachment-video.js";
 import { readVideoFile } from "./read-video.js";
-import { formatReadTextOutput, readTextFileForModel } from "./read-text.js";
+import { formatReadTextOutput } from "./read-text.js";
+import {
+  leoAllowsUnchangedStub,
+  leoReadStateLimit,
+  readLeoTextFileForModel,
+} from "../leo/read-format.js"; // [leo]
 import {
   formatReadPdfOutput,
   formatReadPdfPagesOutput,
@@ -187,7 +192,8 @@ const readHandler: ToolHandler = async (input, context) => {
     const cacheOffset = normalizeCacheOffset(offset);
     const cacheKey = createReadFileStateKey(filePath, cacheOffset, limit);
     const cached = readFileState.get(cacheKey);
-    if (cached && isCachedReadFresh(cached, stat)) {
+    // [leo] hashline 模式下 Edit/Write 之后重读要拿到新锚点，不能回"文件未变"的占位（leoAllowsUnchangedStub）
+    if (cached && isCachedReadFresh(cached, stat) && leoAllowsUnchangedStub(context, cached)) {
       const output = { type: "file_unchanged", filePath } satisfies ReadOutput;
       recordReadFileStateMetadata(context, {
         output,
@@ -198,7 +204,8 @@ const readHandler: ToolHandler = async (input, context) => {
     }
 
     let rangeReadRevision: FileSystemStatResult["revision"] | undefined;
-    const output = await readTextFileForModel({
+    // [leo] 按模型切换行格式：hashline 只换显示；plain 按 2000 行 / 50KB 整行窗口读取。
+    const output = await readLeoTextFileForModel(context, {
       abortSignal: context.abortSignal,
       filePath,
       fileSystemPort,
@@ -215,7 +222,7 @@ const readHandler: ToolHandler = async (input, context) => {
       stat,
       rangeReadRevision,
       offset,
-      limit,
+      limit: leoReadStateLimit(output, limit), // [leo] plain 窗口截断时按实际行数记成 range view
     });
     recordReadFileStateMetadata(context, {
       output,

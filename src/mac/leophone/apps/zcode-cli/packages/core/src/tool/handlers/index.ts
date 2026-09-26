@@ -21,6 +21,9 @@ import type { AgentProfile } from "../../subagent/profile.js";
 import { readToolEntry } from "./read.js";
 import { writeToolEntry } from "./write.js";
 import { editToolEntry } from "./edit.js";
+// [leo] 按模型档位包装 Edit / Read
+import { withLeoModelProfile } from "../leo/tool-profile.js";
+import type { LeoAgentSettings } from "../leo/model-profile.js";
 import { bashToolEntry, createBashToolEntry } from "./bash.js";
 import type { BashTimeoutPolicy } from "../bash-timeout-policy.js";
 import { createJsToolEntry, jsToolEntry } from "./node-repl.js";
@@ -158,6 +161,8 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
 
 interface RegisterBuiltInToolsOptions {
   bashTimeoutPolicy?: BashTimeoutPolicy;
+  /** [leo] 按模型的编辑格式 / Read 行号等档位（config.json 的 leo 段）；缺席按内置默认。 */
+  leoAgent?: LeoAgentSettings;
   includeSkill?: boolean;
   includeAgent?: boolean;
   includeSendMessage?: boolean;
@@ -272,6 +277,10 @@ function resolveBuiltInToolEntryForBranch(
   entry: ToolEntry,
   options: RegisterBuiltInToolsOptions,
 ): ToolEntry {
+  // [leo] Edit / Read 按本轮模型切换 replace / hashline / 无行号（tool/leo/tool-profile.ts）
+  if (entry.metadata.name === "Edit" || entry.metadata.name === "Read") {
+    return withLeoModelProfile(entry, options.leoAgent);
+  }
   if (entry.metadata.name === "Bash") {
     return createBashToolEntry({
       bashTimeoutPolicy: options.bashTimeoutPolicy,

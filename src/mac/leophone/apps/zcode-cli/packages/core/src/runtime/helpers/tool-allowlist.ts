@@ -9,6 +9,7 @@ import {
 import { EXPLORE_AGENT_ALLOWED_TOOLS } from "../../subagent/explore-tools.js";
 import type { AgentRuntimeConfig } from "../types.js";
 import { normalizeToolNameAlias } from "../../tool/tool-visibility.js";
+import { applyLeoLeanToolAllowlist } from "../leo/lean-profile.js"; // [leo]
 
 const EXPLORE_AGENT_ALLOWED_TOOL_SET = new Set<string>(EXPLORE_AGENT_ALLOWED_TOOLS);
 
@@ -78,7 +79,11 @@ export function resolveRuntimeDynamicWorkflowToolsIncluded(config: AgentRuntimeC
 export function resolveBuiltInToolAllowlist(
   config: AgentRuntimeConfig,
 ): readonly string[] | undefined {
-  const normalizedAllowlist = normalizeBuiltInToolAllowlist(config.toolAllowlist);
+  // [leo] 精简档：主会话只保留核心工具（runtime/leo/lean-profile.ts）
+  const normalizedAllowlist = applyLeoLeanToolAllowlist(
+    config,
+    normalizeBuiltInToolAllowlist(config.toolAllowlist),
+  );
 
   if (config.toolset !== "explore") {
     return appendChildControlTool(config, normalizedAllowlist);

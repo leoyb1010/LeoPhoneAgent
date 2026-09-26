@@ -90,6 +90,16 @@ export interface EditOutput {
    * Git diff information (for remote scenarios)
    */
   gitDiff?: GitDiff;
+  /** [leo] 多段 / hashline 编辑的摘要：段数、每段命中的匹配策略、hashline 模式下改动附近的新锚点。 */
+  leo?: LeoEditOutputSummary;
+}
+
+/** [leo] 见 leo-edit.ts。preview 只在 hashline 模式给出，供模型继续编辑而无需重读。 */
+export interface LeoEditOutputSummary {
+  editCount: number;
+  strategies: string[];
+  mode?: "replace" | "hashline";
+  preview?: string;
 }
 
 export interface DiffHunk {
@@ -148,6 +158,16 @@ export const EditOutputSchema = z
     matchCandidateCount: z.number().int().nonnegative().optional(),
     gitDiff: EditGitDiffSchema.optional(),
     perf: ToolExecutionTelemetrySchema.optional(),
+    // [leo] 多段 / hashline 编辑摘要
+    leo: z
+      .object({
+        editCount: z.number().int().nonnegative(),
+        strategies: z.array(z.string()),
+        mode: z.enum(["replace", "hashline"]).optional(),
+        preview: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

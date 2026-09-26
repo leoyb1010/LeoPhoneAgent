@@ -41,6 +41,7 @@ import {
 } from "@zcode/shared/zcode-protocol-v4";
 
 import { createModelAdapter } from "../model-factory.js";
+import { withLeoAgentEnv } from "./leo-agent-config.js"; // [leo]
 import { StartupTimer, startupNow } from "../startup-logging.js";
 import { scheduleStartupLogRetentionCleanup } from "../log-retention.js";
 import type {
@@ -241,7 +242,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     const persistedMode = options.runtimeConfig?.mode
       ? undefined
       : readProjectPermissionMode(localSettingStore, projectID);
-    let { configuredMcpServers, runtimeConfig, untrustedProjectMcpServers } =
+    let { configuredMcpServers, runtimeConfig, untrustedProjectMcpServers, leoAgentWarnings } =
       resolveAppRuntimeConfig({
         cliStorageRoot,
         configResult,
@@ -259,6 +260,14 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
         workingDirectory,
         workspaceIdentity: options.runtimeConfig?.memory?.workspaceIdentity,
       });
+    // [leo] leo 档位配置里被忽略的非法字段（不阻止启动）
+    for (const warning of leoAgentWarnings) {
+      logger.warn("Ignored invalid leo agent setting", {
+        event: "leo.agent_settings.invalid",
+        module: "bootstrap",
+        warning,
+      });
+    }
     const browserControlPort = options.browserControlPort;
     if (
       browserControlPort &&
@@ -528,7 +537,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     const modelAdapter =
       options.modelAdapter ??
       createModelAdapter({
-        env: options.env,
+        env: withLeoAgentEnv(options.env, runtimeConfig.leoAgent), // [leo] prompt_cache_key 开关随 leo 档位
         logger: modelLogger,
         modelIoDir,
         modelIoFullRetentionEnabled: options.modelIoFullRetentionEnabled,

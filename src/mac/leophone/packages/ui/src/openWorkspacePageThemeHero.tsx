@@ -27,27 +27,28 @@ function getThemeHeroPalette(theme: Theme): ThemeHeroPalette {
         heading: "text-slate-900",
         description: "text-slate-700/80",
       };
+    // [leo] 两套 Zai 主题的欢迎背景从智谱蓝换成 Leo 的暖白 / 暖石墨 + 青绿(与鸿蒙端同一个青绿)。
     case "zai-light":
       return {
-        meshBase: "#f8f8f8",
-        meshLight: "#80beff",
+        meshBase: "#f7f6f3",
+        meshLight: "#8fd6d0",
         panel:
-          "bg-[linear-gradient(180deg,#ffffff_0%,#f8f8f8_42%,#ebf4ff_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.9),transparent_24%),radial-gradient(circle_at_82%_14%,rgba(11,127,255,0.2),transparent_26%),radial-gradient(circle_at_70%_84%,rgba(128,190,255,0.2),transparent_30%)]",
-        glowPrimary: "bg-[#80BEFF]/45 mix-blend-multiply",
-        glowSecondary: "bg-[#EBF4FF]/80 mix-blend-multiply",
-        heading: "text-[#0D0D0D]",
-        description: "text-[#5C5C5C]",
+          "bg-[linear-gradient(180deg,#fcfbf9_0%,#f7f6f3_42%,#e6f2f0_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.9),transparent_24%),radial-gradient(circle_at_82%_14%,rgba(46,139,139,0.14),transparent_26%),radial-gradient(circle_at_70%_84%,rgba(143,214,208,0.2),transparent_30%)]",
+        glowPrimary: "bg-[#8FD6D0]/40 mix-blend-multiply",
+        glowSecondary: "bg-[#E6F2F0]/80 mix-blend-multiply",
+        heading: "text-[#1D1B19]",
+        description: "text-[#5F5A54]",
       };
     case "zai-dark":
       return {
-        meshBase: "#001d3d",
-        meshLight: "#80beff",
+        meshBase: "#10292a",
+        meshLight: "#4dd9d9",
         panel:
-          "bg-[linear-gradient(180deg,#161616_0%,#202020_42%,#001d3d_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_18%,rgba(64,153,255,0.18),transparent_24%),radial-gradient(circle_at_82%_12%,rgba(128,190,255,0.2),transparent_26%),radial-gradient(circle_at_66%_84%,rgba(153,199,255,0.16),transparent_28%)]",
-        glowPrimary: "bg-[#4099FF]/22 mix-blend-screen",
-        glowSecondary: "bg-[#80BEFF]/16 mix-blend-screen",
-        heading: "text-[#F8F8F8]",
-        description: "text-[#ADADAD]",
+          "bg-[linear-gradient(180deg,#151413_0%,#1b1a18_46%,#0f2627_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_18%,rgba(77,217,217,0.12),transparent_24%),radial-gradient(circle_at_82%_12%,rgba(168,241,226,0.12),transparent_26%),radial-gradient(circle_at_66%_84%,rgba(77,217,217,0.1),transparent_28%)]",
+        glowPrimary: "bg-[#4DD9D9]/14 mix-blend-screen",
+        glowSecondary: "bg-[#A8F1E2]/10 mix-blend-screen",
+        heading: "text-[#EFEBE5]",
+        description: "text-[#A8A29B]",
       };
     case "dark":
     case "system":

@@ -278,6 +278,8 @@ export async function persistAssistantMessage(
         error?: { name: string; data?: Record<string, unknown> };
         finish?: string;
         tokens?: ReturnType<typeof toTokenUsageInfo>;
+        /** [leo] 丢弃的尝试：留在会话记录里，但不进入 provider 请求历史。 */
+        providerVisibility?: "hidden";
       }
     | undefined,
   traceContext: TraceContext,
@@ -324,7 +326,7 @@ export async function persistAssistantMessage(
         origin: "agent_runtime",
         kind: "assistant_response",
         uiVisibility: "visible",
-        providerVisibility: "visible",
+        providerVisibility: update?.providerVisibility ?? "visible", // [leo]
         transcriptVisibility: "visible",
       },
       anchor: buildProjectionAnchor(traceContext),

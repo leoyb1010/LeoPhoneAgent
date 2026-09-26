@@ -22,6 +22,17 @@ export type RelayConfig = {
 
 export type MachineKeyStore = { get(): Promise<string | null>; set(key: string): Promise<void> };
 
+/** 给 Mac 上「连接手机」面板看的连接状态;不含任何钥匙。 */
+export type RelayLinkStatus = {
+  connected: boolean;
+  /** 中继回执里的版本;0.1 不带,记成 "0.1"。 */
+  relayVersion: string | null;
+  /** 最近一次连上的时间(毫秒)。 */
+  connectedAt: number | null;
+  lastError: string | null;
+  lastErrorAt: number | null;
+};
+
 const PING_INTERVAL_MS = 25_000;
 const PONG_TIMEOUT_MS = 75_000;
 const STREAM_KEEPALIVE_MS = 25_000;
@@ -75,6 +86,13 @@ export class RelayLink {
   private machineKeyRejected = false;
   private readonly outbox: Record<string, unknown>[] = [];
   private readonly streamAborts = new Map<string, AbortController>();
+  private readonly state: RelayLinkStatus = {
+    connected: false,
+    relayVersion: null,
+    connectedAt: null,
+    lastError: null,
+    lastErrorAt: null,
+  };
 
   constructor(
     private readonly config: RelayConfig,
@@ -86,6 +104,15 @@ export class RelayLink {
 
   start(): void {
     void this.runForever();
+  }
+
+  status(): RelayLinkStatus {
+    return { ...this.state };
+  }
+
+  /** 机器专属钥匙(中继 0.2 钉扎后才有);签发配对码时优先用它。 */
+  machineKey(): Promise<string | null> {
+    return this.machineKeys.get();
   }
 
   stop(): void {
@@ -120,8 +147,12 @@ export class RelayLink {
         await this.runOnce();
         backoff = 1;
       } catch (error) {
-        this.logger.warn("[leo/link] relay disconnected", { error: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        this.state.lastError = message;
+        this.state.lastErrorAt = Date.now();
+        this.logger.warn("[leo/link] relay disconnected", { error: message });
       }
+      this.state.connected = false;
       if (this.stopped) break;
       await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
       backoff = Math.min(backoff * 2, 30);
@@ -142,6 +173,7 @@ export class RelayLink {
         settled = true;
         if (pingTimer) clearInterval(pingTimer);
         if (this.activeWs === ws) this.activeWs = null;
+        this.state.connected = false;
         for (const controller of this.streamAborts.values()) controller.abort();
         this.streamAborts.clear();
         try {
@@ -192,6 +224,9 @@ export class RelayLink {
         switch (frame["type"]) {
           case "registered":
             this.logger.info("[leo/link] connected to relay", { name: this.config.name, relay: frame["version"] ?? "0.1" });
+            this.state.connected = true;
+            this.state.connectedAt = Date.now();
+            this.state.relayVersion = typeof frame["version"] === "string" ? frame["version"] : "0.1";
             // 0.2 起回执带 version,并且每个请求都附调用方:从此认不出身份的请求按旧版设备对待。
             this.bridge.strictCallers = typeof frame["version"] === "string";
             if (typeof frame["machine_key"] === "string" && frame["machine_key"]) {

@@ -423,6 +423,8 @@ export interface AgentRuntimeTurnMethods {
           error?: { name: string; data?: Record<string, unknown> };
           finish?: string;
           tokens?: unknown;
+          /** [leo] 丢弃的尝试：留在会话记录里，但不进入 provider 请求历史。 */
+          providerVisibility?: "hidden";
         }
       | undefined,
     traceContext: TraceContext,

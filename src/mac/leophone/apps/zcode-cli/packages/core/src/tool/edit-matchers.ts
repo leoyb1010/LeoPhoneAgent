@@ -1,5 +1,13 @@
+// [leo] 窄归一化 / hashline 前缀剥离两级插在 exact 之后，见 tool/leo/early-matchers.ts。
+import {
+  findLeoEarlyCandidates,
+  normalizeLeoReplacement,
+  type LeoEarlyMatchStrategy,
+} from "./leo/early-matchers.js";
+
 type EditMatchStrategy =
   | "exact"
+  | LeoEarlyMatchStrategy // [leo]
   | "quote_normalized"
   | "line_number_prefix_stripped"
   | "escape_normalized"
@@ -48,7 +56,13 @@ export function findEditMatch(input: {
     return toMatchResult("exact", exact);
   }
 
-  const strategies: EditMatchStrategy[] = [
+  // [leo] 精确匹配失败后先试严格的窄归一化，再轮到上游的宽松匹配器。
+  const leoEarly = findLeoEarlyCandidates(input.content, input.search);
+  if (leoEarly) {
+    return toMatchResult(leoEarly.strategy, leoEarly.candidates);
+  }
+
+  const strategies: Exclude<EditMatchStrategy, LeoEarlyMatchStrategy>[] = [ // [leo]
     "quote_normalized",
     "line_number_prefix_stripped",
     "escape_normalized",
@@ -76,6 +90,8 @@ export function normalizeReplacementForMatch(
   strategy: EditMatchStrategy,
   newString: string,
 ): string {
+  const leoReplacement = normalizeLeoReplacement(strategy, newString); // [leo]
+  if (leoReplacement !== undefined) return leoReplacement;
   return strategy === "escape_normalized" ? unescapeVisibleCharacters(newString) : newString;
 }
 
@@ -105,7 +121,7 @@ export function preserveQuoteStyle(
 }
 
 function collectCandidates(
-  strategy: EditMatchStrategy,
+  strategy: Exclude<EditMatchStrategy, LeoEarlyMatchStrategy>, // [leo] 早期两级在 findEditMatch 里单独处理
   content: string,
   search: string,
 ): Candidate[] {

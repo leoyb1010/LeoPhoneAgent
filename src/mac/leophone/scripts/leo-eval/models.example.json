@@ -1,0 +1,23 @@
+[
+  {
+    "name": "gpt-5 (OpenAI Responses)",
+    "providerId": "openai",
+    "modelId": "gpt-5",
+    "reasoningLevel": "disabled",
+    "api": { "type": "openai-responses", "baseUrl": "https://api.openai.com/v1", "apiKeyEnv": "OPENAI_API_KEY" }
+  },
+  {
+    "name": "local glm (hashline)",
+    "providerId": "local",
+    "modelId": "glm-4.6",
+    "api": { "type": "openai-chat-completions", "baseUrl": "http://127.0.0.1:8000/v1", "apiKeyEnv": "LOCAL_LLM_KEY" },
+    "leo": { "hashlineFamilies": true }
+  },
+  {
+    "name": "local glm (replace, default)",
+    "providerId": "local",
+    "modelId": "glm-4.6",
+    "api": { "type": "openai-chat-completions", "baseUrl": "http://127.0.0.1:8000/v1", "apiKeyEnv": "LOCAL_LLM_KEY" },
+    "leo": { "editMode": { "models": { "*": "replace" } } }
+  }
+]

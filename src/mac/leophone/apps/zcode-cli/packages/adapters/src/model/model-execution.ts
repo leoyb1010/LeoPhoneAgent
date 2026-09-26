@@ -27,6 +27,13 @@ import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
 import { createOfficialCodingPlanGatewayFetch } from "./official-coding-plan-gateway.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
+// [leo] 会话级 prompt_cache_key 与非标准缓存命中字段（leo-prompt-cache.ts）
+import {
+  convertLeoOpenAICompatibleUsage,
+  createLeoPromptCacheKeyFetch,
+  resolveLeoPromptCacheKeyMode,
+  shouldSendLeoPromptCacheKey,
+} from "./leo-prompt-cache.js";
 
 export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible";
 
@@ -277,13 +284,24 @@ export class AiSdkModelExecution {
             values: optionValues,
           })
         : fetch;
+    // [leo] OpenAI 系请求带会话级 prompt_cache_key（默认只对 api.openai.com / openrouter.ai）
+    const leoCacheFetch = createLeoPromptCacheKeyFetch({
+      fetch: optionFetch,
+      enabled:
+        (providerConfig.kind === "openai" || providerConfig.kind === "openai-compatible") &&
+        shouldSendLeoPromptCacheKey(
+          resolveLeoPromptCacheKeyMode(this.env),
+          providerConfig.baseURL ??
+            (providerConfig.kind === "openai" ? "https://api.openai.com/v1" : undefined),
+        ),
+    });
 
     switch (providerConfig.kind) {
       case "openai": {
         const provider = createOpenAI({
           apiKey,
           baseURL: providerConfig.baseURL,
-          fetch: createOpenAIResponsesJsonCompatFetch(optionFetch),
+          fetch: createOpenAIResponsesJsonCompatFetch(leoCacheFetch), // [leo]
           headers,
         });
         return provider.responses as LanguageModelFactory;
@@ -304,10 +322,12 @@ export class AiSdkModelExecution {
           name: providerConfig.name ?? providerId,
           baseURL: providerConfig.baseURL,
           apiKey,
-          fetch: optionFetch,
+          fetch: leoCacheFetch, // [leo]
           headers,
           // OpenAI Compatible 流式 usage 需要显式请求，Usage 是执行结果的一部分。
           includeUsage: true,
+          // [leo] DeepSeek / Kimi 等把缓存命中放在非标准字段，补上回退，命中数进入 cacheReadTokens
+          convertUsage: convertLeoOpenAICompatibleUsage,
           // 缺少这一装配时 SDK 默认 false，会把已声明支持的 Schema 静默降为 JSON object。
           // 使用 binding 冻结的模型事实，不按供应商或实时 Registry 另查一套能力。
           supportsStructuredOutputs: supportsJsonSchemaOutput,

@@ -26,6 +26,8 @@ function parseDeviceIdFromArgs(): string {
 
 // 在 contextBridge 建立之前就暴露同步值，让 renderer 在 React 渲染前就能读到
 contextBridge.exposeInMainWorld("__ZCODE_DEVICE_ID__", parseDeviceIdFromArgs());
+// [leo-link] 手机连接状态与配对码(window.leoLink)。
+import "./leoBridge.js";
 
 import type {
   AppSettings,
