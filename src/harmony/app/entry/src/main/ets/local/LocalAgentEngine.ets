@@ -91,7 +91,7 @@ export class LocalAgentEngine {
     LocalAgentEngine.drafts.delete(sessionKey);
   }
 
-  static run(context: common.UIAbilityContext, sessionKey: string, mine: number, text: string,
+  static run(context: common.Context, sessionKey: string, mine: number, text: string,
     thinking: string, onDelta: (delta: string) => void, onDone: (output: string) => void,
     onError: (message: string) => void): http.HttpRequest | null {
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
@@ -122,7 +122,7 @@ export class LocalAgentEngine {
     return LocalAgentEngine.reqs.get(sessionKey) ?? null;
   }
 
-  private static loop(context: common.UIAbilityContext, sessionKey: string, mine: number,
+  private static loop(context: common.Context, sessionKey: string, mine: number,
     turns: LoopTurn[], thinking: string, rounds: number, failIndex: number,
     onDelta: (delta: string) => void, onDone: (output: string) => void,
     onError: (message: string) => void): void {
@@ -133,7 +133,7 @@ export class LocalAgentEngine {
     });
   }
 
-  private static async begin(context: common.UIAbilityContext, sessionKey: string, mine: number,
+  private static async begin(context: common.Context, sessionKey: string, mine: number,
     turns: LoopTurn[], thinking: string, rounds: number, failIndex: number,
     onDelta: (delta: string) => void, onDone: (output: string) => void,
     onError: (message: string) => void): Promise<void> {
@@ -218,7 +218,7 @@ export class LocalAgentEngine {
     LocalAgentEngine.reqs.set(sessionKey, req);
   }
 
-  private static async tools(context: common.UIAbilityContext, sessionKey: string, mine: number,
+  private static async tools(context: common.Context, sessionKey: string, mine: number,
     turns: LoopTurn[], calls: ToolCall[], thinking: string, rounds: number, failIndex: number,
     onDelta: (delta: string) => void, onDone: (output: string) => void,
     onError: (message: string) => void): Promise<void> {
@@ -248,6 +248,8 @@ export class LocalAgentEngine {
       tool.toolCallId = calls[i].id.length > 0 ? calls[i].id : `call_${i}`;
       tool.toolName = calls[i].name;
       tool.content = times >= LOOP_WARN_AT ? result.text + loopWarning(calls[i].name, times) : result.text;
+      tool.imageB64 = result.imageB64;
+      tool.imageMime = result.imageMime;
       turns.push(tool);
       if (times >= LOOP_STOP_AT) {
         taskStatus.setRunning(false);

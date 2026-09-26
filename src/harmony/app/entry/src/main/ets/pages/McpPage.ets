@@ -27,7 +27,7 @@ struct McpPage {
         .fontColor(Tokens.text)
         .width('100%')
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
-      Text('HTTP JSON-RPC。没有 Linux MCP 进程。保存时会拉 tools/list。')
+      Text('远程 MCP 服务器(Streamable HTTP)。保存时握手并拉工具清单;钥匙可以写成 $$变量名,真值放「环境变量」。')
         .fontSize(13)
         .fontColor(Tokens.muted)
         .width('100%')
@@ -53,7 +53,7 @@ struct McpPage {
             .fontColor(Tokens.text)
             .placeholderColor(Tokens.muted)
             .borderRadius(Tokens.settingsRadius)
-          TextInput({ text: this.secretDraft, placeholder: '可选 Bearer' })
+          TextInput({ text: this.secretDraft, placeholder: '可选钥匙(Bearer),如 $$ZHIPU_API_KEY' })
             .onChange((value: string) => {
               this.secretDraft = value;
             })
@@ -71,6 +71,17 @@ struct McpPage {
             .fontColor('#FFFFFF')
             .onClick(() => {
               this.save();
+            })
+          // 和 iOS 同一个预设:智谱的网页搜索 MCP。钥匙在「环境变量」里填 ZHIPU_API_KEY。
+          Text('+ 智谱网页搜索(预设)')
+            .fontSize(14)
+            .fontColor(Tokens.accent)
+            .margin({ bottom: 16 })
+            .onClick(() => {
+              this.nameDraft = 'zhipu-web-search';
+              this.urlDraft = 'https://open.bigmodel.cn/api/mcp/web_search_prime/mcp';
+              this.secretDraft = '$$ZHIPU_API_KEY';
+              this.message = '在「环境变量」里加 ZHIPU_API_KEY,再点「保存并拉工具」';
             })
           ForEach(this.rows, (row: McpServer) => {
             Row() {

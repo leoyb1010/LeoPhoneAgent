@@ -12,7 +12,7 @@ export class CollectionStore {
   items: CollectionItem[] = [];
   jsonLoadFailed: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     const path = CollectionStore.filePath(context);
     if (!fileIo.accessSync(path)) {
       this.items = [];
@@ -35,7 +35,7 @@ export class CollectionStore {
     }
   }
 
-  async add(context: common.UIAbilityContext, title: string, body: string): Promise<void> {
+  async add(context: common.Context, title: string, body: string): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('藏宝阁档案读坏了，先别保存，避免覆盖');
     }
@@ -56,7 +56,7 @@ export class CollectionStore {
     return '藏宝阁:\n' + top.map((row: CollectionItem) => `- ${row.title}: ${row.body}`).join('\n');
   }
 
-  private static filePath(context: common.UIAbilityContext): string {
+  private static filePath(context: common.Context): string {
     return context.filesDir + '/collections.json';
   }
 

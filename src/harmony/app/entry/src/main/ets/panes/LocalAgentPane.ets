@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { LocalChatLaunch, LocalChatPane } from './LocalChatPane';
+import { ChatRuns } from '../local/ChatRun';
 import { FastLocalActions } from '../local/FastLocalActions';
 import { relativeTime } from '../local/LocalProtocol';
 import { sessionStore, LocalSession, LocalSessionSummary, SessionGroup } from '../store/SessionStore';
@@ -15,7 +16,11 @@ import { Tokens } from '../theme/Tokens';
 export struct LocalAgentPane {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
-  @StorageProp('taskTick') taskTick: number = 0;
+  @StorageProp('taskTick') @Watch('onTaskTick') taskTick: number = 0;
+  /** 点通知回来要打开的对话(EntryAbility 放进来,用完清空)。 */
+  @StorageProp('openSession') @Watch('onOpenSession') openRequest: string = '';
+  /** 正在跑(或等你确认)的对话:列表里标出来。 */
+  @State activeIds: string[] = [];
   @Prop wide: boolean = false;
   onRemote: () => void = () => {};
   onSettings: () => void = () => {};
@@ -36,11 +41,31 @@ export struct LocalAgentPane {
   private launched: boolean = false;
 
   aboutToAppear(): void {
+    this.activeIds = ChatRuns.activeIds();
     this.reload();
   }
 
   onProviderTick(): void {
     this.reload();
+  }
+
+  onTaskTick(): void {
+    this.activeIds = ChatRuns.activeIds();
+    this.groups = sessionStore.grouped(this.query);
+  }
+
+  onOpenSession(): void {
+    this.takeOpenRequest();
+  }
+
+  private takeOpenRequest(): boolean {
+    const id = this.openRequest;
+    if (id.length === 0 || !this.ready) {
+      return false;
+    }
+    AppStorage.setOrCreate('openSession', '');
+    this.openSession(id);
+    return true;
   }
 
   build() {
@@ -301,9 +326,9 @@ export struct LocalAgentPane {
       .alignItems(HorizontalAlign.Start)
       .margin({ left: Tokens.rowGap })
       .layoutWeight(1)
-      Text(relativeTime(row.updatedAt))
+      Text(this.activeIds.indexOf(row.id) >= 0 ? '进行中' : relativeTime(row.updatedAt))
         .fontSize(Tokens.time)
-        .fontColor(Tokens.muted)
+        .fontColor(this.activeIds.indexOf(row.id) >= 0 ? Tokens.online : Tokens.muted)
         .margin({ left: 8 })
     }
     .width('100%')
@@ -589,6 +614,10 @@ export struct LocalAgentPane {
   }
 
   private applyLaunch(): void {
+    if (this.takeOpenRequest()) {
+      this.launched = true;
+      return;
+    }
     if (this.launched || !this.configured) {
       return;
     }
@@ -714,6 +743,7 @@ export struct LocalAgentPane {
   private async removeSession(id: string): Promise<void> {
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
+      ChatRuns.forget(id);
       await sessionStore.remove(ctx, id);
       if (this.sessionId === id) {
         this.sessionId = '';

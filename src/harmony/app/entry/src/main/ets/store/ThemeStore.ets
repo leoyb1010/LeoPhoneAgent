@@ -38,7 +38,7 @@ export class ThemeStore {
     AppStorage.setOrCreate('themeTick', Date.now());
   }
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     if (this.loaded) {
       this.apply();
       return;
@@ -70,7 +70,7 @@ export class ThemeStore {
     this.apply();
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     const body = new ThemeFile();
     body.mode = this.mode;
     body.launch = this.launch;

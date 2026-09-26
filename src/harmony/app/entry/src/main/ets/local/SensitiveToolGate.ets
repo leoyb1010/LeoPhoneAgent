@@ -29,7 +29,7 @@ export class SensitiveToolGate {
   /** 「本次会话允许」:这些会话里写文件不再问。 */
   private static sessionGrants: Set<string> = new Set();
 
-  static async load(context: common.UIAbilityContext): Promise<void> {
+  static async load(context: common.Context): Promise<void> {
     if (SensitiveToolGate.loaded) {
       return;
     }
@@ -46,7 +46,7 @@ export class SensitiveToolGate {
     }
   }
 
-  static async setFullAuto(context: common.UIAbilityContext, on: boolean): Promise<void> {
+  static async setFullAuto(context: common.Context, on: boolean): Promise<void> {
     SensitiveToolGate.fullAuto = on;
     SensitiveToolGate.loaded = true;
     const body = new ApprovalFile();

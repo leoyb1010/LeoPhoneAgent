@@ -52,9 +52,12 @@ export class HarnessClient {
     return parseRemoteTasks(await this.getJson('/harness/sessions'), harness);
   }
 
-  /** 有 prompt 时桥接建好任务就直接跑这一句,不用再单独发一次。 */
-  async create(harness: string, prompt: string, thinking: string): Promise<string> {
-    const body: Record<string, string> = {
+  /**
+   * 有 prompt 时桥接建好任务就直接跑这一句,不用再单独发一次。
+   * fullAuto:让 Mac 用全自动(免审批)跑这个任务,只对 LeoPhoneAgent 任务(zcode)有意义(iOS 同样)。
+   */
+  async create(harness: string, prompt: string, thinking: string, fullAuto: boolean = false): Promise<string> {
+    const body: Record<string, Object> = {
       'harness': harness,
       'cwd': '~'
     };
@@ -63,6 +66,9 @@ export class HarnessClient {
     }
     if (thinking.length > 0) {
       body['thinking'] = thinking;
+    }
+    if (fullAuto) {
+      body['full_auto'] = true;
     }
     const json = await this.postJson('/harness/sessions', body);
     const record = json as Record<string, Object>;
@@ -73,10 +79,14 @@ export class HarnessClient {
     return id;
   }
 
-  async send(sessionId: string, text: string, thinking: string): Promise<void> {
-    const body: Record<string, string> = { 'text': text };
+  /** fullAuto:-1 不说;0 / 1 让 Mac 把这个任务切回「先问我」/ 切到全自动(接着聊的老任务也跟着开关走)。 */
+  async send(sessionId: string, text: string, thinking: string, fullAuto: number = -1): Promise<void> {
+    const body: Record<string, Object> = { 'text': text };
     if (thinking.length > 0) {
       body['thinking'] = thinking;
+    }
+    if (fullAuto >= 0) {
+      body['full_auto'] = fullAuto === 1;
     }
     await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/send`, body);
   }

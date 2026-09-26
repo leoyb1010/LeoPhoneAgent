@@ -16,7 +16,7 @@ export class EnvStore {
   jsonLoadFailed: boolean = false;
   private loaded: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     if (this.loaded) {
       return;
     }
@@ -33,7 +33,7 @@ export class EnvStore {
     this.loaded = true;
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('环境变量档案读坏了，先别保存');
     }
@@ -49,7 +49,7 @@ export class EnvStore {
     }
   }
 
-  async upsert(context: common.UIAbilityContext, name: string, value: string): Promise<void> {
+  async upsert(context: common.Context, name: string, value: string): Promise<void> {
     const key = name.trim();
     if (!key) {
       throw new Error('变量名不能空');
@@ -71,7 +71,7 @@ export class EnvStore {
     await this.save(context);
   }
 
-  async remove(context: common.UIAbilityContext, name: string): Promise<void> {
+  async remove(context: common.Context, name: string): Promise<void> {
     const next: EnvEntry[] = [];
     for (let i = 0; i < this.rows.length; i++) {
       if (this.rows[i].name !== name) {

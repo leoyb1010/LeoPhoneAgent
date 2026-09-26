@@ -2,6 +2,7 @@ import { http } from '@kit.NetworkKit';
 import { common } from '@kit.AbilityKit';
 import { displayName } from '../net/Protocol';
 import { ApprovalState, ChatLaunch, ChatLine, HarnessClient, HttpError } from '../net/HarnessClient';
+import { SensitiveToolGate } from '../local/SensitiveToolGate';
 import { gatewayStore } from '../store/GatewayStore';
 import { Tokens } from '../theme/Tokens';
 
@@ -46,6 +47,8 @@ export struct ChatPane {
   private pendingEcho: string[] = [];
   /** 这一轮已经收尾(完成、失败、停止):流随后正常关闭时不再重连,发下一条再接上。 */
   private ended: boolean = false;
+  /** Mac 拒过这台设备的全自动(旧版 Mac 或中继认不出设备):这个任务里不再请求。 */
+  private fullAutoRefused: boolean = false;
 
   aboutToAppear(): void {
     this.startSession();
@@ -67,6 +70,7 @@ export struct ChatPane {
     this.assistantOpen = false;
     this.ended = false;
     this.reconnects = 0;
+    this.fullAutoRefused = false;
     this.startSession();
   }
 
@@ -431,13 +435,16 @@ export struct ChatPane {
     const line = this.push('user', text);
     this.status = '进行中';
     try {
+      // 这台鸿蒙开了「全自动」时,Mac 上的 LeoPhoneAgent 任务也按全自动跑(和 iOS 一样跟着本机的开关)。
+      const zcode = ChatLaunch.harness === 'zcode';
+      const auto = zcode && SensitiveToolGate.fullAuto && !this.fullAutoRefused;
       if (!this.sessionId) {
         // 第一条消息才在 Mac 上建任务,建的同时就跑这一句。
-        this.sessionId = await this.client.create(ChatLaunch.harness, text, '');
+        this.sessionId = await this.createTask(text, auto);
         ChatLaunch.sessions.set(ChatLaunch.key(this.machine, ChatLaunch.harness), this.sessionId);
         this.listen(0);
       } else {
-        await this.client.send(this.sessionId, text, '');
+        await this.client.send(this.sessionId, text, '', zcode ? (auto ? 1 : 0) : -1);
         if (!this.stream) {
           this.reconnects = 0;
           this.listen(this.lastSeq);
@@ -453,6 +460,21 @@ export struct ChatPane {
       this.draft = text;
       const reason = err instanceof Error ? err.message : `${err}`;
       this.status = `没送到:${reason}`;
+    }
+  }
+
+  private async createTask(text: string, auto: boolean): Promise<string> {
+    const client = this.client as HarnessClient;
+    try {
+      return await client.create(ChatLaunch.harness, text, '', auto);
+    } catch (err) {
+      if (!auto || !(err instanceof HttpError) || err.code !== 403) {
+        throw err as Error;
+      }
+      // 旧版 Mac 或中继还认不出这台设备:这次逐项审批,不再每条都提示。
+      this.fullAutoRefused = true;
+      this.push('system', `Mac 没接受全自动(${err.message}),这次会逐项请你审批`);
+      return await client.create(ChatLaunch.harness, text, '', false);
     }
   }
 

@@ -64,6 +64,7 @@ import {
 } from "./localChat.ts";
 import { enrichEvent, nowSeconds, replayAfter, dueTasks, dayKey, scheduleSessionTitle, lastRunLabel } from "./bodyRuntime.ts";
 import { decide, parseTime, spokenOf } from "./actionRouter.ts";
+import * as agentText from "./agentText.ts";
 import {
   skipUpstreamModels,
   modelsAuthHeaders,
@@ -106,6 +107,8 @@ import {
   applyResponsesToolDelta,
   combineResponsesIds,
   CODEX_RESPONSES_URL,
+  responsesBodyJson,
+  TOOL_IMAGE_CAPTION,
 } from "./codexResponses.ts";
 
 const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api";
@@ -808,7 +811,8 @@ function wireShape(source, startsWith) {
 {
   // --- 0.3.0-alpha.18 对齐:本机 Agent ---
   const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
-  const chatPane = etsSrc("panes/LocalChatPane.ets");
+  // 一轮的流程从聊天页搬进了 ChatRun(离开页面接着跑),审批栏还在页面上:两处一起查。
+  const chatPane = etsSrc("panes/LocalChatPane.ets") + etsSrc("local/ChatRun.ets");
   const tools = etsSrc("local/LocalTools.ets");
   const client = etsSrc("local/OpenAICompatClient.ets");
   const gate = etsSrc("local/SensitiveToolGate.ets");
@@ -843,13 +847,16 @@ function wireShape(source, startsWith) {
   assert.ok(/cmd === '\/auto'/.test(chatPane), "/auto 切换全自动");
   assert.match(gate, /用户拒绝了「写文件」/, "拒绝回执和 iOS 同一句话");
 
-  // 停止真的停:剩下的工具和下一轮都要看这一轮还算不算数。
+  // 停止真的停:剩下的工具和下一轮都要看这一轮还算不算数(每一轮带自己的 gen)。
   const runTools = chatPane.slice(chatPane.indexOf("private async runTools("));
-  assert.ok(/if \(!this\.live\(\)\) \{\s*return;/.test(runTools.slice(0, 400)), "runTools 每个工具前检查");
-  assert.ok(/cancelRun\(\)/.test(chatPane.slice(chatPane.indexOf("onSessionChange()"), chatPane.indexOf("onSessionChange()") + 400)),
-    "换对话作废正在跑的一轮");
+  assert.ok(/if \(gen !== this\.runGen\) \{\s*return;/.test(runTools.slice(0, 400)), "runTools 每个工具前检查");
+  // 换对话、离开页面不再作废正在跑的一轮:页面只是不看它了。
+  const sessionChange = chatPane.slice(chatPane.indexOf("onSessionChange()"), chatPane.indexOf("onSessionChange()") + 400);
+  assert.ok(/this\.detach\(\)/.test(sessionChange) && !/cancelRun|\.stop\(\)/.test(sessionChange), "换对话时那一轮接着跑");
+  const leave = chatPane.slice(chatPane.indexOf("aboutToDisappear()"), chatPane.indexOf("aboutToDisappear()") + 300);
+  assert.ok(/this\.detach\(\)/.test(leave) && !/runGen|cancelRun|\.stop\(\)/.test(leave), "离开页面时那一轮接着跑");
   // 工具执行前先存这一步。
-  assert.ok(/saveToolRound\(ctx, turn\.text, calls\)\.then/.test(chatPane), "工具执行前先存模型这一步");
+  assert.ok(/saveToolRound\(turn\.text, calls\)\.then/.test(chatPane), "工具执行前先存模型这一步");
 }
 
 {
@@ -978,7 +985,7 @@ function wireShape(source, startsWith) {
   assert.ok(protoSrc.includes("(这里原来有一张图片,太早了没再发)"));
   assert.ok(protoSrc.includes("(更早的对话太长,已省略)"));
   assert.match(protoSrc, /while \(out\.length > 1 && out\[0\]\.role !== 'user'\)/);
-  const chatSrc = readFileSync(new URL("../app/entry/src/main/ets/panes/LocalChatPane.ets", import.meta.url), "utf8");
+  const chatSrc = readFileSync(new URL("../app/entry/src/main/ets/local/ChatRun.ets", import.meta.url), "utf8");
   assert.match(chatSrc, /return trimHistory\(out, HISTORY_CHAR_BUDGET\);/);
 }
 
@@ -1002,7 +1009,13 @@ function wireShape(source, startsWith) {
   // 打开机器不再建空任务;第一条消息才建(带着这句话)。
   const start = chat.slice(chat.indexOf("private startSession("), chat.indexOf("private teardown("));
   assert.ok(!/client\.create\(/.test(start), "打开机器时不在 Mac 上建任务");
-  assert.ok(/this\.client\.create\(ChatLaunch\.harness, text, ''\)/.test(chat), "第一条消息建任务并直接跑这一句");
+  assert.ok(/this\.sessionId = await this\.createTask\(text, auto\)/.test(chat) &&
+    /client\.create\(ChatLaunch\.harness, text, '', auto\)/.test(chat), "第一条消息建任务并直接跑这一句");
+  // 这台鸿蒙是「全自动」时,Mac 上的 LeoPhoneAgent 任务也全自动(iOS 同样);Mac 不接受就退回逐项审批一次。
+  assert.ok(/const auto = zcode && SensitiveToolGate\.fullAuto && !this\.fullAutoRefused/.test(chat));
+  assert.ok(/err\.code !== 403/.test(chat) && /client\.create\(ChatLaunch\.harness, text, '', false\)/.test(chat));
+  assert.ok(/this\.client\.send\(this\.sessionId, text, '', zcode \? \(auto \? 1 : 0\) : -1\)/.test(chat));
+  assert.ok(/body\['full_auto'\] = true/.test(harness) && /body\['full_auto'\] = fullAuto === 1/.test(harness));
   // 回放的旧帧不重置重连计数;一轮结束后正常关流就不再重连。
   assert.ok(!/this\.reconnects = 0;\s*this\.onEvent/.test(chat), "不再每来一帧就清零重连计数");
   assert.ok(/if \(this\.ended && message === '已断开'\)/.test(chat));
@@ -1037,6 +1050,206 @@ function wireShape(source, startsWith) {
   assert.equal(nextDelta("Hello", "Hi there"), "i there");
   assert.ok(/draft\.text = draft\.base/.test(engine), "换模型重来时退回这一轮开头");
   assert.ok(/shown\.length > 0 \? shown : output/.test(router), "完成时给控制端已显示的全文");
+}
+
+{
+  // 本机 Agent 的纯文本逻辑(AgentText.ets):镜像一字不差,提示词和 iOS 同文。
+  const ets = readFileSync(new URL("../app/entry/src/main/ets/local/AgentText.ets", import.meta.url), "utf8");
+  const mirror = readFileSync(new URL("./agentText.ts", import.meta.url), "utf8");
+  assert.ok(mirror.includes(ets), "protocol/agentText.ts 要和 AgentText.ets 一字不差");
+  const t = agentText;
+  const L = (role, text, kind = "") => Object.assign(new t.TextLine(), { role, text, kind });
+
+  // 压缩:保留最后 3 个用户回合,前面交给模型;摘要包进第一句用户消息;稿子里认工具行
+  const lines = [L("user", "u1"), L("assistant", "a1"), L("system", t.toolPlanLine(["file_write"])),
+    L("system", t.toolResultLine("file_write", "已写入 a.md")), L("user", "u2"), L("assistant", "a2"),
+    L("user", "u3"), L("assistant", "a3"), L("user", "u4")];
+  assert.equal(t.compactCut(lines, 3), 4);
+  assert.equal(t.compactCut(lines, 4), -1, "分界前没东西可压");
+  assert.equal(t.compactCut([L("user", "only")], 1), -1);
+  const transcript = t.compactTranscript(lines.slice(0, 4), "");
+  assert.equal(transcript, "[User] u1\n[Assistant] a1\n[Tool] file_write\n[Result] file_write: 已写入 a.md");
+  assert.ok(t.compactTranscript([L("user", "x")], "旧摘要").startsWith("Previous context summary:\n旧摘要\n\nNew conversation to merge:\n[User] x"));
+  assert.ok(t.COMPACT_SYSTEM_PROMPT.startsWith("You are a context compaction engine."));
+  assert.ok(t.compactUserMessage("X").includes("\n\nX\n\n---\nEND OF CONVERSATION TO COMPACT."));
+  assert.ok(t.summaryWrapper("S").startsWith("<context-summary>\n") && t.summaryWrapper("S").endsWith("\n\nS\n</context-summary>"));
+  const withSummary = [L("user", "old"), L("system", "摘要", "summary"), L("user", "12345"), L("assistant", "678")];
+  assert.equal(t.lastSummaryIndex(withSummary), 1);
+  assert.equal(t.historyChars(withSummary), 8, "只算摘要之后的");
+  assert.equal(t.compactCut(withSummary, 1), -1);
+
+  // 标题:iOS 同一套提示词;回复按 JSON → "title" → 短纯文本 读
+  assert.equal(t.titleExcerpt([L("user", "帮我写周报")]), "", "没有回答不起标题");
+  assert.equal(t.titleExcerpt([L("user", "Q1"), L("assistant", "A1")]), "User: Q1\n\nAssistant: A1");
+  assert.ok(t.titleExcerpt([L("user", "Q1"), L("assistant", "A1"), L("user", "Q2"), L("assistant", "A2")])
+    .endsWith("[... middle of conversation omitted ...]\n\nUser: Q2\n\nAssistant: A2"));
+  assert.ok(t.titlePrompt("E").startsWith("Based on the following conversation, generate a short title (max 6 words)"));
+  assert.ok(t.titlePrompt("E").endsWith("Conversation:\nE"));
+  assert.equal(t.parseTitleReply('{"title": "整理周报", "category": "writing"}'), "整理周报");
+  assert.equal(t.parseTitleReply('好的:{"title":"「修登录页」"'), "修登录页");
+  assert.equal(t.parseTitleReply("修复登录页"), "修复登录页");
+  assert.equal(t.parseTitleReply("第一行\n第二行"), "");
+
+  // 中断:最后是用户的话、停下的半截回答、工具行 → 没做完
+  assert.equal(t.unfinishedTail([L("user", "q")]), true);
+  assert.equal(t.unfinishedTail([L("user", "q"), L("assistant", "a")]), false);
+  assert.equal(t.unfinishedTail([L("user", "q"), L("assistant", "半截", "partial")]), true);
+  assert.equal(t.unfinishedTail([L("user", "q"), L("system", t.toolPlanLine(["web_fetch"]))]), true);
+  assert.equal(t.unfinishedTail([L("system", "已写入今日记忆")]), false);
+  const note = t.resumeNote([L("user", "q"), L("system", t.toolPlanLine(["file_write", "web_fetch"])),
+    L("system", t.toolResultLine("file_write", "已写入 a.md"))], 3);
+  assert.ok(note.startsWith(t.CONTINUE_REMINDER));
+  assert.ok(note.includes("[Result] file_write: 已写入 a.md"));
+  assert.ok(note.includes(`[Lost] web_fetch: ${t.LOST_TOOL_NOTE}`));
+  assert.equal(t.resumeNote([L("user", "q"), L("assistant", "半截", "partial")], 2), t.CONTINUE_REMINDER);
+
+  // 技能:--- 头读 name / description(| 多行),没有头时用正文第一行;索引和 iOS 同格式
+  const skill = t.parseSkillMeta("---\nname: Weekly Report\ndescription: |\n  写周报\n  的格式\n---\n正文", "x");
+  assert.equal(skill.id, "weekly-report");
+  assert.equal(skill.description, "写周报\n的格式");
+  const plain = t.parseSkillMeta("# 整理会议纪要\n先列决定", "会议 纪要");
+  assert.equal(plain.id, "会议-纪要");
+  assert.equal(plain.description, "整理会议纪要");
+  assert.equal(t.skillIdFromPath("skills/weekly-report/SKILL.md"), "weekly-report");
+  assert.equal(t.skillIdFromPath("/var/minis/skills/weekly-report/SKILL.md"), "weekly-report");
+  assert.equal(t.skillIdFromPath("notes.md"), "");
+  const many = Array.from({ length: 22 }, (_, i) => Object.assign(new t.SkillMeta(), { id: `s${String(i).padStart(2, "0")}`, name: `s${i}`, description: "d".repeat(300) }));
+  const index = t.skillsPromptBlock(many);
+  assert.ok(index.startsWith("Skills:\nReusable instruction sets stored at skills/<name>/SKILL.md."));
+  assert.equal((index.match(/<skill>/g) ?? []).length, 20);
+  assert.ok(index.includes(`<description>${"d".repeat(200)}…</description>`));
+  assert.ok(index.includes("2 more skills not shown above: s20, s21."));
+  assert.equal(t.skillsPromptBlock([]), "");
+
+  // MCP:握手参数、SSE 取 id 对得上的那条、错误
+  assert.equal(JSON.parse(t.mcpInitializeParams("0.3.0")).protocolVersion, "2025-06-18");
+  assert.equal(JSON.parse(t.mcpRequest(7, "tools/list", "{}")).id, 7);
+  assert.equal(JSON.parse(t.mcpNotification("notifications/initialized")).id, undefined);
+  const sse = 'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress"}\ndata: {"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"search"},{"name":"read"}]}}\n\n';
+  assert.deepEqual(t.mcpToolNames(t.mcpReply(sse, 3)), ["search", "read"]);
+  assert.equal(t.mcpReply('{"jsonrpc":"2.0","id":1,"result":{}}', 1), '{"jsonrpc":"2.0","id":1,"result":{}}');
+  assert.equal(t.mcpError('{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}'), "Method not found");
+  assert.equal(t.mcpError('{"jsonrpc":"2.0","id":1,"result":{}}'), "");
+  assert.ok(t.mcpPromptBlock(["zhipu"], ["web_search_prime"]).includes("- zhipu: web_search_prime"));
+  assert.equal(t.mcpPromptBlock([], []), "");
+
+  // 搜索:Bing 跳转链接解出真实地址;DuckDuckGo 的 uddg
+  const bing = t.parseBingResults('<ol><li class="b_algo"><h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=x&amp;u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9h&amp;ntb=1">Ex <strong>A</strong></a></h2><div class="b_caption"><p class="b_lineclamp2">Snip &amp; more</p></div></li><li class="b_algo b_vtl"><h2><a href="https://direct.cn/x">直达</a></h2></li></ol>', 5);
+  assert.deepEqual(bing.map((hit) => [hit.title, hit.url, hit.snippet]), [["Ex A", "https://example.com/a", "Snip & more"], ["直达", "https://direct.cn/x", ""]]);
+  const ddg = t.parseDdgResults('<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fp&amp;rut=1">Org <b>P</b></a><a class="result__snippet" href="x">about p</a>', 5);
+  assert.deepEqual(ddg.map((hit) => [hit.title, hit.url, hit.snippet]), [["Org P", "https://example.org/p", "about p"]]);
+  assert.ok(t.formatSearchHits("q", bing).startsWith("搜索「q」的前 2 条结果:\n1. Ex A\n   https://example.com/a\n   Snip & more"));
+  assert.ok(t.formatSearchHits("q", []).includes("https://cn.bing.com/search?q=q"));
+
+  // 定时任务:今天到点、今天没跑过才跑;关着 App 错过的回来补今天这一次
+  const nine = new Date(2026, 8, 26, 9, 0, 0).getTime();
+  assert.equal(t.scheduleDue(9, 0, true, "", nine), true);
+  assert.equal(t.scheduleDue(9, 0, true, t.dayKeyOf(nine), nine), false);
+  assert.equal(t.scheduleDue(9, 1, true, "", nine), false);
+  assert.equal(t.scheduleDue(8, 0, false, "", nine), false);
+  assert.equal(t.scheduleDue(8, 0, true, "2026-9-25", nine + 3600000 * 5), true, "错过的回来补");
+
+  // 完成通知:iOS 的写法
+  assert.deepEqual(t.doneNotice("done", "周报", "## 好了\n**写完**了"), ["✅ 周报", "好了 写完了"]);
+  assert.deepEqual(t.doneNotice("done", "", ""), ["✅ 本机任务", "任务已完成。"]);
+  assert.deepEqual(t.doneNotice("interrupted", "周报", "x"), ["⏸ 周报", "任务中断,回到 app 可继续。"]);
+  assert.equal(t.doneNotice("failed", "周报", "")[1], "任务执行失败。");
+  assert.deepEqual(t.doneNotice("approval", "周报", ""), ["✋ 周报", "要写文件,等你确认。"]);
+  assert.equal(t.attachedFilesBlock(["a.pdf", "b.png"]), '<user-attached-files>\n  <file path="a.pdf" />\n  <file path="b.png" />\n</user-attached-files>');
+  assert.equal(t.attachedFilesBlock([]), "");
+  assert.equal(t.plainPreview("x".repeat(300), 200).length, 201);
+}
+
+{
+  // --- 本机独立能力第二批:后台接着跑、继续、压缩、标题、技能、MCP、搜索、看图、附件、App 关着的定时任务 ---
+  const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const run = etsSrc("local/ChatRun.ets");
+  const pane = etsSrc("panes/LocalChatPane.ets");
+  const entry = etsSrc("entryability/EntryAbility.ets");
+  const sessions = etsSrc("store/SessionStore.ets");
+  const schedule = etsSrc("store/ScheduleStore.ets");
+  const runner = etsSrc("local/ScheduleRunner.ets");
+  const work = etsSrc("workscheduler/ScheduleWork.ets");
+  const tools = etsSrc("local/LocalTools.ets");
+  const mcp = etsSrc("store/McpStore.ets");
+  const skills = etsSrc("store/SkillStore.ets");
+  const proto = etsSrc("local/LocalProtocol.ets");
+  const client = etsSrc("local/OpenAICompatClient.ets");
+  const moduleJson = readFileSync(new URL("../app/entry/src/main/module.json5", import.meta.url), "utf8");
+
+  // 后台:退到后台申请短时任务;快用完时停下、回前台接着跑;在后台说完发通知,点开回到这个对话
+  assert.ok(/requestSuspendDelay\(/.test(run) && /run\.pauseForBackground\(\)/.test(run));
+  assert.ok(/static onForeground\(\): void \{[\s\S]{0,200}run\.resumeIfPaused\(\)/.test(run));
+  assert.ok(/if \(!ChatRuns\.foreground\) \{\s*ChatRuns\.notify\(/.test(run), "只在后台时发通知");
+  assert.ok(/parameters: \{ 'openSession': sessionId \}/.test(run) && /AppStorage\.setOrCreate\('openSession', id\)/.test(entry));
+  assert.ok(/onNewWant\(want: Want/.test(entry) && /ChatRuns\.onBackground\(ScheduleRunner\.busy\)/.test(entry));
+  assert.ok(/requestEnableNotification\(context\)/.test(run), "第一次跑任务时问通知权限");
+
+  // 继续:一轮开始时落盘 running,被杀后读回来就知道没做完;停下存半截回答
+  assert.ok(/sessionStore\.setRunning\(this\.context, this\.sessionId, true\)/.test(run));
+  assert.ok(/this\.interrupted = session\.running \|\| unfinishedTail\(texts\(session\.messages\)\)/.test(run));
+  assert.ok(/session\.running = obj\['running'\] === true/.test(sessions));
+  assert.ok(/line\.kind = 'partial'/.test(run) && /line\.kind = 'resume'/.test(run));
+  assert.ok(/content = resumeNote\(all, i\)/.test(run) && /\$\{line\.text\}\\n\\n\$\{STOPPED_NOTE\}/.test(run));
+  assert.ok(/this\.run\.resume\(this\.thinking\)/.test(pane) && pane.includes("已中断 · 点「继续」接着做"));
+
+  // 压缩:发送前超过门槛先压;摘要包进第一句用户消息;/compact 手动
+  assert.ok(/historyChars\(texts\(session\.messages\)\) > COMPACT_AT_CHARS/.test(run));
+  assert.ok(/const wrapped = summaryWrapper\(messages\[start\]\.text\)/.test(run));
+  assert.ok(/cmd === '\/compact'/.test(run) && /marker\.kind = 'summary'/.test(run));
+  assert.ok(pane.includes("已压缩前面 ${line.count} 条消息"));
+  // 写摘要、起标题不带工具
+  assert.ok(/}, false\);/.test(etsSrc("local/SideModel.ets")) && /const tools = withTools \?/.test(client));
+  const noTools = JSON.parse(responsesBodyJson("m", "s", [{ role: "user", content: "hi" }], "[]", ""));
+  assert.equal(noTools.tools, undefined);
+  assert.equal(noTools.tool_choice, undefined);
+  assert.ok(/const tools = withTools \? `"parallel_tool_calls":true,"tools"/.test(proto));
+
+  // 标题:只替换自动起的标题,改过名的不动
+  assert.ok(/if \(before !== '新任务' && before !== titleFromPrompt\(firstUser\)\)/.test(run));
+  assert.ok(/now\.title !== before/.test(run));
+
+  // 技能:提示词里只放索引,file_read 读 skills/<id>/SKILL.md
+  assert.ok(/return skillsPromptBlock\(/.test(skills) && /bodyFor\(id: string\)/.test(skills));
+  assert.ok(/skillIdFromPath\(raw\)/.test(tools) && /skillStore\.bodyFor\(skillId\)/.test(tools));
+
+  // MCP:握手、Accept 带 event-stream、会话号、过期重握手;结果原样给模型
+  assert.ok(/'initialize', mcpInitializeParams\(/.test(mcp) && /mcpNotification\('notifications\/initialized'\)/.test(mcp));
+  assert.ok(/'Accept': 'application\/json, text\/event-stream'/.test(mcp) && /header\['Mcp-Session-Id'\] = session/.test(mcp));
+  assert.ok(/resp\.code === 404 && \(McpStore\.sessions\.get\(row\.label\) \?\? ''\)\.length > 0/.test(mcp));
+  assert.ok(/name === 'mcp_tools'/.test(tools) && /envStore\.expand\(row\.url\)/.test(mcp));
+  assert.equal(toolArg('{"arguments":{"q":"x"}}', "arguments"), '{"q":"x"}', "对象参数不再变成 [object Object]");
+  assert.ok(/typeof value === 'object' \? JSON\.stringify\(value\)/.test(proto));
+
+  // 搜索和看图
+  assert.ok(/cn\.bing\.com\/search/.test(tools) && /html\.duckduckgo\.com/.test(tools));
+  assert.ok(/const IMAGE_EDGE = 2000/.test(tools) && /quality: 85/.test(tools) && /out\.imageB64 = /.test(tools));
+  assert.ok(/tool\.imageB64 = result\.imageB64/.test(run) && /tool\.imageB64 = result\.imageB64/.test(etsSrc("local/LocalAgentEngine.ets")));
+  // read_image 的图:Responses 在工具输出后面补一条用户消息;Anthropic 放进 tool_result;OpenAI、Gemini 同 Responses
+  const input = JSON.parse(responsesInputJson([
+    { role: "assistant", content: "", calls: [{ id: "c1", name: "read_image", args: "{}" }] },
+    { role: "tool", content: "Image loaded", toolCallId: "c1", imageB64: "QUJD", imageMime: "image/jpeg" },
+  ]));
+  assert.equal(input[1].type, "function_call_output");
+  assert.deepEqual(input[2].content.map((part) => part.type), ["input_text", "input_image"]);
+  assert.equal(input[2].content[0].text, TOOL_IMAGE_CAPTION);
+  assert.ok(/"content":\[\{"type":"text","text":\$\{JSON\.stringify\(turn\.content\)\}\},\{"type":"image","source"/.test(proto));
+  assert.equal((proto.match(/flushImages\(\);/g) ?? []).length >= 6, true, "OpenAI、Gemini、Responses 三处都在工具串后补图");
+
+  // 附件:进沙箱,消息里只带清单
+  assert.ok(/WorkspaceStore\.saveUpload\(ctx, name, buf\)/.test(pane) && /attachedFilesBlock\(line\.files\)/.test(run));
+  const archive = sessionArchiveFromJson({ messages: [{ role: "user", text: "看", files: ["a.pdf"] }, { role: "system", text: "摘要", kind: "summary", count: 4 }] });
+  assert.deepEqual(archive.messages[0].files, ["a.pdf"]);
+  assert.equal(archive.messages[1].kind, "summary");
+  assert.equal(archive.messages[1].count, 4);
+
+  // App 关着的定时任务:登记延迟任务,系统唤起 ScheduleWork;界面在前台时它让开;错过的回来补今天这一次
+  assert.ok(/"type": "workScheduler"/.test(moduleJson) && /"srcEntry": "\.\/ets\/workscheduler\/ScheduleWork\.ets"/.test(moduleJson));
+  assert.ok(/abilityName: 'ScheduleWork'/.test(runner) && /workScheduler\.startWork\(work\)/.test(runner));
+  assert.ok(/if \(UiState\.uiBusy\(this\.context\)\) \{\s*return;/.test(work) && /ScheduleRunner\.runDue\(this\.context, true\)/.test(work));
+  assert.ok(/scheduleDue\(row\.hour, row\.minute, row\.on, row\.lastDay, now\)/.test(schedule));
+  assert.ok(/if \(retimed && fire\.getTime\(\) <= Date\.now\(\)\)/.test(schedule), "新建时今天的点已过,从明天开始");
+  assert.ok(/await sessionStore\.reload\(this\.context\);/.test(entry), "后台进程写过档案,回前台重读");
 }
 
 console.log("PROTOCOL_MACHINES_OK");

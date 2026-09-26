@@ -6,13 +6,13 @@ const STORE = 'leo.harmony.release';
 const KEY = 'last_seen_version';
 
 export class ReleaseNotesStore {
-  static async shouldShow(context: common.UIAbilityContext): Promise<boolean> {
+  static async shouldShow(context: common.Context): Promise<boolean> {
     const store = await preferences.getPreferences(context, STORE);
     const seen = await store.get(KEY, '') as string;
     return seen !== ReleaseCatalog.currentVersion;
   }
 
-  static async markSeen(context: common.UIAbilityContext): Promise<void> {
+  static async markSeen(context: common.Context): Promise<void> {
     const store = await preferences.getPreferences(context, STORE);
     await store.put(KEY, ReleaseCatalog.currentVersion);
     await store.flush();

@@ -11,6 +11,12 @@ export class LocalChatMessage {
   imageB64: string = '';
   imageMime: string = '';
   imagePath: string = '';
+  /** '' 普通;summary 压缩摘要;resume 「继续」;partial 停下时没说完的回答。 */
+  kind: string = '';
+  /** 摘要替掉了多少条消息。 */
+  count: number = 0;
+  /** 随这句话附上的沙箱文件名(模型用 file_read / read_image 自己读,和 iOS、安卓一样只给清单)。 */
+  files: string[] = [];
 
   static pack(messages: LocalChatMessage[], systemPrompt: string): PackedTurn[] {
     const out: PackedTurn[] = [];
@@ -205,6 +211,17 @@ export function sessionArchiveFromJson(json: object): LocalSessionArchive | null
     line.imageB64 = imageB64;
     line.imageMime = `${item['imageMime'] ?? ''}`;
     line.imagePath = imagePath;
+    const kind = `${item['kind'] ?? ''}`;
+    line.kind = kind === 'summary' || kind === 'resume' || kind === 'partial' ? kind : '';
+    line.count = Number(item['count'] ?? 0) || 0;
+    const files = item['files'];
+    if (Array.isArray(files)) {
+      for (let j = 0; j < files.length; j++) {
+        if (typeof files[j] === 'string' && `${files[j]}`.length > 0) {
+          line.files.push(`${files[j]}`);
+        }
+      }
+    }
     messages.push(line);
   }
   if (messages.length === 0) {
@@ -551,10 +568,12 @@ export function toolArgsComplete(raw: string): boolean {
 export function toolArg(raw: string, key: string): string {
   try {
     const obj = JSON.parse(raw) as Record<string, Object>;
-    if (obj[key] === undefined || obj[key] === null) {
+    const value = obj[key];
+    if (value === undefined || value === null) {
       return '';
     }
-    return `${obj[key]}`;
+    // mcp_call 的 arguments 常是对象:原来拼成 "[object Object]",参数全丢。
+    return typeof value === 'object' ? JSON.stringify(value) : `${value}`;
   } catch (_err) {
     return '';
   }
@@ -568,11 +587,25 @@ export function wireMessagesJson(turns: LoopTurn[], systemPrompt: string): strin
     sys.content = systemPrompt;
     rows.push(JSON.stringify(sys));
   }
+  // read_image 的图:工具消息只能是文字,图跟在这一串工具消息后面,作为一条用户消息(iOS 同样处理)。
+  let images: string[] = [];
+  const flushImages = (): void => {
+    if (images.length > 0) {
+      rows.push(`{"role":"user","content":[{"type":"text","text":${JSON.stringify(TOOL_IMAGE_CAPTION)}},${images.join(',')}]}`);
+      images = [];
+    }
+  };
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
     if (turn.role === 'tool') {
       rows.push(`{"role":"tool","tool_call_id":${JSON.stringify(turn.toolCallId)},"content":${JSON.stringify(turn.content)}}`);
-    } else if (turn.calls.length > 0) {
+      if (turn.imageB64.length > 0) {
+        images.push(`{"type":"image_url","image_url":{"url":"data:${turn.imageMime};base64,${turn.imageB64}"}}`);
+      }
+      continue;
+    }
+    flushImages();
+    if (turn.calls.length > 0) {
       const calls: string[] = [];
       for (let j = 0; j < turn.calls.length; j++) {
         const call = turn.calls[j];
@@ -588,21 +621,28 @@ export function wireMessagesJson(turns: LoopTurn[], systemPrompt: string): strin
       rows.push(JSON.stringify(packed));
     }
   }
+  flushImages();
   return `[${rows.join(',')}]`;
 }
+
+/** 跟在工具结果后面的那张图前面的一句说明。 */
+export const TOOL_IMAGE_CAPTION: string = 'Image returned by read_image:';
 
 export function localToolSchemaJson(): string {
   return '[' +
     '{"type":"function","function":{"name":"file_list","description":"List files in the Harmony app sandbox workspace.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
     '{"type":"function","function":{"name":"file_read","description":"Read a text file from the Harmony app sandbox. Head pages that still have unread lines append next_offset.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"},"offset":{"type":"integer"},"lines":{"type":"integer"},"max_length":{"type":"integer"},"direction":{"type":"string"}},"required":["tool_title","path"]}}},' +
+    '{"type":"function","function":{"name":"read_image","description":"Look at an image file from the sandbox (files the user attached, downloads). The image is returned to you.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"}},"required":["tool_title","path"]}}},' +
     '{"type":"function","function":{"name":"file_write","description":"Write a text file in the Harmony app sandbox. User must approve writes.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"},"content":{"type":"string"}},"required":["tool_title","path","content"]}}},' +
     '{"type":"function","function":{"name":"file_edit","description":"Replace the first occurrence of old text in a sandbox file.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"path":{"type":"string"},"old":{"type":"string"},"new":{"type":"string"}},"required":["tool_title","path","old","new"]}}},' +
     '{"type":"function","function":{"name":"memory_write","description":"Append a memory entry to today daily log.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"content":{"type":"string"}},"required":["tool_title","content"]}}},' +
     '{"type":"function","function":{"name":"memory_get","description":"Search persistent memories.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"scope":{"type":"string"},"keywords":{"type":"string"}},"required":["tool_title"]}}},' +
     '{"type":"function","function":{"name":"open_url","description":"Open an http(s) link in the in-app browser.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
     '{"type":"function","function":{"name":"web_fetch","description":"Download a public https page as text.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"url":{"type":"string"}},"required":["tool_title","url"]}}},' +
+    '{"type":"function","function":{"name":"web_search","description":"Search the web (Bing, then DuckDuckGo) and get titles, links and snippets. Read a result with web_fetch.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"query":{"type":"string"},"count":{"type":"integer"}},"required":["tool_title","query"]}}},' +
     '{"type":"function","function":{"name":"browser_use","description":"Open or manage up to 3 in-app browser tabs.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"action":{"type":"string"},"url":{"type":"string"},"tab_id":{"type":"string"}},"required":["tool_title","action"]}}},' +
-    '{"type":"function","function":{"name":"mcp_call","description":"Call a configured HTTP MCP tool.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"},"name":{"type":"string"},"arguments":{"type":"string"}},"required":["tool_title","server","name"]}}},' +
+    '{"type":"function","function":{"name":"mcp_tools","description":"List the tools of a configured MCP server with their input schemas.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"}},"required":["tool_title","server"]}}},' +
+    '{"type":"function","function":{"name":"mcp_call","description":"Call a tool on a configured MCP server. Look up tool names and input schemas with mcp_tools first.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"server":{"type":"string"},"name":{"type":"string"},"arguments":{"type":"string","description":"JSON object with the tool arguments"}},"required":["tool_title","server","name"]}}},' +
     // 手机能力(PhoneTools.ets)。安卓、iOS 用沙箱里的设备命令做同样的事。
     '{"type":"function","function":{"name":"device_info","description":"Battery level and charging state, device model, OS version and the current local time.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"}},"required":["tool_title"]}}},' +
     '{"type":"function","function":{"name":"clipboard_write","description":"Copy text to the phone clipboard.","parameters":{"type":"object","properties":{"tool_title":{"type":"string"},"text":{"type":"string"}},"required":["tool_title","text"]}}},' +
@@ -723,7 +763,12 @@ export function anthropicMessagesJson(turns: LoopTurn[]): string {
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
     if (turn.role === 'tool') {
-      tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":${JSON.stringify(turn.content)}}`);
+      if (turn.imageB64.length > 0) {
+        const media = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
+        tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":[{"type":"text","text":${JSON.stringify(turn.content)}},{"type":"image","source":{"type":"base64","media_type":${JSON.stringify(media)},"data":${JSON.stringify(turn.imageB64)}}}]}`);
+      } else {
+        tools.push(`{"type":"tool_result","tool_use_id":${JSON.stringify(turn.toolCallId)},"content":${JSON.stringify(turn.content)}}`);
+      }
       continue;
     }
     flushTools();
@@ -757,8 +802,20 @@ export function anthropicMessagesJson(turns: LoopTurn[]): string {
 
 export function geminiContentsJson(turns: LoopTurn[]): string {
   const rows: string[] = [];
+  let images: string[] = [];
+  const flushImages = (): void => {
+    if (images.length > 0) {
+      rows.push(`{"role":"user","parts":[{"text":${JSON.stringify(TOOL_IMAGE_CAPTION)}},${images.join(',')}]}`);
+      images = [];
+    }
+  };
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
+    if (turn.role !== 'tool') {
+      flushImages();
+    } else if (turn.imageB64.length > 0) {
+      images.push(`{"inlineData":{"mimeType":${JSON.stringify(turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg')},"data":${JSON.stringify(turn.imageB64)}}}`);
+    }
     if (turn.role === 'tool') {
       const replyName = turn.toolName.length > 0 ? turn.toolName : turn.toolCallId;
       // 这里原来多写了一个 }：functionResponse 段收尾是 content} + response} + functionResponse} + parts 元素}，
@@ -791,6 +848,7 @@ export function geminiContentsJson(turns: LoopTurn[]): string {
       rows.push(`{"role":${JSON.stringify(role)},"parts":[{"text":${JSON.stringify(turn.content)}}]}`);
     }
   }
+  flushImages();
   return `[${rows.join(',')}]`;
 }
 
@@ -1154,13 +1212,25 @@ export function capResponsesId(id: string): string {
 
 export function responsesInputJson(turns: LoopTurn[]): string {
   const rows: string[] = [];
+  let images: string[] = [];
+  const flushImages = (): void => {
+    if (images.length > 0) {
+      rows.push(`{"role":"user","content":[{"type":"input_text","text":${JSON.stringify(TOOL_IMAGE_CAPTION)}},${images.join(',')}]}`);
+      images = [];
+    }
+  };
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
     if (turn.role === 'tool') {
       const ids = splitResponsesIds(turn.toolCallId);
       rows.push(`{"type":"function_call_output","call_id":${JSON.stringify(capResponsesId(ids[0]))},"output":${JSON.stringify(turn.content)}}`);
+      if (turn.imageB64.length > 0) {
+        const mime = turn.imageMime.length > 0 ? turn.imageMime : 'image/jpeg';
+        images.push(`{"type":"input_image","image_url":"data:${mime};base64,${turn.imageB64}"}`);
+      }
       continue;
     }
+    flushImages();
     if (turn.calls.length > 0) {
       if (turn.content.length > 0) {
         rows.push(`{"role":"assistant","content":${JSON.stringify(turn.content)}}`);
@@ -1181,6 +1251,7 @@ export function responsesInputJson(turns: LoopTurn[]): string {
     }
     rows.push(`{"role":${JSON.stringify(turn.role)},"content":${JSON.stringify(turn.content)}}`);
   }
+  flushImages();
   return `[${rows.join(',')}]`;
 }
 
@@ -1196,7 +1267,7 @@ export function responsesToolSchemaJson(): string {
 }
 
 export function responsesBodyJson(model: string, systemPrompt: string, turns: LoopTurn[],
-  thinking: string): string {
+  thinking: string, withTools: boolean = true): string {
   const effort = thinking.trim().length > 0 ? thinking.trim() : 'low';
   let cache = 'default';
   for (let i = 0; i < turns.length; i++) {
@@ -1205,7 +1276,9 @@ export function responsesBodyJson(model: string, systemPrompt: string, turns: Lo
       break;
     }
   }
-  return `{"model":${JSON.stringify(model)},"stream":true,"store":false,"parallel_tool_calls":true,"prompt_cache_key":${JSON.stringify(cache)},"include":["reasoning.encrypted_content"],"reasoning":{"effort":${JSON.stringify(effort)},"summary":"auto"},"instructions":${JSON.stringify(systemPrompt)},"tools":${responsesToolSchemaJson()},"tool_choice":"auto","input":${responsesInputJson(turns)}}`;
+  // 写摘要、起标题不带工具:空的 tools 有的服务商会拒。
+  const tools = withTools ? `"parallel_tool_calls":true,"tools":${responsesToolSchemaJson()},"tool_choice":"auto",` : '';
+  return `{"model":${JSON.stringify(model)},"stream":true,"store":false,${tools}"prompt_cache_key":${JSON.stringify(cache)},"include":["reasoning.encrypted_content"],"reasoning":{"effort":${JSON.stringify(effort)},"summary":"auto"},"instructions":${JSON.stringify(systemPrompt)},"input":${responsesInputJson(turns)}}`;
 }
 
 export function responsesDeltaFromJson(json: object): string {

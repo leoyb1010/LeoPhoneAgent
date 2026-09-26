@@ -5,7 +5,7 @@ export class SoulStore {
   text: string = '';
   jsonLoadFailed: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     const path = context.filesDir + '/SOUL.md';
     if (!fileIo.accessSync(path)) {
       this.text = '';
@@ -19,7 +19,7 @@ export class SoulStore {
     }
   }
 
-  async save(context: common.UIAbilityContext, text: string): Promise<void> {
+  async save(context: common.Context, text: string): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('SOUL.md 读坏了，先别保存');
     }

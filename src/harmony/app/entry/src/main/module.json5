@@ -69,6 +69,14 @@
           }
         ]
       }
+    ],
+    "extensionAbilities": [
+      {
+        "name": "ScheduleWork",
+        "srcEntry": "./ets/workscheduler/ScheduleWork.ets",
+        "type": "workScheduler",
+        "description": "$string:schedule_work_desc"
+      }
     ]
   }
 }

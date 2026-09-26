@@ -27,7 +27,7 @@ struct SkillsPage {
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 12 })
       Scroll() {
         Column() {
-          TextInput({ text: this.name, placeholder: '技能名' })
+          TextInput({ text: this.name, placeholder: '技能名(SKILL.md 头里写了 name 可以不填)' })
             .onChange((value: string) => {
               this.name = value;
             })
@@ -35,11 +35,11 @@ struct SkillsPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          TextArea({ text: this.body, placeholder: 'SKILL.md 正文' })
+          TextArea({ text: this.body, placeholder: 'SKILL.md 全文:可以带 --- name / description --- 头;没写 description 时用第一行' })
             .onChange((value: string) => {
               this.body = value;
             })
-            .height(120)
+            .height(160)
             .margin({ top: 8 })
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
@@ -47,31 +47,43 @@ struct SkillsPage {
           Button('保存技能')
             .width('100%')
             .height(44)
-            .margin({ top: 12, bottom: 16 })
+            .margin({ top: 12, bottom: 8 })
             .backgroundColor(Tokens.accent)
             .fontColor('#FFFFFF')
             .onClick(() => {
               const ctx = getContext(this) as common.UIAbilityContext;
               skillStore.upsert(ctx, this.name, this.body).then(() => {
                 this.rows = skillStore.skills.slice();
+                this.name = '';
+                this.body = '';
                 this.message = '已保存';
               }).catch((err: Error) => {
                 this.message = `${err}`;
               });
             })
+          Text('对话里只放技能的名字和说明,模型要用时自己读全文(和 iOS、安卓一样)。点一行可以改。')
+            .fontSize(12)
+            .fontColor(Tokens.muted)
+            .margin({ bottom: 12 })
           ForEach(this.rows, (row: LocalSkill) => {
             Row() {
               Column() {
                 Text(row.name)
                   .fontSize(Tokens.rowTitle)
                   .fontColor(Tokens.text)
-                Text(row.enabled ? '已启用，会注入本机对话' : '已关闭')
+                Text(`${row.enabled ? '' : '已关闭 · '}${skillStore.meta(row).description}`)
                   .fontSize(12)
                   .fontColor(Tokens.muted)
+                  .maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .margin({ top: 2 })
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
+              .onClick(() => {
+                this.name = row.name;
+                this.body = row.body;
+              })
               Text(row.enabled ? '关闭' : '启用')
                 .fontSize(13)
                 .fontColor(Tokens.accent)
@@ -81,13 +93,23 @@ struct SkillsPage {
                     this.rows = skillStore.skills.slice();
                   });
                 })
+              Text('删除')
+                .fontSize(13)
+                .fontColor(Tokens.warn)
+                .margin({ left: 14 })
+                .onClick(() => {
+                  const ctx = getContext(this) as common.UIAbilityContext;
+                  skillStore.remove(ctx, row.id).then(() => {
+                    this.rows = skillStore.skills.slice();
+                  });
+                })
             }
             .width('100%')
             .padding({ left: 14, right: 14, top: 12, bottom: 12 })
             .margin({ bottom: 8 })
             .backgroundColor(Tokens.surface)
             .borderRadius(Tokens.settingsRadius)
-          }, (row: LocalSkill) => row.id)
+          }, (row: LocalSkill) => `${row.id}:${row.enabled}`)
           if (this.message.length > 0) {
             Text(this.message)
               .fontColor(Tokens.online)

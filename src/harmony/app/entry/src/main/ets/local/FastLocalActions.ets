@@ -18,7 +18,7 @@ const ABILITY = 'EntryAbility';
  * permission quirks — throw falls through to the existing agent path.
  */
 export class FastLocalActions {
-  static async tryRoute(context: common.UIAbilityContext, text: string, imageCount: number): Promise<string> {
+  static async tryRoute(context: common.Context, text: string, imageCount: number): Promise<string> {
     const route = ActionRouter.decide(text, imageCount);
     if (route.path === 'clarify') {
       // 缺时间、缺车次这类:只追问缺的那一项,不让模型去猜。
@@ -74,7 +74,7 @@ export class FastLocalActions {
   }
 
   /** 出行:出发前一小时和出发时各提醒一次(已经过了前一小时就只提醒出发时)。 */
-  static async addTravel(context: common.UIAbilityContext, route: ActionDecision): Promise<boolean> {
+  static async addTravel(context: common.Context, route: ActionDecision): Promise<boolean> {
     const depart = FastLocalActions.at(route);
     const title = `出行：${route.label}`;
     const ok = await FastLocalActions.addReminderAt(context, depart, title);
@@ -113,7 +113,7 @@ export class FastLocalActions {
     }
   }
 
-  static async setTorch(context: common.UIAbilityContext, on: boolean): Promise<boolean> {
+  static async setTorch(context: common.Context, on: boolean): Promise<boolean> {
     if (!await FastLocalActions.ask(context, 'ohos.permission.CAMERA')) {
       return false;
     }
@@ -130,7 +130,7 @@ export class FastLocalActions {
     }
   }
 
-  static async addTodo(context: common.UIAbilityContext, title: string): Promise<boolean> {
+  static async addTodo(context: common.Context, title: string): Promise<boolean> {
     const text = title.trim().length > 0 ? title.trim() : '待办';
     taskStatus.setLastTodo(text);
     // 原来发通知失败也报成功;现在如实返回,没记上就交给模型处理。
@@ -161,7 +161,7 @@ export class FastLocalActions {
     }
   }
 
-  static async addAlarm(context: common.UIAbilityContext, route: ActionDecision): Promise<boolean> {
+  static async addAlarm(context: common.Context, route: ActionDecision): Promise<boolean> {
     if (route.hour < 0 || route.minute < 0) {
       return false;
     }
@@ -195,7 +195,7 @@ export class FastLocalActions {
     }
   }
 
-  static async addCalendar(context: common.UIAbilityContext, route: ActionDecision): Promise<boolean> {
+  static async addCalendar(context: common.Context, route: ActionDecision): Promise<boolean> {
     if (route.hour < 0 || route.minute < 0) {
       return false;
     }
@@ -213,7 +213,7 @@ export class FastLocalActions {
   }
 
   /** 在指定的本地时间发一条系统提醒(不是日历日程:读写整个日历要受限权限)。 */
-  static async addReminderAt(context: common.UIAbilityContext, at: LocalDateTime, title: string): Promise<boolean> {
+  static async addReminderAt(context: common.Context, at: LocalDateTime, title: string): Promise<boolean> {
     if (!await FastLocalActions.ask(context, 'ohos.permission.PUBLISH_AGENT_REMINDER')) {
       return false;
     }
@@ -247,7 +247,7 @@ export class FastLocalActions {
     }
   }
 
-  private static async ask(context: common.UIAbilityContext, perm: Permissions): Promise<boolean> {
+  private static async ask(context: common.Context, perm: Permissions): Promise<boolean> {
     try {
       const at = abilityAccessCtrl.createAtManager();
       const grant = await at.requestPermissionsFromUser(context, [perm]);

@@ -7,7 +7,7 @@ export class WorkspaceFile {
 }
 
 export class WorkspaceStore {
-  static list(context: common.UIAbilityContext): WorkspaceFile[] {
+  static list(context: common.Context): WorkspaceFile[] {
     const dir = WorkspaceStore.dir(context);
     WorkspaceStore.ensureDir(dir);
     const names = fileIo.listFileSync(dir);
@@ -25,7 +25,7 @@ export class WorkspaceStore {
     return out;
   }
 
-  static read(context: common.UIAbilityContext, name: string): string {
+  static read(context: common.Context, name: string): string {
     const safe = WorkspaceStore.safeName(name);
     const path = `${WorkspaceStore.dir(context)}/${safe}`;
     if (!fileIo.accessSync(path)) {
@@ -34,7 +34,7 @@ export class WorkspaceStore {
     return fileIo.readTextSync(path);
   }
 
-  static write(context: common.UIAbilityContext, name: string, text: string): void {
+  static write(context: common.Context, name: string, text: string): void {
     const safe = WorkspaceStore.safeName(name);
     WorkspaceStore.ensureDir(WorkspaceStore.dir(context));
     const path = `${WorkspaceStore.dir(context)}/${safe}`;
@@ -47,7 +47,34 @@ export class WorkspaceStore {
     }
   }
 
-  private static dir(context: common.UIAbilityContext): string {
+  static pathOf(context: common.Context, name: string): string {
+    return `${WorkspaceStore.dir(context)}/${WorkspaceStore.safeName(name)}`;
+  }
+
+  /**
+   * 附件放进沙箱:文件名里的斜杠换掉,重名就加 -2、-3。返回沙箱里的文件名(模型用它读)。
+   */
+  static saveUpload(context: common.Context, original: string, bytes: ArrayBuffer): string {
+    WorkspaceStore.ensureDir(WorkspaceStore.dir(context));
+    const clean = original.replace(/[\\/]+/g, '_').replace(/^\.+/, '').trim() || `附件-${Date.now()}`;
+    const dot = clean.lastIndexOf('.');
+    const stem = dot > 0 ? clean.substring(0, dot) : clean;
+    const ext = dot > 0 ? clean.substring(dot) : '';
+    let name = clean;
+    for (let i = 2; fileIo.accessSync(`${WorkspaceStore.dir(context)}/${name}`); i++) {
+      name = `${stem}-${i}${ext}`;
+    }
+    const file = fileIo.openSync(`${WorkspaceStore.dir(context)}/${name}`,
+      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+    try {
+      fileIo.writeSync(file.fd, bytes);
+    } finally {
+      fileIo.closeSync(file);
+    }
+    return name;
+  }
+
+  private static dir(context: common.Context): string {
     return context.filesDir + '/workspace';
   }
 

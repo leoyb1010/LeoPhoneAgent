@@ -1,5 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
+import { SkillMeta, parseSkillMeta, skillsPromptBlock } from '../local/AgentText';
 
 export class LocalSkill {
   id: string = '';
@@ -13,7 +14,7 @@ export class SkillStore {
   jsonLoadFailed: boolean = false;
   private loaded: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     const path = SkillStore.filePath(context);
     if (!fileIo.accessSync(path)) {
       this.skills = [];
@@ -39,17 +40,18 @@ export class SkillStore {
     this.loaded = true;
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('技能档案读坏了，先别保存，避免覆盖');
     }
     SkillStore.writeText(SkillStore.filePath(context), JSON.stringify(this.skills));
   }
 
-  async upsert(context: common.UIAbilityContext, name: string, body: string): Promise<void> {
-    const trimmed = name.trim();
+  /** 名字可以不填:SKILL.md 头里写了 name 就用它。 */
+  async upsert(context: common.Context, name: string, body: string): Promise<void> {
+    const trimmed = name.trim().length > 0 ? name.trim() : parseSkillMeta(body, '').name;
     if (!trimmed) {
-      throw new Error('技能名不能空');
+      throw new Error('技能名不能空(或在 SKILL.md 的 --- 头里写 name)');
     }
     let found = false;
     for (let i = 0; i < this.skills.length; i++) {
@@ -70,7 +72,7 @@ export class SkillStore {
     await this.save(context);
   }
 
-  async toggle(context: common.UIAbilityContext, id: string): Promise<void> {
+  async toggle(context: common.Context, id: string): Promise<void> {
     for (let i = 0; i < this.skills.length; i++) {
       if (this.skills[i].id === id) {
         this.skills[i].enabled = !this.skills[i].enabled;
@@ -80,15 +82,39 @@ export class SkillStore {
     await this.save(context);
   }
 
-  promptBlock(): string {
-    const enabled = this.skills.filter((row: LocalSkill) => row.enabled && row.body.trim().length > 0);
-    if (enabled.length === 0) {
-      return '';
-    }
-    return enabled.map((row: LocalSkill) => `技能 ${row.name}:\n${row.body.trim()}`).join('\n\n');
+  async remove(context: common.Context, id: string): Promise<void> {
+    this.skills = this.skills.filter((row: LocalSkill) => row.id !== id);
+    await this.save(context);
   }
 
-  private static filePath(context: common.UIAbilityContext): string {
+  meta(row: LocalSkill): SkillMeta {
+    return parseSkillMeta(row.body, row.name);
+  }
+
+  /**
+   * 提示词里只放索引(名字、说明、路径),正文等模型用 file_read 读 skills/<id>/SKILL.md 时再给 ——
+   * iOS、安卓同样只放索引。原来把每个启用技能的全文都塞进每一轮的提示词。
+   */
+  promptBlock(): string {
+    return skillsPromptBlock(this.enabled().map((row: LocalSkill) => this.meta(row)));
+  }
+
+  /** skills/<id>/SKILL.md 的内容;没有这个启用的技能返回空。 */
+  bodyFor(id: string): string {
+    const rows = this.enabled();
+    for (let i = 0; i < rows.length; i++) {
+      if (this.meta(rows[i]).id === id) {
+        return rows[i].body;
+      }
+    }
+    return '';
+  }
+
+  private enabled(): LocalSkill[] {
+    return this.skills.filter((row: LocalSkill) => row.enabled && row.body.trim().length > 0);
+  }
+
+  private static filePath(context: common.Context): string {
     return context.filesDir + '/skills.json';
   }
 

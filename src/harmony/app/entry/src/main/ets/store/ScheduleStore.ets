@@ -1,5 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
+import { dayKeyOf, scheduleDue } from '../local/AgentText';
 
 export class ScheduleTask {
   rowId: string = '';
@@ -22,11 +23,17 @@ class ScheduleFile {
 export class ScheduleStore {
   rows: ScheduleTask[] = [];
   jsonLoadFailed: boolean = false;
-  running: boolean = false;
-  lastTick: number = 0;
   private loaded: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  /** 后台进程(ScheduleWork)改过档案后,界面回到前台重新读。 */
+  async reload(context: common.Context): Promise<void> {
+    this.loaded = false;
+    this.jsonLoadFailed = false;
+    this.rows = [];
+    await this.load(context);
+  }
+
+  async load(context: common.Context): Promise<void> {
     if (this.loaded) {
       return;
     }
@@ -43,7 +50,7 @@ export class ScheduleStore {
     this.loaded = true;
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('定时任务档案读坏了，先别保存');
     }
@@ -59,7 +66,7 @@ export class ScheduleStore {
     }
   }
 
-  async upsert(context: common.UIAbilityContext, title: string, prompt: string, hour: number,
+  async upsert(context: common.Context, title: string, prompt: string, hour: number,
     minute: number): Promise<void> {
     const name = title.trim();
     const text = prompt.trim();
@@ -82,6 +89,7 @@ export class ScheduleStore {
         row = this.rows[i];
       }
     }
+    const retimed = !row || row.hour !== hour || row.minute !== minute;
     if (!row) {
       row = new ScheduleTask();
       row.rowId = `sch_${Date.now()}`;
@@ -92,10 +100,16 @@ export class ScheduleStore {
     row.hour = hour;
     row.minute = minute;
     row.on = true;
+    // 新建或改了时间、而今天这个点已经过了:从明天开始,不要一保存就补跑一次。
+    const fire = new Date();
+    fire.setHours(hour, minute, 0, 0);
+    if (retimed && fire.getTime() <= Date.now()) {
+      row.lastDay = dayKeyOf(Date.now());
+    }
     await this.save(context);
   }
 
-  async remove(context: common.UIAbilityContext, rowId: string): Promise<void> {
+  async remove(context: common.Context, rowId: string): Promise<void> {
     const next: ScheduleTask[] = [];
     for (let i = 0; i < this.rows.length; i++) {
       if (this.rows[i].rowId !== rowId) {
@@ -106,33 +120,16 @@ export class ScheduleStore {
     await this.save(context);
   }
 
+  /**
+   * 今天到点、今天还没跑过的。原来只认「上次检查到现在」这一分钟窗口,App 不在前台时到点的就永远错过了;
+   * 现在回到前台、或后台被系统唤起时,补跑今天这一次(更早的不补)。
+   */
   dueNow(): ScheduleTask[] {
     const now = Date.now();
-    const today = ScheduleStore.dayKey(now);
-    const windowStart = this.lastTick > 0 ? this.lastTick : now - 60000;
-    this.lastTick = now;
-    const out: ScheduleTask[] = [];
-    for (let i = 0; i < this.rows.length; i++) {
-      const row = this.rows[i];
-      if (!row.on || row.lastDay === today) {
-        continue;
-      }
-      const fire = new Date(now);
-      fire.setHours(row.hour, row.minute, 0, 0);
-      const fireAt = fire.getTime();
-      if (fireAt > windowStart && fireAt <= now) {
-        out.push(row);
-      }
-    }
-    return out;
+    return this.rows.filter((row: ScheduleTask) => scheduleDue(row.hour, row.minute, row.on, row.lastDay, now));
   }
 
-  private static dayKey(stamp: number): string {
-    const date = new Date(stamp);
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  }
-
-  async mark(context: common.UIAbilityContext, rowId: string): Promise<void> {
+  async mark(context: common.Context, rowId: string): Promise<void> {
     const now = new Date();
     const today = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
     for (let i = 0; i < this.rows.length; i++) {
@@ -164,7 +161,7 @@ export class ScheduleStore {
     return result.length > 0 ? `上次 ${when} · ${result}` : `上次 ${when}`;
   }
 
-  async record(context: common.UIAbilityContext, rowId: string, sessionId: string, result: string,
+  async record(context: common.Context, rowId: string, sessionId: string, result: string,
     error: string): Promise<void> {
     for (let i = 0; i < this.rows.length; i++) {
       if (this.rows[i].rowId === rowId) {

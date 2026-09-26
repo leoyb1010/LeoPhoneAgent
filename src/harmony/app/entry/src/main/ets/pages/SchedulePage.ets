@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { ScheduleRunner } from '../local/ScheduleRunner';
 import { ScheduleStore, ScheduleTask, scheduleStore } from '../store/ScheduleStore';
 import { Tokens } from '../theme/Tokens';
 
@@ -28,9 +29,9 @@ struct SchedulePage {
         .fontColor(Tokens.text)
         .width('100%')
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 12, bottom: 8 })
-      Text('目前仅 App 在前台时执行。锁屏、切后台或杀进程都不会跑。结果写入「定时·标题」对话，失败原因也在下面。')
+      Text('App 在前台时到点就跑。App 关着或在后台时，系统会隔一阵唤起它补跑今天到点的任务（常用的 App 大约两小时一次，时间不精确），跑完发通知。结果写入「定时·标题」对话，失败原因也在下面。')
         .fontSize(13)
-        .fontColor(Tokens.warn)
+        .fontColor(Tokens.muted)
         .width('100%')
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 12 })
       Scroll() {
@@ -139,6 +140,7 @@ struct SchedulePage {
     try {
       await scheduleStore.upsert(ctx, this.titleDraft, this.promptDraft, Number(this.hourDraft),
         Number(this.minuteDraft));
+      await ScheduleRunner.syncWork(ctx);
       this.rows = scheduleStore.rows.slice();
       this.titleDraft = '';
       this.promptDraft = '';
@@ -152,6 +154,7 @@ struct SchedulePage {
     const ctx = getContext(this) as common.UIAbilityContext;
     try {
       await scheduleStore.remove(ctx, rowId);
+      await ScheduleRunner.syncWork(ctx);
       this.rows = scheduleStore.rows.slice();
     } catch (err) {
       this.message = `${err}`;

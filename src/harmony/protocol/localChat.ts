@@ -4,6 +4,9 @@ export type LocalChatMessage = {
   imageB64?: string
   imageMime?: string
   imagePath?: string
+  kind?: string
+  count?: number
+  files?: string[]
 }
 
 export type LocalSessionArchive = {
@@ -136,12 +139,17 @@ export function sessionArchiveFromJson(json: unknown): LocalSessionArchive | nul
     if (!role || (!text.trim() && !imageB64 && !imagePath)) continue
     if (role !== "user" && role !== "assistant" && role !== "system") continue
     const imageMime = typeof item.imageMime === "string" ? item.imageMime : ""
+    const kind = item.kind === "summary" || item.kind === "resume" || item.kind === "partial" ? item.kind : ""
+    const files = Array.isArray(item.files) ? item.files.filter((f): f is string => typeof f === "string" && f.length > 0) : []
     messages.push({
       role,
       text: text.trim() || (imageB64 || imagePath ? "看这张图" : ""),
       imageB64,
       imageMime,
       imagePath,
+      kind,
+      count: Number(item.count ?? 0) || 0,
+      files,
     })
   }
   if (messages.length === 0) return null
@@ -338,7 +346,7 @@ export function toolArg(raw: string, key: string): string {
   try {
     const obj = asRecord(JSON.parse(raw))
     if (!obj || obj[key] === undefined || obj[key] === null) return ""
-    return `${obj[key]}`
+    return typeof obj[key] === "object" ? JSON.stringify(obj[key]) : `${obj[key]}`
   } catch {
     return ""
   }
@@ -348,13 +356,16 @@ export function localToolNames(): string[] {
   return [
     "file_list",
     "file_read",
+    "read_image",
     "file_write",
     "file_edit",
     "memory_write",
     "memory_get",
     "open_url",
     "web_fetch",
+    "web_search",
     "browser_use",
+    "mcp_tools",
     "mcp_call",
     // 手机能力,与 PhoneTools.ets 的 NAMES 一致
     "device_info",
@@ -392,6 +403,10 @@ export function localToolSchema(): object[] {
       max_length: { type: "integer", description: "Maximum character length of returned content (default: 15000, hard cap 80000)" },
       direction: str("head (default) or tail"),
     }, ["tool_title", "path"]),
+    tool("read_image", "Look at an image file from the sandbox (files the user attached, downloads). The image is returned to you.", {
+      tool_title: str("Short summary shown to the user"),
+      path: str("Sandbox file name"),
+    }, ["tool_title", "path"]),
     tool("file_write", "Write a text file in the Harmony app sandbox. User must approve writes.", {
       tool_title: str("Short summary shown to the user"),
       path: str("Sandbox file name"),
@@ -420,17 +435,26 @@ export function localToolSchema(): object[] {
       tool_title: str("Short summary shown to the user"),
       url: str("https URL"),
     }, ["tool_title", "url"]),
+    tool("web_search", "Search the web (Bing, then DuckDuckGo) and get titles, links and snippets. Read a result with web_fetch.", {
+      tool_title: str("Short summary shown to the user"),
+      query: str("Search words"),
+      count: { type: "integer", description: "How many results (default 8)" },
+    }, ["tool_title", "query"]),
     tool("browser_use", "Open or manage up to 3 in-app browser tabs.", {
       tool_title: str("Short summary shown to the user"),
       action: str("navigate, new_tab, close_tab, list_tabs"),
       url: str("https URL"),
       tab_id: str("Tab id"),
     }, ["tool_title", "action"]),
-    tool("mcp_call", "Call a configured HTTP MCP tool.", {
+    tool("mcp_tools", "List the tools of a configured MCP server with their input schemas.", {
+      tool_title: str("Short summary shown to the user"),
+      server: str("MCP server label"),
+    }, ["tool_title", "server"]),
+    tool("mcp_call", "Call a tool on a configured MCP server. Look up tool names and input schemas with mcp_tools first.", {
       tool_title: str("Short summary shown to the user"),
       server: str("MCP server label"),
       name: str("Tool name"),
-      arguments: str("JSON object"),
+      arguments: str("JSON object with the tool arguments"),
     }, ["tool_title", "server", "name"]),
   ]
 }

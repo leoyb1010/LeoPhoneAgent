@@ -27,6 +27,8 @@ export class LocalSession {
   updatedAt: number = 0;
   archived: boolean = false;
   pinned: boolean = false;
+  /** 有一轮正在跑。App 被杀后读回来还是 true,就知道那一轮没做完(显示「继续」)。 */
+  running: boolean = false;
   messages: LocalChatMessage[] = [];
 }
 
@@ -44,7 +46,7 @@ export class SessionStore {
   private pending: Promise<void> | null = null;
   private cache: Map<string, LocalSession> = new Map();
 
-  ensureLoaded(context: common.UIAbilityContext): Promise<void> {
+  ensureLoaded(context: common.Context): Promise<void> {
     if (this.loaded) {
       return Promise.resolve();
     }
@@ -103,7 +105,7 @@ export class SessionStore {
     return out;
   }
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     this.jsonLoadFailed = false;
     this.lastError = '';
     SessionStore.ensureDir(SessionStore.dir(context));
@@ -138,7 +140,7 @@ export class SessionStore {
     this.loaded = true;
   }
 
-  async create(context: common.UIAbilityContext, title: string = ''): Promise<LocalSession> {
+  async create(context: common.Context, title: string = ''): Promise<LocalSession> {
     await this.ensureLoaded(context);
     this.assertWritable();
     const session = new LocalSession();
@@ -152,7 +154,7 @@ export class SessionStore {
     return session;
   }
 
-  async get(context: common.UIAbilityContext, id: string): Promise<LocalSession | null> {
+  async get(context: common.Context, id: string): Promise<LocalSession | null> {
     await this.ensureLoaded(context);
     if (!id) {
       return null;
@@ -176,6 +178,7 @@ export class SessionStore {
       session.updatedAt = Number(obj['updatedAt'] ?? 0);
       session.archived = obj['archived'] === true;
       session.pinned = obj['pinned'] === true;
+      session.running = obj['running'] === true;
       const archive = sessionArchiveFromJson(obj);
       session.messages = archive ? archive.messages : [];
       const wrote = this.hydrateImages(context, session.messages);
@@ -191,30 +194,58 @@ export class SessionStore {
     }
   }
 
-  async append(context: common.UIAbilityContext, id: string, role: string, text: string,
+  async append(context: common.Context, id: string, role: string, text: string,
     imageB64: string = '', imageMime: string = '', imagePath: string = ''): Promise<void> {
-    const session = await this.get(context, id);
-    if (!session) {
-      throw new Error('对话不存在');
-    }
-    this.assertWritable();
     const line = new LocalChatMessage();
     line.role = role;
     line.text = text;
     line.imageB64 = imageB64;
     line.imageMime = imageMime;
-    line.imagePath = imagePath.length > 0 ? imagePath : SessionStore.writeImageB64(context, imageB64, imageMime);
-    session.messages = session.messages.concat([line]);
-    if (session.title === '新任务' && role === 'user') {
-      session.title = titleFromPrompt(text);
+    line.imagePath = imagePath;
+    await this.appendLine(context, id, line);
+  }
+
+  /** 追加一条完整的消息(带 kind、附件清单)。 */
+  async appendLine(context: common.Context, id: string, line: LocalChatMessage): Promise<void> {
+    const session = await this.get(context, id);
+    if (!session) {
+      throw new Error('对话不存在');
     }
-    session.lastMessage = text;
+    this.assertWritable();
+    if (line.imagePath.length === 0) {
+      line.imagePath = SessionStore.writeImageB64(context, line.imageB64, line.imageMime);
+    }
+    session.messages = session.messages.concat([line]);
+    if (session.title === '新任务' && line.role === 'user' && line.kind === '') {
+      session.title = titleFromPrompt(line.text);
+    }
+    session.lastMessage = line.text;
     session.updatedAt = Date.now();
     this.upsertSummary(session);
     this.persist(context, session);
   }
 
-  async replaceMessages(context: common.UIAbilityContext, session: LocalSession): Promise<void> {
+  async setRunning(context: common.Context, id: string, on: boolean): Promise<void> {
+    const session = await this.get(context, id);
+    if (!session || session.running === on || this.jsonLoadFailed) {
+      return;
+    }
+    session.running = on;
+    this.persist(context, session);
+  }
+
+  /**
+   * 重新从磁盘读。后台定时任务(ScheduleWork)跑在另一个进程里,会直接写对话档案;
+   * App 回到前台时丢掉内存里的旧副本,免得下次保存把它写的内容盖掉。
+   */
+  async reload(context: common.Context): Promise<void> {
+    this.loaded = false;
+    this.pending = null;
+    this.cache.clear();
+    await this.ensureLoaded(context);
+  }
+
+  async replaceMessages(context: common.Context, session: LocalSession): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     session.updatedAt = Date.now();
@@ -223,7 +254,7 @@ export class SessionStore {
     this.persist(context, session);
   }
 
-  async archive(context: common.UIAbilityContext, id: string): Promise<void> {
+  async archive(context: common.Context, id: string): Promise<void> {
     const session = await this.get(context, id);
     if (!session) {
       return;
@@ -235,7 +266,7 @@ export class SessionStore {
     this.persist(context, session);
   }
 
-  async remove(context: common.UIAbilityContext, id: string): Promise<void> {
+  async remove(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     this.summaries = this.summaries.filter((row: LocalSessionSummary) => row.id !== id);
@@ -247,7 +278,7 @@ export class SessionStore {
     SessionStore.writeText(SessionStore.indexPath(context), JSON.stringify(this.summaries));
   }
 
-  async rename(context: common.UIAbilityContext, id: string, title: string): Promise<void> {
+  async rename(context: common.Context, id: string, title: string): Promise<void> {
     const session = await this.get(context, id);
     if (!session) {
       return;
@@ -261,7 +292,7 @@ export class SessionStore {
     this.persist(context, session);
   }
 
-  async duplicate(context: common.UIAbilityContext, id: string): Promise<LocalSession> {
+  async duplicate(context: common.Context, id: string): Promise<LocalSession> {
     const src = await this.get(context, id);
     if (!src) {
       throw new Error('对话不存在');
@@ -276,7 +307,7 @@ export class SessionStore {
     return copy;
   }
 
-  async togglePin(context: common.UIAbilityContext, id: string): Promise<void> {
+  async togglePin(context: common.Context, id: string): Promise<void> {
     const session = await this.get(context, id);
     if (!session) {
       return;
@@ -288,7 +319,7 @@ export class SessionStore {
   }
 
   /** 一条对话导出成「导入对话」认的档案(不带图片,图片太大)。 */
-  async exportSession(context: common.UIAbilityContext, id: string): Promise<string> {
+  async exportSession(context: common.Context, id: string): Promise<string> {
     const session = await this.get(context, id);
     if (!session) {
       throw new Error('对话不存在');
@@ -296,7 +327,7 @@ export class SessionStore {
     return sessionArchiveJson(session.title, session.messages);
   }
 
-  async importArchive(context: common.UIAbilityContext, raw: string): Promise<LocalSession> {
+  async importArchive(context: common.Context, raw: string): Promise<LocalSession> {
     await this.ensureLoaded(context);
     this.assertWritable();
     let json: object;
@@ -318,7 +349,7 @@ export class SessionStore {
     return session;
   }
 
-  private fillImageBytes(context: common.UIAbilityContext, messages: LocalChatMessage[]): void {
+  private fillImageBytes(context: common.Context, messages: LocalChatMessage[]): void {
     for (let i = 0; i < messages.length; i++) {
       const line = messages[i];
       if (line.imageB64.length > 0 || line.imagePath.length === 0) {
@@ -344,7 +375,7 @@ export class SessionStore {
     }
   }
 
-  private hydrateImages(context: common.UIAbilityContext, messages: LocalChatMessage[]): boolean {
+  private hydrateImages(context: common.Context, messages: LocalChatMessage[]): boolean {
     let changed = false;
     for (let i = 0; i < messages.length; i++) {
       const line = messages[i];
@@ -362,7 +393,7 @@ export class SessionStore {
     return changed;
   }
 
-  static writeImageBytes(context: common.UIAbilityContext, buf: ArrayBuffer, mime: string): string {
+  static writeImageBytes(context: common.Context, buf: ArrayBuffer, mime: string): string {
     const dir = context.filesDir + '/chat-images';
     SessionStore.ensureDir(dir);
     const ext = mime.indexOf('png') >= 0 ? 'png' : 'jpg';
@@ -380,7 +411,7 @@ export class SessionStore {
     return path;
   }
 
-  static writeImageB64(context: common.UIAbilityContext, raw: string, mime: string): string {
+  static writeImageB64(context: common.Context, raw: string, mime: string): string {
     if (raw.length === 0) {
       return '';
     }
@@ -394,7 +425,7 @@ export class SessionStore {
     }
   }
 
-  private persist(context: common.UIAbilityContext, session: LocalSession): void {
+  private persist(context: common.Context, session: LocalSession): void {
     SessionStore.ensureDir(SessionStore.dir(context));
     if (session.messages.length > 0) {
       session.lastMessage = session.messages[session.messages.length - 1].text;
@@ -451,15 +482,15 @@ export class SessionStore {
     }
   }
 
-  private static dir(context: common.UIAbilityContext): string {
+  private static dir(context: common.Context): string {
     return context.filesDir + '/sessions';
   }
 
-  private static indexPath(context: common.UIAbilityContext): string {
+  private static indexPath(context: common.Context): string {
     return SessionStore.dir(context) + '/index.json';
   }
 
-  private static sessionPath(context: common.UIAbilityContext, id: string): string {
+  private static sessionPath(context: common.Context, id: string): string {
     return SessionStore.dir(context) + '/' + id + '.json';
   }
 

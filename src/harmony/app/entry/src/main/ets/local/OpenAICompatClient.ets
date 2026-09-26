@@ -121,9 +121,10 @@ export class OpenAICompatClient {
     }
   }
 
+  /** withTools=false:写摘要、起标题这类只要文字的请求,不带工具。 */
   streamTurn(turns: LoopTurn[], systemPrompt: string, thinking: string,
     onDelta: (text: string) => void, onDone: (turn: StreamTurn) => void,
-    onError: (message: string) => void): http.HttpRequest {
+    onError: (message: string) => void, withTools: boolean = true): http.HttpRequest {
     const req = http.createHttp();
     let leftover = '';
     let assembled = '';
@@ -252,7 +253,7 @@ export class OpenAICompatClient {
     req.requestInStream(this.url, {
       method: http.RequestMethod.POST,
       header: this.headers(),
-      extraData: this.payload(turns, systemPrompt, thinking),
+      extraData: this.payload(turns, systemPrompt, thinking, withTools),
       expectDataType: http.HttpDataType.ARRAY_BUFFER,
       usingCache: false,
       connectTimeout: 120000,
@@ -346,17 +347,20 @@ export class OpenAICompatClient {
     };
   }
 
-  private payload(turns: LoopTurn[], systemPrompt: string, thinking: string): string {
+  private payload(turns: LoopTurn[], systemPrompt: string, thinking: string, withTools: boolean): string {
     if (this.mode === 'codex') {
-      return responsesBodyJson(this.model, systemPrompt, turns, thinking);
+      return responsesBodyJson(this.model, systemPrompt, turns, thinking, withTools);
     }
     if (this.mode === 'anthropic') {
-      return `{"model":${JSON.stringify(this.model)},"max_tokens":8192,"stream":true,"system":${JSON.stringify(systemPrompt)},"messages":${anthropicMessagesJson(turns)},"tools":${anthropicToolSchemaJson()}}`;
+      const tools = withTools ? `,"tools":${anthropicToolSchemaJson()}` : '';
+      return `{"model":${JSON.stringify(this.model)},"max_tokens":8192,"stream":true,"system":${JSON.stringify(systemPrompt)},"messages":${anthropicMessagesJson(turns)}${tools}}`;
     }
     if (this.mode === 'gemini') {
-      return `{"system_instruction":{"parts":[{"text":${JSON.stringify(systemPrompt)}}]},"contents":${geminiContentsJson(turns)},"tools":${geminiToolSchemaJson()}}`;
+      const tools = withTools ? `,"tools":${geminiToolSchemaJson()}` : '';
+      return `{"system_instruction":{"parts":[{"text":${JSON.stringify(systemPrompt)}}]},"contents":${geminiContentsJson(turns)}${tools}}`;
     }
     const effort = thinking.length > 0 ? `,"reasoning_effort":${JSON.stringify(thinking)}` : '';
-    return `{"model":${JSON.stringify(this.model)},"stream":true,"messages":${wireMessagesJson(turns, systemPrompt)},"tools":${localToolSchemaJson()}${effort}}`;
+    const tools = withTools ? `,"tools":${localToolSchemaJson()}` : '';
+    return `{"model":${JSON.stringify(this.model)},"stream":true,"messages":${wireMessagesJson(turns, systemPrompt)}${tools}${effort}}`;
   }
 }

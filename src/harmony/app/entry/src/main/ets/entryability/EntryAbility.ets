@@ -1,19 +1,21 @@
 import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { webview } from '@kit.ArkWeb';
-import { LocalAgentEngine } from '../local/LocalAgentEngine';
-import { LocalTools } from '../local/LocalTools';
+import { ChatRuns } from '../local/ChatRun';
+import { ScheduleRunner } from '../local/ScheduleRunner';
 import { startBody } from '../net/OutboundClient';
 import { gatewayStore } from '../store/GatewayStore';
-import { ScheduleStore, ScheduleTask, scheduleStore } from '../store/ScheduleStore';
+import { scheduleStore } from '../store/ScheduleStore';
 import { sessionStore } from '../store/SessionStore';
 import { themeStore } from '../store/ThemeStore';
+import { UiState } from '../store/UiState';
 import { PushRegistrar } from '../push/PushRegistrar';
 
 export default class EntryAbility extends UIAbility {
   private tick: number = -1;
+  private workerSeen: number = 0;
 
-  onCreate(_want: Want, _launchParam: AbilityConstant.LaunchParam): void {
+  onCreate(want: Want, _launchParam: AbilityConstant.LaunchParam): void {
     themeStore.systemDark = this.context.config.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
     themeStore.load(this.context).catch(() => {
       themeStore.apply();
@@ -30,14 +32,29 @@ export default class EntryAbility extends UIAbility {
     } catch (_err) {
       // Web 引擎初始化失败时登录页会自己报错，不再丢给系统浏览器
     }
+    this.takeOpen(want);
+  }
+
+  /** 点通知回来:打开那个对话。 */
+  onNewWant(want: Want, _launchParam: AbilityConstant.LaunchParam): void {
+    this.takeOpen(want);
   }
 
   onForeground(): void {
-    this.armSchedule();
+    ChatRuns.onForeground();
+    UiState.beat(this.context, true);
+    this.catchUp().catch(() => {
+      // 读档失败时照旧用内存里的
+    }).finally(() => {
+      this.armSchedule();
+    });
   }
 
   onBackground(): void {
     this.clearSchedule();
+    UiState.beat(this.context, false);
+    // 还有一轮在跑(或定时任务在跑)就申请一段后台宽限,说完了发通知。
+    ChatRuns.onBackground(ScheduleRunner.busy);
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {
@@ -56,10 +73,31 @@ export default class EntryAbility extends UIAbility {
     });
   }
 
+  private takeOpen(want: Want): void {
+    const params = want.parameters;
+    const id = params ? `${params['openSession'] ?? ''}` : '';
+    if (id.length > 0) {
+      AppStorage.setOrCreate('openSession', id);
+    }
+  }
+
+  /** 后台进程跑过定时任务(改过档案)就重新读,免得内存里的旧副本把它写的盖掉;顺手登记后台唤起。 */
+  private async catchUp(): Promise<void> {
+    const at = UiState.workerAt(this.context);
+    if (at > this.workerSeen) {
+      this.workerSeen = at;
+      await sessionStore.reload(this.context);
+      await scheduleStore.reload(this.context);
+    }
+    await scheduleStore.load(this.context);
+    await ScheduleRunner.syncWork(this.context);
+  }
+
   private armSchedule(): void {
     this.clearSchedule();
     this.fireDue();
     this.tick = setInterval(() => {
+      UiState.beat(this.context, true);
       this.fireDue();
     }, 30000);
   }
@@ -72,77 +110,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   private fireDue(): void {
-    if (scheduleStore.running) {
-      return;
-    }
-    scheduleStore.load(this.context).then(() => {
-      const rows = scheduleStore.dueNow();
-      if (rows.length === 0) {
-        return;
-      }
-      scheduleStore.running = true;
-      this.markThenRun(rows, 0);
-    }).catch(() => {
-      // first launch has empty schedule
-    });
-  }
-
-  private markThenRun(rows: ScheduleTask[], index: number): void {
-    if (index >= rows.length) {
-      scheduleStore.running = false;
-      return;
-    }
-    const row = rows[index];
-    this.runOne(row).then(() => {
-      this.markThenRun(rows, index + 1);
-    }).catch(() => {
-      this.markThenRun(rows, index + 1);
-    });
-  }
-
-  private async runOne(row: ScheduleTask): Promise<void> {
-    await LocalTools.hydrate(this.context);
-    await sessionStore.ensureLoaded(this.context);
-    let sessionId = row.sessionId;
-    if (!sessionId) {
-      const session = await sessionStore.create(this.context, ScheduleStore.sessionTitle(row.title));
-      sessionId = session.id;
-    }
-    await sessionStore.append(this.context, sessionId, 'user', row.prompt);
-    const mine = LocalAgentEngine.bump('schedule');
-    await new Promise<void>((resolve: Function) => {
-      // 看门狗：这个 Promise 只有 onDone/onError 才 resolve，
-      // 而 LocalAgentEngine 在「这一轮已经被换代」的几个分支里是直接 return、一个回调都不调的。
-      // 一旦命中，markThenRun 就再也不往下走，scheduleStore.running 永远是 true，
-      // 之后所有定时任务全部静默不执行，直到 App 重启。
-      // 这里只负责把调度器的锁放开，不取消正在跑的回合 ——
-      // 回合真跑完时 onDone/onError 照样会写会话和 lastResult（resolve 本身是幂等的）。
-      const guard = setTimeout(() => {
-        resolve();
-      }, 10 * 60 * 1000);
-      const settle = (): void => {
-        clearTimeout(guard);
-        resolve();
-      };
-      LocalAgentEngine.run(this.context, 'schedule', mine, row.prompt, '', () => {
-        // schedule has no live pane
-      }, (output: string) => {
-        sessionStore.append(this.context, sessionId, 'assistant', output).catch(() => {
-          // keep next task moving
-        });
-        scheduleStore.record(this.context, row.rowId, sessionId, output, '').catch(() => {
-          // keep next task moving
-        });
-        settle();
-      }, (message: string) => {
-        sessionStore.append(this.context, sessionId, 'system', message).catch(() => {
-          // keep next task moving
-        });
-        scheduleStore.record(this.context, row.rowId, sessionId, '', message).catch(() => {
-          // keep next task moving
-        });
-        settle();
-      });
+    ScheduleRunner.runDue(this.context, !ChatRuns.foreground).catch(() => {
+      // 下一个 30 秒再试
     });
   }
 }

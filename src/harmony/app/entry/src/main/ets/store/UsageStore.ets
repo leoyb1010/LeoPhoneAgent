@@ -13,7 +13,7 @@ export class UsageStore {
   completion: number = 0;
   private loaded: boolean = false;
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     if (this.loaded) {
       return;
     }
@@ -31,7 +31,7 @@ export class UsageStore {
     this.loaded = true;
   }
 
-  async add(context: common.UIAbilityContext, prompt: number, completion: number): Promise<void> {
+  async add(context: common.Context, prompt: number, completion: number): Promise<void> {
     await this.load(context);
     this.turns += 1;
     this.prompt += prompt;

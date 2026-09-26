@@ -147,7 +147,7 @@ export class ProviderStore {
     return map;
   }
 
-  ensureLoaded(context: common.UIAbilityContext): Promise<void> {
+  ensureLoaded(context: common.Context): Promise<void> {
     if (this.loaded) {
       return Promise.resolve();
     }
@@ -160,7 +160,7 @@ export class ProviderStore {
     return this.pending;
   }
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     this.jsonLoadFailed = false;
     this.lastError = '';
     // 重新加载时先清掉内存里的密钥，否则已删除实例的钥匙会一直留在 Map 里
@@ -227,7 +227,7 @@ export class ProviderStore {
     await SecretStore.removeProviderKey();
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     const body = new ProviderFile();
@@ -241,7 +241,7 @@ export class ProviderStore {
     AppStorage.setOrCreate('providerTick', Date.now());
   }
 
-  async upsert(context: common.UIAbilityContext, row: ProviderInstance, key: string): Promise<void> {
+  async upsert(context: common.Context, row: ProviderInstance, key: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     if (row.baseUrl.length > 0) {
@@ -273,7 +273,7 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async setActiveModel(context: common.UIAbilityContext, id: string, model: string): Promise<void> {
+  async setActiveModel(context: common.Context, id: string, model: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     const next = model.trim();
@@ -292,7 +292,7 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async remove(context: common.UIAbilityContext, id: string): Promise<void> {
+  async remove(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     const gone = this.instances.find((row: ProviderInstance) => row.id === id);
@@ -321,14 +321,14 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async setActive(context: common.UIAbilityContext, id: string): Promise<void> {
+  async setActive(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     this.activeId = id;
     await this.save(context);
   }
 
-  async setActiveGroup(context: common.UIAbilityContext, id: string): Promise<void> {
+  async setActiveGroup(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
     this.activeGroupId = id;
@@ -383,7 +383,7 @@ export class ProviderStore {
     return 'apiKey';
   }
 
-  async addGroup(context: common.UIAbilityContext, name: string, modelIds: string[]): Promise<void> {
+  async addGroup(context: common.Context, name: string, modelIds: string[]): Promise<void> {
     // 必须先 ensureLoaded 再改 this.groups。原来是先 concat 再 save()，
     // 而 save() 内部的 ensureLoaded 若此刻才第一次读盘，会用磁盘内容整个覆盖 this.groups，
     // 刚加的组直接消失（removeGroup 同理）。
@@ -396,7 +396,7 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async removeGroup(context: common.UIAbilityContext, id: string): Promise<void> {
+  async removeGroup(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.groups = this.groups.filter((row: ModelGroup) => row.id !== id);
     if (this.activeGroupId === id) {
@@ -501,7 +501,7 @@ export class ProviderStore {
     return raw;
   }
 
-  private async migrateOld(context: common.UIAbilityContext): Promise<void> {
+  private async migrateOld(context: common.Context): Promise<void> {
     const path = ProviderStore.filePath(context, OLD_FILE);
     if (!fileIo.accessSync(path)) {
       return;
@@ -598,7 +598,7 @@ export class ProviderStore {
     return out;
   }
 
-  private static filePath(context: common.UIAbilityContext, name: string): string {
+  private static filePath(context: common.Context, name: string): string {
     return context.filesDir + '/' + name;
   }
 

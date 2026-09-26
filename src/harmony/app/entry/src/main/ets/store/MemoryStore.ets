@@ -7,14 +7,14 @@ export class MemoryStore {
   jsonLoadFailed: boolean = false;
   private stamp: string = '';
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     this.roll();
     MemoryStore.ensureDir(MemoryStore.dir(context));
     this.global = MemoryStore.readIfPresent(MemoryStore.globalPath(context));
     this.today = MemoryStore.readIfPresent(MemoryStore.dailyPath(context));
   }
 
-  async saveGlobal(context: common.UIAbilityContext, text: string): Promise<void> {
+  async saveGlobal(context: common.Context, text: string): Promise<void> {
     if (this.jsonLoadFailed) {
       throw new Error('记忆档案读坏了，先别保存，避免覆盖');
     }
@@ -23,7 +23,7 @@ export class MemoryStore {
     MemoryStore.writeText(MemoryStore.globalPath(context), text);
   }
 
-  async appendToday(context: common.UIAbilityContext, text: string): Promise<void> {
+  async appendToday(context: common.Context, text: string): Promise<void> {
     this.roll();
     const next = this.today.length > 0 ? `${this.today}\n${text}` : text;
     this.today = next;
@@ -97,15 +97,15 @@ export class MemoryStore {
     return `${now.getFullYear()}-${m}-${d}`;
   }
 
-  private static dir(context: common.UIAbilityContext): string {
+  private static dir(context: common.Context): string {
     return context.filesDir + '/memory';
   }
 
-  private static globalPath(context: common.UIAbilityContext): string {
+  private static globalPath(context: common.Context): string {
     return MemoryStore.dir(context) + '/GLOBAL.md';
   }
 
-  private static dailyPath(context: common.UIAbilityContext): string {
+  private static dailyPath(context: common.Context): string {
     const now = new Date();
     const m = `${now.getMonth() + 1}`.padStart(2, '0');
     const d = `${now.getDate()}`.padStart(2, '0');

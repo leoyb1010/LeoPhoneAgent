@@ -19,7 +19,7 @@ export class BodyStore {
     return encodePair(gatewayStore.apiRoot, this.name);
   }
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     if (this.loaded) {
       return;
     }
@@ -39,7 +39,7 @@ export class BodyStore {
     this.loaded = true;
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     const name = sanitizeMachine(this.name);
     if (!name) {
       throw new Error('身体名不合法');

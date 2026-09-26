@@ -47,8 +47,17 @@ export type LoopLike = {
   imageMime?: string
 }
 
+export const TOOL_IMAGE_CAPTION = "Image returned by read_image:"
+
 export function responsesInputJson(turns: LoopLike[]): string {
   const rows: string[] = []
+  let images: string[] = []
+  const flushImages = () => {
+    if (images.length > 0) {
+      rows.push(`{"role":"user","content":[{"type":"input_text","text":${JSON.stringify(TOOL_IMAGE_CAPTION)}},${images.join(",")}]}`)
+      images = []
+    }
+  }
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i]
     if (turn.role === "tool") {
@@ -56,8 +65,13 @@ export function responsesInputJson(turns: LoopLike[]): string {
       rows.push(
         `{"type":"function_call_output","call_id":${JSON.stringify(capResponsesId(ids.callId))},"output":${JSON.stringify(turn.content)}}`,
       )
+      if ((turn.imageB64 ?? "").length > 0) {
+        const mime = turn.imageMime && turn.imageMime.length > 0 ? turn.imageMime : "image/jpeg"
+        images.push(`{"type":"input_image","image_url":"data:${mime};base64,${turn.imageB64}"}`)
+      }
       continue
     }
+    flushImages()
     const calls = turn.calls ?? []
     if (calls.length > 0) {
       if (turn.content.length > 0) {
@@ -82,6 +96,7 @@ export function responsesInputJson(turns: LoopLike[]): string {
     }
     rows.push(`{"role":${JSON.stringify(turn.role)},"content":${JSON.stringify(turn.content)}}`)
   }
+  flushImages()
   return `[${rows.join(",")}]`
 }
 
@@ -107,7 +122,8 @@ export function responsesBodyJson(
 ): string {
   const effort = thinking.trim().length > 0 ? thinking.trim() : "low"
   const cache = firstUserText(turns)
-  return `{"model":${JSON.stringify(model)},"stream":true,"store":false,"parallel_tool_calls":true,"prompt_cache_key":${JSON.stringify(cache)},"include":["reasoning.encrypted_content"],"reasoning":{"effort":${JSON.stringify(effort)},"summary":"auto"},"instructions":${JSON.stringify(systemPrompt)},"tools":${toolsJson},"tool_choice":"auto","input":${responsesInputJson(turns)}}`
+  const tools = toolsJson === "[]" ? "" : `"parallel_tool_calls":true,"tools":${toolsJson},"tool_choice":"auto",`
+  return `{"model":${JSON.stringify(model)},"stream":true,"store":false,${tools}"prompt_cache_key":${JSON.stringify(cache)},"include":["reasoning.encrypted_content"],"reasoning":{"effort":${JSON.stringify(effort)},"summary":"auto"},"instructions":${JSON.stringify(systemPrompt)},"input":${responsesInputJson(turns)}}`
 }
 
 export function firstUserText(turns: LoopLike[]): string {

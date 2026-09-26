@@ -23,6 +23,8 @@ struct HomePage {
   @State tab: number = 0;
   @State chatMachine: string = '';
   @State chatLaunch: number = 0;
+  /** 点通知回来要打开某个本机对话:先切到本机这一栏,LocalAgentPane 再打开它。 */
+  @StorageProp('openSession') @Watch('onOpenSession') openRequest: string = '';
   private foldCb: ((status: display.FoldStatus) => void) | null = null;
 
   aboutToAppear(): void {
@@ -35,6 +37,7 @@ struct HomePage {
       this.showNotes = show;
     });
     this.syncWide(0, 0);
+    this.onOpenSession();
     this.foldCb = (_status: display.FoldStatus) => {
       this.syncWide(0, 0);
     };
@@ -42,6 +45,12 @@ struct HomePage {
       display.on('foldStatusChange', this.foldCb);
     } catch (_err) {
       // non-fold devices
+    }
+  }
+
+  onOpenSession(): void {
+    if (this.openRequest.length > 0) {
+      this.tab = 0;
     }
   }
 

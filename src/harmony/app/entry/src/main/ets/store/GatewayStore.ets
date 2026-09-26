@@ -30,7 +30,7 @@ export class GatewayStore {
   private loaded: boolean = false;
   private pending: Promise<void> | null = null;
 
-  ensureLoaded(context: common.UIAbilityContext): Promise<void> {
+  ensureLoaded(context: common.Context): Promise<void> {
     if (this.loaded) {
       return Promise.resolve();
     }
@@ -43,7 +43,7 @@ export class GatewayStore {
     return this.pending;
   }
 
-  async load(context: common.UIAbilityContext): Promise<void> {
+  async load(context: common.Context): Promise<void> {
     const store = await preferences.getPreferences(context, STORE);
     try {
       this.apiRoot = requireHttpsRoot(`${await store.get('apiRoot', DEFAULT_API_ROOT)}`);
@@ -82,7 +82,7 @@ export class GatewayStore {
     this.loaded = true;
   }
 
-  async save(context: common.UIAbilityContext): Promise<void> {
+  async save(context: common.Context): Promise<void> {
     await this.ensureLoaded(context);
     this.apiRoot = requireHttpsRoot(this.apiRoot);
     const key = sanitizeKey(this.key);

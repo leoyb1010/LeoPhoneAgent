@@ -22,7 +22,7 @@ export class PhoneTools {
   static readonly NAMES: string[] = ['device_info', 'clipboard_write', 'set_alarm', 'set_reminder', 'notify',
     'flashlight', 'open_app_link', 'dial', 'location', 'weather'];
 
-  static async run(context: common.UIAbilityContext, name: string, args: string): Promise<string> {
+  static async run(context: common.Context, name: string, args: string): Promise<string> {
     try {
       if (name === 'device_info') {
         return FastLocalActions.deviceSummary();
@@ -74,7 +74,7 @@ export class PhoneTools {
     return await FastLocalActions.copyText(text) ? '已复制到剪贴板' : '没复制上,再试一次';
   }
 
-  private static async alarm(context: common.UIAbilityContext, hourRaw: string, minuteRaw: string,
+  private static async alarm(context: common.Context, hourRaw: string, minuteRaw: string,
     label: string): Promise<string> {
     const route = new ActionDecision();
     route.hour = Number(hourRaw);
@@ -90,7 +90,7 @@ export class PhoneTools {
       '闹钟没设上:可能没给「提醒」权限';
   }
 
-  private static async reminder(context: common.UIAbilityContext, time: string, title: string): Promise<string> {
+  private static async reminder(context: common.Context, time: string, title: string): Promise<string> {
     const when: LocalDateTime | null = parseReminderTime(time, Date.now());
     if (!when) {
       return `时间读不懂或已经过去:${time}。用 YYYY-MM-DD HH:mm,例如 ${nowLine(Date.now())}`;
@@ -99,12 +99,17 @@ export class PhoneTools {
     return ok ? `提醒已设好:${time.trim()} ${title}` : '提醒没设上:可能没给「提醒」权限';
   }
 
-  private static async openExternal(context: common.UIAbilityContext, url: string): Promise<string> {
+  private static async openExternal(context: common.Context, url: string): Promise<string> {
     const link = url.trim();
     if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(link)) {
       return '要一个完整链接,例如 https://… 或 应用的 scheme';
     }
-    await context.openLink(link, { appLinkingOnly: false });
+    // 后台定时任务跑在没有界面的进程里,那里打不开别的 App。
+    const ui = context as common.UIAbilityContext;
+    if (typeof ui.openLink !== 'function') {
+      return '现在在后台,打不开别的 App;回到前台再说一次';
+    }
+    await ui.openLink(link, { appLinkingOnly: false });
     return '已交给系统打开';
   }
 
@@ -118,7 +123,7 @@ export class PhoneTools {
     return `已打开拨号盘:${digits}`;
   }
 
-  private static async locate(context: common.UIAbilityContext): Promise<Place | null> {
+  private static async locate(context: common.Context): Promise<Place | null> {
     const perms: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'ohos.permission.LOCATION'];
     try {
       const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, perms);
@@ -151,7 +156,7 @@ export class PhoneTools {
     }
   }
 
-  private static async weather(context: common.UIAbilityContext, city: string): Promise<string> {
+  private static async weather(context: common.Context, city: string): Promise<string> {
     let place: Place | null = null;
     if (city.trim().length > 0) {
       place = await PhoneTools.geocode(city.trim());
