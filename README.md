@@ -3,7 +3,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.44.0%20(126)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.20-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.21-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -49,7 +49,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.20`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.21`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -57,7 +57,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.20
+## HarmonyOS 0.3.0-alpha.21
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
 本机 Agent 能用手机能力（天气、定位、闹钟、提醒、通知、手电、复制、拨号盘、打开链接），
@@ -65,7 +65,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 没做完的点「继续」，太长自动压缩。定时任务在 App 关着时也会被系统唤起补跑。
 远控 Mac 可以接着没做完的任务或接手桌面任务。
 界面对齐 iOS / 安卓（回答不套气泡、工具胶囊、卡片输入框）；宽度 600vp 起就左右分栏（折叠屏展开也分）。
-界面在 Mac 上用 DevEco 预览器截图核对过（手机、折叠屏展开、浅色、深色），还没在鸿蒙真机上装过。
+回答边出边显示到最后（alpha.20 及更早经常停在半截，要退出对话再进来才看全）。
+界面在 Mac 上用 DevEco 预览器截图核对过（手机、折叠屏展开、浅色、深色）；alpha.20 已装到鸿蒙真机用过，alpha.21 还没装。
 
 OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
 

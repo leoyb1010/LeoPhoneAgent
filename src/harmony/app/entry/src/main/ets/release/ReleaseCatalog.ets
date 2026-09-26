@@ -6,15 +6,24 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.20';
-  static readonly currentBuild: number = 100025;
+  static readonly currentVersion: string = '0.3.0-alpha.21';
+  static readonly currentBuild: number = 100026;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.20';
+    first.version = '0.3.0-alpha.21';
     first.date = '2026-09-26';
-    first.title = '界面对齐 iOS 和安卓，折叠屏展开分栏';
+    first.title = '回答不再只显示半截';
     first.highlights = [
+      '回答边出边显示，不会停在半截、要退出对话再进来才看全；说完后下面的复制、朗读、重新生成直接露出来。远控 Mac 的对话也一样。',
+      '远控时 Mac 中途插进来一条说明，后面的回答不再接在那条说明后面。',
+      '改了服务商、技能、MCP、定时任务、模型组、环境变量，列表马上显示新的；「用作默认」点完立刻变成「默认」；对话列表里新起的标题、设置里的状态也会及时更新。'
+    ];
+    const t10 = new LeoRelease();
+    t10.version = '0.3.0-alpha.20';
+    t10.date = '2026-09-26';
+    t10.title = '界面对齐 iOS 和安卓，折叠屏展开分栏';
+    t10.highlights = [
       '对话页换成 iOS、安卓的样子：回答不再套气泡，上面有「LeoPhoneAgent」；工具一步一个小胶囊，做完的一轮折成「已工作 N 步」；代码块能一键复制，表格、粗体、链接照原样显示。',
       '输入框是一张卡片：模型和审批方式就在上面，+ 能加照片和文件，在跑的时候发送按钮变成红色停止。',
       '首页换了：顶上是设置、搜索、远程，对话按今天、昨天分组，在跑的有转圈；最下面直接说一句就开新对话。',
@@ -220,6 +229,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }
