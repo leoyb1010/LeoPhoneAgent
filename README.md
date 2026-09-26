@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.44.0%20(126)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.45.0%20(127)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.21-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -157,7 +157,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.44.0 (126)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.45.0 (127)`;Bundle ID `com.leoyuan.leophoneagent`
+- 1.45.0:设置 → Apple Watch:手表怎么回答(自动 / 总是手表直连 / 只经 iPhone)、手表直连单独选模型(任何 API Key 方式的 OpenAI 兼容或 Anthropic 模型)
 - 1.44.0:审批三档(逐项确认 / 智能批准 / 全自动,风险分级只提示不加步骤);iPad 菜单栏、聊天检查器、
   多窗口(右键或拖出会话开新窗口、iPadOS 27 关窗确认)、设置双栏、拖入链接与文字;做完的一轮收成
   「已工作 N 步 · 用时」;灵动岛等待批准变橙并提醒、5 分钟没更新标「可能已中断」、手表 Smart Stack 小尺寸;
@@ -188,8 +189,9 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 版本:`1.2.4`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
-  Developer ID 签名 + Apple 公证,本机安装;尚未发布到 GitHub Releases(旧的 leocodebox 2.x 只作回退)
+- 版本:`1.2.5`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
+  1.2.5 已 Developer ID 签名,公证待补(Mac Studio 上没有 notarytool 凭据),尚未发布到 GitHub Releases
+  (更新源 `leocodebox-updates` 最新仍是 1.0.1;旧的 leocodebox 2.x 只作回退)
 - Leo Link:手机经中继在 Mac 上开任务、流式看进度、审批、全自动、停止、断线续传,并能接着做 Mac 桌面上开的任务
 
 ## 当前 Android 版本

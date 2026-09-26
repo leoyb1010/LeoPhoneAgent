@@ -94602,58 +94602,6 @@
         }
       }
     },
-    "手表离开 iPhone 时直接回答": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ohne iPhone direkt auf der Uhr antworten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Answer on the watch without the iPhone"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Répondre sur la montre sans l’iPhone"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "iPhone がなくても Apple Watch で回答"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "iPhone 없이 Apple Watch에서 바로 답변"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отвечать на часах без iPhone"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手表离开 iPhone 时直接回答"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "手錶離開 iPhone 時直接回答"
-          }
-        }
-      }
-    },
     "拍照": {
       "localizations": {
         "de": {
@@ -108335,28 +108283,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "預設分組裡沒有 API Key 方式、OpenAI 相容或 Anthropic 介面的模型。訂閱登入（OAuth）的模型只能經 iPhone 使用。"
-          }
-        }
-      }
-    },
-    "已关闭。手表离开 iPhone 时不会自己回答。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Off. Away from your iPhone, the watch won’t answer on its own."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已关闭。手表离开 iPhone 时不会自己回答。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已關閉。手錶離開 iPhone 時不會自己回答。"
           }
         }
       }

@@ -5,9 +5,11 @@
 //  [T-watch-standalone] Answers straight from the wrist when the iPhone is out
 //  of reach — a cellular watch on a run, the phone left at home.
 //
-//  The phone picks the model (first API-key member of the default group that
-//  speaks OpenAI Chat Completions or Anthropic Messages) and sends endpoint and
-//  key over the encrypted WatchConnectivity channel. The key is kept in this
+//  The phone picks the model (Settings → Apple Watch, or the first API-key
+//  member of the default group that speaks OpenAI Chat Completions or
+//  Anthropic Messages) and sends endpoint and key over the encrypted
+//  WatchConnectivity channel. Set to "always", the wrist answers this way even
+//  with the phone in reach. The key is kept in this
 //  watch's Keychain, never synced. Plain chat only: tools, files and sessions
 //  stay on the phone, where the full agent runs.
 //
@@ -22,6 +24,10 @@ struct WatchStandaloneConfig: Codable, Equatable {
     let modelName: String
     let providerName: String
     let userAgent: String
+    /// Answer directly even when the phone is in reach. Nil in configs saved before 1.45.
+    let alwaysDirect: Bool?
+    /// Send `max_tokens` (OpenRouter, Mistral) instead of `max_completion_tokens`. Nil before 1.45.
+    let legacyMaxTokens: Bool?
 }
 
 enum WatchStandaloneError: LocalizedError {
@@ -90,6 +96,9 @@ final class WatchStandaloneClient: ObservableObject {
 
     var isReady: Bool { config != nil }
 
+    /// Picked "always answer on the watch" on the phone.
+    var prefersDirect: Bool { config?.alwaysDirect == true }
+
     /// The phone's config message (see WatchBridge.syncStandaloneConfigIfNeeded).
     func apply(_ info: [String: Any]) {
         let defaults = UserDefaults.standard
@@ -112,7 +121,9 @@ final class WatchStandaloneClient: ObservableObject {
             model: model,
             modelName: (info["modelName"] as? String) ?? model,
             providerName: (info["providerName"] as? String) ?? "",
-            userAgent: (info["userAgent"] as? String) ?? ""
+            userAgent: (info["userAgent"] as? String) ?? "",
+            alwaysDirect: info["alwaysDirect"] as? Bool,
+            legacyMaxTokens: info["legacyMaxTokens"] as? Bool
         )
         if let data = try? JSONEncoder().encode(next) { defaults.set(data, forKey: Self.configKey) }
         defaults.removeObject(forKey: Self.reasonKey)
@@ -160,14 +171,18 @@ final class WatchStandaloneClient: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if !config.userAgent.isEmpty { request.setValue(config.userAgent, forHTTPHeaderField: "User-Agent") }
+        // Room for reasoning models to think before the short answer the prompt asks for.
+        let maxTokens = 2000
         let body: [String: Any]
         if config.format == "anthropic" {
             request.setValue(key, forHTTPHeaderField: "x-api-key")
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            body = ["model": config.model, "max_tokens": 600, "system": Self.systemPrompt, "messages": turns]
+            body = ["model": config.model, "max_tokens": maxTokens, "system": Self.systemPrompt, "messages": turns]
         } else {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            body = ["model": config.model, "max_tokens": 600, "stream": false,
+            // GPT-5 / o-series reject `max_tokens`; OpenRouter and Mistral reject the newer name.
+            let tokenParam = config.legacyMaxTokens == false ? "max_completion_tokens" : "max_tokens"
+            body = ["model": config.model, tokenParam: maxTokens, "stream": false,
                     "messages": [["role": "system", "content": Self.systemPrompt]] + turns]
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

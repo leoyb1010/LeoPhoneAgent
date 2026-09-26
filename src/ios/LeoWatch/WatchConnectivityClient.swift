@@ -8,7 +8,8 @@
 //
 //  Every question goes one of two ways:
 //    • iPhone reachable → the phone runs the full agent and sends the answer.
-//    • iPhone out of reach → WatchStandaloneClient calls the model directly.
+//    • iPhone out of reach, or "always answer on the watch" picked on the
+//      phone → WatchStandaloneClient calls the model directly.
 //
 
 import Foundation
@@ -110,9 +111,11 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
 
     /// The route a question would take right now.
     var route: WatchAskRoute? {
+        let standalone = WatchStandaloneClient.shared
+        if standalone.isReady, standalone.prefersDirect { return .direct }
         let phoneSuspect = phoneFailedAt.map { Date().timeIntervalSince($0) < 60 } ?? false
         if isPhoneReachable, !phoneSuspect { return .phone }
-        return WatchStandaloneClient.shared.isReady ? .direct : (isPhoneReachable ? .phone : nil)
+        return standalone.isReady ? .direct : (isPhoneReachable ? .phone : nil)
     }
 
     // MARK: - Ask

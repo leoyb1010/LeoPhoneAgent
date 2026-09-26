@@ -62,21 +62,46 @@ enum WatchPayloadKey {
 
 // MARK: - Standalone answers
 
-/// [T-watch-standalone] Which model a cellular watch calls on its own.
+/// [T-watch-standalone] Which model the watch calls on its own.
 ///
 /// Only API-key providers that speak OpenAI Chat Completions or Anthropic
 /// Messages qualify: OAuth tokens need refreshing on the phone, and the watch
-/// has to stay a small, dependable client. The first usable member of the
-/// default model group wins, so the wrist answers with the same model the
-/// phone would pick.
+/// has to stay a small, dependable client. The model is the one picked for the
+/// watch in Settings → Apple Watch; without a pick, the first usable member of
+/// the default model group, so the wrist answers with the model the phone
+/// would use.
 enum WatchStandalone {
+    /// Pre-1.45 on/off switch; only read to seed `mode`.
     static let enabledKey = "watch.standalone.enabled"
+    static let modeKey = "watch.standalone.mode"
+    static let entryKey = "watch.standalone.entry"
 
-    /// On unless the user turns it off: answering from a cellular watch is
-    /// the point of the feature. Turning it off deletes the key on the watch.
-    static var isEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    /// How the wrist gets its answers.
+    enum Mode: String, CaseIterable, Identifiable {
+        /// iPhone in reach: the phone runs the full agent. Out of reach: direct.
+        case auto
+        /// Always straight to the model — no waiting on the phone; chat only.
+        case always
+        /// Phone only; no key on the watch.
+        case off
+
+        var id: String { rawValue }
+    }
+
+    static var mode: Mode {
+        get {
+            if let raw = UserDefaults.standard.string(forKey: modeKey), let mode = Mode(rawValue: raw) { return mode }
+            return (UserDefaults.standard.object(forKey: enabledKey) as? Bool) == false ? .off : .auto
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: modeKey) }
+    }
+
+    static var isEnabled: Bool { mode != .off }
+
+    /// The model picked for the watch (`ModelEntry.id`); empty follows the default group.
+    static var entryId: String {
+        get { UserDefaults.standard.string(forKey: entryKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: entryKey) }
     }
 
     struct Config: Equatable {
@@ -87,6 +112,15 @@ enum WatchStandalone {
         let providerName: String
         let userAgent: String?
         let apiKey: String
+        /// OpenRouter and Mistral reject `max_completion_tokens` (same rule as OpenAIProvider).
+        let legacyMaxTokens: Bool
+    }
+
+    /// A model the watch can call, for the picker.
+    struct Candidate: Identifiable, Equatable {
+        let id: String
+        let modelName: String
+        let providerName: String
     }
 
     enum Unavailable: Error, Equatable {
@@ -96,7 +130,7 @@ enum WatchStandalone {
 
         var explanation: String {
             switch self {
-            case .disabled: return String(localized: "已关闭。手表离开 iPhone 时不会自己回答。")
+            case .disabled: return String(localized: "已设成只经 iPhone 回答，手表上不留钥匙。")
             case .noDefaultModel: return String(localized: "还没有默认模型分组。")
             case .noSupportedModel:
                 return String(localized: "默认分组里没有 API Key 方式、OpenAI 兼容或 Anthropic 接口的模型。订阅登录（OAuth）的模型只能经 iPhone 使用。")
@@ -109,41 +143,66 @@ enum WatchStandalone {
         // A `.shared` default argument is evaluated outside the main actor (Swift 6 warning).
         let store = store ?? .shared
         guard isEnabled else { return .failure(.disabled) }
+        if !entryId.isEmpty, let entry = store.entry(for: entryId), !entry.isHidden,
+           let instance = store.instance(for: entry.providerInstanceId),
+           let config = config(entry: entry, instance: instance) {
+            return .success(config)
+        }
         guard let groupId = store.defaultPrimaryGroupId, let group = store.group(for: groupId) else {
             return .failure(.noDefaultModel)
         }
-        for entryId in group.memberEntryIds {
-            guard let entry = store.entry(for: entryId), !entry.isHidden,
-                  let instance = store.instance(for: entry.providerInstanceId),
-                  instance.isEnabled, instance.credentialType == .apiKey, !instance.azureMode,
-                  let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id), !key.isEmpty
-            else { continue }
-            let format: String
-            let defaultBase: String
-            let path: String
-            switch instance.providerType {
-            case .openAI:
-                (format, defaultBase, path) = ("openai", "https://api.openai.com", "/chat/completions")
-            case .openRouter:
-                (format, defaultBase, path) = ("openai", "https://openrouter.ai/api", "/chat/completions")
-            case .anthropic:
-                (format, defaultBase, path) = ("anthropic", "https://api.anthropic.com", "/messages")
-            default:
-                continue
+        for memberId in group.memberEntryIds {
+            if let entry = store.entry(for: memberId), !entry.isHidden,
+               let instance = store.instance(for: entry.providerInstanceId),
+               let config = config(entry: entry, instance: instance) {
+                return .success(config)
             }
-            let (base, appendV1) = instance.resolvedBaseURL(default: defaultBase)
-            let endpoint = URLBuilding.join(base, appendV1 ? "/v1" : "", path)
-            return .success(Config(
-                format: format,
-                endpoint: endpoint,
-                model: entry.baseModel.id,
-                modelName: entry.model.displayName,
-                providerName: instance.label,
-                userAgent: instance.customUserAgent?.trimmingCharacters(in: .whitespacesAndNewlines),
-                apiKey: key
-            ))
         }
         return .failure(.noSupportedModel)
+    }
+
+    /// Every model the watch could call directly, provider by provider.
+    @MainActor
+    static func candidates(store: ProviderConfigStore? = nil) -> [Candidate] {
+        let store = store ?? .shared
+        var out: [Candidate] = []
+        for instance in store.instances.sorted(by: { $0.createdAt < $1.createdAt }) {
+            // Whether the watch can call a provider doesn't depend on the model: check once (one Keychain read).
+            let entries = store.visibleEntries(for: instance.id)
+            guard let first = entries.first, config(entry: first, instance: instance) != nil else { continue }
+            out += entries.map { Candidate(id: $0.id, modelName: $0.model.displayName, providerName: instance.label) }
+        }
+        return out
+    }
+
+    @MainActor
+    private static func config(entry: ModelEntry, instance: ProviderInstance) -> Config? {
+        guard instance.isEnabled, instance.credentialType == .apiKey, !instance.azureMode else { return nil }
+        let format: String
+        let defaultBase: String
+        let path: String
+        switch instance.providerType {
+        case .openAI:
+            (format, defaultBase, path) = ("openai", "https://api.openai.com", "/chat/completions")
+        case .openRouter:
+            (format, defaultBase, path) = ("openai", "https://openrouter.ai/api", "/chat/completions")
+        case .anthropic:
+            (format, defaultBase, path) = ("anthropic", "https://api.anthropic.com", "/messages")
+        default:
+            return nil
+        }
+        guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id), !key.isEmpty else { return nil }
+        let (base, appendV1) = instance.resolvedBaseURL(default: defaultBase)
+        return Config(
+            format: format,
+            endpoint: URLBuilding.join(base, appendV1 ? "/v1" : "", path),
+            model: entry.baseModel.id,
+            modelName: entry.model.displayName,
+            providerName: instance.label,
+            userAgent: instance.customUserAgent?.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: key,
+            legacyMaxTokens: instance.providerType == .openRouter || base.lowercased().contains("mistral.ai")
+        )
     }
 }
 
@@ -285,6 +344,19 @@ final class WatchBridge: NSObject, ObservableObject {
         }
     }
 
+    /// Why nothing reaches the watch right now; nil when it can.
+    var watchUnreachableReason: String? {
+        guard let session else { return String(localized: "只有 iPhone 能配对 Apple Watch。") }
+        #if os(iOS)
+        guard session.activationState == .activated else { return String(localized: "和手表的连接还没准备好，稍后再试。") }
+        if !session.isPaired { return String(localized: "这台 iPhone 还没有配对 Apple Watch。") }
+        if !session.isWatchAppInstalled {
+            return String(localized: "手表上还没装 LeoPhoneAgent：在 iPhone 的 Watch App 里找到它并安装。")
+        }
+        #endif
+        return nil
+    }
+
     /// [T-watch-standalone] Hands the watch the model it calls when the phone
     /// is out of reach, or tells it to forget the key. `transferUserInfo` is
     /// queued and delivered even if the watch app isn't running; the payload
@@ -296,7 +368,7 @@ final class WatchBridge: NSObject, ObservableObject {
         guard session.isPaired, session.isWatchAppInstalled else { return }
         #endif
         let store = ProviderConfigStore.shared
-        let inputs = "\(WatchStandalone.isEnabled)|\(store.configRevision)|\(store.authRevision)|\(store.defaultPrimaryGroupId ?? "")"
+        let inputs = "\(WatchStandalone.mode.rawValue)|\(WatchStandalone.entryId)|\(store.configRevision)|\(store.authRevision)|\(store.defaultPrimaryGroupId ?? "")"
         guard force || inputs != lastStandaloneInputs else { return }
         lastStandaloneInputs = inputs
 
@@ -305,7 +377,11 @@ final class WatchBridge: NSObject, ObservableObject {
         switch WatchStandalone.resolve(store: store) {
         case .success(let config):
             let keyDigest = SHA256.hash(data: Data(config.apiKey.utf8)).map { String(format: "%02x", $0) }.joined()
-            signature = [config.format, config.endpoint, config.model, config.modelName, config.userAgent ?? "", keyDigest].joined(separator: "|")
+            let alwaysDirect = WatchStandalone.mode == .always
+            signature = [config.format, config.endpoint, config.model, config.modelName, config.userAgent ?? "", keyDigest,
+                         "\(alwaysDirect)", "\(config.legacyMaxTokens)"].joined(separator: "|")
+            payload["alwaysDirect"] = alwaysDirect
+            payload["legacyMaxTokens"] = config.legacyMaxTokens
             payload["format"] = config.format
             payload["endpoint"] = config.endpoint
             payload["model"] = config.model
@@ -450,6 +526,7 @@ extension WatchBridge: WCSessionDelegate {
 @MainActor
 final class WatchBridge {
     static let shared = WatchBridge()
+    var watchUnreachableReason: String? { String(localized: "只有 iPhone 能配对 Apple Watch。") }
     func activate() {}
     func pushStatus() {}
     func syncStandaloneConfigIfNeeded(force: Bool = false) {}

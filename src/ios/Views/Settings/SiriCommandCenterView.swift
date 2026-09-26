@@ -9,8 +9,6 @@
 import SwiftUI
 
 struct SiriCommandCenterView: View {
-    @AppStorage(WatchStandalone.enabledKey) private var watchStandalone = true
-
     private struct Phrase: Identifiable {
         let say: String
         let does: String
@@ -45,19 +43,6 @@ struct SiriCommandCenterView: View {
                 } icon: {
                     Image(systemName: "mic.badge.plus").foregroundStyle(.purple)
                 }
-            }
-
-            Section {
-                Toggle("手表离开 iPhone 时直接回答", isOn: $watchStandalone)
-                    .onChange(of: watchStandalone) { _, _ in
-                        WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true)
-                    }
-                Text(watchStandaloneSummary)
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("Apple Watch")
-            } footer: {
-                Text("手表是用来说话的：点一下说，答案显示在表上，也能朗读。iPhone 在身边时由这台 iPhone 上的 Leo 完整处理；离开 iPhone（蜂窝版手表）时用上面这个模型直接回答，只有对话，没有工具。开启会把这个模型的 API Key 经加密通道存进手表的钥匙串，关闭即从手表删除。")
             }
 
             Section("指挥 Mac(不打开 app)") {
@@ -113,13 +98,6 @@ struct SiriCommandCenterView: View {
         }
         .navigationTitle("Siri 指挥中心")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var watchStandaloneSummary: String {
-        switch WatchStandalone.resolve() {
-        case .success(let config): return "直连模型：\(config.modelName) · \(config.providerName)"
-        case .failure(let reason): return reason.explanation
-        }
     }
 
     private func phraseRow(_ p: Phrase) -> some View {

@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.45.0",
+            date: "2026-09-26",
+            title: "Apple Watch 能单独选模型,也能一直自己回答",
+            highlights: [
+                "设置里多了「Apple Watch」:手表怎么回答有三种——自动(iPhone 在身边交给 iPhone,不在身边手表自己直连模型)、总是手表直连(不等 iPhone,蜂窝网络下也一样,只有对话、不能用工具)、只经 iPhone。原来 Siri 指挥中心里的手表开关挪到了这一页。",
+                "手表直连用的模型可以单独选:任何用 API Key 接入、OpenAI 兼容或 Anthropic 接口的模型都能选(DeepSeek、Kimi、通义这类兼容接口也算),不再只能用默认分组里的第一个;不选就跟默认分组走,选的模型被删掉也会回到默认分组。",
+                "手表直连 GPT-5 这类新模型不再因为参数名报错;给会思考的模型留的输出上限加大,不容易只想不答。"
+            ]
+        ),
+        LeoRelease(
             version: "1.44.0",
             date: "2026-09-25",
             title: "审批三档;iPad 有了菜单栏、检查器和多窗口;做完的步骤收成一行",
