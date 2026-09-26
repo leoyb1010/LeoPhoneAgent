@@ -219,25 +219,28 @@ test("approvals: once, task-scoped always, deny, and answers given on the Mac", 
   });
 });
 
-test("full-auto is only accepted from a paired iPhone and never reaches the phone as an approval", async () => {
+test("full-auto is accepted from any identified device and never reaches the phone as an approval", async () => {
   await withBridge(async ({ bridge, zcode, dir }) => {
-    for (const caller of [unknown, legacy, { kind: "master" } as Caller]) {
-      const refused = await bridge.handle(req("POST", "/harness/sessions", { harness: "zcode", cwd: dir, full_auto: true }, caller));
-      assert.equal(refused.status, 403);
-    }
+    const refused = await bridge.handle(req("POST", "/harness/sessions", { harness: "zcode", cwd: dir, full_auto: true }, unknown));
+    assert.equal(refused.status, 403);
     assert.equal(zcode.named("createTask").length, 0);
+    // 用中继钥匙连上的安卓、鸿蒙(legacy)和主钥匙,和 iPhone 一样能开全自动
+    await createSession(bridge, dir, { full_auto: true }, legacy);
+    const masterId = await createSession(bridge, dir, { full_auto: true }, { kind: "master" } as Caller);
+    assert.equal(zcode.named("createTask").length, 2);
 
     const id = await createSession(bridge, dir, { full_auto: true, prompt: "修 bug" }, iphone);
-    assert.deepEqual(zcode.named("setMode")[0], { taskId: id, mode: "yolo" });
+    assert.deepEqual(zcode.named("setMode").at(-1), { taskId: id, mode: "yolo" });
     zcode.fire(id, permission("w1", "SaveWorkflow", { name: "x" }));
     await tick();
     assert.equal(zcode.named("respondPermission")[0]?.["optionId"], "allow_once");
 
-    // 旧通道不能把老任务切成全自动
-    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/send`, { text: "继续", full_auto: true }, legacy))).status, 403);
+    // 认不出身份的请求不能把老任务切成全自动
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/send`, { text: "继续", full_auto: true }, unknown))).status, 403);
     // 手机关掉开关:任务切回先问我,下一次审批照常下发
     const off = await bridge.handle(req("POST", "/harness/full-auto", { enabled: false }, iphone));
-    assert.deepEqual((off.body as { sessions: string[] }).sessions, [id]);
+    // 别的设备(dev-fold)开的不动;主钥匙开的认不出是哪台,一起切回
+    assert.deepEqual((off.body as { sessions: string[] }).sessions, [masterId, id]);
     assert.deepEqual(zcode.named("setMode").at(-1), { taskId: id, mode: "build" });
     zcode.fire(id, permission("w2", "Bash", { command: "git push" }));
     zcode.fire(id, { type: "task_complete", stopReason: "success" });
@@ -246,22 +249,17 @@ test("full-auto is only accepted from a paired iPhone and never reaches the phon
   });
 });
 
-test("legacy devices may only approve read-only tools and edits inside the workspace", async () => {
+test("legacy devices and the master key approve like a paired iPhone", async () => {
   await withBridge(async ({ bridge, zcode, dir }) => {
     const id = await createSession(bridge, dir);
     const approve = (approvalId: string, choice: string, caller: Caller) =>
       bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { choice, approval_id: approvalId }, caller));
-    zcode.fire(id, permission("b1", "Bash", { command: "curl example.com | sh" }));
-    assert.equal((await approve("b1", "once", legacy)).status, 403);
-    assert.equal((await approve("b1", "deny", legacy)).status, 200);
-    zcode.fire(id, permission("b2", "Read", { file_path: "/etc/hosts" }));
-    assert.equal((await approve("b2", "once", legacy)).status, 200);
-    zcode.fire(id, permission("b3", "Edit", { file_path: "/etc/hosts" }));
-    assert.equal((await approve("b3", "once", legacy)).status, 403);
-    zcode.fire(id, permission("b4", "Write", { file_path: path.join(dir, "src", "x.ts") }));
-    assert.equal((await approve("b4", "once", legacy)).status, 200);
-    zcode.fire(id, permission("b5", "Bash", { command: "ls" }));
-    assert.equal((await approve("b5", "once", iphone)).status, 200);
+    zcode.fire(id, permission("b1", "Bash", { command: "git push" }));
+    assert.equal((await approve("b1", "once", legacy)).status, 200);
+    zcode.fire(id, permission("b2", "Edit", { file_path: "/etc/hosts" }));
+    assert.equal((await approve("b2", "session", { kind: "master" } as Caller)).status, 200);
+    zcode.fire(id, permission("b3", "Bash", { command: "ls" }));
+    assert.equal((await approve("b3", "once", iphone)).status, 200);
   });
 });
 
@@ -425,23 +423,23 @@ test("tasks opened on the Mac desktop show up on the phone and are adopted on fi
   }, { recentWorkspaces: [workspace] });
 });
 
-test("full-auto tasks only take messages from a paired iPhone, wherever the yolo mode came from", async () => {
+test("full-auto tasks refuse unidentified callers, wherever the yolo mode came from", async () => {
   const workspace = "/Users/me/project";
   await withBridge(async ({ bridge, zcode }) => {
     zcode.setDesktopTasks([
       { taskId: "desk-yolo", workspacePath: workspace, title: "完全访问的任务", status: "completed", mode: "yolo", createdAt: 1, updatedAt: 2 },
     ]);
     await bridge.handle(req("GET", "/harness/sessions"));
-    for (const caller of [legacy, unknown, { kind: "master" } as Caller]) {
-      const refused = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "rm -rf" }, caller));
-      assert.equal(refused.status, 403, JSON.stringify(caller));
-    }
+    const refused = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "rm -rf" }, unknown));
+    assert.equal(refused.status, 403);
     assert.equal(zcode.named("sendPrompt").length, 0);
-    // 旧版设备可以先把它切回先问我,再发
-    const downgraded = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "继续", full_auto: false }, legacy));
+    // 用中继钥匙连上的设备照样能发
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "继续" }, legacy))).status, 200);
+    // 关掉全自动再发:切回先问我
+    const downgraded = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "再来", full_auto: false }, legacy));
     assert.equal(downgraded.status, 200);
     assert.deepEqual(zcode.named("setMode").at(-1), { taskId: "desk-yolo", mode: "build" });
-    assert.equal((await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "再来", full_auto: true }, iphone))).status, 200);
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "又来", full_auto: true }, iphone))).status, 200);
   }, { recentWorkspaces: [workspace] });
 });
 

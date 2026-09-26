@@ -77,9 +77,9 @@ function expandHome(input: string): string {
   return input.replace(/^~(?=$|\/)/, os.homedir());
 }
 
-/** 只有配对过的 iPhone 能开或切全自动;旧通道、主钥匙、中继 0.1(认不出是谁)都不行。 */
+/** 认得出是哪台设备(iPhone、安卓、鸿蒙、主钥匙)就能开或切全自动;中继 0.1 认不出是谁,不行。 */
 function mayUseFullAuto(caller: Caller): boolean {
-  return caller.kind === "iphone";
+  return caller.kind !== "unknown";
 }
 
 /**
@@ -365,7 +365,7 @@ export class LinkBridge {
       if (fullAuto) return error(400, "全自动只支持 LeoPhoneAgent 任务");
       return this.forward("POST", "/harness/sessions", req.body);
     }
-    if (fullAuto && !mayUseFullAuto(req.caller)) return error(403, "全自动只接受已配对 iPhone 发来的任务");
+    if (fullAuto && !mayUseFullAuto(req.caller)) return error(403, "认不出是哪台设备发来的,不能开全自动;把中继升级到 0.2 后再试");
     const cwd = this.resolveCwd(String(body["cwd"] ?? "").trim());
     const prompt = typeof body["prompt"] === "string" ? body["prompt"].trim() : "";
     const { taskService } = this.deps;
@@ -401,7 +401,7 @@ export class LinkBridge {
     if (!text) return error(400, "text is required");
     if (typeof body["full_auto"] === "boolean") {
       const wanted = body["full_auto"];
-      if (wanted && !mayUseFullAuto(caller)) return error(403, "全自动只接受已配对 iPhone 发来的任务");
+      if (wanted && !mayUseFullAuto(caller)) return error(403, "认不出是哪台设备发来的,不能开全自动;把中继升级到 0.2 后再试");
       // "关"只把全自动任务切回先问我;计划、编辑这类别的模式不动(手机每条消息都会带开关状态)。
       const target = wanted ? "yolo" : session.isFullAuto ? "build" : null;
       if (target) {
@@ -412,10 +412,10 @@ export class LinkBridge {
         }
       }
     }
-    // 处在全自动(完全访问)的任务 —— 手机开的、Mac 桌面上自己设的、重启后认回来的 —— 只接受 iPhone 的消息:
-    // 否则旧版设备或主钥匙给它发一句话,就能让 Mac 免审批地跑命令。
+    // 处在全自动(完全访问)的任务 —— 手机开的、Mac 桌面上自己设的、重启后认回来的 —— 不接受认不出身份的消息:
+    // 否则谁拿到中继 0.1 的通道发一句话,就能让 Mac 免审批地跑命令。
     if (session.isFullAuto && !mayUseFullAuto(caller)) {
-      return error(403, "这个任务在 Mac 上是全自动(完全访问)模式,只接受已配对 iPhone 发来的消息;要继续,请在 iPhone 上发,或在 Mac 上把它切回「先问我」");
+      return error(403, "这个任务在 Mac 上是全自动(完全访问)模式,认不出是哪台设备发来的消息不接;在 Mac 上把它切回「先问我」,或把中继升级到 0.2");
     }
     try {
       await session.send(text, caller);
@@ -438,7 +438,7 @@ export class LinkBridge {
     }
     const result = await session.respond(approvalId, choice as ApprovalChoice, caller);
     if (result === "missing") return error(409, "No such pending approval");
-    if (result === "forbidden") return error(403, "这台设备只能拒绝这类操作;请在 iPhone 或 Mac 上批准");
+    if (result === "forbidden") return error(403, "认不出是哪台设备,只能拒绝;请在 Mac 上批准,或把中继升级到 0.2");
     if (result === "undelivered") return error(502, "Approval could not be delivered to the task");
     return { status: 200, body: { ok: true, choice, approval_id: approvalId } };
   }

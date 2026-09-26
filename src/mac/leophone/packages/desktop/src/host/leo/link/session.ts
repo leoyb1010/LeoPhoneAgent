@@ -14,8 +14,9 @@ import { HarnessJournal, type HarnessEvent, type JournalHealth } from "./journal
 
 /**
  * 发请求的是谁。中继 0.2 转发时附上;0.1 不附,记成 unknown。
- * - iphone:配对过的 iPhone 设备钥匙,全权。
- * - legacy:Android / 鸿蒙的旧版设备钥匙;master:宽限期内的主钥匙。两者审批受限、不能开全自动。
+ * - iphone:配对过的设备钥匙;legacy:Android / 鸿蒙的旧版设备钥匙;master:宽限期内的主钥匙。
+ *   三者都是用户自己的设备,一样全权(能批准、能开全自动)。原来 legacy / master 只能批只读工具,
+ *   用中继钥匙连上的安卓、鸿蒙批不了命令;自用工具不为这个多设一道关(用户 2026-09-26 定的)。
  * - unknown:中继 0.1。它验过钥匙,和切换前经 leoagent 的权限一样;但不能开全自动。
  */
 export type CallerKind = "iphone" | "legacy" | "master" | "unknown";
@@ -34,9 +35,6 @@ const PUSHABLE = new Set(["approval.request", "run.completed", "run.failed", "ru
 const RUN_END = new Set(["run.completed", "run.failed", "run.cancelled"]);
 /** 手机端 reconcile 视为结束的状态;订阅流在这些状态下读完就关。 */
 const TERMINAL = new Set(["cancelled", "failed", "completed", "orphaned"]);
-/** 旧通道只能批这些只读工具;联网的 WebFetch / WebSearch 不在内。 */
-const LEGACY_READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "LS", "TodoRead", "TodoWrite"]);
-const LEGACY_EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit"]);
 const STOP_FALLBACK_MS = 5_000;
 const SUBSCRIBER_QUEUE_LIMIT = 512;
 
@@ -187,7 +185,7 @@ export class LinkSession {
   async respond(approvalId: string, choice: ApprovalChoice, caller: Caller): Promise<"ok" | "missing" | "forbidden" | "undelivered"> {
     const pending = this.pendingApprovals.get(approvalId);
     if (!pending) return "missing";
-    if (choice !== "deny" && !this.callerMayAllow(caller, pending)) return "forbidden";
+    if (choice !== "deny" && !this.callerMayAllow(caller)) return "forbidden";
     if (choice === "session") this.grants.add(grantKey(pending.tool, pending.target));
     const delivered = await this.answer(approvalId, pending, choice === "deny" ? "deny" : "allow_once", choice);
     return delivered ? "ok" : "undelivered";
@@ -288,13 +286,9 @@ export class LinkSession {
     return true;
   }
 
-  /** 旧版设备钥匙与主钥匙只能批只读工具和工作区内的改文件;命令、联网、MCP、工作流只能拒绝。 */
-  private callerMayAllow(caller: Caller, pending: Pending): boolean {
-    if (caller.kind === "iphone") return true;
-    if (caller.kind === "unknown" && !(this.deps.strictCallers?.() ?? false)) return true;
-    if (LEGACY_READ_ONLY_TOOLS.has(pending.tool)) return true;
-    if (LEGACY_EDIT_TOOLS.has(pending.tool)) return isInside(this.cwd, pending.target);
-    return false;
+  /** 认得出是哪台设备就能批;只有中继 0.2 下认不出身份的请求只能拒绝。 */
+  private callerMayAllow(caller: Caller): boolean {
+    return caller.kind !== "unknown" || !(this.deps.strictCallers?.() ?? false);
   }
 
   // -- 编号、落盘、扇出 -----------------------------------------------------
@@ -452,13 +446,6 @@ function choiceOf(optionId: string): ApprovalChoice {
 
 function grantKey(tool: string, target: string): string {
   return `${tool}\u0000${target}`;
-}
-
-function isInside(root: string, target: string): boolean {
-  if (!target) return false;
-  const resolved = path.resolve(root, target);
-  const relative = path.relative(path.resolve(root), resolved);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function safeFileName(id: string): string {
