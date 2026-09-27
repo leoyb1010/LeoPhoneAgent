@@ -126,7 +126,7 @@ struct SettingsHomeView: View {
                 SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
                               icon: "hand.raised.fill", color: .red,
                               hint: "Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
-                SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护",
+                SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护 spotlight 聚焦 搜索",
                               icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
             ]),
             SettingsGroup(id: "data", title: "数据与关于", entries: [

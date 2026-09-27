@@ -8,7 +8,10 @@ struct EnvironmentVariablesView: View {
     @State private var searchText = ""
     @State private var showingAddSheet = false
     @State private var editingEntry: EnvVarEntry?
-    @State private var revealedKeys: Set<String> = []
+    /// [T-envvar-secret-handling] Values of the rows the user revealed (entry
+    /// id → value), read from the Keychain on tap. Rows no longer read the
+    /// Keychain on every render just to draw the mask.
+    @State private var revealedValues: [String: String] = [:]
     @State private var copiedId: String?
     @State private var prefillKey = ""
     @State private var prefillValue = ""
@@ -17,12 +20,17 @@ struct EnvironmentVariablesView: View {
     /// Swipe-delete waiting for confirmation: the value is a secret that
     /// can't be recovered once the Keychain item is gone.
     @State private var pendingDelete: EnvVarEntry?
+    /// A delete also reaches the user's other devices while iCloud sync is on
+    /// (EnvVarItem op=delete); the confirmations say so.
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
 
     private struct OverwriteRequest: Identifiable {
         let id = UUID()
         let entryId: String
         let key: String
         let newValue: String
+        /// The variable exists but has no value yet.
+        let currentIsEmpty: Bool
     }
 
     private var filteredEntries: [EnvVarEntry] {
@@ -74,7 +82,8 @@ struct EnvironmentVariablesView: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
-            Text(String(localized: "Delete \(pendingDelete?.key ?? "")? Its value is removed from this device and can't be recovered."))
+            // 值存在可同步的钥匙串里:不管 App 的 iCloud 同步开没开,删掉都会跟着 iCloud 钥匙串同步到别的设备。
+            Text(String(localized: "Delete \(pendingDelete?.key ?? "")? This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
         }
         .searchable(text: $searchText, prompt: "Filter by name")
         .navigationTitle("Environment Variables")
@@ -89,7 +98,8 @@ struct EnvironmentVariablesView: View {
             }
         }
         .sheet(isPresented: $showingAddSheet) {
-            EnvVarFormSheet(mode: .add, initialKey: prefillKey, initialValue: prefillValue, initialNote: prefillNote) { key, value, note in
+            EnvVarFormSheet(mode: .add, initialKey: prefillKey, initialValue: prefillValue, initialNote: prefillNote,
+                            syncOn: iCloudSyncEnabled) { key, value, note in
                 store.add(key: key, value: value, note: note)
             }
             .onDisappear {
@@ -104,14 +114,15 @@ struct EnvironmentVariablesView: View {
                 deepLink.pendingEnvVarCreate = nil
                 if let existing = store.entries.first(where: { $0.key == normalizedKey }) {
                     let currentValue = store.value(forKey: existing.key) ?? ""
-                    if !currentValue.isEmpty && currentValue != pending.value {
+                    // [T-envvar-deeplink-confirm] A link never writes a value
+                    // without asking — an existing empty variable included.
+                    if currentValue != pending.value {
                         overwriteConfirm = OverwriteRequest(
                             entryId: existing.id,
                             key: existing.key,
-                            newValue: pending.value
+                            newValue: pending.value,
+                            currentIsEmpty: currentValue.isEmpty
                         )
-                    } else if currentValue.isEmpty {
-                        store.update(id: existing.id, key: existing.key, value: pending.value)
                     }
                 } else {
                     prefillKey = pending.key
@@ -122,19 +133,26 @@ struct EnvironmentVariablesView: View {
             }
         }
         .alert(
-            String(localized: "Replace existing value?"),
+            overwriteConfirm?.currentIsEmpty == true
+                ? String(localized: "Set value from link?")
+                : String(localized: "Replace existing value?"),
             isPresented: Binding(
                 get: { overwriteConfirm != nil },
                 set: { if !$0 { overwriteConfirm = nil } }
             ),
             presenting: overwriteConfirm
         ) { request in
-            Button(String(localized: "Replace"), role: .destructive) {
+            Button(request.currentIsEmpty ? String(localized: "Save") : String(localized: "Replace"),
+                   role: .destructive) {
                 store.update(id: request.entryId, key: request.key, value: request.newValue)
+                revealedValues[request.entryId] = nil
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: { request in
-            Text(String(localized: "\"\(request.key)\" already has a value. Replace it with \"\(request.newValue)\"?"))
+            // The new value is a secret: never shown in clear here.
+            Text(request.currentIsEmpty
+                 ? String(localized: "\"\(request.key)\" has no value yet. Set it to the value from the link?")
+                 : String(localized: "\"\(request.key)\" already has a value. Replace it with the value from the link?"))
         }
         .sheet(item: $editingEntry) { entry in
             EnvVarFormSheet(
@@ -142,11 +160,14 @@ struct EnvironmentVariablesView: View {
                 initialKey: entry.key,
                 initialValue: store.value(forKey: entry.key) ?? "",
                 initialNote: entry.note,
+                syncOn: iCloudSyncEnabled,
                 onSave: { key, value, note in
                     store.update(id: entry.id, key: key, value: value, note: note)
+                    revealedValues[entry.id] = nil
                 },
                 onDelete: {
                     store.delete(id: entry.id)
+                    revealedValues[entry.id] = nil
                 }
             )
         }
@@ -154,15 +175,16 @@ struct EnvironmentVariablesView: View {
 
     @ViewBuilder
     private func envVarRow(_ entry: EnvVarEntry) -> some View {
-        let isRevealed = revealedKeys.contains(entry.id)
-        let currentValue = store.value(forKey: entry.key) ?? ""
+        let revealedValue = revealedValues[entry.id]
+        let isRevealed = revealedValue != nil
 
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.key)
                     .font(.system(.body, design: .monospaced))
                     .fontWeight(.medium)
-                Text(isRevealed ? currentValue : String(repeating: "\u{2022}", count: min(currentValue.count, 20)))
+                // Fixed-width mask: no Keychain read per render, and it doesn't hint at the length.
+                Text(verbatim: revealedValue ?? String(repeating: "\u{2022}", count: 8))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                 if !entry.note.isEmpty {
@@ -178,9 +200,9 @@ struct EnvironmentVariablesView: View {
             HStack(spacing: 10) {
                 Button {
                     if isRevealed {
-                        revealedKeys.remove(entry.id)
+                        revealedValues[entry.id] = nil
                     } else {
-                        revealedKeys.insert(entry.id)
+                        revealedValues[entry.id] = store.value(forKey: entry.key) ?? ""
                     }
                 } label: {
                     Image(systemName: isRevealed ? "eye.slash" : "eye")
@@ -190,7 +212,9 @@ struct EnvironmentVariablesView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    UIPasteboard.general.string = "\(entry.key)=\(currentValue)"
+                    // Local-only and expiring: a secret must not ride Universal
+                    // Clipboard to other devices or stay on the pasteboard.
+                    SecretPasteboard.copy("\(entry.key)=\(store.value(forKey: entry.key) ?? "")")
                     withAnimation { copiedId = entry.id }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         withAnimation { if copiedId == entry.id { copiedId = nil } }
@@ -224,6 +248,8 @@ private struct EnvVarFormSheet: View {
     var initialKey: String = ""
     var initialValue: String = ""
     var initialNote: String = ""
+    /// iCloud sync on: a delete also removes it on the user's other devices.
+    var syncOn: Bool = false
     let onSave: (String, String, String) -> Void
     var onDelete: (() -> Void)? = nil
 
@@ -232,6 +258,8 @@ private struct EnvVarFormSheet: View {
     @State private var value = ""
     @State private var note = ""
     @State private var showingDeleteConfirm = false
+    /// [T-envvar-secret-handling] The value is masked unless the user asks to see it.
+    @State private var showValue = false
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable { case key, value, note }
@@ -264,12 +292,29 @@ private struct EnvVarFormSheet: View {
                 }
 
                 Section("Value") {
-                    TextField("Value", text: $value)
+                    HStack {
+                        Group {
+                            if showValue {
+                                TextField("Value", text: $value)
+                            } else {
+                                SecureField("Value", text: $value)
+                            }
+                        }
                         .font(.system(.body, design: .monospaced))
                         .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                         .focused($focusedField, equals: .value)
                         .submitLabel(.next)
                         .onSubmit { focusedField = .note }
+                        Button {
+                            showValue.toggle()
+                        } label: {
+                            Image(systemName: showValue ? "eye.slash" : "eye")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(showValue ? String(localized: "Hide value") : String(localized: "Show value"))
+                    }
                 }
 
                 Section("Note") {
@@ -331,6 +376,8 @@ private struct EnvVarFormSheet: View {
                 dismiss()
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "This can't be undone. With iCloud Keychain on, the value is also removed on your other devices."))
         }
         .onAppear {
             key = initialKey
@@ -359,5 +406,14 @@ private struct EnvVarFormSheet: View {
                 focusedField = .key
             }
         }
+    }
+}
+
+/// [T-delete-sync-warning] Env var, skill and MCP deletes are pushed to the
+/// user's other devices while iCloud sync is on (op=delete records), so their
+/// confirmations append a line saying so. Callers pass whether that applies.
+enum SyncedDeleteMessage {
+    static func text(_ base: String, syncOn: Bool) -> String {
+        syncOn ? base + "\n" + String(localized: "iCloud sync is on, so it's also deleted on your other devices.") : base
     }
 }

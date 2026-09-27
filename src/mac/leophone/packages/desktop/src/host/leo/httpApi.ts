@@ -12,6 +12,7 @@ import {
   listOAuthFlows,
   listOAuthProviders,
   logoutOAuth,
+  OAuthRequestError,
   startOAuthLogin,
 } from "./oauthRuntime.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
@@ -21,6 +22,11 @@ type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string,
 
 /** 订阅代理的长上下文也远到不了这个量;超了直接 413,不给本机进程拿大包拖垮 Host 的机会。 */
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
+/**
+ * 订阅代理的请求体会带着整段对话里的截图(base64),8MB 不够:以前超了回 413,Agent 当成普通请求错误,
+ * 这个会话从此每一步都失败。放宽到 48MB;再大就按「上下文超窗」回,Agent 会先压缩再重试。
+ */
+const MAX_CHAT_BODY_BYTES = 48 * 1024 * 1024;
 
 class HttpError extends Error {
   constructor(
@@ -36,6 +42,15 @@ function secretMatcher(secret: string): (candidate: string | undefined) => boole
   const expected = createHash("sha256").update(secret).digest();
   return (candidate) =>
     secret.length > 0 && timingSafeEqual(createHash("sha256").update(candidate ?? "").digest(), expected);
+}
+
+/** 路径里的 id:`%` 转义写坏了回 400,不要变成 500 和一条告警。 */
+function decodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new HttpError(400, "bad path parameter");
+  }
 }
 
 /** 按 Buffer 收齐再一次性解码:逐块 `raw += chunk` 会把跨块的多字节中文切成 U+FFFD。 */
@@ -154,7 +169,7 @@ export function startLeoHttpApi(deps: {
       const login = /^\/providers\/([^/]+)\/login$/.exec(sub);
       if (login && req.method === "POST") {
         const body = await readJsonBody(req);
-        const flowId = await startOAuthLogin(decodeURIComponent(login[1]!), deps.onSubscriptionChanged, {
+        const flowId = await startOAuthLogin(decodeParam(login[1]!), deps.onSubscriptionChanged, {
           importFromOpenCodeCli: body["importFromOpenCodeCli"] === true,
         });
         json(res, 202, { flowId });
@@ -162,7 +177,7 @@ export function startLeoHttpApi(deps: {
       }
       const logout = /^\/providers\/([^/]+)\/logout$/.exec(sub);
       if (logout && req.method === "POST") {
-        await logoutOAuth(decodeURIComponent(logout[1]!));
+        await logoutOAuth(decodeParam(logout[1]!));
         deps.onSubscriptionChanged();
         json(res, 200, { ok: true });
         return;
@@ -238,7 +253,17 @@ export function startLeoHttpApi(deps: {
       return;
     }
     if (url.pathname === "/v1/chat/completions" && req.method === "POST") {
-      await handleChatCompletions(req, res, await readJsonBody(req));
+      let body: Record<string, unknown>;
+      try {
+        body = await readJsonBody(req, MAX_CHAT_BODY_BYTES);
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.status !== 413) throw error;
+        json(res, 400, {
+          error: { message: "请求太大(对话里的图片或文件太多)", type: "invalid_request_error", code: "context_length_exceeded" },
+        });
+        return;
+      }
+      await handleChatCompletions(req, res, body);
       return;
     }
     if (url.pathname === "/api/leo/link/status" && req.method === "GET") {
@@ -270,7 +295,7 @@ export function startLeoHttpApi(deps: {
 
   const server = createServer((req, res) => {
     handle(req, res).catch((error: unknown) => {
-      const status = error instanceof HttpError ? error.status : 500;
+      const status = error instanceof HttpError ? error.status : error instanceof OAuthRequestError ? 400 : 500;
       if (status === 500) deps.logger.warn("[leo] local api request failed", { error: String(error) });
       json(res, status, { error: error instanceof Error ? error.message : String(error) });
     });

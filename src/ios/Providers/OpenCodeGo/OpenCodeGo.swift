@@ -14,27 +14,16 @@ enum OpenCodeGo {
     static let keyPageURL = URL(string: "https://opencode.ai/auth")!
     static let providerName = "OpenCode Go"
 
-    enum WireProtocol: Equatable {
-        case chatCompletions
-        case responses
-        case anthropicMessages
-    }
+    typealias WireProtocol = OpenCodeGoWireProtocol
 
+    /// The model's own `provider.npm` in the models.dev `opencode-go` catalog
+    /// when it names one, else the docs' endpoint table (every MiniMax and Qwen
+    /// model on `/v1/messages`). See `OpenCodeGoWireProtocol`.
     static func wireProtocol(for modelId: String) -> WireProtocol {
-        var id = modelId.lowercased()
-        if let slash = id.lastIndex(of: "/") { id = String(id[id.index(after: slash)...]) }
-        if id.hasPrefix("gpt-") || id.hasPrefix("grok-") || id.hasPrefix("muse-spark-") {
-            return .responses
-        }
-        // Only these two are served over Anthropic Messages; minimax-m2.7 and
-        // the other qwen models are chat/completions.
-        if anthropicMessagesModels.contains(id) {
-            return .anthropicMessages
-        }
-        return .chatCompletions
+        let catalogNpm = ModelsDevAPI.modelProviderNpm(
+            providerKey: "opencode-go", modelId: WireProtocol.bareId(modelId))
+        return WireProtocol.resolve(modelId: modelId, catalogNpm: catalogNpm)
     }
-
-    private static let anthropicMessagesModels: Set<String> = ["minimax-m3", "qwen3.8-flash"]
 
     static let fallbackModels: [LLMModel] = [
         LLMModel(id: "kimi-k3", displayName: "Kimi K3", provider: providerName),

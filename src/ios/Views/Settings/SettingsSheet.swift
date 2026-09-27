@@ -10,6 +10,14 @@ import SwiftUI
 
 // MARK: - Settings Sheet
 
+extension EnvironmentValues {
+    /// [T-settings-split-discard-guard] True only for the iPad split-view detail
+    /// ROOT (the page selected in the sidebar). That page is not pushed: it has
+    /// no Back button to guard, and `dismiss()` there closes the whole Settings
+    /// sheet. Editors that can be either pushed (iPhone) or this root read it.
+    @Entry var isSettingsSplitDetailRoot: Bool = false
+}
+
 enum SettingsDestination: Hashable {
     case providers
     case providerDetail(instanceId: String)
@@ -88,6 +96,7 @@ struct SettingsSheet: View {
                 Group {
                     if let entry = SettingsHomeView.groups.flatMap(\.entries).first(where: { $0.id == splitSelection }) {
                         entry.destination()
+                            .environment(\.isSettingsSplitDetailRoot, true)
                     } else {
                         ContentUnavailableView("选择一项设置", systemImage: "gearshape.2",
                                                description: Text("左边按分组列出了全部设置，也可以直接搜索。"))

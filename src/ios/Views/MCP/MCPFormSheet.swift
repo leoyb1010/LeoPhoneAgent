@@ -3,8 +3,8 @@
 //  MinisApp
 //
 //  Add / edit form for a single MCP server. Transport picker switches between
-//  HTTP (URL + custom headers) and STDIO (command + args + env). SSE is treated
-//  as an HTTP-family URL transport (the CLI's HTTP transport parses SSE replies).
+//  HTTP (URL + custom headers) and STDIO (command + args + env). Servers that
+//  reply with SSE use HTTP too: the CLI's HTTP transport parses SSE replies.
 //
 
 import SwiftUI
@@ -23,9 +23,10 @@ struct MCPFormSheet: View {
     /// is non-nil.
     var prefill: MCPServerConfig? = nil
 
+    /// [T-mcp-form-sse] No separate SSE option: the store has no transport
+    /// field, so an "SSE" server was saved as HTTP and reopened as HTTP anyway.
     private enum Transport: String, CaseIterable, Identifiable {
         case http = "HTTP"
-        case sse = "SSE"
         case stdio = "STDIO"
         var id: String { rawValue }
     }
@@ -43,6 +44,13 @@ struct MCPFormSheet: View {
         case none = "None"
         case oauthStatic = "OAuth (Client ID + Secret)"
         var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .none: return String(localized: "None")
+            case .oauthStatic: return String(localized: "OAuth (Client ID + Secret)")
+            }
+        }
     }
     @State private var authMode: AuthMode = .none
     @State private var oauthClientId: String = ""
@@ -68,6 +76,14 @@ struct MCPFormSheet: View {
     /// are globally-unique UUIDs, so this single field unambiguously targets one
     /// row across both the headers and env editors.
     @State private var pendingDeleteId: KeyValue.ID?
+
+    /// [T-mcp-form-duplicate-name] Save / Authorize waiting for "replace the
+    /// existing server with this name?" — `MCPStore.add` overwrites by name.
+    private enum ReplaceAction { case save, authorize }
+    @State private var pendingReplace: ReplaceAction?
+    /// Name this form already saved itself (Authorize saves first), so the
+    /// Save that follows isn't mistaken for replacing another server.
+    @State private var savedByThisForm: String?
 
     private struct KeyValue: Identifiable, Hashable {
         let id = UUID()
@@ -100,8 +116,31 @@ struct MCPFormSheet: View {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard unresolvedPlaceholder == nil else { return false }
         switch transport {
-        case .http, .sse: return !url.trimmingCharacters(in: .whitespaces).isEmpty
+        case .http: return !url.trimmingCharacters(in: .whitespaces).isEmpty
         case .stdio: return !command.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+    }
+
+    /// Adding (not editing) under a name another server already uses.
+    private var nameTakenByAnotherServer: Bool {
+        guard !isEditing else { return false }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return trimmed != savedByThisForm && store.servers.contains { $0.id == trimmed }
+    }
+
+    private func perform(_ action: ReplaceAction) {
+        switch action {
+        case .save: save()
+        case .authorize: Task { await runAuthorize() }
+        }
+    }
+
+    /// Runs `action` right away, or asks first when it would replace another server.
+    private func performCheckingName(_ action: ReplaceAction) {
+        if nameTakenByAnotherServer {
+            pendingReplace = action
+        } else {
+            perform(action)
         }
     }
 
@@ -161,7 +200,7 @@ struct MCPFormSheet: View {
             }
             // Full-width primary Save pinned to the bottom, above the keyboard.
             .safeAreaInset(edge: .bottom) {
-                Button(action: save) {
+                Button { performCheckingName(.save) } label: {
                     Text("Save")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -189,6 +228,15 @@ struct MCPFormSheet: View {
             .animation(.spring(response: 0.3), value: copiedToast)
             .sheet(item: $shareURL) { url in
                 MCPConfigShareSheet(url: url)
+            }
+            .alert(String(localized: "Replace existing server?"),
+                   isPresented: Binding(get: { pendingReplace != nil },
+                                        set: { if !$0 { pendingReplace = nil } }),
+                   presenting: pendingReplace) { action in
+                Button(String(localized: "Replace"), role: .destructive) { perform(action) }
+                Button(String(localized: "Cancel"), role: .cancel) {}
+            } message: { _ in
+                Text(String(localized: "A server named \"\(name.trimmingCharacters(in: .whitespaces))\" already exists. Saving replaces its settings."))
             }
             .onAppear(perform: populate)
         }
@@ -223,6 +271,7 @@ struct MCPFormSheet: View {
             Section(String(localized: "Custom Headers")) {
                 keyValueEditor($headers, keyPlaceholder: String(localized: "Header"),
                                valuePlaceholder: String(localized: "Value"),
+                               deleteTitle: String(localized: "Delete this header?"),
                                showEnvPicker: true)
             }
             oauthSection
@@ -238,7 +287,7 @@ struct MCPFormSheet: View {
         Section {
             Picker(String(localized: "Authorization"), selection: $authMode) {
                 ForEach(AuthMode.allCases) { m in
-                    Text(m.rawValue).tag(m)
+                    Text(m.label).tag(m)
                 }
             }
             if authMode == .oauthStatic {
@@ -286,7 +335,7 @@ struct MCPFormSheet: View {
                         .font(.subheadline)
                     }
                     Button {
-                        Task { await runAuthorize() }
+                        performCheckingName(.authorize)
                     } label: {
                         if isAuthorizing {
                             ProgressView()
@@ -298,6 +347,11 @@ struct MCPFormSheet: View {
                     .buttonStyle(.glassProminent)
                     .controlSize(.small)
                 }
+                // [T-mcp-form-authorize-saves] The flow needs the persisted
+                // server (resource URI, Keychain secret), so it saves first — say so.
+                Text("Authorizing saves this server with the settings above first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if let oauthError {
                     Text(oauthError)
                         .font(.caption)
@@ -321,11 +375,14 @@ struct MCPFormSheet: View {
         defer { isAuthorizing = false }
         let config = buildConfig()
         store.add(config)
+        savedByThisForm = config.id
         MCPOAuthController.setClientSecret(oauthClientSecret, server: config.id)
         guard let oauth = config.oauth else { return }
         do {
             try await MCPOAuthController.shared.authorize(server: config.id, oauth: oauth)
             isAuthorized = true
+        } catch MCPOAuthController.OAuthError.cancelled {
+            // 用户自己关掉了授权页:不是错误,不出红字。
         } catch {
             oauthError = error.localizedDescription
         }
@@ -344,6 +401,7 @@ struct MCPFormSheet: View {
             Section {
                 keyValueEditor($env, keyPlaceholder: String(localized: "Name"),
                                valuePlaceholder: String(localized: "Value"),
+                               deleteTitle: String(localized: "Delete this environment variable?"),
                                showEnvPicker: true)
             } header: {
                 Text("Environment Variables")
@@ -367,7 +425,8 @@ struct MCPFormSheet: View {
     }
 
     private func keyValueEditor(_ pairs: Binding<[KeyValue]>, keyPlaceholder: String,
-                                valuePlaceholder: String, showEnvPicker: Bool = false) -> some View {
+                                valuePlaceholder: String, deleteTitle: String,
+                                showEnvPicker: Bool = false) -> some View {
         Group {
             ForEach(pairs) { $pair in
                 HStack {
@@ -404,7 +463,7 @@ struct MCPFormSheet: View {
             }
         }
         .confirmationDialog(
-            Text("Delete this environment variable?"),
+            Text(deleteTitle),
             isPresented: deleteConfirmBinding(for: pairs),
             titleVisibility: .visible
         ) {
@@ -533,7 +592,7 @@ struct MCPFormSheet: View {
         config.note = trimmedNote.isEmpty ? nil : trimmedNote
 
         switch transport {
-        case .http, .sse:
+        case .http:
             config.url = url.trimmingCharacters(in: .whitespaces)
             let hdrs = dict(from: headers)
             config.headers = hdrs.isEmpty ? nil : hdrs
@@ -587,9 +646,10 @@ struct MCPFormSheet: View {
     // MARK: - Export
 
     /// Copy the current form's config as standard mcpServers JSON to the clipboard.
+    /// Local-only and expiring: headers / env often carry API keys.
     private func copyJSON() {
         guard let json = store.exportServerJSON(buildConfig()) else { return }
-        UIPasteboard.general.string = json
+        SecretPasteboard.copy(json)
         copiedToast = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copiedToast = false }
     }

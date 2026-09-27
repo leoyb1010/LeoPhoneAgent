@@ -49,7 +49,7 @@ enum OAuthRefreshErrorClassifier {
 
     /// Build the machine-readable message a token-endpoint throw site should use:
     /// `oauth_http_status=<code> <sanitized body>`. The body is reduced to the
-    /// OAuth `error` / `error_description` fields (or a short plain-text body);
+    /// OAuth `error` / `code` / `error_description` fields (or a short plain-text body);
     /// anything else (HTML challenge pages, echoed request data) is dropped so
     /// it never reaches logs or the UI.
     static func makeErrorMessage(status: Int, body: String) -> String {
@@ -61,7 +61,10 @@ enum OAuthRefreshErrorClassifier {
         if let data = trimmed.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             var kept: [String: String] = [:]
-            if let code = obj["error"] as? String { kept["error"] = String(code.prefix(64)) }
+            // OpenAI nests the code (`{"error":{"code":"refresh_token_reused",…}}`);
+            // flatten it to the RFC 6749 shape so it survives sanitizing.
+            if let code = (obj["error"] as? String) ?? nestedErrorCode(obj) { kept["error"] = String(code.prefix(64)) }
+            if let code = obj["code"] as? String { kept["code"] = String(code.prefix(64)) }
             if let desc = obj["error_description"] as? String { kept["error_description"] = String(desc.prefix(160)) }
             guard !kept.isEmpty,
                   let out = try? JSONSerialization.data(withJSONObject: kept, options: [.sortedKeys]),
@@ -95,10 +98,17 @@ enum OAuthRefreshErrorClassifier {
         return Int(digits)
     }
 
-    /// Parse the OAuth `error` field from a JSON body, if present and well-formed.
-    /// Only reads the top-level `error` string (RFC 6749 token-error shape:
-    /// `{"error":"invalid_grant", ...}`). Returns lowercased for comparison.
+    /// Parse the OAuth error code from a JSON body, if present and well-formed.
+    /// Returns lowercased for comparison.
     static func parseErrorCode(fromBody message: String) -> String? {
+        parseErrorCodes(fromBody: message).first
+    }
+
+    /// Every error code in a JSON body, most specific shape first: the RFC 6749
+    /// top-level `error` string (`{"error":"invalid_grant"}`), OpenAI's nested
+    /// `{"error":{"code":"refresh_token_reused","type":…}}`, and a top-level
+    /// `code`. Lowercased; empty when the body is not JSON.
+    static func parseErrorCodes(fromBody message: String) -> [String] {
         // The body follows the status marker; if there's no marker, treat the
         // whole message as the candidate body.
         let body: Substring
@@ -111,11 +121,24 @@ enum OAuthRefreshErrorClassifier {
         }
         guard let jsonStart = body.firstIndex(of: "{"),
               let data = String(body[jsonStart...]).data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let code = obj["error"] as? String
-        else { return nil }
-        return code.lowercased()
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        let codes = [obj["error"] as? String, nestedErrorCode(obj), obj["code"] as? String]
+        return codes.compactMap { $0?.lowercased() }
     }
+
+    /// `error.code` from OpenAI's nested error object, if present.
+    private static func nestedErrorCode(_ obj: [String: Any]) -> String? {
+        (obj["error"] as? [String: Any])?["code"] as? String
+    }
+
+    /// ChatGPT sign-in (auth.openai.com) rotates refresh tokens and reports a
+    /// dead one as HTTP 401 with a nested body, e.g.
+    /// `{"error":{"code":"refresh_token_reused","type":"invalid_request_error"}}`.
+    static let codexFatalErrorCodes: Set<String> = [
+        "invalid_grant", "invalid_token", "invalid_request", "unauthorized_client",
+        "refresh_token_reused", "refresh_token_expired", "refresh_token_invalidated",
+    ]
 
     /// Structured verdict: is this refresh failure a genuine token-invalid error
     /// that warrants clearing credentials?
@@ -129,7 +152,7 @@ enum OAuthRefreshErrorClassifier {
 
         // 1. Parsed JSON error code is the most reliable signal — an exact match
         //    against the provider's fatal set (no substring ambiguity).
-        if let code = parseErrorCode(fromBody: message), fatalErrorCodes.contains(code) {
+        if parseErrorCodes(fromBody: message).contains(where: fatalErrorCodes.contains) {
             return true
         }
 

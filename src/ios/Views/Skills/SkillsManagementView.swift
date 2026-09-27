@@ -36,10 +36,14 @@ struct SkillsManagementView: View {
     /// A swipe-delete waiting for confirmation: skills are user content and
     /// the swipe used to delete instantly with no undo.
     @State private var pendingDeleteSkill: (id: String, name: String)?
+    /// The .skillmd file being shared from the row context menu.
+    @State private var shareSkillFile: URL?
     /// Subscribed mirror of `SyncV2Bootstrap.isEnabled` so the
     /// Force-iCloud-Sync menu entry shows / hides reactively when
     /// the user flips the toggle in Settings.
-    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    /// [T-sync-default-mirror] Default must match `SyncV2Bootstrap.isEnabled`:
+    /// before the key is first written it can be inherited from v1 = on.
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
     @AppStorage("skillsList.sortKey") private var sortKeyRaw: String = SkillSortKey.name.rawValue
     @AppStorage("skillsList.sortAscending") private var sortAscending: Bool = true
 
@@ -103,11 +107,15 @@ struct SkillsManagementView: View {
                 // [T-skill-share] Absorbed from Cindy's "teach once, share":
                 // AirDrop a skill to another device (or another person) as a
                 // .skillmd file; the receiver taps it and installs.
+                // [T-skill-share-lazy] The .skillmd file is written only when
+                // the user actually taps Share — building the menu used to
+                // write one to tmp on every render of the list. Deferred a tick
+                // so the context menu finishes closing before the sheet shows.
                 .contextMenu {
-                    if let url = Self.exportURL(for: skill) {
-                        ShareLink(item: url) {
-                            Label("Share skill", systemImage: "square.and.arrow.up")
-                        }
+                    Button {
+                        DispatchQueue.main.async { shareSkillFile = Self.exportURL(for: skill) }
+                    } label: {
+                        Label("Share skill", systemImage: "square.and.arrow.up")
                     }
                 }
             }
@@ -127,7 +135,11 @@ struct SkillsManagementView: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteSkill = nil }
         } message: {
-            Text(String(localized: "Delete \"\(pendingDeleteSkill?.name ?? "")\"? This action cannot be undone."))
+            Text(SyncedDeleteMessage.text(String(localized: "Delete \"\(pendingDeleteSkill?.name ?? "")\"? This action cannot be undone."),
+                                          syncOn: Self.deleteSyncsToOtherDevices(syncOn: iCloudSyncEnabled)))
+        }
+        .sheet(item: $shareSkillFile) { url in
+            ActivityView(activityItems: [url]) { shareSkillFile = nil }
         }
         .navigationTitle("Skills")
         // 与其他设置子页一致用小标题:大标题 + 常驻搜索栏在设置表单里会叠到列表第一行上(真机 1.41.0 截图)。
@@ -218,6 +230,13 @@ struct SkillsManagementView: View {
         .animation(.spring(response: 0.3), value: forceSyncAllToast)
     }
 
+    /// [T-delete-sync-warning] A skill delete reaches the user's other devices
+    /// (markDirty op=delete) only while iCloud sync AND the Skills upload
+    /// category are on.
+    static func deleteSyncsToOtherDevices(syncOn: Bool) -> Bool {
+        syncOn && UploadPolicy.isEnabled(.skills)
+    }
+
     private func forceSyncAllSkills() {
         let count = store.skills.count
         for s in store.skills { store.forceMarkDirty(s.id) }
@@ -264,6 +283,15 @@ private struct ImportSkillSheet: View {
         case url = "URL"
         case paste = "Paste"
         case file = "File"
+
+        /// Picker label in the app language (rawValue is an identifier).
+        var label: String {
+            switch self {
+            case .url: return String(localized: "URL")
+            case .paste: return String(localized: "Paste")
+            case .file: return String(localized: "File")
+            }
+        }
     }
 
     var body: some View {
@@ -271,7 +299,7 @@ private struct ImportSkillSheet: View {
             Form {
                 Picker("Import Method", selection: $importMode) {
                     ForEach(ImportMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(mode.label).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -465,7 +493,10 @@ private struct SkillDetailView: View {
     /// Sync button shows / hides reactively when the user flips the
     /// iCloud Sync toggle in Settings. Same gating predicate used by
     /// the parent SkillsManagementView plus-menu (commit 47fd61ef).
-    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
+    /// [T-skill-update-confirm] "Update from URL" replaces the skill's files
+    /// with the remote copy; ask first so local edits aren't lost silently.
+    @State private var showUpdateFromURLConfirm = false
 
     private var skill: Skill? {
         store.skills.first(where: { $0.id == skillId })
@@ -572,7 +603,7 @@ private struct SkillDetailView: View {
                 // ── Update actions ────────────────────────────────────
                 Section {
                     if case .url = skill.importSource {
-                        Button { updateFromURL() } label: {
+                        Button { showUpdateFromURLConfirm = true } label: {
                             HStack {
                                 Label("Update from URL", systemImage: "arrow.triangle.2.circlepath")
                                 Spacer()
@@ -730,7 +761,15 @@ private struct SkillDetailView: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
-            Text(String(localized: "Are you sure you want to delete this skill? This action cannot be undone."))
+            Text(SyncedDeleteMessage.text(
+                String(localized: "Are you sure you want to delete this skill? This action cannot be undone."),
+                syncOn: SkillsManagementView.deleteSyncsToOtherDevices(syncOn: iCloudSyncEnabled)))
+        }
+        .alert(String(localized: "Update from URL?"), isPresented: $showUpdateFromURLConfirm) {
+            Button(String(localized: "Update"), role: .destructive) { updateFromURL() }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "The skill's files are replaced with the latest version from its URL. Changes you made to them on this device will be lost."))
         }
     }
 
@@ -837,7 +876,7 @@ private struct SkillDetailView: View {
         do {
             try fm.createDirectory(at: exportDir, withIntermediateDirectories: true)
         } catch {
-            updateError = "Failed to create zip: \(error.localizedDescription)"
+            updateError = String(localized: "Failed to create zip: \(error.localizedDescription)")
             return
         }
         do {
@@ -865,7 +904,7 @@ private struct SkillDetailView: View {
             }
             shareZipURL = zipURL
         } catch {
-            updateError = "Failed to create zip: \(error.localizedDescription)"
+            updateError = String(localized: "Failed to create zip: \(error.localizedDescription)")
         }
     }
 
@@ -885,6 +924,11 @@ private struct SkillFileDetailView: View {
     @State private var content: String = ""
     @State private var hasChanges = false
     @State private var saveError: String?
+    /// [T-skill-file-editor-dirty] 载入文件时给 content 赋值也会触发 onChange;
+    /// 这一次不算用户改动,否则一打开就显示"有未保存的改动"。
+    @State private var suppressNextChange = false
+    @State private var confirmDiscard = false
+    @Environment(\.dismiss) private var dismiss
 
     private var fileName: String {
         (relativePath as NSString).lastPathComponent
@@ -894,7 +938,13 @@ private struct SkillFileDetailView: View {
         TextEditor(text: $content)
             .font(.system(.caption, design: .monospaced))
             .padding(.horizontal, 8)
-            .onChange(of: content) { _ in hasChanges = true }
+            .onChange(of: content) { _ in
+                if suppressNextChange {
+                    suppressNextChange = false
+                } else {
+                    hasChanges = true
+                }
+            }
             .overlay(alignment: .bottom) {
                 if let saveError {
                     Text(saveError)
@@ -914,8 +964,19 @@ private struct SkillFileDetailView: View {
                     }
                 }
             }
+            // 总是从技能详情页推进来的,返回键可以接管。
+            .confirmDiscardOnBack(isPushed: true, hasChanges: hasChanges, isPresented: $confirmDiscard,
+                                  onSave: { save(); if !hasChanges { dismiss() } },
+                                  onDiscard: { dismiss() })
+            .interactiveDismissDisabled(hasChanges)
             .onAppear {
-                content = store.readSkillFile(skillId, relativePath: relativePath) ?? ""
+                // 返回过又回来(或有未保存的改动)时不要用磁盘内容盖掉编辑中的文字。
+                guard !hasChanges else { return }
+                let loaded = store.readSkillFile(skillId, relativePath: relativePath) ?? ""
+                if loaded != content {
+                    suppressNextChange = true
+                    content = loaded
+                }
             }
     }
 

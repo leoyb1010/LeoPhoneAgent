@@ -80,8 +80,9 @@ struct WatchRootView: View {
 /// row so a 45mm screen never truncates a label into ambiguity.
 ///
 /// Tap-only: the crown scrolls this card, so it must never also decide it.
-/// A high-risk command gets no double-tap shortcut, no "always", and its
-/// allow buttons need a second tap to confirm — a stray pinch must not run it.
+/// "Always" (a permanent allow rule on the Mac) is never offered here. A
+/// high-risk command gets no double-tap shortcut, and its allow buttons need a
+/// second tap to confirm — a stray pinch must not run it.
 private struct WatchApprovalSheet: View {
     let approval: WatchApproval
     let onChoose: (String) -> Void
@@ -91,7 +92,6 @@ private struct WatchApprovalSheet: View {
         switch choice {
         case "once": return "允许一次"
         case "session": return "本次会话允许"
-        case "always": return "始终允许"
         case "deny": return "拒绝"
         default: return choice
         }
@@ -117,8 +117,8 @@ private struct WatchApprovalSheet: View {
     /// Double tap (Series 9 / Ultra 2) is "allow once" for commands that are
     /// not high risk.
     private var visibleChoices: [String] {
-        let order = ["once", "session", "always", "deny"]
-        let offered = approval.isHighRisk ? approval.choices.filter { $0 != "always" } : approval.choices
+        let order = ["once", "session", "deny"]
+        let offered = approval.choices.filter { $0 != "always" }
         return offered.sorted { (order.firstIndex(of: $0) ?? order.count) < (order.firstIndex(of: $1) ?? order.count) }
     }
 

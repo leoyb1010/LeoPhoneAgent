@@ -308,5 +308,20 @@ enum WidgetDataMirror {
             WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.briefing)
             WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
         }
+        // The status card (also the watch face) keeps the last run's title
+        // until the next run rewrites it.
+        var status = AgentWidgetSnapshotStore.load()
+        if !status.privacyMode, !status.sessionId.isEmpty,
+           privacy || lockStore.isHiddenFromSystemSurfaces(status.sessionId) {
+            status.title = ""
+            status.status = ""
+            status.toolIcon = "sparkles"
+            status.loopIteration = 0
+            status.privacyMode = true
+            AgentWidgetSnapshotStore.save(status)
+            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.status)
+            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+            WatchBridge.shared.pushStatus()
+        }
     }
 }

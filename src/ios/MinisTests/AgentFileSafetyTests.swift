@@ -71,22 +71,47 @@ final class SymlinkSafeDeleteTests: XCTestCase {
 }
 
 final class OffloadPlaceholderGuardTests: XCTestCase {
-    private let path = "/var/minis/offloads/tools/abc.txt"
+    /// Where an earlier `file_write` call's own content is offloaded.
+    private let path = "/var/minis/offloads/tools/file_write_abc123def456.txt"
 
-    private var contentStub: String {
-        "[CONTEXT OFFLOADED] Content (~1200 tokens, 4800 bytes) saved to: \(path)\nUse file_read tool to retrieve if needed."
+    private func stub(_ savedTo: String) -> String {
+        "[CONTEXT OFFLOADED] Content (~1200 tokens, 4800 bytes) saved to: \(savedTo)\nUse file_read tool to retrieve if needed."
     }
+
+    private var contentStub: String { stub(path) }
 
     func testCleanTextPassesThrough() {
         XCTAssertEqual(OffloadPlaceholderGuard.check("print(1)\n", field: "content", contents: [:]), .clean)
     }
 
-    func testContentStubIsResolvedFromSavedFile() {
+    func testOwnWriteStubIsRestoredFromSavedFile() {
         let text = "header\n\(contentStub)\nfooter"
         XCTAssertEqual(OffloadPlaceholderGuard.referencedContentPaths(in: text), [path])
         XCTAssertEqual(
             OffloadPlaceholderGuard.check(text, field: "content", contents: [path: "REAL BODY"]),
             .resolved("header\nREAL BODY\nfooter"))
+    }
+
+    func testToolResultStubsAreRejectedNotRestored() {
+        // A file_read result carries its "[path | … ]" header and minis_url /
+        // next_offset trailers; shell and browser output are not file text.
+        for savedTo in [
+            "/var/minis/offloads/tools/file_read_abc123def456.txt",
+            "/var/minis/offloads/tools/shell_execute_abc123def456.txt",
+            "/var/minis/offloads/tools/result_file_write_abc123def456.txt",
+            "/var/minis/offloads/shell_execute_1767000000_toolu_01.txt",
+        ] {
+            let saved = "[/root/main.py | 20 bytes | 1 lines | showing 1-1 of 1]\nprint(1)\nminis_url: leophoneagent://x"
+            guard case .rejected(let message) = OffloadPlaceholderGuard.check(
+                "\(stub(savedTo))\n", field: "content", contents: [savedTo: saved]) else {
+                return XCTFail("a stub for \(savedTo) must not be written back into a file")
+            }
+            XCTAssertTrue(message.contains("file_read"), "the error must send the model back to the real file")
+            XCTAssertTrue(message.contains("Nothing was written"))
+        }
+        XCTAssertFalse(OffloadPlaceholderGuard.isOwnWriteContent("/var/minis/offloads/tools/file_write_../../etc/passwd"))
+        XCTAssertFalse(OffloadPlaceholderGuard.isOwnWriteContent("/var/minis/offloads/tools/file_write_x/y.txt"))
+        XCTAssertTrue(OffloadPlaceholderGuard.isOwnWriteContent(path))
     }
 
     func testUnreadableStubIsRejected() {
@@ -103,9 +128,16 @@ final class OffloadPlaceholderGuardTests: XCTestCase {
         }
     }
 
-    func testBareMarkerIsRejected() {
-        guard case .rejected = OffloadPlaceholderGuard.check("see [CONTEXT OFFLOADED] above", field: "content", contents: [:]) else {
-            return XCTFail("a mangled stub must not be written")
+    func testBareMarkerTextIsWritable() {
+        // Docs, tests and the source that builds the notices mention the
+        // markers without being a placeholder.
+        for text in [
+            "see [CONTEXT OFFLOADED] above",
+            "let stub = \"[CONTEXT OFFLOADED] Content (~\\(tokens) tokens, \\(bytes) bytes) saved to: \\(path)\"",
+            "+ \"\\n\\n[OUTPUT TRUNCATED] Full output (\\(toolOutput.count) chars) saved to: \\(offloadResult.linuxPath)\"",
+            "Long output ends with [OUTPUT TRUNCATED] Showing first & last N chars.",
+        ] {
+            XCTAssertEqual(OffloadPlaceholderGuard.check(text, field: "content", contents: [:]), .clean, text)
         }
     }
 
@@ -116,7 +148,7 @@ final class OffloadPlaceholderGuardTests: XCTestCase {
         }
         XCTAssertTrue(message.contains("/var/minis/offloads/out.txt"))
 
-        let shell = "a\n[OUTPUT TRUNCATED] Showing first & last 2000 chars\nz"
+        let shell = "a\n\n...\n\nz\n\n[OUTPUT TRUNCATED] Showing first & last 2000 of 90000 chars (1200 lines total).\nUse file_read tool to read specific sections."
         guard case .rejected = OffloadPlaceholderGuard.check(shell, field: "content", contents: [:]) else {
             return XCTFail("clipped shell output must not be written")
         }

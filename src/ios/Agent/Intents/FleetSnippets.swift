@@ -88,23 +88,29 @@ struct FleetStatusSnippet: View {
 struct MacDispatchSnippet: View {
     let machine: String
     let cli: String
+    /// The task, or on failure why nothing started.
     let task: String
+    /// false: nothing was started — the card must not say it was.
+    var ok: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("已开工", systemImage: "play.circle.fill")
+            Label(ok ? "已开工" : "没能开工",
+                  systemImage: ok ? "play.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
-                .foregroundStyle(.green)
+                .foregroundStyle(ok ? .green : .orange)
             Text("\(machine) · \(cli)")
                 .font(.system(size: 15, weight: .medium))
             Text(task)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
-            Button(intent: MacFleetStatusIntent()) {
-                Label("查看进度", systemImage: "arrow.clockwise")
+            if ok {
+                Button(intent: MacFleetStatusIntent()) {
+                    Label("查看进度", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .padding(4)
     }

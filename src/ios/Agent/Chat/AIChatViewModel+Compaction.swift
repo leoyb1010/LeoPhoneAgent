@@ -68,10 +68,16 @@ extension AIChatViewModel {
             // Not enough to compact — send the queued message directly
             promptQueue.removeAll { $0.id == queuedPrompt.id }
             messages.removeAll { $0.queuedPromptId == queuedPrompt.id }
-            inputText = text
-            attachments = atts
-            skipCompactCheck = true
-            send()
+            let sendParked = { [self] in
+                inputText = text
+                attachments = atts
+                skipCompactCheck = true
+                send()
+            }
+            // [T-draft-headless] A draft back in the composer (a headless send
+            // was parked here) is not part of this message. The usual empty
+            // composer keeps send()'s edit-in-progress handling as before.
+            if currentComposerDraft.isEmpty { sendParked() } else { withComposerSetAside(sendParked) }
             return
         }
 
@@ -134,10 +140,20 @@ extension AIChatViewModel {
     /// Cancel the compact-before-send prompt, restoring text to input.
     func cancelCompactBeforeSend() {
         showCompactBeforeSendPrompt = false
-        // Restore the folded composer (tokens + chips), not the expanded body.
-        inputText = pendingSendRawText ?? pendingSendText ?? ""
-        pastedBlocks = pendingSendPastedBlocks
-        attachments = pendingSendAttachments
+        if currentComposerDraft.isEmpty {
+            // Restore the folded composer (tokens + chips), not the expanded body.
+            inputText = pendingSendRawText ?? pendingSendText ?? ""
+            pastedBlocks = pendingSendPastedBlocks
+            attachments = pendingSendAttachments
+        } else {
+            // [T-draft-headless] The user's draft is back in the composer (the
+            // parked prompt came from a headless send): keep it and add the
+            // parked message after it, expanded so paste tokens can't collide.
+            if let parked = pendingSendText, !parked.isEmpty {
+                inputText += (inputText.isEmpty ? "" : "\n") + parked
+            }
+            attachments += pendingSendAttachments
+        }
         pendingSendText = nil
         pendingSendRawText = nil
         pendingSendPastedBlocks = []

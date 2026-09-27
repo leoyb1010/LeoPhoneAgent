@@ -17,6 +17,8 @@ struct SoulSettingsView: View {
     @State private var showForceSyncDone: Bool = false
     @State private var confirmDiscard = false
     @Environment(\.dismiss) private var dismiss
+    /// iPad 双栏里这一页是右栏首页,不是推进来的:没有返回键可接管,dismiss() 会关掉整个设置。
+    @Environment(\.isSettingsSplitDetailRoot) private var isSplitDetailRoot
     @StateObject private var loadedRef = LoadedFileRef()
     /// Mirrors `SyncV2Bootstrap.isEnabled` so the Force iCloud Sync row
     /// shows / hides reactively when the user toggles iCloud sync in
@@ -108,13 +110,15 @@ struct SoulSettingsView: View {
                     .disabled(!isDirty || isBodyOverLimit)
             }
         }
-        .confirmDiscardOnBack(hasChanges: isDirty, isPresented: $confirmDiscard,
+        .confirmDiscardOnBack(isPushed: !isSplitDetailRoot, hasChanges: isDirty, isPresented: $confirmDiscard,
                               onSave: {
                                   guard !isBodyOverLimit else { return }
                                   save()
-                                  if saveError == nil { dismiss() }
+                                  if saveError == nil, !isSplitDetailRoot { dismiss() }
                               },
-                              onDiscard: { dismiss() })
+                              onDiscard: { if !isSplitDetailRoot { dismiss() } })
+        // 下滑关掉整个设置也会丢掉没保存的改动。
+        .interactiveDismissDisabled(isDirty)
         .onAppear(perform: reload)
         // Using .alert (not .confirmationDialog) so the dialog stays
         // centered on iPad / Mac. confirmationDialog without a source

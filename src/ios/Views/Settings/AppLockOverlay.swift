@@ -82,7 +82,7 @@ final class AppLockWindowController {
     static let shared = AppLockWindowController()
 
     private var windows: [ObjectIdentifier: UIWindow] = [:]
-    private var cancellable: AnyCancellable?
+    private var cancellables: Set<AnyCancellable> = []
     private var covering = false
 
     func attach(to scene: UIWindowScene) {
@@ -91,8 +91,13 @@ final class AppLockWindowController {
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1
         window.backgroundColor = .clear
+        window.overrideUserInterfaceStyle = Self.appearanceStyle
         let host = UIHostingController(rootView: AppLockOverlay())
         host.view.backgroundColor = .clear
+        // VoiceOver stays on the lock screen (triple-click VoiceOver is a
+        // classic way around app locks); the windows below are hidden from it
+        // as well, see `syncUnderlyingAccessibility`.
+        host.view.accessibilityViewIsModal = true
         window.rootViewController = host
         window.isHidden = !covering
         windows[key] = window
@@ -103,21 +108,71 @@ final class AppLockWindowController {
         windows.removeValue(forKey: ObjectIdentifier(scene))?.isHidden = true
     }
 
+    /// The in-app Appearance choice (0 system, 1 light, 2 dark). This window is
+    /// outside SwiftUI's `.preferredColorScheme`, so it follows it by hand.
+    private static var appearanceStyle: UIUserInterfaceStyle {
+        switch UserDefaults.standard.integer(forKey: "appearanceMode") {
+        case 1: return .light
+        case 2: return .dark
+        default: return .unspecified
+        }
+    }
+
     private func observeIfNeeded() {
-        guard cancellable == nil else { return }
+        guard cancellables.isEmpty else { return }
         let store = SessionLockStore.shared
-        cancellable = Publishers.CombineLatest(store.$appIsLocked, store.$showPrivacyScreen)
+        Publishers.CombineLatest(store.$appIsLocked, store.$showPrivacyScreen)
             .map { $0 || $1 }
             .removeDuplicates()
             .sink { [weak self] cover in self?.apply(cover: cover) }
+            .store(in: &cancellables)
+        // A focused text field keeps the keyboard window above ours. Drop focus
+        // when the app really locks or leaves, not for the .inactive privacy
+        // cover (Control Center, Notification Center, Face ID prompts), which
+        // used to throw the keyboard away mid-sentence.
+        store.$appIsLocked
+            .removeDuplicates()
+            .sink { locked in
+                if locked { Self.dropKeyboard() }
+                // VoiceOver moves onto the lock screen, and back once it lifts.
+                UIAccessibility.post(notification: .screenChanged, argument: nil)
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                guard self?.covering == true else { return }
+                UIView.performWithoutAnimation { Self.dropKeyboard() }
+            }
+            .store(in: &cancellables)
+        // A window that appears under an active cover (cold launch behind the
+        // lock) starts out reachable by VoiceOver.
+        NotificationCenter.default.publisher(for: UIWindow.didBecomeVisibleNotification)
+            .sink { [weak self] _ in self?.syncUnderlyingAccessibility() }
+            .store(in: &cancellables)
+    }
+
+    private static func dropKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private func apply(cover: Bool) {
         covering = cover
-        if cover {
-            // A focused text field would keep the keyboard window above us.
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        for window in windows.values {
+            if cover { window.overrideUserInterfaceStyle = Self.appearanceStyle }
+            window.isHidden = !cover
         }
-        for window in windows.values { window.isHidden = !cover }
+        syncUnderlyingAccessibility()
+    }
+
+    /// The app's own windows under a lock window are hidden from VoiceOver
+    /// while it covers them.
+    private func syncUnderlyingAccessibility() {
+        for lockWindow in windows.values {
+            guard let scene = lockWindow.windowScene else { continue }
+            for window in scene.windows where window !== lockWindow && window.windowLevel == .normal
+                && window.accessibilityElementsHidden != covering {
+                window.accessibilityElementsHidden = covering
+            }
+        }
     }
 }

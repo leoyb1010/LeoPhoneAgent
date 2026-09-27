@@ -47,7 +47,7 @@ struct SessionInspectorView: View {
                 Section("Model") {
                     LabeledContent("Current model", value: currentModel.displayName)
                     if contextWindow > 0 {
-                        LabeledContent("Context window", value: "\(compact(contextWindow)) tokens")
+                        LabeledContent("Context window", value: String(localized: "\(compact(contextWindow)) tokens"))
                     }
                 }
 

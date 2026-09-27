@@ -38,9 +38,11 @@ extension UIApplication {
         connectedScenes.compactMap { $0 as? UIWindowScene }.activeFirst
     }
 
-    /// Key window of the scene the user is currently driving.
+    /// Key window of the scene the user is currently driving. Only app windows
+    /// at `.normal` level: the app-lock window (above them) must never become
+    /// a presentation anchor.
     var leoActiveKeyWindow: UIWindow? {
-        leoActiveWindowScene?.windows.first { $0.isKeyWindow }
-            ?? leoActiveWindowScene?.windows.first
+        let windows = leoActiveWindowScene?.windows.filter { $0.windowLevel == .normal } ?? []
+        return windows.first { $0.isKeyWindow } ?? windows.first
     }
 }

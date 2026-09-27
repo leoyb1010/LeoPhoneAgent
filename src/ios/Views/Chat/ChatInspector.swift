@@ -64,6 +64,13 @@ struct ChatDetailContainer<Content: View>: View {
 struct ChatInspectorPanel: View {
     let sessionId: String?
     @AppStorage("leo.ipad.inspectorTab") private var tabRaw = Tab.run.rawValue
+    /// Prior #2: a Face ID-locked chat shows nothing here until unlocked.
+    @ObservedObject private var lockStore = SessionLockStore.shared
+
+    private var isLocked: Bool {
+        guard let sessionId, !sessionId.isEmpty else { return false }
+        return lockStore.isVisuallyLocked(sessionId)
+    }
 
     enum Tab: String, CaseIterable, Identifiable {
         case run, session, artifacts, files
@@ -87,6 +94,15 @@ struct ChatInspectorPanel: View {
     }
 
     var body: some View {
+        if isLocked {
+            ContentUnavailableView("This session is locked", systemImage: "lock.fill",
+                                   description: Text("Unlock it in the chat to see its runs, artifacts and files here."))
+        } else {
+            panel
+        }
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
             Picker("检查器", selection: tab) {
                 ForEach(Tab.allCases) { Text($0.title).tag($0) }

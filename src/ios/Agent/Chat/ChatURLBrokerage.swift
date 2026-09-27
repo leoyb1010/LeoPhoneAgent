@@ -56,17 +56,14 @@ final class MinisOpenURLBroker: ObservableObject {
     func consume() { pendingURL = nil }
 
     /// `leophoneagent://` hosts that perform an action instead of naming a
-    /// chat resource. Mirrors the host switch in `DeepLinkRouter`.
+    /// chat resource: exactly the top-level cases of `DeepLinkRouter.handle`.
+    /// Settings pages are only reachable as `settings/<page>`, so folder names
+    /// like `memory`, `skills`, `mounts` or `mcp-servers` stay file previews
+    /// (`minis-open /var/minis/mounts/Vault/note.md`). [B2]
     nonisolated static let actionHosts: Set<String> = [
-        "open_terminal", "views", "settings", "voice", "new", "new_chat",
-        "quick-task", "quick_task", "share", "collections", "treasury", "open",
-        "session", "sessions", "providers", "model-groups", "model_groups",
-        "usage", "usage-stats", "usage_stats", "skills", "mcp-servers",
-        "mcp_servers", "mcp", "memory", "storage", "mount-external",
-        "mount_external", "mounts", "shared-folders", "shared_folders", "logs",
-        "appearance", "background", "about", "permissions", "selftest",
-        "self-test", "self_test", "mac", "mac-console", "gateway",
-        "environments", "rootfs", "rootfs-management", "rootfs_management",
+        "voice", "new", "new_chat", "quick-task", "quick_task", "share",
+        "views", "open_terminal", "collections", "treasury", "open",
+        "session", "sessions", "settings",
     ]
 
     nonisolated static func isActionURL(_ url: URL) -> Bool {

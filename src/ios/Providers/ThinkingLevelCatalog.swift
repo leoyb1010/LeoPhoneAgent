@@ -191,3 +191,53 @@ enum ThinkingLevelCatalog {
         return normalized.hasPrefix(prefix)
     }
 }
+
+// MARK: - OpenCode Go wire protocol
+
+/// Which endpoint an OpenCode Go model is served on. `OpenCodeGo.wireProtocol(for:)`
+/// is the entry point; the table lives here because this file is compiled into
+/// MinisTests (OpenCodeGo.swift is not), so the routing has unit coverage.
+///
+/// A model's own `provider.npm` in the models.dev `opencode-go` catalog wins (it
+/// is what the official opencode client routes by). Without one, the endpoint
+/// table of https://opencode.ai/docs/go/ applies: GPT / Grok / Muse Spark on
+/// `/v1/responses`, every MiniMax and Qwen model on `/v1/messages`, the rest
+/// on `/v1/chat/completions`. Keep the fallback in step with
+/// src/harmony/protocol/providerModels.ts and ProviderModels.ets.
+enum OpenCodeGoWireProtocol: Equatable, Sendable {
+    case chatCompletions
+    case responses
+    case anthropicMessages
+
+    static func resolve(modelId: String, catalogNpm: String?) -> OpenCodeGoWireProtocol {
+        if let catalogNpm, let fromCatalog = fromNpm(catalogNpm) { return fromCatalog }
+        return fallback(modelId: modelId)
+    }
+
+    /// The AI SDK package models.dev names for a model; nil for one we can't speak.
+    static func fromNpm(_ npm: String) -> OpenCodeGoWireProtocol? {
+        switch npm.lowercased() {
+        case "@ai-sdk/anthropic": return .anthropicMessages
+        case "@ai-sdk/openai": return .responses
+        case "@ai-sdk/openai-compatible": return .chatCompletions
+        default: return nil
+        }
+    }
+
+    static func fallback(modelId: String) -> OpenCodeGoWireProtocol {
+        let id = bareId(modelId)
+        if responsesPrefixes.contains(where: { id.hasPrefix($0) }) { return .responses }
+        if messagesPrefixes.contains(where: { id.hasPrefix($0) }) { return .anthropicMessages }
+        return .chatCompletions
+    }
+
+    /// Lowercased id without an `opencode-go/`-style provider prefix.
+    static func bareId(_ modelId: String) -> String {
+        let id = modelId.lowercased()
+        guard let slash = id.lastIndex(of: "/") else { return id }
+        return String(id[id.index(after: slash)...])
+    }
+
+    static let responsesPrefixes = ["gpt-", "grok-", "muse-spark-"]
+    static let messagesPrefixes = ["minimax-", "qwen"]
+}

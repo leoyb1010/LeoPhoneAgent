@@ -516,7 +516,8 @@ final class MountedFoldersManager {
             switch outcome {
             case .none:
                 let msg = "resolve timed out after 5s (FileProvider unresponsive)"
-                manager.activationStates[entry.id] = .failed(msg)
+                // Shown in Settings → Mount External Folders; the log keeps the English detail.
+                manager.activationStates[entry.id] = .failed(String(localized: "The app that stores this folder didn't respond in time. Open the folder once in the Files app, then come back."))
                 mountLog.warning("activate '\(entry.name)' [\(idPrefix)] \(msg) (elapsed=\(elapsedMs)ms)")
             case .failure(let error):
                 manager.activationStates[entry.id] = .failed(error.localizedDescription)

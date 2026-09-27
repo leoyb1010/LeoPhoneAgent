@@ -209,15 +209,22 @@ struct FileBrowserView: View {
                 set: { if !$0 { itemToDelete = nil } }
             )
         ) {
-            Button("Delete", role: .destructive) {
-                if let item = itemToDelete {
-                    viewModel.deleteItem(item)
-                    itemToDelete = nil
+            if let item = itemToDelete, item.isSymlink, FileBrowserViewModel.isMountRootLink(item.url) {
+                // Mount-root links are unmounted in Settings, never deleted here.
+                Button("OK", role: .cancel) { itemToDelete = nil }
+            } else {
+                Button("Delete", role: .destructive) {
+                    if let item = itemToDelete {
+                        viewModel.deleteItem(item)
+                        itemToDelete = nil
+                    }
                 }
+                Button("Cancel", role: .cancel) { itemToDelete = nil }
             }
-            Button("Cancel", role: .cancel) { itemToDelete = nil }
         } message: {
-            if let item = itemToDelete, item.isSymlink {
+            if let item = itemToDelete, item.isSymlink, FileBrowserViewModel.isMountRootLink(item.url) {
+                Text(String(localized: "\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched."))
+            } else if let item = itemToDelete, item.isSymlink {
                 let target = SymlinkSafeDelete.linkDestination(of: item.url) ?? item.url.resolvingSymlinksInPath().path
                 Text("Only this link is removed. The original at \(target) is kept.")
             } else {
@@ -253,17 +260,17 @@ struct FileBrowserView: View {
                     rootLabel: viewModel.rootLabel,
                     initialPath: initial,
                     excludedURL: item.url,
-                    title: moveOrCopyMode == .move ? "Move to…" : "Copy to…"
+                    title: moveOrCopyMode == .move ? String(localized: "Move to…") : String(localized: "Copy to…")
                 ) { destinationDir in
                     let destName = viewModel.displayPath(for: destinationDir)
                     if moveOrCopyMode == .move {
                         if viewModel.moveItem(item, to: destinationDir) {
-                            successMessage = "Moved \"\(item.name)\" to \(destName)"
+                            successMessage = String(localized: "Moved \"\(item.name)\" to \(destName)")
                             showSuccess = true
                         }
                     } else {
                         if viewModel.copyItem(item, to: destinationDir) {
-                            successMessage = "Copied \"\(item.name)\" to \(destName)"
+                            successMessage = String(localized: "Copied \"\(item.name)\" to \(destName)")
                             showSuccess = true
                         }
                     }
@@ -772,6 +779,12 @@ private struct FileBrowserRow: View {
         return ext == "html" || ext == "htm"
     }
 
+    /// The link that anchors a mounted folder can't be deleted here (it's
+    /// removed by unmounting), so don't offer Delete for it at all.
+    private var canDelete: Bool {
+        !(item.isSymlink && FileBrowserViewModel.isMountRootLink(item.url))
+    }
+
     var body: some View {
         FileItemRow(item: item, onTap: onTap, onExport: onExport)
             .contextMenu {
@@ -809,17 +822,21 @@ private struct FileBrowserRow: View {
                         }
                     }
                 }
-                Button(role: .destructive) {
-                    itemToDelete = item
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                if canDelete {
+                    Button(role: .destructive) {
+                        itemToDelete = item
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    itemToDelete = item
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                if canDelete {
+                    Button(role: .destructive) {
+                        itemToDelete = item
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
             .sheet(isPresented: $showAddWebApp) {
@@ -1075,6 +1092,12 @@ class FileBrowserViewModel: ObservableObject {
                     showError = true
                     return
                 }
+                // [T-symlink-delete-readonly] Removing a link writes to the
+                // folder that holds it, so a link inside a read-only mount must
+                // be refused like any other delete there. Check the parent, not
+                // the link: requireWritable resolves symlinks, which would test
+                // the link's target instead.
+                try MountedFolderCoordinator.requireWritable(linkURL.deletingLastPathComponent())
                 try SymlinkSafeDelete.unlinkSymlink(at: linkURL)
                 removedURL = linkURL
             } else if fm.fileExists(atPath: logicalURL.path) {
@@ -1100,7 +1123,7 @@ class FileBrowserViewModel: ObservableObject {
             Self.queueSessionFileCloudDelete(forRemovedURL: removedURL)
             loadItems()
         } catch {
-            errorMessage = "Cannot delete \"\(item.name)\": \(error.localizedDescription)"
+            errorMessage = String(localized: "Cannot delete \"\(item.name)\": \(error.localizedDescription)")
             showError = true
         }
     }
@@ -1108,7 +1131,7 @@ class FileBrowserViewModel: ObservableObject {
     /// True for the `var/minis/mounts/<name>` link that anchors a mounted
     /// external folder. Unlinking it is pointless (mount refresh recreates it)
     /// and reads like deleting the folder, so it's routed to "unmount".
-    private static func isMountRootLink(_ url: URL) -> Bool {
+    static func isMountRootLink(_ url: URL) -> Bool {
         let mountsDir = RootfsManager.shared.dataPath
             .appendingPathComponent("var/minis/mounts", isDirectory: true)
             .resolvingSymlinksInPath().standardized.path
@@ -1241,7 +1264,7 @@ class FileBrowserViewModel: ObservableObject {
         let destURL = resolvedDest.appendingPathComponent(item.name)
         do {
             if fm.fileExists(atPath: destURL.path) {
-                errorMessage = "A file named \"\(item.name)\" already exists in the destination."
+                errorMessage = String(localized: "A file named \"\(item.name)\" already exists in the destination.")
                 showError = true
                 return false
             }
@@ -1255,7 +1278,7 @@ class FileBrowserViewModel: ObservableObject {
             loadItems()
             return true
         } catch {
-            errorMessage = "Cannot move \"\(item.name)\": \(error.localizedDescription)"
+            errorMessage = String(localized: "Cannot move \"\(item.name)\": \(error.localizedDescription)")
             showError = true
             return false
         }
@@ -1268,7 +1291,7 @@ class FileBrowserViewModel: ObservableObject {
         let destURL = resolvedDest.appendingPathComponent(item.name)
         do {
             if fm.fileExists(atPath: destURL.path) {
-                errorMessage = "A file named \"\(item.name)\" already exists in the destination."
+                errorMessage = String(localized: "A file named \"\(item.name)\" already exists in the destination.")
                 showError = true
                 return false
             }
@@ -1279,7 +1302,7 @@ class FileBrowserViewModel: ObservableObject {
             loadItems()
             return true
         } catch {
-            errorMessage = "Cannot copy \"\(item.name)\": \(error.localizedDescription)"
+            errorMessage = String(localized: "Cannot copy \"\(item.name)\": \(error.localizedDescription)")
             showError = true
             return false
         }
@@ -1371,7 +1394,7 @@ class FileBrowserViewModel: ObservableObject {
             }
         }
         if failCount > 0 {
-            errorMessage = "Failed to import \(failCount) file(s)."
+            errorMessage = String(localized: "Failed to import \(failCount) file(s).")
             showError = true
         }
         loadItems()

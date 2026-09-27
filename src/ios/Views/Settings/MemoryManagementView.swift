@@ -9,7 +9,9 @@ import SwiftUI
 
 struct MemoryManagementView: View {
     @State private var memoryFiles: [MemoryFileItem] = []
-    @State private var pendingDeleteOffsets: IndexSet?
+    /// [T-memory-delete-by-name] 待确认删除的文件名(不是行号)。确认框弹着时列表
+    /// 可能因为记忆工具 / iCloud 合并写入而重排,按行号删会删到别的文件。
+    @State private var pendingDeleteNames: [String]?
     @State private var forceSyncToast: String?
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
     /// [T-memory-global-toggle-settings-ui-ios] Global default for whether
@@ -57,18 +59,20 @@ struct MemoryManagementView: View {
                 .deleteDisabled(file.isGlobal)
             }
             .onDelete { offsets in
-                pendingDeleteOffsets = offsets
+                let names = offsets.filter { memoryFiles.indices.contains($0) && !memoryFiles[$0].isGlobal }
+                    .map { memoryFiles[$0].name }
+                if !names.isEmpty { pendingDeleteNames = names }
             }
         }
         .navigationTitle("Memory")
         .alert(String(localized: "Delete this memory file?"),
-               isPresented: Binding(get: { pendingDeleteOffsets != nil },
-                                    set: { if !$0 { pendingDeleteOffsets = nil } })) {
+               isPresented: Binding(get: { pendingDeleteNames != nil },
+                                    set: { if !$0 { pendingDeleteNames = nil } })) {
             Button(String(localized: "Delete"), role: .destructive) {
-                if let offsets = pendingDeleteOffsets { deleteFiles(at: offsets) }
-                pendingDeleteOffsets = nil
+                if let names = pendingDeleteNames { deleteFiles(named: names) }
+                pendingDeleteNames = nil
             }
-            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteOffsets = nil }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteNames = nil }
         } message: {
             Text(iCloudSyncEnabled
                  ? String(localized: "This removes it from this device only. A copy on another iCloud device may sync it back.")
@@ -164,17 +168,15 @@ struct MemoryManagementView: View {
         memoryFiles = items
     }
 
-    private func deleteFiles(at offsets: IndexSet) {
+    /// 按文件名删,和列表当前的顺序无关;GLOBAL.md 永远不删。
+    private func deleteFiles(named names: [String]) {
         let fm = FileManager.default
         let memDir = AIChatViewModel.minisMemoryPersistentDir
-        for idx in offsets {
-            let file = memoryFiles[idx]
-            if file.isGlobal { continue }
-            let url = memDir.appendingPathComponent(file.name)
-            try? fm.removeItem(at: url)
+        let targets = Set(names.filter { $0 != "GLOBAL.md" })
+        for name in targets {
+            try? fm.removeItem(at: memDir.appendingPathComponent(name))
         }
-        let deletable = IndexSet(offsets.filter { !memoryFiles[$0].isGlobal })
-        memoryFiles.remove(atOffsets: deletable)
+        memoryFiles.removeAll { !$0.isGlobal && targets.contains($0.name) }
     }
 
     private func firstMemoryLine(from content: String) -> String {
@@ -283,9 +285,12 @@ private struct MemoryFileEditView: View {
                 Button("Save") { save() }
             }
         }
-        .confirmDiscardOnBack(hasChanges: hasChanges, isPresented: $confirmDiscard,
+        // 这一页总是从记忆列表推进来的(iPhone 单栏和 iPad 双栏都是),返回键可以接管。
+        .confirmDiscardOnBack(isPushed: true, hasChanges: hasChanges, isPresented: $confirmDiscard,
                               onSave: { save(); if !hasChanges { dismiss() } },
                               onDiscard: { dismiss() })
+        // 下滑关掉整个设置也会丢掉没保存的改动。
+        .interactiveDismissDisabled(hasChanges)
         .onAppear {
             let fm = FileManager.default
             let exists = fm.fileExists(atPath: fileURL.path)
@@ -360,20 +365,25 @@ extension View {
     /// Swaps the system back button for one that asks before throwing away
     /// unsaved edits. Only when pushed (a split-view detail root has no back
     /// button to guard) and only while `hasChanges` is true.
-    func confirmDiscardOnBack(hasChanges: Bool, isPresented: Binding<Bool>,
+    ///
+    /// [T-settings-split-discard-guard] `isPushed` comes from the caller. It used
+    /// to be `@Environment(\.isPresented)`, which is also true for the iPad
+    /// split-view detail root inside the Settings sheet: that page got a fake
+    /// Back button, and Save / Discard called `dismiss()` — closing all of Settings.
+    func confirmDiscardOnBack(isPushed: Bool, hasChanges: Bool, isPresented: Binding<Bool>,
                               onSave: @escaping () -> Void,
                               onDiscard: @escaping () -> Void) -> some View {
-        modifier(ConfirmDiscardOnBack(hasChanges: hasChanges, isPresented: isPresented,
+        modifier(ConfirmDiscardOnBack(isPushed: isPushed, hasChanges: hasChanges, isPresented: isPresented,
                                       onSave: onSave, onDiscard: onDiscard))
     }
 }
 
 private struct ConfirmDiscardOnBack: ViewModifier {
+    let isPushed: Bool
     let hasChanges: Bool
     @Binding var isPresented: Bool
     let onSave: () -> Void
     let onDiscard: () -> Void
-    @Environment(\.isPresented) private var isPushed
 
     func body(content: Content) -> some View {
         let guarding = hasChanges && isPushed

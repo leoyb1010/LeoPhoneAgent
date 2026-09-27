@@ -5,7 +5,10 @@ import path from "node:path";
 import type { IZCodeTaskService } from "@zcode/services";
 import type { ZCodeTaskMode } from "@zcode/shared";
 
+import { fetchDesktopTasks, type DesktopTask } from "./desktopTasks.js";
 import type { HarnessEvent } from "./journal.js";
+import { LeoagentForwarder } from "./leoagentForward.js";
+import { error, expandHome, isLinkPath, mayUseFullAuto, record, validSessionId } from "./linkPolicy.js";
 import { resumeEnvelope } from "./resumeEnvelope.js";
 import { APPROVAL_CHOICES, LinkSession, type ApprovalChoice, type Caller } from "./session.js";
 
@@ -26,61 +29,11 @@ export type LinkBridgeDeps = {
   recentWorkspaces?: () => Promise<string[]>;
 };
 
-/** 会话 id 就是任务 id:只允许普通字符,挡掉编码后的 `/`、`..` 这类路径花样。 */
-function validSessionId(id: string): boolean {
-  return id.length > 0 && id.length <= 200 && !id.includes("/") && !id.includes("..") && !/[\\\s]/.test(id);
-}
-
-/** 桌面上开的任务:手机列表里能看到,点开或发消息时桥接当场接过来。 */
-type DesktopTask = {
-  taskId: string;
-  cwd: string;
-  title: string;
-  status: string;
-  mode: ZCodeTaskMode;
-  createdAt: number;
-  updatedAt: number;
-};
-const DESKTOP_TASK_LIMIT = 20;
-
 const VERSION = "0.4.0";
 const ZCODE = "zcode";
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-const FORWARD_TIMEOUT_MS = 55_000;
 /** 重启后认回的任务数上限;更老的手机上也早就翻不到了。 */
 const INDEX_LIMIT = 50;
-
-/**
- * 经 Leo Link 只放行手机协议 v0.4 这几条;模型代理(/v1/models、/v1/chat/completions)、
- * 藏宝阁(/api/leo/*)、机器人配置一律拒绝 —— 它们只给本机用。
- */
-export function isLinkPath(pathname: string): boolean {
-  return (
-    pathname === "/health" ||
-    pathname === "/v1/capabilities" ||
-    pathname === "/v1/grok/token" ||
-    pathname === "/harness/full-auto" ||
-    pathname === "/harness/sessions" ||
-    /^\/harness\/sessions\/[^/]+\/(events|send|approval|stop|archive)$/.test(pathname)
-  );
-}
-
-function error(status: number, message: string): LinkResponse {
-  return { status, body: { error: { message } } };
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function expandHome(input: string): string {
-  return input.replace(/^~(?=$|\/)/, os.homedir());
-}
-
-/** 认得出是哪台设备(iPhone、安卓、鸿蒙、主钥匙)就能开或切全自动;中继 0.1 认不出是谁,不行。 */
-function mayUseFullAuto(caller: Caller): boolean {
-  return caller.kind !== "unknown";
-}
 
 /**
  * [leo-link] 手机协议 v0.4 在新 Mac 上的实现。中继帧在进程内交到这里,
@@ -99,10 +52,30 @@ export class LinkBridge {
   /** 最近一次列出的桌面任务;接管时按它找工作区。 */
   private desktopTasks = new Map<string, DesktopTask>();
 
-  constructor(private readonly deps: LinkBridgeDeps) {}
+  private readonly leoagent: LeoagentForwarder;
+  /** 认回任务期间不写任务表:这时只认回了一部分,写下去再赶上崩溃,没认回的那些就丢了。 */
+  private restoring = false;
+  private saveWanted = false;
+
+  constructor(private readonly deps: LinkBridgeDeps) {
+    this.leoagent = new LeoagentForwarder(deps.leoagent);
+  }
 
   /** 读回任务表:Mac 重启后,手机上已有的任务照样能续传、续聊、审批。 */
   async restore(): Promise<void> {
+    this.restoring = true;
+    try {
+      await this.restoreFromIndex();
+    } finally {
+      this.restoring = false;
+      if (this.saveWanted) {
+        this.saveWanted = false;
+        void this.saveIndex();
+      }
+    }
+  }
+
+  private async restoreFromIndex(): Promise<void> {
     let entries: Record<string, unknown>[] = [];
     try {
       entries = JSON.parse(await fsp.readFile(this.indexPath(), "utf8")) as Record<string, unknown>[];
@@ -137,6 +110,10 @@ export class LinkBridge {
 
   /** 串行写:几处同时触发时共用一个临时文件,并发 rename 会互相踩掉。 */
   private saveIndex(): Promise<void> {
+    if (this.restoring) {
+      this.saveWanted = true;
+      return this.saving;
+    }
     this.saving = this.saving.then(() => this.writeIndex());
     return this.saving;
   }
@@ -198,7 +175,7 @@ export class LinkBridge {
     if (!validSessionId(sessionId)) return;
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) {
-      await this.forwardStream(url.pathname + url.search, write, signal);
+      await this.leoagent.stream(url.pathname + url.search, write, signal);
       return;
     }
     const parsed = Number.parseInt(url.searchParams.get("after") ?? "0", 10);
@@ -226,7 +203,7 @@ export class LinkBridge {
       return { status: 200, body: { status: "ok", platform: "leoagent", version: VERSION, server: "leophoneagent", app_version: this.deps.appVersion } };
     }
     if (pathname === "/v1/capabilities" && method === "GET") return this.capabilities();
-    if (pathname === "/v1/grok/token" && method === "GET") return this.forward("GET", url.pathname);
+    if (pathname === "/v1/grok/token" && method === "GET") return this.leoagent.request("GET", url.pathname);
     if (pathname === "/harness/full-auto" && method === "POST") return this.fullAutoOff(req);
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
@@ -240,7 +217,7 @@ export class LinkBridge {
     // 清理不接管桌面任务:没接过来的本来就不在手机的「进行中」里。
     if (match[2] === "archive") return this.archive(sessionId, url.pathname, req.body);
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
-    if (!session) return this.forward("POST", url.pathname, req.body);
+    if (!session) return this.leoagent.request("POST", url.pathname, req.body);
     const body = record(req.body);
     switch (match[2]) {
       case "send":
@@ -256,27 +233,9 @@ export class LinkBridge {
   /** Mac 最近打开的项目里的任务(手机自己开的已经在 sessions 里,不重复列)。读不到就当没有。 */
   private async listDesktopTasks(): Promise<DesktopTask[]> {
     const workspaces = await this.deps.recentWorkspaces?.().catch(() => []) ?? [];
-    if (workspaces.length === 0) return [];
     try {
-      const result = await this.deps.taskService.listTaskList({
-        kind: "timeline",
-        workspaceScopes: workspaces.map((workspacePath) => ({ workspacePath })),
-        sortBy: "updated",
-        limit: DESKTOP_TASK_LIMIT,
-      });
-      const tasks = result.items
-        .filter((item) => !this.sessions.has(item.taskId))
-        .map((item): DesktopTask => ({
-          taskId: item.taskId,
-          cwd: item.workspacePath,
-          title: item.title,
-          // 没在跑的桌面任务报 "available" 而不是 "idle":手机首页和 Siri 把 idle 当成"进行中",
-          // 最近 20 个桌面任务会把首页刷满;available 只出现在 Mac 控制台的列表里,点开即接管。
-          status: item.status === "running" ? "running" : "available",
-          mode: item.mode,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-        }));
+      const tasks = (await fetchDesktopTasks(this.deps.taskService, workspaces))
+        .filter((task) => !this.sessions.has(task.taskId));
       this.desktopTasks = new Map(tasks.map((task) => [task.taskId, task]));
       return tasks;
     } catch (cause) {
@@ -327,7 +286,7 @@ export class LinkBridge {
   }
 
   private async capabilities(): Promise<LinkResponse> {
-    const upstream = await this.forward("GET", "/v1/capabilities");
+    const upstream = await this.leoagent.request("GET", "/v1/capabilities");
     const legacy = upstream.status === 200 ? (record(upstream.body)["harnesses"] as unknown[] | undefined) ?? [] : [];
     return {
       status: 200,
@@ -373,7 +332,7 @@ export class LinkBridge {
       pending_approvals: [],
     }));
     ours.push(...desktop);
-    const upstream = await this.forward("GET", "/harness/sessions");
+    const upstream = await this.leoagent.request("GET", "/harness/sessions");
     const theirs = upstream.status === 200 ? ((record(upstream.body)["sessions"] as unknown[] | undefined) ?? []) : [];
     return { status: 200, body: { sessions: [...ours, ...theirs] } };
   }
@@ -384,7 +343,7 @@ export class LinkBridge {
     const fullAuto = body["full_auto"] === true;
     if (harness !== ZCODE) {
       if (fullAuto) return error(400, "全自动只支持 LeoPhoneAgent 任务");
-      return this.forward("POST", "/harness/sessions", req.body);
+      return this.leoagent.request("POST", "/harness/sessions", req.body);
     }
     if (fullAuto && !mayUseFullAuto(req.caller)) return error(403, "认不出是哪台设备发来的,不能开全自动;把中继升级到 0.2 后再试");
     const cwd = this.resolveCwd(String(body["cwd"] ?? "").trim());
@@ -472,7 +431,7 @@ export class LinkBridge {
     const session = this.sessions.get(sessionId);
     if (!session) {
       if (this.desktopTasks.has(sessionId)) return { status: 200, body: { ok: true, archived: false } };
-      return this.forward("POST", pathname, body);
+      return this.leoagent.request("POST", pathname, body);
     }
     if (session.status === "running" || session.status === "waiting_for_approval") {
       return error(409, "任务还在跑:先停止,再清理");
@@ -503,63 +462,6 @@ export class LinkBridge {
     }
     if (switched.length > 0) void this.saveIndex();
     return { status: 200, body: { ok: true, sessions: switched } };
-  }
-
-  // -- 转给本机 leoagent -------------------------------------------------------
-
-  private leoagentHeaders(extra: Record<string, string> = {}): Record<string, string> | null {
-    const key = this.deps.leoagent.key();
-    return key ? { Authorization: `Bearer ${key}`, ...extra } : null;
-  }
-
-  private async forward(method: string, tail: string, body?: unknown): Promise<LinkResponse> {
-    const headers = this.leoagentHeaders(body != null ? { "Content-Type": "application/json" } : {});
-    if (!headers) return error(503, "本机 leoagent 未配置");
-    try {
-      const res = await fetch(`${this.deps.leoagent.url}${tail}`, {
-        method,
-        headers,
-        body: body != null ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
-      });
-      const text = await res.text();
-      let payload: unknown;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        payload = { raw: text };
-      }
-      return { status: res.status, body: payload };
-    } catch (cause) {
-      return error(502, `本机 leoagent 不可用:${cause instanceof Error ? cause.message : String(cause)}`);
-    }
-  }
-
-  private async forwardStream(tail: string, write: (data: string) => void, signal: AbortSignal): Promise<void> {
-    const headers = this.leoagentHeaders({ Accept: "text/event-stream" });
-    if (!headers) return;
-    try {
-      const res = await fetch(`${this.deps.leoagent.url}${tail}`, { headers, signal });
-      if (!res.body) return;
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffered = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffered += decoder.decode(value, { stream: true });
-        let newline = buffered.indexOf("\n");
-        while (newline !== -1) {
-          const line = buffered.slice(0, newline).trim();
-          buffered = buffered.slice(newline + 1);
-          // 本机是 SSE 帧,剥掉 "data: " 交给中继;注释保活跳过。
-          if (line.startsWith("data:")) write(line.slice(5).trim());
-          newline = buffered.indexOf("\n");
-        }
-      }
-    } catch {
-      // 手机断开或 leoagent 重启:手机会按 seq 续传。
-    }
   }
 
   private pruneDone(): void {

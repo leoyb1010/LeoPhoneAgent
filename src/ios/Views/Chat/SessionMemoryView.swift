@@ -107,13 +107,13 @@ struct SessionMemoryView: View {
             let lineCount = content.components(separatedBy: "\n").count
             items.append(AutoItem(
                 name: "SOUL.md",
-                detail: "\(lineCount) lines (full)",
+                detail: String(localized: "\(lineCount) lines (full)"),
                 icon: "person.fill",
                 content: content,
                 fileURL: soulURL
             ))
         } else {
-            items.append(AutoItem(name: "SOUL.md", detail: "Empty", icon: "person", content: "(empty)", fileURL: soulURL))
+            items.append(AutoItem(name: "SOUL.md", detail: String(localized: "Empty"), icon: "person", content: String(localized: "(empty)"), fileURL: soulURL))
         }
 
         // GLOBAL.md
@@ -124,13 +124,13 @@ struct SessionMemoryView: View {
             let lineCount = content.components(separatedBy: "\n").count
             items.append(AutoItem(
                 name: "GLOBAL.md",
-                detail: "\(lineCount) lines (full)",
+                detail: String(localized: "\(lineCount) lines (full)"),
                 icon: "star.fill",
                 content: content,
                 fileURL: globalURL
             ))
         } else {
-            items.append(AutoItem(name: "GLOBAL.md", detail: "Empty", icon: "star", content: "(empty)", fileURL: globalURL))
+            items.append(AutoItem(name: "GLOBAL.md", detail: String(localized: "Empty"), icon: "star", content: String(localized: "(empty)"), fileURL: globalURL))
         }
 
         // Most recent 3 daily logs with content (matches system prompt injection logic)
@@ -152,8 +152,8 @@ struct SessionMemoryView: View {
                 let lineCount = content.components(separatedBy: "\n").count
                 let injected = min(lineCount, 200)
                 let detail = lineCount > 200
-                    ? "\(injected)/\(lineCount) lines injected"
-                    : "\(lineCount) lines (full)"
+                    ? String(localized: "\(injected)/\(lineCount) lines injected")
+                    : String(localized: "\(lineCount) lines (full)")
                 let label: String
                 switch dayOffset {
                 case 0: label = String(localized: "Today")
@@ -222,7 +222,9 @@ struct SessionMemoryView: View {
                     let resultLines = block.content.components(separatedBy: "\n").filter { !$0.isEmpty }
                     if let kw = keywords, !kw.isEmpty {
                         let matchCount = resultLines.filter { $0.hasPrefix("---") || $0.hasPrefix("## ") }.count
-                        detail = "Search: \(kw)" + (matchCount > 0 ? " (\(matchCount) files)" : "")
+                        detail = matchCount > 0
+                            ? String(localized: "Search: \(kw) (\(matchCount) files)")
+                            : String(localized: "Search: \(kw)")
                     } else {
                         detail = String((resultLines.first ?? "").prefix(100))
                     }

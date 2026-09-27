@@ -79,20 +79,36 @@ async function callLeo(
   }
 }
 
+/**
+ * 38473 上的是不是我们自己的 Host。保留的 LeoCodeBox 2.x 或别的程序占着端口时,
+ * 出码口令不能交给它(口令只该出现在主进程和我们的 Host 之间)。
+ */
+async function ownHostListening(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/health`, { signal: AbortSignal.timeout(5_000) });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return body["app"] === "leophoneagent-1.x";
+  } catch {
+    return false;
+  }
+}
+
+const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
+
 export function registerLeoLinkIpc(): void {
   ipcMain.handle(LEO_LINK_STATUS_CHANNEL, (event) =>
     trustedSender(event) ? callLeo("/api/leo/link/status", "GET") : { ok: false, error: "forbidden" },
   );
-  ipcMain.handle(LEO_LINK_PAIR_CHANNEL, (event) =>
-    trustedSender(event)
-      ? callLeo("/api/leo/link/pair", "POST", { "x-leo-pair": LEO_PAIR_SECRET })
-      : { ok: false, error: "forbidden" },
-  );
-  ipcMain.handle(LEO_LINK_REVOKE_CHANNEL, (event, payload: unknown) =>
-    trustedSender(event) && typeof payload === "string"
-      ? callLeo(`/api/leo/link/pair?payload=${encodeURIComponent(payload)}`, "DELETE", {
-          "x-leo-pair": LEO_PAIR_SECRET,
-        })
-      : { ok: false, error: "forbidden" },
-  );
+  ipcMain.handle(LEO_LINK_PAIR_CHANNEL, async (event) => {
+    if (!trustedSender(event)) return { ok: false, error: "forbidden" };
+    if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
+    return callLeo("/api/leo/link/pair", "POST", { "x-leo-pair": LEO_PAIR_SECRET });
+  });
+  ipcMain.handle(LEO_LINK_REVOKE_CHANNEL, async (event, payload: unknown) => {
+    if (!trustedSender(event) || typeof payload !== "string") return { ok: false, error: "forbidden" };
+    if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
+    return callLeo(`/api/leo/link/pair?payload=${encodeURIComponent(payload)}`, "DELETE", {
+      "x-leo-pair": LEO_PAIR_SECRET,
+    });
+  });
 }

@@ -223,6 +223,10 @@ export async function handleChatCompletions(
   body: Record<string, unknown>,
 ): Promise<void> {
   const request = body as unknown as OpenAIRequest;
+  if (!Array.isArray(request.messages)) {
+    sendJson(res, 400, { error: { message: "messages is required", type: "invalid_request_error" } });
+    return;
+  }
   const [providerId, ...rest] = String(request.model ?? "").split("/");
   const modelId = rest.join("/");
   const runtime = await oauthRuntime();

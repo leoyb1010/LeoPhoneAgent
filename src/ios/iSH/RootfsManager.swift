@@ -115,18 +115,7 @@ class RootfsManager {
             // Backup /root directory
             let userDataPath = dataPath.appendingPathComponent("root")
             if FileManager.default.fileExists(atPath: userDataPath.path) {
-                // Application Support, not tmp: the backup must survive the
-                // relaunch the reset asks for, and tmp is purged by the system.
-                let backupPath = userDataBackupsDirectory
-                    .appendingPathComponent("rootfs-backup-\(Int(Date().timeIntervalSince1970))")
-                    .appendingPathComponent("root")
-
-                try FileManager.default.createDirectory(
-                    at: backupPath.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-
-                try FileManager.default.copyItem(at: userDataPath, to: backupPath)
+                let backupPath = try backUpUserData(from: userDataPath)
                 backupURL = backupPath
                 print("RootfsManager: User data backed up to \(backupPath.path)")
             }
@@ -158,9 +147,81 @@ class RootfsManager {
             .appendingPathComponent("RootfsBackups", isDirectory: true)
     }
 
+    /// In-progress copies. Deliberately not `rootfs-backup-*`, so
+    /// `existingUserDataBackups()` never offers one.
+    private static let partialBackupPrefix = ".partial-rootfs-backup-"
+    /// Written next to `root/` inside a backup.
+    private static let backupModesFileName = "fakefs-modes.json"
+
+    /// [T-rootfs-backup-integrity] Copy `/root` into a new backup and return
+    /// its `root` folder.
+    ///
+    /// The copy goes under a temporary name and is renamed only once complete:
+    /// a copy that fails partway (disk full) used to stay behind as
+    /// `rootfs-backup-*/root`, get listed, and replace an intact /root on Restore.
+    ///
+    /// [T-rootfs-backup-modes] iSH keeps file modes in meta.db, not on the
+    /// host — including the symlink type: a fakefs symlink is a plain host file
+    /// holding the target path, marked S_IFLNK only in meta.db. So the backup
+    /// also records every /root path's mode (`backupModesFileName`) for restore
+    /// to re-apply; otherwise scripts lose +x and links such as
+    /// `node_modules/.bin/*` come back as text files.
+    private func backUpUserData(from userDataPath: URL) throws -> URL {
+        let fm = FileManager.default
+        // Application Support, not tmp: the backup must survive the
+        // relaunch the reset asks for, and tmp is purged by the system.
+        let backupsDir = userDataBackupsDirectory
+        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+        excludeBackupsFromDeviceBackup()
+        // Left by a copy the system killed midway; never listed, only takes space.
+        for leftover in (try? fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)) ?? []
+        where leftover.lastPathComponent.hasPrefix(Self.partialBackupPrefix) {
+            try? fm.removeItem(at: leftover)
+        }
+
+        let stamp = Int(Date().timeIntervalSince1970)
+        let partialDir = backupsDir.appendingPathComponent("\(Self.partialBackupPrefix)\(stamp)", isDirectory: true)
+        let finalDir = backupsDir.appendingPathComponent("rootfs-backup-\(stamp)", isDirectory: true)
+        do {
+            try fm.createDirectory(at: partialDir, withIntermediateDirectories: true)
+            try fm.copyItem(at: userDataPath, to: partialDir.appendingPathComponent("root"))
+            // No readable meta.db → no manifest; restore then uses default modes.
+            if let modes = fakefsModes(under: "/root") {
+                let data = try JSONEncoder().encode(modes)
+                try data.write(to: partialDir.appendingPathComponent(Self.backupModesFileName), options: .atomic)
+            }
+            try fm.moveItem(at: partialDir, to: finalDir)
+        } catch {
+            try? fm.removeItem(at: partialDir)
+            throw error
+        }
+        return finalDir.appendingPathComponent("root")
+    }
+
+    /// A local safety copy of /root, possibly large: keep the folder out of
+    /// iCloud / computer device backups. Idempotent; also applied when listing,
+    /// so folders created by older builds get it too.
+    private func excludeBackupsFromDeviceBackup() {
+        var url = userDataBackupsDirectory
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
+    }
+
+    /// Modes recorded by `backUpUserData`. Empty for backups made before the
+    /// manifest existed (or if it can't be read): those restore with defaults.
+    private func recordedBackupModes(for backupURL: URL) -> [String: UInt32] {
+        let manifest = backupURL.deletingLastPathComponent().appendingPathComponent(Self.backupModesFileName)
+        guard let data = try? Data(contentsOf: manifest),
+              let modes = try? JSONDecoder().decode([String: UInt32].self, from: data) else { return [:] }
+        return modes
+    }
+
     /// `/root` backups made by `reset(keepUserData: true)`, newest first.
     /// Includes ones older builds left in tmp, while the system hasn't purged them.
     func existingUserDataBackups() -> [URL] {
+        excludeBackupsFromDeviceBackup()
         let fm = FileManager.default
         let parents = [userDataBackupsDirectory, fm.temporaryDirectory]
         let backups = parents.flatMap { dir -> [URL] in
@@ -198,14 +259,21 @@ class RootfsManager {
         let userDataPath = dataPath.appendingPathComponent("root")
         // Copy next to the target first, so a failed copy leaves /root intact.
         let staging = dataPath.appendingPathComponent(".root-restore-\(UUID().uuidString)")
-        try fm.copyItem(at: backupURL, to: staging)
+        do {
+            try fm.copyItem(at: backupURL, to: staging)
+        } catch {
+            try? fm.removeItem(at: staging)   // a partial copy is just garbage
+            throw error
+        }
         if fm.fileExists(atPath: userDataPath.path) {
             removeFakefsPath("/root")
             try fm.removeItem(at: userDataPath)
         }
         try fm.moveItem(at: staging, to: userDataPath)
         // Host-side files are invisible to the guest until they are in meta.db.
-        registerSubtreeInMetaDB(hostRoot: userDataPath)
+        // [T-rootfs-backup-modes] Re-apply the modes (+x, symlink type…) the
+        // backup recorded; older backups without a manifest get the defaults.
+        registerSubtreeInMetaDB(hostRoot: userDataPath, modes: recordedBackupModes(for: backupURL))
 
         print("RootfsManager: User data restored from \(backupURL.path)")
     }
@@ -265,6 +333,14 @@ class RootfsManager {
             // relativePath e.g. "/etc/pip/pip.conf"
             let relativePath = fileURL.path.replacingOccurrences(of: overlayURL.path, with: "")
             let destURL = dataPath.appendingPathComponent(relativePath)
+
+            // [T-mirror-survives-launch] 用户在「镜像源」里选了自定义 pip 镜像时,pip.conf 是用户的配置:
+            // 以前每次启动都被包里的默认文件盖回去,选的镜像重启就没了。
+            if relativePath == "/etc/pip/pip.conf",
+               UserDefaults.standard.bool(forKey: "mirror.useCustom.pip"),
+               fm.fileExists(atPath: destURL.path) {
+                continue
+            }
 
             do {
                 let copyStart = CFAbsoluteTimeGetCurrent()
@@ -476,11 +552,66 @@ class RootfsManager {
         }
     }
 
+    /// Linux path → fakefs `st_mode` (file type + permission bits) for
+    /// `linuxRoot` and everything under it, read from meta.db. nil when meta.db
+    /// can't be read.
+    func fakefsModes(under linuxRoot: String) -> [String: UInt32]? {
+        let metaDBPath = rootfsPath.appendingPathComponent("meta.db").path
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
+              let db else {
+            sqlite3_close(db)
+            return nil
+        }
+        defer { sqlite3_close(db) }
+        // The booted kernel may be writing meta.db; wait briefly instead of failing.
+        sqlite3_busy_timeout(db, 2000)
+
+        let prefix = linuxRoot.hasSuffix("/") ? linuxRoot : linuxRoot + "/"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db,
+            "SELECT paths.path, stats.stat FROM paths JOIN stats ON stats.inode = paths.inode WHERE paths.path = ? OR substr(paths.path, 1, ?) = ?",
+            -1, &stmt, nil) == SQLITE_OK, let stmt else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        bindPathBlob(stmt, index: 1, path: linuxRoot)
+        sqlite3_bind_int(stmt, 2, Int32(Array(prefix.utf8).count))
+        bindPathBlob(stmt, index: 3, path: prefix)
+
+        var modes: [String: UInt32] = [:]
+        var rc = sqlite3_step(stmt)
+        while rc == SQLITE_ROW {
+            // SQLite: fetch the pointer first, then its byte count.
+            let pathBytes = sqlite3_column_blob(stmt, 0)
+            let pathCount = Int(sqlite3_column_bytes(stmt, 0))
+            let statBytes = sqlite3_column_blob(stmt, 1)
+            let statCount = Int(sqlite3_column_bytes(stmt, 1))
+            if let pathBytes, pathCount > 0, let statBytes, statCount >= 4 {
+                let path = String(decoding: UnsafeRawBufferPointer(start: pathBytes, count: pathCount), as: UTF8.self)
+                // struct ish_stat starts with a little-endian uint32 mode.
+                let stat = UnsafeRawBufferPointer(start: statBytes, count: 4)
+                modes[path] = UInt32(stat[0]) | UInt32(stat[1]) << 8 | UInt32(stat[2]) << 16 | UInt32(stat[3]) << 24
+            }
+            rc = sqlite3_step(stmt)
+        }
+        return rc == SQLITE_DONE ? modes : nil
+    }
+
+    /// A recorded mode is used only while its type still fits the host entry:
+    /// a directory must stay a directory, and a host file (regular file, or a
+    /// fakefs symlink / fifo stored as one) must not turn into a directory.
+    private static func recordedMode(_ mode: UInt32?, isDirectory: Bool) -> UInt32? {
+        guard let mode else { return nil }
+        let isDirectoryMode = (mode & 0o170000) == 0o040000
+        return isDirectoryMode == isDirectory ? mode : nil
+    }
+
     /// Register every existing file/directory under `hostRoot` into `meta.db`,
     /// using Linux paths relative to `dataPath`. Used after copying a directory
     /// subtree from the host filesystem (e.g. FileBrowser import/copy/move)
     /// so that the iSH kernel can see the new entries.
-    func registerSubtreeInMetaDB(hostRoot: URL) {
+    /// `modes` (Linux path → fakefs mode) overrides the default 0644 / 0755
+    /// for the paths it lists, e.g. modes a /root backup recorded.
+    func registerSubtreeInMetaDB(hostRoot: URL, modes: [String: UInt32] = [:]) {
         let fm = FileManager.default
         let dataPrefix = dataPath.standardized.path
         let rootStd = hostRoot.standardized.path
@@ -497,7 +628,8 @@ class RootfsManager {
         guard let rootLinux = linuxPath(for: rootStd) else { return }
 
         ensureParentDirsInMetaDB(for: rootLinux)
-        ensureFakefsMetadata(for: rootLinux, isDirectory: isDir.boolValue)
+        ensureFakefsMetadata(for: rootLinux, isDirectory: isDir.boolValue,
+                             mode: Self.recordedMode(modes[rootLinux], isDirectory: isDir.boolValue))
         guard isDir.boolValue else { return }
 
         var stack: [URL] = [URL(fileURLWithPath: rootStd)]
@@ -510,7 +642,8 @@ class RootfsManager {
                 guard let childLinux = linuxPath(for: childStd) else { continue }
                 var childIsDir: ObjCBool = false
                 fm.fileExists(atPath: childStd, isDirectory: &childIsDir)
-                ensureFakefsMetadata(for: childLinux, isDirectory: childIsDir.boolValue)
+                ensureFakefsMetadata(for: childLinux, isDirectory: childIsDir.boolValue,
+                                     mode: Self.recordedMode(modes[childLinux], isDirectory: childIsDir.boolValue))
                 if childIsDir.boolValue {
                     stack.append(URL(fileURLWithPath: childStd))
                 }

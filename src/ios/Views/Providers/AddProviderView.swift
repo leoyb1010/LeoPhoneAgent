@@ -81,7 +81,7 @@ struct AIDataSharingConsentView: View {
                                 .font(.headline)
 
                             VStack(alignment: .leading, spacing: 6) {
-                                dataItem("API keys are stored in the iOS Keychain and can sync through iCloud Keychain; sign-in tokens stay on this device only. Provider configuration may also sync through your iCloud account when iCloud Sync is enabled")
+                                dataItem("API keys (including the key an OpenRouter sign-in creates) and pasted tokens are stored in the iOS Keychain and can sync through iCloud Keychain; ChatGPT, xAI and Kimi sign-ins stay on this device only. Provider configuration may also sync through your iCloud account when iCloud Sync is enabled")
                                 dataItem("Data is sent only to the specific provider you choose for each conversation")
                                 dataItem("You can remove any provider and its credentials at any time from Settings")
                                 dataItem("Diagnostic logs can contain shell output and should be reviewed before export")
@@ -689,7 +689,12 @@ struct AddProviderView: View {
         } header: {
             Text("OAuth")
         } footer: {
-            Text("Sign-in tokens stay in this device's Keychain and are not synced to iCloud. They are only sent to the provider's official endpoint.")
+            // OpenRouter's sign-in yields a regular API key, which syncs like one.
+            if selectedType == .openRouter {
+                Text("Signing in creates an OpenRouter API key. It is stored in the iOS Keychain, can sync through iCloud Keychain, and is only sent to OpenRouter.")
+            } else {
+                Text("Sign-in tokens stay in this device's Keychain and are not synced to iCloud. They are only sent to the provider's official endpoint.")
+            }
         }
 
         // Manual OAuth entry — available for all providers (supports proxy services, Coding Plan tokens, etc.)
@@ -993,6 +998,8 @@ struct AddProviderView: View {
             oauthAuthTime = Date()
             oauthMaskedToken = masked
             pendingOAuthDone = true
+        } catch is CancellationError {
+            // Closing the sign-in page is not an error.
         } catch {
             errorMessage = error.localizedDescription
         }

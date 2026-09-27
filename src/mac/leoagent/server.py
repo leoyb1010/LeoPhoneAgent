@@ -25,6 +25,7 @@ import hmac
 import json
 from urllib.parse import urlparse
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -352,6 +353,13 @@ class MacBridgeEventSink:
     """
 
     OUTBOX_LIMIT = 200
+    # Mac 关着几个小时再开,积压的审批 / 完成早就过时了,一下子全推到手机只是打扰。
+    MAX_AGE_S = 10 * 60
+    # 只带推送和补齐要用的字段。Claude 的审批帧带着 raw(整份工具输入,Write 一个大文件就是几百 KB),
+    # 超过 Mac 接口的上限会被拒,这条审批就永远到不了手机;文件内容也不该经 Mac 进中继。
+    KEEP = ("event", "session_id", "seq", "timestamp", "approval_id", "tool", "command",
+            "description", "choices", "error", "output", "harness")
+    FIELD_LIMIT = 2000
 
     def __init__(self, url: str, key: str) -> None:
         self.url = url
@@ -359,26 +367,44 @@ class MacBridgeEventSink:
         self._outbox: List[Dict[str, Any]] = []
         self._wake: Optional[asyncio.Event] = None
 
+    @classmethod
+    def slim(cls, event: Dict[str, Any]) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for key in cls.KEEP:
+            value = event.get(key)
+            if value is None:
+                continue
+            out[key] = value[:cls.FIELD_LIMIT] if isinstance(value, str) else value
+        return out
+
     def push(self, event: Dict[str, Any]) -> None:
         if event.get("event") not in harness.PUSHABLE_EVENTS:
             return
-        self._outbox.append(event)
+        self._outbox.append({**self.slim(event), "_queued_at": time.time()})
         if len(self._outbox) > self.OUTBOX_LIMIT:
             del self._outbox[: len(self._outbox) - self.OUTBOX_LIMIT]
         if self._wake is not None:
             self._wake.set()
 
+    def _next(self) -> Optional[Dict[str, Any]]:
+        """队首还没过时的一条;过时的直接丢掉。没有就 None。"""
+        now = time.time()
+        while self._outbox and now - float(self._outbox[0].get("_queued_at") or 0) > self.MAX_AGE_S:
+            self._outbox.pop(0)
+        return self._outbox[0] if self._outbox else None
+
     async def run_forever(self) -> None:
         self._wake = asyncio.Event()
         async with aiohttp.ClientSession() as http:
             while True:
-                if not self._outbox:
+                event = self._next()
+                if event is None:
                     await self._wake.wait()
                     self._wake.clear()
                     continue
-                event = self._outbox[0]
+                payload = {k: v for k, v in event.items() if k != "_queued_at"}
                 try:
-                    async with http.post(self.url, json={"event": event},
+                    async with http.post(self.url, json={"event": payload},
                                          headers={"Authorization": f"Bearer {self.key}"},
                                          timeout=aiohttp.ClientTimeout(total=10)) as r:
                         # 4xx 重发也不会好(钥匙不对、Mac 版本太旧),丢掉这一条。

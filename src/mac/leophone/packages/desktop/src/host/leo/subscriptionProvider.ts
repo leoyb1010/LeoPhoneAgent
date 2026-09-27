@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { IProviderSettingsService } from "@zcode/services";
 
 import { LEO_HTTP_PORT, leoLocalKey, leoPath } from "./leoPaths.js";
-import { loggedInModels } from "./oauthRuntime.js";
+import { loggedInModels, retireBlockedLogins } from "./oauthRuntime.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
@@ -39,6 +39,12 @@ export async function syncSubscriptionProvider(
   logger: Logger,
 ): Promise<void> {
   try {
+    // 清不掉也不能耽误同步模型清单。
+    await retireBlockedLogins()
+      .then((retired) => {
+        if (retired.length) logger.info("[leo] 清掉了已下架的订阅登录", { providers: retired });
+      })
+      .catch((error: unknown) => logger.warn("[leo] 清理已下架的订阅登录失败", { error: String(error) }));
     const models = await loggedInModels();
     const view = (await providerSettings.getView()) as unknown as {
       providers?: Array<{

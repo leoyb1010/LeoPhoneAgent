@@ -116,6 +116,12 @@ enum ModelsDevAPI {
         return model
     }
 
+    /// The AI SDK package a provider's catalog names for one model (its own
+    /// `provider.npm`, e.g. `@ai-sdk/anthropic`), or nil when the model has none.
+    static func modelProviderNpm(providerKey: String, modelId: String) -> String? {
+        loadRegistry()?[providerKey]?.models[modelId]?.provider?.npm
+    }
+
     /// Enrich an array of models in bulk.
     static func enrichModels(_ models: [LLMModel]) -> [LLMModel] {
         guard let registry = loadRegistry() else { return models }
@@ -352,6 +358,8 @@ private struct ModelsDevModel: Decodable {
     let limit: ModelsDevLimit?
     let reasoning: Bool?
     let interleaved: ModelsDevInterleaved?
+    /// Per-model provider override (e.g. `{"npm": "@ai-sdk/anthropic"}`).
+    let provider: ModelsDevModelProvider?
 
     /// Convert models.dev modalities to app ModelModality.
     var resolvedModality: ModelModality? {
@@ -375,6 +383,20 @@ private struct ModelsDevModel: Decodable {
 private struct ModelsDevModalities: Decodable {
     let input: [String]?
     let output: [String]?
+}
+
+/// Lenient: an unexpected shape decodes to nil instead of failing the whole registry.
+private struct ModelsDevModelProvider: Decodable {
+    let npm: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        npm = try? container?.decodeIfPresent(String.self, forKey: .npm)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case npm
+    }
 }
 
 private struct ModelsDevLimit: Decodable {

@@ -86,8 +86,12 @@ final class WorkerPool {
         if let host, !host.isEmpty {
             finalPrompt = "Run ALL shell work for this task on the remote host '\(host)' via remote_shell (fall back to local only if the host is unreachable and say so).\n\n" + prompt
         }
-        vm.inputText = finalPrompt
-        vm.send()
+        // [T-draft-headless] The worker VM starts empty (the cache no longer
+        // restores drafts); borrow the composer the headless way regardless.
+        vm.withComposerSetAside {
+            vm.inputText = finalPrompt
+            vm.send()
+        }
         logger.info("dispatched \(workerId) session=\(sessionId.prefix(8)) label=\(cleanLabel)")
         return ("Dispatched worker \(workerId) (\"\(cleanLabel)\") in session \(sessionId.prefix(8)). It runs in parallel; use check_subtasks to monitor and collect_subtask when done.", true)
     }

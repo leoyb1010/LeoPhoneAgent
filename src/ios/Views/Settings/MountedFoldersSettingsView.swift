@@ -168,6 +168,19 @@ struct MountedFoldersSettingsView: View {
         } message: {
             Text(errorText ?? "")
         }
+        .task { await refreshWhileChecking() }
+    }
+
+    /// [T-mount-state-pending] Launch-time resolution finishes in the
+    /// background. Refresh on appear, then keep refreshing (≤ 20 s) while a
+    /// row still shows "checking", so the result shows up without reopening.
+    private func refreshWhileChecking() async {
+        model.refresh()
+        for _ in 0..<20 where model.hasPendingStates {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if Task.isCancelled { return }
+            model.refresh()
+        }
     }
 
     /// Build the MountDetailView context for an external-mount entry.
@@ -271,7 +284,8 @@ private struct InfoBanner: View {
 
 private struct MountedFolderRow: View {
     let entry: MountedFolderEntry
-    let state: MountActivationState
+    /// nil while the mount is still being resolved.
+    let state: MountActivationState?
     let sourceURL: URL?
 
     var body: some View {
@@ -294,7 +308,11 @@ private struct MountedFolderRow: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if let problem = stateProblem {
+            if state == nil {
+                Label(String(localized: "Checking access…"), systemImage: "clock")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if let problem = stateProblem {
                 Label(problem, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2)
                     .foregroundStyle(.orange)
@@ -306,7 +324,7 @@ private struct MountedFolderRow: View {
 
     private var stateProblem: String? {
         switch state {
-        case .active: return nil
+        case .none, .active: return nil
         case .stale:
             return String(localized: "The folder moved or was renamed. Remove this mount and pick the folder again.")
         case .permissionDenied:
@@ -465,8 +483,17 @@ final class MountedFoldersViewModel: ObservableObject {
         states = MountedFoldersManager.shared.activationStates
     }
 
-    func state(for id: UUID) -> MountActivationState {
-        states[id] ?? .failed("")
+    /// nil = not resolved yet. [T-mount-state-pending] Mounts are resolved
+    /// asynchronously at launch (up to 5 s each), so "no state" means
+    /// "still checking", not "couldn't mount" — defaulting to `.failed("")`
+    /// flagged every healthy mount with a warning until the page was reopened.
+    func state(for id: UUID) -> MountActivationState? {
+        states[id]
+    }
+
+    /// True while some mount has no resolution result yet.
+    var hasPendingStates: Bool {
+        entries.contains { states[$0.id] == nil }
     }
 
     /// Resolved host URL for a mount, if currently active. Exposed to row views

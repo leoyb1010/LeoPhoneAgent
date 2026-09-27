@@ -176,3 +176,32 @@ test("leoagent events are only accepted with leoagent's own key and only for pus
   // 测试里没开桥接:钥匙和事件都对,才走到「连接没在跑」。
   assert.equal((await call("POST", "/api/leo/link/leoagent-event", agent, body(event))).status, 503);
 });
+
+test("malformed %-escapes in a path parameter are a 400, not a 500 with a warning", async () => {
+  const before = logs.length;
+  const res = await call("POST", "/api/leo/ui/oauth/providers/%E0%A4%A/login", { "x-leo-ui": "1" }, "{}");
+  assert.equal(res.status, 400);
+  assert.equal(logs.length, before);
+});
+
+test("chat requests without messages are a 400 before any model runtime loads", async () => {
+  const res = await call(
+    "POST",
+    "/v1/chat/completions",
+    { authorization: `Bearer ${leoLocalKey()}`, "content-type": "application/json" },
+    JSON.stringify({ model: "openai-codex/gpt-6" }),
+  );
+  assert.equal(res.status, 400);
+});
+
+test("a chat body past the proxy limit reads as context overflow so the agent compacts instead of failing forever", async () => {
+  const huge = JSON.stringify({ model: "x/y", messages: [{ role: "user", content: "a".repeat(49 * 1024 * 1024) }] });
+  const res = await call(
+    "POST",
+    "/v1/chat/completions",
+    { authorization: `Bearer ${leoLocalKey()}`, "content-type": "application/json" },
+    huge,
+  );
+  assert.equal(res.status, 400);
+  assert.equal((res.body["error"] as Record<string, unknown>)["code"], "context_length_exceeded");
+});

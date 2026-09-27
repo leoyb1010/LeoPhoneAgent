@@ -155,10 +155,13 @@ struct QuickTaskIntent: AppIntent {
         }
 
         let renderedPrompt = definition.renderedPrompt(inputValues: inputValues)
-        vm.inputText = renderedPrompt
         let sid = vm.sessionId ?? "unknown"
-        let runId = try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) {
-            vm.send()
+        // [T-headless-draft] 同一个 VM 可能正开在界面上:只发这个快捷任务,用户的草稿留着。
+        let runId = try vm.withComposerSetAside {
+            vm.inputText = renderedPrompt
+            return try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) {
+                vm.send()
+            }
         }
 
         // Resolve model name

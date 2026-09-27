@@ -16,9 +16,30 @@ struct EnhancedBackgroundSettingsView: View {
     /// reactively once the row reaches the expected state.
     @State private var focus: [String: Bool?] = [:]
     @AppStorage(LeoRunPolicy.defaultsKey) private var runPolicyRaw: Int = LeoRunPolicy.standard.rawValue
+    @State private var isAuthorizingPrivacyOff = false
 
     private func shouldFocus(_ key: String, current: Bool) -> Bool {
         DeepLinkCoordinator.shouldFocus(key, current: current, in: focus)
+    }
+
+    /// Turning it off puts session content back on the Lock Screen, so it
+    /// takes Face ID / passcode like every other protection it lowers.
+    private var taskStatusPrivacyBinding: Binding<Bool> {
+        Binding(get: { keepAlive.liveActivityPrivacyMode }, set: { newValue in
+            guard newValue != keepAlive.liveActivityPrivacyMode else { return }
+            guard !newValue else {
+                keepAlive.liveActivityPrivacyMode = true
+                return
+            }
+            guard !isAuthorizingPrivacyOff else { return }
+            isAuthorizingPrivacyOff = true
+            Task { @MainActor in
+                if await BiometricAuth.authorizeLoweringProtection(reason: String(localized: "Turn off Task Status Privacy")) {
+                    keepAlive.liveActivityPrivacyMode = false
+                }
+                isAuthorizingPrivacyOff = false
+            }
+        })
     }
 
     var body: some View {
@@ -73,7 +94,8 @@ struct EnhancedBackgroundSettingsView: View {
             Section {
                 // Display name only — the persisted key stays
                 // `liveActivityPrivacyMode` so existing installs keep their setting.
-                Toggle("Task Status Privacy", isOn: $keepAlive.liveActivityPrivacyMode)
+                Toggle("Task Status Privacy", isOn: taskStatusPrivacyBinding)
+                    .disabled(isAuthorizingPrivacyOff)
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Hide session content on the Lock Screen, in the Dynamic Island and in notifications. Only the number of completed tasks and the elapsed time are shown — no session titles, tool status or reply content.")

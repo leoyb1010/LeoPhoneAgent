@@ -83,8 +83,11 @@ struct AskMinisIntent: AppIntent {
             throw QuickTaskIntentError.cancelledBeforeStart
         }
 
-        vm.inputText = prompt
-        vm.send()
+        // [T-headless-draft] 同一个 VM 可能正开在界面上:只发这句,用户的草稿留着。
+        vm.withComposerSetAside {
+            vm.inputText = prompt
+            vm.send()
+        }
 
         let sid = vm.sessionId ?? session?.id ?? ""
         logger.info("AskMinis send sid=\(sid.prefix(8)) new=\(session == nil)")

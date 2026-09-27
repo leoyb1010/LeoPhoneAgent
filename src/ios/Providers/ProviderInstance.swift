@@ -142,7 +142,13 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// custom base URL (proxy/relay) — official direct connections (no customBaseURL)
     /// and native Gemini are excluded.
     var supportsCustomUserAgent: Bool {
-        guard effectiveCustomBaseURL != nil, !usesProviderSignIn else { return false }
+        guard trimmedCustomBaseURL != nil else { return false }
+        return supportsCustomUserAgent(manualToken: storedManualToken())
+    }
+
+    func supportsCustomUserAgent(manualToken: String?) -> Bool {
+        guard effectiveCustomBaseURL(manualToken: manualToken) != nil,
+              !usesProviderSignIn(manualToken: manualToken) else { return false }
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .anthropic:
             return true
@@ -155,8 +161,25 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// (not a user-pasted manual token). Such tokens are only ever sent to the
     /// provider's official endpoint, so a custom API base is not offered.
     var usesProviderSignIn: Bool {
-        guard credentialType == .oauth else { return false }
-        return ProviderKeychainHelper.loadOAuthString(instanceId: id, account: "manual-oauth-token")?.isEmpty != false
+        usesProviderSignIn(manualToken: storedManualToken())
+    }
+
+    /// The `…(manualToken:)` variants take a manual token the caller already
+    /// read. A provider build reads it once (`storedManualToken()`) and derives
+    /// both the credential and the base URL from that read, so a transient
+    /// Keychain miss can't drop a relay's custom base while its token is still
+    /// sent — to the official host.
+    func usesProviderSignIn(manualToken: String?) -> Bool {
+        credentialType == .oauth && (manualToken?.isEmpty ?? true)
+    }
+
+    /// The user-pasted bearer token of an OAuth instance (one Keychain read);
+    /// nil for API-key instances and when none is stored.
+    func storedManualToken() -> String? {
+        guard credentialType == .oauth,
+              let token = ProviderKeychainHelper.loadOAuthString(instanceId: id, account: "manual-oauth-token"),
+              !token.isEmpty else { return nil }
+        return token
     }
 
     /// Whether the Custom API Base setting applies to this instance.
@@ -167,19 +190,35 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         }
     }
 
+    func supportsCustomBaseURL(manualToken: String?) -> Bool {
+        switch providerType {
+        case .openCodeGo, .unsupported: return false
+        default: return !usesProviderSignIn(manualToken: manualToken)
+        }
+    }
+
     /// Non-nil when the instance depends on a sign-in path this build no longer
     /// ships (Claude subscription OAuth, Google/Gemini Code Assist OAuth,
     /// Antigravity). The instance and its models are kept, but it cannot send
     /// requests until it is switched to an API key.
     var retiredSignInNotice: String? {
-        if providerType == .unsupported, unknownProviderTypeRaw == RetiredSignIn.antigravityRawType {
-            return RetiredSignIn.antigravityNotice
-        }
-        guard usesProviderSignIn else { return nil }
         switch providerType {
-        case .anthropic: return RetiredSignIn.claudeNotice
-        case .gemini: return RetiredSignIn.geminiNotice
+        case .unsupported where unknownProviderTypeRaw == RetiredSignIn.antigravityRawType:
+            return RetiredSignIn.antigravityNotice
+        case .anthropic where usesProviderSignIn: return RetiredSignIn.claudeNotice
+        case .gemini where usesProviderSignIn: return RetiredSignIn.geminiNotice
         default: return nil
+        }
+    }
+
+    /// `retiredSignInNotice != nil` for list and picker rows: reads the cached
+    /// credential probe instead of the Keychain. A Claude / Google sign-in
+    /// instance counts as retired while it has no API key or manual token.
+    var isRetiredSignIn: Bool {
+        switch providerType {
+        case .unsupported: return unknownProviderTypeRaw == RetiredSignIn.antigravityRawType
+        case .anthropic, .gemini: return credentialType == .oauth && !hasAnyCredential
+        default: return false
         }
     }
 
@@ -203,11 +242,22 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// Returns customBaseURL if non-nil and non-empty, otherwise nil.
     /// Use this to check whether a custom base is configured; for building request URLs use resolvedBaseURL(default:).
     var effectiveCustomBaseURL: String? {
-        guard let url = customBaseURL, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard trimmedCustomBaseURL != nil else { return nil }
+        return effectiveCustomBaseURL(manualToken: storedManualToken())
+    }
+
+    func effectiveCustomBaseURL(manualToken: String?) -> String? {
+        guard let url = trimmedCustomBaseURL else { return nil }
         // Signed-in tokens must only reach the provider's own endpoint, so a
         // base persisted before this rule (or synced from an older build) is ignored.
-        guard supportsCustomBaseURL else { return nil }
-        return url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard supportsCustomBaseURL(manualToken: manualToken) else { return nil }
+        return url
+    }
+
+    /// The stored custom base, trimmed; nil when unset. No Keychain read.
+    private var trimmedCustomBaseURL: String? {
+        guard let url = customBaseURL?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else { return nil }
+        return url
     }
 
     /// Returns the base URL to use for API requests.

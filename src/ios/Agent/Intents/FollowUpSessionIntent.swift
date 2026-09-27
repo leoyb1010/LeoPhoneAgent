@@ -72,21 +72,23 @@ struct FollowUpSessionIntent: AppIntent {
             }
         }
 
-        // Add file attachments if provided
-        logger.info("📎 FollowUp files param: \(files == nil ? "nil" : "\(files!.count) files")")
-        if let intentFiles = files {
-            for (i, file) in intentFiles.enumerated() {
-                let name = SendPromptIntent.resolvedFileName(for: file)
-                let dataSize = file.data.count
-                logger.info("📎 FollowUp file[\(i)]: name=\(name) dataSize=\(dataSize) type=\(file.type?.identifier ?? "nil")")
-                vm.addDataAttachment(data: file.data, fileName: name)
-            }
-        }
-        logger.info("📎 FollowUp vm.attachments after add: \(vm.attachments.count)")
-
-        vm.inputText = prompt
         let sid = vm.sessionId ?? session.id
-        let runId = try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
+        // [T-headless-draft] 同一个 VM 可能正开在界面上:只发这次追问和它自己的附件,用户的草稿留着。
+        let runId = try vm.withComposerSetAside {
+            // Add file attachments if provided
+            logger.info("📎 FollowUp files param: \(files == nil ? "nil" : "\(files!.count) files")")
+            if let intentFiles = files {
+                for (i, file) in intentFiles.enumerated() {
+                    let name = SendPromptIntent.resolvedFileName(for: file)
+                    let dataSize = file.data.count
+                    logger.info("📎 FollowUp file[\(i)]: name=\(name) dataSize=\(dataSize) type=\(file.type?.identifier ?? "nil")")
+                    vm.addDataAttachment(data: file.data, fileName: name)
+                }
+            }
+            logger.info("📎 FollowUp vm.attachments after add: \(vm.attachments.count)")
+            vm.inputText = prompt
+            return try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
+        }
         logger.info("📎 FollowUp send() called, isProcessing=\(vm.isProcessing)")
 
         // Resolve model name

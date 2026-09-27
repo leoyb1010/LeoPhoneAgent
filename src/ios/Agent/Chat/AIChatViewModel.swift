@@ -628,6 +628,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// without changing the proven start ordering.
     private func handleProcessingStarted() {
         nativeRunOutcome = nil
+        // [B8] A new run supersedes the previous failure's typed retry.
+        typedErrorRetry = nil
         // Agent loop starting — defer iCloud sync sends until completion
         Task { await ChatStore.shared.setSyncSendDeferred(true) }
         // [T-ios-defer-icloud-sync-after-stop] A new turn supersedes any
@@ -745,7 +747,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// only ever changes alongside isLoadingSession, whose publish already
     /// re-evaluates the view.
     var hasCompletedInitialLoad = false
-    @Published var errorMessage: String?
+    @Published var errorMessage: String? {
+        // [B8] A cleared error drops its typed retry, so a later failure with
+        // the same text (e.g. offline) can't re-run an old compaction.
+        didSet { if errorMessage == nil { typedErrorRetry = nil } }
+    }
     enum ErrorBannerRetry {
         case reply
         case compaction(UUID, includesBoundary: Bool)
@@ -1464,7 +1470,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             LeoHaptics.notification(.error)
             return
         }
-        NotificationCenter.default.post(name: .chatShareFileRequested, object: url)
+        NotificationCenter.default.post(name: .chatShareFileRequested, object: url,
+                                        userInfo: Self.shareRequestUserInfo(sessionId: sessionId))
     }
 
     /// [T-reply-toolbar] Quote a reply excerpt into the composer as a

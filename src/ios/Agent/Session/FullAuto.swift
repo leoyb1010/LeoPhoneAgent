@@ -219,7 +219,7 @@ struct FullAutoBadge: View {
         .hoverEffect(.highlight)
         .accessibilityLabel(String(localized: "审批方式：\(mode.title)"))
         .accessibilityHint(mode.detail)
-        .confirmationDialog("打开全自动?", isPresented: $confirming, titleVisibility: .visible) {
+        .confirmationDialog("打开全自动？", isPresented: $confirming, titleVisibility: .visible) {
             Button("打开全自动") {
                 explainedOnce = true
                 setMode(.full)

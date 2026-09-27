@@ -233,6 +233,9 @@ private struct InstanceRow: View {
             }
             return CredentialStatus(configured: false, summary: String(localized: "No API key"))
         case .oauth:
+            if instance.isRetiredSignIn {
+                return CredentialStatus(configured: false, summary: String(localized: "Retired · needs API key"))
+            }
             let ok = instance.isOAuthAuthenticated
             return CredentialStatus(configured: ok,
                                     summary: ok ? String(localized: "Authenticated") : String(localized: "Not authenticated"))

@@ -319,73 +319,8 @@ private struct BridgedAssistantBlockV3: View {
         .padding(.horizontal, 16)
         .opacity(message.isCompactedHistory ? 0.5 : 1.0)
         .accessibilityIdentifier(blockAccessibilityId)
-        // Context menu on zero-size overlay so it doesn't inflate self-sizing
-        // (same pattern as BridgedAssistantFooterV3).
-        .overlay {
-            Color.clear.frame(width: 0, height: 0)
-                .contextMenu {
-                    Button {
-                        // [T-fake-copyall] Was byte-identical to Copy Markdown;
-                        // now genuinely plain text via the shared flattener.
-                        let text = message.blocks
-                            .filter { if case .text = $0.kind { return true }; return false }
-                            .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = WatchTextSanitizer.plain(text)
-                    } label: {
-                        Label(String(localized: "Copy Text"), systemImage: "doc.plaintext")
-                    }
-                    Button {
-                        let text = message.blocks
-                            .filter { if case .text = $0.kind { return true }; return false }
-                            .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = text
-                    } label: {
-                        Label(String(localized: "Copy Markdown"), systemImage: "text.quote")
-                    }
-                    if let onReadAloud = bridge.onReadAloud {
-                        Button {
-                            onReadAloud()
-                        } label: {
-                            Label(String(localized: "Read from Start"), systemImage: "play.circle")
-                        }
-                        // Greyed out while streaming so it can't clash with the
-                        // live streaming TTS of the same reply.
-                        .disabled(bridge.isStreaming)
-                    }
-                    if let onCopyScreenshot = bridge.onCopyScreenshot {
-                        Button {
-                            onCopyScreenshot()
-                        } label: {
-                            Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder")
-                        }
-                    }
-                    if let onForceSync = bridge.onForceSync {
-                        Divider()
-                        Button {
-                            onForceSync()
-                        } label: {
-                            Label(String(localized: "Force Sync"), systemImage: "arrow.triangle.2.circlepath.icloud")
-                        }
-                    }
-                    if let onCompact = bridge.onCompact {
-                        Divider()
-                        Button(role: .destructive) {
-                            onCompact()
-                        } label: {
-                            Label(String(localized: "Compact Above"), systemImage: "arrow.down.right.and.arrow.up.left")
-                        }
-                    }
-                } preview: {
-                    // [T-ios-longpress-menu-preview-background] This .contextMenu
-                    // is on a zero-size Color.clear overlay (kept zero-size to
-                    // avoid inflating self-sizing), so without an explicit preview
-                    // SwiftUI snapshots that transparent overlay → see-through
-                    // preview. Supply an opaque card of the message text.
-                    MessageContextMenuPreview(text: message.blocks
-                        .filter { if case .text = $0.kind { return true }; return false }
-                        .map(\.content).joined(separator: "\n\n"))
-                }
-        }
+        // [#20] The zero-size .contextMenu overlay that sat here could never be
+        // long-pressed (a 0×0 clear view takes no touches); removed.
     }
 
     private func toggleUsage() {
@@ -733,71 +668,8 @@ private struct BridgedAssistantFooterV3: View {
         .padding(.vertical, hasFooterContent ? 2 : 0)
         .opacity(message.isCompactedHistory ? 0.5 : 1.0)
         .accessibilityIdentifier("assistantFooter")
-        // Sheet + contextMenu on zero-size overlay so they don't inflate self-sizing.
-        // Both .sheet and .contextMenu wrap the view in interaction containers that
-        // report inflated heights to systemLayoutSizeFitting, causing height oscillation.
-        .overlay {
-            Color.clear.frame(width: 0, height: 0)
-                .contextMenu {
-                    Button {
-                        // [T-fake-copyall] Real plain text (was identical to
-                        // Copy Markdown).
-                        let text = message.blocks
-                            .filter { if case .text = $0.kind { return true }; return false }
-                            .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = WatchTextSanitizer.plain(text)
-                    } label: {
-                        Label(String(localized: "Copy Text"), systemImage: "doc.plaintext")
-                    }
-                    Button {
-                        let text = message.blocks
-                            .filter { if case .text = $0.kind { return true }; return false }
-                            .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = text
-                    } label: {
-                        Label(String(localized: "Copy Markdown"), systemImage: "text.quote")
-                    }
-                    if let onReadAloud = bridge.onReadAloud {
-                        Button {
-                            onReadAloud()
-                        } label: {
-                            Label(String(localized: "Read from Start"), systemImage: "play.circle")
-                        }
-                        // Greyed out while streaming so it can't clash with the
-                        // live streaming TTS of the same reply.
-                        .disabled(bridge.isStreaming)
-                    }
-                    if let onCopyScreenshot = bridge.onCopyScreenshot {
-                        Button {
-                            onCopyScreenshot()
-                        } label: {
-                            Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder")
-                        }
-                    }
-                    if let onForceSync = bridge.onForceSync {
-                        Divider()
-                        Button {
-                            onForceSync()
-                        } label: {
-                            Label(String(localized: "Force Sync"), systemImage: "arrow.triangle.2.circlepath.icloud")
-                        }
-                    }
-                    if let onCompact = bridge.onCompact {
-                        Divider()
-                        Button(role: .destructive) {
-                            onCompact()
-                        } label: {
-                            Label(String(localized: "Compact Above"), systemImage: "arrow.down.right.and.arrow.up.left")
-                        }
-                    }
-                } preview: {
-                    // [T-ios-longpress-menu-preview-background] Opaque preview
-                    // for the footer's zero-size Color.clear contextMenu overlay.
-                    MessageContextMenuPreview(text: message.blocks
-                        .filter { if case .text = $0.kind { return true }; return false }
-                        .map(\.content).joined(separator: "\n\n"))
-                }
-        }
+        // [#20] The zero-size .contextMenu overlay that sat here could never be
+        // long-pressed (a 0×0 clear view takes no touches); removed.
     }
 
     // MARK: - Footer sub-views

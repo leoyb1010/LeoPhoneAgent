@@ -519,7 +519,12 @@ extension AIChatViewModel {
                    let source = OffloadPlaceholderGuard.offloadSourcePath(ofFileReadResult: content, offloadsDir: Self.minisOffloadsLinuxDir) {
                     linuxPath = source
                 } else if content.count > 500 {
-                    linuxPath = offloadContextContent(content, toolId: id, toolName: name)
+                    // [B3] A write tool's RESULT must not land on
+                    // `tools/file_write_<id>.txt`: that name holds the same
+                    // call's offloaded content, which the placeholder guard
+                    // restores into files.
+                    let fileTag = (name == "file_write" || name == "file_edit") ? "result_\(name)" : name
+                    linuxPath = offloadContextContent(content, toolId: id, toolName: fileTag)
                 }
                 // Offload image data
                 if let imgData = imgData, imgData.count > 1024 {

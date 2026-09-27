@@ -110502,7 +110502,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开终端?"
+            "value": "打开终端？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開終端？"
           }
         }
       }
@@ -110514,6 +110520,12 @@
             "state": "translated",
             "value": "这个链接会把下面的命令填进终端。按回车之前不会执行。\n\n%@"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個連結會把下面的命令填進終端。按 Return 之前不會執行。\n\n%@"
+          }
         }
       }
     },
@@ -110523,6 +110535,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个链接会打开一个交互式终端。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個連結會開啟一個互動式終端。"
           }
         }
       }
@@ -110534,6 +110552,12 @@
             "state": "translated",
             "value": "「%@」是挂载的文件夹。要移除，请到 设置 → 挂载外部文件夹 里卸载。里面的文件不会被动到。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」是掛載的資料夾。要移除，請到 設定 → 掛載外部資料夾 裡卸載。裡面的檔案不會被動到。"
+          }
         }
       }
     },
@@ -110543,6 +110567,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "只会删除这个链接，%@ 里的原文件会保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只會刪除這個連結，%@ 裡的原檔案會保留。"
           }
         }
       }
@@ -110572,7 +110602,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在其他 App 中打开?"
+            "value": "在其他 App 中打开？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在其他 App 中開啟？"
           }
         }
       }
@@ -110584,6 +110620,12 @@
             "state": "translated",
             "value": "这个网页想在 LeoPhoneAgent 之外打开一个 %@ 链接。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個網頁想在 LeoPhoneAgent 之外開啟一個 %@ 連結。"
+          }
         }
       }
     },
@@ -110592,7 +110634,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "删除之后的对话?"
+            "value": "删除之后的对话？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除之後的對話？"
           }
         }
       }
@@ -110602,7 +110650,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "编辑并删除之后的对话?"
+            "value": "编辑并删除之后的对话？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編輯並刪除之後的對話？"
           }
         }
       }
@@ -110614,6 +110668,12 @@
             "state": "translated",
             "value": "重试并删除之后的对话"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重試並刪除之後的對話"
+          }
         }
       }
     },
@@ -110623,6 +110683,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新执行并删除之后的对话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新執行並刪除之後的對話"
           }
         }
       }
@@ -110634,6 +110700,12 @@
             "state": "translated",
             "value": "仍然编辑"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍然編輯"
+          }
         }
       }
     },
@@ -110643,6 +110715,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送编辑后的消息会删除这个对话里之后的 %lld 轮，无法撤销。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "傳送編輯後的訊息會刪除這個對話裡之後的 %lld 輪，無法復原。"
           }
         }
       }
@@ -110654,6 +110732,12 @@
             "state": "translated",
             "value": "这会删除这个对话里之后的 %lld 轮，无法撤销。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這會刪除這個對話裡之後的 %lld 輪，無法復原。"
+          }
         }
       }
     },
@@ -110663,6 +110747,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除「%@」？此操作无法撤销。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除「%@」？此操作無法復原。"
           }
         }
       }
@@ -110674,6 +110764,12 @@
             "state": "translated",
             "value": "删除 %@？它的值会从这台设备上移除，无法找回。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 %@？它的值會從這台裝置上移除，無法找回。"
+          }
         }
       }
     },
@@ -110684,6 +110780,12 @@
             "state": "translated",
             "value": "删除服务器"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除伺服器"
+          }
         }
       }
     },
@@ -110693,6 +110795,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除「%@」及其保存的登录凭据？此操作无法撤销。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除「%@」及其儲存的登入憑證？此操作無法復原。"
           }
         }
       }
@@ -110744,6 +110852,12 @@
             "state": "translated",
             "value": "✅ Rootfs 已重置。/root 已备份在这台设备上——重启 App 后，点「恢复用户数据」。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 已重置。/root 已備份在這台裝置上——重新啟動 App 後，點「恢復用戶數據」。"
+          }
         }
       }
     },
@@ -110754,6 +110868,12 @@
             "state": "translated",
             "value": "✅ Rootfs 已重置。没有可备份的 /root。"
           }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 已重置。沒有可備份的 /root。"
+          }
         }
       }
     },
@@ -110763,6 +110883,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "✅ /root 已恢复。备份会一直保留，直到你删除它。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ /root 已恢復。備份會一直保留，直到你刪除它。"
           }
         }
       }
@@ -111321,6 +111447,1500 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 在等你批准"
+          }
+        }
+      }
+    },
+    "Unlock the selected chat sessions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁选中的对话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解鎖選取的對話"
+          }
+        }
+      }
+    },
+    "Turn off Task Status Privacy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭任务状态隐私模式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉任務狀態隱私模式"
+          }
+        }
+      }
+    },
+    "没能开工": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能开工"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒能開工"
+          }
+        }
+      }
+    },
+    "• 手表上也有同款审批卡，不提供「始终允许」；高风险命令要点两下确认": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• 手表上也有同款审批卡，不提供「始终允许」；高风险命令要点两下确认"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• 手錶上也有同款審批卡，不提供「始終允許」；高風險命令要點兩下確認"
+          }
+        }
+      }
+    },
+    "跑任务、审批这类动作现在要先解锁 iPhone：锁屏时触发的自动化（定时、到达、NFC 等）跑不了它们。定时任务请用「运行到点的定时任务」，锁屏也能跑。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跑任务、审批这类动作现在要先解锁 iPhone：锁屏时触发的自动化（定时、到达、NFC 等）跑不了它们。定时任务请用「运行到点的定时任务」，锁屏也能跑。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跑任務、審批這類動作現在要先解鎖 iPhone：鎖屏時觸發的自動化（定時、到達、NFC 等）跑不了它們。定時任務請用「執行到點的定時任務」，鎖屏也能跑。"
+          }
+        }
+      }
+    },
+    "Context is almost full. Compact the conversation first, then try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文快满了，先压缩对话再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文快滿了，先壓縮對話再試。"
+          }
+        }
+      }
+    },
+    "All chats · billed at 2×": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对所有对话生效 · 按 2 倍计费"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對所有對話生效 · 按 2 倍計費"
+          }
+        }
+      }
+    },
+    "Connect a Mac": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去连接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去連接"
+          }
+        }
+      }
+    },
+    "Previous Turn": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一轮对话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一輪對話"
+          }
+        }
+      }
+    },
+    "Scroll to Bottom": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滚动到底部"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捲動到底部"
+          }
+        }
+      }
+    },
+    "A reply is still running. Stop it before clearing the chat.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在生成回复，先停止再清空对话。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在產生回覆，先停止再清空對話。"
+          }
+        }
+      }
+    },
+    "Verification didn't pass. Full auto stays off.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证没有通过，全自动保持关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "驗證沒有通過，全自動保持關閉。"
+          }
+        }
+      }
+    },
+    "Kernel boot failed: %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地执行环境启动失败（kernel %lld）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地執行環境啟動失敗（kernel %lld）"
+          }
+        }
+      }
+    },
+    "streaming…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接收中…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接收中…"
+          }
+        }
+      }
+    },
+    "%@ received": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已接收 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已接收 %@"
+          }
+        }
+      }
+    },
+    "%@ tokens": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Token"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Token"
+          }
+        }
+      }
+    },
+    "%lld lines (full)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行（全部注入）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行（全部注入）"
+          }
+        }
+      }
+    },
+    "Empty": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空"
+          }
+        }
+      }
+    },
+    "(empty)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（空）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（空）"
+          }
+        }
+      }
+    },
+    "%lld/%lld lines injected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已注入 %lld/%lld 行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已注入 %lld/%lld 行"
+          }
+        }
+      }
+    },
+    "Search: %@ (%lld files)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索：%@（%lld 个文件）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋：%@（%lld 個檔案）"
+          }
+        }
+      }
+    },
+    "Search: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋：%@"
+          }
+        }
+      }
+    },
+    "Unlock it in the chat to see its runs, artifacts and files here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在对话里解锁后，这里才会显示运行记录、产物和文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在對話裡解鎖後，這裡才會顯示執行記錄、產物和檔案。"
+          }
+        }
+      }
+    },
+    "✅ Rootfs installed successfully": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 安装成功"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 安裝成功"
+          }
+        }
+      }
+    },
+    "❌ Installation failed: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 安装失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 安裝失敗：%@"
+          }
+        }
+      }
+    },
+    "✅ Rootfs reset complete. Restart app to reinstall.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 已重置。重启 App 后会重新安装。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✅ Rootfs 已重置。重新啟動 App 後會重新安裝。"
+          }
+        }
+      }
+    },
+    "❌ Reset failed: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 重置失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 重置失敗：%@"
+          }
+        }
+      }
+    },
+    "❌ No backup available": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 没有可用的备份"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 沒有可用的備份"
+          }
+        }
+      }
+    },
+    "❌ Restore failed: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 恢复失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "❌ 恢復失敗：%@"
+          }
+        }
+      }
+    },
+    "Checking access…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查访问权限…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在檢查存取權限…"
+          }
+        }
+      }
+    },
+    "The app that stores this folder didn't respond in time. Open the folder once in the Files app, then come back.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存放这个文件夹的 App 没有及时响应。先在「文件」App 里打开一次这个文件夹，再回来。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存放這個資料夾的 App 沒有及時回應。先在「檔案」App 裡打開一次這個資料夾，再回來。"
+          }
+        }
+      }
+    },
+    "Moved \"%@\" to %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已将「%@」移动到 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已將「%@」移動到 %@"
+          }
+        }
+      }
+    },
+    "Copied \"%@\" to %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已将「%@」复制到 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已將「%@」複製到 %@"
+          }
+        }
+      }
+    },
+    "A file named \"%@\" already exists in the destination.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标位置已有名为「%@」的文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目標位置已有名為「%@」的檔案。"
+          }
+        }
+      }
+    },
+    "Cannot move \"%@\": %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移动「%@」：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法移動「%@」：%@"
+          }
+        }
+      }
+    },
+    "Cannot copy \"%@\": %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法复制「%@」：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法複製「%@」：%@"
+          }
+        }
+      }
+    },
+    "Cannot delete \"%@\": %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法删除「%@」：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法刪除「%@」：%@"
+          }
+        }
+      }
+    },
+    "Failed to import %lld file(s).": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个文件导入失败。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個檔案匯入失敗。"
+          }
+        }
+      }
+    },
+    "iCloud sync is on, so it's also deleted on your other devices.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 同步已开启，你的其他设备上也会一起删除。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 同步已開啟，你的其他裝置上也會一起刪除。"
+          }
+        }
+      }
+    },
+    "Set value from link?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要填入链接里的值吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要填入連結裡的值嗎？"
+          }
+        }
+      }
+    },
+    "\"%@\" has no value yet. Set it to the value from the link?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」还没有值。要设为链接里的值吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」還沒有值。要設為連結裡的值嗎？"
+          }
+        }
+      }
+    },
+    "\"%@\" already has a value. Replace it with the value from the link?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已经有值。要换成链接里的值吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已經有值。要換成連結裡的值嗎？"
+          }
+        }
+      }
+    },
+    "Show value": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示值"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示值"
+          }
+        }
+      }
+    },
+    "Hide value": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏值"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隱藏值"
+          }
+        }
+      }
+    },
+    "Update from URL?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 URL 更新？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從 URL 更新？"
+          }
+        }
+      }
+    },
+    "The skill's files are replaced with the latest version from its URL. Changes you made to them on this device will be lost.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能文件会被替换成 URL 上的最新版本，你在这台设备上对它们做的修改会丢失。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能檔案會被替換成 URL 上的最新版本，你在這台裝置上對它們做的修改會遺失。"
+          }
+        }
+      }
+    },
+    "Failed to create zip: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建 zip 失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立 zip 失敗：%@"
+          }
+        }
+      }
+    },
+    "OAuth (Client ID + Secret)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth（Client ID + Secret）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth（Client ID + Secret）"
+          }
+        }
+      }
+    },
+    "Delete this header?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这个请求头？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除這個請求頭？"
+          }
+        }
+      }
+    },
+    "Replace existing server?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换已有的服务器？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取代已有的伺服器？"
+          }
+        }
+      }
+    },
+    "A server named \"%@\" already exists. Saving replaces its settings.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有名为「%@」的服务器，保存会替换它的设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有名為「%@」的伺服器，儲存會取代它的設定。"
+          }
+        }
+      }
+    },
+    "Authorizing saves this server with the settings above first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权前会先按上面的设置保存这个服务器。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授權前會先按上面的設定儲存這個伺服器。"
+          }
+        }
+      }
+    },
+    "Official CDN": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 CDN"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 CDN"
+          }
+        }
+      }
+    },
+    "Tsinghua TUNA": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清华 TUNA"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清華 TUNA"
+          }
+        }
+      }
+    },
+    "Alibaba": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阿里云"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阿里雲"
+          }
+        }
+      }
+    },
+    "USTC": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中科大"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中科大"
+          }
+        }
+      }
+    },
+    "Huawei": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "华为云"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "華為雲"
+          }
+        }
+      }
+    },
+    "Tencent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "腾讯云"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "騰訊雲"
+          }
+        }
+      }
+    },
+    "LEASEWEB UK": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LEASEWEB 英国"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LEASEWEB 英國"
+          }
+        }
+      }
+    },
+    "RWTH Germany": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RWTH 德国"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RWTH 德國"
+          }
+        }
+      }
+    },
+    "JAIST Japan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JAIST 日本"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JAIST 日本"
+          }
+        }
+      }
+    },
+    "Kakao Korea": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kakao 韩国"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kakao 韓國"
+          }
+        }
+      }
+    },
+    "Official PyPI": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 PyPI"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 PyPI"
+          }
+        }
+      }
+    },
+    "Official npm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 npm"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方 npm"
+          }
+        }
+      }
+    },
+    "Global": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全球"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全球"
+          }
+        }
+      }
+    },
+    "China": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中国"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中國"
+          }
+        }
+      }
+    },
+    "Europe": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欧洲"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歐洲"
+          }
+        }
+      }
+    },
+    "Asia": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亚洲"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亞洲"
+          }
+        }
+      }
+    },
+    "⚠️ Failed: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ 失败：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ 失敗：%@"
+          }
+        }
+      }
+    },
+    "The template could not be encoded.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法编码这个模板。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法編碼這個範本。"
+          }
+        }
+      }
+    },
+    "删除这台机器？": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这台机器？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除這台機器？"
+          }
+        }
+      }
+    },
+    "「%@」和它保存在本机的访问密钥会一起删除。中继刷新时不会再自动加回来，要用时重新添加或扫码。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」和它保存在本机的访问密钥会一起删除。中继刷新时不会再自动加回来，要用时重新添加或扫码。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」和它儲存在本機的存取金鑰會一起刪除。中繼重新整理時不會再自動加回來，要用時重新新增或掃碼。"
+          }
+        }
+      }
+    },
+    "删除": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除"
+          }
+        }
+      }
+    },
+    "经中继 · %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "经中继 · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "經中繼 · %@"
+          }
+        }
+      }
+    },
+    "在线": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在线"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在線"
+          }
+        }
+      }
+    },
+    "连不上": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不上"
+          }
+        }
+      }
+    },
+    "检测中…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测中…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢測中…"
+          }
+        }
+      }
+    },
+    "删除 Jev Key？": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 Jev Key？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 Jev Key？"
+          }
+        }
+      }
+    },
+    "删除后 Agent 不再有 jev_decide 工具，要再用得重新粘贴 Key。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除后 Agent 不再有 jev_decide 工具，要再用得重新粘贴 Key。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除後 Agent 不再有 jev_decide 工具，要再用得重新貼上 Key。"
+          }
+        }
+      }
+    },
+    "在 iPhone 上已关闭": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 iPhone 上已关闭"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 iPhone 上已關閉"
+          }
+        }
+      }
+    },
+    "要登录授权(OAuth),只能经 iPhone 用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要登录授权（OAuth），只能经 iPhone 用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要登入授權（OAuth），只能經 iPhone 用"
+          }
+        }
+      }
+    },
+    "缺少环境变量,先在 设置 → 环境变量 里补上": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少环境变量，先在 设置 → 环境变量 里补上"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少環境變量，先在 設定 → 環境變量 裡補上"
+          }
+        }
+      }
+    },
+    "no authorization code": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未返回授权码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未回傳授權碼"
+          }
+        }
+      }
+    },
+    "xAI sign-in failed (%@). Please try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xAI 登录失败（%@），请重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xAI 登入失敗（%@），請重試。"
+          }
+        }
+      }
+    },
+    "xAI denied API access (%@). Check that your SuperGrok or X Premium+ plan includes API access, or use an API key.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xAI 拒绝了 API 访问（%@）。请确认你的 SuperGrok 或 X Premium+ 订阅包含 API 访问权限，或改用 API Key。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xAI 拒絕了 API 存取（%@）。請確認你的 SuperGrok 或 X Premium+ 訂閱包含 API 存取權限，或改用 API Key。"
+          }
+        }
+      }
+    },
+    "Another authorization is already in progress.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有一个授权正在进行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有一個授權正在進行。"
+          }
+        }
+      }
+    },
+    "API keys (including the key an OpenRouter sign-in creates) and pasted tokens are stored in the iOS Keychain and can sync through iCloud Keychain; ChatGPT, xAI and Kimi sign-ins stay on this device only. Provider configuration may also sync through your iCloud account when iCloud Sync is enabled": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key（包括 OpenRouter 登录时生成的 Key）和手动粘贴的 Token 保存在 iOS 钥匙串，可随 iCloud 钥匙串同步；ChatGPT、xAI 和 Kimi 的登录凭证只保留在本机。开启 iCloud 同步后，供应商配置也可能通过你的 iCloud 账户同步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key（包括 OpenRouter 登入時產生的 Key）和手動貼上的 Token 保存在 iOS 鑰匙圈，可隨 iCloud 鑰匙圈同步；ChatGPT、xAI 和 Kimi 的登入憑證只保留在本機。開啟 iCloud 同步後，供應商設定也可能透過你的 iCloud 帳號同步"
+          }
+        }
+      }
+    },
+    "Signing in creates an OpenRouter API key. It is stored in the iOS Keychain, can sync through iCloud Keychain, and is only sent to OpenRouter.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录会生成一个 OpenRouter API Key。它保存在 iOS 钥匙串，可随 iCloud 钥匙串同步，且只会发送给 OpenRouter。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入會產生一個 OpenRouter API Key。它保存在 iOS 鑰匙圈，可隨 iCloud 鑰匙圈同步，且只會傳送給 OpenRouter。"
+          }
+        }
+      }
+    },
+    "Stored in the iOS Keychain; it can sync to your other devices through iCloud Keychain.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存在 iOS 钥匙串，可通过 iCloud 钥匙串同步到你的其他设备。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存在 iOS 鑰匙圈，可透過 iCloud 鑰匙圈同步到你的其他裝置。"
+          }
+        }
+      }
+    },
+    "Retired · needs API key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下线 · 需改用 API Key"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下線 · 需改用 API Key"
+          }
+        }
+      }
+    },
+    "打开全自动？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn On Full Auto?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开全自动？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開全自動？"
+          }
+        }
+      }
+    },
+    "Delete %@? This can't be undone. With iCloud Keychain on, the value is also removed on your other devices.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %@？删除后无法恢复；开着 iCloud 钥匙串时，其他设备上的这个值也会一起删除。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 %@？刪除後無法復原；開著 iCloud 鑰匙圈時，其他裝置上的這個值也會一起刪除。"
+          }
+        }
+      }
+    },
+    "This can't be undone. With iCloud Keychain on, the value is also removed on your other devices.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除后无法恢复；开着 iCloud 钥匙串时，其他设备上的这个值也会一起删除。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除後無法復原；開著 iCloud 鑰匙圈時，其他裝置上的這個值也會一起刪除。"
           }
         }
       }

@@ -800,7 +800,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showCommandPalette) {
             CommandPaletteView(
-                sessions: sessions.prefix(12).map { ($0.id, $0.title ?? String(localized: "New Chat")) },
+                // A locked conversation is listed (and searchable) without its title.
+                sessions: sessions.prefix(12).map {
+                    ($0.id, SessionLockStore.shared.isVisuallyLocked($0.id)
+                        ? String(localized: "Locked conversation")
+                        : ($0.title ?? String(localized: "New Chat")))
+                },
                 openSession: { sid in jumpToSession(sid) },
                 runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
                 openSurface: { target in
@@ -2010,7 +2015,8 @@ struct ContentView: View {
                                 // [T-ios-crash-contextmenu-uaf] Value-only menu view,
                                 // no closure captures — see SessionContextMenu.
                                 SessionContextMenu(
-                                    key: MenuKey(sid: session.id, pinned: session.isPinned, title: session.title),
+                                    key: MenuKey(sid: session.id, pinned: session.isPinned,
+                                                 locked: SessionLockStore.shared.isLocked(session.id)),
                                     actions: menuActions
                                 )
                                 .equatable()
@@ -2128,7 +2134,8 @@ struct ContentView: View {
                                         : session.id
                                     if let menuSid {
                                         SessionContextMenu(
-                                            key: MenuKey(sid: menuSid, pinned: session.isPinned, title: session.title),
+                                            key: MenuKey(sid: menuSid, pinned: session.isPinned,
+                                                         locked: SessionLockStore.shared.isLocked(menuSid)),
                                             actions: menuActions
                                         )
                                         .equatable()
@@ -2703,6 +2710,23 @@ struct ContentView: View {
 
     // MARK: - Menu action wiring
 
+    /// Export, duplicate and title edits reveal a Face ID–locked conversation
+    /// (its transcript, an unlocked copy, its title), so they ask for the same
+    /// unlock as opening it. Sessions not locked right now run straight away.
+    private func afterUnlocking(_ ids: Set<String>, _ work: @escaping @MainActor () -> Void) {
+        let lockStore = SessionLockStore.shared
+        let locked = ids.filter { lockStore.isVisuallyLocked($0) }
+        guard !locked.isEmpty else { work(); return }
+        Task { @MainActor in
+            let reason = locked.count == 1
+                ? String(localized: "Unlock this chat session")
+                : String(localized: "Unlock the selected chat sessions")
+            guard await BiometricAuth.authenticate(reason: reason) else { return }
+            for sid in locked { lockStore.noteUnlock(sid) }
+            work()
+        }
+    }
+
     /// [T-ios-crash-contextmenu-uaf] Connect the stable action channel to
     /// ContentView's instance methods. Called once from onAppear; the closure
     /// captures `self` whose @State backing is stable for the view-graph
@@ -2716,28 +2740,45 @@ struct ContentView: View {
                     refreshSessionList()
                 }
             case .exportJSON(let sid):
-                exportSessions(ids: [sid], format: .json)
+                afterUnlocking([sid]) { exportSessions(ids: [sid], format: .json) }
             case .exportText(let sid):
-                exportSessions(ids: [sid], format: .plainText)
+                afterUnlocking([sid]) { exportSessions(ids: [sid], format: .plainText) }
             case .editTitle(let sid):
-                if let current = sessions.first(where: { $0.id == sid }) {
-                    sessionToEdit = current
+                afterUnlocking([sid]) {
+                    if let current = sessions.first(where: { $0.id == sid }) {
+                        sessionToEdit = current
+                    }
                 }
             case .regenerateTitle(let sid):
-                regenerateTitle(sessionId: sid)
+                afterUnlocking([sid]) { regenerateTitle(sessionId: sid) }
             case .lockSession(let sid):
                 SessionLockStore.shared.lock(sid)
+                // Nothing this view observes changes, so its menus keep the old
+                // Lock item until the next redraw; ask for one now.
+                sessionExtras.objectWillChange.send()
             case .unlockSession(let sid):
                 Task {
                     let reason = String(localized: "Unlock this session to remove \(BiometricAuth.biometryDisplayName) protection")
                     let ok = await BiometricAuth.authenticate(reason: reason)
-                    if ok { SessionLockStore.shared.unlockPermanently(sid) }
+                    if ok {
+                        SessionLockStore.shared.unlockPermanently(sid)
+                        sessionExtras.objectWillChange.send()
+                    }
                 }
             case .duplicate(let sid):
-                Task { @MainActor in
-                    if let dup = await SessionForkManager.shared.duplicateSession(sessionId: sid) {
-                        refreshSessionList()
-                        selectedSessionId = dup.id
+                afterUnlocking([sid]) {
+                    Task { @MainActor in
+                        if let dup = await SessionForkManager.shared.duplicateSession(sessionId: sid) {
+                            // A copy of a locked conversation is locked too (and
+                            // open for now: its owner just unlocked the original).
+                            let lockStore = SessionLockStore.shared
+                            if lockStore.isLocked(sid) {
+                                lockStore.lock(dup.id)
+                                lockStore.noteUnlock(dup.id)
+                            }
+                            refreshSessionList()
+                            selectedSessionId = dup.id
+                        }
                     }
                 }
             case .forceSync(let sid):
@@ -3792,12 +3833,14 @@ struct ContentView: View {
         HStack(spacing: 0) {
             Menu {
                 Button {
-                    exportSessions(ids: selectedIds, format: .json)
+                    let ids = selectedIds
+                    afterUnlocking(ids) { exportSessions(ids: ids, format: .json) }
                 } label: {
                     Label("JSON", systemImage: "doc.text")
                 }
                 Button {
-                    exportSessions(ids: selectedIds, format: .plainText)
+                    let ids = selectedIds
+                    afterUnlocking(ids) { exportSessions(ids: ids, format: .plainText) }
                 } label: {
                     Label("Plain Text", systemImage: "text.alignleft")
                 }
@@ -4971,7 +5014,7 @@ private struct SessionContextMenu: View, Equatable {
             Label("Regenerate Title", systemImage: "arrow.triangle.2.circlepath")
         }
         if BiometricAuth.isAvailable {
-            if SessionLockStore.shared.isLocked(key.sid) {
+            if key.locked {
                 Button {
                     actions.send(.unlockSession(key.sid))
                 } label: {
@@ -5028,18 +5071,22 @@ private struct SessionContextMenu: View, Equatable {
         } label: {
             Label("移到分组", systemImage: "folder")
         }
-        Button {
-            let title = (key.title ?? "Untitled").prefix(60)
-            var components = URLComponents(string: "https://github.com/leoyb1010/LeoPhoneAgent/issues/new")
-            components?.queryItems = [
-                URLQueryItem(name: "title", value: "Content Report: \(title)"),
-                URLQueryItem(name: "body", value: "Session: \(key.sid)\n\nPlease describe the issue:\n"),
-            ]
-            if let url = components?.url {
-                UIApplication.shared.open(url)
+        // Not for a locked conversation. The issue title stays neutral: the
+        // session title is written by the model from the conversation, and
+        // this URL goes to an outside site.
+        if !key.locked {
+            Button {
+                var components = URLComponents(string: "https://github.com/leoyb1010/LeoPhoneAgent/issues/new")
+                components?.queryItems = [
+                    URLQueryItem(name: "title", value: "Content Report"),
+                    URLQueryItem(name: "body", value: "Session: \(key.sid)\n\nPlease describe the issue:\n"),
+                ]
+                if let url = components?.url {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Report Content", systemImage: "exclamationmark.bubble")
             }
-        } label: {
-            Label("Report Content", systemImage: "exclamationmark.bubble")
         }
         Button(role: .destructive) {
             actions.send(.delete(key.sid))
@@ -5054,12 +5101,12 @@ private struct SessionContextMenu: View, Equatable {
 }
 
 /// Value key for the sidebar session context menu — only these fields change what
-/// the menu renders (Pin/Unpin label, title in Report/Delete). A change here is
+/// the menu renders (Pin/Unpin label, Lock/Remove Lock, Report). A change here is
 /// the only reason to rebuild the menu tree.
 private struct MenuKey: Equatable {
     let sid: String
     let pinned: Bool
-    let title: String?
+    let locked: Bool
 }
 
 // MARK: - Session Row

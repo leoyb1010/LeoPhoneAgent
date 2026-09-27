@@ -483,11 +483,16 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     func stop() {
+        guard sessionId != nil else { return }
+        Task { await self.stopAndWait() }
+    }
+
+    /// The same stop, awaited: for a caller whose process may be suspended as
+    /// soon as it returns (the Live Activity's stop button).
+    func stopAndWait() async {
         guard let sessionId else { return }
-        Task { [client] in
-            do { try await client.stopHarness(sessionId: sessionId) }
-            catch { await MainActor.run { self.lastError = error.localizedDescription } }
-        }
+        do { try await client.stopHarness(sessionId: sessionId) }
+        catch { lastError = error.localizedDescription }
     }
 
     func respond(to approval: GatewayApprovalRequest, choice: String) {

@@ -59,6 +59,12 @@ struct MirrorEntry: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: MirrorEntry, rhs: MirrorEntry) -> Bool { lhs.id == rhs.id }
+
+    /// Name / region for display, in the app language (`name` and `region`
+    /// are the English catalog keys; resolved on read so a language switch
+    /// takes effect without relaunch).
+    var localizedName: String { String(localized: String.LocalizationValue(name)) }
+    var localizedRegion: String { String(localized: String.LocalizationValue(region)) }
 }
 
 struct MirrorTestResult: Identifiable {
@@ -353,6 +359,12 @@ final class MirrorSpeedTestViewModel: ObservableObject {
     func selectMirror(_ mirror: MirrorEntry) {
         selectedMirrorId[mirror.category] = mirror.id
         persistSelection(for: mirror.category)
+        // [T-mirror-select-applies] With "Use Mirror" already on, picking
+        // another mirror must rewrite the config too — it used to only save
+        // the choice, and the old mirror stayed in effect.
+        if useCustomMirror[mirror.category] == true {
+            applyMirror(for: mirror.category)
+        }
     }
 
     func setUseCustom(_ enabled: Bool, for category: MirrorCategory) {
@@ -392,12 +404,12 @@ final class MirrorSpeedTestViewModel: ObservableObject {
         case .alpine:
             content = "\(mirror.baseURL)v3.21/main\n\(mirror.baseURL)v3.21/community\n"
         case .pip:
-            let host = URL(string: mirror.baseURL)?.host ?? ""
+            // Every mirror here is https, so no `trusted-host`: that line
+            // switched off pip's certificate check for the mirror host.
             content = """
             [global]
             break-system-packages = true
             index-url = \(mirror.baseURL)
-            trusted-host = \(host)
 
             """
         case .npm:
@@ -494,7 +506,7 @@ struct MirrorsSectionView: View {
                         Spacer()
                         if vm.isActive(for: category),
                            let selected = vm.selectedMirror(for: category) {
-                            Text(selected.name)
+                            Text(selected.localizedName)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -542,7 +554,7 @@ struct MirrorCategoryDetailView: View {
 
                 if vm.isActive(for: category), let mirror = vm.selectedMirror(for: category) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(mirror.name).font(.body.weight(.medium))
+                        Text(mirror.localizedName).font(.body.weight(.medium))
                         Text(mirror.baseURL)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -610,7 +622,7 @@ struct MirrorCategoryDetailView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(mirror.name)
+                    Text(mirror.localizedName)
                         .font(.body)
                     if mirror.isOfficial {
                         Text(String(localized: "Official"))
@@ -621,7 +633,7 @@ struct MirrorCategoryDetailView: View {
                             .background(Color.secondary.opacity(0.12))
                             .clipShape(Capsule())
                     }
-                    Text(mirror.region)
+                    Text(mirror.localizedRegion)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -644,7 +656,7 @@ struct MirrorCategoryDetailView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(result.mirror.name)
+                    Text(result.mirror.localizedName)
                         .font(.body)
                     if result.mirror.isOfficial {
                         Text(String(localized: "Official"))
@@ -655,7 +667,7 @@ struct MirrorCategoryDetailView: View {
                             .background(Color.secondary.opacity(0.12))
                             .clipShape(Capsule())
                     }
-                    Text(result.mirror.region)
+                    Text(result.mirror.localizedRegion)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

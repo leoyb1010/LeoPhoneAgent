@@ -48,12 +48,14 @@ final class HarnessLiveActivityBridge {
 
     /// Live Activity "stop" for a Mac session: these have no view model, so
     /// the stop has to go to the Mac. Returns false if `sessionId` isn't one.
+    /// Returns once the request has been made: an intent that returned first
+    /// could have its process suspended before the request went out.
     @discardableResult
-    func stop(sessionId: String) -> Bool {
+    func stop(sessionId: String) async -> Bool {
         guard let driver = entries.values.compactMap(\.driver).first(where: { $0.sessionId == sessionId }) else {
             return false
         }
-        driver.stop()
+        await driver.stopAndWait()
         return true
     }
 

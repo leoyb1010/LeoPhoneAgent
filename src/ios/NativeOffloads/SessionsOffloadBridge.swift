@@ -296,12 +296,14 @@ private let logger = AppLogger(category: "SessionsOffload")
                 store.setBinding(binding, for: sid)
             }
 
-            // Attachments.
-            _ = stageAttachments(paths: attachmentPaths, on: vm)
-
-            // Send.
-            vm.inputText = prompt
-            vm.send()
+            // Attachments + send. [T-draft-headless] An unsent draft in that
+            // chat (text, photos, folded pastes) is set aside for this send and
+            // put back after, never sent along with the CLI prompt.
+            vm.withComposerSetAside {
+                _ = stageAttachments(paths: attachmentPaths, on: vm)
+                vm.inputText = prompt
+                vm.send()
+            }
 
             // Resolve model name for the response.
             var modelName = vm.selectedModel.displayName

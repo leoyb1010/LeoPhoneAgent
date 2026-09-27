@@ -720,6 +720,7 @@ struct UnifiedModelPicker: View {
         guard let instance = store.instance(for: entry.providerInstanceId) else {
             return String(localized: "Provider not found")
         }
+        if instance.isRetiredSignIn { return String(localized: "Retired · needs API key") }
         if !instance.isEnabled { return String(localized: "Provider disabled") }
         if !instance.hasAnyCredential { return String(localized: "Not signed in") }
         return nil

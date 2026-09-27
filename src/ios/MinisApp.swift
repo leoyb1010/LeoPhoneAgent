@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import ObjectiveC
 import FileProvider
@@ -285,6 +286,7 @@ struct MinisApp: App {
                     StreamingHangLogger.shared.acquire(reason: "app-launch always-on")
                     // Migrate legacy provider config on first launch after upgrade
                     ProviderMigration.migrateIfNeeded(store: ProviderConfigStore.shared)
+                    Self.retireSignInsAfterProviderLoad()
                     // Refresh model lists once per day to keep them current
                     ProviderConfigStore.shared.refreshAllModelsIfNeeded()
                     // [T-mimo-shadow-voice] One-time upgrade fix: force-refresh
@@ -340,6 +342,27 @@ struct MinisApp: App {
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase)
         }
+    }
+
+    /// The migration's "retire removed sign-in providers" pass disables them,
+    /// but ProviderConfigStore swaps its SQLite copy in a moment after launch
+    /// (it has no "loaded" signal) and that swap turned them back on — so the
+    /// pass never stuck and re-ran every launch. Re-run the idempotent,
+    /// flag-guarded migration on any early config publish that still has an
+    /// enabled retired instance; the write made after the swap persists.
+    @MainActor private static var providerRetireWatch: AnyCancellable?
+
+    @MainActor
+    private static func retireSignInsAfterProviderLoad() {
+        guard providerRetireWatch == nil else { return }   // several windows, one watch
+        let store = ProviderConfigStore.shared
+        providerRetireWatch = store.objectWillChange
+            .receive(on: DispatchQueue.main)   // fires before the new config lands
+            .filter { _ in store.instances.contains { $0.isEnabled && $0.retiredSignInNotice != nil } }
+            .sink { _ in ProviderMigration.migrateIfNeeded(store: store) }
+        // Only around launch, when the swap happens: a provider switched back
+        // on later is left alone.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { providerRetireWatch = nil }
     }
 
     private func presentReleaseNotesIfNeeded() {
@@ -1083,7 +1106,10 @@ private enum ApprovalAlertPresenter {
     private static func topController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
+        // Never the app-lock window (AppLockWindowController, above .normal):
+        // an alert presented there would stay invisible, then pop over the lock screen.
+        let windows = scene?.windows.filter { $0.windowLevel == .normal } ?? []
+        var top = (windows.first { $0.isKeyWindow } ?? windows.first)?.rootViewController
         while let next = top?.presentedViewController {
             if next.isBeingDismissed { return nil }
             top = next

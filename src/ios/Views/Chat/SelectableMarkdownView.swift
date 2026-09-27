@@ -7884,8 +7884,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
                     UIApplication.shared.open(URL)
                 })
                 alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let root = scene.windows.first?.rootViewController {
+                // [B7] The tapped view's own scene, and its content window —
+                // not whichever window happens to be first (the app-lock one).
+                if let scene = textView.window?.windowScene
+                    ?? UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let root = scene.chatPresentationWindow?.rootViewController {
                     var presenter = root
                     while let presented = presenter.presentedViewController { presenter = presented }
                     if let popover = alert.popoverPresentationController {

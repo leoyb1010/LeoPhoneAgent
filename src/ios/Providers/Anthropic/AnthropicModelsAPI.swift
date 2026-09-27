@@ -13,9 +13,12 @@ private func stripV1Suffix(_ base: String) -> String {
 
 enum AnthropicModelsAPI {
 
-    static func fetchModels(apiKey: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false, userAgent: String? = nil) async throws -> [LLMModel] {
+    /// - Parameter alsoSendBearer: also send the key as `Authorization: Bearer`
+    ///   (relays and coding plans behind a custom base want it).
+    static func fetchModels(apiKey: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false, userAgent: String? = nil, alsoSendBearer: Bool = false) async throws -> [LLMModel] {
         try await fetchWithFallback(credential: apiKey, baseURL: baseURL, appendV1Suffix: appendV1Suffix, forceRefresh: forceRefresh) { request in
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            if alsoSendBearer { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
             if let ua = userAgent { request.setValue(ua, forHTTPHeaderField: "User-Agent") }
         }

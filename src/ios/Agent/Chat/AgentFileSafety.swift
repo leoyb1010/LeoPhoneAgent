@@ -63,10 +63,22 @@ enum SymlinkSafeDelete {
 /// (`[CONTEXT OFFLOADED] … saved to: <path>`), and oversized tool output is
 /// clipped with an `[OUTPUT TRUNCATED]` marker. Models copy these stubs back
 /// into `file_write` / `file_edit`, which silently replaces real file content
-/// with a pointer. This guard resolves full stubs back to the saved content
-/// and refuses anything it can't restore.
+/// with a pointer. This guard puts back the model's own earlier `file_write`
+/// content and refuses every other stub.
 enum OffloadPlaceholderGuard {
     static let contextMarker = "[CONTEXT OFFLOADED]"
+
+    /// Where a `file_write` call's `content` is offloaded (Offloading.swift:
+    /// `tools/<tool name>_<id>.txt`): text the model itself wrote. Any other
+    /// Content stub stands for a tool *result* — a `file_read` page with its
+    /// `[path | … ]` header and `minis_url:` / `next_offset:` trailers, shell
+    /// or browser output — and writing that back corrupts the file. [B3]
+    static let ownWriteOffloadPrefix = "/var/minis/offloads/tools/file_write_"
+
+    static func isOwnWriteContent(_ path: String) -> Bool {
+        guard path.hasPrefix(ownWriteOffloadPrefix), !path.contains("..") else { return false }
+        return !path.dropFirst(ownWriteOffloadPrefix.count).contains("/")
+    }
 
     enum Outcome: Equatable {
         /// No placeholder present; write as-is.
@@ -80,10 +92,12 @@ enum OffloadPlaceholderGuard {
     private static let contextStubRegex = try! NSRegularExpression(
         pattern: #"\[CONTEXT OFFLOADED\] (Content|Image) \(~\d+ tokens, \d+ bytes\) saved to: ([^\n]*)(?:\nUse file_read tool to retrieve if needed\.)?"#
     )
-    private static let truncatedMarkers = [
-        "[OUTPUT TRUNCATED] Full output (",
-        "[OUTPUT TRUNCATED] Showing first & last ",
-    ]
+    /// The two clipping notices exactly as generated (ConcurrentTools /
+    /// ISHCommand). Text that merely mentions the marker — docs, tests, the
+    /// source that builds it — is ordinary content. [B12]
+    private static let truncatedExcerptRegex = try! NSRegularExpression(
+        pattern: #"\[OUTPUT TRUNCATED\] (?:Full output \(\d+ chars\) saved to: \S+|Showing first & last \d+ of \d+ chars \(\d+ lines total\)\.)"#
+    )
     private static let savedToRegex = try! NSRegularExpression(pattern: #"saved to: (\S+)"#)
 
     /// Linux paths of `Content` stubs in `text`, in order of appearance.
@@ -103,26 +117,30 @@ enum OffloadPlaceholderGuard {
     ///   - contents: offloaded content keyed by the Linux path from
     ///     `referencedContentPaths(in:)`; a missing key means unreadable.
     static func check(_ text: String, field: String, contents: [String: String]) -> Outcome {
-        for marker in truncatedMarkers where text.contains(marker) {
-            let ns = text as NSString
-            let path = savedToRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length))
-                .map { ns.substring(with: $0.range(at: 1)) }
+        let ns = text as NSString
+        let whole = NSRange(location: 0, length: ns.length)
+        if text.contains("[OUTPUT TRUNCATED]"),
+           let excerpt = truncatedExcerptRegex.firstMatch(in: text, range: whole) {
+            let notice = ns.substring(with: excerpt.range) as NSString
+            let path = savedToRegex.firstMatch(in: notice as String, range: NSRange(location: 0, length: notice.length))
+                .map { notice.substring(with: $0.range(at: 1)) }
             let hint = path.map { " The complete output is in \($0) — read it with file_read (use offset/next_offset to page) or copy it with shell_execute `cp \($0) <destination>`." } ?? " Re-read the source with file_read and write the real content."
-            return .rejected("Error: '\(field)' contains a truncated tool-output excerpt (\(marker.trimmingCharacters(in: .whitespaces))…), not real file content. Nothing was written.\(hint)")
+            return .rejected("Error: '\(field)' contains a truncated tool-output excerpt ([OUTPUT TRUNCATED]…), not real file content. Nothing was written.\(hint)")
         }
         guard text.contains(contextMarker) else { return .clean }
 
-        let ns = text as NSString
-        let matches = contextStubRegex.matches(in: text, range: NSRange(location: 0, length: ns.length))
-        guard !matches.isEmpty else {
-            return .rejected("Error: '\(field)' contains an offload placeholder (\(contextMarker)) instead of real content. Nothing was written. Read the offloaded file with file_read and pass its actual text.")
-        }
+        // A bare "[CONTEXT OFFLOADED]" without the stub around it is ordinary text. [B12]
+        let matches = contextStubRegex.matches(in: text, range: whole)
+        guard !matches.isEmpty else { return .clean }
         var result = text
         for m in matches.reversed() {
             let kind = ns.substring(with: m.range(at: 1))
             let path = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespaces)
             guard kind == "Content" else {
                 return .rejected("Error: '\(field)' contains an offloaded-image placeholder (saved to: \(path)). Images can't be written as text. Nothing was written.")
+            }
+            guard path.isEmpty || isOwnWriteContent(path) else {
+                return .rejected("Error: '\(field)' contains an offload placeholder for an earlier tool result (saved to: \(path)), not file content. That saved output still carries the tool's headers and trailers, so writing it would corrupt the file. Nothing was written. Read the real source file again with file_read and write its actual text.")
             }
             guard let restored = contents[path] else {
                 let location = path.isEmpty ? "" : " (saved to: \(path))"

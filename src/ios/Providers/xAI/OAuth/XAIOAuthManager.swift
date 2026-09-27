@@ -123,8 +123,9 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         let authorizationURL = components.url!
         logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
-        // 3. Open in-app Safari.
-        presentSafariViewController(url: authorizationURL)
+        // 3. Open in-app Safari (throws when it can't be shown, so the flow
+        //    ends now instead of waiting for a callback that can't come).
+        safariVC = try OAuthSafariPresenter.present(authorizationURL, delegate: self)
 
         // 4. Wait for callback (5 min).
         logger.info("Waiting for callback...")
@@ -134,7 +135,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         // 5. Validate state.
         guard result.state == state else {
             logger.error("State mismatch!")
-            throw LLMError.providerError(message: "xAI OAuth state mismatch")
+            throw LLMError.providerError(message: String(localized: "Sign-in could not be verified. Please try again."))
         }
 
         // 6. Exchange code for token.
@@ -288,12 +289,22 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             "code_challenge": challenge,           // xAI-specific
             "code_challenge_method": "S256",       // xAI-specific
         ]
-        return try await postTokenRequest(
-            body: body,
-            endpoint: tokenEndpoint,
-            previousRefreshToken: nil,
-            context: "Token exchange"
-        )
+        do {
+            return try await postTokenRequest(
+                body: body,
+                endpoint: tokenEndpoint,
+                previousRefreshToken: nil,
+                context: "Token exchange"
+            )
+        } catch let error as LLMError {
+            // Show `HTTP 400 · invalid_grant`, not the raw status marker and body.
+            guard case .providerError(let message) = error else { throw error }
+            let summary = OAuthRefreshErrorClassifier.userFacingSummary(error)
+            if OAuthRefreshErrorClassifier.parseStatus(from: message) == 403 {
+                throw LLMError.providerError(message: String(localized: "xAI denied API access (\(summary)). Check that your SuperGrok or X Premium+ plan includes API access, or use an API key."))
+            }
+            throw LLMError.providerError(message: String(localized: "xAI sign-in failed (\(summary)). Please try again."))
+        }
     }
 
     private func performRefresh(refreshToken: String, cachedEndpoint: String?) async throws -> XAITokenStorage {
@@ -411,34 +422,15 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         guard let data = Data(base64Encoded: base64) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
-
-    // MARK: - In-App Safari
-
-    private func presentSafariViewController(url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).activeFirst,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        let vc = SFSafariViewController(url: url)
-        // Observe user-driven dismissal (Done button / swipe-down) so we
-        // can stop the loopback server immediately rather than letting
-        // `waitForCallback` hang the full 5-min timeout. Without this,
-        // `isAuthenticating` stays true and the re-entrancy guard blocks
-        // every subsequent tap (T-xai-oauth-stop-resume).
-        vc.delegate = self
-        topVC.present(vc, animated: true)
-        self.safariVC = vc
-    }
 }
 
 extension XAIOAuthManager: SFSafariViewControllerDelegate {
     nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
         Task { @MainActor [weak self] in
             guard let self, self.safariVC === controller else { return }
-            // Stopping the server resumes any in-flight waitForCallback
-            // with a "cancelled" error, which lets the login()'s defer
-            // run and resets `isAuthenticating` — so the user can tap
+            // Stopping the server ends any in-flight waitForCallback with a
+            // CancellationError, which lets the login()'s defer run and
+            // resets `isAuthenticating` — so the user can tap
             // "Sign in with xAI" again.
             self.callbackServer?.stop()
         }
@@ -466,12 +458,18 @@ enum XAICredentialSource {
     case none
 
     static func resolve(instanceId: String) -> XAICredentialSource {
+        resolve(instanceId: instanceId,
+                manualToken: ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "manual-oauth-token"))
+    }
+
+    /// `manualToken`: a provider build passes its single read, so the token it
+    /// sends and the custom base it picked come from the same Keychain read.
+    static func resolve(instanceId: String, manualToken: @autoclosure () -> String?) -> XAICredentialSource {
         if GrokViaMacBroker.hostMarker(instanceId: instanceId) != nil { return .viaMac }
         if ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self) != nil {
             return .oauthLogin
         }
-        if let manual = ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "manual-oauth-token"),
-           !manual.isEmpty {
+        if let manual = manualToken(), !manual.isEmpty {
             return .manualToken(manual)
         }
         return .none

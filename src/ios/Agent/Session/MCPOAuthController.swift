@@ -60,6 +60,9 @@ final class MCPOAuthController: NSObject, ObservableObject {
     /// OAuthCallbackServer is the shared implementation in OAuthLoopback.swift.
     private var callbackServer: OAuthCallbackServer?
     private weak var safariVC: SFSafariViewController?
+    /// One authorization at a time: two would fight over the loopback port and
+    /// the shared Safari/session references.
+    private var isAuthorizing = false
 
     /// [T-mcp-oauth-loopback] Fixed loopback port for MCP OAuth. Chosen clear
     /// of the ports the other managers hold: Codex 1455, OpenRouter 3000,
@@ -76,12 +79,14 @@ final class MCPOAuthController: NSObject, ObservableObject {
         case badConfig(String)
         case cancelled
         case exchangeFailed(String)
+        case inProgress
 
         var errorDescription: String? {
             switch self {
             case .badConfig(let m): return m
             case .cancelled: return String(localized: "Authorization was cancelled.")
             case .exchangeFailed(let m): return m
+            case .inProgress: return String(localized: "Another authorization is already in progress.")
             }
         }
     }
@@ -393,6 +398,10 @@ final class MCPOAuthController: NSObject, ObservableObject {
     /// auth sheet; on success stores tokens (Keychain) and materializes the
     /// guest bridge file.
     func authorize(server: String, oauth: MCPOAuthConfig) async throws {
+        // Throw rather than return: the caller treats a normal return as success.
+        guard !isAuthorizing else { throw OAuthError.inProgress }
+        isAuthorizing = true
+        defer { isAuthorizing = false }
         guard !oauth.clientId.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw OAuthError.badConfig(String(localized: "Client ID is required."))
         }
@@ -514,23 +523,28 @@ final class MCPOAuthController: NSObject, ObservableObject {
     /// [T-mcp-oauth-loopback] RFC 8252 loopback: local HTTP server on the
     /// redirect URI's port/path + in-app Safari. Mirrors CodexOAuthManager.
     private func runLoopbackFlow(authURL: URL, redirectURL: URL, state: String) async throws -> String {
-        // Defensive cleanup of a previous failed attempt.
-        callbackServer?.stop()
-        callbackServer = nil
-        defer {
-            callbackServer?.stop()
-            callbackServer = nil
-            safariVC?.dismiss(animated: true)
-            safariVC = nil
-        }
         let port = UInt16(redirectURL.port ?? Int(Self.loopbackPort))
         let path = redirectURL.path.isEmpty ? "/callback" : redirectURL.path
         let server = OAuthCallbackServer(port: port, callbackPath: path)
+        var presented: SFSafariViewController?
+        // Tear down only what this attempt created.
+        defer {
+            server.stop()
+            if callbackServer === server { callbackServer = nil }
+            presented?.dismiss(animated: true)
+            if safariVC === presented { safariVC = nil }
+        }
         callbackServer = server
         try server.start()
 
-        presentSafari(url: authURL)
-        let result = try await server.waitForCallback(timeout: 300)
+        presented = try OAuthSafariPresenter.present(authURL, delegate: self)
+        safariVC = presented
+        let result: OAuthCallbackResult
+        do {
+            result = try await server.waitForCallback(timeout: 300)
+        } catch is CancellationError {
+            throw OAuthError.cancelled
+        }
         guard result.state == state else {
             throw OAuthError.exchangeFailed(String(localized: "State mismatch in the OAuth callback."))
         }
@@ -563,24 +577,10 @@ final class MCPOAuthController: NSObject, ObservableObject {
             throw OAuthError.exchangeFailed(String(localized: "State mismatch in the OAuth callback."))
         }
         guard let code = cbComps?.queryItems?.first(where: { $0.name == "code" })?.value else {
-            let err = cbComps?.queryItems?.first(where: { $0.name == "error" })?.value ?? "no code"
+            let err = cbComps?.queryItems?.first(where: { $0.name == "error" })?.value ?? String(localized: "no authorization code")
             throw OAuthError.exchangeFailed(String(localized: "Authorization failed: \(err)"))
         }
         return code
-    }
-
-    /// Present the authorization page in in-app Safari, on top of whatever is
-    /// currently presented (the MCP form sheet). Mirrors CodexOAuthManager.
-    private func presentSafari(url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).activeFirst,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        let vc = SFSafariViewController(url: url)
-        vc.delegate = self
-        topVC.present(vc, animated: true)
-        safariVC = vc
     }
 
     /// Re-materialize the bridge (e.g. after the user edits the client secret
@@ -605,11 +605,13 @@ final class MCPOAuthController: NSObject, ObservableObject {
 }
 
 extension MCPOAuthController: SFSafariViewControllerDelegate {
-    /// User closed Safari manually — stop the server, which resumes the
-    /// in-flight waitForCallback with "cancelled" (OAuthCallbackServer.stop
-    /// serializes against a racing successful callback, see its comments).
+    /// User closed Safari manually — stop the server, which ends the in-flight
+    /// waitForCallback as a cancellation (OAuthCallbackServer.stop serializes
+    /// against a racing successful callback, see its comments). Only for the
+    /// Safari view of the current attempt.
     nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
         MainActor.assumeIsolated {
+            guard safariVC === controller else { return }
             callbackServer?.stop()
         }
     }

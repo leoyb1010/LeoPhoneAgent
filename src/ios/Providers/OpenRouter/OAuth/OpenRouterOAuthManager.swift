@@ -80,8 +80,9 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         let authorizationURL = components.url!
         logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
-        // 3. Open in-app Safari
-        presentSafariViewController(url: authorizationURL)
+        // 3. Open in-app Safari (throws when it can't be shown, so the flow
+        //    ends now instead of waiting for a callback that can't come)
+        safariVC = try OAuthSafariPresenter.present(authorizationURL, delegate: self)
         logger.info("Opened in-app Safari for OpenRouter authorization")
 
         // 4. Wait for callback (5 min timeout)
@@ -157,20 +158,6 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         }
 
         return key
-    }
-
-    // MARK: - In-App Safari
-
-    private func presentSafariViewController(url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).activeFirst,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        let vc = SFSafariViewController(url: url)
-        vc.delegate = self
-        topVC.present(vc, animated: true)
-        self.safariVC = vc
     }
 }
 

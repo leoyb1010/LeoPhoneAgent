@@ -226,11 +226,11 @@ struct ConfigAuditView: View {
             await MainActor.run {
                 revertingId = nil
                 if (bridgeResult["ok"] as? Bool) == true {
-                    revertResult = AlertMessage(title: "Reverted",
-                                                body: "Setting restored.")
+                    revertResult = AlertMessage(title: String(localized: "Reverted"),
+                                                body: String(localized: "Setting restored."))
                 } else {
-                    let reason = bridgeResult["reason"] as? String ?? "Unknown error"
-                    revertResult = AlertMessage(title: "Revert Failed",
+                    let reason = bridgeResult["reason"] as? String ?? String(localized: "Unknown error")
+                    revertResult = AlertMessage(title: String(localized: "Revert Failed"),
                                                 body: reason)
                 }
                 reload()

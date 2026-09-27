@@ -1528,6 +1528,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         }
         let privacy = liveActivityPrivacyMode
         let selectedId = activeIds.first ?? terminalSessionId
+        // A Face ID–locked conversation is shown like Privacy Mode (this card
+        // also feeds the watch face), whatever the Privacy Mode switch says.
+        let redact = privacy || (!selectedId.isEmpty && SessionLockStore.shared.isHiddenFromSystemSurfaces(selectedId))
         let info = selectedId.isEmpty ? nil : tracker.sessionToolInfo[selectedId]
         let phase = selectedId.isEmpty ? nil : tracker.sessionActivityPhases[selectedId]
 
@@ -1554,13 +1557,13 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             state: state,
             activeCount: activeIds.count,
             sessionId: selectedId,
-            title: privacy ? "" : (info?.title ?? ""),
-            status: privacy ? "" : status,
-            toolIcon: privacy || toolName.isEmpty
+            title: redact ? "" : (info?.title ?? ""),
+            status: redact ? "" : status,
+            toolIcon: redact || toolName.isEmpty
                 ? "sparkles"
                 : AgentLiveActivityManager.sfSymbol(forTool: toolName),
-            loopIteration: privacy ? 0 : (info?.loopIteration ?? 0),
-            privacyMode: privacy
+            loopIteration: redact ? 0 : (info?.loopIteration ?? 0),
+            privacyMode: redact
         )
         guard AgentWidgetSnapshotStore.save(snapshot) else {
             logger.warning("[Widget] failed to save snapshot src=\(source)")

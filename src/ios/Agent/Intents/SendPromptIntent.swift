@@ -91,9 +91,16 @@ struct SendPromptIntent: AppIntent {
         let vm: AIChatViewModel
         let isNewSession: Bool
         if let session = session {
-            let (cached, _) = ViewModelCache.shared.getOrCreate(for: session.id)
+            let (cached, isNew) = ViewModelCache.shared.getOrCreate(for: session.id)
             vm = cached
-            await vm.loadSession()
+            // A cached view model is already current (and may be the chat on
+            // screen). loadSession() also marks the session as the one on
+            // screen; it isn't.
+            if isNew {
+                let onScreen = AIChatViewModel.activeSessionId
+                await vm.loadSession()
+                AIChatViewModel.activeSessionId = onScreen
+            }
             isNewSession = false
         } else {
             vm = ViewModelCache.shared.createDraft()
@@ -103,7 +110,10 @@ struct SendPromptIntent: AppIntent {
         // For new sessions, create the DB record first
         if isNewSession {
             vm.sessionSource = "shortcut"
+            // Creating the session marks it as the one on screen, too.
+            let onScreen = AIChatViewModel.activeSessionId
             await vm.ensureSessionReturningId()
+            AIChatViewModel.activeSessionId = onScreen
             // [T-shortcuts-eager-keepalive] Real id now known — re-arm with it
             // (keeps activeSessions non-empty across the swap) and drop the
             // placeholder so it doesn't linger. Re-arm is idempotent when the
@@ -153,9 +163,12 @@ struct SendPromptIntent: AppIntent {
         // phone): the answer is heard, not read — ask for a short spoken reply.
         var voiceOnly = false
         if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
-        vm.inputText = voiceOnly ? prompt + Self.voiceOnlyReminder : prompt
         let sid = vm.sessionId ?? "unknown"
-        let runId = try Self.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
+        // [T-headless-draft] 这个对话若也开在界面上,VM 是同一个:只发这条提示,用户没发出的草稿原样留着。
+        let runId = try vm.withComposerSetAside {
+            vm.inputText = voiceOnly ? prompt + Self.voiceOnlyReminder : prompt
+            return try Self.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
+        }
 
         // Resolve actual model from session binding (matches what the agent loop uses)
         var modelName = vm.selectedModel.displayName
@@ -339,9 +352,11 @@ enum ShortcutNotification {
 
         let content = UNMutableNotificationContent()
         content.title = title
-        // Task Status Privacy (on by default) promises no prompt or reply text here.
+        // Task Status Privacy (on by default) promises no prompt or reply text here;
+        // a Face-ID-locked session never shows its reply on the lock screen either.
         let privacy = UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true
-        content.body = privacy ? String(localized: "打开 App 查看") : body
+        let hidden = privacy || SessionLockStore.isHiddenFromSystemSurfaces(sessionId)
+        content.body = hidden ? String(localized: "打开 App 查看") : body
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["sessionId": sessionId]
@@ -466,7 +481,10 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
             return
         }
         if let sessionId = userInfo["sessionId"] as? String {
-            DispatchQueue.main.async {
+            Task { @MainActor in
+                // A notification outlives its session: tapping one for a
+                // deleted chat would open an empty ghost chat.
+                guard await ChatStore.shared.sessionExists(id: sessionId) else { return }
                 // Held behind the app lock; buffer first (cold-launch
                 // consumer), then post (warm-path consumer). Whichever runs
                 // marks the other's copy dead.
@@ -595,26 +613,24 @@ enum NotificationQuickReply {
                 await vm.loadSession()
                 AIChatViewModel.activeSessionId = onScreen
             }
-            // Send just the reply; an unsent draft in that chat stays where it was.
-            let draft = (text: vm.inputText, attachments: vm.attachments)
-            vm.inputText = text
-            vm.attachments = []
+            // Send just the reply; an unsent draft in that chat (text, attachments,
+            // folded pastes) stays where it was.
             var sent = true
-            if vm.isProcessing {
-                vm.enqueuePrompt()
-            } else {
-                // Not a Shortcut run: no pending record, which would come back as a
-                // false "automation may not have completed" warning on the next open.
-                sent = (try? SendPromptIntent.dispatchRun(vm: vm, sessionId: vm.sessionId ?? sessionId,
-                                                          pendingId: UUID().uuidString) { vm.send() }) != nil
+            vm.withComposerSetAside {
+                vm.inputText = text
+                if vm.isProcessing {
+                    vm.enqueuePrompt()
+                } else {
+                    // Not a Shortcut run: no pending record, which would come back as a
+                    // false "automation may not have completed" warning on the next open.
+                    sent = (try? SendPromptIntent.dispatchRun(vm: vm, sessionId: vm.sessionId ?? sessionId,
+                                                              pendingId: UUID().uuidString) { vm.send() }) != nil
+                }
             }
-            if sent {
-                vm.inputText = draft.text
-            } else {
+            if !sent {
                 // A reply that didn't go out waits in the composer, after the draft.
-                vm.inputText = draft.text.isEmpty ? text : draft.text + "\n" + text
+                vm.inputText = vm.inputText.isEmpty ? text : vm.inputText + "\n" + text
             }
-            vm.attachments = draft.attachments
         }
         return true
     }

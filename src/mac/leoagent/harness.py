@@ -197,6 +197,7 @@ def _translate_claude(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
                 json.dumps(detail, ensure_ascii=False)[:300] if detail else "")
             out.append({
                 "event": EVENT_APPROVAL_REQUEST,
+                "tool": req.get("tool_name") or "Bash",
                 "command": req.get("tool_name") or req.get("command") or "",
                 "description": description,
                 "choices": ["once", "session", "always", "deny"],
@@ -244,6 +245,7 @@ def _translate_codex(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
     elif kind in ("exec_approval_request", "apply_patch_approval_request"):
         out.append({
             "event": EVENT_APPROVAL_REQUEST,
+            "tool": "apply_patch" if kind == "apply_patch_approval_request" else "exec",
             "command": " ".join(msg.get("command") or []) or str(msg.get("path") or ""),
             "description": msg.get("reason") or "",
             "choices": ["once", "session", "always", "deny"],
@@ -336,6 +338,7 @@ class HarnessSession:
     _outbox: List[Dict[str, Any]] = field(default_factory=list)
     # grok ACP:session/prompt 的请求 id 集合;响应到达即回合结束。
     _acp_prompt_ids: set = field(default_factory=set)
+    archived: bool = False
 
     # -- event fan-out -----------------------------------------------------
 
@@ -348,6 +351,8 @@ class HarnessSession:
         (approval_id used to be minted after the write — replayed approvals
         arrived unaddressable.)
         """
+        if self.archived:
+            return
         self.seq += 1
         event = dict(event)
         event["seq"] = self.seq
@@ -1141,6 +1146,7 @@ class HarnessManager:
         session = self.sessions.pop(session_id, None)
         if session is None:
             return False
+        session.archived = True
         if session.process is not None and session.process.returncode is None:
             try:
                 await session.stop()

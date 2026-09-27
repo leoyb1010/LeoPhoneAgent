@@ -753,17 +753,10 @@ final class AgentLiveActivityManager {
             // even with Privacy Mode off.
             var s = state
             s.sessions = s.sessions.map { snap in
-                guard SessionLockStore.shared.isHiddenFromSystemSurfaces(snap.sessionId) else { return snap }
-                var redacted = snap
-                redacted.title = Self.privacyTaskTitle
-                redacted.toolStatus = snap.isCompleted ? "" : (snap.needsApproval ? Self.privacyApprovalStatus : Self.privacyWorkingStatus)
-                redacted.toolIcon = snap.isCompleted ? "checkmark.circle.fill"
-                    : (snap.needsApproval ? LiveSessionSnapshot.approvalIcon : Self.privacyNeutralIcon)
-                redacted.lastMessage = snap.isCompleted ? Self.privacyCompletedStatus : ""
-                return redacted
+                SessionLockStore.shared.isHiddenFromSystemSurfaces(snap.sessionId) ? Self.redactedRow(snap) : snap
             }
             if s.sessions.contains(where: { SessionLockStore.shared.isHiddenFromSystemSurfaces($0.sessionId) }) {
-                s.latestToolIcon = s.allCompleted ? "checkmark.circle.fill" : Self.privacyNeutralIcon
+                s.latestToolIcon = Self.privacyLatestIcon(s)
                 s.minimalShowsTool = false
             }
             return s
@@ -777,24 +770,61 @@ final class AgentLiveActivityManager {
         // everything conversation-derived.
         // Neutral icon for the Dynamic Island trailing/expanded glyphs, and never
         // let the minimal icon flip to a tool glyph (it would leak which tool ran).
-        s.latestToolIcon = s.allCompleted ? "checkmark.circle.fill" : Self.privacyNeutralIcon
+        s.latestToolIcon = Self.privacyLatestIcon(s)
         s.minimalShowsTool = false
-        s.sessions = s.sessions.map { snap in
-            var redacted = snap
-            // "Agent Task" + the view's existing "1/2" index chip reads as
-            // "第 1/2 个智能体任务" — task position without task content.
-            redacted.title = Self.privacyTaskTitle
-            // In-flight rows get a content-free "working" label; completed rows
-            // show a content-free "Completed" beside the checkmark (the slot
-            // where the reply summary appears outside Privacy Mode).
-            // A run waiting for your OK says so even in Privacy Mode (no command text).
-            redacted.toolStatus = snap.isCompleted ? "" : (snap.needsApproval ? Self.privacyApprovalStatus : Self.privacyWorkingStatus)
-            redacted.toolIcon = snap.isCompleted ? "checkmark.circle.fill"
-                : (snap.needsApproval ? LiveSessionSnapshot.approvalIcon : Self.privacyNeutralIcon)
-            redacted.lastMessage = snap.isCompleted ? Self.privacyCompletedStatus : ""
-            return redacted
-        }
+        s.sessions = s.sessions.map(Self.redactedRow)
         return s
+    }
+
+    /// A content-free row: its position, its state and how it ended — never
+    /// what it was about.
+    @available(iOS 16.2, *)
+    private static func redactedRow(_ snap: LiveSessionSnapshot) -> LiveSessionSnapshot {
+        var redacted = snap
+        // "Agent Task" + the view's existing "1/2" index chip reads as
+        // "第 1/2 个智能体任务" — task position without task content.
+        redacted.title = privacyTaskTitle
+        if snap.isCompleted {
+            // The real ending beside its icon, in the slot where the reply
+            // summary appears outside Privacy Mode: a failed or stopped run
+            // must not read "Completed".
+            redacted.toolStatus = ""
+            switch snap.outcome {
+            case .done:
+                redacted.toolIcon = "checkmark.circle.fill"
+                redacted.lastMessage = privacyCompletedStatus
+            case .attention:
+                redacted.toolIcon = "exclamationmark.circle.fill"
+                // A run parked until the app returns says so (no content in it).
+                redacted.lastMessage = snap.lastMessage == privacyPausedStatus
+                    ? privacyPausedStatus : String(localized: "Needs attention")
+            case .stopped:
+                redacted.toolIcon = "stop.circle.fill"
+                redacted.lastMessage = String(localized: "Stopped")
+            }
+        } else if snap.needsApproval {
+            // A run waiting for your OK says so even in Privacy Mode (no command text).
+            redacted.toolStatus = privacyApprovalStatus
+            redacted.toolIcon = LiveSessionSnapshot.approvalIcon
+            redacted.lastMessage = ""
+        } else if snap.toolIcon == pausedIcon {
+            redacted.toolStatus = privacyPausedStatus
+            redacted.toolIcon = pausedIcon
+            redacted.lastMessage = ""
+        } else {
+            redacted.toolStatus = privacyWorkingStatus
+            redacted.toolIcon = privacyNeutralIcon
+            redacted.lastMessage = ""
+        }
+        return redacted
+    }
+
+    /// The shared glyph once everything has ended follows the most urgent
+    /// ending, like the unredacted card.
+    @available(iOS 16.2, *)
+    private static func privacyLatestIcon(_ state: AgentActivityAttributes.ContentState) -> String {
+        guard state.allCompleted else { return privacyNeutralIcon }
+        return state.sessions.contains { $0.outcome == .attention } ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
     }
 
     /// Neutral placeholders used by Privacy Mode. Localized so the redacted
@@ -803,6 +833,9 @@ final class AgentLiveActivityManager {
     private static var privacyWorkingStatus: String { String(localized: "Working…") }
     private static var privacyCompletedStatus: String { String(localized: "Completed") }
     private static var privacyApprovalStatus: String { String(localized: "等你批准") }
+    /// Content-free already: the text and glyph of a run parked until the app returns.
+    private static var privacyPausedStatus: String { String(localized: "已暂停，回到 App 继续") }
+    private static let pausedIcon = "pause.circle.fill"
 
     /// [T-la-stale] A running card whose app stopped updating it (killed,
     /// frozen, relay gone) turns "stale" after this long; while work is in

@@ -44,6 +44,17 @@ class HarnessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(log.exists())
         self.assertFalse(await manager.archive("hs_a"))
 
+    async def test_archived_session_never_writes_its_log_again(self):
+        log = self.sessions / "hs_b.ndjson"
+        _write_log(log)
+        manager = HarnessManager(home=self.home)
+        session = manager.sessions["hs_b"]
+        self.assertTrue(await manager.archive("hs_b"))
+        # 停进程后 pump 还会吐出缓冲里的输出:不能把删掉的日志重新建出来。
+        session._emit({"event": "message.delta", "delta": "late output"})
+        self.assertFalse(log.exists())
+        self.assertNotIn("hs_b", HarnessManager(home=self.home).sessions)
+
     def test_list_reports_title_updated_at_and_stale_idle(self):
         log = self.sessions / "hs_idle.ndjson"
         _write_log(log, cwd="/tmp/myproj")

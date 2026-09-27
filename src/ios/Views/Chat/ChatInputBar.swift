@@ -849,6 +849,34 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
             let provider = item.itemProvider
             let types = provider.registeredTypeIdentifiers
 
+            // [#29] Same rule as the page-level drop (AIChatView
+            // handleDropProviders, [T-ipad-drop-links]): a web link or a text
+            // selection goes into the message, not in as a file attachment —
+            // public.url conforms to public.data, so the file path below took
+            // links as files. An image dragged out of Safari also carries its
+            // web address: that one is still attached as the image.
+            let carriesMedia = types.contains { id in
+                guard let ut = UTType(id) else { return false }
+                return ut.conforms(to: .image) || ut.conforms(to: .movie) || ut.conforms(to: .pdf)
+            }
+            let isFileDrop = carriesMedia || types.contains(UTType.fileURL.identifier)
+            if !isFileDrop, types.contains(UTType.url.identifier),
+               provider.canLoadObject(ofClass: URL.self) {
+                _ = provider.loadObject(ofClass: URL.self) { [weak self] url, _ in
+                    guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+                    DispatchQueue.main.async { self?.insertText(url.absoluteString) }
+                }
+                continue
+            }
+            if !isFileDrop, types.contains(where: { UTType($0)?.conforms(to: .plainText) ?? false }),
+               provider.canLoadObject(ofClass: String.self) {
+                _ = provider.loadObject(ofClass: String.self) { [weak self] text, _ in
+                    guard let text, !text.isEmpty else { return }
+                    DispatchQueue.main.async { self?.insertText(String(text.prefix(20_000))) }
+                }
+                continue
+            }
+
             // Determine if this item represents a file (not just inline text).
             // A dragged .txt file will conform to both public.plain-text AND
             // public.file-url (or a concrete file UTI like public.text).
@@ -942,6 +970,13 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
     }
 
     @objc private func handleReturnKey() {
+        // [#39] While an input method is composing (pinyin / kana still
+        // marked), Return confirms the composition as it does everywhere on
+        // iOS; it must not send a half-typed message.
+        if markedTextRange != nil {
+            unmarkText()
+            return
+        }
         onReturnKey?()
     }
 

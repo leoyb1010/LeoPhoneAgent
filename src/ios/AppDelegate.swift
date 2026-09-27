@@ -107,14 +107,27 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // work for every running session — a cached ViewModel always exists
         // for a processing session (ViewModelCache never evicts those); a Mac
         // session has none and is stopped on the Mac.
-        WidgetIntentBridge.shared.stopAllTasksHandler = {
-            await MainActor.run {
-                var stopped = 0
-                for sessionId in SessionActivityTracker.shared.activeSessions {
-                    if let vm = ViewModelCache.shared.get(for: sessionId) {
-                        vm.cancel(queuePolicy: .discardQueuedPrompts)
-                        stopped += 1
-                    } else if HarnessLiveActivityBridge.shared.stop(sessionId: sessionId) {
+        WidgetIntentBridge.shared.stopAllTasksHandler = { @MainActor in
+            var stopped = 0
+            var withoutViewModel: [String] = []
+            for sessionId in SessionActivityTracker.shared.activeSessions {
+                if let vm = ViewModelCache.shared.get(for: sessionId) {
+                    vm.cancel(queuePolicy: .discardQueuedPrompts)
+                    stopped += 1
+                } else {
+                    withoutViewModel.append(sessionId)
+                }
+            }
+            // A Mac session is stopped on the Mac. The requests are awaited
+            // (side by side, so one unreachable Mac holds up no other): a
+            // process woken just for this intent can be suspended as soon as
+            // it returns, with a fire-and-forget request never sent.
+            await withTaskGroup(of: (String, Bool).self) { group in
+                for sessionId in withoutViewModel {
+                    group.addTask { (sessionId, await HarnessLiveActivityBridge.shared.stop(sessionId: sessionId)) }
+                }
+                for await (sessionId, wasMacSession) in group {
+                    if wasMacSession {
                         stopped += 1
                     } else {
                         // [T-widget-stop-eager-placeholder] An intent registers
@@ -128,8 +141,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                         SessionActivityTracker.shared.requestEagerCancel(sessionId)
                     }
                 }
-                logger.info("[Widget] stop-all cancelled \(stopped) session(s)")
             }
+            logger.info("[Widget] stop-all cancelled \(stopped) session(s)")
         }
         // [T-control-center] Control Center buttons land here after the
         // system has already foregrounded the app (openAppWhenRun = true).
@@ -374,7 +387,7 @@ enum AppURLEntry {
         }
         lastURL = url
         lastAt = Date()
-        if SessionLockStore.shared.appIsLocked {
+        if SessionLockStore.shared.appIsLocked || SessionLockStore.shared.showPrivacyScreen {
             logger.info("[URL] deferred until unlock (\(source))")
         }
         SessionLockStore.shared.runWhenUnlocked { dispatch(url) }

@@ -638,7 +638,11 @@ final class ViewModelCache {
         }
         let vm = AIChatViewModel()
         vm.sessionId = sessionId
-        vm.restoreComposerDraftIfNeeded()
+        // [T-draft-headless] No draft restore here: Siri / Shortcuts / widget /
+        // worker / `minis-sessions send` / watch also create VMs through this
+        // cache and would send (then delete) the user's saved draft with their
+        // own prompt. Only a VM the chat screen presents restores it
+        // (CachedViewModel.init in AIChatView).
         cache[sessionId] = vm
         touch(sessionId)
         // A brand-new cache entry doesn't need the stale signal — its
@@ -694,9 +698,10 @@ final class ViewModelCache {
     }
 
     /// Create a fresh (uncached) ViewModel for draft sessions (nil sessionId).
+    /// Starts with an empty composer; the chat screen restores the new-chat
+    /// draft itself (see `getOrCreate`).
     func createDraft() -> AIChatViewModel {
         let vm = AIChatViewModel()
-        vm.restoreComposerDraftIfNeeded()
         logger.info("🔄SESSION ViewModelCache createDraft vm=\(vm.vmInstanceId)")
         return vm
     }

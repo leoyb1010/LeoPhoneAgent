@@ -23,15 +23,21 @@ SSH / Docker 远程工作区(远端运行时原本从官方 CDN 下载,后续改
 - **订阅账号(OAuth)**:pi 的 `ModelRuntime` 负责各家授权流程、token 存储与刷新,凭据只在
   `~/.leoagent/oauth/auth.json`(0600)。登录页 `http://127.0.0.1:38473/leo/oauth` 在系统浏览器打开;
   `/v1/models`、`/v1/chat/completions` 是给 agent 用的 OpenAI 兼容代理,登录后自动登记为
-  「订阅账号(Claude / ChatGPT / Copilot)」供应商。上游失败按真实 HTTP 状态回给 agent
-  (401 提示重新登录、429 / 5xx 退避重试、超窗返回 `context_length_exceeded` 触发压缩)。
+  「订阅账号(ChatGPT / Copilot / OpenCode Go)」供应商。Claude 订阅与 Radius 网关不上架,
+  启动时清掉以前留下的这两类凭据。上游失败按真实 HTTP 状态回给 agent(401 提示重新登录、
+  429 / 5xx 退避重试、超窗或请求体超过 48MB 时返回 `context_length_exceeded` 触发压缩)。
 - **藏宝阁**:`~/.leoagent/treasury.sqlite`(node:sqlite)。四个工具
   `treasury_search / treasury_get / treasury_save / treasury_update`,首启登记进 `~/.agents/mcp.json`。
   写操作要求 `user_confirmed: true`。
-- **Telegram**:配置在 `~/.leoagent/channels.json`(0600)。配对后说话即开会话,权限请求以内联按钮推送,
-  走 ZCode 自己的权限系统(`respondPermission`)。
-- **本机接口**:只绑 `127.0.0.1:38473` 并校验 Host。`/api/leo/*` 与 `/v1/*` 要 Bearer(`~/.leoagent/key`);
-  登录页接口要 `X-Leo-UI` 头、不开 CORS。多窗口时只有抢到端口的 Host 跑 Telegram、MCP 登记与订阅同步。
+- **聊天机器人遥控**:用上游的机器人服务,模式固定为「先问我」,规则见 `services/src/bots/leoBotPolicy.ts`。
+- **本机接口**:只绑 `127.0.0.1:38473` 并校验 Host,不开 CORS。钥匙三把、各管一段:主钥匙 `~/.leoagent/key`
+  (订阅代理、连接状态、藏宝阁);藏宝阁钥匙 `~/.leoagent/treasury.key`(只能调藏宝阁,写进 `~/.agents/mcp.json`
+  的是它);出配对码口令只在主进程与 Host 的内存里,每次启动都换,界面上点了才经 IPC 带上。`/api/leo/health`
+  不要钥匙,返回 `app` 标识;登录页接口要 `X-Leo-UI` 头。多窗口时只有抢到端口的 Host 跑手机连接、MCP 登记与订阅同步。
+- **leoagent(Python,`127.0.0.1:8646`)**:跑手机上开的 claude / codex / grok 会话。LaunchAgent
+  `com.leoyuan.leoagent` 运行的是 `~/.leoagent/leoagent` 这份拷贝,改了 `src/mac/leoagent` 要同步过去再
+  `launchctl kickstart -k gui/$(id -u)/com.leoyuan.leoagent`;测试在 `src/mac` 下跑
+  `~/.leoagent/venv/bin/python -m unittest discover -s leoagent -t . -p "test_*.py"`(按包导入;在 leoagent 目录里直接跑会导入失败)。
 
 ## 常用命令(在 `src/mac/leophone/` 下,Node 24 + pnpm 10.33)
 ```bash

@@ -178,10 +178,11 @@ struct ChatScreenshotPreviewSheet: View {
             let safeURL = MinisShareSheet.sanitizedShareURL(url) ?? url
             DispatchQueue.main.async {
                 let avc = UIActivityViewController(activityItems: [safeURL], applicationActivities: nil)
+                // [B7] Content window (key first), never the app-lock window.
                 guard let scene = UIApplication.shared.connectedScenes
                     .compactMap({ $0 as? UIWindowScene })
                     .first(where: { $0.activationState == .foregroundActive }),
-                      let root = scene.windows.first?.rootViewController else { return }
+                      let root = scene.chatPresentationWindow?.rootViewController else { return }
                 var presenter = root
                 while let p = presenter.presentedViewController { presenter = p }
                 avc.popoverPresentationController?.sourceView = presenter.view

@@ -191,7 +191,7 @@ struct QuickTaskSettingsView: View {
 
     private func export(_ task: QuickTaskDefinition) {
         guard let data = store.exportData(id: task.id) else {
-            exportError = "The template could not be encoded."
+            exportError = String(localized: "The template could not be encoded.")
             return
         }
         let safeName = task.name

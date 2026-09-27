@@ -264,7 +264,7 @@ private struct CopyableURLCapsule: View {
     @State private var showCopied = false
 
     var body: some View {
-        Text(showCopied ? "Copied!" : url)
+        Text(showCopied ? String(localized: "Copied") : url)
             .font(.system(size: 12, weight: showCopied ? .semibold : .regular))
             .foregroundStyle(showCopied ? Color.white : Color(white: 0.35))
             .lineLimit(1)
@@ -1032,7 +1032,7 @@ struct ToolLiveSheet: View {
 
         // Compute size label for title bar (just byte size, not the result message)
         let sizeLabel: String = {
-            if isStreaming { return "streaming…" }
+            if isStreaming { return String(localized: "streaming…") }
             let totalBytes = oldText.utf8.count + newText.utf8.count
             return Self.formatBytes(totalBytes)
         }()
@@ -1293,7 +1293,7 @@ struct ToolLiveSheet: View {
     private func memoryEditorContent(_ memoryContent: String, action: String, resultText: String? = nil, isStreaming: Bool = false) -> some View {
         let byteCount = memoryContent.utf8.count
         let sizeLabel = isStreaming
-            ? "\(Self.formatBytes(byteCount)) received"
+            ? String(localized: "\(Self.formatBytes(byteCount)) received")
             : Self.formatBytes(byteCount)
 
         return ScrollView {
@@ -1354,7 +1354,7 @@ struct ToolLiveSheet: View {
         let isRead = { if case .fileReadTool = block.kind { return true }; return false }()
         let byteCount = fileContent.utf8.count
         let sizeLabel = isStreaming
-            ? "\(Self.formatBytes(byteCount)) received"
+            ? String(localized: "\(Self.formatBytes(byteCount)) received")
             : Self.formatBytes(byteCount)
 
         let chunks = isStreaming

@@ -55,7 +55,7 @@ enum WatchPayloadKey {
     static let choices = "choices"
     static let choice = "choice"
     /// CommandRisk raw value; the wrist colors the card, and for a high-risk
-    /// command drops double-tap and "always" and asks for a confirming tap.
+    /// command drops double-tap and asks for a confirming tap.
     static let risk = "risk"
     // [T-watch-standalone] phone → watch (transferUserInfo): the model the
     // watch calls directly when the phone is out of reach.
@@ -325,25 +325,20 @@ final class WatchBridge: NSObject, ObservableObject {
     func sendApprovalRequest(approvalId: String, command: String?, reason: String?, choices: [String]) {
         guard let session, session.isReachable else { return }
         let risk = command.map(CommandRisk.assess) ?? .medium
-        if risk == .high { highRiskApprovalIds.insert(approvalId) }
         session.sendMessage([
             WatchPayloadKey.kind: WatchPayloadKey.kindApprovalRequest,
             WatchPayloadKey.requestId: approvalId,
             WatchPayloadKey.text: WatchTextSanitizer.plain(command ?? reason ?? ""),
-            WatchPayloadKey.choices: Self.wristChoices(choices, risk: risk),
+            WatchPayloadKey.choices: Self.wristChoices(choices),
             WatchPayloadKey.risk: risk.rawValue,
         ], replyHandler: nil, errorHandler: { _ in })
     }
 
-    /// Approvals whose command assessed as high risk, so a reply from an
-    /// older watch build can't upgrade one to a permanent rule.
-    private var highRiskApprovalIds: Set<String> = []
-
     /// "Always" writes a permanent allow rule on the Mac (Claude Code project
-    /// settings). The phone's notification never offers it; the wrist offers
-    /// it only for commands that are not high risk.
-    static func wristChoices(_ choices: [String], risk: CommandRisk) -> [String] {
-        risk == .high ? choices.filter { $0 != "always" } : choices
+    /// settings) for every later run of that command. The phone's notification
+    /// never offers it, and neither does the wrist, whatever the risk.
+    static func wristChoices(_ choices: [String]) -> [String] {
+        choices.filter { $0 != "always" }
     }
 
     /// Tell the wrist the card is gone (answered on the phone, or timed out).
@@ -618,10 +613,10 @@ extension WatchBridge: WCSessionDelegate {
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
             guard !requestId.isEmpty, !choice.isEmpty else { return }
             Task { @MainActor in
-                let bridge = WatchBridge.shared
-                let isHighRisk = bridge.highRiskApprovalIds.remove(requestId) != nil
-                bridge.resolveApproval(approvalId: requestId,
-                                       choice: isHighRisk && choice == "always" ? "once" : choice)
+                // A watch on an older build can still send "always": allow this
+                // one run, never write the permanent rule from the wrist.
+                WatchBridge.shared.resolveApproval(approvalId: requestId,
+                                                   choice: choice == "always" ? "once" : choice)
             }
         default:
             replyHandler(["ok": false])
@@ -776,15 +771,31 @@ enum WatchAskRunner {
         }
         // The answer is read on a 45 mm screen and often spoken: ask for it in
         // that shape. Hidden from the chat bubble like every system reminder.
-        // An unsent draft in that chat stays where it was.
-        let draft = (text: vm.inputText, attachments: vm.attachments)
+        // An unsent draft in that chat stays where it was, folded pastes
+        // included (send() clears them, and the draft's [Pasted#N] tokens
+        // would come back pointing at nothing).
+        let draft = (text: vm.inputText, attachments: vm.attachments, pasted: vm.pastedBlocks)
         vm.inputText = prompt + wristReminder
         vm.attachments = []
+        vm.pastedBlocks = []
         // Messages before this turn; the assistant turn it produces comes after.
         let baseline = vm.messages.count
         vm.send()
+        // send() can return without starting anything (context full, a
+        // "/model" command, a compaction waiting for the user's OK).
+        let runStarted = vm.isProcessing || vm.isCompacting || vm.compactAndSendRequestId != nil
         vm.inputText = draft.text
         vm.attachments = draft.attachments
+        vm.pastedBlocks = draft.pasted
+        guard runStarted else {
+            // The eager keep-alive above registered this session as running;
+            // nothing else would ever mark it done.
+            if SessionActivityTracker.shared.activeSessions.contains(sid) {
+                SessionActivityTracker.shared.setInactive(sid, source: "WatchAskRunner.notStarted")
+            }
+            deliver(requestId: requestId, text: "问题没有发出。请在 iPhone 上打开这个会话看看原因。", sessionId: sid)
+            return
+        }
         // Wait for the run to settle (same observation pattern as the widget
         // runner): give it up to 3 minutes, then report whatever exists.
         // Startup grace: the send registers as active a beat later — breaking

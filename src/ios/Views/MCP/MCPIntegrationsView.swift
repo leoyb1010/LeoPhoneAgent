@@ -3,8 +3,8 @@
 //  MinisApp
 //
 //  Management screen for MCP (Model Context Protocol) servers. Mirrors
-//  SkillsManagementView: a list of servers with status dot + name + transport,
-//  swipe-to-delete, and a toolbar "+" menu offering form-add or JSON-import.
+//  SkillsManagementView: a list of servers with name + transport + an enable
+//  toggle, swipe-to-delete, and a toolbar "+" menu offering form-add or JSON-import.
 //
 
 import SwiftUI
@@ -33,6 +33,9 @@ struct MCPIntegrationsView: View {
     @State private var toolsServer: MCPServerConfig?
     /// One-shot consumption of initialEditServerId.
     @State private var consumedInitialEdit = false
+    /// While iCloud sync is on a delete is pushed to the user's other devices
+    /// (MCPServerItem op=delete); the confirmation says so.
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
 
     var body: some View {
         List {
@@ -40,12 +43,24 @@ struct MCPIntegrationsView: View {
                 emptyState
             } else {
                 ForEach(store.servers) { server in
-                    Button {
-                        editingServer = server
-                    } label: {
-                        row(for: server)
+                    // [T-mcp-row-toggle] Enable/disable right in the list
+                    // (MCPStore.toggle had no caller; the row only showed a dot).
+                    // The toggle sits outside the edit button so each gets its own tap.
+                    HStack(spacing: 12) {
+                        Button {
+                            editingServer = server
+                        } label: {
+                            row(for: server)
+                        }
+                        .buttonStyle(.plain)
+                        Toggle(isOn: Binding(
+                            get: { server.enabled },
+                            set: { if $0 != server.enabled { store.toggle(id: server.id) } }
+                        )) {
+                            Text(server.id)
+                        }
+                        .labelsHidden()
                     }
-                    .buttonStyle(.plain)
                     // [T-mcp-tools-refresh] Per-server tools entry: opens the
                     // sheet, which force-reconnects + re-pulls tools/list.
                     .contextMenu {
@@ -80,7 +95,9 @@ struct MCPIntegrationsView: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteServerId = nil }
         } message: {
-            Text(String(localized: "Delete \"\(pendingDeleteServerId ?? "")\" and its saved credentials? This action cannot be undone."))
+            Text(SyncedDeleteMessage.text(
+                String(localized: "Delete \"\(pendingDeleteServerId ?? "")\" and its saved credentials? This action cannot be undone."),
+                syncOn: iCloudSyncEnabled))
         }
         .navigationTitle(Text("MCP Integrations"))
         .navigationBarTitleDisplayMode(.inline)
@@ -188,9 +205,6 @@ struct MCPIntegrationsView: View {
 
     private func row(for server: MCPServerConfig) -> some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(server.enabled ? Color.green : Color.gray)
-                .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 3) {
                 Text(server.id)
                     .font(.body)
@@ -207,9 +221,6 @@ struct MCPIntegrationsView: View {
                 }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
     }

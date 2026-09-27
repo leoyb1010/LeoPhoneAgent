@@ -133,8 +133,9 @@ export function codexCatalogIds(json: object): string[] {
 
 // OpenCode Go 的目录里混着走 Responses / Anthropic Messages 的模型;本端只会 chat completions,
 // 列出来一选就 4xx,所以拉回来的目录按协议筛一遍。筛完为空就原样返回,不把列表清空。
-const OPENCODE_GO_NON_CHAT_PREFIXES: string[] = ['gpt-', 'grok-', 'muse-spark-'];
-const OPENCODE_GO_NON_CHAT_IDS: string[] = ['minimax-m3', 'qwen3.8-flash'];
+// 按 https://opencode.ai/docs/go/ 的端点表:GPT / Grok / Muse Spark 走 /v1/responses,
+// MiniMax 和 Qwen 全部走 /v1/messages。和 iOS OpenCodeGoWireProtocol、providerModels.ts 保持一致。
+const OPENCODE_GO_NON_CHAT_PREFIXES: string[] = ['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen'];
 
 export function chatModelsFor(type: string, ids: string[]): string[] {
   if (type !== 'openCodeGo') {
@@ -143,9 +144,6 @@ export function chatModelsFor(type: string, ids: string[]): string[] {
   const kept: string[] = ids.filter((id: string) => {
     const parts = id.toLowerCase().split('/');
     const bare = parts[parts.length - 1];
-    if (OPENCODE_GO_NON_CHAT_IDS.indexOf(bare) >= 0) {
-      return false;
-    }
     for (let i = 0; i < OPENCODE_GO_NON_CHAT_PREFIXES.length; i++) {
       if (bare.startsWith(OPENCODE_GO_NON_CHAT_PREFIXES[i])) {
         return false;

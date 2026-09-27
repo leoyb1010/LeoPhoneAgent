@@ -72,6 +72,57 @@ final class OAuthRefreshErrorClassifierTests: XCTestCase {
         XCTAssertTrue(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: rotatingFatal))
     }
 
+    // MARK: - OpenAI nested error bodies (ChatGPT sign-in refresh)
+
+    /// auth.openai.com's shape for a dead refresh token: HTTP 401 with the code
+    /// nested under `error`.
+    private func nestedOpenAIError(code: String) -> String {
+        "{\"error\":{\"message\":\"Your refresh token has already been used to generate a new access token. Please try signing in again.\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"\(code)\"}}"
+    }
+
+    func testNestedOpenAIRefreshTokenCodes_areFatal_forCodex() {
+        for code in ["refresh_token_reused", "refresh_token_expired", "refresh_token_invalidated"] {
+            let e = msg(status: 401, body: nestedOpenAIError(code: code))
+            XCTAssertTrue(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: OAuthRefreshErrorClassifier.codexFatalErrorCodes),
+                          "\(code) in a nested OpenAI body must clear the dead sign-in")
+        }
+    }
+
+    func testNestedOpenAIBody_keepsCodeDropsMessage() {
+        let message = OAuthRefreshErrorClassifier.makeErrorMessage(status: 401, body: nestedOpenAIError(code: "refresh_token_reused"))
+        XCTAssertNotEqual(message, "oauth_http_status=401 {}", "the nested code must survive sanitizing")
+        XCTAssertFalse(message.contains("already been used"), "only the code is kept, not the prose")
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCode(fromBody: message), "refresh_token_reused")
+        let e = LLMError.providerError(message: "Token refresh failed: " + message)
+        XCTAssertEqual(OAuthRefreshErrorClassifier.userFacingSummary(e), "HTTP 401 · refresh_token_reused")
+    }
+
+    func testTopLevelCode_isFatal_forCodex() {
+        let e = msg(status: 401, body: "{\"code\":\"refresh_token_expired\",\"message\":\"expired\"}")
+        XCTAssertTrue(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: OAuthRefreshErrorClassifier.codexFatalErrorCodes))
+    }
+
+    func testParseErrorCodes_readsAllShapes() {
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCodes(fromBody: "oauth_http_status=401 {\"code\":\"Refresh_Token_Expired\"}"),
+                       ["refresh_token_expired"])
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCodes(fromBody: "oauth_http_status=401 {\"error\":{\"code\":\"refresh_token_reused\"}}"),
+                       ["refresh_token_reused"])
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCodes(fromBody: "oauth_http_status=400 {\"error\":\"invalid_grant\",\"code\":\"x\"}"),
+                       ["invalid_grant", "x"])
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCodes(fromBody: "oauth_http_status=500 not json"), [])
+    }
+
+    func testNestedTypeWithoutCode_isNotFatal() {
+        // `invalid_request_error` is a type, not the fatal `invalid_request` code.
+        let e = msg(status: 401, body: "{\"error\":{\"message\":\"bad\",\"type\":\"invalid_request_error\",\"code\":null}}")
+        XCTAssertFalse(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: OAuthRefreshErrorClassifier.codexFatalErrorCodes))
+    }
+
+    func testNestedTransientServerError_isNotFatal() {
+        let e = msg(status: 500, body: "{\"error\":{\"message\":\"try later\",\"type\":\"server_error\",\"code\":\"server_error\"}}")
+        XCTAssertFalse(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: OAuthRefreshErrorClassifier.codexFatalErrorCodes))
+    }
+
     // MARK: - False positives the OLD substring test would have WRONGLY flagged
 
     func test500WithBodyContaining400_isNotFatal() {

@@ -675,12 +675,13 @@ extension AIChatViewModel {
         return FileToolResult(output: result, success: true)
     }
 
-    /// Reads back the content behind `[CONTEXT OFFLOADED]` stubs (only from
-    /// the offloads dir the stubs point at) and runs the placeholder guard.
+    /// Reads back the content behind `[CONTEXT OFFLOADED]` stubs (only the
+    /// model's own offloaded `file_write` content — every other stub is
+    /// rejected by the guard) and runs the placeholder guard.
     private func resolveOffloadPlaceholders(in text: String, field: String) async -> OffloadPlaceholderGuard.Outcome {
         var contents: [String: String] = [:]
         for path in OffloadPlaceholderGuard.referencedContentPaths(in: text)
-        where contents[path] == nil && path.hasPrefix(Self.minisOffloadsLinuxDir + "/") && !path.contains("..") {
+        where contents[path] == nil && OffloadPlaceholderGuard.isOwnWriteContent(path) {
             if let url = await resolvePathForDirectRead(path),
                let saved = try? String(contentsOf: url, encoding: .utf8) {
                 contents[path] = saved

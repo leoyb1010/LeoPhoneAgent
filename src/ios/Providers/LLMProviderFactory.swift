@@ -66,13 +66,14 @@ enum LLMProviderFactory {
         return provider
     }
 
+    /// `manualToken` is the builder's single read of the instance's pasted token.
     @discardableResult
-    static func applyCustomUserAgent(_ provider: OpenAIProvider, instance: ProviderInstance) -> OpenAIProvider {
+    static func applyCustomUserAgent(_ provider: OpenAIProvider, instance: ProviderInstance, manualToken: String?) -> OpenAIProvider {
         // OAuth (Codex) requires its own `codex_cli_rs/...` UA — never touch it.
         guard !provider.isOAuth else { return provider }
         // A user-set per-provider custom UA wins (only honored for
         // custom-base proxy/relay instances, per supportsCustomUserAgent).
-        if instance.supportsCustomUserAgent, let ua = instance.effectiveCustomUserAgent {
+        if instance.supportsCustomUserAgent(manualToken: manualToken), let ua = instance.effectiveCustomUserAgent {
             provider.extraHeaders["User-Agent"] = ua
             return provider
         }
@@ -89,26 +90,32 @@ enum LLMProviderFactory {
     // MARK: - Per-Provider Builders
 
     static func makeAnthropicProvider(instance: ProviderInstance, model: LLMModel) -> AnthropicProvider {
-        let customBase = instance.effectiveCustomBaseURL
+        // One Keychain read decides both the credential and the base URL.
+        let manualToken = instance.storedManualToken()
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
         let appendV1 = instance.appendV1Suffix
         // Only custom-base Anthropic-compat (proxy/relay) instances get a custom UA;
         // otherwise send the app default (LeoPhoneAgent/<marketing>) so the SDK
         // (which sets no UA itself) doesn't fall back to URLSession's build-number default.
-        let ua = (instance.supportsCustomUserAgent ? instance.effectiveCustomUserAgent : nil) ?? MinisUserAgent.default
+        let ua = (instance.supportsCustomUserAgent(manualToken: manualToken) ? instance.effectiveCustomUserAgent : nil) ?? MinisUserAgent.default
         // A retired subscription-login instance has no manual token and falls
         // through to an empty key; entry points reject it via `retiredSignInNotice`.
-        if instance.credentialType == .oauth,
-           let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+        if let manualToken {
             return AnthropicProvider(manualToken: manualToken, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
         }
         let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
+        // Relays and coding plans behind a custom base often want the key as
+        // `Authorization: Bearer`; send it that way too (x-api-key stays).
+        if customBase != nil {
+            return AnthropicProvider(manualToken: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
+        }
         return AnthropicProvider(apiKey: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
     }
 
     static func makeGeminiProvider(instance: ProviderInstance, model: LLMModel) -> GeminiProvider {
-        let customBase = instance.effectiveCustomBaseURL
-        if instance.credentialType == .oauth,
-           let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+        let manualToken = instance.storedManualToken()
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
+        if let manualToken {
             return GeminiProvider(apiKey: manualToken, model: model, customBasePath: customBase)
         }
         let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
@@ -124,14 +131,15 @@ enum LLMProviderFactory {
         case .responses:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
             provider.forceResponsesAPI = true
-            return applyCustomUserAgent(provider, instance: instance)
+            return applyCustomUserAgent(provider, instance: instance, manualToken: nil)
         case .chatCompletions:
-            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true), instance: instance)
+            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true), instance: instance, manualToken: nil)
         }
     }
 
     static func makeOpenAIProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
-        let customBase = instance.effectiveCustomBaseURL
+        let manualToken = instance.storedManualToken()
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
         let appendV1 = instance.appendV1Suffix
         // Mistral's chat-completions endpoint rejects `max_completion_tokens`
         // (newer OpenAI parameter name) and `stream_options` with HTTP 422,
@@ -151,10 +159,10 @@ enum LLMProviderFactory {
         switch instance.credentialType {
         case .apiKey:
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-            return applyAzure(applyCustomUserAgent(configure(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)), instance: instance), instance: instance)
+            return applyAzure(applyCustomUserAgent(configure(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)), instance: instance, manualToken: manualToken), instance: instance)
         case .oauth:
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
-                return applyCustomUserAgent(configure(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)), instance: instance)
+            if let manualToken {
+                return applyCustomUserAgent(configure(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)), instance: instance, manualToken: manualToken)
             }
             let iid = instance.id
             let provider = OpenAIProvider(
@@ -167,25 +175,21 @@ enum LLMProviderFactory {
     }
 
     static func makeOpenRouterProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
-        let key: String
-        if instance.credentialType == .oauth,
-           let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
-            key = manualToken
-        } else {
-            key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-        }
-        let customBase = instance.effectiveCustomBaseURL
+        let manualToken = instance.storedManualToken()
+        let key = manualToken ?? ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
         let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase ?? "https://openrouter.ai/api", appendV1Suffix: customBase == nil)
         provider.extraHeaders = [
             "HTTP-Referer": "https://github.com/leoyb1010/LeoPhoneAgent",
             "X-Title": "LeoPhoneAgent App",
         ]
         provider.useOpenRouterCompat = true
-        return applyCustomUserAgent(provider, instance: instance)
+        return applyCustomUserAgent(provider, instance: instance, manualToken: manualToken)
     }
 
     static func makeOpenAIResponsesProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
-        let customBase = instance.effectiveCustomBaseURL
+        let manualToken = instance.storedManualToken()
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
         let appendV1 = instance.appendV1Suffix
         // Both credential types are valid for Responses API instances
         // (e.g. an OpenAI2 instance configured with the user's Codex
@@ -198,12 +202,12 @@ enum LLMProviderFactory {
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)
             provider.forceResponsesAPI = true
-            return applyAzure(applyCustomUserAgent(provider, instance: instance), instance: instance)
+            return applyAzure(applyCustomUserAgent(provider, instance: instance, manualToken: manualToken), instance: instance)
         case .oauth:
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if let manualToken {
                 let provider = OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1)
                 provider.forceResponsesAPI = true
-                return applyCustomUserAgent(provider, instance: instance)
+                return applyCustomUserAgent(provider, instance: instance, manualToken: manualToken)
             }
             // Signed-in tokens only go to the official endpoint; a persisted
             // custom base from before this rule is ignored.
@@ -223,17 +227,19 @@ enum LLMProviderFactory {
     /// OAuth bearer through OpenAIProvider). See the Kimi Code OAuth design notes.
     static func makeKimiProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
         let officialBase = "https://api.kimi.com/coding"
-        let customBase = instance.effectiveCustomBaseURL ?? officialBase
+        let manualToken = instance.storedManualToken()
+        let effectiveBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
+        let customBase = effectiveBase ?? officialBase
         // The default Kimi coding base is `…/coding` WITHOUT `/v1`; the real
         // endpoints are `/coding/v1/chat/completions` and `/coding/v1/models`
         // (verified: `/coding/chat/completions` 404s, `/coding/v1/…` needs auth).
         // So append `/v1` for the default base; a user-supplied custom base keeps
         // their own appendV1 preference.
-        let appendV1 = instance.effectiveCustomBaseURL == nil ? true : instance.appendV1Suffix
+        let appendV1 = effectiveBase == nil ? true : instance.appendV1Suffix
         switch instance.credentialType {
         case .apiKey:
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance)
+            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance, manualToken: manualToken)
         case .oauth:
             // Signed-in tokens only go to the official endpoint.
             let iid = instance.id
@@ -249,18 +255,20 @@ enum LLMProviderFactory {
 
     static func makeXAIProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
         let officialBase = "https://api.x.ai/v1"
-        let customBase = instance.effectiveCustomBaseURL ?? officialBase
-        let appendV1 = instance.effectiveCustomBaseURL == nil ? false : instance.appendV1Suffix
+        let manualToken = instance.storedManualToken()
+        let effectiveBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
+        let customBase = effectiveBase ?? officialBase
+        let appendV1 = effectiveBase == nil ? false : instance.appendV1Suffix
         switch instance.credentialType {
         case .apiKey:
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance)
+            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance, manualToken: manualToken)
         case .oauth:
             let iid = instance.id
             let tokenProvider: @Sendable () async throws -> String
-            switch XAICredentialSource.resolve(instanceId: iid) {
+            switch XAICredentialSource.resolve(instanceId: iid, manualToken: manualToken) {
             case .manualToken(let manualToken):
-                return applyCustomUserAgent(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance)
+                return applyCustomUserAgent(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance, manualToken: manualToken)
             case .viaMac:
                 tokenProvider = { try await GrokViaMacBroker.shared.token(instanceId: iid) }
             case .oauthLogin, .none:

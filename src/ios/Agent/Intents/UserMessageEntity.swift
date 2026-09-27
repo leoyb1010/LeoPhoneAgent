@@ -22,26 +22,27 @@ struct UserMessageEntity: AppEntity {
         )
     }
 
+    /// The label for a user message. RetryRunIntent finds the picked message
+    /// again by comparing this label, so both sides must build it from the
+    /// same text (what the chat shows) in the same way.
+    static func preview(for displayText: String) -> String {
+        let text = displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return "(attachment)" }
+        return text.count > 80 ? String(text.prefix(80)) + "…" : text
+    }
+
     /// Build entities from a session's user messages (reads from DB).
     static func loadFromDB(sessionId: String, sessionTitle: String) async -> [UserMessageEntity] {
         let messages = await ChatStore.shared.loadMessages(sessionId: sessionId)
         let userMessages = messages.filter { $0.role == .user && !$0.isToolResultOnly }
         return userMessages.enumerated().map { idx, msg in
-            let texts = msg.parts.compactMap { part -> String? in
-                if case .text(let t) = part { return t }
-                return nil
-            }
-            let joined = texts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            let preview: String
-            if joined.count > 80 {
-                preview = String(joined.prefix(80)) + "…"
-            } else {
-                preview = joined.isEmpty ? "(attachment)" : joined
-            }
+            // The chat's own text for this row: attachment markup and system
+            // reminders stripped, as in the loaded conversation.
+            let shown = msg.toChatMessage(mediaResolver: { _ in URL(fileURLWithPath: "/") }, showThinking: false).content
             return UserMessageEntity(
                 id: "\(sessionId):\(idx)",
                 sessionId: sessionId,
-                preview: preview,
+                preview: preview(for: shown),
                 index: idx + 1,
                 sessionTitle: sessionTitle
             )

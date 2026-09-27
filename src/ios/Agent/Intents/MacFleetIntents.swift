@@ -163,11 +163,11 @@ struct CommandMacIntent: AppIntent {
         guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == mac.id }),
               let client = GatewayHostStore.shared.client(for: host) else {
             return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 远程机器」补上。",
-                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "缺少访问密钥"))
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "缺少访问密钥", ok: false))
         }
         guard !text.isEmpty else {
             return .result(dialog: "任务内容是空的,没有开工。",
-                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "内容为空"))
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "内容为空", ok: false))
         }
         // [T-local-brain] Siri 里是口述进来的,常常是一段流水话。先让本机
         // 模型整理成"标题 + 要点"再下发,Mac 那头拿到的是清楚的任务。
@@ -202,7 +202,7 @@ struct CommandMacIntent: AppIntent {
         } catch {
             return .result(dialog: "没能开工:\(error.localizedDescription)",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
-                                                    task: error.localizedDescription))
+                                                    task: error.localizedDescription, ok: false))
         }
     }
 }
@@ -298,11 +298,17 @@ struct ApprovePendingMacIntent: AppIntent {
         // stops here: falling through to the next candidate would run a
         // command nobody was told about.
         let candidate = candidates[0]
-        let cmd = candidate.session.pendingApprovalCommand ?? candidate.session.name
+        // Without the command text there is nothing to read out or to
+        // risk-check, so it is never approved blind from here.
+        guard let cmd = candidate.session.pendingApprovalCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !cmd.isEmpty else {
+            return .result(dialog: IntentDialog(stringLiteral: "\(candidate.host.name) 上这条审批看不到命令内容，请在 iPhone 上审批。"),
+                           view: ApprovalResultSnippet(machine: candidate.host.name, command: "看不到命令内容", approved: false))
+        }
         let spoken = String(cmd.prefix(80))
         let others = candidates.count > 1 ? "(还有 \(candidates.count - 1) 条在排队)" : ""
 
-        if let command = candidate.session.pendingApprovalCommand, CommandRisk.assess(command) == .high {
+        if CommandRisk.assess(cmd) == .high {
             return .result(dialog: IntentDialog(stringLiteral: "\(candidate.host.name) 上这条是高风险命令:\(spoken)。请在 iPhone 上看过再批。"),
                            view: ApprovalResultSnippet(machine: candidate.host.name, command: cmd, approved: false))
         }

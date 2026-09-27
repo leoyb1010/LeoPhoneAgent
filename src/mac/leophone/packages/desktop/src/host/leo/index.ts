@@ -19,6 +19,12 @@ let retryTimer: NodeJS.Timeout | null = null;
 let link: Promise<{ stop(): Promise<void> } | null> | null = null;
 let linkTimer: NodeJS.Timeout | null = null;
 let linkRelaySignature: string | null = null;
+/**
+ * 上一个桥接彻底停完(会话关掉、日志刷完)才起下一个。以前换中继配置时新旧两份同时在跑:
+ * 新桥接认回任务时旧的还在写同一批日志,seq 可能重号;还没起完就被停的那份晚一步起来,
+ * 会把「当前连接」清掉,状态、出码、推送都以为手机连接没开。
+ */
+let linkStopped: Promise<void> = Promise.resolve();
 
 const PORT_RETRY_MS = 15_000;
 /** 切换 / 回滚脚本改完 `~/.leoagent/link.json` 后,最多这么久桥接就跟上,不用重启 App。 */
@@ -55,7 +61,13 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           const stopLink = (reason: string) => {
             const running = link;
             link = null;
-            void running?.then((started) => started?.stop());
+            linkStopped = linkStopped.then(async () => {
+              try {
+                await (await running)?.stop();
+              } catch (error) {
+                deps.logger.warn("[leo/link] stop failed", { error: String(error) });
+              }
+            });
             deps.logger.info(`[leo/link] stopped (${reason})`);
           };
           const syncLink = () => {
@@ -64,12 +76,15 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
             if (wanted && link && relaySignature !== linkRelaySignature) stopLink("relay config changed");
             if (wanted && !link) {
               linkRelaySignature = relaySignature;
-              const starting: Promise<{ stop(): Promise<void> } | null> = startLeoLink({
-                taskService,
-                settingService: deps.services.get(ISettingService),
-                logger: deps.logger,
-                appVersion: ZCODE_VERSION,
-              })
+              const starting: Promise<{ stop(): Promise<void> } | null> = linkStopped
+                .then(() =>
+                  startLeoLink({
+                    taskService,
+                    settingService: deps.services.get(ISettingService),
+                    logger: deps.logger,
+                    appVersion: ZCODE_VERSION,
+                  }),
+                )
                 .catch((error: unknown) => {
                   deps.logger.warn("[leo/link] failed to start", { error: String(error) });
                   return null;

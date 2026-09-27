@@ -408,7 +408,7 @@ struct SyncMigrationDetailView: View {
                             forceDeleteV1Status = nil
                             v1ZoneForceDeletedAtTs = Date().timeIntervalSince1970
                         } catch {
-                            forceDeleteV1Status = "⚠️ Failed: \(error.localizedDescription)"
+                            forceDeleteV1Status = String(localized: "⚠️ Failed: \(error.localizedDescription)")
                         }
                         forceDeleteV1InProgress = false
                         await refresh()
@@ -605,7 +605,11 @@ struct SyncMigrationDetailView: View {
                 .buttonStyle(.borderless)
                 // The default _defaultZone is system-managed and can't
                 // safely be deleted; gray it out.
-                .disabled(row.kind == .system)
+                // [T-sync-zone-delete-guard] The V2 zones (minis-shared /
+                // minis-devices / minis-secrets) are the live sync store —
+                // deleting one wipes every device's synced data. Only legacy
+                // (V1) and unknown zones can be deleted here.
+                .disabled(row.kind == .system || row.kind == .v2)
             }
         }
     }
@@ -743,6 +747,7 @@ struct SyncMigrationDetailView: View {
     private func deletePendingZone(_ row: ZoneRow) {
         guard #available(iOS 17.0, *) else { return }
         pendingZoneDelete = nil
+        guard row.kind != .v2, row.kind != .system else { return }
         zoneDeleteInProgress = row.name
         Task {
             do {
@@ -854,8 +859,8 @@ struct SyncMigrationDetailView: View {
 
     private func formatRate(_ rps: Double) -> String {
         if rps < 0.05 { return String(localized: "0 rec/s") }
-        if rps < 10 { return String(format: "%.1f rec/s", rps) }
-        return String(format: "%.0f rec/s", rps)
+        if rps < 10 { return String(localized: "\(String(format: "%.1f", rps)) rec/s") }
+        return String(localized: "\(String(format: "%.0f", rps)) rec/s")
     }
 
     private func bootDelayRemaining(until: Date) -> String {

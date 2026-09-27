@@ -23,9 +23,20 @@ extension AIChatViewModel {
         case pdf
     }
 
+    /// [#25] Scopes a `.chatShareFileRequested` post to the chat that asked,
+    /// so on iPad only that window's AIChatView shows the share sheet.
+    static func shareRequestUserInfo(sessionId: String?) -> [AnyHashable: Any]? {
+        sessionId.map { ["sessionId": $0] }
+    }
+
     /// Build the export, register it as an artifact, then ask the view to
     /// present the share sheet. Fire-and-forget from a menu action.
     func exportSession(format: SessionExportFormat) {
+        // Prior #2: a Face ID-locked chat hands out nothing until unlocked.
+        if let sid = sessionId, SessionLockStore.shared.isVisuallyLocked(sid) {
+            LeoHaptics.notification(.error)
+            return
+        }
         // Transcript assembly touches main-actor state -- cheap (measured
         // ~16ms/200 messages). The sanitizer + CoreText pagination are NOT
         // cheap on pathological input (a 500KB single-line blob measured
@@ -63,7 +74,8 @@ extension AIChatViewModel {
                     title: fileName)
             }
             await MainActor.run {
-                NotificationCenter.default.post(name: .chatShareFileRequested, object: url)
+                NotificationCenter.default.post(name: .chatShareFileRequested, object: url,
+                                                userInfo: Self.shareRequestUserInfo(sessionId: sessionId))
             }
         }
     }

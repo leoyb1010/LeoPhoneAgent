@@ -41,30 +41,49 @@ enum ProviderMigration {
 
     // MARK: - Retired sign-in methods (Claude subscription, Gemini Google login, Antigravity)
 
-    /// Disables instances whose sign-in method is gone and deletes their stored
-    /// tokens. The instance itself stays so the user sees the notice and can
-    /// switch it to an API key. Idempotent.
+    private static let retiredSignInStoresCleanupKey = "com.leoyuan.leophoneagent.retired-sign-in-stores-cleanup-v1-done"
+
+    /// Disables instances whose sign-in method is gone and deletes the
+    /// credentials only those sign-ins used. The instance itself stays so the
+    /// user sees the notice and can switch it to an API key. API keys and
+    /// pasted manual tokens are never touched. Idempotent.
     private static func retireDiscontinuedSignIns(store: ProviderConfigStore) {
-        for singleton in ["com.leoyuan.leophoneagent.claude-oauth", "com.leoyuan.leophoneagent.gemini-oauth"] {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: singleton,
-            ]
-            SecItemDelete(query as CFDictionary)
-        }
-        for key in ["com.leoyuan.leophoneagent.gemini-email", "com.leoyuan.leophoneagent.gemini-gcp-project"] {
-            UserDefaults.standard.removeObject(forKey: key)
+        // Once: the pre-per-instance token stores and the user's own Google
+        // OAuth client (Gemini / Antigravity sign-in). None can come back.
+        if !UserDefaults.standard.bool(forKey: retiredSignInStoresCleanupKey) {
+            for service in ["com.leoyuan.leophoneagent.claude-oauth",
+                            "com.leoyuan.leophoneagent.gemini-oauth",
+                            "com.leoyuan.leophoneagent.googleOAuthClient"] {
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+                ]
+                SecItemDelete(query as CFDictionary)
+            }
+            for key in ["com.leoyuan.leophoneagent.gemini-email", "com.leoyuan.leophoneagent.gemini-gcp-project"] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+            UserDefaults.standard.set(true, forKey: retiredSignInStoresCleanupKey)
         }
 
-        for instance in store.instances where instance.retiredSignInNotice != nil {
-            if ProviderKeychainHelper.migrateOAuthTokenToDeviceOnly(instanceId: instance.id) != nil {
-                ProviderKeychainHelper.deleteOAuthToken(instanceId: instance.id)
+        // Every launch (instances can arrive later through iCloud sync), and
+        // only acting when something is left: the Claude / Google sign-in
+        // token and account strings, also on Claude / Gemini instances that now
+        // run on a pasted token, since nothing reads them any more.
+        for instance in store.instances {
+            let retired = instance.retiredSignInNotice != nil
+            let formerSignIn = instance.credentialType == .oauth
+                && (instance.providerType == .anthropic || instance.providerType == .gemini)
+            guard retired || formerSignIn else { continue }
+            if ProviderKeychainHelper.hasAnyOAuthTokenCopy(instanceId: instance.id) {
+                ProviderKeychainHelper.deleteOAuthToken(instanceId: instance.id, includingICloudCopy: true)
             }
             for account in ["oauth-email", "oauth-gcp-project", "oauth-base-url"]
             where ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: account) != nil {
                 ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: account)
             }
-            if instance.isEnabled {
+            if retired, instance.isEnabled {
                 var disabled = instance
                 disabled.isEnabled = false
                 store.updateInstance(disabled)

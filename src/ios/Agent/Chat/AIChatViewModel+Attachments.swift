@@ -546,6 +546,9 @@ enum ComposerDraftStore {
     static let newChatKey = "__new_chat__"
 
     private struct Stored: Codable {
+        /// `path` is relative to `attachmentsDirectory` (every composer
+        /// attachment is cached there). Drafts saved by earlier builds hold an
+        /// absolute path, which breaks once the app container moves.
         struct Attachment: Codable { let fileName: String; let path: String; let kind: String }
         struct Pasted: Codable { let index: Int; let text: String }
         let text: String
@@ -556,6 +559,33 @@ enum ComposerDraftStore {
     private static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ComposerDrafts", isDirectory: true)
+    }
+
+    /// Same folder as the view model's attachment cache.
+    private static var attachmentsDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("InputAttachments", isDirectory: true)
+    }
+
+    /// [T-draft-relative-path] File name relative to `attachmentsDirectory`;
+    /// anything stored elsewhere keeps its absolute path.
+    private static func storedPath(for url: URL) -> String {
+        let dir = attachmentsDirectory.standardizedFileURL.path + "/"
+        let path = url.standardizedFileURL.path
+        return path.hasPrefix(dir) ? String(path.dropFirst(dir.count)) : path
+    }
+
+    private static func resolvedURL(forStoredPath stored: String) -> URL? {
+        let fm = FileManager.default
+        guard stored.hasPrefix("/") else {
+            let url = attachmentsDirectory.appendingPathComponent(stored)
+            return fm.fileExists(atPath: url.path) ? url : nil
+        }
+        if fm.fileExists(atPath: stored) { return URL(fileURLWithPath: stored) }
+        // Old absolute path from before the container moved (app update):
+        // the file keeps its name inside the attachments folder.
+        let moved = attachmentsDirectory.appendingPathComponent((stored as NSString).lastPathComponent)
+        return fm.fileExists(atPath: moved.path) ? moved : nil
     }
 
     private static func fileURL(for key: String) -> URL {
@@ -572,7 +602,7 @@ enum ComposerDraftStore {
         let stored = Stored(
             text: draft.text,
             attachments: draft.attachments.filter { $0.loadState == .ready }.map {
-                .init(fileName: $0.fileName, path: $0.cacheURL.path, kind: kindName($0.kind))
+                .init(fileName: $0.fileName, path: storedPath(for: $0.cacheURL), kind: kindName($0.kind))
             },
             pasted: draft.pastedBlocks.map { .init(index: $0.index, text: $0.text) }
         )
@@ -585,8 +615,8 @@ enum ComposerDraftStore {
         guard let data = try? Data(contentsOf: fileURL(for: key)),
               let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
         let attachments = stored.attachments.compactMap { a -> InputAttachment? in
-            guard FileManager.default.fileExists(atPath: a.path) else { return nil }
-            return InputAttachment(fileName: a.fileName, cacheURL: URL(fileURLWithPath: a.path), kind: kind(named: a.kind))
+            guard let url = resolvedURL(forStoredPath: a.path) else { return nil }
+            return InputAttachment(fileName: a.fileName, cacheURL: url, kind: kind(named: a.kind))
         }
         let blocks = stored.pasted.map { p -> PastedBlock in
             let firstLine = p.text
@@ -653,7 +683,9 @@ extension AIChatViewModel {
     }
 
     /// Restores the persisted draft into an empty composer and starts
-    /// persisting further edits. Call once the VM's session id is known.
+    /// persisting further edits. Call once the VM's session id is known, and
+    /// only for a VM the chat screen presents (CachedViewModel.init): headless
+    /// senders must never get the user's draft. [T-draft-headless]
     func restoreComposerDraftIfNeeded() {
         if !composerDraftPersistenceEnabled {
             composerDraftPersistenceEnabled = true
@@ -681,15 +713,79 @@ extension AIChatViewModel {
     /// user's draft text, attachments and folded pastes stay where they are.
     func sendDetachedPrompt(_ prompt: String) {
         guard !isProcessing, editingMessageIndex == nil else { return }
-        let saved = currentComposerDraft
+        // [B4] Near the context limit send() parks the prompt for the "compact
+        // first?" alert, and Cancel there puts it into the composer in place of
+        // the draft. Say so up front instead and leave the composer alone.
+        switch checkContextBeforeSend() {
+        case .ok:
+            break
+        case .needsCompact where autoCompactEnabled || sessionSource == "shortcut":
+            break // send() compacts and sends without asking
+        case .needsCompact, .exhausted:
+            transientNotice = String(localized: "Context is almost full. Compact the conversation first, then try again.")
+            return
+        }
+        withComposerSetAside {
+            inputText = prompt
+            send()
+        }
+    }
+
+    /// [T-draft-headless] Headless senders (Siri / Shortcuts / widget quick
+    /// tasks / WorkerPool / `minis-sessions send` / watch) borrow the composer
+    /// for their own prompt only: `body` fills it and calls `send()`
+    /// (synchronous up to the point where the composer is consumed). The
+    /// user's unsent draft — text, attachments, folded pastes, a message being
+    /// edited, a pending Treasury pick — is set aside first and put back
+    /// afterwards, so an automated turn never sends it along or deletes its
+    /// files.
+    @discardableResult
+    func withComposerSetAside<T>(_ body: () throws -> T) rethrows -> T {
+        let draft = currentComposerDraft
+        let editIndex = editingMessageIndex
+        let editStash = draftStashedForEdit
+        let treasury = pendingTreasuryContext
+        editingMessageIndex = nil
+        draftStashedForEdit = nil
+        pendingTreasuryContext = nil
         pastedBlocks = []
         attachments = []
-        inputText = prompt
-        // send() snapshots and clears the composer synchronously.
-        send()
-        pastedBlocks = saved.pastedBlocks
-        attachments = saved.attachments
-        inputText = saved.text
+        inputText = ""
+        // defer:body 抛错(比如快捷指令派发失败)也要把用户的草稿放回去。
+        defer {
+            // Files the caller staged but send() refused to take go away with it.
+            let leftovers = attachments.filter { staged in !draft.attachments.contains { $0.id == staged.id } }
+            if !leftovers.isEmpty { Self.cleanupAttachmentFiles(leftovers) }
+            pastedBlocks = draft.pastedBlocks
+            attachments = draft.attachments
+            inputText = draft.text
+            pendingTreasuryContext = treasury
+            draftStashedForEdit = editStash
+            editingMessageIndex = editIndex
+        }
+        return try body()
+    }
+
+    /// [#33] "Context Full → New Session": the message that didn't fit becomes
+    /// the new chat's draft instead of going back into this full chat.
+    func movePendingSendToNewChatDraft() {
+        showCompactBeforeSendPrompt = false
+        showContextExhaustedPrompt = false
+        let text = (pendingSendText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let moved = pendingSendAttachments
+        pendingSendText = nil
+        pendingSendRawText = nil
+        pendingSendPastedBlocks = []
+        pendingSendAttachments = []
+        guard !text.isEmpty || !moved.isEmpty else { return }
+        // A new-chat draft that is already waiting stays; the message goes after it.
+        var draft = ComposerDraftStore.load(key: ComposerDraftStore.newChatKey)
+            ?? ComposerDraftSnapshot(text: "", attachments: [], pastedBlocks: [])
+        if !text.isEmpty {
+            draft.text = draft.text.isEmpty ? text : draft.text + "\n" + text
+        }
+        draft.attachments += moved
+        ComposerDraftStore.save(draft, key: ComposerDraftStore.newChatKey)
     }
 
     /// Puts back the draft set aside by `stashComposerDraftForEdit`.

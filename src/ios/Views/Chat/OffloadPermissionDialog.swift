@@ -33,8 +33,18 @@ private enum OffloadPermissionSheetPresenter {
     private static weak var shown: UIViewController?
     private static var shownId: String?
 
+    /// [B7] On screen or on its way there. A sheet UIKit refused to present,
+    /// or one torn down with the controller under it, is neither.
+    private static func isOnScreen(_ controller: UIViewController?) -> Bool {
+        guard let controller, !controller.isBeingDismissed else { return false }
+        return controller.presentingViewController != nil || controller.isBeingPresented
+    }
+
     static func update(_ pending: PermissionRequest?) {
-        guard pending?.id != shownId else { return }
+        // Same request whose sheet is really up: nothing to do. [B7] Before,
+        // a recorded id alone was enough, so a sheet that never made it on
+        // screen left the request waiting for the 30-second auto-deny.
+        if pending?.id == shownId, pending == nil || isOnScreen(shown) { return }
         if let shown, shown.presentingViewController != nil, !shown.isBeingDismissed {
             shown.dismiss(animated: true)
         }
@@ -47,7 +57,14 @@ private enum OffloadPermissionSheetPresenter {
             }
             return
         }
-        let host = UIHostingController(rootView: OffloadPermissionDialogContent(request: request))
+        let host = UIHostingController(rootView: OffloadPermissionDialogContent(request: request)
+            .onDisappear {
+                // Gone while still unanswered (dismissed together with the
+                // controller under it): put it back instead of timing out.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    update(OffloadPermissionManager.shared.pendingRequest)
+                }
+            })
         host.isModalInPresentation = true
         // Both detents — long arg lists were getting pushed below the medium
         // detent's bottom edge with the Allow / Deny buttons trailing them.
@@ -56,17 +73,35 @@ private enum OffloadPermissionSheetPresenter {
         shown = host
         shownId = request.id
         top.present(host, animated: true)
+        // present() can decline silently (the top controller started another
+        // presentation meanwhile). Check once it had time to land.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            update(OffloadPermissionManager.shared.pendingRequest)
+        }
     }
 
     private static func topController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
+        // [B7] The app's own window, never the app-lock window stacked above it.
+        var top = scene?.chatPresentationWindow?.rootViewController
         while let next = top?.presentedViewController {
-            if next.isBeingDismissed { return nil }
+            // Mid-transition either way (e.g. a sensitive-tool alert still
+            // animating in): presenting on it now would be refused.
+            if next.isBeingDismissed || next.isBeingPresented { return nil }
             top = next
         }
         return top
+    }
+}
+
+extension UIWindowScene {
+    /// The scene's content window for presenting chat UI: the key window
+    /// first, and only `.normal`-level ones — never the app-lock window
+    /// (`AppLockWindowController`, `.alert + 1`) layered above the app.
+    var chatPresentationWindow: UIWindow? {
+        let normal = windows.filter { $0.windowLevel == .normal && !$0.isHidden }
+        return normal.first(where: \.isKeyWindow) ?? normal.first
     }
 }
 
@@ -161,7 +196,9 @@ private struct OffloadPermissionDialogContent: View {
                     LeoHaptics.notification(.success)
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: true)
                 } label: {
-                    Text("Allow in Session")
+                    // [#24] Same wording as every other approval: 允许一次 /
+                    // 本次会话允许 / 拒绝. This button grants the session.
+                    Text("本次会话允许")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -188,7 +225,7 @@ private struct OffloadPermissionDialogContent: View {
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: false)
                 } label: {
                     // Denies this request only; the next one asks again.
-                    Text("Deny")
+                    Text("拒绝")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)

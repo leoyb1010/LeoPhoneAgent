@@ -1420,8 +1420,12 @@ console.log("PROTOCOL_MACHINES_OK");
 
 {
   // OpenCode Go:只留 chat completions 能跑的模型;其他服务商原样。
-  const goIds = ["kimi-k3", "glm-5.3", "gpt-5.6-luna", "grok-4.6", "muse-spark-1.3-contributor", "minimax-m3", "minimax-m2.7", "qwen3.8-flash", "qwen3.8-max"];
-  assert.deepEqual(chatModelsFor("openCodeGo", goIds), ["kimi-k3", "glm-5.3", "minimax-m2.7", "qwen3.8-max"]);
+  const goIds = ["kimi-k3", "glm-5.3", "gpt-5.6-luna", "grok-4.6", "muse-spark-1.3-contributor", "minimax-m3", "minimax-m2.7", "minimax-m2.5", "qwen3.8-flash", "qwen3.8-max", "qwen3.6-plus", "deepseek-v4-pro"];
+  // MiniMax 和 Qwen 只在 /v1/messages 上(opencode.ai/docs/go 端点表),chat completions 端用不了。
+  assert.deepEqual(chatModelsFor("openCodeGo", goIds), ["kimi-k3", "glm-5.3", "deepseek-v4-pro"]);
+  assert.deepEqual(chatModelsFor("openCodeGo", ["opencode-go/MiniMax-M2.7", "opencode-go/GLM-5.3"]), ["opencode-go/GLM-5.3"]);
+  const modelsEts = readFileSync(new URL("../app/entry/src/main/ets/local/ProviderModels.ets", import.meta.url), "utf8");
+  assert.ok(modelsEts.includes("['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen']"), "ProviderModels.ets 的 OpenCode Go 表要和 providerModels.ts 一致");
   assert.deepEqual(chatModelsFor("openCodeGo", ["gpt-5.6-luna"]), ["gpt-5.6-luna"]);
   assert.deepEqual(chatModelsFor("openAI", ["gpt-5.5"]), ["gpt-5.5"]);
   assert.deepEqual(availableCredentials("openCodeGo"), ["apiKey"]);

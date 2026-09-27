@@ -232,7 +232,9 @@ struct AppearanceSettingsView: View {
                             // Record the choice only once iOS accepts it, or the
                             // checkmark and the real icon drift apart.
                             UIApplication.shared.setAlternateIconName(option.iconName) { error in
-                                if error == nil { appIconMode = option.id }
+                                // UIKit calls this on an arbitrary background queue.
+                                guard error == nil else { return }
+                                DispatchQueue.main.async { appIconMode = option.id }
                             }
                         } label: {
                             HStack(spacing: 14) {

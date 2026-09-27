@@ -48,6 +48,9 @@ private final class CachedViewModel: ObservableObject {
             self.isNew = true
             minisLogger.info("🔑DRAFT CachedViewModel.init DRAFT vm=\(draft.vmInstanceId)")
         }
+        // [T-draft-headless] Only a chat the user sees gets the saved draft
+        // back; VMs made for Siri / Shortcuts / workers stay empty.
+        vm.restoreComposerDraftIfNeeded()
         // Forward VM's objectWillChange → this wrapper's objectWillChange
         // so that SwiftUI re-renders when any @Published property on `vm` changes.
         cancellable = vm.objectWillChange
@@ -638,7 +641,9 @@ struct AIChatView: View {
                     // entry with a live count — they were buried four taps
                     // deep in the overflow menu, which is exactly why
                     // "where did my file go" kept happening.
-                    if artifactCount > 0 {
+                    // Prior #2: hidden while the chat is Face ID-locked
+                    // (titleLocked is part of the host key, so it re-renders).
+                    if artifactCount > 0, !titleIsVisuallyLocked {
                         Button {
                             showArtifactTray = true
                         } label: {
@@ -752,7 +757,9 @@ struct AIChatView: View {
         .alert(String(localized: "Context Full"), isPresented: Binding(get: { vm.showContextExhaustedPrompt }, set: { vm.showContextExhaustedPrompt = $0 })) {
             Button(String(localized: "New Session")) {
                 vm.showContextExhaustedPrompt = false
-                vm.cancelCompactBeforeSend()
+                // [#33] The unsent message opens as the new chat's draft
+                // instead of going back into this full one.
+                vm.movePendingSendToNewChatDraft()
                 NotificationCenter.default.post(name: .newChatRequested, object: nil)
             }
             Button(String(localized: "Clear Chat"), role: .destructive) {
@@ -836,7 +843,6 @@ struct AIChatView: View {
         } message: { name in
             Text(String(localized: "\(name) is unavailable. It may have been deleted or not yet synced from iCloud."))
         }
-        .modifier(TerminalLinkConfirmation(pending: $pendingTerminalLink))
         .fullScreenCover(item: $imageGallery) { presentation in
             MessageImageGallery(items: presentation.items, startIndex: presentation.startIndex)
         }
@@ -851,7 +857,10 @@ struct AIChatView: View {
             inputFocused = true
         }
         .modifier(ChatInputAppendListener(vm: vm, inputFocused: $inputFocused))
-        .modifier(RerunFromToolBlockListener(vm: vm, pendingRewind: $pendingRewind))
+        // [B5] Also hosts the open_terminal link confirmation, so this chain
+        // gains no modifier layer for it (cold-launch demangle crash history).
+        .modifier(RerunFromToolBlockListener(vm: vm, pendingRewind: $pendingRewind,
+                                             pendingTerminalLink: $pendingTerminalLink))
         .fullScreenCover(item: $previewVideoFile) { fileURL in
             MinisVideoFullscreenPlayer(fileURL: fileURL)
         }
@@ -954,6 +963,8 @@ struct AIChatView: View {
         }
         // [T-session-export] Export/share-card flows hand a file URL here.
         .onReceive(NotificationCenter.default.publisher(for: .chatShareFileRequested)) { note in
+            // [#25] Only the window showing the chat that asked (iPad: two windows).
+            guard note.userInfo?["sessionId"] as? String == vm.sessionId else { return }
             if let url = note.object as? URL { shareFile = url }
         }
         .sheet(isPresented: $showArtifactTray) {
@@ -1272,6 +1283,9 @@ struct AIChatView: View {
         }
         .onDisappear {
             isChatViewVisible = false
+            // [B10] The draft save is debounced 400 ms and holds the VM weakly:
+            // write it now so the last keystrokes of a closed new chat survive.
+            vm.flushComposerDraft()
             if speechManager.state == .recording {
                 speechManager.stopRecording()
             }
@@ -1644,17 +1658,13 @@ struct AIChatView: View {
         guard let transfer = ViewModelCache.pendingTransfer else { return }
         ViewModelCache.pendingTransfer = nil
         minisLogger.info("[MoveTo] Injecting transfer: text='\(String(transfer.inputText.prefix(50)))' attachments=\(transfer.attachments.count) existing=\(vm.attachments.count)")
-        // Clean up any stale unsent attachments on the target VM before injecting
-        if !vm.attachments.isEmpty {
-            minisLogger.info("[MoveTo] Clearing \(vm.attachments.count) stale attachments from target session")
-            for a in vm.attachments { try? FileManager.default.removeItem(at: a.cacheURL) }
-            vm.attachments.removeAll()
-        }
+        // [T-draft-headless] The target's own composer is the user's restored
+        // draft, not leftovers: keep it and add the moved content after it.
         if !transfer.inputText.isEmpty {
             if !vm.inputText.isEmpty { vm.inputText += "\n" }
             vm.inputText += transfer.inputText
         }
-        vm.attachments = transfer.attachments
+        vm.attachments += transfer.attachments
         // Focus input after the view is fully settled and keyboard from
         // the source session has dismissed
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -1691,6 +1701,8 @@ struct AIChatView: View {
             showFastModeToggle: activeModelSupportsFastMode,
             fastModeEnabled: codexFastModeEnabled,
             isProcessing: vm.isProcessing,
+            isEditing: vm.editingMessageIndex != nil,
+            isLocked: titleIsVisuallyLocked,
             onNewChat: { requestNewChatFromMenu() },
             // [T-chat-menu-compact-entry] Same effect as the /compact slash
             // command (AIChatViewModel+SlashCommands case "compact").
@@ -1876,6 +1888,7 @@ struct AIChatView: View {
             showFastModeToggle: activeModelSupportsFastMode,
             fastModeEnabled: codexFastModeEnabled,
             isProcessing: vm.isProcessing,
+            isEditing: vm.editingMessageIndex != nil,
             artifactCount: artifactCount
         )
     }
@@ -2368,21 +2381,9 @@ struct AIChatView: View {
                 .foregroundStyle(.red)
                 .lineLimit(2)
             Spacer()
-            let retryKind = vm.errorBannerRetry
-            if case .unavailable = retryKind {} else {
+            if case .unavailable = vm.errorBannerRetry {} else {
                 Button {
-                    // A kernel that failed to boot is what needs another try; retry()
-                    // has no reply to redo and did nothing.
-                    if case .failed = vm.kernelStatus {
-                        vm.errorMessage = nil
-                        vm.retryKernelBoot()
-                    } else if case let .compaction(anchor, includesBoundary) = retryKind {
-                        vm.errorMessage = nil
-                        vm.compactTask = Task { await vm.compactBefore(anchor, includesBoundary: includesBoundary) }
-                    } else {
-                        vm.retry()
-                        vm.forceScrollToBottom.send()
-                    }
+                    performTypedRetry()
                 } label: {
                     Label("Retry", systemImage: "arrow.clockwise")
                         .labelStyle(.titleAndIcon)
@@ -2405,6 +2406,31 @@ struct AIChatView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color.red.opacity(0.12))
+    }
+
+    /// [#12] The error banner's Retry and the status card's Retry redo the
+    /// same thing: a kernel that failed to boot boots again, a failed
+    /// compaction compacts again, anything else re-runs the reply.
+    private func performTypedRetry() {
+        // A kernel that failed to boot is what needs another try; retry()
+        // has no reply to redo and did nothing.
+        if case .failed = vm.kernelStatus {
+            vm.errorMessage = nil
+            vm.retryKernelBoot()
+            return
+        }
+        switch vm.errorBannerRetry {
+        case let .compaction(anchor, includesBoundary):
+            vm.errorMessage = nil
+            vm.compactTask = Task { await vm.compactBefore(anchor, includesBoundary: includesBoundary) }
+        case .unavailable:
+            // Nothing to redo in place (the banner offers no Retry); the
+            // answer is already in the chat, so just clear the failure.
+            vm.errorMessage = nil
+        case .reply:
+            vm.retry()
+            vm.forceScrollToBottom.send()
+        }
     }
 
     #if DEBUG
@@ -2577,7 +2603,8 @@ struct AIChatView: View {
                             // chevron, and distinguishes it from the down button's
                             // chevron.down. Available since iOS 16 (both our legacy
                             // and iOS 26 floors).
-                            scrollFloatingButtonLabel("arrow.up.to.line")
+                            scrollFloatingButtonLabel("arrow.up.to.line",
+                                                      accessibilityLabel: String(localized: "Previous Turn"))
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
@@ -2590,7 +2617,8 @@ struct AIChatView: View {
                         Button {
                             vm.forceScrollToBottom.send()
                         } label: {
-                            scrollFloatingButtonLabel("chevron.down")
+                            scrollFloatingButtonLabel("chevron.down",
+                                                      accessibilityLabel: String(localized: "Scroll to Bottom"))
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
@@ -2674,8 +2702,10 @@ struct AIChatView: View {
 
     /// Shared label style for the floating scroll buttons (up / down), matching
     /// the original scroll-to-bottom button look.
-    private func scrollFloatingButtonLabel(_ systemName: String) -> some View {
-        Image(systemName: systemName)
+    /// [#30] Carries a VoiceOver label (the bare symbol name read as noise).
+    /// AnyView keeps the added modifier out of the body's generic type.
+    private func scrollFloatingButtonLabel(_ systemName: String, accessibilityLabel: String) -> AnyView {
+        AnyView(Image(systemName: systemName)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(.secondary)
             .frame(width: 36, height: 36)
@@ -2685,6 +2715,7 @@ struct AIChatView: View {
             // plain reply text. [T-ios-scrollbtn-invisible-lightmode]
             .overlay(Circle().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+            .accessibilityLabel(Text(accessibilityLabel)))
     }
 
     /// Background color for the scroll-to-bottom button.
@@ -3142,6 +3173,11 @@ struct AIChatView: View {
             micButtonContainer
             sendButton
         }
+        // [B5] The /model /tasks /mac sheets ride inside this already-erased
+        // row, so `inputBar`'s generic type gains no layer (cold-launch
+        // demangle crash history, see inputBar). The row is always mounted
+        // with the composer, like the host's previous spot.
+        .background(composerSheetsHost)
         return AnyView(row)
     }
 
@@ -3519,6 +3555,12 @@ struct AIChatView: View {
                     }
                 }
             }
+            // [#32] No Mac yet: one tap to where one gets connected.
+            if gatewayStore.activeHosts.isEmpty {
+                Button(String(localized: "Connect a Mac")) {
+                    DeepLinkCoordinator.shared.pendingSettingsTarget = .macConsole
+                }
+            }
         } message: {
             if gatewayStore.activeHosts.isEmpty {
                 Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
@@ -3721,10 +3763,7 @@ struct AIChatView: View {
                     isSuspended: vm.isSuspended,
                     canResume: vm.canResume,
                     failureReason: currentFailureReason,
-                    onRetry: {
-                        vm.retry()
-                        vm.forceScrollToBottom.send()
-                    },
+                    onRetry: { performTypedRetry() },
                     onResume: {
                         vm.resume()
                         vm.forceScrollToBottom.send()
@@ -3778,7 +3817,6 @@ struct AIChatView: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 20))
             .onTapGesture { inputFocused = true }
-            .background(composerSheetsHost)
             .onReceive(speechManager.$recognizedText) { text in
                 guard speechManager.state == .recording || !text.isEmpty else { return }
                 // Append only the new delta to preserve existing input text
@@ -4611,7 +4649,11 @@ struct AIChatView: View {
     }
 
     private var canEnqueue: Bool {
-        vm.isProcessing && !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // [#26] A ready attachment alone can be queued too (enqueuePrompt
+        // takes it), same content rule as canSend.
+        let hasText = !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasReadyAttachment = vm.attachments.contains { $0.loadState == .ready }
+        return vm.isProcessing && (hasText || hasReadyAttachment)
     }
 
     /// Whether the composer actually holds something worth moving to another
@@ -5009,6 +5051,8 @@ private struct ChatToolbarKey: Equatable {
     let showFastModeToggle: Bool
     let fastModeEnabled: Bool
     let isProcessing: Bool
+    /// B13: Save as Skill is off while a sent message is being edited.
+    let isEditing: Bool
     let artifactCount: Int
 }
 
@@ -5061,6 +5105,7 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             if lhs.key.enhancedCacheEnabled != rhs.key.enhancedCacheEnabled { diffs.append("enhancedCacheEnabled") }
             if lhs.key.showFastModeToggle != rhs.key.showFastModeToggle { diffs.append("showFastModeToggle") }
             if lhs.key.isProcessing != rhs.key.isProcessing { diffs.append("isProcessing") }
+            if lhs.key.isEditing != rhs.key.isEditing { diffs.append("isEditing") }
             if lhs.key.artifactCount != rhs.key.artifactCount { diffs.append("artifactCount") }
             if lhs.key.fastModeEnabled != rhs.key.fastModeEnabled { diffs.append("fastModeEnabled") }
             NavbarEvalStats.logger.info("[NavbarEval] host == FALSE diffs=[\(diffs.joined(separator: ","))]")
@@ -5107,6 +5152,11 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let showFastModeToggle: Bool
     let fastModeEnabled: Bool
     let isProcessing: Bool
+    /// B13: a sent message is being edited — Save as Skill can't run then.
+    let isEditing: Bool
+    /// Prior #2: the chat is Face ID-locked — nothing that shows or exports
+    /// its content is offered until it is unlocked.
+    let isLocked: Bool
 
     let onNewChat: () -> Void
     let onCompact: () -> Void
@@ -5145,6 +5195,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         let showFastModeToggle: Bool
         let fastModeEnabled: Bool
         let isProcessing: Bool
+        let isEditing: Bool
+        let isLocked: Bool
     }
 
     private var key: Key {
@@ -5155,7 +5207,9 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             enhancedCacheEnabled: enhancedCacheEnabled,
             showFastModeToggle: showFastModeToggle,
             fastModeEnabled: fastModeEnabled,
-            isProcessing: isProcessing)
+            isProcessing: isProcessing,
+            isEditing: isEditing,
+            isLocked: isLocked)
     }
 
     final class Coordinator {
@@ -5205,6 +5259,9 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
 
     private static func buildMenu(key: Key, coordinator: Coordinator) -> UIMenu {
         var groups: [UIMenuElement] = []
+        // Prior #2: rows that show or export the chat's content stay off
+        // while it is Face ID-locked.
+        let contentGate: UIMenuElement.Attributes = key.isLocked ? [.disabled] : []
 
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "New Chat"),
@@ -5215,10 +5272,10 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "Export as Markdown"),
                      image: UIImage(systemName: "arrow.down.doc"),
-                     attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onExportMarkdown() },
+                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportMarkdown() },
             UIAction(title: String(localized: "Export as PDF"),
                      image: UIImage(systemName: "doc.richtext"),
-                     attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
+                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
         ]))
 
         // [T-chat-menu-compact-entry] Compact sits ABOVE Clear Chat in its own
@@ -5250,27 +5307,37 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
 
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "Open Terminal"),
-                     image: UIImage(systemName: "terminal")) { _ in coordinator.parent.onOpenTerminal() },
+                     image: UIImage(systemName: "terminal"),
+                     attributes: contentGate) { _ in coordinator.parent.onOpenTerminal() },
             UIAction(title: String(localized: "Open Browser"),
-                     image: UIImage(systemName: "globe")) { _ in coordinator.parent.onOpenBrowser() },
+                     image: UIImage(systemName: "globe"),
+                     attributes: contentGate) { _ in coordinator.parent.onOpenBrowser() },
             UIAction(title: String(localized: "Browse Chat Files"),
-                     image: UIImage(systemName: "folder")) { _ in coordinator.parent.onBrowseFiles() },
+                     image: UIImage(systemName: "folder"),
+                     attributes: contentGate) { _ in coordinator.parent.onBrowseFiles() },
             UIAction(title: String(localized: "Artifacts"),
-                     image: UIImage(systemName: "shippingbox")) { _ in coordinator.parent.onArtifacts() },
+                     image: UIImage(systemName: "shippingbox"),
+                     attributes: contentGate) { _ in coordinator.parent.onArtifacts() },
         ]))
 
         var sessionGroup: [UIMenuElement] = [
             UIAction(title: String(localized: "Skills in Session"),
-                     image: UIImage(systemName: "puzzlepiece.extension")) { _ in coordinator.parent.onSkills() },
+                     image: UIImage(systemName: "puzzlepiece.extension"),
+                     attributes: contentGate) { _ in coordinator.parent.onSkills() },
             UIAction(title: String(localized: "MCPs in Session"),
-                     image: UIImage(systemName: "wrench.and.screwdriver")) { _ in coordinator.parent.onMCPs() },
+                     image: UIImage(systemName: "wrench.and.screwdriver"),
+                     attributes: contentGate) { _ in coordinator.parent.onMCPs() },
         ]
         if key.memoryEnabled {
             sessionGroup.append(UIAction(title: String(localized: "Memories in Session"),
-                                         image: UIImage(systemName: "brain.head.profile")) { _ in coordinator.parent.onMemories() })
+                                         image: UIImage(systemName: "brain.head.profile"),
+                                         attributes: contentGate) { _ in coordinator.parent.onMemories() })
         }
+        // Reading replies aloud reveals them too: can't be switched ON while
+        // locked (switching it off stays possible).
         sessionGroup.append(UIAction(title: String(localized: "Speak Responses"),
                                      image: UIImage(systemName: "speaker.wave.2"),
+                                     attributes: key.isLocked && !key.speakEnabled ? [.disabled] : [],
                                      state: key.speakEnabled ? .on : .off) { _ in
             coordinator.parent.setSpeakEnabled(!key.speakEnabled)
         })
@@ -5291,11 +5358,14 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         // service_tier=priority (the wire value codex_cli_rs sends for its
         // Fast mode) into Codex requests while enabled; 2x credit burn.
         if key.showFastModeToggle {
-            modelControlGroup.append(UIAction(title: String(localized: "Enable Fast Mode"),
-                                              image: UIImage(systemName: "bolt.fill"),
-                                              state: key.fastModeEnabled ? .on : .off) { _ in
+            let fastMode = UIAction(title: String(localized: "Enable Fast Mode"),
+                                    image: UIImage(systemName: "bolt.fill"),
+                                    state: key.fastModeEnabled ? .on : .off) { _ in
                 coordinator.parent.setFastMode(!key.fastModeEnabled)
-            })
+            }
+            // #16: one app-wide switch, not per chat, and billed at twice the rate.
+            fastMode.subtitle = String(localized: "All chats · billed at 2×")
+            modelControlGroup.append(fastMode)
         }
         if !modelControlGroup.isEmpty {
             groups.append(UIMenu(options: .displayInline, children: modelControlGroup))
@@ -5304,11 +5374,14 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         var tailGroup: [UIMenuElement] = [
             UIAction(title: String(localized: "Save as Skill"),
                      image: UIImage(systemName: "book.and.wrench"),
-                     attributes: key.messagesEmpty || key.isProcessing ? [.disabled] : []) { _ in coordinator.parent.onDistillSkill() },
+                     attributes: key.messagesEmpty || key.isProcessing || key.isEditing || key.isLocked
+                        ? [.disabled] : []) { _ in coordinator.parent.onDistillSkill() },
             UIAction(title: String(localized: "Session Inspector"),
-                     image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent")) { _ in coordinator.parent.onInspector() },
+                     image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent"),
+                     attributes: contentGate) { _ in coordinator.parent.onInspector() },
             UIAction(title: String(localized: "Token Usage"),
-                     image: UIImage(systemName: "number")) { _ in coordinator.parent.onTokenUsage() },
+                     image: UIImage(systemName: "number"),
+                     attributes: contentGate) { _ in coordinator.parent.onTokenUsage() },
         ]
         #if DEBUG
         tailGroup.append(UIDeferredMenuElement.uncached { completion in
@@ -5344,7 +5417,10 @@ private struct MoveToSessionSheet: View {
     private var isSearching: Bool { !searchText.isEmpty }
 
     private var displayedSessions: [ChatSession] {
-        let filtered = sessions.filter { $0.id != currentSessionId }
+        // Face ID 锁住的对话不列出来:这里会露出标题和最后一条消息;要移进去先在那个对话里解锁。
+        let filtered = sessions.filter {
+            $0.id != currentSessionId && !SessionLockStore.shared.isHiddenFromSystemSurfaces($0.id)
+        }
         guard let matchedIds = searchMatchedIds else { return filtered }
         return filtered.filter { matchedIds.contains($0.id) }
     }
@@ -5472,10 +5548,10 @@ private struct MoveToSessionSheet: View {
                 return String(localized: "Just now")
             } else if seconds < 3600 {
                 let mins = seconds / 60
-                return "\(mins) min ago"
+                return String(localized: "\(mins) min ago")
             } else {
                 let hrs = seconds / 3600
-                return "\(hrs) hr ago"
+                return String(localized: "\(hrs) hr ago")
             }
         } else if calendar.isDateInYesterday(date) {
             return String(localized: "Yesterday")
@@ -6171,7 +6247,9 @@ extension AIChatViewModel {
         // flag retryFromMessage uses); released once the DB cut lands.
         isTruncatingForRetry = true
         canResume = false
-        if let editing = editingMessageIndex, editing >= idx { editingMessageIndex = nil }
+        // [B9] The message being edited is going away: leave edit mode the
+        // same way Cancel does, so the composer gets the user's own draft back.
+        if let editing = editingMessageIndex, editing >= idx { cancelEdit() }
 
         messages.removeSubrange(idx...)
         if !transitionSuspended { objectWillChange.send() }
@@ -6210,12 +6288,13 @@ extension AIChatViewModel {
     }
 }
 
-private struct PendingTerminalLink: Identifiable {
+struct PendingTerminalLink: Identifiable {
     let id = UUID()
     let command: String?
 }
 
-private struct TerminalLinkConfirmation: ViewModifier {
+/// Hosted by `RerunFromToolBlockListener`, not AIChatView's own chain. [B5]
+struct TerminalLinkConfirmation: ViewModifier {
     @Binding var pending: PendingTerminalLink?
 
     func body(content: Content) -> some View {

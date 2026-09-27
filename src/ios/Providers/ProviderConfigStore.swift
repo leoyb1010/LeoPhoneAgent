@@ -882,6 +882,7 @@ final class ProviderConfigStore: ObservableObject {
         // Clean up credentials from Keychain
         ProviderKeychainHelper.deleteAPIKey(instanceId: instanceId)
         ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId)
+        ProviderKeychainHelper.forgetOAuthTokenMigration(instanceId: instanceId)
         ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: "oauth-email")
         ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: "oauth-gcp-project")
         ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: "manual-oauth-token")
@@ -984,29 +985,10 @@ final class ProviderConfigStore: ObservableObject {
         if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "manual-oauth-token") {
             dict["manualOAuthToken"] = Data(manualToken.utf8).base64EncodedString()
         }
-        // [T-ios-provider-export-oauth-token] Export the structured OAuth-login
-        // credential (access + refresh + expiry) saved by the OAuth flow via
-        // ProviderKeychainHelper.saveOAuthToken<T:Codable>. This is a DIFFERENT
-        // keychain account ("oauth-token") than apiKey / manual-oauth-token, and
-        // was previously omitted — so an OAuth-logged-in Claude/OpenAI/Gemini/xAI
-        // provider exported with an empty credential and imported as
-        // hasCredential=false. We JSON-encode the typed token blob and base64 it
-        // (matching the apiKey / manualOAuthToken encoding) under "oauthToken".
-        let oauthTokenBlob: Data? = {
-            switch instance.providerType {
-            case .openAI:
-                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: CodexTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
-            case .xAI:
-                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
-            case .kimiCode:
-                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: KimiTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
-            default:
-                return nil
-            }
-        }()
-        if let blob = oauthTokenBlob {
-            dict["oauthToken"] = blob.base64EncodedString()
-        }
+        // Signed-in tokens (ChatGPT / xAI / Kimi) are never exported: they carry
+        // a rotating refresh token, and a copy used on a second device would
+        // race this one's refresh. The importing device signs in itself.
+        // (Import still reads `oauthToken` from older exports.)
         if let url = instance.customBaseURL {
             dict["customBaseURL"] = url
         }
@@ -2397,19 +2379,22 @@ final class ProviderConfigStore: ObservableObject {
 
     /// Fetch the model list from a provider's API for the given instance.
     static func fetchModelsForInstance(_ instance: ProviderInstance, forceRefresh: Bool = false) async throws -> [LLMModel] {
-        let customBase = instance.effectiveCustomBaseURL
+        // One Keychain read decides both the credential and the base URL.
+        let manualToken = instance.storedManualToken()
+        let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
         let appendV1 = instance.appendV1Suffix
         // Custom UA only for custom-base OpenAI/Anthropic-compat instances (proxy/relay);
         // OAuth-login paths keep their required client UA, so we never pass it there.
-        let ua = instance.supportsCustomUserAgent ? instance.effectiveCustomUserAgent : nil
+        let ua = instance.supportsCustomUserAgent(manualToken: manualToken) ? instance.effectiveCustomUserAgent : nil
         switch (instance.providerType, instance.credentialType) {
         case (.anthropic, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
             }
-            return try await AnthropicModelsAPI.fetchModels(apiKey: key, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
+            // Same auth as chat: a custom base also gets `Authorization: Bearer`.
+            return try await AnthropicModelsAPI.fetchModels(apiKey: key, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua, alsoSendBearer: customBase != nil)
         case (.anthropic, .oauth):
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if let manualToken {
                 // Manual token — try Bearer auth first, fall back to x-api-key for compatibility
                 return try await AnthropicModelsAPI.fetchModels(bearerToken: manualToken, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
             }
@@ -2420,7 +2405,7 @@ final class ProviderConfigStore: ObservableObject {
             }
             return try await GeminiModelsAPI.fetchModels(apiKey: key, customBaseURL: customBase, forceRefresh: forceRefresh)
         case (.gemini, .oauth):
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if let manualToken {
                 return try await GeminiModelsAPI.fetchModels(apiKey: manualToken, customBaseURL: customBase, forceRefresh: forceRefresh)
             }
             throw ModelRefreshError.noCredential
@@ -2430,7 +2415,7 @@ final class ProviderConfigStore: ObservableObject {
             }
             return try await OpenAIModelsAPI.fetchModels(apiKey: key, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
         case (.openAI, .oauth):
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if let manualToken {
                 return try await OpenAIModelsAPI.fetchModels(apiKey: manualToken, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
             }
             let hasModels = await MainActor.run { !ProviderConfigStore.shared.visibleEntries(for: instance.id).isEmpty }
@@ -2447,7 +2432,7 @@ final class ProviderConfigStore: ObservableObject {
             }
             return try await OpenRouterModelsAPI.fetchModels(apiKey: key, forceRefresh: forceRefresh)
         case (.openRouter, .oauth):
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if let manualToken {
                 return try await OpenRouterModelsAPI.fetchModels(apiKey: manualToken, forceRefresh: forceRefresh)
             }
             // OpenRouter OAuth produces a permanent API key stored via ProviderKeychainHelper.saveAPIKey
@@ -2477,7 +2462,7 @@ final class ProviderConfigStore: ObservableObject {
             var xaiUA: String? = nil
             var xaiBase = "https://api.x.ai/v1"
             var xaiAppendV1 = false
-            switch XAICredentialSource.resolve(instanceId: instance.id) {
+            switch XAICredentialSource.resolve(instanceId: instance.id, manualToken: manualToken) {
             case .viaMac:
                 token = try await GrokViaMacBroker.shared.token(instanceId: instance.id)
             case .oauthLogin:
@@ -2819,12 +2804,22 @@ enum ProviderKeychainHelper {
     /// Signed-in OAuth tokens stay on this device: they are refresh-rotated, so
     /// an iCloud-synced copy on a second device goes stale and its refresh would
     /// race this one. (Pasted manual tokens and API keys still sync.)
+    ///
+    /// Older builds (≤ 1.46.x) kept the token in iCloud Keychain. Each instance
+    /// adopts that copy once (`migrateOAuthTokenToDeviceOnly`); after that only
+    /// the device-only item is read, written or deleted, and an iCloud copy is
+    /// left to the devices still on an older build — so a refresh here doesn't
+    /// sign them out, and their fresh sign-in isn't pulled over to this device.
     static func saveOAuthToken<T: Codable>(_ token: T, instanceId: String, caller: String = #function) {
         guard let data = try? JSONEncoder().encode(token) else {
             AppLogger(category: "Keychain").warning("write oauthToken instanceId=\(instanceId.prefix(8)) ENCODE FAILED caller=\(caller)")
             return
         }
+        migrationLock.lock()
         let addStatus = writeDeviceOnlyOAuthToken(data, instanceId: instanceId)
+        // This device now has its own token; never adopt an iCloud copy over it.
+        if addStatus == errSecSuccess { markOAuthTokenDeviceOnly(instanceId: instanceId) }
+        migrationLock.unlock()
         AppLogger(category: "Keychain").info("write oauthToken instanceId=\(instanceId.prefix(8)) blobLen=\(data.count) addStatus=\(addStatus) caller=\(caller)")
         notifyAuthChanged(instanceId: instanceId)
     }
@@ -2837,17 +2832,57 @@ enum ProviderKeychainHelper {
         ]
     }
 
-    /// Replaces every copy (local and iCloud) with a single device-only item.
+    /// Set once this device has adopted (or found no) iCloud copy of the
+    /// instance's sign-in token. Removed with the instance.
+    private static func deviceOnlyMigratedKey(instanceId: String) -> String {
+        "oauthToken.deviceOnlyMigrated.\(instanceId)"
+    }
+
+    static func isOAuthTokenDeviceOnly(instanceId: String) -> Bool {
+        UserDefaults.standard.bool(forKey: deviceOnlyMigratedKey(instanceId: instanceId))
+    }
+
+    private static func markOAuthTokenDeviceOnly(instanceId: String) {
+        UserDefaults.standard.set(true, forKey: deviceOnlyMigratedKey(instanceId: instanceId))
+    }
+
+    static func forgetOAuthTokenMigration(instanceId: String) {
+        UserDefaults.standard.removeObject(forKey: deviceOnlyMigratedKey(instanceId: instanceId))
+    }
+
+    /// Serializes the one-time adoption against token saves, so a migration
+    /// can't write an older iCloud token over one a refresh just saved.
+    private static let migrationLock = NSLock()
+
+    /// Whether a sign-in token item exists on this device or in iCloud Keychain.
+    static func hasAnyOAuthTokenCopy(instanceId: String) -> Bool {
+        readOAuthTokenData(instanceId: instanceId, synchronizable: false).0 != nil
+            || readOAuthTokenData(instanceId: instanceId, synchronizable: true).0 != nil
+    }
+
+    /// Updates the device-only item in place (atomic: no window where a kill
+    /// loses the token), adding it when absent. Never touches iCloud copies.
     private static func writeDeviceOnlyOAuthToken(_ data: Data, instanceId: String) -> OSStatus {
-        let base = oauthTokenBaseQuery(instanceId: instanceId)
-        SecItemDelete(base as CFDictionary)
-        var syncDelete = base
-        syncDelete[kSecAttrSynchronizable as String] = true
-        SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = base
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        addQuery[kSecAttrSynchronizable as String] = false
+        var match = oauthTokenBaseQuery(instanceId: instanceId)
+        match[kSecAttrSynchronizable as String] = false
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updateStatus = SecItemUpdate(match as CFDictionary, attributes as CFDictionary)
+        switch updateStatus {
+        case errSecSuccess, errSecInteractionNotAllowed:
+            // Locked (before first unlock): keep what is stored.
+            return updateStatus
+        case errSecItemNotFound:
+            break
+        default:
+            // Could not update in place (an item an older build wrote with
+            // other attributes); replace it.
+            SecItemDelete(match as CFDictionary)
+        }
+        var addQuery = match
+        addQuery.merge(attributes) { _, new in new }
         return SecItemAdd(addQuery as CFDictionary, nil)
     }
 
@@ -2861,17 +2896,40 @@ enum ProviderKeychainHelper {
         return (status == errSecSuccess ? result as? Data : nil, status)
     }
 
-    /// Moves a token written by an older build (iCloud-synced) to device-only
-    /// storage. Returns the token data if one exists in either place.
+    /// One-time per instance: moves a token an older build kept in iCloud
+    /// Keychain to device-only storage. The device-only copy is written before
+    /// the iCloud one is deleted, so a kill in between loses nothing. Returns
+    /// the token data now in device-only storage; nil once migrated with no
+    /// device-only token (an iCloud copy is then never adopted).
     @discardableResult
     static func migrateOAuthTokenToDeviceOnly(instanceId: String) -> Data? {
+        migrationLock.lock()
+        defer { migrationLock.unlock() }
         let (local, _) = readOAuthTokenData(instanceId: instanceId, synchronizable: false)
-        let (synced, _) = readOAuthTokenData(instanceId: instanceId, synchronizable: true)
-        guard let synced else { return local }
-        let data = local ?? synced
-        let status = writeDeviceOnlyOAuthToken(data, instanceId: instanceId)
-        AppLogger(category: "Keychain").info("migrate oauthToken instanceId=\(instanceId.prefix(8)) toDeviceOnly status=\(status)")
-        return data
+        guard !isOAuthTokenDeviceOnly(instanceId: instanceId) else { return local }
+        if let local {
+            // This device already has its own token; an iCloud copy belongs to
+            // a device still on an older build and is left alone.
+            markOAuthTokenDeviceOnly(instanceId: instanceId)
+            return local
+        }
+        let (synced, syncedStatus) = readOAuthTokenData(instanceId: instanceId, synchronizable: true)
+        guard let synced else {
+            // Only a definite "none" counts; a locked Keychain retries later.
+            if syncedStatus == errSecItemNotFound { markOAuthTokenDeviceOnly(instanceId: instanceId) }
+            return nil
+        }
+        let addStatus = writeDeviceOnlyOAuthToken(synced, instanceId: instanceId)
+        guard addStatus == errSecSuccess else {
+            AppLogger(category: "Keychain").warning("migrate oauthToken instanceId=\(instanceId.prefix(8)) toDeviceOnly addStatus=\(addStatus); iCloud copy kept")
+            return synced
+        }
+        var syncDelete = oauthTokenBaseQuery(instanceId: instanceId)
+        syncDelete[kSecAttrSynchronizable as String] = true
+        let deleteStatus = SecItemDelete(syncDelete as CFDictionary)
+        markOAuthTokenDeviceOnly(instanceId: instanceId)
+        AppLogger(category: "Keychain").info("migrate oauthToken instanceId=\(instanceId.prefix(8)) toDeviceOnly addStatus=\(addStatus) syncDeleteStatus=\(deleteStatus)")
+        return synced
     }
 
     static func loadOAuthToken<T: Codable>(instanceId: String, as type: T.Type, caller: String = #function) -> T? {
@@ -2886,7 +2944,15 @@ enum ProviderKeychainHelper {
         return decoded
     }
 
+    /// Deletes this device's sign-in token. The iCloud copy an older build
+    /// wrote is deleted too only while the instance hasn't migrated yet.
     static func deleteOAuthToken(instanceId: String, caller: String = #function) {
+        deleteOAuthToken(instanceId: instanceId, includingICloudCopy: !isOAuthTokenDeviceOnly(instanceId: instanceId), caller: caller)
+    }
+
+    /// `includingICloudCopy: true` also deletes the iCloud copy: only for
+    /// credentials of retired sign-in methods, which no build uses any more.
+    static func deleteOAuthToken(instanceId: String, includingICloudCopy: Bool, caller: String = #function) {
         let service = "com.leoyuan.leophoneagent.provider.\(instanceId)"
         let acct = "oauth-token"
         let query: [String: Any] = [
@@ -2895,10 +2961,13 @@ enum ProviderKeychainHelper {
             kSecAttrAccount as String: acct,
         ]
         let s1 = SecItemDelete(query as CFDictionary)
-        var syncQuery = query
-        syncQuery[kSecAttrSynchronizable as String] = true
-        let s2 = SecItemDelete(syncQuery as CFDictionary)
-        AppLogger(category: "Keychain").info("delete oauthToken instanceId=\(instanceId.prefix(8)) legacyStatus=\(s1) syncStatus=\(s2) caller=\(caller)")
+        var s2: OSStatus = errSecItemNotFound
+        if includingICloudCopy {
+            var syncQuery = query
+            syncQuery[kSecAttrSynchronizable as String] = true
+            s2 = SecItemDelete(syncQuery as CFDictionary)
+        }
+        AppLogger(category: "Keychain").info("delete oauthToken instanceId=\(instanceId.prefix(8)) legacyStatus=\(s1) syncStatus=\(s2) includeICloud=\(includingICloudCopy) caller=\(caller)")
         notifyAuthChanged(instanceId: instanceId)
     }
 

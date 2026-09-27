@@ -349,7 +349,9 @@ final class SessionLockStore: ObservableObject {
 
     /// True when the privacy screen should cover content (task switcher).
     /// Cleared automatically by `evaluateAppLock()` on foreground return.
-    @Published var showPrivacyScreen: Bool = false
+    @Published var showPrivacyScreen: Bool = false {
+        didSet { if !showPrivacyScreen { drainDeferredWork() } }
+    }
 
     /// True when app should show the lock screen.
     @Published private(set) var appIsLocked: Bool = {
@@ -361,7 +363,10 @@ final class SessionLockStore: ObservableObject {
 
     /// Call on app launch and foreground return to evaluate lock state.
     func evaluateAppLock() {
-        showPrivacyScreen = false
+        // Lowered only after the lock decision below: dropping the cover first
+        // released work queued behind it while a timed-out lock was still
+        // about to come back up.
+        defer { showPrivacyScreen = false }
         // Snapshot + consume the background spell that just ended (foreground
         // return). nil on a true cold launch (never backgrounded this run).
         let backgroundedFor: TimeInterval? = appBackgroundedAt.map { Date().timeIntervalSince($0) }
@@ -421,26 +426,43 @@ final class SessionLockStore: ObservableObject {
 
     // MARK: - Work deferred while locked
 
-    private var deferredWhileLocked: [@MainActor () -> Void] = []
+    private struct DeferredEntry {
+        let queuedAt: Date
+        let work: @MainActor () -> Void
+    }
+
+    private var deferredWhileLocked: [DeferredEntry] = []
+
+    /// A tap the user made a minute ago and then walked away from must not
+    /// navigate when the app is finally unlocked hours later.
+    static let deferredEntryMaxAge: TimeInterval = 60
 
     /// Run `work` now, or once the app lock is lifted. Every external entry
     /// (URLs, Spotlight, notification taps, intents that open UI) goes through
-    /// here so nothing surfaces content behind the lock screen.
+    /// here so nothing surfaces content behind the lock screen. The privacy
+    /// cover counts too: on a warm return those entries arrive before the
+    /// foreground re-check has decided whether the lock comes back.
     func runWhenUnlocked(_ work: @escaping @MainActor () -> Void) {
-        guard appIsLocked else { work(); return }
+        guard appIsLocked || showPrivacyScreen else { work(); return }
         // Keep the queue bounded; only the most recent entries matter.
         if deferredWhileLocked.count >= 8 { deferredWhileLocked.removeFirst() }
-        deferredWhileLocked.append(work)
+        deferredWhileLocked.append(DeferredEntry(queuedAt: Date(), work: work))
     }
 
     private func drainDeferredWork() {
-        guard !appIsLocked, !deferredWhileLocked.isEmpty else { return }
-        let work = deferredWhileLocked
+        guard !appIsLocked, !showPrivacyScreen, !deferredWhileLocked.isEmpty else { return }
+        let entries = deferredWhileLocked
         deferredWhileLocked.removeAll()
         // Let the lock window hide and the root view re-activate first.
         Task { @MainActor in
             await Task.yield()
-            for item in work { item() }
+            // Covered again in the meantime: wait for the next unlock.
+            guard !self.appIsLocked, !self.showPrivacyScreen else {
+                self.deferredWhileLocked = entries + self.deferredWhileLocked
+                return
+            }
+            let cutoff = Date().addingTimeInterval(-Self.deferredEntryMaxAge)
+            for entry in entries where entry.queuedAt > cutoff { entry.work() }
         }
     }
 
@@ -631,7 +653,7 @@ enum BiometricAuth {
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else {
             return false
         }
-        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+        let ok = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { ok, evalErr in
                 if !ok, let e = evalErr {
                     AppLogger(category: "AppLock").info("[AppLock] evaluatePolicy failed: \((e as NSError).code) \(e.localizedDescription)")
@@ -639,5 +661,12 @@ enum BiometricAuth {
                 cont.resume(returning: ok)
             }
         }
+        // Any in-app prompt proves what the app lock asks for. Restart its
+        // clock, or a lock that timed out during use prompts again the moment
+        // this one closes.
+        if ok, SessionLockStore.shared.appLockEnabled {
+            SessionLockStore.shared.noteAppUnlock()
+        }
+        return ok
     }
 }

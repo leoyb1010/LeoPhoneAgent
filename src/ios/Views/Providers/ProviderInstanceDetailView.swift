@@ -161,9 +161,7 @@ struct ProviderInstanceDetailView: View {
             } header: {
                 Text("Credential")
             } footer: {
-                Text(instance.credentialType == .apiKey
-                     ? "API key is stored securely in the iOS Keychain."
-                     : "Sign-in tokens stay in this device's Keychain and are not synced to iCloud.")
+                Text(credentialFooter(instance))
             }
 
             // MARK: Custom Base URL
@@ -374,6 +372,30 @@ struct ProviderInstanceDetailView: View {
     }
 
     // MARK: - Credential Section
+
+    /// Only a ChatGPT / xAI / Kimi sign-in keeps its token on this device. The
+    /// key an OpenRouter sign-in creates and a pasted token are stored like API
+    /// keys and can sync through iCloud Keychain.
+    private func credentialFooter(_ instance: ProviderInstance) -> String {
+        guard instance.credentialType == .oauth else {
+            return String(localized: "API key is stored securely in the iOS Keychain.")
+        }
+        let deviceOnly: Bool
+        switch instance.providerType {
+        case .openAI, .openAIResponses, .kimiCode:
+            deviceOnly = instance.usesProviderSignIn
+        case .xAI:
+            switch XAICredentialSource.resolve(instanceId: instance.id) {
+            case .oauthLogin, .none: deviceOnly = true
+            case .viaMac, .manualToken: deviceOnly = false
+            }
+        case .anthropic, .gemini, .openCodeGo, .openRouter, .unsupported:
+            deviceOnly = false
+        }
+        return deviceOnly
+            ? String(localized: "Sign-in tokens stay in this device's Keychain and are not synced to iCloud.")
+            : String(localized: "Stored in the iOS Keychain; it can sync to your other devices through iCloud Keychain.")
+    }
 
     @ViewBuilder
     private func credentialSection(_ instance: ProviderInstance) -> some View {

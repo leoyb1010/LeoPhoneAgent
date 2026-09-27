@@ -13,7 +13,7 @@
 //
 //  [T-approval-vocab] 按钮和 App 里一致:允许一次 / 本次会话允许 / 拒绝 /
 //  拒绝并停止。「允许」类按钮必须先解锁手机(.authenticationRequired),
-//  「拒绝」免解锁;手表上高风险命令不给双指互点、也不给「始终允许」。
+//  「拒绝」免解锁;手表上从不给「始终允许」,高风险命令也不给双指互点。
 //
 
 import Foundation
@@ -147,7 +147,9 @@ enum HarnessApprovalNotifier {
             defer { completion() }
             let host = GatewayHostStore.shared.hostMatching(hostId: hostId, machine: machine)
                 ?? (GatewayHostStore.shared.hosts.count == 1 ? GatewayHostStore.shared.hosts.first : nil)
-            guard let host, let client = GatewayHostStore.shared.client(for: host) else { return }
+            // No matching Mac (key missing, several hosts and no hint): the answer
+            // went nowhere, so the card comes back rather than vanishing.
+            guard let host, let client = GatewayHostStore.shared.client(for: host) else { return redeliver(response) }
             var sessionId = hintedSession.flatMap { $0.isEmpty ? nil : $0 }
                 ?? MacLiveSessionsStore.shared.rows.first(where: {
                     $0.hostId == host.id && $0.session.pendingApprovalId == approvalId

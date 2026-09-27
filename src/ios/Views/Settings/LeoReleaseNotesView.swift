@@ -16,12 +16,12 @@ enum LeoReleaseCatalog {
             date: "2026-09-27",
             title: "接入 OpenCode Go;下线 Claude 订阅等非官方登录;锁、审批和对话数据全面加固",
             highlights: [
-                "新增 OpenCode Go:在 opencode.ai/auth 拿 API Key 填进来,会员里的 Kimi、GLM、DeepSeek、Qwen、MiMo、MiniMax 等模型直接可用。",
-                "Claude 订阅、Antigravity、Gemini CLI 登录下线(都不是官方开放给第三方的接口)。原来用它们的服务商会停用并提示改填 API Key;Claude 也可以远程用 Mac 上你自己登录的官方 claude。订阅登录的令牌只留在这台设备,不再走 iCloud——其它设备需要重新登录一次。",
-                "从锁屏通知、Siri、快捷指令批准命令或下任务都要先解锁;「LPA批准」会先念出命令、你确认后才批,高风险命令不能用 Siri 批。App 锁盖住所有页面和弹窗,锁着时点开的链接解锁后才跳转。关闭或放宽 Face ID 保护、开全自动都要先验证身份。",
-                "Face ID 锁住的会话不再出现在聚焦搜索、小组件、快捷指令、实时活动和通知预览里。手表直连默认不再带上 iPhone 的 MCP 工具(需要的在设置里逐个打开);高风险命令在手表上要点两下,也不再有「始终允许」。",
-                "对话:终端链接先确认、只填入命令不自动执行;未发送的草稿按对话保存,编辑消息或存成技能不再覆盖;重试或编辑较早的消息前会提示将删除之后的内容;删除挂载文件夹里的链接不再误删原文件;回复进行中不能清空对话。长会话打开更快。",
-                "首页和设置:全选只选当前看得见的;藏宝阁删除能撤销;测试连接不会覆盖已存的密码;编辑器有未保存内容时离开会提醒;左滑删除技能、环境变量、MCP 前要确认;Rootfs 备份重启后还能恢复。控制中心「拍照对话」会打开相机,点实时活动直接进入对应会话。"
+                "新增 OpenCode Go:在 opencode.ai/auth 拿 API Key 填进来,会员里的 Kimi、GLM、DeepSeek、Qwen、MiMo、MiniMax 等模型直接可用,每个模型自动走它对应的接口。ChatGPT 登录过期后会直接提示重新登录,不再一直报「检查网络」。",
+                "Claude 订阅、Antigravity、Gemini CLI 登录下线(都不是官方开放给第三方的接口),原来用它们的服务商会停用并提示改填 API Key,残留的登录凭据一并清掉;Claude 也可以远程用 Mac 上你自己登录的官方 claude。订阅登录的令牌只留在这台设备,不再走 iCloud——其它设备需要重新登录一次。",
+                "锁屏时从通知、Siri、快捷指令批准命令或下任务都要先解锁(锁屏时自动运行的快捷指令也一样,只有「运行到点的定时任务」照常);「LPA批准」会先念出命令、你确认后才批,高风险命令不能用 Siri 批。App 锁盖住所有页面和弹窗;关闭或放宽 Face ID 保护、开全自动都要先验证身份。",
+                "Face ID 锁住的会话不再出现在聚焦搜索、小组件、表盘、快捷指令、实时活动和通知里;首页长按导出、复制、改标题也要先验证。手表上不再有「始终允许」,手表直连默认不带 iPhone 的 MCP 工具(需要的在设置里逐个打开)。",
+                "对话:没发出的草稿按对话保存,Siri、快捷指令、手表和通知回复发消息时不会把它带走;终端链接要先确认、只填入不执行;Agent 写文件时不会再把「内容已折叠」的占位文字写进文件;重试或编辑较早的消息前会提示;回复进行中不能清空对话。",
+                "首页和设置:全选只选看得见的;藏宝阁删除能撤销;MCP 服务器可以逐个开关;Rootfs 备份恢复后文件权限和链接照旧,选的 pip 镜像重启不丢;删除技能、环境变量、MCP、远程机器前都会确认;环境变量复制 60 秒后自动清掉;编辑器有未保存内容时离开会提醒。"
             ]
         ),
         LeoRelease(
@@ -795,8 +795,18 @@ struct LeoReleaseNotesView: View {
         }
     }
 
+    /// [T-release-notes-nav] Only the `.latest` sheet brings its own
+    /// NavigationStack. `.history` is always pushed onto Settings / About's
+    /// stack, where a second stack meant a nested navigation bar.
     var body: some View {
-        NavigationStack {
+        if mode == .latest {
+            NavigationStack { notesList }
+        } else {
+            notesList
+        }
+    }
+
+    private var notesList: some View {
             List {
                 if mode == .latest {
                     Section {
@@ -847,6 +857,5 @@ struct LeoReleaseNotesView: View {
                     }
                 }
             }
-        }
     }
 }

@@ -360,7 +360,8 @@ struct ModelGroupDetailView: View {
 
     private func memberRow(entry: ModelEntry, group: ModelGroup) -> some View {
         let instance = store.instance(for: entry.providerInstanceId)
-        let providerDisabled = instance?.isEnabled == false
+        let retired = instance?.isRetiredSignIn == true
+        let providerDisabled = instance?.isEnabled == false || retired
         return HStack(spacing: 10) {
             providerDot(entry)
                 .opacity(providerDisabled ? 0.35 : 1)
@@ -374,7 +375,7 @@ struct ModelGroupDetailView: View {
                         Text(instance.label)
                         if providerDisabled {
                             Text("·")
-                            Text("Provider disabled")
+                            Text(retired ? "Retired · needs API key" : "Provider disabled")
                                 .foregroundStyle(.orange)
                         }
                     }

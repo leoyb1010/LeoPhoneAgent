@@ -95,12 +95,10 @@ struct RetryRunIntent: AppIntent {
         // Build entity list from this session's user messages
         let sessionTitle = session.displayName
         let entities = userMessages.enumerated().map { idx, msg -> UserMessageEntity in
-            let text = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            let preview = text.isEmpty ? "(attachment)" : String(text.prefix(80))
-            return UserMessageEntity(
+            UserMessageEntity(
                 id: "\(session.id):\(idx)",
                 sessionId: session.id,
-                preview: preview,
+                preview: UserMessageEntity.preview(for: msg.content),
                 index: idx + 1,
                 sessionTitle: sessionTitle
             )
@@ -124,10 +122,10 @@ struct RetryRunIntent: AppIntent {
         // database and can drift from this list, and retrying truncates
         // history after the target — so the index must also agree on the
         // text, and a message that can't be found is an error, never "the
-        // last one".
+        // last one". The entity's label is built by the same helper (with its
+        // "…"), or every message longer than 80 characters fails to match.
         func preview(of msg: ChatMessage) -> String {
-            let text = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? "(attachment)" : String(text.prefix(80))
+            UserMessageEntity.preview(for: msg.content)
         }
         let targetIdx = chosenEntity.index - 1
         let indexed = (targetIdx >= 0 && targetIdx < userMessages.count) ? userMessages[targetIdx] : nil

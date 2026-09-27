@@ -133,6 +133,8 @@ struct JevSettingsView: View {
     @State private var hasKey = JevClient.hasKey
     @State private var testing = false
     @State private var testResult: String?
+    /// [T-jev-delete-confirm] 删 Key 前先确认:删了 Agent 就没有 jev_decide,要用得重新粘贴。
+    @State private var confirmDeleteKey = false
 
     var body: some View {
         Form {
@@ -143,9 +145,7 @@ struct JevSettingsView: View {
                     Button(testing ? "测试中…" : "测一下") { Task { await test() } }
                         .disabled(testing)
                     Button("删除 Key", role: .destructive) {
-                        JevClient.saveKey(nil)
-                        hasKey = false
-                        testResult = nil
+                        confirmDeleteKey = true
                     }
                 } else {
                     SecureField("粘贴 TypeSafe API Key", text: $keyInput)
@@ -173,6 +173,16 @@ struct JevSettingsView: View {
         }
         .navigationTitle("Jev 快速判断")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("删除 Jev Key？", isPresented: $confirmDeleteKey) {
+            Button("删除", role: .destructive) {
+                JevClient.saveKey(nil)
+                hasKey = false
+                testResult = nil
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后 Agent 不再有 jev_decide 工具，要再用得重新粘贴 Key。")
+        }
     }
 
     private func test() async {

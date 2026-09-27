@@ -60,6 +60,9 @@ export function oauthRuntime(): Promise<ModelRuntime> {
   return runtimePromise;
 }
 
+/** 请求本身有问题(不支持的登录方式、缺 Key):本机接口按 400 回,不当成服务出错。 */
+export class OAuthRequestError extends Error {}
+
 /** 凭据文件变了(登录 / 退出)就重建,它自己不监听文件。 */
 export function resetOAuthRuntime(): void {
   runtimePromise = null;
@@ -75,6 +78,23 @@ function isBlockedProvider(runtime: ModelRuntime, providerId: string): boolean {
   if (providerId === "anthropic" || providerId.startsWith("radius")) return true;
   // models.json 里另起名字的 Radius 网关:认它们专用的 pi-messages 协议。
   return runtime.getModels(providerId).some((model) => (model.api as string) === "pi-messages");
+}
+
+/**
+ * 下架的登录方式(Claude 订阅、Radius 网关)以前登过的,凭据还留在 auth.json 里:界面上看不到,
+ * 也就退不掉,只剩一份没人用的 refresh token。启动时清掉(只删本机凭据,不联网)。
+ */
+export async function retireBlockedLogins(): Promise<string[]> {
+  const runtime = await oauthRuntime();
+  const retired: string[] = [];
+  for (const provider of runtime.getProviders()) {
+    if (!isBlockedProvider(runtime, provider.id)) continue;
+    if (!runtime.isUsingOAuth(provider.id) || !runtime.hasConfiguredAuth(provider.id)) continue;
+    await runtime.logout(provider.id);
+    retired.push(provider.id);
+  }
+  if (retired.length) resetOAuthRuntime();
+  return retired;
 }
 
 /** 用 API Key 接入的官方订阅:OpenCode Go 会员在 opencode.ai 控制台领 Key。 */
@@ -226,11 +246,11 @@ export async function startOAuthLogin(
   }
   const runtime = await oauthRuntime();
   if (isBlockedProvider(runtime, providerId) || !runtime.getProvider(providerId)) {
-    throw new Error(`不支持用这种方式登录:${providerId}`);
+    throw new OAuthRequestError(`不支持用这种方式登录:${providerId}`);
   }
   const authType = isApiKeyProvider(providerId) ? "api_key" : "oauth";
   const importedKey = options.importFromOpenCodeCli ? readOpenCodeCliKey(providerId) : null;
-  if (options.importFromOpenCodeCli && !importedKey) throw new Error("本机 OpenCode 里没有找到这家的 API Key");
+  if (options.importFromOpenCodeCli && !importedKey) throw new OAuthRequestError("本机 OpenCode 里没有找到这家的 API Key");
   const flow: LoginFlow = {
     id: randomUUID(),
     provider: providerId,

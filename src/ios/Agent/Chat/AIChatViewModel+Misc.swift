@@ -49,7 +49,9 @@ extension AIChatViewModel {
     /// 保证 fakefs 变更跟踪、路径钩子只装一次且顺序不变。已启动时直接返回。
     struct KernelBootError: LocalizedError {
         let code: Int32
-        var errorDescription: String? { "Kernel boot failed: \(code)" }
+        // #31: localized. The zh text keeps "kernel" so
+        // AgentActivityFailureClassifier still routes it to Retry Kernel.
+        var errorDescription: String? { String(localized: "Kernel boot failed: \(Int(code))") }
     }
 
     static func bootKernelIfNeeded() throws {

@@ -47,6 +47,9 @@ struct GatewaySettingsView: View {
     @State private var reachable: [String: Bool] = [:]
     @State private var showQuickSetup = false
     @State private var scanMessage: String?
+    /// [T-gateway-delete-confirm] 左滑删除待确认的机器。存机器本身,不存行号:
+    /// 确认框弹着时列表可能因为刷新变动。删除会连同本机保存的访问密钥一起删掉。
+    @State private var pendingDeleteHost: GatewayHost?
 
     var body: some View {
         List {
@@ -117,7 +120,9 @@ struct GatewaySettingsView: View {
                         .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
-                        for index in offsets { store.delete(id: store.hosts[index].id) }
+                        if let index = offsets.first, store.hosts.indices.contains(index) {
+                            pendingDeleteHost = store.hosts[index]
+                        }
                     }
                 }
 
@@ -187,6 +192,15 @@ struct GatewaySettingsView: View {
             Button("好", role: .cancel) { scanMessage = nil }
         } message: {
             Text(scanMessage ?? "")
+        }
+        .alert("删除这台机器？", isPresented: Binding(
+            get: { pendingDeleteHost != nil },
+            set: { if !$0 { pendingDeleteHost = nil } }
+        ), presenting: pendingDeleteHost) { host in
+            Button("删除", role: .destructive) { store.delete(id: host.id) }
+            Button("取消", role: .cancel) {}
+        } message: { host in
+            Text("「\(host.name)」和它保存在本机的访问密钥会一起删除。中继刷新时不会再自动加回来，要用时重新添加或扫码。")
         }
     }
 
@@ -359,11 +373,18 @@ private struct GatewayHostRow: View {
                 .leoPulse(active: isReachable == nil)
             VStack(alignment: .leading, spacing: 2) {
                 Text(host.name).font(.system(size: 16, weight: .medium))
-                Text(host.baseURL)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let address = displayedAddress {
+                    Text(address)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else {
+                    // [T-gateway-row-relay] 中继发现的机器没有引擎地址,以前这里是一行空白。
+                    Text(host.harnessURL == nil ? statusText : String(localized: "经中继 · \(statusText)"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Image(systemName: "chevron.right")
@@ -371,6 +392,24 @@ private struct GatewayHostRow: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+
+    /// 引擎地址;没有时退到直连的编码会话地址。经中继的机器返回 nil(地址里带钥匙路径,也没什么可看的)。
+    private var displayedAddress: String? {
+        if !host.baseURL.isEmpty { return host.baseURL }
+        if let harness = host.harnessURL, !harness.isEmpty,
+           RelayMachinesClient.apiRoot(fromHarnessURL: harness) == nil {
+            return harness
+        }
+        return nil
+    }
+
+    private var statusText: String {
+        switch isReachable {
+        case .some(true): return String(localized: "在线")
+        case .some(false): return String(localized: "连不上")
+        case .none: return String(localized: "检测中…")
+        }
     }
 }
 
@@ -437,7 +476,8 @@ private struct GatewayHostEditor: View {
     /// 只收 https:访问密钥挂在每个请求的 Authorization 头上,而本 app 开了
     /// NSAllowsArbitraryLoads,一个手滑的 http:// 就等于把密钥明文撒在当前
     /// WiFi 上,系统层没有兜底。
-    private var canSave: Bool {
+    /// 地址合法就能测连通(/health 不用密钥);保存另见 canSave。
+    private var canTest: Bool {
         guard !draft.name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         // 两个地址至少填一个;填了的必须是合法 https。
         let engine = draft.baseURL.trimmingCharacters(in: .whitespaces)
@@ -453,6 +493,13 @@ private struct GatewayHostEditor: View {
                   harnessURL.scheme?.lowercased() == "https" else { return false }
         }
         return true
+    }
+
+    /// [T-gateway-key-required] 「访问密钥(必填)」名副其实:没有密钥的机器什么都
+    /// 做不了(client(for:) 直接返回 nil)。中继发现 / 扫码加入的机器,密钥在加入时
+    /// 已写进钥匙串,打开编辑就带出来了,不用手动再填。
+    private var canSave: Bool {
+        canTest && !GatewayHostStore.normalizedAccessKey(draft.accessKey).isEmpty
     }
 
     var body: some View {
@@ -507,7 +554,7 @@ private struct GatewayHostEditor: View {
                             if isTesting { ProgressView() }
                         }
                     }
-                    .disabled(!canSave || isTesting)
+                    .disabled(!canTest || isTesting)
                     if let testResult {
                         Text(testResult).font(.system(size: 13)).foregroundStyle(.secondary)
                     }

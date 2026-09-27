@@ -569,10 +569,12 @@ extension Notification.Name {
 /// target is the first block with nothing preceding it, that path degrades
 /// to a preceding-user-message truncation automatically.
 /// Also hosts the chat's shared "discard later turns?" confirmation (retry
-/// and edit set `pendingRewind` too), so AIChatView.body gains no modifier.
+/// and edit set `pendingRewind` too) and the `open_terminal` link
+/// confirmation, so AIChatView.body gains no modifier for either. [B5]
 struct RerunFromToolBlockListener: ViewModifier {
     let vm: AIChatViewModel
     @Binding var pendingRewind: PendingChatRewind?
+    @Binding var pendingTerminalLink: PendingTerminalLink?
 
     func body(content: Content) -> some View {
         content
@@ -590,6 +592,7 @@ struct RerunFromToolBlockListener: ViewModifier {
                 }
             }
             .modifier(ChatRewindConfirmation(pending: $pendingRewind))
+            .modifier(TerminalLinkConfirmation(pending: $pendingTerminalLink))
     }
 }
 

@@ -417,7 +417,13 @@ extension AIChatViewModel {
             appendSystemInfo(memoryEnabled ? "已开启记忆:会读取并写入记忆。" : "已关闭记忆:本对话不读取也不写入记忆。",
                              icon: "brain.head.profile")
         case "clear":
-            clearChatConfirmRequested = true
+            // [#11] Same rule as the "…" menu's Clear Chat: not while a reply runs.
+            if isProcessing {
+                appendSystemInfo(String(localized: "A reply is still running. Stop it before clearing the chat."),
+                                 icon: "trash.slash")
+            } else {
+                clearChatConfirmRequested = true
+            }
         case "model":
             handleModelSlashCommand()
         case "tasks":
@@ -430,7 +436,12 @@ extension AIChatViewModel {
                 if on {
                     guard await BiometricAuth.authorizeLoweringProtection(
                         reason: String(localized: "Turn on full-auto approvals")
-                    ) else { return }
+                    ) else {
+                        // B13: say why nothing changed instead of failing silently.
+                        self.appendSystemInfo(String(localized: "Verification didn't pass. Full auto stays off."),
+                                              icon: "bolt.slash")
+                        return
+                    }
                 }
                 FullAutoStore.shared.enabled = on
                 UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)

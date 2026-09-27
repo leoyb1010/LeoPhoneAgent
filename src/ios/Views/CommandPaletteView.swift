@@ -15,7 +15,8 @@ struct CommandPaletteView: View {
     @State private var searchActive = false
 
     /// The real session list (the widget's copy says "会话" for every row
-    /// while Task Status Privacy is on).
+    /// while Task Status Privacy is on). A Face ID–locked conversation comes
+    /// without its title.
     let sessions: [(id: String, title: String)]
     /// Actions the host wires: open session / run quick task / open surface.
     let openSession: (String) -> Void

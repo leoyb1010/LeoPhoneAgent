@@ -103,8 +103,9 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         let authorizationURL = components.url!
         logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
-        // 3. Open in-app Safari
-        presentSafariViewController(url: authorizationURL)
+        // 3. Open in-app Safari (throws when it can't be shown, so the flow
+        //    ends now instead of waiting for a callback that can't come)
+        safariVC = try OAuthSafariPresenter.present(authorizationURL, delegate: self)
 
         // 4. Wait for callback (5 min timeout)
         logger.info("Waiting for callback...")
@@ -155,13 +156,12 @@ final class CodexOAuthManager: NSObject, ObservableObject {
     /// classifier. Codex (ChatGPT OAuth) rotates + rejects reused refresh tokens.
     /// The old bare `refresh_token` substring is dropped: it was the widest
     /// false-positive source (matched benign mentions like refresh_token_expiry);
-    /// the precise `invalid_grant` / `refresh_token_reused` codes + auth statuses
-    /// cover real revocation without it.
+    /// the precise codes (`invalid_grant`, `refresh_token_reused/expired/invalidated`,
+    /// read from OpenAI's nested error body too) cover real revocation without it.
     private func isRefreshTokenInvalid(_ error: LLMError) -> Bool {
         OAuthRefreshErrorClassifier.isTokenInvalid(
             error,
-            fatalErrorCodes: ["invalid_grant", "invalid_token", "invalid_request",
-                              "unauthorized_client", "refresh_token_reused"]
+            fatalErrorCodes: OAuthRefreshErrorClassifier.codexFatalErrorCodes
         )
     }
 
@@ -360,20 +360,6 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
         guard let data = Data(base64Encoded: base64) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    }
-
-    // MARK: - In-App Safari
-
-    private func presentSafariViewController(url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).activeFirst,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        let vc = SFSafariViewController(url: url)
-        vc.delegate = self
-        topVC.present(vc, animated: true)
-        self.safariVC = vc
     }
 }
 

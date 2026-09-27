@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SafariServices
 import os.log
 
 private let logger = AppLogger(category: "OAuthLoopback")
@@ -34,6 +35,32 @@ struct OAuthCallbackResult {
     let state: String?
 }
 
+/// Opens a sign-in page in in-app Safari over the top-most view controller.
+@MainActor
+enum OAuthSafariPresenter {
+    /// Throws when the page can't be shown (no key window, or nothing on screen
+    /// to present from), so the sign-in fails at once instead of waiting out
+    /// the callback timeout with nothing on screen.
+    static func present(_ url: URL, delegate: SFSafariViewControllerDelegate) throws -> SFSafariViewController {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            throw LLMError.providerError(message: String(localized: "Could not present the authorization page."))
+        }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        // UIKit silently drops a presentation from a view controller that is
+        // off screen or being dismissed (e.g. a sheet torn down mid-flow).
+        guard topVC.viewIfLoaded?.window != nil, !topVC.isBeingDismissed else {
+            throw LLMError.providerError(message: String(localized: "Could not present the authorization page."))
+        }
+        let vc = SFSafariViewController(url: url)
+        vc.delegate = delegate
+        topVC.present(vc, animated: true)
+        return vc
+    }
+}
+
 /// Minimal loopback HTTP server that receives the OAuth redirect.
 /// Bound to 127.0.0.1 only; each connection gets a short read timeout so a
 /// silent client cannot stall the accept loop.
@@ -45,6 +72,9 @@ final class OAuthCallbackServer: @unchecked Sendable {
     /// Empty set → OPTIONS requests get a `null` origin.
     private let optionsCORSAllowedHosts: Set<String>
     private var listenSocket: Int32 = -1
+    /// Guards taking `listenSocket`: the timeout and the owner's cleanup can
+    /// stop the server from different threads, and the fd must close once.
+    private let socketLock = NSLock()
     private var continuation: CheckedContinuation<OAuthCallbackResult, Error>?
     private let queue = DispatchQueue(label: "oauth.callback.server")
     private var stopped = false
@@ -102,36 +132,48 @@ final class OAuthCallbackServer: @unchecked Sendable {
         try await withCheckedThrowingContinuation { cont in
             self.continuation = cont
 
-            queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                guard let self, !self.stopped else { return }
-                self.stopped = true
-                logger.error("[Server] Callback timeout after \(timeout)s")
-                self.continuation = nil
-                cont.resume(throwing: LLMError.providerError(message: String(localized: "Sign-in timed out. Please try again.")))
+            // Not on `queue`: the accept loop blocks it until a connection
+            // arrives, so a timeout scheduled there would never run.
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) { [weak self] in
+                guard let self else { return }
+                if self.finish(resumingWith: LLMError.providerError(message: String(localized: "Sign-in timed out. Please try again."))) {
+                    logger.error("[Server] Callback timeout after \(timeout)s")
+                }
             }
         }
     }
 
+    /// Ends the wait as a cancellation (the user closed Safari, or the owner
+    /// is cleaning up after a finished attempt).
     func stop() {
+        finish(resumingWith: CancellationError())
+    }
+
+    /// Returns true when this call ended a still-pending wait.
+    @discardableResult
+    private func finish(resumingWith error: Error) -> Bool {
         // Close the listen socket OUTSIDE queue.sync: acceptLoop blocks in
         // accept() on `queue`, so closing first makes accept() return and
         // frees the queue for the critical section below.
+        socketLock.lock()
         let fdToClose = listenSocket
         listenSocket = -1
+        socketLock.unlock()
         if fdToClose >= 0 {
+            shutdown(fdToClose, SHUT_RDWR)
             close(fdToClose)
             logger.info("[Server] Stopped (listen socket closed)")
         }
 
         // Serialized against handleCallback so a Safari dismiss racing a
         // successful redirect does not report the flow as cancelled.
-        queue.sync {
+        return queue.sync {
             let wasStopped = stopped
             stopped = true
-            if !wasStopped, let cont = continuation {
-                continuation = nil
-                cont.resume(throwing: LLMError.providerError(message: "OAuth callback cancelled"))
-            }
+            guard !wasStopped, let cont = continuation else { return false }
+            continuation = nil
+            cont.resume(throwing: error)
+            return true
         }
     }
 
@@ -232,10 +274,12 @@ final class OAuthCallbackServer: @unchecked Sendable {
         logger.info("[Server] Callback — code present: \(code != nil), state present: \(state != nil)")
 
         guard let code, !code.isEmpty else {
-            let errorMsg = queryItems.first(where: { $0.name == "error" })?.value ?? "no code"
+            let providerError = queryItems.first(where: { $0.name == "error" })?.value
+            let errorMsg = providerError ?? "no code"
             logger.error("[Server] Callback error: \(errorMsg)")
             sendErrorPage(fd: fd, message: errorMsg)
-            continuation?.resume(throwing: LLMError.providerError(message: String(localized: "Sign-in was not completed (\(errorMsg)).")))
+            let reason = providerError ?? String(localized: "no authorization code")
+            continuation?.resume(throwing: LLMError.providerError(message: String(localized: "Sign-in was not completed (\(reason)).")))
             continuation = nil
             return
         }

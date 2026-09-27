@@ -58,7 +58,7 @@ struct SiriCommandCenterView: View {
                     Text("Mac 任务需要审批时,本机会收到时效性通知:")
                     Text("• 锁屏或横幅上直接按「允许一次」或「拒绝」;允许要先解锁 iPhone,拒绝不用")
                     Text("• 戴 AirPods 时开启「Siri 播报通知」,Siri 会念出来;回「批准」同样要求 iPhone 已解锁")
-                    Text("• 手表上也有同款审批卡;高风险命令要点两下确认,且不提供「始终允许」")
+                    Text("• 手表上也有同款审批卡，不提供「始终允许」；高风险命令要点两下确认")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
             }
@@ -88,6 +88,8 @@ struct SiriCommandCenterView: View {
             Section("推荐自动化(快捷指令 App 里各建一条)") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("iOS 不允许 app 代建自动化,照着建只要 1 分钟:")
+                    Text("跑任务、审批这类动作现在要先解锁 iPhone：锁屏时触发的自动化（定时、到达、NFC 等）跑不了它们。定时任务请用「运行到点的定时任务」，锁屏也能跑。")
+                        .foregroundStyle(.orange)
                     Text("• 「充电时 + 23:00」→ 指挥一台 Mac:跑夜间批处理")
                     Text("• 「到达家」→ Mac 任务汇报")
                     Text("• 「离开公司」→ Mac 任务汇报")

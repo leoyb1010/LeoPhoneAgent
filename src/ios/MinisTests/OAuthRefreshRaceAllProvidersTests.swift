@@ -62,8 +62,9 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
         [
             Provider(name: "xAI", isFatal: fatal(rotatingFatal),
                      rotationError: rotationError(status: 400, body: "{\"error\":\"refresh_token_reused\"}")),
-            Provider(name: "Codex", isFatal: fatal(rotatingFatal),
-                     rotationError: rotationError(status: 400, body: "{\"error\":\"refresh_token_reused\"}")),
+            // auth.openai.com answers a dead refresh token with 401 + a nested code.
+            Provider(name: "Codex", isFatal: fatal(OAuthRefreshErrorClassifier.codexFatalErrorCodes),
+                     rotationError: rotationError(status: 401, body: "{\"error\":{\"message\":\"Your refresh token has already been used.\",\"type\":\"invalid_request_error\",\"code\":\"refresh_token_reused\"}}")),
             Provider(name: "Kimi", isFatal: KimiOAuthRefreshCoordinator.isRefreshTokenInvalid,
                      rotationError: rotationError(status: 400, body: "{\"error\":\"invalid_grant\"}")),
         ]

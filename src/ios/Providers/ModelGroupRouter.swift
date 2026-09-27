@@ -85,6 +85,8 @@ enum ModelGroupRouter {
             let label = inst.label
             if entry.isHidden {
                 result.append((model: entry.model.displayName, instance: label, reason: String(localized: "Hidden")))
+            } else if inst.isRetiredSignIn {
+                result.append((model: entry.model.displayName, instance: label, reason: String(localized: "Retired · needs API key")))
             } else if !inst.isEnabled {
                 result.append((model: entry.model.displayName, instance: label, reason: String(localized: "Disabled")))
             } else if !inst.hasAnyCredential {
