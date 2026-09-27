@@ -721,6 +721,21 @@ extension AIChatViewModel {
             toolOutput = result.output
             toolSuccess = result.success
 
+        case "mail_accounts", "mail_folders", "mail_search", "mail_read":
+            // [T-mail] 只读 IMAP;结果包在 untrusted 标签里。
+            let result: (output: String, success: Bool)
+            switch tu.name {
+            case "mail_accounts": result = await MailService.executeAccounts()
+            case "mail_folders": result = await MailService.executeFolders(from: argsJson)
+            case "mail_search": result = await MailService.executeSearch(from: argsJson)
+            default: result = await MailService.executeRead(from: argsJson)
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
         case "memory_write":
             let memResult = executeMemoryWrite(from: argsJson)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

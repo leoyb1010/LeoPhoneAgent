@@ -440,7 +440,8 @@ extension AIChatViewModel {
                     case "file_edit": .fileEditTool(path: "")
                     case "browser_use": .browserTool(action: "")
                     case "read_image": .readImageTool(path: "")
-                    case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update":
+                    case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update",
+                         "mail_search", "mail_read", "mail_folders", "mail_accounts":
                         .memoryTool(action: name)
                     default: .shellTool(command: name)
                     }

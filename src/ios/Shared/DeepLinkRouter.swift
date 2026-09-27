@@ -171,6 +171,9 @@ enum DeepLinkRouter {
                 ? .mcpServerDetail(serverId: arg!)
                 : .mcpIntegrations
 
+        case "mail", "mail-accounts", "mailboxes":
+            coord.pendingSettingsTarget = .mailAccounts
+
         case "memory":
             coord.pendingSettingsTarget = .memory
 

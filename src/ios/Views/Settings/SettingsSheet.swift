@@ -38,6 +38,7 @@ enum SettingsDestination: Hashable {
     // [T-mcp-oauth-deeplink]
     case mcpIntegrations
     case mcpServerDetail(serverId: String)
+    case mailAccounts
     // [T-selftest-1.41]
     case selfTest
     // [T-mac-console-deeplink] leophoneagent://settings/mac
@@ -203,6 +204,8 @@ struct SettingsSheet: View {
             MCPIntegrationsView()
         case .mcpServerDetail(let serverId):
             MCPIntegrationsView(initialEditServerId: serverId)
+        case .mailAccounts:
+            MailAccountsView()
         }
     }
 
@@ -273,6 +276,7 @@ struct SettingsSheet: View {
         case .environments: show(.environments)
         case .mcpIntegrations: show(.mcpIntegrations)
         case .mcpServerDetail(let id): show(.mcpServerDetail(serverId: id))
+        case .mailAccounts: show(.mailAccounts)
         case .selfTest: show(.selfTest)
         case .macConsole: show(.macConsole)
         case .automations: show(.automations)
@@ -301,7 +305,7 @@ struct SettingsSheet: View {
         .providers: "AI 服务商", .modelGroups: "模型分组", .usage: "Token 用量", .skills: "技能",
         .memory: "记忆", .storage: "存储", .mountedFolders: "挂载外部文件夹", .sharedFolders: "共享文件夹",
         .appearance: "外观", .background: "后台与通知", .about: "关于", .permissions: "权限",
-        .environments: "环境变量", .mcpIntegrations: "MCP 集成", .selfTest: "能力自检", .macConsole: "Mac 控制台",
+        .environments: "环境变量", .mcpIntegrations: "MCP 集成", .mailAccounts: "邮箱账户", .selfTest: "能力自检", .macConsole: "Mac 控制台",
         .automations: "自动化", .scheduledTasks: "定时任务", .timeline: "Agent 时间线",
     ]
 

@@ -610,6 +610,17 @@
 		FDD896F80E0A14A7B60B12EF /* VoiceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */; };
 		808A25205D208491596E63A7 /* AppleSpeechAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18E9A421C24F0F32CCF8867B /* AppleSpeechAnalyzer.swift */; };
 		D686CFC625007710F37C0C19 /* SystemSpeechResourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */; };
+		E533B2C2679C56644D1DCB4B /* MIMEMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53B6C6100E2D63451FB511D /* MIMEMessage.swift */; };
+		E521D59DA5102F112A67270D /* MIMEMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53B6C6100E2D63451FB511D /* MIMEMessage.swift */; };
+		E5484E5F65A16EEFAFB5F81C /* IMAPResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A6B03AE6C100F4234B9543 /* IMAPResponse.swift */; };
+		E5A04910E1B075BC86214111 /* IMAPResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A6B03AE6C100F4234B9543 /* IMAPResponse.swift */; };
+		E53AFC9D6C92F35C2FBC06D4 /* IMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FE37D7D31D8D8BA48CCF0D /* IMAPClient.swift */; };
+		E5E7AEEF0B1AE86527E36437 /* IMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FE37D7D31D8D8BA48CCF0D /* IMAPClient.swift */; };
+		E57CD6950AD692B8CB385CE1 /* MailAccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4FB4D6254D774D3D03C56 /* MailAccountStore.swift */; };
+		E56BEBDBC94EC484ACC8DBE1 /* MailAccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4FB4D6254D774D3D03C56 /* MailAccountStore.swift */; };
+		E50E3DE034E41A79F378F810 /* MailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E530843EFE7E556C09C0F20A /* MailService.swift */; };
+		E56A439125632EE00B93B5D3 /* MailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E530843EFE7E556C09C0F20A /* MailService.swift */; };
+		E5765D01962FD682F367D27D /* MailAccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52B0110EC6FB3E3F11745AE /* MailAccountsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1345,6 +1356,12 @@
 		F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceProviderFactory.swift; sourceTree = "<group>"; };
 		18E9A421C24F0F32CCF8867B /* AppleSpeechAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechAnalyzer.swift; sourceTree = "<group>"; };
 		E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSpeechResourcesView.swift; sourceTree = "<group>"; };
+		E53B6C6100E2D63451FB511D /* MIMEMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MIMEMessage.swift; path = Agent/Mail/MIMEMessage.swift; sourceTree = SOURCE_ROOT; };
+		E5A6B03AE6C100F4234B9543 /* IMAPResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IMAPResponse.swift; path = Agent/Mail/IMAPResponse.swift; sourceTree = SOURCE_ROOT; };
+		E5FE37D7D31D8D8BA48CCF0D /* IMAPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IMAPClient.swift; path = Agent/Mail/IMAPClient.swift; sourceTree = SOURCE_ROOT; };
+		E5A4FB4D6254D774D3D03C56 /* MailAccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailAccountStore.swift; path = Agent/Mail/MailAccountStore.swift; sourceTree = SOURCE_ROOT; };
+		E530843EFE7E556C09C0F20A /* MailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailService.swift; path = Agent/Mail/MailService.swift; sourceTree = SOURCE_ROOT; };
+		E52B0110EC6FB3E3F11745AE /* MailAccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailAccountsView.swift; path = Views/Settings/MailAccountsView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1578,6 +1595,11 @@
 				E5FP00010 /* MinisFileProvider.appex */,
 				AA8A568B2F6FBB7A00A3E54E /* MinisUITests.xctest */,
 				BB1000010F700000000000AA /* MinisTests.xctest */,
+				E53B6C6100E2D63451FB511D /* MIMEMessage.swift */,
+				E5A6B03AE6C100F4234B9543 /* IMAPResponse.swift */,
+				E5FE37D7D31D8D8BA48CCF0D /* IMAPClient.swift */,
+				E5A4FB4D6254D774D3D03C56 /* MailAccountStore.swift */,
+				E530843EFE7E556C09C0F20A /* MailService.swift */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1678,6 +1700,7 @@
 				E5ART0011 /* ArtifactModels.swift */,
 				E5ART0012 /* ArtifactRepository.swift */,
 				E5ART0013 /* ArtifactTrayView.swift */,
+				E52B0110EC6FB3E3F11745AE /* MailAccountsView.swift */,
 			);
 			path = Artifacts;
 			sourceTree = "<group>";
@@ -2889,6 +2912,11 @@
 				E5KIMI0A2 /* KimiOAuthRefreshCoordinator.swift in Sources */,
 				E5KIMI0B2 /* KimiDeviceFlow.swift in Sources */,
 				E5OARC003 /* LLMError.swift in Sources */,
+				E521D59DA5102F112A67270D /* MIMEMessage.swift in Sources */,
+				E5A04910E1B075BC86214111 /* IMAPResponse.swift in Sources */,
+				E5E7AEEF0B1AE86527E36437 /* IMAPClient.swift in Sources */,
+				E56BEBDBC94EC484ACC8DBE1 /* MailAccountStore.swift in Sources */,
+				E56A439125632EE00B93B5D3 /* MailService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3367,6 +3395,12 @@
 				8B886DA8A270E8FB58A9A1FA /* SpeechPlayerControl.swift in Sources */,
 				7A49962E84F115865D41B933 /* AudioSessionCoordinator.swift in Sources */,
 				C0B1AF9A75C90C3C178A8804 /* VoiceTextSanitizer.swift in Sources */,
+				E533B2C2679C56644D1DCB4B /* MIMEMessage.swift in Sources */,
+				E5484E5F65A16EEFAFB5F81C /* IMAPResponse.swift in Sources */,
+				E53AFC9D6C92F35C2FBC06D4 /* IMAPClient.swift in Sources */,
+				E57CD6950AD692B8CB385CE1 /* MailAccountStore.swift in Sources */,
+				E50E3DE034E41A79F378F810 /* MailService.swift in Sources */,
+				E5765D01962FD682F367D27D /* MailAccountsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3467,7 +3501,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3476,7 +3510,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3491,12 +3525,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3511,7 +3545,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3527,7 +3561,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3542,7 +3576,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3554,7 +3588,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3700,7 +3734,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3730,7 +3764,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3755,7 +3789,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3785,7 +3819,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3806,7 +3840,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3818,7 +3852,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3833,7 +3867,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3845,7 +3879,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3860,7 +3894,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3872,7 +3906,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3887,7 +3921,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3899,7 +3933,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3914,7 +3948,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3926,7 +3960,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3941,7 +3975,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3953,7 +3987,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3968,7 +4002,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3977,7 +4011,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -3994,7 +4028,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 132;
+				CURRENT_PROJECT_VERSION = 133;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoPhoneAgent;
@@ -4002,7 +4036,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.47.2;
+				MARKETING_VERSION = 1.48.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;

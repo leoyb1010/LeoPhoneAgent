@@ -331,6 +331,7 @@ enum AgentToolPresentation {
         case "read_image":                      return "photo"
         case "memory":                          return "brain.head.profile"
         case "treasury_search", "treasury_get", "treasury_save", "treasury_update": return "archivebox.fill"
+        case "mail_search", "mail_read", "mail_folders", "mail_accounts": return "envelope.fill"
         case "text":                            return "bubble.left"
         case "thinking":                        return "lightbulb.max"
         case "code_interpret":                  return "chevron.left.forwardslash.chevron.right"
@@ -351,6 +352,9 @@ enum AgentToolPresentation {
         case "treasury_get":                    return String(localized: "Read Treasury")
         case "treasury_save":                   return String(localized: "Save to Treasury")
         case "treasury_update":                 return String(localized: "Update Treasury")
+        case "mail_search":                     return String(localized: "Search Mail")
+        case "mail_read":                       return String(localized: "Read Mail")
+        case "mail_folders", "mail_accounts":   return String(localized: "Mail")
         case "text":                            return String(localized: "Responding")
         case "thinking":                        return String(localized: "Thinking…")
         case "code_interpret":                  return String(localized: "Code")

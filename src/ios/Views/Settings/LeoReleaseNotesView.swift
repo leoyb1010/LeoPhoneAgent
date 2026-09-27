@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.48.0",
+            date: "2026-09-28",
+            title: "邮箱接进来了:授权 Gmail / QQ / 163 等邮箱,对话里直接读邮件",
+            highlights: [
+                "设置 → 邮箱账户:填邮箱地址和「授权码 / 应用专用密码」,测试通了就保存,可以加多个、逐个开关。支持 Gmail、QQ 邮箱、163 / 126、iCloud,以及任何开了 IMAP 的邮箱(自填服务器)。授权码只存在这台设备的钥匙串里。",
+                "对话里直接说:「今天有什么未读邮件」「找一下携程发来的行程」「读一下第 2 封」「工作邮箱里 12306 的邮件」。Agent 用 mail_search 找、mail_read 读,不标已读、不删、不发;邮件内容对它来说只是资料,邮件里写的指令不会被执行。",
+                "163 / 126 这类不支持中文搜索的服务器会自动改成在最近 200 封里按主题、发件人匹配;中文、GBK 编码、HTML 正文、附件清单都能正确读出来。"
+            ]
+        ),
+        LeoRelease(
             version: "1.47.2",
             date: "2026-09-27",
             title: "灵动岛不再把还在跑的任务标成失败;首页能直接选模型;产物预览能退出",

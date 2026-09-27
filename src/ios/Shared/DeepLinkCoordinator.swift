@@ -26,6 +26,8 @@ enum SettingsDeepLinkTarget: Equatable {
     /// edit form (where the Authorize button lives).
     case mcpIntegrations
     case mcpServerDetail(serverId: String)
+    /// [T-mail] leophoneagent://settings/mail — 邮箱账户。
+    case mailAccounts
     /// [T-selftest-1.41] 能力自检;经深链打开时自动开跑。
     case selfTest
     case macConsole
