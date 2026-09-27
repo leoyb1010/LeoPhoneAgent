@@ -2156,6 +2156,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// Model group to bind when creating a new session (from long-press FAB).
     var initialGroupId: String?
+    /// [T-home-model-pick] Model entry (compositeKey) picked on the Home page for this new session.
+    var initialEntryKey: String?
 
     /// Currently active session ID — accessible from anywhere for leophoneagent:// URL resolution.
     /// Updated whenever a session is loaded.

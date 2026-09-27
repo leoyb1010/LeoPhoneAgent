@@ -808,17 +808,20 @@ struct MinisHTMLPreviewView: View {
 
 import QuickLook
 
+/// [T-artifact-preview-exit] Bare QLPreviewController: the caller puts it in a
+/// NavigationStack with a Done button (its own UINavigationController had no
+/// way to close the sheet once a page or image took over the drag gesture).
 struct MinisDocumentPreviewView: UIViewControllerRepresentable {
     let fileURL: URL
 
-    func makeUIViewController(context: Context) -> UINavigationController {
+    func makeUIViewController(context: Context) -> QLPreviewController {
         let controller = QLPreviewController()
         controller.dataSource = context.coordinator
         context.coordinator.controller = controller
-        return UINavigationController(rootViewController: controller)
+        return controller
     }
 
-    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {
+    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {
         // [T-ios-file-preview-stale-cache] QLPreviewController caches a
         // rendered representation keyed by URL. When the agent rewrites the
         // file in place (same path, new bytes) the controller can keep showing

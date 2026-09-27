@@ -1155,6 +1155,27 @@ extension AIChatViewModel {
     private func createInitialBinding(for sessionId: String, preserveThinkingLevel: Bool = false) async {
         let store = ProviderConfigStore.shared
 
+        // [T-home-model-pick] Tier 0 — a model picked on the Home page for this chat.
+        // Same binding the in-chat picker writes (ModelSwitcher.apply's direct entry).
+        if let key = initialEntryKey, let entry = store.entry(for: key), !entry.isHidden,
+           let instance = store.instance(for: entry.providerInstanceId), instance.isEnabled {
+            var subSource: SessionModelSource? = nil
+            if let subGroupId = store.defaultSubGroupId,
+               let subGroup = store.group(for: subGroupId),
+               let subEntryId = ModelGroupRouter.resolve(group: subGroup, sessionId: sessionId, store: store) {
+                subSource = .group(groupId: subGroupId, resolvedEntryId: subEntryId)
+            }
+            store.setBinding(SessionModelBinding(
+                sessionId: sessionId,
+                primarySource: .directEntry(modelEntryId: entry.id),
+                subModelSource: subSource
+            ), for: sessionId)
+            ModelSwitcher.remember(entry.compositeKey)
+            Task { await ChatStore.shared.updateSessionModelId(sessionId, modelId: entry.model.id) }
+            logger.info("[NewSessionDefault] tier=0 home-entry sid=\(sessionId.prefix(8)) entry=\(entry.id.prefix(8)) modelId=\(entry.model.id)")
+            return
+        }
+
         // Tier 0 — explicit group from long-press FAB.
         let overrideGroupId = initialGroupId
         // Tier 1 — default group (current behaviour).

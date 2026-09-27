@@ -214,6 +214,25 @@ struct ContentView: View {
         return groupId.isEmpty ? nil : groupId
     }
 
+    private static let entrySeparator = "__entry__"
+
+    /// [T-home-model-pick] A draft id carrying what the Home capsule picked for
+    /// this chat: a model entry (compositeKey) or a group ("group:<id>", which
+    /// rides the existing __grp__ form). AIChatView reads it back and binds it.
+    private static func makeNewSessionId(homeChoice: String?) -> String {
+        guard let choice = homeChoice, !choice.isEmpty else { return makeNewSessionId() }
+        if choice.hasPrefix("group:") {
+            return makeNewSessionId(groupId: String(choice.dropFirst("group:".count)))
+        }
+        return "\(newSessionPrefix)\(UUID().uuidString)\(entrySeparator)\(choice)"
+    }
+
+    private static func extractEntryKey(from id: String) -> String? {
+        guard let range = id.range(of: entrySeparator) else { return nil }
+        let key = String(id[range.upperBound...])
+        return key.isEmpty ? nil : key
+    }
+
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// [T-home-zoom-transition] Session row ↔ session page zoom (iPhone stack).
@@ -1382,7 +1401,7 @@ struct ContentView: View {
                                 .id(id)
                         }
                     } else {
-                        let chat = AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                        let chat = AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
                             .modifier(ChatToolbarMinimization())
                             .id(id)
                             .onAppear {
@@ -1420,7 +1439,7 @@ struct ContentView: View {
             // [T-ipad-inspector] The inspector column lives on this small
             // container, not on AIChatView's own (deep) modifier chain.
             ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id) {
-                AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id), initialEntryKey: Self.extractEntryKey(from: id))
                     .onAppear {
                         draftLog.info("🔑DRAFT detailView APPEAR id=\(id) effectiveId=\(effectiveId ?? "nil") isDraft=\(isDraft)")
                     }
@@ -1757,6 +1776,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSelectModels) {
             NavigationStack { OnboardingModelSelectionView() }
+        }
+        .sheet(isPresented: $showHomeModelPicker) {
+            QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
+                                  onPick: { homeModelChoice = $0 })
         }
         // [T-session-attention-bar] Aggregate what needs the user, above the
         // list. Individual rows already carry badges, but with several
@@ -2629,7 +2652,9 @@ struct ContentView: View {
     fileprivate func openSessionForPendingQuickAction() {
         defer { quickActionStartedAtHome = false }
         guard case .pendingDispatch = QuickActionWorkflow.shared.state else { return }
-        let newId = Self.makeNewSessionId()
+        // [T-home-model-pick] The capsule's pick is for this one chat; the capsule goes back to the default.
+        let newId = Self.makeNewSessionId(homeChoice: homeModelChoice)
+        homeModelChoice = nil
         if isWideLayout {
             openSession(newId)
         } else if quickActionStartedAtHome && !reduceMotion {
@@ -2990,6 +3015,13 @@ struct ContentView: View {
     }
     @State private var showAddProvider = false
     @State private var showSelectModels = false
+    /// [T-home-model-pick] What the Home capsule picked for the next new chat: a
+    /// model entry's compositeKey or "group:<id>"; nil = the default group. It used
+    /// to only let you switch the DEFAULT group — no way to pick a model for this
+    /// chat without opening it first. Cleared once the chat is opened, like the
+    /// per-session picker inside a chat.
+    @State private var homeModelChoice: String?
+    @State private var showHomeModelPicker = false
 
     @ViewBuilder
     private var sessionFilterChips: some View {
@@ -3155,7 +3187,7 @@ struct ContentView: View {
         if homeTargetIsIPhone {
             return HomeCapsuleLabel(icon: isIPad ? "ipad" : "iphone",
                                     place: isIPad ? "此 iPad" : "此 iPhone",
-                                    model: ModelSwitcher.defaultLabel())
+                                    model: homeChoiceLabel ?? ModelSwitcher.defaultLabel())
         }
         return HomeCapsuleLabel(icon: homeTargetMenuIcon, place: homeExecutionTargetTitle, model: nil)
     }
@@ -3165,24 +3197,74 @@ struct ContentView: View {
     private var homeCapsuleMenuContent: some View {
         Section("在哪里执行") { homeTargetMenuItems }
         if homeTargetIsIPhone {
+            // [T-home-model-pick] 这一个对话用哪个模型:默认分组、常用 / 最近用过的模型、分组、全部模型。
+            // 以前只能换默认分组,选不了具体模型。
             Section("用哪个模型") {
-                ForEach(providerStore.modelGroups) { group in
-                    Button {
-                        providerStore.defaultPrimaryGroupId = group.id
-                        LeoHaptics.selection()
-                    } label: {
-                        if providerStore.defaultPrimaryGroupId == group.id {
-                            Label(group.name, systemImage: "checkmark")
-                        } else {
-                            Text(group.name)
+                Button {
+                    homeModelChoice = nil
+                    LeoHaptics.selection()
+                } label: {
+                    let name = ModelSwitcher.defaultLabel() ?? String(localized: "默认")
+                    if homeModelChoice == nil {
+                        Label("默认 · \(name)", systemImage: "checkmark")
+                    } else {
+                        Text("默认 · \(name)")
+                    }
+                }
+                ForEach(homeQuickModelEntries, id: \.compositeKey) { entry in
+                    homeModelChoiceButton(key: entry.compositeKey, title: entry.model.displayName)
+                }
+                if !providerStore.modelGroups.isEmpty {
+                    Menu("模型分组") {
+                        ForEach(providerStore.modelGroups) { group in
+                            homeModelChoiceButton(key: "group:\(group.id)", title: group.name)
                         }
                     }
+                }
+                Button { showHomeModelPicker = true } label: {
+                    Label("更多模型…", systemImage: "magnifyingglass")
                 }
                 Button {
                     if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
                 } label: {
                     Label(providerStore.modelGroups.isEmpty ? "连接模型" : "管理模型", systemImage: "slider.horizontal.3")
                 }
+            }
+        }
+    }
+
+    /// 胶囊上显示的、为下一个对话选好的模型名;没选就是 nil(显示默认分组解析出的模型)。
+    private var homeChoiceLabel: String? {
+        guard let choice = homeModelChoice else { return nil }
+        if choice.hasPrefix("group:") {
+            return providerStore.group(for: String(choice.dropFirst("group:".count)))?.name
+        }
+        return providerStore.entry(for: choice)?.model.displayName
+    }
+
+    /// 常用(钉住的)+ 最近用过的,最多 6 个;一个都没有就列前几个可用模型,首页也能一步选到。
+    private var homeQuickModelEntries: [ModelEntry] {
+        var out = ModelSwitcher.pinnedEntries(store: providerStore)
+        for entry in ModelSwitcher.recentEntries(store: providerStore, limit: 3)
+        where !out.contains(where: { $0.compositeKey == entry.compositeKey }) {
+            out.append(entry)
+        }
+        if out.isEmpty {
+            out = ModelSwitcher.allChoices(store: providerStore, includeGroups: false)
+                .prefix(4).compactMap { providerStore.entry(for: $0.id) }
+        }
+        return Array(out.prefix(6))
+    }
+
+    private func homeModelChoiceButton(key: String, title: String) -> some View {
+        Button {
+            homeModelChoice = key
+            LeoHaptics.selection()
+        } label: {
+            if homeModelChoice == key {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
             }
         }
     }

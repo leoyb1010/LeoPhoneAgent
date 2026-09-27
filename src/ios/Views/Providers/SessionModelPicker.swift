@@ -181,8 +181,17 @@ struct SessionModelPicker: View {
 struct SessionModelDisplay {
     let store: ProviderConfigStore
     var draftGroupId: String? = nil
+    /// [T-home-model-pick] Model entry the Home capsule picked for a draft (compositeKey).
+    var draftEntryKey: String? = nil
+
+    private var draftEntry: ModelEntry? {
+        draftEntryKey.flatMap { store.entry(for: $0) }
+    }
 
     func displayName(for sessionId: String?) -> String {
+        if sessionId == nil, let entry = draftEntry {
+            return entry.model.displayName
+        }
         if sessionId == nil, let gid = draftGroupId,
            let group = store.group(for: gid) {
             return group.name
@@ -204,6 +213,10 @@ struct SessionModelDisplay {
     }
 
     func resolvedDetail(for sessionId: String?) -> (providerLabel: String, modelName: String)? {
+        if sessionId == nil, let entry = draftEntry {
+            guard let instance = store.instance(for: entry.providerInstanceId) else { return nil }
+            return (instance.label, entry.model.displayName)
+        }
         if sessionId == nil, let gid = draftGroupId {
             return resolvedDetail(forGroupId: gid)
         }
@@ -234,6 +247,10 @@ struct SessionModelDisplay {
     /// credentialType/providerType/model (e.g. the "..." menu's Fast Mode
     /// gate: Responses-API providers with a gpt-family model).
     func resolvedInstanceAndModel(for sessionId: String?) -> (instance: ProviderInstance, modelId: String)? {
+        if sessionId == nil, let entry = draftEntry {
+            guard let instance = store.instance(for: entry.providerInstanceId) else { return nil }
+            return (instance, entry.model.id)
+        }
         if sessionId == nil, let gid = draftGroupId {
             return resolvedInstanceAndModel(forGroupId: gid)
         }

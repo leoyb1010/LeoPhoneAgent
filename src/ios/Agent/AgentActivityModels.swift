@@ -386,3 +386,20 @@ enum ContinuedProcessingProgress {
         return min(scale - 1, max(previous + 1, curve))
     }
 }
+
+// MARK: - Resting outcome [T-la-honest-outcome]
+
+extension LiveSessionSnapshot.RestingOutcome {
+    /// How a run rests on the Live Activity once it left the tracker, from the
+    /// final phase `SessionActivityTracker.setInactive` recorded. Only a real
+    /// ending gets a verdict: `.suspended` (background time ran out, resumes on
+    /// its own) is `.paused`, never `.attention`.
+    init(ending phase: AgentActivityPhase?) {
+        switch phase {
+        case .cancelled: self = .stopped
+        case .suspended: self = .paused
+        case .failed, .waitingForUser, .waitingForPermission, .unverified: self = .attention
+        default: self = .done
+        }
+    }
+}

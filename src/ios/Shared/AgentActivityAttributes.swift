@@ -619,6 +619,10 @@ struct LiveSessionSnapshot: Codable, Hashable {
 
     enum RestingOutcome: String, Codable, Hashable {
         case done, attention, stopped
+        /// [T-la-false-failure] Parked until the app is back (background time ran
+        /// out): not finished, not failed. Used to rest as `.attention`, which
+        /// painted the orange exclamation over a task that was going to resume.
+        case paused
     }
 }
 

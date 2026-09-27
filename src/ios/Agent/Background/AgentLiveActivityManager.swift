@@ -521,11 +521,27 @@ final class AgentLiveActivityManager {
     @available(iOS 16.2, *)
     private func _handleSessionDeleted(_ sessionId: String) {
         deletedSessionIds.insert(sessionId)
+        _removeSession(sessionId, tag: "sessionDeleted")
+    }
+
+    /// [T-la-false-failure] Take a session off the card without a verdict. The
+    /// phone stopped following a Mac task that is still running (console left
+    /// the screen): resting it as done / paused / failed would all be wrong,
+    /// so it simply disappears; other sessions keep their card.
+    func dropSession(_ sessionId: String) {
+        guard Self.isActivityKitAvailable else { return }
+        if #available(iOS 16.2, *) {
+            _removeSession(sessionId, tag: "dropSession")
+        }
+    }
+
+    @available(iOS 16.2, *)
+    private func _removeSession(_ sessionId: String, tag: String) {
         completedSessionSnapshots.removeValue(forKey: sessionId)
 
         let system = Activity<AgentActivityAttributes>.activities
         guard currentActivity != nil || !system.isEmpty else {
-            logger.info("[LiveActivity][sessionDeleted] sid=\(sessionId.prefix(8)) — no activity on screen, nothing to clean")
+            logger.info("[LiveActivity][\(tag)] sid=\(sessionId.prefix(8)) — no activity on screen, nothing to clean")
             return
         }
 
@@ -543,20 +559,20 @@ final class AgentLiveActivityManager {
             // id) and dedups if the pushed state wouldn't change. Also covers
             // a just-started activity whose initial content isn't recorded in
             // lastPushedState yet.
-            logger.info("[LiveActivity][sessionDeleted] sid=\(sessionId.prefix(8)) — \(remainingActive.count) session(s) still active, updating in place")
+            logger.info("[LiveActivity][\(tag)] sid=\(sessionId.prefix(8)) — \(remainingActive.count) session(s) still active, updating in place")
             BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "sessionDeleted")
             return
         }
 
         if remainingShown.isEmpty && completedSessionSnapshots.isEmpty {
-            logger.info("[LiveActivity][sessionDeleted] sid=\(sessionId.prefix(8)) — no sessions remain, ending activity immediately")
+            logger.info("[LiveActivity][\(tag)] sid=\(sessionId.prefix(8)) — no sessions remain, ending activity immediately")
             _endActivity()
             return
         }
 
         guard shown.count != remainingShown.count else {
             // Deleted session isn't displayed; other sessions' activity stays as-is.
-            logger.info("[LiveActivity][sessionDeleted] sid=\(sessionId.prefix(8)) — not displayed in activity, no-op")
+            logger.info("[LiveActivity][\(tag)] sid=\(sessionId.prefix(8)) — not displayed in activity, no-op")
             return
         }
 
@@ -565,7 +581,7 @@ final class AgentLiveActivityManager {
         // keep lingering until foreground dismissal.
         guard let activity = currentActivity as? Activity<AgentActivityAttributes>,
               let prev = lastPushedState as? AgentActivityAttributes.ContentState else { return }
-        logger.info("[LiveActivity][sessionDeleted] sid=\(sessionId.prefix(8)) — trimming soft-finished activity to \(remainingShown.count) session(s)")
+        logger.info("[LiveActivity][\(tag)] sid=\(sessionId.prefix(8)) — trimming soft-finished activity to \(remainingShown.count) session(s)")
         let state = AgentActivityAttributes.ContentState(
             activeSessionCount: remainingShown.count,
             sessions: remainingShown,
@@ -683,10 +699,16 @@ final class AgentLiveActivityManager {
         // unaffected. The DEDUP-SKIP above still runs first, so an unchanged
         // state never reaches activity.update() even on this path.
         let isBackground = UIApplication.shared.applicationState != .active
-        let minInterval: TimeInterval = isBackground ? 5.0 : 3.0
+        let minInterval: TimeInterval = isBackground ? Self.backgroundPushInterval : 3.0
         let elapsed = Date().timeIntervalSince(lastPushDate)
+        // [T-la-approval] "Needs your OK" must not wait out the throttle: it is
+        // the one change the user has to see now (and the push carries the alert).
+        let previouslyWaiting = Set(
+            ((lastPushedState as? AgentActivityAttributes.ContentState)?.sessions ?? [])
+                .filter(\.needsApproval).map(\.sessionId))
+        let newlyWaiting = state.sessions.contains { $0.needsApproval && !previouslyWaiting.contains($0.sessionId) }
 
-        if elapsed < minInterval, !bypassRateLimit {
+        if elapsed < minInterval, !bypassRateLimit, !newlyWaiting {
             pendingState = state
             if pendingPushWorkItem == nil {
                 let delay = minInterval - elapsed
@@ -795,9 +817,11 @@ final class AgentLiveActivityManager {
                 redacted.lastMessage = privacyCompletedStatus
             case .attention:
                 redacted.toolIcon = "exclamationmark.circle.fill"
+                redacted.lastMessage = String(localized: "Needs attention")
+            case .paused:
                 // A run parked until the app returns says so (no content in it).
-                redacted.lastMessage = snap.lastMessage == privacyPausedStatus
-                    ? privacyPausedStatus : String(localized: "Needs attention")
+                redacted.toolIcon = pausedIcon
+                redacted.lastMessage = privacyPausedStatus
             case .stopped:
                 redacted.toolIcon = "stop.circle.fill"
                 redacted.lastMessage = String(localized: "Stopped")
@@ -840,8 +864,17 @@ final class AgentLiveActivityManager {
     /// [T-la-stale] A running card whose app stopped updating it (killed,
     /// frozen, relay gone) turns "stale" after this long; while work is in
     /// flight the heartbeat re-pushes well before that.
-    static let staleInterval: TimeInterval = 5 * 60
+    /// [T-la-false-failure] 20 min, not 5: ActivityKit rations background
+    /// updates, and a long tool-heavy run (dozens of tool calls, one push each)
+    /// exhausts the budget, after which the system holds our updates for
+    /// minutes. With a 5-minute window the card flipped to "may be interrupted"
+    /// while the task was running fine; a dead process is still caught, later.
+    static let staleInterval: TimeInterval = 20 * 60
     static let heartbeatInterval: TimeInterval = 2 * 60
+    /// Minimum spacing of background pushes. Tool changes arrive every few
+    /// seconds on a busy run; pushing each one spends the update budget the
+    /// stale window depends on. Newly needing approval bypasses this.
+    static let backgroundPushInterval: TimeInterval = 15
 
     @available(iOS 16.2, *)
     static func staleDate(for state: AgentActivityAttributes.ContentState) -> Date? {
@@ -1075,24 +1108,23 @@ final class AgentLiveActivityManager {
     static func applyOutcome(to snap: inout LiveSessionSnapshot, lastMessage: String) {
         let phase = SessionActivityTracker.shared.lastOutcomes[snap.sessionId]
         snap.isCompleted = true
-        switch phase {
-        case .cancelled:
-            snap.outcome = .stopped
+        snap.outcome = LiveSessionSnapshot.RestingOutcome(ending: phase)
+        snap.lastMessage = lastMessage
+        switch snap.outcome {
+        case .stopped:
             snap.toolIcon = "stop.circle.fill"
             snap.toolStatus = String(localized: "Stopped")
-            snap.lastMessage = lastMessage
-        case .failed, .suspended, .waitingForUser, .waitingForPermission, .unverified:
-            snap.outcome = .attention
+        case .paused:
+            // [T-la-false-failure] Not a verdict: the run carries on once the app
+            // is back. Pause glyph, not the orange exclamation.
+            snap.toolIcon = "pause.circle.fill"
+            snap.toolStatus = String(localized: "已暂停，回到 App 继续")
+        case .attention:
             snap.toolIcon = "exclamationmark.circle.fill"
             snap.toolStatus = String(localized: "Needs attention")
-            snap.lastMessage = phase == .suspended
-                ? String(localized: "已暂停，回到 App 继续")
-                : lastMessage
-        default:
-            snap.outcome = .done
+        case .done:
             snap.toolIcon = "checkmark.circle.fill"
             snap.toolStatus = String(localized: "Completed")
-            snap.lastMessage = lastMessage
         }
     }
 

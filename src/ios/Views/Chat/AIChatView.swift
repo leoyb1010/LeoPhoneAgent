@@ -157,6 +157,8 @@ struct AIChatView: View {
     var remoteDeviceId: String? = nil
     /// Model group to bind when creating a new session (from long-press FAB).
     var initialGroupId: String? = nil
+    /// [T-home-model-pick] Model entry (compositeKey) the Home capsule picked for this new chat.
+    var initialEntryKey: String? = nil
     @EnvironmentObject var shareCoordinator: ShareCoordinator
     @StateObject private var cached: CachedViewModel
 
@@ -177,11 +179,12 @@ struct AIChatView: View {
         )
     }
 
-    init(sessionId: String? = nil, draftId: String? = nil, remoteDeviceId: String? = nil, initialGroupId: String? = nil) {
+    init(sessionId: String? = nil, draftId: String? = nil, remoteDeviceId: String? = nil, initialGroupId: String? = nil, initialEntryKey: String? = nil) {
         self.sessionId = sessionId
         self.draftId = draftId
         self.remoteDeviceId = remoteDeviceId
         self.initialGroupId = initialGroupId
+        self.initialEntryKey = initialEntryKey
         // [T-ios-aichatview-eager-cachedvm] Build the CachedViewModel INSIDE the
         // StateObject autoclosure so SwiftUI only constructs it the first time
         // this view's StateObject is created — NOT on every struct re-init.
@@ -876,7 +879,19 @@ struct AIChatView: View {
             MinisMarkdownPreviewView(fileURL: fileURL)
         }
         .sheet(item: $previewDocumentFile) { fileURL in
-            MinisDocumentPreviewView(fileURL: fileURL)
+            // [T-artifact-preview-exit] Done button: a page or image in QuickLook
+            // takes the drag, so the sheet could not be swiped away.
+            NavigationStack {
+                MinisDocumentPreviewView(fileURL: fileURL)
+                    .ignoresSafeArea(edges: .bottom)
+                    .navigationTitle(fileURL.lastPathComponent)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(String(localized: "Done")) { previewDocumentFile = nil }
+                        }
+                    }
+            }
         }
         .sheet(item: $shareFile) { fileURL in
             MinisShareSheet(url: fileURL)
@@ -1182,6 +1197,7 @@ struct AIChatView: View {
             vm.draftId = draftId
             vm.remoteDeviceId = remoteDeviceId
             vm.initialGroupId = initialGroupId
+            vm.initialEntryKey = initialEntryKey
             if let sessionId { AIChatViewModel.activeSessionId = sessionId }
             vm.ensureKernelBooted()
             if let sessionId {
@@ -1902,7 +1918,7 @@ struct AIChatView: View {
     /// custom base) — and the model id must contain "gpt" (mirrors the
     /// official fast catalog: gpt-5.6-sol/terra/luna, gpt-5.5, gpt-5.4).
     private var activeModelSupportsFastMode: Bool {
-        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId)
+        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
         guard let (instance, modelId) = display.resolvedInstanceAndModel(for: vm.sessionId) else { return false }
         guard modelId.lowercased().contains("gpt") else { return false }
         if instance.providerType == .openAIResponses { return true }
@@ -1918,7 +1934,7 @@ struct AIChatView: View {
         #if DEBUG
         NavbarEvalStats.toolbarPass += 1
         #endif
-        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId)
+        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
         let resolved = display.resolvedDetail(for: vm.sessionId)
         let sessionTitle: String? = (titlePillSession?.title?.trimmingCharacters(in: .whitespacesAndNewlines))
             .flatMap { $0.isEmpty ? nil : $0 }
@@ -1943,7 +1959,7 @@ struct AIChatView: View {
     }
 
     private var titleView: some View {
-        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId)
+        let display = SessionModelDisplay(store: configStore, draftGroupId: vm.initialGroupId, draftEntryKey: vm.initialEntryKey)
         let modelName = display.displayName(for: vm.sessionId)
         let isGroupBound = display.isGroupBound(for: vm.sessionId)
         let resolved = display.resolvedDetail(for: vm.sessionId)

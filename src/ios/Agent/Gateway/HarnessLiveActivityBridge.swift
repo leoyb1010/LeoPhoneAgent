@@ -86,6 +86,10 @@ final class HarnessLiveActivityBridge {
             }
             SessionActivityTracker.shared.setInactive(sid, finalPhase: phase, haptic: false,
                                                       source: "HarnessLiveActivityBridge")
+            // [T-la-false-failure] Still running on the Mac; only this phone stopped
+            // following. No resting verdict (it rested as "needs attention"): the
+            // session just leaves the card. Reopening the console registers it again.
+            if phase == .suspended { AgentLiveActivityManager.shared.dropSession(sid) }
         }
         entries.removeValue(forKey: ObjectIdentifier(driver))
         refresh()

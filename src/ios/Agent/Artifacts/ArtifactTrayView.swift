@@ -142,8 +142,21 @@ struct ArtifactTrayView: View {
             .refreshable { await viewModel.load() }
             .task { await viewModel.load() }
             .sheet(item: $previewURL) { url in
-                ArtifactQuickLookPreview(url: url)
-                    .ignoresSafeArea()
+                // [T-artifact-preview-exit] A bare QLPreviewController in a sheet has
+                // no bar of its own, and a web page / zoomed image swallows the
+                // swipe-down — there was no way back to the chat. Same shell as the
+                // attachment preview: a bar with Done.
+                NavigationStack {
+                    ArtifactQuickLookPreview(url: url)
+                        .ignoresSafeArea(edges: .bottom)
+                        .navigationTitle(url.lastPathComponent)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(String(localized: "Done")) { previewURL = nil }
+                            }
+                        }
+                }
             }
             .sheet(item: $shareURL) { url in
                 MinisShareSheet(url: url)
@@ -379,7 +392,17 @@ private struct ArtifactVersionHistoryView: View {
             }
             .task { await load() }
             .sheet(item: $previewURL) { url in
-                ArtifactQuickLookPreview(url: url).ignoresSafeArea()
+                NavigationStack {
+                    ArtifactQuickLookPreview(url: url)
+                        .ignoresSafeArea(edges: .bottom)
+                        .navigationTitle(url.lastPathComponent)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(String(localized: "Done")) { previewURL = nil }
+                            }
+                        }
+                }
             }
             .sheet(item: $shareURL) { url in
                 MinisShareSheet(url: url)

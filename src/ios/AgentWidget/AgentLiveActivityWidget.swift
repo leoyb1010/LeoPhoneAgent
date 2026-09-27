@@ -534,8 +534,10 @@ struct AgentLiveActivityWidget: Widget {
 /// [T-la-stale] What a running card says once the app stopped refreshing it
 /// (process gone, relay unreachable) — instead of "running" forever.
 enum LiveActivityStale {
-    static let symbol = "clock.badge.exclamationmark"
-    static var text: String { String(localized: "可能已中断 · 打开 App 查看") }
+    // [T-la-false-failure] Late updates are the common case (ActivityKit holding
+    // our pushes), a dead app the rare one: say "not updated", not "interrupted".
+    static let symbol = "clock.arrow.circlepath"
+    static var text: String { String(localized: "状态更新延迟 · 打开 App 查看") }
 }
 
 /// Lock screen / banner at full size, or the small layout on the watch.
@@ -599,7 +601,9 @@ struct AgentSmallActivityView: View {
 
     private func title(_ s: LiveSessionSnapshot?) -> String {
         if state.allCompleted {
-            return state.anyNeedsAttention ? String(localized: "Needs attention") : String(localized: "\(state.sessions.count) completed")
+            if state.anyNeedsAttention { return String(localized: "Needs attention") }
+            if state.restingOutcome == .paused { return String(localized: "已暂停，回到 App 继续") }
+            return String(localized: "\(state.sessions.count) completed")
         }
         if state.activeSessionCount > 1, waiting == nil {
             return String(localized: "\(state.activeSessionCount) 个任务在跑")
@@ -2291,6 +2295,7 @@ extension LiveSessionSnapshot.RestingOutcome {
         case .done: "checkmark.circle.fill"
         case .attention: "exclamationmark.circle.fill"
         case .stopped: "stop.circle.fill"
+        case .paused: "pause.circle.fill"
         }
     }
 
@@ -2299,6 +2304,8 @@ extension LiveSessionSnapshot.RestingOutcome {
         case .done: .green
         case .attention: .orange
         case .stopped: .gray
+        // [T-la-false-failure] Parked, resumes on its own: blue like a running card, not a warning color.
+        case .paused: .blue
         }
     }
 }
@@ -2313,8 +2320,9 @@ extension LiveSessionSnapshot {
 @available(iOSApplicationExtension 16.2, *)
 extension AgentActivityAttributes.ContentState {
     /// The most urgent outcome decides the shared capsule.
-    private var restingOutcome: LiveSessionSnapshot.RestingOutcome {
+    var restingOutcome: LiveSessionSnapshot.RestingOutcome {
         if sessions.contains(where: { $0.outcome == .attention }) { return .attention }
+        if sessions.contains(where: { $0.outcome == .paused }) { return .paused }
         if !sessions.isEmpty, sessions.allSatisfy({ $0.outcome == .stopped }) { return .stopped }
         return .done
     }

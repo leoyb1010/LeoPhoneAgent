@@ -21,6 +21,10 @@ struct QuickModelSwitchSheet: View {
     let sessionId: String?
     /// 会话还没建时(草稿)由调用方补建,拿到 id 才能写绑定。
     let ensureSessionId: (() async -> String)?
+    /// [T-home-model-pick] 只选不绑:首页还没有对话,选好的 choiceId 交给调用方
+    /// (它开对话时带上去)。onPick 非空时打勾按 pickedKey,不再有「全部模型与分组」。
+    var pickedKey: String? = nil
+    var onPick: ((String) -> Void)? = nil
 
     @StateObject private var store = ProviderConfigStore.shared
     /// 钉选状态的可观察来源。直接读 ModelSwitcher.pinnedKeys 的话
@@ -33,7 +37,9 @@ struct QuickModelSwitchSheet: View {
 
     /// 打勾按身份比。同一个模型挂在两个供应商实例下时,按显示名比会
     /// 两行都打勾,而点哪行都会真的换实例。
-    private var currentKey: String? { ModelSwitcher.currentChoiceId(sessionId: sessionId) }
+    private var currentKey: String? {
+        onPick != nil ? pickedKey : ModelSwitcher.currentChoiceId(sessionId: sessionId)
+    }
 
     private var searching: Bool {
         !query.trimmingCharacters(in: .whitespaces).isEmpty
@@ -47,7 +53,7 @@ struct QuickModelSwitchSheet: View {
                 } else {
                     pinnedSection
                     othersSection
-                    footerSection
+                    if onPick == nil { footerSection }
                 }
             }
             .searchable(text: $query, prompt: "搜索模型")
@@ -209,6 +215,11 @@ struct QuickModelSwitchSheet: View {
 
     private func commit(_ choiceId: String) {
         LeoHaptics.selection()
+        if let onPick {
+            onPick(choiceId)
+            dismiss()
+            return
+        }
         Task {
             var sid = sessionId ?? ""
             if sid.isEmpty { sid = await ensureSessionId?() ?? "" }
