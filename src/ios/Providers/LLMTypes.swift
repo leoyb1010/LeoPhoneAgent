@@ -182,26 +182,6 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
         .gemini25Pro, .gemini25Flash, .gemini25FlashLite,
     ]
 
-    // MARK: - Antigravity Models (via Cloud Code — Gemini, Claude, GPT)
-
-    static let agGemini31ProHigh = LLMModel(id: "gemini-3.1-pro-high", displayName: "Gemini 3.1 Pro (High)", provider: "Antigravity")
-    static let agGemini31ProLow = LLMModel(id: "gemini-3.1-pro-low", displayName: "Gemini 3.1 Pro (Low)", provider: "Antigravity")
-    static let agGemini3ProHigh = LLMModel(id: "gemini-3-pro-high", displayName: "Gemini 3 Pro (High)", provider: "Antigravity")
-    static let agGemini3ProLow = LLMModel(id: "gemini-3-pro-low", displayName: "Gemini 3 Pro (Low)", provider: "Antigravity")
-    static let agGemini3ProImage = LLMModel(id: "gemini-3-pro-image", displayName: "Gemini 3 Pro (Image)", provider: "Antigravity")
-    static let agGemini3Flash = LLMModel(id: "gemini-3-flash", displayName: "Gemini 3 Flash", provider: "Antigravity")
-    static let agClaudeOpus46Thinking = LLMModel(id: "claude-opus-4-6-thinking", displayName: "Claude Opus 4.6 Thinking", provider: "Antigravity")
-    static let agClaudeSonnet46 = LLMModel(id: "claude-sonnet-4-6", displayName: "Claude Sonnet 4.6", provider: "Antigravity")
-    static let agClaudeSonnet45Thinking = LLMModel(id: "claude-sonnet-4-5-thinking", displayName: "Claude Sonnet 4.5 Thinking", provider: "Antigravity")
-    static let agClaudeSonnet45 = LLMModel(id: "claude-sonnet-4-5", displayName: "Claude Sonnet 4.5", provider: "Antigravity")
-
-    static let allAntigravity: [LLMModel] = [
-        .agGemini31ProHigh, .agGemini31ProLow,
-        .agGemini3ProHigh, .agGemini3ProLow, .agGemini3ProImage, .agGemini3Flash,
-        .agClaudeOpus46Thinking, .agClaudeSonnet46,
-        .agClaudeSonnet45Thinking, .agClaudeSonnet45,
-    ]
-
     // MARK: - OpenAI Models
 
     static let gpt6Astra = LLMModel(
@@ -418,7 +398,7 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
         .orClaudeSonnet4, .orGemini25Flash, .orGPT4o, .orLlama4Maverick,
     ]
 
-    static let allModels: [LLMModel] = allAnthropic + allGemini + allOpenAI + allAntigravity + allOpenRouter
+    static let allModels: [LLMModel] = allAnthropic + allGemini + allOpenAI + allOpenRouter
 
     // MARK: - Modality Inference from Model Name
 
@@ -529,19 +509,15 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
     private static let knownCapabilities: [String: ModelCapabilities] = [
         "Anthropic": ModelCapabilities(
             supportedModalities: .vision,
-            supportedAuth: [.apiKey, .oauth]
+            supportedAuth: [.apiKey]
         ),
         "Google": ModelCapabilities(
             supportedModalities: .fullMultimodal,
-            supportedAuth: [.apiKey, .oauth]
+            supportedAuth: [.apiKey]
         ),
         "OpenAI": ModelCapabilities(
             supportedModalities: .vision,
             supportedAuth: [.apiKey, .oauth]
-        ),
-        "Antigravity": ModelCapabilities(
-            supportedModalities: .fullMultimodal,
-            supportedAuth: [.oauth]
         ),
         "OpenRouter": ModelCapabilities(
             supportedModalities: .vision,

@@ -6,15 +6,27 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.21';
-  static readonly currentBuild: number = 100026;
+  static readonly currentVersion: string = '0.3.0-alpha.22';
+  static readonly currentBuild: number = 100027;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.21';
-    first.date = '2026-09-26';
-    first.title = '回答不再只显示半截';
+    first.version = '0.3.0-alpha.22';
+    first.date = '2026-09-27';
+    first.title = '接入 OpenCode Go,下线 Claude 订阅登录,安全和数据加固';
     first.highlights = [
+      '新增 OpenCode Go:在 opencode.ai/auth 拿 API Key 填进来,就能用会员里的 Kimi、GLM、DeepSeek、Qwen、MiMo、MiniMax 等模型。',
+      'Claude 订阅登录下线(Anthropic 不允许第三方应用用订阅账号调用)。原来用订阅登录的会自动改成 API Key 方式,需要重新填 Anthropic 控制台的 Key。',
+      '远控 Mac 的任务不再跟着这台的「全自动」走:每个任务默认逐项确认,要全自动在输入框上单独开,开之前会再问一次。批准后点停止、切换页面时发出的消息,都不会落到别的任务上。审批卡能看到完整命令。',
+      '环境变量只能用在 MCP 调用里,值改存到系统钥匙串;删 MCP 服务器或换地址会清掉旧令牌;订阅登录的令牌只发给官方地址。别的设备远控这台、定时任务不能拉起 App、拨号、写剪贴板、读定位、调 MCP(开了全自动除外)。',
+      '对话档案先写临时文件再替换,写到一半被杀也不会坏;目录坏了或和后台定时任务互相覆盖时,会按每条对话自己的档案补回来,不再整页消失。删除对话先确认,连带删掉图片。',
+      '配对码过期会直接提示;码来自另一台中继时先问你要不要换。定时任务超过 10 分钟会真的停下。'
+    ];
+    const t11 = new LeoRelease();
+    t11.version = '0.3.0-alpha.21';
+    t11.date = '2026-09-26';
+    t11.title = '回答不再只显示半截';
+    t11.highlights = [
       '回答边出边显示，不会停在半截、要退出对话再进来才看全；说完后下面的复制、朗读、重新生成直接露出来。远控 Mac 的对话也一样。',
       '远控时 Mac 中途插进来一条说明，后面的回答不再接在那条说明后面。',
       '改了服务商、技能、MCP、定时任务、模型组、环境变量，列表马上显示新的；「用作默认」点完立刻变成「默认」；对话列表里新起的标题、设置里的状态也会及时更新。'
@@ -229,6 +241,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, t11, t10, t9, t8, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

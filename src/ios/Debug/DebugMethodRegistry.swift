@@ -608,7 +608,7 @@ enum DebugMethodRegistry {
             name: "provider.instances.create",
             description: "Add a new provider instance. apiKey is stored in the iOS Keychain.",
             params: [
-                ParamSpec(name: "providerType", type: "string", required: true, default: nil, description: "One of openAI, anthropic, gemini, antigravity, openRouter, openAIResponses."),
+                ParamSpec(name: "providerType", type: "string", required: true, default: nil, description: "One of openAI, anthropic, gemini, openCodeGo, openRouter, openAIResponses."),
                 ParamSpec(name: "label", type: "string", required: true, default: nil, description: "User-visible name."),
                 ParamSpec(name: "credentialType", type: "string", required: false, default: "apiKey", description: "apiKey or oauth."),
                 ParamSpec(name: "apiKey", type: "string", required: false, default: nil, description: "Required when credentialType=apiKey. Write-only."),

@@ -11,9 +11,8 @@ import UIKit
 ///
 /// Scope: applied as the DEFAULT only where a request would otherwise fall back
 /// to the system UA AND the endpoint does not require an identity-locked UA. A
-/// user-set per-provider custom UA still overrides it, and OAuth/CLI-gated
-/// flows (Codex `codex_cli_rs/…`, Claude Code `claude-cli/…`, Gemini/Antigravity
-/// CLI UAs) keep their required UA untouched.
+/// user-set per-provider custom UA still overrides it, and the Codex OAuth flow
+/// keeps its required `codex_cli_rs/…` UA untouched.
 enum MinisUserAgent {
     /// Cached because the components are process-constant. `nonisolated(unsafe)`
     /// is safe: the value is computed once from immutable bundle/device info and

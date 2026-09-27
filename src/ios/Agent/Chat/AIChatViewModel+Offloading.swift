@@ -513,8 +513,12 @@ extension AIChatViewModel {
 
             switch part {
             case .toolResult(let id, let name, let content, let isError, let imgData, let imgMime, _, _):
-                // Offload text content
-                if content.count > 500 {
+                // Offload text content. A file_read page of an offload file
+                // points back at that file instead of copying it again.
+                if name == "file_read",
+                   let source = OffloadPlaceholderGuard.offloadSourcePath(ofFileReadResult: content, offloadsDir: Self.minisOffloadsLinuxDir) {
+                    linuxPath = source
+                } else if content.count > 500 {
                     linuxPath = offloadContextContent(content, toolId: id, toolName: name)
                 }
                 // Offload image data

@@ -1,5 +1,69 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.47.0 (130) · 接入 OpenCode Go、下线非官方登录、锁与数据加固 - 2026-09-27
+
+### 服务商 / 登录
+
+- 新增 OpenCode Go(`https://opencode.ai/zen/go/v1`,API Key 来自 https://opencode.ai/auth):模型从 `GET /models` 读,读不到时用内置清单(均取自 OpenCode Go 官方目录)。按模型选协议:`gpt-*`、`grok-*`、`muse-spark-*` 走 Responses,`minimax-m3`、`qwen3.8-flash` 走 Anthropic Messages,其余走 chat/completions。
+- 下线 Claude 订阅(冒充 Claude Code)、Antigravity、Gemini CLI 三种 OAuth;Anthropic API Key、Gemini AI Studio Key 照常。旧实例停用并提示「改用 API Key」,残留令牌删除。
+- OAuth 服务商不能自定义 API 根(已存的覆盖值忽略);订阅令牌改为只存本机、不进 iCloud(一次性迁移,**其它设备需重新登录**)。刷新失败只有 `invalid_grant` 这类明确错误才删凭据,裸 400/401/403 当作暂时错误。本地回调服务只绑回环地址、有读超时、错误页转义;日志不再打令牌片段、邮箱、账号 ID。
+
+### 锁 / 审批 / Siri / 手表
+
+- 锁屏通知的允许和回复、Siri / 快捷指令下任务和批准都要先解锁(批准 Mac 步骤要求本机认证);「拒绝」不用解锁。「LPA批准」念出主机和命令、确认后只批这一条,高风险命令拒绝。
+- App 锁是独立窗口,盖住所有 sheet;锁着时打开的链接解锁后才处理,2 秒内重复的链接去重。关闭或放宽 App 锁、会话锁、全自动、`/auto` 都要验证身份。
+- Face ID 锁住的会话在通知、实时活动、聚焦搜索、小组件、快捷指令结果、手表提问里隐藏或打码;新增聚焦搜索开关。
+- 手表直连默认不带 iPhone 的 MCP 服务器(逐个打开);高风险命令没有双击批准和「始终允许」。手表问 iPhone 时会带上会话历史、会话忙时排队、保留草稿。
+- 外部 `.skillmd` 先预览,同名需要点红色「替换」;自检链接只打开页面不自动跑;控制中心拍照按钮真的打开相机。
+
+### 对话 / 数据
+
+- 终端链接先确认、只填入命令不执行;`minis-open` 拒绝动作链接。草稿按对话保存,编辑消息、存成技能不再覆盖;重试 / 编辑较早消息前提示会删掉之后的内容;回复进行中不能清空对话或存成技能。
+- 删除挂载目录里的符号链接不再删掉链接目标;offload 占位符防护和重复 offload 循环修复;思考关闭时收紧推理强度。
+- 左滑删除技能、环境变量、MCP 要确认;Rootfs 备份重启后仍可恢复或删除;首页全选只选可见项、藏宝阁删除可撤销、测试连接不覆盖已存密码、编辑器未保存离开提醒。
+
+### 验证
+
+- 源码:三路并行修复后逐项复核;OpenCode Go 的内置模型和协议路由按 OpenCode Go 官方目录改正过(子任务原先写了不存在的型号、把所有 qwen 路由到 Anthropic)。
+- 构建:Release `generic/platform=iOS` 构建(含 LeoWatch、小组件、分享和文件扩展)**BUILD SUCCEEDED**;`IOSReleaseReadinessAudit`(1.47.0 / 130 + 本次更新)、`IOSVisibleControlAudit`、`IOSAccessibilityMotionAudit` 通过;`IOSNativePermissionAudit` 这个工作区没有 iSH 子模块,没跑。`MinisLogicTests` 全部 419 项通过(含新增 OAuth 刷新分类 / 竞态 / Kimi 与文件安全测试)。模拟器整包链接不了(`libish_emu.a` 只有真机架构),属环境限制。
+- **没装到 iPhone / 手表上**:由你用 `./scripts/InstallIOSRelease.sh` 装机,首启应弹出 1.47.0 的「本次更新」。
+- 没做:OpenRouter 钥匙进 CloudKit 加密字段(要部署 Production schema);实时活动停止本机任务的确认(锁屏按钮弹不了确认);快捷指令重试改用持久消息 ID;导出上锁对话;其余 P2/P3 见审计报告。
+
+## Mac 1.3.2 · 接入 OpenCode Go、Claude 订阅登录下线、审计修复 - 2026-09-27
+
+- 订阅账号登录页:去掉 Claude(Anthropic 只允许官方 Claude Code 用订阅),新增 OpenCode Go(填 https://opencode.ai/auth 的 API Key,或从本机 OpenCode 导入);页面刷新后接着显示没走完的登录。
+- leoagent(`src/mac/leoagent/`):Grok 续期只接受 `https://*.x.ai` 的 issuer;授权临时文件 0600 创建;新增 `/harness/sessions/{id}/archive`(在跑的返回 409);孤儿会话日志 7 天清理,空闲 30 分钟以上报「可用」;没配中继时事件经 `POST /api/leo/link/leoagent-event` 推给 Mac 桌面端(只收 leoagent 自己的钥匙、只收可推送事件、会话号必须 `hs_` 开头)。
+- 中继 `relay.py`:审批和完成推送的锁屏文字不再带命令原文和输出。
+- 桌面端:关于、菜单、外部链接提示改叫 LeoPhoneAgent;跟随系统主题时用 Leo 配色;「本次更新」跳版本时列出中间几版(最多 5 版)、Esc 关闭、键盘焦点可见;机器人锁定提示说清楚是「构建模式」。
+- 验证:`pnpm typecheck` 通过;Leo host 测试 41/41(含新的 leoagent 事件接口测试);leoagent Python 单测 38 项通过;`leo-verify-release-notes` 放行 1.3.2。**没打包签名、没装机**;`relay.py`、leoagent 要重新部署到跑中继和 `~/.leoagent/leoagent` 的机器上才生效。
+
+## Harmony 0.3.0-alpha.22 (100027) · 接入 OpenCode Go、下线 Claude 订阅登录、审计修复 - 2026-09-27
+
+### 用户可见
+
+- 新增服务商 OpenCode Go(`https://opencode.ai/zen/go/v1`,OpenAI 兼容):在 https://opencode.ai/auth 拿 API Key。拉模型列表时只留走 chat/completions 的模型(Kimi、GLM、DeepSeek、Qwen、MiMo、MiniMax 等);GPT、Grok、Muse Spark 和走 Anthropic 接口的 minimax-m3、qwen3.8-flash 不放进来,免得选了就报错。
+- Claude 订阅登录下线:Anthropic 只能填控制台 API Key。已有的订阅登录实例首启时改成 API Key 方式,删掉本机存的订阅令牌;旧令牌还被调用时直接给出中文说明。
+- 远控 Mac:任务的「全自动」不再跟这台鸿蒙本机的开关走,每个任务默认逐项确认,在输入框上单独开,开前确认;换任务回到逐项确认。审批卡里的长命令能滚动看全。
+- 删除对话先确认,连带删掉只属于这条对话的图片(「复制对话」共用的图片保留)。
+- 配对码过期直接提示;码来自另一台中继时先确认再换。
+
+### 安全 / 数据(审计 P0/P1)
+
+- 环境变量 `$$名字` 只在 `mcp_call` 参数里替换;其它工具的参数引用了环境变量就拒绝执行(原来任何工具都会展开,模型能把密钥写进文件或网址)。值从 `env.json` 明文搬进系统钥匙串(首启迁移一次)。
+- 别的设备远控这台、定时任务这两条没人能点「允许」的链路,不能用 `open_app_link`、`dial`、`clipboard_write`、`location`、`mcp_call`,本机开了「全自动」时除外。
+- OAuth 实例不再显示 API 根,保存时清空;请求时订阅令牌只发给这家服务商的官方地址(原来改了 API 根,ChatGPT 令牌会发到自填地址)。
+- MCP:删服务器、换地址又没填新令牌时清掉钥匙串里的旧令牌。
+- 远控:批准后点停止,停的是答题时那个任务;等 Mac 回话期间切了机器或任务,发出的消息记在原任务下,不接到当前页。
+- 对话档案先写 `.tmp` 再改名;`index.json` 读坏或和后台定时任务互相覆盖时,按 `sessions/*.json` 补齐目录(原来目录坏了整页对话都不见)。外部链接带进来的对话编号只接受 `s_数字_数字`。
+- 定时任务 10 分钟看门狗到点会让这一轮真的停下(原来只是不再等它,后台还在跑工具)。
+
+### 验证
+
+- 源码:以上每条都有对应 `protocol.test.mjs` 断言(`PROTOCOL_OPENCODE_GO_OK`、`PROTOCOL_UNATTENDED_OK`、`PROTOCOL_HARMONY_AUDIT_OK`),远控全自动改成按任务开关后,旧断言「跟着本机全自动」同步改写。
+- 构建:`build_hap.sh` 未签名 HAP 构建通过(发版闸门 `verify_harmony_release_notes.sh` 在链首)。
+- **没装到鸿蒙真机**:由你在 DevEco 签名安装,首启应弹出这一版的「本次更新」;需实测 OpenCode Go 对话、旧 Claude 订阅实例迁移、环境变量迁移后 MCP 仍能取到值。
+- 没做:锁屏通知预览(P2-13)、流式空闲超时(P2-15)。
+
 ## iOS 1.45.0 (127) · Apple Watch 单独选模型、可以一直自己回答 - 2026-09-26
 
 - 设置首页「我的设备」多了「Apple Watch」(原来 Siri 指挥中心里的手表开关挪到这里):手表怎么回答分三种——自动(iPhone 在身边交给 iPhone 上的完整 Agent,不在身边手表直连模型;原来的行为)、总是手表直连(不等 iPhone,蜂窝网络下也一样,只有对话没有工具)、只经 iPhone(手表上不留钥匙;原来关掉开关就是这个)。旧的开关状态自动沿用。

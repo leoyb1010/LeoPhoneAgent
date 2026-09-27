@@ -748,7 +748,26 @@ final class AgentLiveActivityManager {
     /// (the elapsed timer lives there, not in ContentState).
     @available(iOS 16.2, *)
     private func withPrivacyRedaction(_ state: AgentActivityAttributes.ContentState) -> AgentActivityAttributes.ContentState {
-        guard BackgroundKeepAliveManager.shared.liveActivityPrivacyMode else { return state }
+        guard BackgroundKeepAliveManager.shared.liveActivityPrivacyMode else {
+            // A Face ID–locked conversation is redacted on the Lock Screen
+            // even with Privacy Mode off.
+            var s = state
+            s.sessions = s.sessions.map { snap in
+                guard SessionLockStore.shared.isHiddenFromSystemSurfaces(snap.sessionId) else { return snap }
+                var redacted = snap
+                redacted.title = Self.privacyTaskTitle
+                redacted.toolStatus = snap.isCompleted ? "" : (snap.needsApproval ? Self.privacyApprovalStatus : Self.privacyWorkingStatus)
+                redacted.toolIcon = snap.isCompleted ? "checkmark.circle.fill"
+                    : (snap.needsApproval ? LiveSessionSnapshot.approvalIcon : Self.privacyNeutralIcon)
+                redacted.lastMessage = snap.isCompleted ? Self.privacyCompletedStatus : ""
+                return redacted
+            }
+            if s.sessions.contains(where: { SessionLockStore.shared.isHiddenFromSystemSurfaces($0.sessionId) }) {
+                s.latestToolIcon = s.allCompleted ? "checkmark.circle.fill" : Self.privacyNeutralIcon
+                s.minimalShowsTool = false
+            }
+            return s
+        }
         var s = state
         s.privacyMode = true
         // [T-ios-live-activity-privacy-duration] soulName deliberately survives
@@ -859,6 +878,9 @@ final class AgentLiveActivityManager {
             return
         }
 
+        // A rebuilt card is a live state like any other: same privacy and
+        // audio decoration, or it comes back unredacted until the next update.
+        let state = withAudioState(state)
         let oldId = oldActivity.id
         let sinceLastRenew = Int(Date().timeIntervalSince(lastRenewDate))
         logger.info("[LiveActivity][renew] ending old id=\(oldId) after \(sinceLastRenew)s to reset budget")
@@ -900,7 +922,8 @@ final class AgentLiveActivityManager {
     /// ended but couldn't restart (background race). Called on foreground return.
     @available(iOS 16.2, *)
     private func resumePendingStartIfNeeded() {
-        guard let state = pendingStartState as? AgentActivityAttributes.ContentState else { return }
+        guard let pending = pendingStartState as? AgentActivityAttributes.ContentState else { return }
+        let state = withAudioState(pending)
         guard UIApplication.shared.applicationState == .active else { return }
         guard Self.isActivityKitAvailable, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         // If something else already re-created an activity, just clear the flag.

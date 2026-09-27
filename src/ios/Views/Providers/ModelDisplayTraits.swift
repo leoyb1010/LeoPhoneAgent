@@ -84,7 +84,7 @@ extension ModelEntry {
         case "Anthropic": return .purple
         case "Google", "Google Gemini": return .blue
         case "OpenAI": return .green
-        case "Antigravity": return .orange
+        case "OpenCode Go": return .orange
         case "OpenRouter": return .cyan
         default: return .gray
         }

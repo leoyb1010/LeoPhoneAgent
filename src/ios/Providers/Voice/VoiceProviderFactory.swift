@@ -123,9 +123,8 @@ enum VoiceProviderFactory {
                 baseURL: custom ?? "https://generativelanguage.googleapis.com/v1beta",
                 apiKey: apiKey)
 
-        // Antigravity has no OpenAI-compatible voice path; unsupported = synced
-        // from a newer build this version can't service.
-        case .antigravity, .kimiCode, .unsupported:
+        // No voice path; unsupported = synced from a newer build this version can't service.
+        case .openCodeGo, .kimiCode, .unsupported:
             return nil
         }
     }

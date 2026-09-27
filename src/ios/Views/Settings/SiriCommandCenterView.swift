@@ -21,8 +21,8 @@ struct SiriCommandCenterView: View {
         Phrase(say: "让LPA在Mac上跑", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
         Phrase(say: "让LPA用我的Mac", does: "同上,另一种说法"),
         Phrase(say: "LPA汇报", does: "念出三台 Mac 进行中任务与待审批"),
-        Phrase(say: "LPA批准", does: "批准最近一条等待审批的操作"),
-        Phrase(say: "LPA停止任务", does: "停掉指定 Mac 上最近的任务"),
+        Phrase(say: "LPA批准", does: "念出最近一条待审批,确认后批准(需解锁,高风险不经 Siri)"),
+        Phrase(say: "LPA停止任务", does: "停掉指定 Mac 上正在跑的任务(多个时先问)"),
     ]
 
     private let chatPhrases: [Phrase] = [
@@ -56,9 +56,9 @@ struct SiriCommandCenterView: View {
             Section("审批不用打开 App") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Mac 任务需要审批时,本机会收到时效性通知:")
-                    Text("• 锁屏或横幅上直接按「允许一次」或「拒绝」，不用解锁")
-                    Text("• 戴 AirPods 时开启「Siri 播报通知」,Siri 会念出来,回一句「批准」即可")
-                    Text("• 手表上也有同款审批卡")
+                    Text("• 锁屏或横幅上直接按「允许一次」或「拒绝」;允许要先解锁 iPhone,拒绝不用")
+                    Text("• 戴 AirPods 时开启「Siri 播报通知」,Siri 会念出来;回「批准」同样要求 iPhone 已解锁")
+                    Text("• 手表上也有同款审批卡;高风险命令要点两下确认,且不提供「始终允许」")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
             }

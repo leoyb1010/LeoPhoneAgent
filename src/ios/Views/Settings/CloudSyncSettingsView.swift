@@ -9,6 +9,7 @@ import SwiftUI
 struct SyncLogView: View {
     @ObservedObject private var store = SyncLogStore.shared
     @State private var shareItem: ShareFileItem?
+    @State private var confirmClear = false
 
     var body: some View {
         List {
@@ -84,13 +85,17 @@ struct SyncLogView: View {
                 .disabled(store.entries.isEmpty)
 
                 Button("Clear") {
-                    store.clear()
+                    confirmClear = true
                 }
                 .disabled(store.entries.isEmpty)
             }
         }
         .sheet(item: $shareItem) { item in
             SyncLogShareSheet(url: item.url)
+        }
+        .alert("Clear the sync log?", isPresented: $confirmClear) {
+            Button("Clear", role: .destructive) { store.clear() }
+            Button("Cancel", role: .cancel) {}
         }
     }
 

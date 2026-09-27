@@ -36,9 +36,6 @@ Some values are injected at build time and are **not** in this repository.
 Copy the templates before building:
 
 ```sh
-cp src/ios/Configs/ProviderCustomization.xcconfig.example \
-   src/ios/Configs/ProviderCustomization.xcconfig
-
 cp src/android/app/provider-customization.properties.example \
    src/android/app/provider-customization.properties
 ```
@@ -46,26 +43,7 @@ cp src/android/app/provider-customization.properties.example \
 Leaving the values empty is fine — **the app compiles and runs**. A value is
 only required by the feature that uses it, and that feature fails loudly at
 runtime when it is missing. API-key based sign-in works without any
-customization.
-
-### `ANTHROPIC_OAUTH_IDENTIFIER_PROMPT`
-
-Only relevant if you want to **sign in with Claude OAuth credentials** rather
-than an Anthropic API key.
-
-When a request is authenticated with OAuth, Anthropic's endpoint expects the
-system prompt to begin with the identifying line that Claude Code itself
-sends; without it the request is rejected. The build injects that line from
-this value, so OAuth sign-in fails at runtime while it is empty.
-
-We do not ship a value. Supply your own if you need this path — other
-open-source projects that talk to the same endpoint declare the same
-identifier, for example
-[claude-relay-service](https://github.com/Wei-Shaw/claude-relay-service),
-which you can consult for the exact wording.
-
-Everything else — Anthropic API keys, and every other provider — works
-without setting this.
+customization. The iOS app needs no build-time customization.
 
 ---
 

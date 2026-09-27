@@ -364,6 +364,7 @@ struct AgentLiveActivityWidget: Widget {
                 isStale: context.isStale
             )
             .leoWidgetLocale()
+            .widgetURL(context.state.tapDestination)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -522,6 +523,7 @@ struct AgentLiveActivityWidget: Widget {
             } minimal: {
                 MinimalIconView(state: context.state)
             }
+            .widgetURL(context.state.tapDestination)
         }
         // [T-la-small] Apple Watch Smart Stack and CarPlay get a layout made
         // for their size instead of a squeezed lock-screen card.
@@ -944,6 +946,12 @@ extension AgentActivityAttributes.ContentState {
         guard !sessions.isEmpty else { return nil }
         let idx = carouselIndex % sessions.count
         return sessions[idx]
+    }
+
+    /// Tapping the card lands on the run that's waiting for you, else the
+    /// one it shows. The app ignores ids that aren't local sessions.
+    var tapDestination: URL? {
+        (sessions.first(where: \.needsApproval) ?? currentSession).map { sessionURL($0.sessionId) }
     }
 
     var distinctToolIcons: [String] {

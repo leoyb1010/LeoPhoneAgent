@@ -53,9 +53,6 @@ struct CloudSyncSettingsV2View: View {
                         }
                     }
                 }
-            } footer: {
-                Text("Toggle takes effect on next app launch.")
-                    .font(.caption)
             }
 
             if v2Enabled {
@@ -148,7 +145,7 @@ struct CloudSyncSettingsV2View: View {
                         }
                     }
                 } footer: {
-                    Text("Choose which data this device pushes to iCloud. API keys and secrets are synced securely via iCloud Keychain.")
+                    Text("Choose which data this device pushes to iCloud. Environment variables and provider API keys are stored in your private iCloud encoded, not encrypted. Turn those two categories off to keep secrets on this device.")
                         .font(.caption)
                 }
 
@@ -271,9 +268,9 @@ struct CloudSyncSettingsV2View: View {
         let all = await ChatStore.shared.listSyncDevices()
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
         if #available(iOS 17.0, *), v2Enabled {
-            statusText = cloudProblem != nil ? "iCloud 出错" : SyncCore.shared.isRunning ? "Running" : "Starting"
+            statusText = cloudProblem != nil ? String(localized: "iCloud 出错") : SyncCore.shared.isRunning ? String(localized: "Running") : String(localized: "Starting")
         } else {
-            statusText = "Off"
+            statusText = String(localized: "Off")
         }
     }
 
@@ -289,7 +286,7 @@ struct CloudSyncSettingsV2View: View {
         } catch {
             cloudProblem = cloudKitProblemDescription(error)
         }
-        statusText = cloudProblem != nil ? "iCloud 出错" : SyncCore.shared.isRunning ? "Running" : "Starting"
+        statusText = cloudProblem != nil ? String(localized: "iCloud 出错") : SyncCore.shared.isRunning ? String(localized: "Running") : String(localized: "Starting")
     }
 
     /// Whenever the user changes their upload preferences or device

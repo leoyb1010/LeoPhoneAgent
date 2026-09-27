@@ -198,7 +198,6 @@ struct AIChatView: View {
         _cached = StateObject(wrappedValue: CachedViewModel(sessionId: sessionId))
         AIChatViewModel.onAppearTimestamp = CFAbsoluteTimeGetCurrent()
     }
-    @StateObject private var oauth = ClaudeOAuthManager.shared
     // Face ID lock state moved into `SessionLockGateOverlay` (separate
     // struct) — keeping the @State / @ObservedObject here pushed the
     // body's generic-type depth past iOS 26's runtime metadata budget
@@ -269,12 +268,6 @@ struct AIChatView: View {
     // [T-browser-download-ux-v2] Downloads panel + "Show in Files" locate target.
     @State private var showDownloadsPanel = false
     @State private var locateDownloadTarget: DownloadLocateTarget?
-    /// Total session count snapshot (persisted in DB) — used to decide
-    /// whether to show the New-Chat onboarding directory grid. Only the
-    /// "first-time, no sessions yet" case shows it; returning users with
-    /// any prior chat skip the grid even when starting a new draft.
-    /// Populated lazily on first appearance.
-    @State private var totalSessionCount: Int? = nil
     @State private var showBrowserSheet = false
     @State private var showTerminal = false
     @State private var terminalInitCommand: String?
@@ -320,6 +313,7 @@ struct AIChatView: View {
     @State private var compactConfirmMessageId: UUID?
     /// [T-delete-from-here] User message awaiting the "从此处删除" confirmation.
     @State private var deleteFromHereMessageId: UUID?
+    @State private var pendingRewind: PendingChatRewind?
     /// [T-new-message-pill] Driven by the UIKit list coordinator; read by the
     /// "↓ 新消息" pill overlay.
     @StateObject private var listFollowState = MessageListFollowState()
@@ -404,6 +398,10 @@ struct AIChatView: View {
     /// when `resolveMinisFileURL` returns nil for a tapped `leophoneagent://` link
     /// (file was deleted, the session was pruned, or iCloud hasn't synced yet).
     @State private var missingMinisFileName: String?
+    /// `open_terminal` link waiting for the user to confirm. Links in replies
+    /// can be written by the model or injected content, so never open the
+    /// terminal on a bare tap.
+    @State private var pendingTerminalLink: PendingTerminalLink?
 
     var body: some View {
         ZStack {
@@ -838,6 +836,7 @@ struct AIChatView: View {
         } message: { name in
             Text(String(localized: "\(name) is unavailable. It may have been deleted or not yet synced from iCloud."))
         }
+        .modifier(TerminalLinkConfirmation(pending: $pendingTerminalLink))
         .fullScreenCover(item: $imageGallery) { presentation in
             MessageImageGallery(items: presentation.items, startIndex: presentation.startIndex)
         }
@@ -852,7 +851,7 @@ struct AIChatView: View {
             inputFocused = true
         }
         .modifier(ChatInputAppendListener(vm: vm, inputFocused: $inputFocused))
-        .modifier(RerunFromToolBlockListener(vm: vm))
+        .modifier(RerunFromToolBlockListener(vm: vm, pendingRewind: $pendingRewind))
         .fullScreenCover(item: $previewVideoFile) { fileURL in
             MinisVideoFullscreenPlayer(fileURL: fileURL)
         }
@@ -899,7 +898,9 @@ struct AIChatView: View {
         // to new subscribers on first attach — without it, a chat view
         // created after a previous OSC capture would re-present a stale URL.
         .onReceive(MinisOpenURLBroker.shared.$pendingURL.dropFirst().compactMap { $0 }) { url in
-            if MinisOpenURLBroker.isWebScheme(url.scheme) {
+            if MinisOpenURLBroker.isActionURL(url) {
+                // Defense in depth: `offer` already drops these.
+            } else if MinisOpenURLBroker.isWebScheme(url.scheme) {
                 // Skip when a topmost host wants to present the web preview
                 // itself: ToolLiveSheet (`toolSheetVisible`) or the
                 // full-screen iSH terminal (`terminalVisible`). Otherwise
@@ -1146,6 +1147,7 @@ struct AIChatView: View {
                 }
             case .failure(let error):
                 minisLogger.error("File import failed: \(error.localizedDescription)")
+                flashToast(String(localized: "Couldn't import the file: \(error.localizedDescription)"))
             }
         }
         .onAppear {
@@ -1169,21 +1171,6 @@ struct AIChatView: View {
             vm.draftId = draftId
             vm.remoteDeviceId = remoteDeviceId
             vm.initialGroupId = initialGroupId
-            // Snapshot total session count once so the New-Chat onboarding
-            // grid only appears for first-time users (no prior sessions).
-            // [T-ios-session-coldload-listsessions-block] Use the bare
-            // COUNT(*) query, NOT listSessions().count — the latter ran 4
-            // un-indexable parts_json LIKE subqueries per session (~0.5s cold
-            // on a 100k-message DB) and, on the serialized ChatStore actor,
-            // head-of-line-blocked the loadSession() dispatched below, which
-            // was the reported ~3s cold-open stall. The comment used to claim
-            // "single SQLite COUNT" — now the code actually does one.
-            if totalSessionCount == nil {
-                Task.detached(priority: .utility) {
-                    let count = await ChatStore.shared.sessionCount()
-                    await MainActor.run { totalSessionCount = count }
-                }
-            }
             if let sessionId { AIChatViewModel.activeSessionId = sessionId }
             vm.ensureKernelBooted()
             if let sessionId {
@@ -1482,22 +1469,17 @@ struct AIChatView: View {
         }
         switch action {
         case .startVoice:
-            // Mirror the mic button's action: ask for speech +
-            // microphone permission, then start recording. Drop
-            // input-focus so the keyboard doesn't fight the speech
-            // session for focus.
-            Task { @MainActor in
-                guard speechManager.state == .idle else { return }
-                let granted = await speechManager.requestPermissions()
-                guard granted else { return }
+            // Same entry as the mic button: the inline voice panel. The old
+            // SFSpeech waveform path had no stop button, appended partial
+            // results by length (garbling revised words), and could record
+            // alongside the panel.
+            if !voiceInputActive {
                 inputFocused = false
-                lastRecognizedLength = 0
-                try? speechManager.startRecording()
-                // [T-voice-input-mode-preference-ios] Mark the composition as
-                // voice-assisted so the send doesn't flip the preference to
-                // "text". (No preference write here — the quick action is its
-                // own explicit intent, not a mic tap.)
+                // [T-voice-input-mode-preference-ios] Voice-assisted, but no
+                // preference write — the quick action is its own intent.
                 vm.voiceUsedInComposition = true
+                VoiceModePreference.shared.enteredFromText = true
+                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { voiceInputActive = true }
             }
             // No cover for voice — close the workflow loop immediately
             // so the retry timer doesn't fire and re-trigger the mic.
@@ -1708,6 +1690,7 @@ struct AIChatView: View {
             enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
             showFastModeToggle: activeModelSupportsFastMode,
             fastModeEnabled: codexFastModeEnabled,
+            isProcessing: vm.isProcessing,
             onNewChat: { requestNewChatFromMenu() },
             // [T-chat-menu-compact-entry] Same effect as the /compact slash
             // command (AIChatViewModel+SlashCommands case "compact").
@@ -1891,7 +1874,9 @@ struct AIChatView: View {
             showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
             enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
             showFastModeToggle: activeModelSupportsFastMode,
-            fastModeEnabled: codexFastModeEnabled
+            fastModeEnabled: codexFastModeEnabled,
+            isProcessing: vm.isProcessing,
+            artifactCount: artifactCount
         )
     }
 
@@ -2383,22 +2368,29 @@ struct AIChatView: View {
                 .foregroundStyle(.red)
                 .lineLimit(2)
             Spacer()
-            Button {
-                // A kernel that failed to boot is what needs another try; retry()
-                // has no reply to redo and did nothing.
-                if case .failed = vm.kernelStatus {
-                    vm.errorMessage = nil
-                    vm.retryKernelBoot()
-                } else {
-                    vm.retry()
-                    vm.forceScrollToBottom.send()
+            let retryKind = vm.errorBannerRetry
+            if case .unavailable = retryKind {} else {
+                Button {
+                    // A kernel that failed to boot is what needs another try; retry()
+                    // has no reply to redo and did nothing.
+                    if case .failed = vm.kernelStatus {
+                        vm.errorMessage = nil
+                        vm.retryKernelBoot()
+                    } else if case let .compaction(anchor, includesBoundary) = retryKind {
+                        vm.errorMessage = nil
+                        vm.compactTask = Task { await vm.compactBefore(anchor, includesBoundary: includesBoundary) }
+                    } else {
+                        vm.retry()
+                        vm.forceScrollToBottom.send()
+                    }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.semibold))
                 }
-            } label: {
-                Label("Retry", systemImage: "arrow.clockwise")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+                .disabled(vm.isProcessing)
             }
-            .buttonStyle(.borderless)
             Button { vm.errorMessage = nil } label: {
                 Image(systemName: "xmark")
                     .font(.caption)
@@ -2476,11 +2468,24 @@ struct AIChatView: View {
             CollectionViewMessageListV3(
                 vm: vm,
                 inputFocused: inputFocused,
-                onRetryMessage: { vm.retryFromMessage($0); vm.forceScrollToBottom.send() },
+                onRetryMessage: { [self] msgId in
+                    let run = { vm.retryFromMessage(msgId); vm.forceScrollToBottom.send() }
+                    let later = vm.laterUserTurnCount(after: msgId)
+                    if later > 0 {
+                        pendingRewind = PendingChatRewind(kind: .retry, laterTurns: later, perform: run)
+                    } else {
+                        run()
+                    }
+                },
                 onRetryLast: { vm.retry(); vm.forceScrollToBottom.send() },
                 onEdit: { [self] msgId in
-                    vm.editMessage(msgId)
-                    inputFocused = true
+                    let run = { vm.editMessage(msgId); inputFocused = true }
+                    let later = vm.laterUserTurnCount(after: msgId)
+                    if later > 0 {
+                        pendingRewind = PendingChatRewind(kind: .edit, laterTurns: later, perform: run)
+                    } else {
+                        run()
+                    }
                 },
                 onWithdraw: { vm.withdrawQueuedMessage($0) },
                 onResume: { vm.resume(); vm.forceScrollToBottom.send() },
@@ -2918,11 +2923,9 @@ struct AIChatView: View {
 
         // Terminal deep link: leophoneagent://open_terminal?init_command=...
         if url.host == "open_terminal" {
-            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            let initCmd = comps?.queryItems?.first(where: { $0.name == "init_command" })?.value
-            let dl = DeepLinkCoordinator.shared
-            dl.terminalInitCommand = initCmd
-            dl.showTerminal = true
+            pendingTerminalLink = PendingTerminalLink(
+                command: MinisOpenURLBroker.sanitizedTerminalInitCommand(from: url)
+            )
             return .handled
         }
         // View deep links: leophoneagent://views/alarm
@@ -3473,11 +3476,18 @@ struct AIChatView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
-        // Attach the sheet INSIDE the erased subtree. AIChatView.body has a
-        // documented history of blowing Swift's mangled-type decoder on cold
-        // launch when another large closure is added to the outer chain (see
-        // the camera fullScreenCover's comment); keeping this here costs the
-        // outer body nothing.
+        return AnyView(strip)
+    }
+
+    /// Sheets and listeners for /model, /tasks, /mac and the send button's
+    /// "switch model". They used to hang off `composerQuickTaskStrip`, which
+    /// isn't mounted in voice/edit/landscape mode, so those commands did
+    /// nothing there. This zero-size host is always mounted with the composer.
+    /// Kept in an erased subtree: AIChatView.body has a documented history of
+    /// blowing Swift's mangled-type decoder on cold launch when another large
+    /// closure is added to the outer chain.
+    private var composerSheetsHost: AnyView {
+        let host = Color.clear.frame(width: 0, height: 0)
         .sheet(isPresented: $showQuickTaskPicker) {
             QuickTaskPickerSheet { task in
                 prepareComposer(with: task)
@@ -3492,13 +3502,13 @@ struct AIChatView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch, object: vm)) { _ in
             showQuickModelSwitch = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickTaskPicker)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickTaskPicker, object: vm)) { _ in
             showQuickTaskPicker = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .leoOpenMacSwitch)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenMacSwitch, object: vm)) { _ in
             showMacSwitchDialog = true
         }
         .confirmationDialog("交给哪台 Mac 继续", isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
@@ -3514,7 +3524,7 @@ struct AIChatView: View {
                 Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
             }
         }
-        return AnyView(strip)
+        return AnyView(host)
     }
 
     /// [T-local-brain] 本机改写菜单。结果直接替换输入框内容;失败保留原文。
@@ -3768,6 +3778,7 @@ struct AIChatView: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 20))
             .onTapGesture { inputFocused = true }
+            .background(composerSheetsHost)
             .onReceive(speechManager.$recognizedText) { text in
                 guard speechManager.state == .recording || !text.isEmpty else { return }
                 // Append only the new delta to preserve existing input text
@@ -3985,7 +3996,7 @@ struct AIChatView: View {
                                 // queues the prompt instead of sending it,
                                 // so the capsule advertises that — matches
                                 // the send-button's send/enqueue toggle.
-                                isEnqueue: vm.isProcessing && !canSend)
+                                isEnqueue: sendButtonMode == .enqueue)
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -4997,6 +5008,8 @@ private struct ChatToolbarKey: Equatable {
     /// [T-codex-fast-mode] Menu row shown only for Codex OAuth models.
     let showFastModeToggle: Bool
     let fastModeEnabled: Bool
+    let isProcessing: Bool
+    let artifactCount: Int
 }
 
 /// [T-ios-navbar-toolbar-host] Zero-footprint host that owns the navigation
@@ -5047,6 +5060,8 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             if lhs.key.showEnhancedCacheToggle != rhs.key.showEnhancedCacheToggle { diffs.append("showEnhancedCacheToggle") }
             if lhs.key.enhancedCacheEnabled != rhs.key.enhancedCacheEnabled { diffs.append("enhancedCacheEnabled") }
             if lhs.key.showFastModeToggle != rhs.key.showFastModeToggle { diffs.append("showFastModeToggle") }
+            if lhs.key.isProcessing != rhs.key.isProcessing { diffs.append("isProcessing") }
+            if lhs.key.artifactCount != rhs.key.artifactCount { diffs.append("artifactCount") }
             if lhs.key.fastModeEnabled != rhs.key.fastModeEnabled { diffs.append("fastModeEnabled") }
             NavbarEvalStats.logger.info("[NavbarEval] host == FALSE diffs=[\(diffs.joined(separator: ","))]")
         }
@@ -5091,6 +5106,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     /// Codex OAuth instance (OpenAI OAuth, no custom base).
     let showFastModeToggle: Bool
     let fastModeEnabled: Bool
+    let isProcessing: Bool
 
     let onNewChat: () -> Void
     let onCompact: () -> Void
@@ -5128,6 +5144,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         let enhancedCacheEnabled: Bool
         let showFastModeToggle: Bool
         let fastModeEnabled: Bool
+        let isProcessing: Bool
     }
 
     private var key: Key {
@@ -5137,7 +5154,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             showEnhancedCacheToggle: showEnhancedCacheToggle,
             enhancedCacheEnabled: enhancedCacheEnabled,
             showFastModeToggle: showFastModeToggle,
-            fastModeEnabled: fastModeEnabled)
+            fastModeEnabled: fastModeEnabled,
+            isProcessing: isProcessing)
     }
 
     final class Coordinator {
@@ -5213,7 +5231,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                      attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onCompact() },
             UIAction(title: String(localized: "Clear Chat"),
                      image: UIImage(systemName: "trash"),
-                     attributes: key.messagesEmpty ? [.destructive, .disabled] : [.destructive]) { _ in coordinator.parent.onClearChat() },
+                     attributes: key.messagesEmpty || key.isProcessing ? [.destructive, .disabled] : [.destructive]) { _ in coordinator.parent.onClearChat() },
         ]))
 
         // Same gate as before: iOS 17+ (v2 sync engine) AND the user's
@@ -5285,7 +5303,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
 
         var tailGroup: [UIMenuElement] = [
             UIAction(title: String(localized: "Save as Skill"),
-                     image: UIImage(systemName: "book.and.wrench")) { _ in coordinator.parent.onDistillSkill() },
+                     image: UIImage(systemName: "book.and.wrench"),
+                     attributes: key.messagesEmpty || key.isProcessing ? [.disabled] : []) { _ in coordinator.parent.onDistillSkill() },
             UIAction(title: String(localized: "Session Inspector"),
                      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent")) { _ in coordinator.parent.onInspector() },
             UIAction(title: String(localized: "Token Usage"),
@@ -5384,7 +5403,7 @@ private struct MoveToSessionSheet: View {
             }
         }
         .task {
-            sessions = ChatStore.shared.listSessions()
+            sessions = await ChatStore.shared.listSessions()
         }
     }
 
@@ -6092,14 +6111,13 @@ extension AIChatView {
     /// into a reusable SKILL.md draft, written where the skills importer can
     /// pick it up. Runs through the ordinary loop — visible, correctable.
     func distillCurrentSessionToSkill() {
-        vm.inputText = """
+        vm.sendDetachedPrompt("""
         把本会话到目前为止的工作流程提炼成一个可复用技能：
         1. 起一个短横线小写的技能名（英文）；
         2. 写出符合规范的 SKILL.md（YAML frontmatter: name/description/version 0.1.0，正文含步骤、注意事项、参数化占位符，去除本次会话的隐私细节）；
         3. 用 file_write 写入 /var/minis/workspace/skill-drafts/<技能名>/SKILL.md；
         4. 最后给我一句话总结这个技能做什么，并提醒我可在技能页从该文件安装。
-        """
-        vm.send()
+        """)
     }
 }
 
@@ -6189,5 +6207,39 @@ extension AIChatViewModel {
             isTruncatingForRetry = false
         }
         return .deleted
+    }
+}
+
+private struct PendingTerminalLink: Identifiable {
+    let id = UUID()
+    let command: String?
+}
+
+private struct TerminalLinkConfirmation: ViewModifier {
+    @Binding var pending: PendingTerminalLink?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            String(localized: "Open Terminal?"),
+            isPresented: Binding(
+                get: { pending != nil },
+                set: { if !$0 { pending = nil } }
+            ),
+            presenting: pending
+        ) { link in
+            Button(String(localized: "Open Terminal")) {
+                let dl = DeepLinkCoordinator.shared
+                dl.terminalInitCommand = link.command
+                dl.showTerminal = true
+                pending = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pending = nil }
+        } message: { link in
+            if let cmd = link.command, !cmd.isEmpty {
+                Text(String(localized: "This link will type the following command into the terminal. It won't run until you press Return.\n\n\(cmd)"))
+            } else {
+                Text(String(localized: "This link opens an interactive terminal."))
+            }
+        }
     }
 }

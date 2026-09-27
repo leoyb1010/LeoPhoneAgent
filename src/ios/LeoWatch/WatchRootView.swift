@@ -80,11 +80,12 @@ struct WatchRootView: View {
 /// row so a 45mm screen never truncates a label into ambiguity.
 ///
 /// Tap-only: the crown scrolls this card, so it must never also decide it.
-/// Risk is shown (color + label), never an extra step — a one-person tool
-/// shouldn't make its owner jump through hoops.
+/// A high-risk command gets no double-tap shortcut, no "always", and its
+/// allow buttons need a second tap to confirm — a stray pinch must not run it.
 private struct WatchApprovalSheet: View {
     let approval: WatchApproval
     let onChoose: (String) -> Void
+    @State private var armedChoice: String?
 
     private func label(for choice: String) -> String {
         switch choice {
@@ -113,11 +114,28 @@ private struct WatchApprovalSheet: View {
     }
 
     /// Allow-once first, deny last — same order as the phone's notification.
-    /// Double tap (Series 9 / Ultra 2) is "allow once": answering from the
-    /// wrist should take one gesture.
+    /// Double tap (Series 9 / Ultra 2) is "allow once" for commands that are
+    /// not high risk.
     private var visibleChoices: [String] {
         let order = ["once", "session", "always", "deny"]
-        return approval.choices.sorted { (order.firstIndex(of: $0) ?? order.count) < (order.firstIndex(of: $1) ?? order.count) }
+        let offered = approval.isHighRisk ? approval.choices.filter { $0 != "always" } : approval.choices
+        return offered.sorted { (order.firstIndex(of: $0) ?? order.count) < (order.firstIndex(of: $1) ?? order.count) }
+    }
+
+    private func needsConfirm(_ choice: String) -> Bool {
+        approval.isHighRisk && choice != "deny"
+    }
+
+    private func buttonTitle(for choice: String) -> String {
+        armedChoice == choice ? "再点一次确认" : label(for: choice)
+    }
+
+    private func tap(_ choice: String) {
+        if needsConfirm(choice), armedChoice != choice {
+            armedChoice = choice
+            return
+        }
+        onChoose(choice)
     }
 
     var body: some View {
@@ -146,12 +164,12 @@ private struct WatchApprovalSheet: View {
                 }
                 ForEach(visibleChoices, id: \.self) { choice in
                     Button {
-                        onChoose(choice)
+                        tap(choice)
                     } label: {
-                        Text(label(for: choice)).frame(maxWidth: .infinity)
+                        Text(buttonTitle(for: choice)).frame(maxWidth: .infinity)
                     }
                     .tint(choice == "deny" ? .gray : riskColor)
-                    .handGestureShortcut(.primaryAction, isEnabled: choice == "once")
+                    .handGestureShortcut(.primaryAction, isEnabled: choice == "once" && !approval.isHighRisk)
                 }
             }
             .padding(.horizontal, 4)

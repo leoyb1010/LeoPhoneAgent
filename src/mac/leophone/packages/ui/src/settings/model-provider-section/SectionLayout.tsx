@@ -68,7 +68,7 @@ export function ModelProviderSectionLayout({
         />
       </div>
 
-      {/* [leo] 订阅账号（Claude / ChatGPT / Copilot）登录页由本机 Leo 服务提供，在系统浏览器里打开。 */}
+      {/* [leo] 订阅账号（ChatGPT / Copilot / OpenCode Go）登录页由本机 Leo 服务提供，在系统浏览器里打开。 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Button
           type="button"
@@ -76,7 +76,7 @@ export function ModelProviderSectionLayout({
           className="rounded-lg"
           onClick={() => platform.openExternal(LEO_OAUTH_PAGE_URL)}
         >
-          订阅账号登录(Claude / ChatGPT / Copilot)
+          订阅账号登录(ChatGPT / Copilot / OpenCode Go)
         </Button>
         <span className="text-ui-sm text-foreground-subtle">
           在浏览器里完成授权;登录后模型出现在「订阅账号」供应商下,凭据只存本机。

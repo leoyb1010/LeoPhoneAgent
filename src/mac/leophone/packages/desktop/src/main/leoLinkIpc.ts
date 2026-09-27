@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -13,10 +14,23 @@ import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
  */
 export const LEO_LINK_STATUS_CHANNEL = "leo:link:status";
 export const LEO_LINK_PAIR_CHANNEL = "leo:link:pair";
+export const LEO_LINK_REVOKE_CHANNEL = "leo:link:revoke";
 
 export type LeoLinkIpcResult<T = Record<string, unknown>> =
   | { ok: true; data: T }
   | { ok: false; error: string };
+
+/**
+ * 出配对码的口令:每次启动在主进程内存里随机生成,只经 fork 环境交给 Host(Host 启动即从
+ * 环境里抹掉)。`~/.leoagent/key` 谁都读得到,agent 拿着它也签不出配对码 —— 必须是用户在
+ * 界面上点了「扫码连接手机」、经这条 IPC 才行。
+ */
+const LEO_PAIR_SECRET = randomBytes(24).toString("base64url");
+export const LEO_PAIR_SECRET_ENV = "LEO_PAIR_SECRET";
+
+export function leoHostPairEnv(): Record<string, string> {
+  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET };
+}
 
 // 与 host/leo/leoPaths.ts 同一套约定(主进程不引 host 的模块):端口 38473,钥匙 ~/.leoagent/key。
 const LEO_HTTP_PORT = Number(process.env["LEOAGENT_PORT"]) || 38473;
@@ -42,13 +56,17 @@ function trustedSender(event: IpcMainInvokeEvent): boolean {
   return !app.isPackaged && /^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(url);
 }
 
-async function callLeo(path: string, method: "GET" | "POST"): Promise<LeoLinkIpcResult> {
+async function callLeo(
+  path: string,
+  method: "GET" | "POST" | "DELETE",
+  extraHeaders: Record<string, string> = {},
+): Promise<LeoLinkIpcResult> {
   const key = leoLocalKey();
   if (!key) return { ok: false, error: "本机 Leo 服务还没启动" };
   try {
     const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}${path}`, {
       method,
-      headers: { authorization: `Bearer ${key}` },
+      headers: { authorization: `Bearer ${key}`, ...extraHeaders },
       signal: AbortSignal.timeout(25_000),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -66,6 +84,15 @@ export function registerLeoLinkIpc(): void {
     trustedSender(event) ? callLeo("/api/leo/link/status", "GET") : { ok: false, error: "forbidden" },
   );
   ipcMain.handle(LEO_LINK_PAIR_CHANNEL, (event) =>
-    trustedSender(event) ? callLeo("/api/leo/link/pair", "POST") : { ok: false, error: "forbidden" },
+    trustedSender(event)
+      ? callLeo("/api/leo/link/pair", "POST", { "x-leo-pair": LEO_PAIR_SECRET })
+      : { ok: false, error: "forbidden" },
+  );
+  ipcMain.handle(LEO_LINK_REVOKE_CHANNEL, (event, payload: unknown) =>
+    trustedSender(event) && typeof payload === "string"
+      ? callLeo(`/api/leo/link/pair?payload=${encodeURIComponent(payload)}`, "DELETE", {
+          "x-leo-pair": LEO_PAIR_SECRET,
+        })
+      : { ok: false, error: "forbidden" },
   );
 }

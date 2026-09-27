@@ -133,7 +133,15 @@ export class LinkBridge {
     return path.join(this.deps.journalDir, "sessions.json");
   }
 
-  private async saveIndex(): Promise<void> {
+  private saving: Promise<void> = Promise.resolve();
+
+  /** 串行写:几处同时触发时共用一个临时文件,并发 rename 会互相踩掉。 */
+  private saveIndex(): Promise<void> {
+    this.saving = this.saving.then(() => this.writeIndex());
+    return this.saving;
+  }
+
+  private async writeIndex(): Promise<void> {
     const rows = [...this.sessions.values()]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, INDEX_LIMIT)
@@ -155,6 +163,7 @@ export class LinkBridge {
       push: this.deps.push,
       logger: this.deps.logger,
       strictCallers: () => this.strictCallers,
+      onModeChanged: () => void this.saveIndex(),
     });
   }
 
@@ -294,7 +303,15 @@ export class LinkBridge {
     session.needsResume = true;
     this.sessions.set(taskId, session);
     this.desktopTasks.delete(taskId);
-    await session.open();
+    try {
+      await session.open();
+    } catch (cause) {
+      // 接不上就原样放回桌面任务清单,别留一个打不开的会话占着这个 id。
+      this.sessions.delete(taskId);
+      this.desktopTasks.set(taskId, task);
+      await session.close().catch(() => undefined);
+      throw cause;
+    }
     if (session.seq === 0) {
       session.emit({ event: "session.note", text: `接上了 Mac 上的任务「${task.title || "未命名"}」:之前的对话在 Mac 上,这里从现在开始同步。` });
     }
@@ -484,6 +501,7 @@ export class LinkBridge {
         switched.push(session.sessionId);
       }
     }
+    if (switched.length > 0) void this.saveIndex();
     return { status: 200, body: { ok: true, sessions: switched } };
   }
 

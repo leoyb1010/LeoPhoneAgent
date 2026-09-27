@@ -29,6 +29,8 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
   button { font:inherit; border:1px solid var(--line); background:transparent; color:var(--fg); padding:6px 14px; border-radius:8px; cursor:pointer; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button:disabled { opacity:.5; cursor:default; }
+  a.btn { border:1px solid var(--line); color:var(--fg); padding:6px 14px; border-radius:8px; text-decoration:none; white-space:nowrap; }
+  button:focus-visible, a.btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .flow { margin-top:20px; padding:16px; border:1px solid var(--line); border-radius:10px; background:var(--card); }
   .flow h2 { font-size:15px; margin:0 0 8px; }
   .flow a { color:var(--accent); word-break:break-all; }
@@ -41,7 +43,8 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
 <body>
 <main>
   <h1>订阅账号登录</h1>
-  <p class="lead">用你已有的订阅(Claude Pro/Max、ChatGPT、GitHub Copilot 等)直接驱动 LeoPhoneAgent。凭据只存在这台 Mac 的 ~/.leoagent/oauth,不经过任何第三方。登录后回到 LeoPhoneAgent,在模型选择里找「订阅账号」即可。</p>
+  <p class="lead">用你已有的订阅(ChatGPT、GitHub Copilot、OpenCode Go 等)驱动 LeoPhoneAgent。凭据只存在这台 Mac 的 ~/.leoagent/oauth,请求直接发到各家官方接口,中间没有别的服务。登录后回到 LeoPhoneAgent,在模型选择里找「订阅账号」即可。</p>
+  <p class="lead">Claude 订阅不在这里:Anthropic 只允许在官方 Claude Code 里用订阅登录。要用 Claude,请在「模型供应商」里填 API Key,或在手机上远程开这台 Mac 上你自己登录的官方 claude CLI。GitHub Copilot 登录时会替你开启 Copilot 的模型使用策略。</p>
   <div id="list"><p class="muted">正在读取…</p></div>
   <div id="flow"></div>
 </main>
@@ -58,15 +61,26 @@ let polling = null;
 async function renderList() {
   const { providers } = await api("/providers");
   const list = document.getElementById("list");
-  list.innerHTML = providers.map((p) => \`
+  list.innerHTML = providers.map((p) => {
+    const apiKey = p.authType === "api_key";
+    const status = p.loggedIn ? "已接入 · " + p.modelCount + " 个模型" : apiKey ? "未接入 · 用 API Key" : "未登录";
+    const hint = apiKey && !p.loggedIn && p.hint ? \`<small>\${esc(p.hint)}</small>\` : "";
+    const actions = p.loggedIn
+      ? \`<button data-logout="\${esc(p.id)}">\${apiKey ? "移除 Key" : "退出"}</button>\`
+      : apiKey
+        ? (p.keyUrl ? \`<a class="btn" href="\${esc(p.keyUrl)}" target="_blank" rel="noopener">获取 Key</a> \` : "")
+          + (p.importable ? \`<button data-import="\${esc(p.id)}">从本机 OpenCode 导入</button> \` : "")
+          + \`<button class="primary" data-login="\${esc(p.id)}">填入 Key</button>\`
+        : \`<button class="primary" data-login="\${esc(p.id)}">登录</button>\`;
+    return \`
     <div class="row">
       <span class="dot \${p.loggedIn ? "on" : ""}"></span>
-      <div class="name"><b>\${esc(p.name)}</b><small>\${p.loggedIn ? "已登录 · " + p.modelCount + " 个模型" : "未登录"}</small></div>
-      \${p.loggedIn
-        ? \`<button data-logout="\${esc(p.id)}">退出</button>\`
-        : \`<button class="primary" data-login="\${esc(p.id)}">登录</button>\`}
-    </div>\`).join("");
+      <div class="name"><b>\${esc(p.name)}</b><small>\${status}</small>\${hint}</div>
+      \${actions}
+    </div>\`;
+  }).join("");
   list.querySelectorAll("[data-login]").forEach((b) => b.onclick = () => startLogin(b.dataset.login));
+  list.querySelectorAll("[data-import]").forEach((b) => b.onclick = () => startLogin(b.dataset.import, true));
   list.querySelectorAll("[data-logout]").forEach((b) => b.onclick = async () => {
     b.disabled = true;
     await api("/providers/" + encodeURIComponent(b.dataset.logout) + "/logout", { method: "POST" });
@@ -74,11 +88,28 @@ async function renderList() {
   });
 }
 
-async function startLogin(providerId) {
-  const { flowId } = await api("/providers/" + encodeURIComponent(providerId) + "/login", { method: "POST" });
+function watchFlow(flowId) {
   clearInterval(polling);
   polling = setInterval(() => pollFlow(flowId), 1000);
   pollFlow(flowId);
+}
+
+async function startLogin(providerId, importFromOpenCodeCli = false) {
+  try {
+    const { flowId } = await api("/providers/" + encodeURIComponent(providerId) + "/login", {
+      method: "POST",
+      body: JSON.stringify({ importFromOpenCodeCli }),
+    });
+    watchFlow(flowId);
+  } catch (e) {
+    document.getElementById("flow").innerHTML = '<div class="flow"><p class="err">' + esc(e.message) + "</p></div>";
+  }
+}
+
+// 页面刷新前留着没走完的登录:接着显示,能继续也能取消。
+async function resumeFlow() {
+  const { flows } = await api("/flows").catch(() => ({ flows: [] }));
+  if (flows && flows.length) watchFlow(flows[flows.length - 1].id);
 }
 
 async function pollFlow(flowId) {
@@ -122,6 +153,7 @@ async function pollFlow(flowId) {
 }
 
 renderList().catch((e) => { document.getElementById("list").innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+resumeFlow();
 </script>
 </body>
 </html>`;

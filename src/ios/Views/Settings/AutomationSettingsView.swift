@@ -8,11 +8,14 @@
 //
 
 import CoreLocation
+import EventKit
 import SwiftUI
 
 struct AutomationSettingsView: View {
     @ObservedObject private var store = AutomationStore.shared
     @State private var showEditor = false
+    @State private var editingRule: AutomationRule?
+    @State private var pendingDeleteIds: [String]?
 
     var body: some View {
         List {
@@ -21,32 +24,54 @@ struct AutomationSettingsView: View {
                     ruleRow(rule)
                 }
                 .onDelete { offsets in
-                    let ids = offsets.map { store.rules[$0].id }
-                    for id in ids { store.delete(id: id) }
+                    pendingDeleteIds = offsets.map { store.rules[$0].id }
                 }
                 Button { showEditor = true } label: {
                     Label("Add automation", systemImage: "plus.circle.fill")
                 }
             } footer: {
-                Text("Location rules wake the agent when you arrive or leave (may take a few minutes — iOS decides). Event and charging rules fire when the app reconciles. Three thumbs-down auto-pauses a rule. Time-of-day rules live in Scheduled Tasks.")
+                Text("Location rules wake the agent when you arrive or leave (may take a few minutes — iOS decides). Event and charging rules fire when the app reconciles. A rule auto-pauses once its 👎 outnumber its 👍 by three. Time-of-day rules live in Scheduled Tasks.")
             }
         }
         .navigationTitle(Text("Automations"))
-        .sheet(isPresented: $showEditor) { AutomationEditSheet() }
+        .sheet(isPresented: $showEditor) { AutomationEditSheet(existing: nil) }
+        .sheet(item: $editingRule) { rule in AutomationEditSheet(existing: rule) }
+        .alert(String(localized: "Delete this automation?"),
+               isPresented: Binding(get: { pendingDeleteIds != nil },
+                                    set: { if !$0 { pendingDeleteIds = nil } })) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                for id in pendingDeleteIds ?? [] { store.delete(id: id) }
+                pendingDeleteIds = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteIds = nil }
+        }
         .onAppear { AutomationEngine.shared.reloadMonitoring() }
     }
 
     private func ruleRow(_ rule: AutomationRule) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(rule.name).font(.body.weight(.medium))
-                Spacer()
-                if !rule.isEnabled {
-                    Text("Paused").font(.caption2).foregroundStyle(.orange)
+            // Only the title block opens the editor; the vote buttons below
+            // must stay independently tappable.
+            Button { editingRule = rule } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text(rule.name).font(.body.weight(.medium))
+                        Spacer()
+                        if !rule.isEnabled {
+                            Text("Paused").font(.caption2).foregroundStyle(.orange)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    Text(rule.trigger.title)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
+                .contentShape(Rectangle())
             }
-            Text(rule.trigger.title)
-                .font(.caption).foregroundStyle(.secondary)
+            .buttonStyle(.borderless)
+            .tint(.primary)
             HStack(spacing: 14) {
                 Button { store.vote(id: rule.id, up: true) } label: {
                     Label("\(rule.score)", systemImage: "hand.thumbsup")
@@ -76,7 +101,11 @@ struct AutomationSettingsView: View {
 
 private struct AutomationEditSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var model = AutomationEditModel()
+    @StateObject private var model: AutomationEditModel
+
+    init(existing: AutomationRule?) {
+        _model = StateObject(wrappedValue: AutomationEditModel(existing: existing))
+    }
 
     var body: some View {
         NavigationStack {
@@ -97,10 +126,19 @@ private struct AutomationEditSheet: View {
                                 .multilineTextAlignment(.trailing)
                         }
                         if model.capturedLocation == nil {
-                            Text(model.locationDenied
-                                 ? "没有定位权限:在系统设置里给 LeoPhoneAgent 打开定位,才能按地点触发。"
-                                 : "正在获取当前位置…拿到后才能保存。")
-                                .font(.caption).foregroundStyle(model.locationDenied ? .orange : .secondary)
+                            if model.locationDenied {
+                                Text("没有定位权限:在系统设置里给 LeoPhoneAgent 打开定位,才能按地点触发。")
+                                    .font(.caption).foregroundStyle(.orange)
+                            } else if model.locationFailed {
+                                Button("没拿到当前位置,点这里再试一次") { model.retryLocation() }
+                                    .font(.caption)
+                            } else {
+                                Text("正在获取当前位置…拿到后才能保存。")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } else if model.isEditing {
+                            Text("沿用这条规则原来记下的位置(半径 200 米)。")
+                                .font(.caption).foregroundStyle(.secondary)
                         } else {
                             Text("已记下当前位置(半径 200 米)。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -109,6 +147,12 @@ private struct AutomationEditSheet: View {
                     if model.triggerKind == .beforeEvent {
                         Stepper(String(localized: "\(model.minutesBefore) minutes before"),
                                 value: $model.minutesBefore, in: 5...120, step: 5)
+                        if !model.calendarAuthorized {
+                            Text("没有完整的日历权限,这条规则不会触发。")
+                                .font(.caption).foregroundStyle(.orange)
+                            Button("允许访问日历") { model.requestCalendarAccess() }
+                                .font(.caption)
+                        }
                     }
                 }
                 Section(String(localized: "Action")) {
@@ -128,7 +172,7 @@ private struct AutomationEditSheet: View {
                     }
                 }
             }
-            .navigationTitle(Text("New Automation"))
+            .navigationTitle(Text(model.isEditing ? "Edit Automation" : "New Automation"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -159,8 +203,41 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
     @Published var quickTaskId: String = QuickTaskStore.shared.tasks.first?.id ?? ""
     @Published var prompt = ""
     @Published var capturedLocation: CLLocation?
+    @Published var calendarAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
+    @Published var locationFailed = false
 
+    private let existing: AutomationRule?
+    var isEditing: Bool { existing != nil }
     private let locationManager = CLLocationManager()
+
+    init(existing: AutomationRule?) {
+        self.existing = existing
+        super.init()
+        guard let existing else { return }
+        name = existing.name
+        switch existing.trigger {
+        case .arriveLocation(let lat, let lon, _, let place):
+            triggerKind = .arriveHere
+            placeName = place
+            capturedLocation = CLLocation(latitude: lat, longitude: lon)
+        case .leaveLocation(let lat, let lon, _, let place):
+            triggerKind = .leaveHere
+            placeName = place
+            capturedLocation = CLLocation(latitude: lat, longitude: lon)
+        case .beforeEvent(let minutes):
+            triggerKind = .beforeEvent
+            minutesBefore = minutes
+        case .nightCharging:
+            triggerKind = .nightCharging
+        }
+        if let quickTaskId = existing.quickTaskId {
+            useQuickTask = true
+            self.quickTaskId = quickTaskId
+        } else {
+            useQuickTask = false
+            prompt = existing.prompt ?? ""
+        }
+    }
 
     /// 没有定位权限:地点规则存不了,界面要说明原因,不能只把「保存」置灰。
     @Published var locationDenied = false
@@ -168,6 +245,7 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
 
     func prepare() {
         locationManager.delegate = self
+        guard capturedLocation == nil else { return }
         switch locationManager.authorizationStatus {
         case .notDetermined: locationManager.requestWhenInUseAuthorization()
         case .denied, .restricted: locationDenied = true
@@ -181,6 +259,19 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
             guard capturedLocation != nil, !placeName.isEmpty else { return false }
         }
         return useQuickTask ? !quickTaskId.isEmpty : !prompt.isEmpty
+    }
+
+    func retryLocation() {
+        locationFailed = false
+        locationRetries = 0
+        locationManager.requestLocation()
+    }
+
+    func requestCalendarAccess() {
+        Task { @MainActor in
+            let granted = (try? await EKEventStore().requestFullAccessToEvents()) ?? false
+            calendarAuthorized = granted
+        }
     }
 
     func save() {
@@ -200,16 +291,20 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
         case .nightCharging:
             trigger = .nightCharging
         }
-        AutomationStore.shared.upsert(AutomationRule(
-            name: name.trimmingCharacters(in: .whitespaces),
-            trigger: trigger,
-            quickTaskId: useQuickTask ? quickTaskId : nil,
-            prompt: useQuickTask ? nil : prompt))
+        var rule = existing ?? AutomationRule(name: "", trigger: trigger)
+        rule.name = name.trimmingCharacters(in: .whitespaces)
+        rule.trigger = trigger
+        rule.quickTaskId = useQuickTask ? quickTaskId : nil
+        rule.prompt = useQuickTask ? nil : prompt
+        AutomationStore.shared.upsert(rule)
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let latest = locations.last
-        Task { @MainActor in self.capturedLocation = latest }
+        Task { @MainActor in
+            self.capturedLocation = latest
+            self.locationFailed = false
+        }
     }
 
     // 以前授权弹窗点了「允许」也不会再去定位,定位失败也不重试,「保存」一直是灰的。
@@ -225,7 +320,11 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            guard !self.locationDenied, self.capturedLocation == nil, self.locationRetries < 3 else { return }
+            guard !self.locationDenied, self.capturedLocation == nil else { return }
+            guard self.locationRetries < 3 else {
+                self.locationFailed = true
+                return
+            }
             self.locationRetries += 1
             try? await Task.sleep(for: .seconds(2))
             self.locationManager.requestLocation()

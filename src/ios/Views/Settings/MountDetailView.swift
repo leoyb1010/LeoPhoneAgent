@@ -152,12 +152,19 @@ struct MountDetailView: View {
         }
         .navigationTitle(context.canRename ? String(localized: "Edit Mount") : String(localized: "Folder Details"))
         .navigationBarTitleDisplayMode(.inline)
+        // Toggles here apply immediately, so the list must refresh on any
+        // exit — not only after Save/Unmount.
+        .onDisappear { onDismiss() }
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(String(localized: "Save")) {
-                    save()
+            // Only renaming needs an explicit Save; shared folders can't be
+            // renamed, and a permanently disabled Save there was a dead control.
+            if context.canRename {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(String(localized: "Save")) {
+                        save()
+                    }
+                    .disabled(!canSave)
                 }
-                .disabled(!canSave)
             }
         }
         .sheet(isPresented: $showingBrowser) {

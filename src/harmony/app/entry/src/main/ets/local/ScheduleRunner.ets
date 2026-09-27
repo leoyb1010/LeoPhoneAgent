@@ -82,7 +82,9 @@ export class ScheduleRunner {
       // 看门狗:LocalAgentEngine 在「这一轮已经被换代」时直接 return、一个回调都不调;
       // 这里只负责不让调度卡死,回合真跑完时照样会写会话和结果。
       const guard = setTimeout(() => {
-        resolve(['failed', '超过 10 分钟没跑完']);
+        // 换代让这一轮真的停下(断开请求、后面的工具不再执行),不只是不等它。
+        LocalAgentEngine.bump('schedule');
+        resolve(['failed', '超过 10 分钟没跑完,已经停下']);
       }, 10 * 60 * 1000);
       LocalAgentEngine.run(context, 'schedule', mine, row.prompt, '', () => {
         // 定时任务没有页面在看

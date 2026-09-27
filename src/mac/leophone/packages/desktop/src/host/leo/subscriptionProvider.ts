@@ -7,7 +7,7 @@ import { loggedInModels } from "./oauthRuntime.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
-const PROVIDER_NAME = "订阅账号(Claude / ChatGPT / Copilot)";
+const PROVIDER_NAME = "订阅账号(ChatGPT / Copilot / OpenCode Go)";
 const ID_FILE = leoPath("oauth", "provider-id");
 
 function isLocalProxy(baseUrl: string | null | undefined): boolean {

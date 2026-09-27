@@ -18,6 +18,7 @@ struct AskMinisIntent: AppIntent {
     // Open the app and land in the conversation (the Siri experience). The send
     // itself still goes through the normal in-app pipeline.
     static var openAppWhenRun = true
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
     var prompt: String
@@ -27,6 +28,9 @@ struct AskMinisIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        if let lockedId = session?.id, SessionLockStore.shared.isHiddenFromSystemSurfaces(lockedId) {
+            throw SessionLockedIntentError.locked
+        }
         // Same eager keep-alive discipline as SendPromptIntent: arm before any
         // await so an intent-woken process isn't suspended before the send path
         // flips isActive. No-op unless enhancedBackgroundEffective is on.

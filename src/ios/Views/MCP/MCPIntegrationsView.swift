@@ -18,6 +18,9 @@ struct MCPIntegrationsView: View {
     @ObservedObject private var store = MCPStore.shared
 
     @State private var editingServer: MCPServerConfig?
+    /// Swipe-delete waiting for confirmation (it also purges the server's
+    /// OAuth credentials, which can't be restored).
+    @State private var pendingDeleteServerId: String?
     @State private var showAddForm = false
     @State private var showJSONImport = false
     /// [T-mcp-catalog] Recommended-servers catalog sheet + the template the
@@ -62,10 +65,22 @@ struct MCPIntegrationsView: View {
                     }
                 }
                 .onDelete { offsets in
-                    let ids = offsets.map { store.servers[$0].id }
-                    for id in ids { store.delete(id: id) }
+                    guard let first = offsets.first else { return }
+                    pendingDeleteServerId = store.servers[first].id
                 }
             }
+        }
+        .alert(String(localized: "Delete Server"), isPresented: Binding(
+            get: { pendingDeleteServerId != nil },
+            set: { if !$0 { pendingDeleteServerId = nil } }
+        )) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                if let id = pendingDeleteServerId { store.delete(id: id) }
+                pendingDeleteServerId = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteServerId = nil }
+        } message: {
+            Text(String(localized: "Delete \"\(pendingDeleteServerId ?? "")\" and its saved credentials? This action cannot be undone."))
         }
         .navigationTitle(Text("MCP Integrations"))
         .navigationBarTitleDisplayMode(.inline)

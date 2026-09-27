@@ -994,12 +994,8 @@ final class ProviderConfigStore: ObservableObject {
         // (matching the apiKey / manualOAuthToken encoding) under "oauthToken".
         let oauthTokenBlob: Data? = {
             switch instance.providerType {
-            case .anthropic:
-                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ClaudeTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .openAI:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: CodexTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
-            case .gemini:
-                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: GeminiTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .xAI:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .kimiCode:
@@ -1010,16 +1006,6 @@ final class ProviderConfigStore: ObservableObject {
         }()
         if let blob = oauthTokenBlob {
             dict["oauthToken"] = blob.base64EncodedString()
-        }
-        // Gemini also stores the resolved account email + GCP project as separate
-        // OAuth strings; carry them so the imported instance can call the API.
-        if instance.providerType == .gemini {
-            if let email = ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "oauth-email") {
-                dict["oauthEmail"] = Data(email.utf8).base64EncodedString()
-            }
-            if let project = ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "oauth-gcp-project") {
-                dict["oauthGcpProject"] = Data(project.utf8).base64EncodedString()
-            }
         }
         if let url = instance.customBaseURL {
             dict["customBaseURL"] = url
@@ -1119,19 +1105,9 @@ final class ProviderConfigStore: ObservableObject {
         if let oauthB64 = dict["oauthToken"] as? String, !oauthB64.isEmpty,
            let blob = Data(base64Encoded: oauthB64) {
             switch providerType {
-            case .anthropic:
-                if let t = (try? JSONDecoder().decode(ClaudeTokenStorage.self, from: blob))
-                    ?? Self.decodeClaudeTokenFromRawOAuth(blob) {
-                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
-                }
             case .openAI:
                 if let t = (try? JSONDecoder().decode(CodexTokenStorage.self, from: blob))
                     ?? Self.decodeCodexTokenFromRawOAuth(blob) {
-                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
-                }
-            case .gemini:
-                if let t = (try? JSONDecoder().decode(GeminiTokenStorage.self, from: blob))
-                    ?? Self.decodeGeminiTokenFromRawOAuth(blob) {
                     ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
                 }
             case .xAI:
@@ -1147,18 +1123,6 @@ final class ProviderConfigStore: ObservableObject {
                 break
             }
         }
-        // Gemini account email + GCP project (base64-encoded OAuth strings).
-        if providerType == .gemini {
-            if let b64 = dict["oauthEmail"] as? String, let d = Data(base64Encoded: b64),
-               let email = String(data: d, encoding: .utf8) {
-                ProviderKeychainHelper.saveOAuthString(email, instanceId: instance.id, account: "oauth-email")
-            }
-            if let b64 = dict["oauthGcpProject"] as? String, let d = Data(base64Encoded: b64),
-               let project = String(data: d, encoding: .utf8) {
-                ProviderKeychainHelper.saveOAuthString(project, instanceId: instance.id, account: "oauth-gcp-project")
-            }
-        }
-
         // Append instance directly (skip addInstance to avoid built-in model
         // population and async refreshModels — we already have models from the JSON).
         config.instances.append(instance)
@@ -2449,8 +2413,7 @@ final class ProviderConfigStore: ObservableObject {
                 // Manual token — try Bearer auth first, fall back to x-api-key for compatibility
                 return try await AnthropicModelsAPI.fetchModels(bearerToken: manualToken, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
             }
-            let token = try await ClaudeOAuthManager.shared.validAccessToken(instanceId: instance.id)
-            return try await AnthropicModelsAPI.fetchModels(oauthToken: token, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh)
+            throw ModelRefreshError.noCredential
         case (.gemini, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2460,9 +2423,7 @@ final class ProviderConfigStore: ObservableObject {
             if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
                 return try await GeminiModelsAPI.fetchModels(apiKey: manualToken, customBaseURL: customBase, forceRefresh: forceRefresh)
             }
-            let token = try await GeminiOAuthManager.shared.validAccessToken(instanceId: instance.id)
-            let projectID = GeminiOAuthManager.shared.gcpProjectID(instanceId: instance.id)
-            return try await GeminiModelsAPI.fetchModels(oauthToken: token, gcpProjectID: projectID ?? "", customBaseURL: customBase)
+            throw ModelRefreshError.noCredential
         case (.openAI, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2475,13 +2436,11 @@ final class ProviderConfigStore: ObservableObject {
             let hasModels = await MainActor.run { !ProviderConfigStore.shared.visibleEntries(for: instance.id).isEmpty }
             return try await OpenAIModelsAPI.fetchModelsCodexOAuth(
                 instanceId: instance.id, forceRefresh: forceRefresh, instanceHasModels: hasModels)
-        case (.antigravity, .apiKey):
-            // Antigravity only supports OAuth
-            return ModelsDevAPI.enrichModels(AntigravityModelsAPI.fetchModelsBuiltIn())
-        case (.antigravity, .oauth):
-            let token = try await AntigravityOAuthManager.shared.validAccessToken(instanceId: instance.id)
-            let projectID = AntigravityOAuthManager.shared.projectID(instanceId: instance.id) ?? ""
-            return try await AntigravityModelsAPI.fetchModels(oauthToken: token, projectID: projectID, forceRefresh: forceRefresh)
+        case (.openCodeGo, _):
+            guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
+                throw ModelRefreshError.noCredential
+            }
+            return try await OpenCodeGo.fetchModels(apiKey: key, forceRefresh: forceRefresh)
         case (.openRouter, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2513,19 +2472,26 @@ final class ProviderConfigStore: ObservableObject {
             return try await OpenAIModelsAPI.fetchModels(apiKey: key, baseURL: xaiBase, appendV1Suffix: xaiAppendV1, forceRefresh: forceRefresh, userAgent: ua)
         case (.xAI, .oauth):
             let token: String
-            // Custom UA applies only to the manual-token (relay) sub-case; the xAI
-            // OAuth-login token keeps the default UA, matching the other OAuth paths.
+            // Custom UA and custom base apply only to the manual-token (relay)
+            // sub-case; signed-in tokens go to the official endpoint only.
             var xaiUA: String? = nil
-            if GrokViaMacBroker.hostMarker(instanceId: instance.id) != nil {
+            var xaiBase = "https://api.x.ai/v1"
+            var xaiAppendV1 = false
+            switch XAICredentialSource.resolve(instanceId: instance.id) {
+            case .viaMac:
                 token = try await GrokViaMacBroker.shared.token(instanceId: instance.id)
-            } else if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            case .oauthLogin:
+                token = try await XAIOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            case .manualToken(let manualToken):
                 token = manualToken
                 xaiUA = ua
-            } else {
-                token = try await XAIOAuthManager.shared.validAccessToken(instanceId: instance.id)
+                if let customBase {
+                    xaiBase = customBase
+                    xaiAppendV1 = appendV1
+                }
+            case .none:
+                throw ModelRefreshError.noCredential
             }
-            let xaiBase = customBase ?? "https://api.x.ai/v1"
-            let xaiAppendV1 = customBase == nil ? false : appendV1
             let fetched = (try? await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: xaiBase, appendV1Suffix: xaiAppendV1, forceRefresh: forceRefresh, userAgent: xaiUA)) ?? []
             // OpenMinis keeps the complete built-in OAuth catalog available;
             // live /models entries enrich it but never shrink the picker.
@@ -2542,10 +2508,9 @@ final class ProviderConfigStore: ObservableObject {
             let kimiAppendV1 = customBase == nil ? true : appendV1  // default base …/coding needs /v1 appended
             return try await OpenAIModelsAPI.fetchModels(apiKey: key, baseURL: kimiBase, appendV1Suffix: kimiAppendV1, forceRefresh: forceRefresh, userAgent: ua)
         case (.kimiCode, .oauth):
+            // Signed-in tokens go to the official endpoint only.
             let token = try await KimiOAuthManager.shared.validAccessToken(instanceId: instance.id)
-            let kimiBase = customBase ?? "https://api.kimi.com/coding"
-            let kimiAppendV1 = customBase == nil ? true : appendV1  // default base …/coding needs /v1 appended
-            return try await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: kimiBase, appendV1Suffix: kimiAppendV1, forceRefresh: forceRefresh, userAgent: nil)
+            return try await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: "https://api.kimi.com/coding", appendV1Suffix: true, forceRefresh: forceRefresh, userAgent: nil)
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
@@ -2587,30 +2552,6 @@ final class ProviderConfigStore: ObservableObject {
             lastRefresh: Date(),
             accountId: accountId,
             planType: planType
-        )
-    }
-
-    /// Parse an Android-exported raw OAuth JSON into `ClaudeTokenStorage`.
-    private static func decodeClaudeTokenFromRawOAuth(_ blob: Data) -> ClaudeTokenStorage? {
-        guard let json = try? JSONSerialization.jsonObject(with: blob) as? [String: Any],
-              let accessToken = json["access_token"] as? String else { return nil }
-        return ClaudeTokenStorage(
-            accessToken: accessToken,
-            refreshToken: json["refresh_token"] as? String,
-            expireDate: expireDateFromRawOAuth(json),
-            lastRefresh: Date()
-        )
-    }
-
-    /// Parse an Android-exported raw OAuth JSON into `GeminiTokenStorage`.
-    private static func decodeGeminiTokenFromRawOAuth(_ blob: Data) -> GeminiTokenStorage? {
-        guard let json = try? JSONSerialization.jsonObject(with: blob) as? [String: Any],
-              let accessToken = json["access_token"] as? String else { return nil }
-        return GeminiTokenStorage(
-            accessToken: accessToken,
-            refreshToken: json["refresh_token"] as? String,
-            expireDate: expireDateFromRawOAuth(json),
-            lastRefresh: Date()
         )
     }
 
@@ -2727,7 +2668,7 @@ final class ProviderConfigStore: ObservableObject {
         case .kimiCode: return "https://api.kimi.com/coding"
         case .gemini: return "https://generativelanguage.googleapis.com"
         case .openRouter: return "https://openrouter.ai/api"
-        case .antigravity: return nil // No public base URL
+        case .openCodeGo: return OpenCodeGo.apiRoot
         case .unsupported: return nil // synced from newer build
         }
     }
@@ -2875,65 +2816,73 @@ enum ProviderKeychainHelper {
         Task { @MainActor in ProviderConfigStore.shared.authRevision &+= 1 }
     }
 
+    /// Signed-in OAuth tokens stay on this device: they are refresh-rotated, so
+    /// an iCloud-synced copy on a second device goes stale and its refresh would
+    /// race this one. (Pasted manual tokens and API keys still sync.)
     static func saveOAuthToken<T: Codable>(_ token: T, instanceId: String, caller: String = #function) {
         guard let data = try? JSONEncoder().encode(token) else {
             AppLogger(category: "Keychain").warning("write oauthToken instanceId=\(instanceId.prefix(8)) ENCODE FAILED caller=\(caller)")
             return
         }
-        let service = "com.leoyuan.leophoneagent.provider.\(instanceId)"
-        let acct = "oauth-token"
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: acct,
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
-        var syncDelete = deleteQuery
-        syncDelete[kSecAttrSynchronizable as String] = true
-        SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = writeDeviceOnlyOAuthToken(data, instanceId: instanceId)
         AppLogger(category: "Keychain").info("write oauthToken instanceId=\(instanceId.prefix(8)) blobLen=\(data.count) addStatus=\(addStatus) caller=\(caller)")
         notifyAuthChanged(instanceId: instanceId)
     }
 
-    static func loadOAuthToken<T: Codable>(instanceId: String, as type: T.Type, caller: String = #function) -> T? {
-        let service = "com.leoyuan.leophoneagent.provider.\(instanceId)"
-        let acct = "oauth-token"
-        // Try synchronizable first
-        let syncQuery: [String: Any] = [
+    private static func oauthTokenBaseQuery(instanceId: String) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: acct,
-            kSecAttrSynchronizable as String: true,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecAttrService as String: "com.leoyuan.leophoneagent.provider.\(instanceId)",
+            kSecAttrAccount as String: "oauth-token",
         ]
+    }
+
+    /// Replaces every copy (local and iCloud) with a single device-only item.
+    private static func writeDeviceOnlyOAuthToken(_ data: Data, instanceId: String) -> OSStatus {
+        let base = oauthTokenBaseQuery(instanceId: instanceId)
+        SecItemDelete(base as CFDictionary)
+        var syncDelete = base
+        syncDelete[kSecAttrSynchronizable as String] = true
+        SecItemDelete(syncDelete as CFDictionary)
+        var addQuery = base
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        addQuery[kSecAttrSynchronizable as String] = false
+        return SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    private static func readOAuthTokenData(instanceId: String, synchronizable: Bool) -> (Data?, OSStatus) {
+        var query = oauthTokenBaseQuery(instanceId: instanceId)
+        query[kSecAttrSynchronizable as String] = synchronizable
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
-        let syncStatus = SecItemCopyMatching(syncQuery as CFDictionary, &result)
-        if syncStatus == errSecSuccess, let data = result as? Data {
-            let decoded = try? JSONDecoder().decode(type, from: data)
-            AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) src=sync hit=true decoded=\(decoded != nil) caller=\(caller)")
-            return decoded
-        }
-        // Fallback to legacy
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: acct,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        let legacyStatus = SecItemCopyMatching(query as CFDictionary, &result)
-        guard legacyStatus == errSecSuccess, let data = result as? Data else {
-            AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) hit=false syncStatus=\(syncStatus) legacyStatus=\(legacyStatus) caller=\(caller)")
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        return (status == errSecSuccess ? result as? Data : nil, status)
+    }
+
+    /// Moves a token written by an older build (iCloud-synced) to device-only
+    /// storage. Returns the token data if one exists in either place.
+    @discardableResult
+    static func migrateOAuthTokenToDeviceOnly(instanceId: String) -> Data? {
+        let (local, _) = readOAuthTokenData(instanceId: instanceId, synchronizable: false)
+        let (synced, _) = readOAuthTokenData(instanceId: instanceId, synchronizable: true)
+        guard let synced else { return local }
+        let data = local ?? synced
+        let status = writeDeviceOnlyOAuthToken(data, instanceId: instanceId)
+        AppLogger(category: "Keychain").info("migrate oauthToken instanceId=\(instanceId.prefix(8)) toDeviceOnly status=\(status)")
+        return data
+    }
+
+    static func loadOAuthToken<T: Codable>(instanceId: String, as type: T.Type, caller: String = #function) -> T? {
+        let (local, localStatus) = readOAuthTokenData(instanceId: instanceId, synchronizable: false)
+        let data = local ?? migrateOAuthTokenToDeviceOnly(instanceId: instanceId)
+        guard let data else {
+            AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) hit=false localStatus=\(localStatus) caller=\(caller)")
             return nil
         }
         let decoded = try? JSONDecoder().decode(type, from: data)
-        AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) src=legacy hit=true decoded=\(decoded != nil) syncStatus=\(syncStatus) caller=\(caller)")
+        AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) src=\(local != nil ? "local" : "migrated") hit=true decoded=\(decoded != nil) caller=\(caller)")
         return decoded
     }
 

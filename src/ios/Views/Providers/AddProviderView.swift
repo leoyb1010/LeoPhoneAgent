@@ -65,6 +65,7 @@ struct AIDataSharingConsentView: View {
                                 providerRow("OpenAI", description: "GPT and o-series models (openai.com)", color: .green)
                                 providerRow("Google", description: "Gemini models (google.com)", color: .blue)
                                 providerRow("OpenRouter", description: "Multi-provider routing (openrouter.ai)", color: .cyan)
+                                providerRow("OpenCode Go", description: "Kimi, GLM, DeepSeek, Qwen, MiniMax and more (opencode.ai)", color: .teal)
                                 providerRow("Custom Endpoints", description: "Self-hosted or third-party compatible APIs you configure", color: .gray)
                             }
 
@@ -80,7 +81,7 @@ struct AIDataSharingConsentView: View {
                                 .font(.headline)
 
                             VStack(alignment: .leading, spacing: 6) {
-                                dataItem("API keys and tokens are stored in the iOS Keychain; provider configuration may also sync through your iCloud account when iCloud Sync is enabled")
+                                dataItem("API keys are stored in the iOS Keychain and can sync through iCloud Keychain; sign-in tokens stay on this device only. Provider configuration may also sync through your iCloud account when iCloud Sync is enabled")
                                 dataItem("Data is sent only to the specific provider you choose for each conversation")
                                 dataItem("You can remove any provider and its credentials at any time from Settings")
                                 dataItem("Diagnostic logs can contain shell output and should be reviewed before export")
@@ -193,6 +194,7 @@ struct AddProviderView: View {
     @State private var showImportResult = false
     @State private var importSucceeded = false
     @State private var pendingSaveKind: PendingSaveKind?
+    @State private var isSigningIn = false
 
     /// Whether the data-sharing consent has been accepted (persisted in UserDefaults).
     private var consentAccepted: Bool {
@@ -321,8 +323,7 @@ struct AddProviderView: View {
 
     private var visibleProviderTypes: [ProviderType] {
         ProviderType.allCases.filter {
-            $0 != .openAIResponses && $0 != .antigravity
-                && !$0.isUnsupported
+            $0 != .openAIResponses && !$0.isUnsupported
         }
     }
 
@@ -503,37 +504,6 @@ struct AddProviderView: View {
                 Text("Authentication")
             }
 
-            // [T-google-oauth-byo-client] Google sign-in needs an OAuth client
-            // the fork does not ship. Offer the setup entry point right where
-            // the user would otherwise wonder why there is no OAuth option.
-            if selectedType == .gemini {
-                Section {
-                    NavigationLink {
-                        GoogleOAuthClientSetupView()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: GoogleOAuthClientStore.isConfigured
-                                  ? "checkmark.seal.fill" : "person.badge.key")
-                                .font(.body)
-                                .frame(width: 28)
-                                .foregroundStyle(GoogleOAuthClientStore.isConfigured ? .green : Color(UIColor.label))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Google sign-in setup")
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(Color(UIColor.label))
-                                Text(GoogleOAuthClientStore.isConfigured
-                                     ? String(localized: "Configured — pick OAuth above to sign in")
-                                     : String(localized: "Add your own Google OAuth client to sign in with an account"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                } footer: {
-                    Text("Gemini's OAuth (Cloud Code Assist) support is complete, but the Google client secret was removed when this project was open-sourced. Create your own OAuth client in Google Cloud Console — an \"iOS\" type client needs no secret and is recommended.")
-                }
-            }
-
             // "Responses API" is now integrated as API Format picker in Step 3
         }
     }
@@ -585,6 +555,16 @@ struct AddProviderView: View {
 
     private var apiKeySection: some View {
         Group {
+            if selectedType == .openCodeGo {
+                Section {
+                    Link(destination: OpenCodeGo.keyPageURL) {
+                        Label(String(localized: "Get a Key from OpenCode"), systemImage: "safari")
+                    }
+                } footer: {
+                    Text("Official OpenCode Go API (opencode.ai). Sign in on the OpenCode site, create an API key, then paste it below.")
+                }
+            }
+
             Section {
                     HStack {
                         if showApiKeyPlaintext {
@@ -607,7 +587,7 @@ struct AddProviderView: View {
                     Text("Your key is stored in the iOS Keychain and used only to authenticate requests sent directly to this provider. Provider configuration can sync through your private iCloud account when iCloud Sync is enabled.")
                 }
 
-            if selectedType != .antigravity {
+            if selectedType != .openCodeGo {
                 customBaseURLSection
             }
 
@@ -694,18 +674,26 @@ struct AddProviderView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        Text(oauthSignInLabel)
-                            .font(.body.weight(.semibold))
+                        if isSigningIn {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text(oauthSignInLabel)
+                                .font(.body.weight(.semibold))
+                        }
                         Spacer()
                     }
                 }
+                .disabled(isSigningIn)
             }
         } header: {
             Text("OAuth")
+        } footer: {
+            Text("Sign-in tokens stay in this device's Keychain and are not synced to iCloud. They are only sent to the provider's official endpoint.")
         }
 
         // Manual OAuth entry — available for all providers (supports proxy services, Coding Plan tokens, etc.)
-        if selectedType != .antigravity && !pendingOAuthDone {
+        if !pendingOAuthDone {
             Section {
                 TextField(defaultBaseURL, text: $customBaseURLInput)
                     .font(.system(.body, design: .monospaced))
@@ -800,6 +788,7 @@ struct AddProviderView: View {
         case .openAIResponses: return "https://api.openai.com"
         case .xAI: return "https://api.x.ai/v1"
         case .kimiCode: return "https://api.kimi.com/coding"
+        case .openCodeGo: return OpenCodeGo.apiRoot + "/v1"
         default: return "https://api.example.com"
         }
     }
@@ -985,40 +974,38 @@ struct AddProviderView: View {
 
     @MainActor
     private func startOAuth() async {
-        guard let type = selectedType else { return }
+        guard let type = selectedType, !isSigningIn else { return }
         errorMessage = nil
+        isSigningIn = true
+        defer { isSigningIn = false }
         do {
             switch type {
-            case .anthropic: try await ClaudeOAuthManager.shared.login(instanceId: pendingInstanceId)
-            case .gemini: try await GeminiOAuthManager.shared.login(instanceId: pendingInstanceId)
+            case .anthropic, .gemini, .openCodeGo: return // API key only
             case .openAI: try await CodexOAuthManager.shared.login(instanceId: pendingInstanceId)
-            case .antigravity: try await AntigravityOAuthManager.shared.login(instanceId: pendingInstanceId)
             case .openRouter: try await OpenRouterOAuthManager.shared.login(instanceId: pendingInstanceId)
             case .openAIResponses: break // API key only, no OAuth
             case .xAI: try await XAIOAuthManager.shared.login(instanceId: pendingInstanceId)
             case .kimiCode: break // device-code flow runs in KimiDeviceLoginSheet, not here
             case .unsupported: break // free / unsupported — no OAuth
             }
+            // A re-entrant call returns without signing in; only advance on a real token.
+            guard let masked = loadMaskedToken(type: type) else { return }
             oauthAuthTime = Date()
-            oauthMaskedToken = loadMaskedToken(type: type)
+            oauthMaskedToken = masked
             pendingOAuthDone = true
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    /// Loads the access token from Keychain and masks the middle third.
+    /// Loads the access token from Keychain and masks it.
     private func loadMaskedToken(type: ProviderType) -> String? {
         let token: String?
         switch type {
-        case .anthropic:
-            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: ClaudeTokenStorage.self)?.accessToken
-        case .gemini:
-            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: GeminiTokenStorage.self)?.accessToken
+        case .anthropic, .gemini, .openCodeGo:
+            token = nil
         case .openAI:
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: CodexTokenStorage.self)?.accessToken
-        case .antigravity:
-            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: AntigravityTokenStorage.self)?.accessToken
         case .openRouter:
             // OpenRouter OAuth produces a permanent API key, not an OAuth token
             token = ProviderKeychainHelper.loadAPIKey(instanceId: pendingInstanceId)
@@ -1032,7 +1019,7 @@ struct AddProviderView: View {
             token = nil // free / unsupported — no token
         }
         guard let t = token, !t.isEmpty else { return nil }
-        return ClaudeOAuthManager.maskToken(t)
+        return OAuthTokenMask.mask(t)
     }
 
     private func goBack() {
@@ -1098,10 +1085,8 @@ struct AddProviderView: View {
     private var oauthSignInLabel: String {
         guard let type = selectedType else { return String(localized: "Sign In") }
         switch type {
-        case .anthropic: return String(localized: "Sign in with Claude")
-        case .gemini: return String(localized: "Sign in with Google")
+        case .anthropic, .gemini, .openCodeGo: return String(localized: "Sign In") // Not reachable — API key only
         case .openAI: return String(localized: "Sign in with OpenAI")
-        case .antigravity: return String(localized: "Sign in with Google")
         case .openRouter: return String(localized: "Sign in with OpenRouter")
         case .openAIResponses: return String(localized: "Sign In") // Not reachable — API key only
         case .xAI: return String(localized: "Sign in with xAI")
@@ -1116,7 +1101,7 @@ struct AddProviderView: View {
         case .anthropic: return "sk-ant-..."
         case .gemini: return "Gemini API Key..."
         case .openAI: return "sk-..."
-        case .antigravity: return "API Key..."
+        case .openCodeGo: return "sk-..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."
         case .xAI: return "xai-..."
@@ -1130,7 +1115,7 @@ struct AddProviderView: View {
         case .anthropic: return String(localized: "Anthropic / Compatible API")
         case .openAI:    return String(localized: "OpenAI / Compatible API")
         case .gemini:    return type.displayName
-        case .antigravity: return type.displayName
+        case .openCodeGo: return type.displayName
         case .openRouter: return "OpenRouter"
         case .openAIResponses: return "Responses API"
         case .xAI: return "xAI (Grok)"
@@ -1149,16 +1134,8 @@ struct AddProviderView: View {
 
     private func availableCredentials(for type: ProviderType) -> [ProviderCredential] {
         switch type {
-        case .antigravity:
-            return [.oauth]
-        case .gemini:
-            // [T-google-oauth-byo-client] OAuth is fully implemented (Cloud
-            // Code Assist) but needs a real Google OAuth client, which
-            // upstream stripped. Offer it only once the user has supplied
-            // one — surfacing it unconditionally would just hand them an
-            // `invalid_client` error from Google.
-            return GoogleOAuthClientStore.isConfigured ? [.apiKey, .oauth] : [.apiKey]
-        case .openAIResponses:
+        case .anthropic, .gemini, .openCodeGo, .openAIResponses:
+            // Claude subscription and Google account sign-in are retired.
             return [.apiKey]
         default:
             return [.apiKey, .oauth]
@@ -1173,16 +1150,14 @@ struct AddProviderView: View {
             return String(localized: "Use an API key for a Responses API endpoint")
         case (.kimiCode, .apiKey):
             return String(localized: "Use a Kimi Coding API key.")
+        case (.openCodeGo, .apiKey):
+            return String(localized: "Use an API key from opencode.ai (official OpenCode Go API).")
         case (_, .apiKey):
             return String(localized: "Use an API key from your \(type.displayName) account")
-        case (.anthropic, .oauth):
-            return String(localized: "Sign in with your Claude account")
-        case (.gemini, .oauth):
-            return String(localized: "Sign in with Google for Cloud Code Assist")
+        case (.anthropic, .oauth), (.gemini, .oauth), (.openCodeGo, .oauth):
+            return "" // Not reachable — API key only
         case (.openAI, .oauth):
             return String(localized: "Sign in with OpenAI Codex")
-        case (.antigravity, .oauth):
-            return String(localized: "Sign in with Google for Antigravity Cloud Code")
         case (.openRouter, .oauth):
             return String(localized: "Sign in with your OpenRouter account")
         case (.openAIResponses, .oauth):
@@ -1208,9 +1183,9 @@ struct AddProviderView: View {
         case .openAI:
             Image(systemName: "circle.hexagongrid")
                 .foregroundStyle(.green)
-        case .antigravity:
-            Image(systemName: "ant")
-                .foregroundStyle(.orange)
+        case .openCodeGo:
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .foregroundStyle(.teal)
         case .openRouter:
             Image(systemName: "arrow.triangle.branch")
                 .foregroundStyle(.cyan)
@@ -1234,7 +1209,7 @@ struct AddProviderView: View {
         case .anthropic: return .purple
         case .gemini: return .blue
         case .openAI: return .green
-        case .antigravity: return .orange
+        case .openCodeGo: return .teal
         case .openRouter: return .cyan
         case .openAIResponses: return .mint
         case .xAI: return .gray

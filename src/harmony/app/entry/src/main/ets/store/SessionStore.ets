@@ -110,34 +110,85 @@ export class SessionStore {
     this.lastError = '';
     SessionStore.ensureDir(SessionStore.dir(context));
     const indexPath = SessionStore.indexPath(context);
-    if (!fileIo.accessSync(indexPath)) {
-      this.summaries = [];
-      this.loaded = true;
-      return;
+    let listed: LocalSessionSummary[] = [];
+    if (fileIo.accessSync(indexPath)) {
+      try {
+        const parsed = JSON.parse(fileIo.readTextSync(indexPath)) as Object[];
+        if (!Array.isArray(parsed)) {
+          throw new Error('index not array');
+        }
+        listed = parsed.map((row: Object) => SessionStore.summaryFrom(row as Record<string, Object>, ''));
+      } catch (err) {
+        // 目录坏了不等于对话坏了:下面按每条对话自己的档案重建。
+        this.lastError = `${err}`;
+      }
     }
     try {
-      const raw = fileIo.readTextSync(indexPath);
-      const parsed = JSON.parse(raw) as Object[];
-      if (!Array.isArray(parsed)) {
-        throw new Error('index not array');
-      }
-      this.summaries = parsed.map((row: Object) => {
-        const item = row as Record<string, Object>;
-        const summary = new LocalSessionSummary();
-        summary.id = `${item['id'] ?? ''}`;
-        summary.title = `${item['title'] ?? '新任务'}`;
-        summary.lastMessage = `${item['lastMessage'] ?? ''}`;
-        summary.updatedAt = Number(item['updatedAt'] ?? 0);
-        summary.archived = item['archived'] === true;
-        summary.pinned = item['pinned'] === true;
-        return summary;
-      }).filter((row: LocalSessionSummary) => row.id.length > 0);
+      this.summaries = this.reconcile(context, listed);
     } catch (err) {
       this.jsonLoadFailed = true;
       this.lastError = `${err}`;
       this.summaries = [];
     }
     this.loaded = true;
+  }
+
+  /**
+   * 目录以磁盘上真有的对话档案为准:目录里有、档案没了的去掉;档案在、目录里没有的补上
+   * (后台定时任务和前台各自写目录会互相盖掉对方新建的对话,补回来就不会「消失」)。
+   */
+  private reconcile(context: common.Context, listed: LocalSessionSummary[]): LocalSessionSummary[] {
+    const names = fileIo.listFileSync(SessionStore.dir(context));
+    const onDisk: Set<string> = new Set();
+    for (let i = 0; i < names.length; i++) {
+      const id = names[i].endsWith('.json') ? names[i].slice(0, -5) : '';
+      if (SessionStore.validId(id)) {
+        onDisk.add(id);
+      }
+    }
+    const out: LocalSessionSummary[] = [];
+    const seen: Set<string> = new Set();
+    for (let i = 0; i < listed.length; i++) {
+      const row = listed[i];
+      if (onDisk.has(row.id) && !seen.has(row.id)) {
+        out.push(row);
+        seen.add(row.id);
+      }
+    }
+    let changed = out.length !== listed.length;
+    onDisk.forEach((id: string) => {
+      if (seen.has(id)) {
+        return;
+      }
+      try {
+        const obj = JSON.parse(fileIo.readTextSync(SessionStore.sessionPath(context, id))) as Record<string, Object>;
+        out.push(SessionStore.summaryFrom(obj, id));
+        changed = true;
+      } catch (_err) {
+        // 这一条档案本身坏了就跳过,不连累其他对话
+      }
+    });
+    out.sort((a: LocalSessionSummary, b: LocalSessionSummary) => b.updatedAt - a.updatedAt);
+    if (changed) {
+      SessionStore.writeText(SessionStore.indexPath(context), JSON.stringify(out));
+    }
+    return out;
+  }
+
+  private static summaryFrom(item: Record<string, Object>, fallbackId: string): LocalSessionSummary {
+    const summary = new LocalSessionSummary();
+    summary.id = `${item['id'] ?? fallbackId}`;
+    summary.title = `${item['title'] ?? '新任务'}`;
+    summary.lastMessage = `${item['lastMessage'] ?? ''}`;
+    summary.updatedAt = Number(item['updatedAt'] ?? 0);
+    summary.archived = item['archived'] === true;
+    summary.pinned = item['pinned'] === true;
+    return summary;
+  }
+
+  /** 对话编号只能是 create() 发的样子,外部链接带进来的编号不能拼成别的路径。 */
+  static validId(id: string): boolean {
+    return /^s_\d+_\d+$/.test(id);
   }
 
   async create(context: common.Context, title: string = ''): Promise<LocalSession> {
@@ -156,7 +207,7 @@ export class SessionStore {
 
   async get(context: common.Context, id: string): Promise<LocalSession | null> {
     await this.ensureLoaded(context);
-    if (!id) {
+    if (!SessionStore.validId(id)) {
       return null;
     }
     const hit = this.cache.get(id);
@@ -272,6 +323,10 @@ export class SessionStore {
   async remove(context: common.Context, id: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
+    if (!SessionStore.validId(id)) {
+      return;
+    }
+    const doomed = await this.get(context, id);
     this.summaries = this.summaries.filter((row: LocalSessionSummary) => row.id !== id);
     this.cache.delete(id);
     const path = SessionStore.sessionPath(context, id);
@@ -279,6 +334,36 @@ export class SessionStore {
       fileIo.unlinkSync(path);
     }
     SessionStore.writeText(SessionStore.indexPath(context), JSON.stringify(this.summaries));
+    if (doomed) {
+      this.dropImages(context, doomed.messages);
+    }
+  }
+
+  /** 删掉这条对话自己的图片;「复制对话」的副本和它共用图片文件,还有别的对话引用的就留着。 */
+  private dropImages(context: common.Context, messages: LocalChatMessage[]): void {
+    const paths = messages.map((line: LocalChatMessage) => line.imagePath)
+      .filter((path: string) => path.length > 0 && fileIo.accessSync(path));
+    if (paths.length === 0) {
+      return;
+    }
+    const others: string[] = [];
+    for (let i = 0; i < this.summaries.length; i++) {
+      try {
+        others.push(fileIo.readTextSync(SessionStore.sessionPath(context, this.summaries[i].id)));
+      } catch (_err) {
+        // 读不到的档案不影响判断
+      }
+    }
+    for (let i = 0; i < paths.length; i++) {
+      if (others.some((text: string) => text.indexOf(paths[i]) >= 0)) {
+        continue;
+      }
+      try {
+        fileIo.unlinkSync(paths[i]);
+      } catch (_err) {
+        // 已经不在了
+      }
+    }
   }
 
   async rename(context: common.Context, id: string, title: string): Promise<void> {
@@ -494,6 +579,9 @@ export class SessionStore {
   }
 
   private static sessionPath(context: common.Context, id: string): string {
+    if (!SessionStore.validId(id)) {
+      throw new Error('对话编号不对');
+    }
     return SessionStore.dir(context) + '/' + id + '.json';
   }
 
@@ -503,14 +591,18 @@ export class SessionStore {
     }
   }
 
+  /** 先写临时文件再改名:写到一半被杀掉,旧档案还是完整的。 */
   private static writeText(path: string, text: string): void {
-    const file = fileIo.openSync(path,
+    const tmp = `${path}.tmp`;
+    const file = fileIo.openSync(tmp,
       fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
     try {
       fileIo.writeSync(file.fd, text);
+      fileIo.fsyncSync(file.fd);
     } finally {
       fileIo.closeSync(file);
     }
+    fileIo.renameSync(tmp, path);
   }
 }
 

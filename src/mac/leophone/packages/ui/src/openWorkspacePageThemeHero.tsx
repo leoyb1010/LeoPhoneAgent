@@ -68,8 +68,9 @@ function getThemeHeroPalette(theme: Theme): ThemeHeroPalette {
 
 export function useResolvedThemeHeroPalette(): ThemeHeroPalette {
   const theme = useZCodeStore((state) => state.theme);
+  // [leo] 跟随系统时全局用的是 theme-zai-*,欢迎背景也要落到 Zai 那两套,否则还是智谱蓝。
   const resolvedTheme =
-    theme === "system" ? (resolveTheme(theme) === "dark" ? "dark" : "light") : theme;
+    theme === "system" ? (resolveTheme(theme) === "dark" ? "zai-dark" : "zai-light") : theme;
 
   return getThemeHeroPalette(resolvedTheme);
 }

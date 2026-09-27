@@ -1013,6 +1013,8 @@ class HarnessManager:
     # A personal machine hosting more live coding agents than this is a bug,
     # not a workload; the cap turns a runaway client into a clean 400.
     MAX_LIVE_SESSIONS = 16
+    ORPHAN_RETENTION_S = 7 * 24 * 3600
+    IDLE_STALE_S = 30 * 60
 
     def __init__(self, home: Optional[Path] = None):
         self.home = home or Path.home() / ".leoagent"
@@ -1036,8 +1038,16 @@ class HarnessManager:
         steered (their process died with the old daemon) but their history
         replays exactly.
         """
+        now = time.time()
         for log_path in sorted(self.sessions_dir.glob("hs_*.ndjson")):
             session_id = log_path.stem
+            # 旧会话只读、不能再驱动;一周没动的直接清掉,不然每次重启都复活一批孤儿。
+            try:
+                if now - log_path.stat().st_mtime > self.ORPHAN_RETENTION_S:
+                    log_path.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                continue
             harness_key, cwd, last_seq = "?", "?", 0
             try:
                 with log_path.open(encoding="utf-8") as handle:
@@ -1126,21 +1136,56 @@ class HarnessManager:
     def get(self, session_id: str) -> Optional[HarnessSession]:
         return self.sessions.get(session_id)
 
+    async def archive(self, session_id: str) -> bool:
+        """手机「清理」:停掉(还活着的话),从列表拿掉,删日志。"""
+        session = self.sessions.pop(session_id, None)
+        if session is None:
+            return False
+        if session.process is not None and session.process.returncode is None:
+            try:
+                await session.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            session.log_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return True
+
+    @staticmethod
+    def _updated_at(session: "HarnessSession") -> float:
+        try:
+            return session.log_path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    def _reported_status(self, session: "HarnessSession", updated_at: float) -> str:
+        # 与 Mac 桥接的 ZCode 会话同一条规则:跑完一轮后半小时没动静,就不再算「进行中」。
+        if session.status == "idle" and time.time() - updated_at > self.IDLE_STALE_S:
+            return "available"
+        return session.status
+
     def list(self) -> List[Dict[str, Any]]:
-        return [
-            {
-                "session_id": s.session_id,
-                "harness": s.spec.key,
-                "name": s.spec.display_name,
-                "cwd": s.cwd,
-                "status": s.status,
-                "seq": s.seq,
-                "waiting_for_approval": bool(s.pending_approvals),
-                "pending_approvals": [
-                    {"approval_id": k, "command": v.get("command", ""),
-                     "choices": v.get("choices", [])}
-                    for k, v in s.pending_approvals.items()
-                ],
-            }
-            for s in self.sessions.values()
-        ]
+        rows = []
+        for s in self.sessions.values():
+            updated_at = self._updated_at(s)
+            rows.append(self._list_row(s, updated_at))
+        return rows
+
+    def _list_row(self, s: "HarnessSession", updated_at: float) -> Dict[str, Any]:
+        return {
+            "session_id": s.session_id,
+            "harness": s.spec.key,
+            "name": s.spec.display_name,
+            "title": f"{s.spec.display_name} · {os.path.basename(s.cwd.rstrip('/')) or s.cwd}",
+            "cwd": s.cwd,
+            "updated_at": updated_at,
+            "status": self._reported_status(s, updated_at),
+            "seq": s.seq,
+            "waiting_for_approval": bool(s.pending_approvals),
+            "pending_approvals": [
+                {"approval_id": k, "command": v.get("command", ""),
+                 "choices": v.get("choices", [])}
+                for k, v in s.pending_approvals.items()
+            ],
+        }

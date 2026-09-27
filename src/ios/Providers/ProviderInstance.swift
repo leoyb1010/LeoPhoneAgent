@@ -140,14 +140,46 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// Whether this instance should expose / inject a custom User-Agent.
     /// Only OpenAI-compatible or Anthropic-compatible endpoints reached through a
     /// custom base URL (proxy/relay) — official direct connections (no customBaseURL)
-    /// and native Gemini/Antigravity are excluded.
+    /// and native Gemini are excluded.
     var supportsCustomUserAgent: Bool {
-        guard effectiveCustomBaseURL != nil else { return false }
+        guard effectiveCustomBaseURL != nil, !usesProviderSignIn else { return false }
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .anthropic:
             return true
-        case .gemini, .antigravity, .unsupported:
+        case .gemini, .openCodeGo, .unsupported:
             return false
+        }
+    }
+
+    /// True for OAuth instances authenticated by the provider's own sign-in
+    /// (not a user-pasted manual token). Such tokens are only ever sent to the
+    /// provider's official endpoint, so a custom API base is not offered.
+    var usesProviderSignIn: Bool {
+        guard credentialType == .oauth else { return false }
+        return ProviderKeychainHelper.loadOAuthString(instanceId: id, account: "manual-oauth-token")?.isEmpty != false
+    }
+
+    /// Whether the Custom API Base setting applies to this instance.
+    var supportsCustomBaseURL: Bool {
+        switch providerType {
+        case .openCodeGo, .unsupported: return false
+        default: return !usesProviderSignIn
+        }
+    }
+
+    /// Non-nil when the instance depends on a sign-in path this build no longer
+    /// ships (Claude subscription OAuth, Google/Gemini Code Assist OAuth,
+    /// Antigravity). The instance and its models are kept, but it cannot send
+    /// requests until it is switched to an API key.
+    var retiredSignInNotice: String? {
+        if providerType == .unsupported, unknownProviderTypeRaw == RetiredSignIn.antigravityRawType {
+            return RetiredSignIn.antigravityNotice
+        }
+        guard usesProviderSignIn else { return nil }
+        switch providerType {
+        case .anthropic: return RetiredSignIn.claudeNotice
+        case .gemini: return RetiredSignIn.geminiNotice
+        default: return nil
         }
     }
 
@@ -172,6 +204,9 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// Use this to check whether a custom base is configured; for building request URLs use resolvedBaseURL(default:).
     var effectiveCustomBaseURL: String? {
         guard let url = customBaseURL, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        // Signed-in tokens must only reach the provider's own endpoint, so a
+        // base persisted before this rule (or synced from an older build) is ignored.
+        guard supportsCustomBaseURL else { return nil }
         return url.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -205,7 +240,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
 
     /// Whether this provider type's image-output models flow through OpenAIProvider
     /// (and therefore can be routed via /v1/images/generations vs /v1/chat/completions).
-    /// Anthropic / Gemini / Antigravity have their own native image paths and aren't
+    /// Anthropic / Gemini have their own native image paths and aren't
     /// affected by `imageEndpointMode`.
     var supportsImageEndpointSetting: Bool {
         switch providerType {
@@ -276,36 +311,27 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         )?.isEmpty == false {
             return true
         }
-        // Provider-specific OAuth storage (Claude Code login, Codex login, …).
+        // Provider-specific OAuth storage (Codex login, …).
         // Mirrors the diagnostic in MinisApp.swift scenePhase=active.
         switch providerType {
-        case .anthropic:
-            return ProviderKeychainHelper.loadOAuthToken(
-                instanceId: id, as: ClaudeTokenStorage.self, caller: "hasAnyCredential"
-            ) != nil
-        case .gemini:
-            return ProviderKeychainHelper.loadOAuthToken(
-                instanceId: id, as: GeminiTokenStorage.self, caller: "hasAnyCredential"
-            ) != nil
+        case .anthropic, .gemini:
+            // Their sign-in flows were retired; only API keys / manual tokens count.
+            return false
         case .openAI, .openAIResponses:
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: CodexTokenStorage.self, caller: "hasAnyCredential"
             ) != nil
         case .xAI:
-            return ProviderKeychainHelper.loadOAuthToken(
-                instanceId: id, as: XAITokenStorage.self, caller: "hasAnyCredential"
-            ) != nil
+            if case .none = XAICredentialSource.resolve(instanceId: id) { return false }
+            return true
         case .kimiCode:
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: KimiTokenStorage.self, caller: "hasAnyCredential"
             ) != nil
-        case .antigravity, .openRouter, .unsupported:
-            // unsupported = synced from a newer build; no usable credential here.
-            // antigravity stores its token via AntigravityOAuthManager (no
-            // standalone Codable used by the diagnostic); OpenRouter is
-            // API-key only in practice. If a manual token is missing, treat
-            // as no-credential — the router will skip the entry and the
-            // factory's empty-key branch can no longer fire.
+        case .openRouter, .openCodeGo, .unsupported:
+            // unsupported = synced from a newer build (or a retired type such
+            // as Antigravity); no usable credential here. OpenRouter and
+            // OpenCode Go are API-key only, already checked above.
             return false
         }
     }
@@ -403,5 +429,19 @@ final class ProviderCredentialCache: @unchecked Sendable {
         entries.removeAll()
         generation &+= 1
         lock.unlock()
+    }
+}
+
+/// User-facing copy and identifiers for sign-in paths removed from the app.
+enum RetiredSignIn {
+    static let antigravityRawType = "antigravity"
+    static var claudeNotice: String {
+        String(localized: "Claude subscription sign-in has been retired. Use an API key instead, or the official claude CLI on your Mac.")
+    }
+    static var geminiNotice: String {
+        String(localized: "Google account sign-in for Gemini has been retired. Use a Gemini API key from Google AI Studio instead.")
+    }
+    static var antigravityNotice: String {
+        String(localized: "Antigravity has been retired. Add a Gemini API key from Google AI Studio instead, then delete this provider.")
     }
 }

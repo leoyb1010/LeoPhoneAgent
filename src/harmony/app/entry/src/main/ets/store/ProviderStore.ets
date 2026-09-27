@@ -4,6 +4,7 @@ import { http } from '@kit.NetworkKit';
 import { kindByKey, providerKinds } from '../local/ProviderCatalog';
 import { FailoverSlot, ProviderSlot, requireProviderRoot, resolveFailoverQueue } from '../local/LocalProtocol';
 import {
+  chatModelsFor,
   idsFromModelsDevJson,
   MODELS_DEV_URL,
   modelIdsFromListJson,
@@ -189,9 +190,34 @@ export class ProviderStore {
       }
     }
     await this.adoptLegacyKey();
+    const retired = await this.retireClaudeOAuth();
     const current = this.active();
     this.apiKey = current ? this.keyFor(current.id) : '';
     this.loaded = true;
+    if (retired) {
+      await this.save(context);
+    }
+  }
+
+  // Claude 订阅登录已下线:老实例改成 API Key 档并清掉订阅令牌,
+  // 否则令牌会被当成 x-api-key 发出去。用户在详情页填上控制台的 Key 就能接着用。
+  private async retireClaudeOAuth(): Promise<boolean> {
+    if (this.jsonLoadFailed) {
+      return false;
+    }
+    let changed = false;
+    for (let i = 0; i < this.instances.length; i++) {
+      const row = this.instances[i];
+      if (row.type !== 'anthropic' || row.credential !== 'oauth') {
+        continue;
+      }
+      row.credential = 'apiKey';
+      this.keys.delete(row.id);
+      await SecretStore.removeProviderKeyFor(row.id);
+      await SecretStore.remove(`${OAUTH_ALIAS}.${row.id}`);
+      changed = true;
+    }
+    return changed;
   }
 
   // 老版本只有一个供应商，密钥存在全局别名 leo.harmony.provider_key 下。
@@ -244,7 +270,9 @@ export class ProviderStore {
   async upsert(context: common.Context, row: ProviderInstance, key: string): Promise<void> {
     await this.ensureLoaded(context);
     this.assertWritable();
-    if (row.baseUrl.length > 0) {
+    if (row.credential === 'oauth') {
+      row.baseUrl = '';
+    } else if (row.baseUrl.length > 0) {
       row.baseUrl = requireProviderRoot(this.normalizeRoot(row));
     }
     if (!row.model.trim()) {
@@ -447,9 +475,10 @@ export class ProviderStore {
   }
 
   applyModels(row: ProviderInstance, ids: string[]): void {
-    row.models = ids;
-    if (ids.indexOf(row.model) < 0) {
-      row.model = ids[0];
+    const usable = chatModelsFor(row.type, ids);
+    row.models = usable;
+    if (usable.indexOf(row.model) < 0) {
+      row.model = usable[0];
     }
   }
 

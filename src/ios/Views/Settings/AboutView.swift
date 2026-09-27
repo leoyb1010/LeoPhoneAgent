@@ -75,7 +75,6 @@ struct AboutView: View {
                 } label: {
                     Label("更新记录", systemImage: "clock.arrow.circlepath")
                 }
-                LabeledContent("版本规则", value: "与「本次更新」同一套目录")
             }
         }
         .navigationTitle("About")

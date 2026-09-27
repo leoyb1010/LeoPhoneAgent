@@ -680,6 +680,7 @@ extension AIChatViewModel {
             return
         } catch {
             logger.error("[Compact] Summary generation failed type=\(String(describing: type(of: error)))")
+            typedErrorRetry = (error.localizedDescription, .compaction(chatMessageId, includesBoundary: includesBoundary))
             errorMessage = error.localizedDescription
             statusMsg.content = String(localized: "压缩失败：\(error.localizedDescription)")
             statusMsg.isCompactLoading = false

@@ -139,7 +139,11 @@ final class RelayEventCatchUp: ObservableObject {
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = String(body.prefix(120))
+        // Task output is private: with Task Status Privacy on, the lock screen
+        // only learns that something finished.
+        content.body = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+            ? String(localized: "打开 App 查看结果")
+            : String(body.prefix(120))
         content.sound = .default
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: "relay-\(UUID().uuidString)",

@@ -21,6 +21,11 @@ struct LeoReaderView: UIViewControllerRepresentable {
     let url: URL
     /// 文章类内容默认进阅读模式;视频、商品页这类进了反而是坏的。
     var preferReaderMode: Bool = true
+    /// Safari's own Close button only dismisses the controller; the SwiftUI
+    /// presentation binding must be cleared too or the next open is a no-op.
+    var onFinish: (() -> Void)? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
@@ -29,10 +34,22 @@ struct LeoReaderView: UIViewControllerRepresentable {
         let vc = SFSafariViewController(url: url, configuration: config)
         vc.dismissButtonStyle = .close
         vc.preferredControlTintColor = UIColor(named: "AccentColor") ?? .systemBlue
+        vc.delegate = context.coordinator
         return vc
     }
 
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {
+        context.coordinator.onFinish = onFinish
+    }
+
+    final class Coordinator: NSObject, SFSafariViewControllerDelegate {
+        var onFinish: (() -> Void)?
+        init(onFinish: (() -> Void)?) { self.onFinish = onFinish }
+
+        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            onFinish?()
+        }
+    }
 }
 
 /// 阅读器要打开的目标。`Identifiable` 让它能直接喂给 `.fullScreenCover(item:)`。

@@ -235,7 +235,7 @@ export class LocalAgentEngine {
       }
       // owner 传 sessionKey：远程/定时这两条链路没有 UI 授权入口，
       // 传了也永远配不上本机聊天页的授权;只有这台鸿蒙开了「全自动」时才能写。
-      const result: ToolResult = await LocalTools.run(context, calls[i].name, calls[i].args, sessionKey);
+      const result: ToolResult = await LocalTools.run(context, calls[i].name, calls[i].args, sessionKey, true);
       if (result.needWrite) {
         onError('这台鸿蒙是「逐项确认」,远程和定时任务不能写文件;在鸿蒙上切到「全自动」后可以');
         return;

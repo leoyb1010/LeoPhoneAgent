@@ -54,8 +54,8 @@ enum WatchPayloadKey {
     static let kindApprovalReply = "approvalReply"       // watch → phone
     static let choices = "choices"
     static let choice = "choice"
-    /// CommandRisk raw value; the wrist colors the card and asks for a crown
-    /// turn before allowing a high-risk command.
+    /// CommandRisk raw value; the wrist colors the card, and for a high-risk
+    /// command drops double-tap and "always" and asks for a confirming tap.
     static let risk = "risk"
     // [T-watch-standalone] phone → watch (transferUserInfo): the model the
     // watch calls directly when the phone is out of reach.
@@ -100,8 +100,11 @@ enum WatchStandalone {
 
     static var isEnabled: Bool { mode != .off }
 
-    /// [T-watch-skills] MCP servers the user switched off for the watch.
-    static let toolsOffKey = "watch.standalone.tools.off"
+    /// [T-watch-skills] MCP servers the user explicitly switched ON for the
+    /// watch. Opt-in: the wrist calls these tools with no per-call approval,
+    /// and their URLs + credential headers get copied to the watch, so nothing
+    /// goes there by default.
+    static let toolsOnKey = "watch.standalone.tools.on"
 
     /// A remote tool server the wrist can call itself, with credentials filled in.
     struct ToolServer: Equatable {
@@ -118,9 +121,9 @@ enum WatchStandalone {
         let reason: String?
     }
 
-    static var toolsOff: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: toolsOffKey) ?? []) }
-        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: toolsOffKey) }
+    static var toolsOn: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: toolsOnKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: toolsOnKey) }
     }
 
     /// Every HTTP server on the phone and whether the wrist can use it. stdio
@@ -142,12 +145,12 @@ enum WatchStandalone {
         }
     }
 
-    /// The servers to hand the watch: usable and not switched off.
+    /// The servers to hand the watch: usable and switched on for the watch.
     @MainActor
     static func toolServers() -> [ToolServer] {
-        let off = toolsOff
+        let on = toolsOn
         return MCPStore.shared.servers.compactMap { server in
-            guard server.enabled, server.isHTTP, server.oauth == nil, !off.contains(server.id),
+            guard server.enabled, server.isHTTP, server.oauth == nil, on.contains(server.id),
                   let resolved = try? NativeMCPClient.resolvedTransport(server) else { return nil }
             return ToolServer(id: server.id, url: resolved.url, headers: resolved.headers)
         }
@@ -158,7 +161,7 @@ enum WatchStandalone {
     static var toolInputs: String {
         let servers = MCPStore.shared.servers.filter(\.isHTTP)
             .map { "\($0.id):\($0.enabled):\(Int($0.updatedAt ?? $0.createdAt ?? 0)):\($0.oauth != nil)" }
-        return (servers + toolsOff.sorted()).joined(separator: ",")
+        return (servers + toolsOn.sorted()).joined(separator: ",")
     }
 
     /// The model picked for the watch (`ModelEntry.id`); empty follows the default group.
@@ -321,13 +324,26 @@ final class WatchBridge: NSObject, ObservableObject {
     /// truth if the watch is unreachable.
     func sendApprovalRequest(approvalId: String, command: String?, reason: String?, choices: [String]) {
         guard let session, session.isReachable else { return }
+        let risk = command.map(CommandRisk.assess) ?? .medium
+        if risk == .high { highRiskApprovalIds.insert(approvalId) }
         session.sendMessage([
             WatchPayloadKey.kind: WatchPayloadKey.kindApprovalRequest,
             WatchPayloadKey.requestId: approvalId,
             WatchPayloadKey.text: WatchTextSanitizer.plain(command ?? reason ?? ""),
-            WatchPayloadKey.choices: choices,
-            WatchPayloadKey.risk: (command.map(CommandRisk.assess) ?? .medium).rawValue,
+            WatchPayloadKey.choices: Self.wristChoices(choices, risk: risk),
+            WatchPayloadKey.risk: risk.rawValue,
         ], replyHandler: nil, errorHandler: { _ in })
+    }
+
+    /// Approvals whose command assessed as high risk, so a reply from an
+    /// older watch build can't upgrade one to a permanent rule.
+    private var highRiskApprovalIds: Set<String> = []
+
+    /// "Always" writes a permanent allow rule on the Mac (Claude Code project
+    /// settings). The phone's notification never offers it; the wrist offers
+    /// it only for commands that are not high risk.
+    static func wristChoices(_ choices: [String], risk: CommandRisk) -> [String] {
+        risk == .high ? choices.filter { $0 != "always" } : choices
     }
 
     /// Tell the wrist the card is gone (answered on the phone, or timed out).
@@ -602,7 +618,10 @@ extension WatchBridge: WCSessionDelegate {
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
             guard !requestId.isEmpty, !choice.isEmpty else { return }
             Task { @MainActor in
-                WatchBridge.shared.resolveApproval(approvalId: requestId, choice: choice)
+                let bridge = WatchBridge.shared
+                let isHighRisk = bridge.highRiskApprovalIds.remove(requestId) != nil
+                bridge.resolveApproval(approvalId: requestId,
+                                       choice: isHighRisk && choice == "always" ? "once" : choice)
             }
         default:
             replyHandler(["ok": false])
@@ -715,10 +734,21 @@ enum WatchAskRunner {
     private static var running: [String: String] = [:]
 
     static func run(requestId: String, prompt: String, sessionId: String?) async {
+        if let sessionId, !sessionId.isEmpty, SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) {
+            deliver(requestId: requestId, text: "这个会话已用 Face ID 锁定，请在 iPhone 上打开。")
+            return
+        }
+        BackgroundKeepAliveManager.shared.setup()
+        if let sessionId, !sessionId.isEmpty {
+            _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(sessionId: sessionId, caller: "WatchAskRunner")
+        }
         let previousActive = AIChatViewModel.activeSessionId
         let vm: AIChatViewModel
         if let sessionId, !sessionId.isEmpty {
-            vm = ViewModelCache.shared.getOrCreate(for: sessionId).0
+            let (cached, isNew) = ViewModelCache.shared.getOrCreate(for: sessionId)
+            vm = cached
+            // Without this a follow-up runs with no history.
+            if isNew { await vm.loadSession() }
         } else {
             vm = ViewModelCache.shared.createDraft()
         }
@@ -731,12 +761,30 @@ enum WatchAskRunner {
         }
         running[requestId] = sid
         defer { running.removeValue(forKey: requestId) }
+        let started = Date()
+        // send() silently drops a prompt while the session is running, and the
+        // wrist would then be handed that other run's answer.
+        if vm.isProcessing {
+            WatchBridge.shared.sendAskPartial(requestId: requestId, text: "", step: "前一个任务还在跑，排队中")
+            while vm.isProcessing, Date().timeIntervalSince(started) < 150 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            guard !vm.isProcessing else {
+                deliver(requestId: requestId, text: "这个会话还在忙，问题没有发出。稍后再问一次。", sessionId: sid)
+                return
+            }
+        }
         // The answer is read on a 45 mm screen and often spoken: ask for it in
         // that shape. Hidden from the chat bubble like every system reminder.
+        // An unsent draft in that chat stays where it was.
+        let draft = (text: vm.inputText, attachments: vm.attachments)
         vm.inputText = prompt + wristReminder
+        vm.attachments = []
         // Messages before this turn; the assistant turn it produces comes after.
         let baseline = vm.messages.count
         vm.send()
+        vm.inputText = draft.text
+        vm.attachments = draft.attachments
         // Wait for the run to settle (same observation pattern as the widget
         // runner): give it up to 3 minutes, then report whatever exists.
         // Startup grace: the send registers as active a beat later — breaking
@@ -744,8 +792,9 @@ enum WatchAskRunner {
         // [T-watch-stream] Meanwhile the wrist gets the answer as it is written
         // and what the agent is doing, a few times a second.
         var sawActive = false
+        var stillRunning = false
         var lastPartial = (text: "", step: "")
-        let started = Date()
+        // The watch stops waiting at 185 s.
         while Date().timeIntervalSince(started) < 180 {
             try? await Task.sleep(nanoseconds: 300_000_000)
             let partial = partialSnapshot(vm: vm, after: baseline)
@@ -755,10 +804,24 @@ enum WatchAskRunner {
             }
             let active = SessionActivityTracker.shared.activeSessions.contains(sid)
                 || SessionActivityTracker.shared.isActive(sid)
+            stillRunning = active
             if active { sawActive = true; continue }
             if sawActive || Date().timeIntervalSince(started) >= 15 { break }   // ended, or never started within 15s
         }
-        let reply = await lastAssistantText(sessionId: sid, limit: 2000)
+        if stillRunning {
+            let soFar = partialSnapshot(vm: vm, after: baseline).text
+            deliver(requestId: requestId,
+                    text: "还在进行中，完成后可在 iPhone 上查看。" + (soFar.isEmpty ? "" : "\n\n目前：" + String(soFar.suffix(600))),
+                    sessionId: sid)
+            WatchBridge.shared.pushStatus()
+            return
+        }
+        // This run's own turn; the database's last assistant message is only a
+        // fallback when the turn text isn't in memory.
+        let ownTurn = partialSnapshot(vm: vm, after: baseline).text
+        let reply = ownTurn.isEmpty && vm.messages.count > baseline
+            ? await lastAssistantText(sessionId: sid, limit: 2000)
+            : String(ownTurn.prefix(2000))
         deliver(requestId: requestId,
                 text: reply.isEmpty ? "任务已执行，但没有产生文本回复。可在 iPhone 上查看会话。" : reply,
                 sessionId: sid)

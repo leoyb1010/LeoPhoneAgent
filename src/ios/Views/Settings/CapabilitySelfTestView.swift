@@ -31,10 +31,8 @@ final class CapabilitySelfTest: ObservableObject {
     @Published private(set) var checks: [Check] = []
     @Published private(set) var isRunning = false
     @Published private(set) var finishedAt: Date?
-    /// 深链打开时置位,页面出现时消费。
-    var autoRunRequested = false
     /// 同时对每个模型供应商真发一句话(走和聊天完全相同的请求路径,带一个工具)。
-    /// 每项只花几十个 token;默认关,页面开关或深链 `?chat=1` 打开。
+    /// 每项只花几十个 token;默认关,只能在页面上手动打开——深链只导航,不开跑。
     @Published var includeChat = false
     /// chat 检查项 id → (供应商实例, 模型条目)。
     private var chatTargets: [String: (instanceId: String, entryId: String)] = [:]
@@ -362,7 +360,7 @@ struct CapabilitySelfTestView: View {
                     .font(.footnote)
                     .disabled(test.isRunning)
             } footer: {
-                Text("用只读方式把每项能力按 Agent 的同一条路跑一遍。\"未授权\"不是坏了,是系统或 App 里还没允许;点一项的说明看原因。")
+                Text("用只读方式把每项能力按 Agent 的同一条路跑一遍。\"未授权\"不是坏了,是系统或 App 里还没允许;原因写在每一项下面的说明里。")
             }
             ForEach(groups, id: \.self) { group in
                 Section(group) {
@@ -374,12 +372,6 @@ struct CapabilitySelfTestView: View {
         }
         .navigationTitle("能力自检")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if test.autoRunRequested {
-                test.autoRunRequested = false
-                await test.run()
-            }
-        }
     }
 
     private func stat(_ value: Int, _ label: String, _ color: Color) -> some View {
@@ -404,7 +396,6 @@ struct CapabilitySelfTestView: View {
                     Text(check.detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
                         .textSelection(.enabled)
                 }
             }

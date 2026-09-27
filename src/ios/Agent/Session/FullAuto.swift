@@ -242,6 +242,20 @@ struct FullAutoBadge: View {
 
     private func setMode(_ mode: FullAutoGate.Mode) {
         guard mode != store.mode else { return }
+        if mode == .full {
+            Task { @MainActor in
+                guard await BiometricAuth.authorizeLoweringProtection(
+                    reason: String(localized: "Turn on full-auto approvals")
+                ) else { return }
+                applyMode(mode)
+            }
+            return
+        }
+        applyMode(mode)
+    }
+
+    private func applyMode(_ mode: FullAutoGate.Mode) {
+        guard mode != store.mode else { return }
         store.mode = mode
         LeoHaptics.impact(mode == .ask ? .light : .medium)
         flashToken += 1
@@ -269,8 +283,16 @@ struct FullAutoSettingsSection: View {
             Picker(selection: Binding(
                 get: { store.mode },
                 set: { newValue in
-                    store.mode = newValue
-                    if newValue == .full {
+                    guard newValue != store.mode else { return }
+                    guard newValue == .full else {
+                        store.mode = newValue
+                        return
+                    }
+                    Task { @MainActor in
+                        guard await BiometricAuth.authorizeLoweringProtection(
+                            reason: String(localized: "Turn on full-auto approvals")
+                        ) else { return }
+                        store.mode = newValue
                         // 在这里选过就已经看过说明了,输入框上的菜单之后一选即开。
                         UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
                         showSystemPermissions = true

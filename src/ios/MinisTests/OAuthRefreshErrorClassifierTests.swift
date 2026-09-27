@@ -21,9 +21,44 @@ final class OAuthRefreshErrorClassifierTests: XCTestCase {
         XCTAssertTrue(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: googleFatal))
     }
 
-    func test401_isFatal_evenWithUnknownBody() {
-        let e = msg(status: 401, body: "Unauthorized")
+    func test401_JSONInvalidToken_isFatal() {
+        let e = msg(status: 401, body: "{\"error\":\"invalid_token\"}")
         XCTAssertTrue(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: googleFatal))
+    }
+
+    // MARK: - A bare auth-ish status is transient (E#8)
+
+    func test401_withUnknownBody_isNotFatal() {
+        let e = msg(status: 401, body: "Unauthorized")
+        XCTAssertFalse(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: googleFatal),
+                       "a 401 without an OAuth error code (e.g. from a proxy) must not delete credentials")
+    }
+
+    func test403_cloudflareChallenge_isNotFatal() {
+        let html = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>cf-challenge</body></html>"
+        let e = msg(status: 403, body: html)
+        XCTAssertFalse(OAuthRefreshErrorClassifier.isTokenInvalid(e, fatalErrorCodes: rotatingFatal))
+    }
+
+    // MARK: - Sanitized messages (E#22)
+
+    func testHTMLBodyIsDroppedFromMessage() {
+        let message = OAuthRefreshErrorClassifier.makeErrorMessage(status: 403, body: "<html><body>secret echo</body></html>")
+        XCTAssertFalse(message.contains("secret echo"))
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseStatus(from: message), 403)
+    }
+
+    func testJSONBodyKeepsOnlyOAuthFields() {
+        let message = OAuthRefreshErrorClassifier.makeErrorMessage(
+            status: 400, body: "{\"error\":\"invalid_grant\",\"refresh_token\":\"rt-abc\",\"email\":\"a@b.c\"}")
+        XCTAssertFalse(message.contains("rt-abc"))
+        XCTAssertFalse(message.contains("a@b.c"))
+        XCTAssertEqual(OAuthRefreshErrorClassifier.parseErrorCode(fromBody: message), "invalid_grant")
+    }
+
+    func testUserFacingSummary() {
+        let e = msg(status: 400, body: "{\"error\":\"invalid_grant\",\"error_description\":\"x\"}")
+        XCTAssertEqual(OAuthRefreshErrorClassifier.userFacingSummary(e), "HTTP 400 · invalid_grant")
     }
 
     func testRefreshTokenReused_plainText_isFatal_forRotatingProviders() {

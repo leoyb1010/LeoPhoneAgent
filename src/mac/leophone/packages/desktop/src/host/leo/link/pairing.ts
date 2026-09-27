@@ -146,3 +146,31 @@ export async function createPairingCode(args: {
   }
   throw new Error(rejected ? "中继不认这台 Mac 的钥匙,签发不了配对码" : "这台 Mac 还没有中继钥匙");
 }
+
+/** 从二维码整串里取出一次性码;格式不对返回空串。 */
+export function joinTokenFromPayload(payload: string): string {
+  if (!payload.startsWith(PAIR_PREFIX_V2)) return "";
+  try {
+    const decoded = JSON.parse(payload.slice(PAIR_PREFIX_V2.length)) as { join?: unknown };
+    return typeof decoded.join === "string" ? decoded.join : "";
+  } catch {
+    return "";
+  }
+}
+
+/** 作废一个还没兑换的码(换码、关弹层时)。码已经用掉或过期,中继回 404,当成功处理。 */
+export async function revokePairingCode(args: {
+  relayUrl: string;
+  token: string;
+  keys: readonly string[];
+  request?: typeof relayRequest;
+}): Promise<void> {
+  const send = args.request ?? relayRequest;
+  const base = relayHttpBase(args.relayUrl);
+  for (const key of args.keys) {
+    if (!key) continue;
+    const res = await send(base, "DELETE", `/relay/api/join-tokens/${encodeURIComponent(args.token)}`, key);
+    if (res.status === 401 || res.status === 403) continue;
+    return;
+  }
+}

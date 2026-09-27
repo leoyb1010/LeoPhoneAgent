@@ -109,6 +109,37 @@ enum CodexReasoningCeiling {
         guard let raw = (UserDefaults.standard.dictionary(forKey: key) as? [String: String])?[modelId.lowercased()] else { return nil }
         return ThinkingLevel(rawValue: raw)
     }
+
+    // Lowest effort each model accepts. Models with mandatory reasoning don't
+    // list "none", and sending it when the user turns thinking off is a 400.
+    private static let floorKey = "codex.reasoningFloor.v1"
+    private static let wireOrder = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+
+    static func lowest(of efforts: [String]) -> String? {
+        efforts.map { $0.lowercased() }
+            .compactMap { e in wireOrder.firstIndex(of: e).map { (e, $0) } }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    static func saveFloors(_ floors: [String: String]) {
+        var merged = UserDefaults.standard.dictionary(forKey: floorKey) as? [String: String] ?? [:]
+        for (slug, effort) in floors { merged[slug.lowercased()] = effort }
+        UserDefaults.standard.set(merged, forKey: floorKey)
+    }
+
+    static func floorEffort(for modelId: String) -> String? {
+        (UserDefaults.standard.dictionary(forKey: floorKey) as? [String: String])?[modelId.lowercased()]
+    }
+
+    /// The effort to send when the user turned thinking off: `preferred`, or
+    /// the model's lowest accepted tier when `preferred` is below it.
+    static func clampOffEffort(_ preferred: String, floor: String?) -> String {
+        guard let floor,
+              let f = wireOrder.firstIndex(of: floor),
+              let p = wireOrder.firstIndex(of: preferred.lowercased()),
+              p < f else { return preferred }
+        return floor
+    }
 }
 
 enum ThinkingLevelCatalog {

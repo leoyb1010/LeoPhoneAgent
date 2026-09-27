@@ -320,9 +320,10 @@ private struct AttachmentChip: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 2)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.black.opacity(0.6))
             }
+            .accessibilityLabel(Text("Remove Attachment"))
             .offset(x: 4, y: -4)
         }
         .fixedSize()
@@ -358,9 +359,10 @@ private struct AttachmentChip: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, Color.black.opacity(0.6))
                 }
+                .accessibilityLabel(Text("Remove Attachment"))
                 .offset(x: 4, y: -4)
             }
             .fixedSize()
@@ -451,9 +453,10 @@ private struct AttachmentChip: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 2)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.black.opacity(0.6))
             }
+            .accessibilityLabel(Text("Remove Attachment"))
             .offset(x: 4, y: -4)
         }
         .fixedSize()

@@ -347,18 +347,41 @@ struct WebPreviewMoreMenu: View {
 // MARK: - Navigation delegate (scheme hand-off + error capture)
 
 extension WebViewHolder: WKNavigationDelegate {
-    /// Prevents non-http schemes from loading inside the webview.
+    /// Prevents non-http schemes from loading inside the webview. Handing
+    /// them to another app needs a tapped link plus a confirmation: pages the
+    /// agent opens could otherwise launch apps (or our own action links)
+    /// from script without the user doing anything.
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
            !["http", "https", "about", "blob", "file"].contains(scheme) {
-            UIApplication.shared.open(url)
             decisionHandler(.cancel)
+            guard navigationAction.navigationType == .linkActivated else {
+                AppLogger(category: "WebPreview").warning("[WebPreview] blocked non-gesture hand-off scheme=\(scheme)")
+                return
+            }
+            confirmExternalOpen(url, from: webView)
             return
         }
         decisionHandler(.allow)
+    }
+
+    private func confirmExternalOpen(_ url: URL, from webView: WKWebView) {
+        var top = webView.window?.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed { top = next }
+        guard let top else { return }
+        let target = url.scheme.map { "\($0):" } ?? url.absoluteString
+        let alert = UIAlertController(
+            title: String(localized: "Open in Another App?"),
+            message: String(localized: "This page wants to open a \(target) link outside LeoPhoneAgent."),
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: String(localized: "Open"), style: .default) { _ in
+            UIApplication.shared.open(url)
+        })
+        top.present(alert, animated: true)
     }
 
     // [T-ios-webview-error-ui] Surface load failures as a Safari-style overlay

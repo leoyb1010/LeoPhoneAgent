@@ -5,7 +5,7 @@ import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 
 import { startLeoHttpApi } from "./httpApi.js";
-import { linkEnabled, startLeoLink } from "./link/index.js";
+import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
 import { TreasuryStore } from "./treasuryStore.js";
@@ -18,6 +18,7 @@ let store: TreasuryStore | null = null;
 let retryTimer: NodeJS.Timeout | null = null;
 let link: Promise<{ stop(): Promise<void> } | null> | null = null;
 let linkTimer: NodeJS.Timeout | null = null;
+let linkRelaySignature: string | null = null;
 
 const PORT_RETRY_MS = 15_000;
 /** 切换 / 回滚脚本改完 `~/.leoagent/link.json` 后,最多这么久桥接就跟上,不用重启 App。 */
@@ -51,23 +52,36 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           registerTreasuryMcpServer(deps.logger);
           // 手机经中继连回这台 Mac:只在抢到端口的这个 Host 里跑一份。
           // 跟着开关文件走:回滚时必须立刻让出机器名,否则和恢复注册的 leoagent 在中继上互踢。
+          const stopLink = (reason: string) => {
+            const running = link;
+            link = null;
+            void running?.then((started) => started?.stop());
+            deps.logger.info(`[leo/link] stopped (${reason})`);
+          };
           const syncLink = () => {
             const wanted = linkEnabled();
+            const relaySignature = relayConfigSignature();
+            if (wanted && link && relaySignature !== linkRelaySignature) stopLink("relay config changed");
             if (wanted && !link) {
-              link = startLeoLink({
+              linkRelaySignature = relaySignature;
+              const starting: Promise<{ stop(): Promise<void> } | null> = startLeoLink({
                 taskService,
                 settingService: deps.services.get(ISettingService),
                 logger: deps.logger,
                 appVersion: ZCODE_VERSION,
-              }).catch((error: unknown) => {
-                deps.logger.warn("[leo/link] failed to start", { error: String(error) });
-                return null;
-              });
+              })
+                .catch((error: unknown) => {
+                  deps.logger.warn("[leo/link] failed to start", { error: String(error) });
+                  return null;
+                })
+                .then((started) => {
+                  // 没起来(没配中继、启动报错)就放掉,下一轮同步再试。
+                  if (!started && link === starting) link = null;
+                  return started;
+                });
+              link = starting;
             } else if (!wanted && link) {
-              const running = link;
-              link = null;
-              void running.then((started) => started?.stop());
-              deps.logger.info("[leo/link] stopped (disabled)");
+              stopLink("disabled");
             }
           };
           syncLink();

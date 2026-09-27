@@ -65,7 +65,7 @@ struct ProvidersCollection: ConfigCollection {
     /// Payload (JSON object):
     ///   providerType   (required) one of ProviderType.rawValue
     ///                  (openAI / anthropic / gemini / openRouter /
-    ///                   openAIResponses / xAI / antigravity)
+    ///                   openAIResponses / xAI / openCodeGo)
     ///   label          (required) user-facing nickname
     ///   apiKey         (optional) literal secret OR `$$ENV_VAR` reference.
     ///                  When omitted the instance is created credential-less

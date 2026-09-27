@@ -333,18 +333,11 @@ struct CapsuleProtectedFrame: ViewModifier {
     }
     func body(content: Content) -> some View {
         content
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear {
-                            let f = geo.frame(in: .global)
-                            if Self.isSane(f) { SpeechCapsulePlacement.shared.setRectDebounced(key, f) }
-                        }
-                        .onChange(of: geo.frame(in: .global)) { f in
-                            if Self.isSane(f) { SpeechCapsulePlacement.shared.setRectDebounced(key, f) }
-                        }
-                }
-            )
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { f in
+                if Self.isSane(f) { SpeechCapsulePlacement.shared.setRectDebounced(key, f) }
+            }
             .onDisappear { SpeechCapsulePlacement.shared.setRectDebounced(key, nil) }
     }
 }

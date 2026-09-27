@@ -119,7 +119,9 @@ struct MountedFoldersSettingsView: View {
                     let pm = PendingMount(
                         url: url,
                         name: Self.defaultMountName(for: url),
-                        allowWrite: true
+                        // Read-only until the user opts in: a mount points
+                        // at the user's real files (iCloud Drive, Obsidian…).
+                        allowWrite: false
                     )
                     mountUILogger.info("async assign pendingMount id=\(pm.id.uuidString) url=\(url.path)")
                     pendingMount = pm
@@ -292,8 +294,28 @@ private struct MountedFolderRow: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if let problem = stateProblem {
+                Label(problem, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.vertical, 2)
+    }
+
+    private var stateProblem: String? {
+        switch state {
+        case .active: return nil
+        case .stale:
+            return String(localized: "The folder moved or was renamed. Remove this mount and pick the folder again.")
+        case .permissionDenied:
+            return String(localized: "Access to this folder was revoked. Remove this mount and pick the folder again.")
+        case .contentsUnavailable:
+            return String(localized: "The folder's contents aren't downloaded. Open it once in the Files app, then come back.")
+        case .failed(let reason):
+            return String(localized: "Couldn't mount: \(reason)")
+        }
     }
 
     /// Small pill reflecting the effective write state of this mount:

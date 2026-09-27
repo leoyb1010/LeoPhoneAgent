@@ -31,50 +31,6 @@ enum GeminiModelsAPI {
         return models
     }
 
-    static func fetchModels(oauthToken: String, customBaseURL: String? = nil, forceRefresh: Bool = false) async throws -> [LLMModel] {
-        if !forceRefresh, let cached = GeminiModelsCache.load(credential: oauthToken) {
-            logger.info("Returning \(cached.count) cached models (OAuth)")
-            return cached
-        }
-
-        let modelsURL = customBaseURL.map { base -> String in
-            // Trim trailing slashes to detect a /models suffix reliably.
-            var trimmed = base
-            while trimmed.hasSuffix("/") { trimmed.removeLast() }
-            return trimmed.hasSuffix("/models") ? trimmed : URLBuilding.join(trimmed, "/models")
-        } ?? defaultBaseURL
-        var request = URLRequest(url: URL(string: modelsURL)!)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(oauthToken)", forHTTPHeaderField: "Authorization")
-        logger.info("Fetching Gemini models (OAuth auth)")
-        #if DEBUG
-        logger.debug("OAuth token present: \(!oauthToken.isEmpty)")
-        #endif
-        do {
-            let models = try await performFetch(request)
-            GeminiModelsCache.save(models, credential: oauthToken)
-            return models
-        } catch {
-            // Standard API returns 403 for OAuth clients without generative-language scope.
-            // Fall back to built-in model list.
-            logger.warning("Standard models API failed for OAuth: \(error.localizedDescription). Using built-in list.")
-            return ModelsDevAPI.enrichModels(LLMModel.allGemini)
-        }
-    }
-
-    /// Fetch models for OAuth users.
-    /// Cloud Code Assist has no listModels endpoint and the standard API returns 403 for
-    /// this OAuth client (insufficient scopes), so we return the built-in model list directly.
-    /// When a custom base URL is set, attempt a real fetch before falling back.
-    static func fetchModels(oauthToken: String, gcpProjectID: String, customBaseURL: String? = nil) async throws -> [LLMModel] {
-        if let customBaseURL, !customBaseURL.isEmpty {
-            logger.info("OAuth + Cloud Code: custom base URL set, attempting real fetch")
-            return try await fetchModels(oauthToken: oauthToken, customBaseURL: customBaseURL)
-        }
-        logger.info("Using built-in Gemini model list (OAuth + Cloud Code Assist)")
-        return LLMModel.allGemini
-    }
-
     private static func performFetch(_ request: URLRequest) async throws -> [LLMModel] {
         // Redact API key from logged URL
         let logURL: String

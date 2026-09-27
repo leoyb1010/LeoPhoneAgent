@@ -20,6 +20,9 @@ struct RunDueScheduledTasksIntent: LiveActivityIntent {
         "Runs any LeoPhoneAgent scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
     )
     static var openAppWhenRun = false
+    // Time-of-day automations fire while the phone is locked, and this intent
+    // takes no input: it only runs tasks the owner already scheduled in-app.
+    static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<Int> & ProvidesDialog {

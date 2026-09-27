@@ -134,15 +134,17 @@ struct ProviderDetailPage {
             .backgroundColor(Tokens.surface)
             .fontColor(Tokens.text)
             .borderRadius(Tokens.settingsRadius)
-          this.fieldCaption('API 根')
-          TextInput({ text: this.root, placeholder: kindByKey(this.type).root })
-            .onChange((value: string) => {
-              this.root = value;
-            })
-            .height(44)
-            .backgroundColor(Tokens.surface)
-            .fontColor(Tokens.text)
-            .borderRadius(Tokens.settingsRadius)
+          if (this.credential !== 'oauth') {
+            this.fieldCaption('API 根')
+            TextInput({ text: this.root, placeholder: kindByKey(this.type).root })
+              .onChange((value: string) => {
+                this.root = value;
+              })
+              .height(44)
+              .backgroundColor(Tokens.surface)
+              .fontColor(Tokens.text)
+              .borderRadius(Tokens.settingsRadius)
+          }
           if (this.credential === 'oauth') {
             this.fieldCaption('OAuth')
             Text(this.keyDraft.length > 0 ? '已登录，钥匙存在本机' : '还没登录')

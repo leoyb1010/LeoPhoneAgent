@@ -30,6 +30,7 @@ struct QuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task (Compatibility)"
     static var description = IntentDescription("Runs a quick task saved by an earlier LeoPhoneAgent version. New shortcuts should use Quick Task.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Task")
@@ -233,6 +234,7 @@ struct RunQuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task"
     static var description = IntentDescription("Runs a LeoPhoneAgent quick task from your editable task library.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Task")

@@ -105,14 +105,19 @@ struct OffloadPermissionSettingsView: View {
         }
         .confirmationDialog("所有能力都改成「自动允许」?", isPresented: $confirmAllBypass, titleVisibility: .visible) {
             Button("全部自动允许", role: .destructive) {
-                manager.setAllBypass()
-                // The minis-config master switch is a separate
-                // store from OffloadPermissionManager (different
-                // subsystem) so its own setAllBypass doesn't touch
-                // it. Flip it on here so "Set All Bypass" really
-                // does enable everything the user can see on this
-                // screen.
-                configGate.enabled = true
+                Task { @MainActor in
+                    guard await BiometricAuth.authorizeLoweringProtection(
+                        reason: String(localized: "Allow every capability without asking")
+                    ) else { return }
+                    manager.setAllBypass()
+                    // The minis-config master switch is a separate
+                    // store from OffloadPermissionManager (different
+                    // subsystem) so its own setAllBypass doesn't touch
+                    // it. Flip it on here so "Set All Bypass" really
+                    // does enable everything the user can see on this
+                    // screen.
+                    configGate.enabled = true
+                }
             }
         } message: {
             Text("Agent 调用手机能力时不再先问你;你设成「不允许」的也会改成自动允许。之后可以逐项改回来。")

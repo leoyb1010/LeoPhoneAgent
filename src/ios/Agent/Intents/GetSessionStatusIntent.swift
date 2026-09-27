@@ -61,6 +61,7 @@ struct GetSessionStatusIntent: AppIntent {
     static var title: LocalizedStringResource = "Get Session Status"
     static var description = IntentDescription("Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Session")
     var session: SessionEntity
@@ -68,6 +69,9 @@ struct GetSessionStatusIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SessionStatus> {
         let sessionID = session.id
+        guard !SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionID) else {
+            throw SessionLockedIntentError.locked
+        }
         let isRunning = SessionActivityTracker.shared.isActive(sessionID)
 
         let session = await ChatStore.shared.getSession(sessionID)

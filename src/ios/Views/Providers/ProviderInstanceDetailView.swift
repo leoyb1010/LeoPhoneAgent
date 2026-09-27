@@ -163,11 +163,13 @@ struct ProviderInstanceDetailView: View {
             } footer: {
                 Text(instance.credentialType == .apiKey
                      ? "API key is stored securely in the iOS Keychain."
-                     : "OAuth tokens are stored per-instance in the iOS Keychain.")
+                     : "Sign-in tokens stay in this device's Keychain and are not synced to iCloud.")
             }
 
             // MARK: Custom Base URL
-            customBaseURLSection(instance)
+            if instance.supportsCustomBaseURL {
+                customBaseURLSection(instance)
+            }
 
             // [T-mimo-shadow-voice] These LLM-config fields are gated by their own
             // providerType/capability checks (supportsCustomUserAgent, API-format
@@ -234,7 +236,7 @@ struct ProviderInstanceDetailView: View {
             }
 
             // MARK: Manual OAuth Token (for OAuth instances with manual token)
-            if instance.credentialType == .oauth && instance.providerType != .antigravity {
+            if instance.credentialType == .oauth && !instance.providerType.isUnsupported {
                 manualOAuthTokenSection(instance)
             }
 
@@ -249,7 +251,6 @@ struct ProviderInstanceDetailView: View {
                         }
                         let hasApiKey = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) != nil
                         let hasOAuth = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") != nil
-                            || (instance.providerType == .anthropic && ClaudeOAuthManager.shared.isAuthenticated(instanceId: instance.id))
                         AppLogger(category: "Provider").info("toggleEnabled instanceId=\(instance.id.prefix(8)) type=\(instance.providerType.rawValue) old=\(instance.isEnabled) new=\(newValue) hasApiKey=\(hasApiKey) hasOAuth=\(hasOAuth)")
                         var updated = instance
                         updated.isEnabled = newValue
@@ -380,8 +381,49 @@ struct ProviderInstanceDetailView: View {
         case .apiKey:
             apiKeyCredentialView(instance)
         case .oauth:
-            oauthCredentialView(instance)
+            if let notice = instance.retiredSignInNotice {
+                retiredSignInView(instance, notice: notice)
+            } else {
+                oauthCredentialView(instance)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func retiredSignInView(_ instance: ProviderInstance, notice: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(notice, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout)
+                .foregroundStyle(.orange)
+            if !instance.providerType.isUnsupported {
+                Button(String(localized: "Use API Key Instead")) {
+                    convertToAPIKey(instance)
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    /// Rebuilds the instance (credential type is immutable) with the same id so
+    /// its models, groups and session bindings survive the switch.
+    private func convertToAPIKey(_ instance: ProviderInstance) {
+        let converted = ProviderInstance(
+            id: instance.id,
+            label: instance.label,
+            providerType: instance.providerType,
+            credentialType: .apiKey,
+            isEnabled: true,
+            createdAt: instance.createdAt,
+            customBaseURL: nil,
+            appendV1Suffix: instance.appendV1Suffix,
+            imageEndpointMode: instance.imageEndpointMode,
+            imageEndpointResolved: nil,
+            customUserAgent: instance.customUserAgent,
+            azureMode: instance.azureMode
+        )
+        store.updateInstance(converted)
+        oauthRefreshTrigger.toggle()
     }
 
     @ViewBuilder
@@ -430,7 +472,7 @@ struct ProviderInstanceDetailView: View {
         .contextMenu {
             if !keyInputText.isEmpty {
                 Button {
-                    UIPasteboard.general.string = keyInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    SecretPasteboard.copy(keyInputText.trimmingCharacters(in: .whitespacesAndNewlines))
                 } label: {
                     Label("Copy API Key", systemImage: "doc.on.doc")
                 }
@@ -551,7 +593,7 @@ struct ProviderInstanceDetailView: View {
         case .anthropic: return "https://api.anthropic.com/v1"
         case .openAI:    return "https://api.openai.com/v1"
         case .gemini:    return "https://generativelanguage.googleapis.com/v1beta"
-        case .antigravity: return String(localized: "Default")
+        case .openCodeGo: return OpenCodeGo.apiRoot + "/v1"
         case .openRouter: return "https://openrouter.ai/api/v1"
         case .openAIResponses: return "https://api.openai.com/v1"
         case .xAI: return "https://api.x.ai/v1"
@@ -625,7 +667,7 @@ struct ProviderInstanceDetailView: View {
         } header: {
             Text(String(localized: "Custom User-Agent"))
         } footer: {
-            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")."))
+            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."))
         }
     }
 
@@ -922,10 +964,8 @@ struct ProviderInstanceDetailView: View {
             return true
         }
         switch instance.providerType {
-        case .anthropic: return ClaudeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .gemini: return GeminiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .anthropic, .gemini, .openCodeGo: return false // no sign-in flow
         case .openAI: return CodexOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .antigravity: return AntigravityOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .openRouter: return OpenRouterOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .openAIResponses: return false // API key only
         case .xAI: return XAIOAuthManager.shared.isAuthenticated(instanceId: instance.id)
@@ -940,36 +980,11 @@ struct ProviderInstanceDetailView: View {
             return String(localized: "Authenticated (manual token)")
         }
         switch instance.providerType {
-        case .anthropic:
-            if ClaudeOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                return ClaudeOAuthManager.shared.maskedToken(instanceId: instance.id) ?? String(localized: "Authenticated")
-            }
-            return String(localized: "Not authenticated")
-        case .gemini:
-            if GeminiOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                let parts = [
-                    GeminiOAuthManager.shared.userEmail(instanceId: instance.id),
-                    GeminiOAuthManager.shared.gcpProjectID(instanceId: instance.id)
-                ].compactMap { $0 }
-                return parts.isEmpty ? String(localized: "Authenticated") : parts.joined(separator: " · ")
-            }
+        case .anthropic, .gemini, .openCodeGo:
             return String(localized: "Not authenticated")
         case .openAI:
             if CodexOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                let parts = [
-                    CodexOAuthManager.shared.planType(instanceId: instance.id),
-                    CodexOAuthManager.shared.accountId(instanceId: instance.id).map { "ID: \(String($0.prefix(8)))..." }
-                ].compactMap { $0 }
-                return parts.isEmpty ? String(localized: "Authenticated") : parts.joined(separator: " · ")
-            }
-            return String(localized: "Not authenticated")
-        case .antigravity:
-            if AntigravityOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
-                let parts = [
-                    AntigravityOAuthManager.shared.userEmail(instanceId: instance.id),
-                    AntigravityOAuthManager.shared.projectID(instanceId: instance.id)
-                ].compactMap { $0 }
-                return parts.isEmpty ? String(localized: "Authenticated") : parts.joined(separator: " · ")
+                return CodexOAuthManager.shared.planType(instanceId: instance.id) ?? String(localized: "Authenticated")
             }
             return String(localized: "Not authenticated")
         case .openRouter:
@@ -998,10 +1013,8 @@ struct ProviderInstanceDetailView: View {
 
     private func oauthSignInLabel(_ instance: ProviderInstance) -> String {
         switch instance.providerType {
-        case .anthropic: return String(localized: "Sign in with Claude")
-        case .gemini: return String(localized: "Sign in with Google")
+        case .anthropic, .gemini, .openCodeGo: return String(localized: "Sign In")
         case .openAI: return String(localized: "Sign in with OpenAI")
-        case .antigravity: return String(localized: "Sign in with Google")
         case .openRouter: return String(localized: "Sign in with OpenRouter")
         case .openAIResponses: return String(localized: "Sign In")
         case .xAI: return String(localized: "Sign in with xAI")
@@ -1014,10 +1027,8 @@ struct ProviderInstanceDetailView: View {
         await MainActor.run { signInError = nil }
         do {
             switch instance.providerType {
-            case .anthropic: try await ClaudeOAuthManager.shared.login(instanceId: instance.id)
-            case .gemini: try await GeminiOAuthManager.shared.login(instanceId: instance.id)
+            case .anthropic, .gemini, .openCodeGo: break
             case .openAI: try await CodexOAuthManager.shared.login(instanceId: instance.id)
-            case .antigravity: try await AntigravityOAuthManager.shared.login(instanceId: instance.id)
             case .openRouter: try await OpenRouterOAuthManager.shared.login(instanceId: instance.id)
             case .openAIResponses: break
             case .xAI: try await XAIOAuthManager.shared.login(instanceId: instance.id)
@@ -1037,10 +1048,8 @@ struct ProviderInstanceDetailView: View {
 
     private func oauthLogout(_ instance: ProviderInstance) {
         switch instance.providerType {
-        case .anthropic: ClaudeOAuthManager.shared.logout(instanceId: instance.id)
-        case .gemini: GeminiOAuthManager.shared.logout(instanceId: instance.id)
+        case .anthropic, .gemini, .openCodeGo: break
         case .openAI: CodexOAuthManager.shared.logout(instanceId: instance.id)
-        case .antigravity: AntigravityOAuthManager.shared.logout(instanceId: instance.id)
         case .openRouter: OpenRouterOAuthManager.shared.logout(instanceId: instance.id)
         case .openAIResponses: break // API key only
         case .xAI: XAIOAuthManager.shared.logout(instanceId: instance.id)
@@ -1052,14 +1061,10 @@ struct ProviderInstanceDetailView: View {
     private func oauthCopyToken(_ instance: ProviderInstance) async {
         let token: String?
         switch instance.providerType {
-        case .anthropic:
-            token = try? await ClaudeOAuthManager.shared.validAccessToken(instanceId: instance.id)
-        case .gemini:
-            token = try? await GeminiOAuthManager.shared.validAccessToken(instanceId: instance.id)
+        case .anthropic, .gemini, .openCodeGo:
+            token = nil
         case .openAI:
             token = try? await CodexOAuthManager.shared.validAccessToken(instanceId: instance.id)
-        case .antigravity:
-            token = try? await AntigravityOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .openRouter:
             token = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id)
         case .openAIResponses:
@@ -1072,7 +1077,7 @@ struct ProviderInstanceDetailView: View {
             token = nil
         }
         guard let token, !token.isEmpty else { return }
-        await MainActor.run { UIPasteboard.general.string = token }
+        await MainActor.run { SecretPasteboard.copy(token) }
     }
 
     // MARK: - Helpers
@@ -1084,7 +1089,7 @@ struct ProviderInstanceDetailView: View {
         case .openAI: return "sk-..."
         case .xAI: return "xai-..."
         case .kimiCode: return "" // OAuth only
-        case .antigravity: return "API Key..."
+        case .openCodeGo: return "sk-..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."
         case .unsupported: return ""

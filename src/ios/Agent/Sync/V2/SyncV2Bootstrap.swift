@@ -65,7 +65,9 @@ enum SyncV2Bootstrap {
     }
 
     static func setEnabled(_ enabled: Bool) {
-        let prev = UserDefaults.standard.object(forKey: "cloudSync.v2.enabled") as? Bool ?? true
+        // `isEnabled`, not a raw `?? true`: on a clean install the key is
+        // absent, and treating that as "was on" skipped the hot start below.
+        let prev = isEnabled
         UserDefaults.standard.set(enabled, forKey: "cloudSync.v2.enabled")
         logger.info("[SyncCore] v2 enabled flag set to \(enabled) (was \(prev))")
         // When the user disables iCloud Sync, stop the active SyncCore +

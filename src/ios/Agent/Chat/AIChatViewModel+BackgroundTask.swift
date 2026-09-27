@@ -729,6 +729,10 @@ extension AIChatViewModel {
     }
 
     func clearChat() {
+        // A running loop would keep appending to history/rows we're wiping.
+        if isProcessing || !promptQueue.isEmpty {
+            cancel(queuePolicy: .discardQueuedPrompts)
+        }
         messages.removeAll()
         agentHistory.removeAll()
         toolSnapshots.removeAll()

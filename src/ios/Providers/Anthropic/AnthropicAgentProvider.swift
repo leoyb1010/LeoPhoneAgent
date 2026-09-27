@@ -180,7 +180,7 @@ final class AnthropicAgentProvider: AgentProvider {
         )
 
         #if DEBUG
-        // Note: request body is captured by the URLProtocol layer (OAuthURLProtocol / EagerStreamingURLProtocol).
+        // Note: request body is captured by the URLProtocol layer (EagerStreamingURLProtocol / DualAuthURLProtocol).
         // Do NOT call JSONEncoder().encode(parameter) here — MessageParameter can contain
         // non-Encodable or deeply nested content that triggers a runtime trap (EXC_BREAKPOINT).
         AgentRequestTrace.shared.step("anthropic.streamMessage.prepare")

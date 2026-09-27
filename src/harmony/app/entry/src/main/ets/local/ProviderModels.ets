@@ -130,3 +130,28 @@ export function codexCatalogIds(json: object): string[] {
     Number(a['priority'] ?? Number.MAX_SAFE_INTEGER) - Number(b['priority'] ?? Number.MAX_SAFE_INTEGER));
   return uniqueIds(listed.map((row: Record<string, Object>) => `${row['slug']}`));
 }
+
+// OpenCode Go 的目录里混着走 Responses / Anthropic Messages 的模型;本端只会 chat completions,
+// 列出来一选就 4xx,所以拉回来的目录按协议筛一遍。筛完为空就原样返回,不把列表清空。
+const OPENCODE_GO_NON_CHAT_PREFIXES: string[] = ['gpt-', 'grok-', 'muse-spark-'];
+const OPENCODE_GO_NON_CHAT_IDS: string[] = ['minimax-m3', 'qwen3.8-flash'];
+
+export function chatModelsFor(type: string, ids: string[]): string[] {
+  if (type !== 'openCodeGo') {
+    return ids;
+  }
+  const kept: string[] = ids.filter((id: string) => {
+    const parts = id.toLowerCase().split('/');
+    const bare = parts[parts.length - 1];
+    if (OPENCODE_GO_NON_CHAT_IDS.indexOf(bare) >= 0) {
+      return false;
+    }
+    for (let i = 0; i < OPENCODE_GO_NON_CHAT_PREFIXES.length; i++) {
+      if (bare.startsWith(OPENCODE_GO_NON_CHAT_PREFIXES[i])) {
+        return false;
+      }
+    }
+    return true;
+  });
+  return kept.length > 0 ? kept : ids;
+}

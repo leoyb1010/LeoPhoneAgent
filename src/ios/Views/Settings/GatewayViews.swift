@@ -836,7 +836,11 @@ struct GatewayEntryView: View {
                     NavigationLink {
                         HarnessLauncherView(host: host, client: client)
                     } label: {
-                        Label("在 \(host.name) 上跑编码任务", systemImage: "terminal")
+                        if host.isAndroidBody {
+                            Label("给 \(host.name) 派任务", systemImage: "terminal")
+                        } else {
+                            Label("在 \(host.name) 上跑编码任务", systemImage: "terminal")
+                        }
                     }
                     if host.url != nil {
                         NavigationLink {
@@ -846,13 +850,17 @@ struct GatewayEntryView: View {
                         }
                     }
                 } else {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(host.name)
-                            Text("缺访问密钥,去「设置 → 远程机器」补上").font(.system(size: 12)).foregroundStyle(.secondary)
+                    NavigationLink {
+                        GatewaySettingsView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(host.name)
+                                Text("缺访问密钥,点这里去「远程机器」补上").font(.system(size: 12)).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
                         }
-                    } icon: {
-                        Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
                     }
                 }
             }

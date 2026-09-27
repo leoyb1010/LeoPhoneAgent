@@ -127,6 +127,14 @@ final class QuickActionRouter: ObservableObject {
         postNewChat()
     }
 
+    /// Control Center / Action button "拍照对话". Must not go through
+    /// `startNewChat()`, whose reset would drop the camera action.
+    func startCameraChat() {
+        logger.info("startCameraChat from control")
+        QuickActionWorkflow.shared.start(.openCamera)
+        postNewChat()
+    }
+
     /// [T-widget-quick-tasks] `leophoneagent://new` — plain new chat from a
     /// Home Screen widget. Mirrors the newChat Home Screen shortcut path.
     func startNewChat() {

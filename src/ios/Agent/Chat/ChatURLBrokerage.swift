@@ -43,8 +43,46 @@ final class MinisOpenURLBroker: ObservableObject {
     @Published var terminalVisible: Bool = false
     private init() {}
 
-    func offer(_ url: URL) { pendingURL = url }
+    /// Agent-emitted URLs (shell `minis-open`, OSC markers) may only preview
+    /// resources. Action links such as `leophoneagent://open_terminal` would
+    /// otherwise let the agent drive the UI without per-command approval.
+    func offer(_ url: URL) {
+        guard !Self.isActionURL(url) else {
+            AppLogger(category: "MinisOpenURL").info("[minis-open] rejected action URL host=\(url.host ?? "-")")
+            return
+        }
+        pendingURL = url
+    }
     func consume() { pendingURL = nil }
+
+    /// `leophoneagent://` hosts that perform an action instead of naming a
+    /// chat resource. Mirrors the host switch in `DeepLinkRouter`.
+    nonisolated static let actionHosts: Set<String> = [
+        "open_terminal", "views", "settings", "voice", "new", "new_chat",
+        "quick-task", "quick_task", "share", "collections", "treasury", "open",
+        "session", "sessions", "providers", "model-groups", "model_groups",
+        "usage", "usage-stats", "usage_stats", "skills", "mcp-servers",
+        "mcp_servers", "mcp", "memory", "storage", "mount-external",
+        "mount_external", "mounts", "shared-folders", "shared_folders", "logs",
+        "appearance", "background", "about", "permissions", "selftest",
+        "self-test", "self_test", "mac", "mac-console", "gateway",
+        "environments", "rootfs", "rootfs-management", "rootfs_management",
+    ]
+
+    nonisolated static func isActionURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "leophoneagent" else { return false }
+        return actionHosts.contains(url.host?.lowercased() ?? "")
+    }
+
+    /// `init_command` of an `open_terminal` link with newlines and other
+    /// control characters removed, so the link can only pre-fill the prompt —
+    /// a `%0A` in the link must never press Return. Same filter as
+    /// `DeepLinkRouter`'s `open_terminal` entry.
+    nonisolated static func sanitizedTerminalInitCommand(from url: URL) -> String? {
+        let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "init_command" })?.value
+        return raw.map { String(String.UnicodeScalarView($0.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) })) }
+    }
 
     /// Schemes that `minis-open` may emit and that the host knows how to
     /// route. `http`/`https`/`about` → WKWebView preview, `minis` → built-in

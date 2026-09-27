@@ -31,6 +31,7 @@ struct RemoteHostSettingsView: View {
     @State private var sheetItem: HostSheetItem?
     /// [T-fleet] hostId → reachable, probed on appear.
     @State private var reachability: [String: Bool] = [:]
+    @State private var pendingDelete: RemoteHost?
 
     var body: some View {
         List {
@@ -54,8 +55,7 @@ struct RemoteHostSettingsView: View {
                     }
                 }
                 .onDelete { offsets in
-                    let ids = offsets.map { store.hosts[$0].id }
-                    for id in ids { store.delete(id: id) }
+                    pendingDelete = offsets.first.map { store.hosts[$0] }
                 }
                 Button {
                     sheetItem = .add()
@@ -76,6 +76,18 @@ struct RemoteHostSettingsView: View {
         .sheet(item: $sheetItem) { item in
             RemoteHostEditSheet(sheetId: item.id, host: item.host)
         }
+        .alert(String(localized: "Delete this host?"),
+               isPresented: Binding(get: { pendingDelete != nil },
+                                    set: { if !$0 { pendingDelete = nil } }),
+               presenting: pendingDelete) { host in
+            Button(String(localized: "Delete"), role: .destructive) {
+                store.delete(id: host.id)
+                pendingDelete = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
+        } message: { host in
+            Text(String(localized: "\(host.name) and its saved password will be removed from this device."))
+        }
     }
 }
 
@@ -94,6 +106,7 @@ private final class HostEditModel: ObservableObject {
     @Published var failShake = 0
     @Published var okSweep = 0
     @Published var pubkey: String?
+    @Published var hasStoredPassword = false
 
     init(sheetId: String, host: RemoteHost?) {
         draftId = host?.id ?? sheetId
@@ -103,6 +116,7 @@ private final class HostEditModel: ObservableObject {
         port = host.map { String($0.port) } ?? "22"
         username = host?.username ?? ""
         pubkey = RemoteHostStore.devicePublicKeyLine()
+        hasStoredPassword = host.map { RemoteHostStore.password(hostId: $0.id)?.isEmpty == false } ?? false
     }
 
     var draft: RemoteHost {
@@ -120,19 +134,29 @@ private final class HostEditModel: ObservableObject {
     }
 
     func runTest() {
-        let candidate = draft
+        var candidate = draft
         let pw = password
+        // A typed password is tested under a throwaway id so Cancel really
+        // writes nothing — testing a wrong password used to overwrite the
+        // saved, working one.
+        if !pw.isEmpty { candidate.id = "test-" + UUID().uuidString.lowercased() }
         testing = true
         testResult = nil
         Task {
             if !pw.isEmpty { RemoteHostStore.setPassword(pw, hostId: candidate.id) }
             let result = await RemoteSSHExecutor.shared.test(host: candidate)
+            if !pw.isEmpty { RemoteHostStore.deletePassword(hostId: candidate.id) }
             await MainActor.run {
                 self.testing = false
                 self.testResult = String(result.output.prefix(400))
                 if result.output.contains("LEO_OK") { self.okSweep += 1 } else { self.failShake += 1 }
             }
         }
+    }
+
+    func forgetPassword() {
+        RemoteHostStore.deletePassword(hostId: draftId)
+        hasStoredPassword = false
     }
 
     func generateKey() {
@@ -168,6 +192,11 @@ private struct RemoteHostEditSheet: View {
                 }
                 Section {
                     SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)
+                    if model.hasStoredPassword {
+                        Button(String(localized: "Forget saved password"), role: .destructive) {
+                            model.forgetPassword()
+                        }
+                    }
                 } footer: {
                     Text("Stored in the local Keychain only — never synced, never logged. On a Mac, enable System Settings → Sharing → Remote Login first.")
                 }

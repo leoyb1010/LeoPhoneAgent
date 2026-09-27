@@ -638,6 +638,7 @@ final class ViewModelCache {
         }
         let vm = AIChatViewModel()
         vm.sessionId = sessionId
+        vm.restoreComposerDraftIfNeeded()
         cache[sessionId] = vm
         touch(sessionId)
         // A brand-new cache entry doesn't need the stale signal — its
@@ -681,10 +682,13 @@ final class ViewModelCache {
     /// Remove a session's ViewModel from the cache (e.g. on session delete).
     func remove(sessionId: String) {
         lruOrder.removeAll { $0 == sessionId }
+        ComposerDraftStore.remove(key: sessionId)
+        AIChatViewModel.saveEnhancedCache(false, for: sessionId)
         if let removed = cache.removeValue(forKey: sessionId) {
             // The chat is being deleted: its queued prompts go with it (the default
             // policy ran them, calling the model and tools for a chat that is gone).
             removed.cancel(queuePolicy: .discardQueuedPrompts)
+            removed.composerDraftPersistenceEnabled = false
             logger.info("🔄SESSION ViewModelCache REMOVE session=\(sessionId) vm=\(removed.vmInstanceId)")
         }
     }
@@ -692,6 +696,7 @@ final class ViewModelCache {
     /// Create a fresh (uncached) ViewModel for draft sessions (nil sessionId).
     func createDraft() -> AIChatViewModel {
         let vm = AIChatViewModel()
+        vm.restoreComposerDraftIfNeeded()
         logger.info("🔄SESSION ViewModelCache createDraft vm=\(vm.vmInstanceId)")
         return vm
     }
@@ -749,6 +754,7 @@ final class ViewModelCache {
     }
 
     private func evict(_ sessionId: String, vm: AIChatViewModel, reason: String) {
+        vm.flushComposerDraft()
         vm.cancel()
         cache.removeValue(forKey: sessionId)
         lruOrder.removeAll { $0 == sessionId }

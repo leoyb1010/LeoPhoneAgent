@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 
@@ -7,11 +8,14 @@ import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
 import {
   createPairingCode,
+  joinTokenFromPayload,
   probePairingSupport,
   relayHttpBase,
+  revokePairingCode,
   type PairingCode,
   type PairingSupport,
 } from "./pairing.js";
+import type { HarnessEvent } from "./journal.js";
 import { keychainMachineKeyStore, RelayLink, type RelayConfig, type RelayLinkStatus } from "./relayLink.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
@@ -48,6 +52,11 @@ function readRelayJson(): { url: string; key: string } | null {
   return url && key ? { url, key } : null;
 }
 
+/** relay.json 变了(补上、换地址、换钥匙)要重连;拿它的内容当指纹。 */
+export function relayConfigSignature(): string {
+  return JSON.stringify(readRelayJson());
+}
+
 /** 中继地址与注册钥匙:`~/.leoagent/relay.json {url, key}`,与 leoagent 共用。 */
 export function resolveRelayConfig(): RelayConfig | null {
   const raw = readRelayJson();
@@ -70,6 +79,29 @@ function leoagentKey(): string | null {
     }
   }
   return null;
+}
+
+const LEOAGENT_PUSHABLE = new Set(["approval.request", "run.completed", "run.failed", "run.cancelled"]);
+
+function sameSecret(a: string, b: string): boolean {
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(a), digest(b));
+}
+
+/**
+ * leoagent 切到桥接后自己不连中继,它的审批 / 完成事件 POST 到这里,借桥接这条连接推给手机。
+ * 只认 leoagent 自己那把钥匙,只放行会推送的几类事件。
+ */
+export function forwardLeoagentEvent(authorization: string | undefined, event: unknown): 200 | 400 | 401 | 503 {
+  const key = leoagentKey();
+  if (!key || !sameSecret(authorization ?? "", `Bearer ${key}`)) return 401;
+  if (!event || typeof event !== "object") return 400;
+  const { event: name, session_id: sessionId } = event as Record<string, unknown>;
+  if (typeof name !== "string" || !LEOAGENT_PUSHABLE.has(name)) return 400;
+  if (typeof sessionId !== "string" || !sessionId.startsWith("hs_")) return 400;
+  if (!running) return 503;
+  running.pushEvent(event as HarnessEvent);
+  return 200;
 }
 
 /** 正在跑的那条中继连接;「连接手机」面板读它的状态、借它的机器钥匙签配对码。 */
@@ -142,6 +174,15 @@ export async function createLeoPairingCode(): Promise<PairingCode> {
     machine: machineName(),
     keys: machineKey ? [machineKey, raw.key] : [raw.key],
   });
+}
+
+/** 作废界面上一次出的码(传二维码整串)。 */
+export async function revokeLeoPairingCode(payload: string): Promise<void> {
+  const token = joinTokenFromPayload(payload);
+  const raw = readRelayJson();
+  if (!token || !raw) return;
+  const machineKey = running ? await running.machineKey() : null;
+  await revokePairingCode({ relayUrl: raw.url, token, keys: machineKey ? [machineKey, raw.key] : [raw.key] });
 }
 
 /**

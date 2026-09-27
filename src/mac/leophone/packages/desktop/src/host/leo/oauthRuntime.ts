@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
@@ -8,11 +9,11 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { leoPath } from "./leoPaths.js";
 
 /**
- * [leo] 订阅账号登录(OAuth):Claude Pro/Max、ChatGPT(Codex)、GitHub Copilot 等。
+ * [leo] 订阅账号登录:ChatGPT(Codex)、GitHub Copilot 等走 OAuth,OpenCode Go 走 API Key。
  *
- * 用 pi 的 ModelRuntime —— 它负责每家的授权流程(浏览器回跳 / 设备码)、token
- * 存储与过期刷新,以及每家接口的细节(Claude 订阅的 beta 头、Codex 的专用端点、
- * Copilot 的 token 交换)。凭据只落在本机 `~/.leoagent/oauth/auth.json`,不出机器。
+ * 用 pi 的 ModelRuntime —— 它负责每家的授权流程(浏览器回跳 / 设备码 / 填 Key)、token
+ * 存储与过期刷新,以及每家接口的细节(Codex 的专用端点、Copilot 的 token 交换、
+ * OpenCode Go 按模型分三种协议)。凭据只落在本机 `~/.leoagent/oauth/auth.json`,不出机器。
  */
 const OAUTH_DIR = leoPath("oauth");
 const AUTH_PATH = leoPath("oauth", "auth.json");
@@ -64,29 +65,76 @@ export function resetOAuthRuntime(): void {
   runtimePromise = null;
 }
 
+/**
+ * 不上架的登录方式:
+ * - anthropic:Claude 订阅登录只许用在官方 Claude Code 里,第三方应用代发请求违反 Anthropic 条款。
+ *   要用 Claude,走 API Key 供应商,或在手机上远程开 Mac 上你自己登录的官方 claude CLI。
+ * - radius:pi 作者方的第三方网关,与「请求直连各家官方接口」的承诺不符。
+ */
+function isBlockedProvider(runtime: ModelRuntime, providerId: string): boolean {
+  if (providerId === "anthropic" || providerId.startsWith("radius")) return true;
+  // models.json 里另起名字的 Radius 网关:认它们专用的 pi-messages 协议。
+  return runtime.getModels(providerId).some((model) => (model.api as string) === "pi-messages");
+}
+
+/** 用 API Key 接入的官方订阅:OpenCode Go 会员在 opencode.ai 控制台领 Key。 */
+const API_KEY_PROVIDERS = ["opencode-go"] as const;
+type ApiKeyProviderId = (typeof API_KEY_PROVIDERS)[number];
+
+function isApiKeyProvider(providerId: string): providerId is ApiKeyProviderId {
+  return (API_KEY_PROVIDERS as readonly string[]).includes(providerId);
+}
+
+export const API_KEY_PROVIDER_HELP: Record<ApiKeyProviderId, { keyUrl: string; hint: string }> = {
+  "opencode-go": {
+    keyUrl: "https://opencode.ai/auth",
+    hint: "在 OpenCode 控制台订阅 Go 后复制 API Key。请求直接发到 opencode.ai/zen/go,按 Go 会员额度计费。",
+  },
+};
+
 export interface OAuthProviderInfo {
   id: string;
   name: string;
+  authType: "oauth" | "api_key";
   loggedIn: boolean;
   modelCount: number;
+  keyUrl?: string;
+  hint?: string;
+  /** 本机装了 OpenCode CLI 且已经存过这家的 Key:页面给「从本机 OpenCode 导入」。 */
+  importable?: boolean;
 }
 
 export async function listOAuthProviders(): Promise<OAuthProviderInfo[]> {
   const runtime = await oauthRuntime();
   const out: OAuthProviderInfo[] = [];
   for (const provider of runtime.getProviders()) {
+    if (isBlockedProvider(runtime, provider.id)) continue;
+    if (isApiKeyProvider(provider.id)) {
+      const loggedIn = runtime.hasConfiguredAuth(provider.id);
+      out.push({
+        id: provider.id,
+        name: provider.name ?? provider.id,
+        authType: "api_key",
+        loggedIn,
+        modelCount: loggedIn ? runtime.getModels(provider.id).length : 0,
+        ...API_KEY_PROVIDER_HELP[provider.id],
+        importable: Boolean(readOpenCodeCliKey(provider.id)),
+      });
+      continue;
+    }
     const auth = (provider as unknown as { auth?: { oauth?: unknown } }).auth;
     if (!auth?.oauth) continue;
     const loggedIn = runtime.isUsingOAuth(provider.id) && runtime.hasConfiguredAuth(provider.id);
     out.push({
       id: provider.id,
       name: provider.name ?? provider.id,
+      authType: "oauth",
       loggedIn,
       modelCount: loggedIn ? runtime.getModels(provider.id).length : 0,
     });
   }
-  // 常用的放前面:Claude、ChatGPT、Copilot。
-  const rank = (id: string) => ["anthropic", "openai-codex", "github-copilot"].indexOf(id);
+  // 常用的放前面:ChatGPT、OpenCode Go、Copilot。
+  const rank = (id: string) => ["openai-codex", "opencode-go", "github-copilot"].indexOf(id);
   return out.sort((a, b) => {
     const ra = rank(a.id);
     const rb = rank(b.id);
@@ -141,11 +189,48 @@ interface LoginFlow {
 
 const flows = new Map<string, LoginFlow>();
 
-export async function startOAuthLogin(providerId: string, onDone: () => void): Promise<string> {
+/** 浏览器授权页关了不点取消,pi 的登录会一直挂着、还按家排队;超时后放掉,这家才能再登。 */
+const LOGIN_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * OpenCode CLI 自己存的 Key(`opencode auth login` / TUI 里 `/connect`):
+ * `$XDG_DATA_HOME/opencode/auth.json`,默认 `~/.local/share/opencode/auth.json`,
+ * 形如 `{"opencode-go": {"type": "api", "key": "..."}}`。Zen 与 Go 共用同一把控制台 Key。
+ */
+export function readOpenCodeCliKey(providerId: string): string | null {
+  const dataHome = process.env["XDG_DATA_HOME"]?.trim() || join(homedir(), ".local", "share");
+  try {
+    const parsed = JSON.parse(readFileSync(join(dataHome, "opencode", "auth.json"), "utf8")) as Record<
+      string,
+      { type?: unknown; key?: unknown } | undefined
+    >;
+    for (const id of [providerId, "opencode"]) {
+      const entry = parsed[id];
+      if (entry?.type === "api" && typeof entry.key === "string" && entry.key.trim()) return entry.key.trim();
+    }
+  } catch {
+    // 没装或没登过 OpenCode
+  }
+  return null;
+}
+
+export async function startOAuthLogin(
+  providerId: string,
+  onDone: () => void,
+  options: { importFromOpenCodeCli?: boolean } = {},
+): Promise<string> {
   for (const [id, flow] of flows) {
     if (flow.status !== "running" && Date.now() - flow.startedAt > 30 * 60_000) flows.delete(id);
+    // 同一家重新点登录:上一次没走完的直接作废,不然会排在它后面一直等。
+    if (flow.status === "running" && flow.provider === providerId) flow.abort.abort();
   }
   const runtime = await oauthRuntime();
+  if (isBlockedProvider(runtime, providerId) || !runtime.getProvider(providerId)) {
+    throw new Error(`不支持用这种方式登录:${providerId}`);
+  }
+  const authType = isApiKeyProvider(providerId) ? "api_key" : "oauth";
+  const importedKey = options.importFromOpenCodeCli ? readOpenCodeCliKey(providerId) : null;
+  if (options.importFromOpenCodeCli && !importedKey) throw new Error("本机 OpenCode 里没有找到这家的 API Key");
   const flow: LoginFlow = {
     id: randomUUID(),
     provider: providerId,
@@ -157,10 +242,21 @@ export async function startOAuthLogin(providerId: string, onDone: () => void): P
     abort: new AbortController(),
   };
   flows.set(flow.id, flow);
+  const timeout = setTimeout(() => {
+    if (flow.status === "running") {
+      flow.error = "登录超时(10 分钟没有完成),请重新点登录";
+      flow.abort.abort();
+    }
+  }, LOGIN_TIMEOUT_MS);
+  timeout.unref();
   const interaction: AuthInteraction = {
     signal: flow.abort.signal,
     prompt: (prompt: AuthPrompt) =>
       new Promise<string>((resolve, reject) => {
+        if (importedKey && prompt.type === "secret") {
+          resolve(importedKey);
+          return;
+        }
         const p = prompt as unknown as { type: string; message: string; placeholder?: string; options?: unknown };
         flow.prompt = { id: randomUUID(), type: p.type, message: p.message, placeholder: p.placeholder, options: p.options };
         flow.resolvePrompt = (value) => {
@@ -186,7 +282,7 @@ export async function startOAuthLogin(providerId: string, onDone: () => void): P
     },
   };
   void runtime
-    .login(providerId, "oauth", interaction)
+    .login(providerId, authType, interaction)
     .then(() => {
       flow.prompt = null;
       flow.status = "done";
@@ -195,10 +291,19 @@ export async function startOAuthLogin(providerId: string, onDone: () => void): P
     })
     .catch((error: unknown) => {
       flow.prompt = null;
-      flow.status = flow.abort.signal.aborted ? "cancelled" : "error";
-      flow.error = error instanceof Error ? error.message : String(error);
-    });
+      const timedOut = Boolean(flow.error);
+      flow.status = flow.abort.signal.aborted && !timedOut ? "cancelled" : "error";
+      if (!timedOut) flow.error = error instanceof Error ? error.message : String(error);
+    })
+    .finally(() => clearTimeout(timeout));
   return flow.id;
+}
+
+/** 还在进行中的登录:页面刷新后能找回来继续、或者取消。 */
+export function listOAuthFlows(): Array<{ id: string; provider: string; startedAt: number }> {
+  return [...flows.values()]
+    .filter((flow) => flow.status === "running")
+    .map((flow) => ({ id: flow.id, provider: flow.provider, startedAt: flow.startedAt }));
 }
 
 export function getOAuthFlow(flowId: string) {

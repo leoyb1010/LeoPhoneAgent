@@ -216,10 +216,12 @@ struct SpeechPlayerControl: View {
         }
         // Measure the base frame BEFORE the offset, and ONLY while not dragging, so
         // it never changes mid-drag (no measure↔render feedback → no flicker).
-        .background(
-            GeometryReader { geo in
-                Color.clear.onChange(of: geo.frame(in: .global)) { f in
-                    // Snapshot the real frame AND the offset that produced it, only
+        // [T-ios-geometry-observer-crash] onGeometryChange, not
+        // onChange(of: geo.frame): the latter writing state is the v1.8b13 SIGTRAP.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { f in
+            // Snapshot the real frame AND the offset that produced it, only
                     // while idle. The pair (baseFrame, baseFrameOffset) is a
                     // consistent reference; bounds are derived from it without ever
                     // re-subtracting the live offset (which double-counted before).
@@ -233,13 +235,7 @@ struct SpeechPlayerControl: View {
                     // the frame re-measures. Gated on `hasUserDragged` so a live drag
                     // this session is never overwritten; idempotent otherwise.
                     if !isDragging { restoreSavedPositionIfNeeded() }
-                }
-                .onAppear {
-                    baseFrame = geo.frame(in: .global); baseFrameOffset = dragOffset
-                    restoreSavedPositionIfNeeded()
-                }
-            }
-        )
+        }
         // Pure @State offset, no implicit animation — drag tracks the finger 1:1.
         .offset(x: dragOffset.width, y: dragOffset.height)
         .onAppear {

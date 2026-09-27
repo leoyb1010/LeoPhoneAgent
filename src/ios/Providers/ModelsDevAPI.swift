@@ -19,7 +19,7 @@ enum ModelsDevAPI {
         "Google": ["google", "google-vertex"],
         "OpenAI": ["openai"],
         "OpenRouter": ["openrouter"],
-        "Antigravity": [],  // Custom proxy, no public models.dev entry
+        "OpenCode Go": ["opencode-go", "opencode"],
     ]
 
     // MARK: - Public: Fetch models by base URL

@@ -45,6 +45,7 @@ struct FileBrowserView: View {
     @State private var previewingFile: FileItem?
     @State private var showImportPicker = false
     @State private var itemToDelete: FileItem?
+    @State private var deleteSizeText: String?
     @State private var moveOrCopyItem: FileItem?
     @State private var moveOrCopyMode: MoveOrCopyMode = .move
     @State private var successMessage = ""
@@ -216,7 +217,24 @@ struct FileBrowserView: View {
             }
             Button("Cancel", role: .cancel) { itemToDelete = nil }
         } message: {
-            Text("\(itemToDelete?.formattedSize ?? "") · This action cannot be undone.")
+            if let item = itemToDelete, item.isSymlink {
+                let target = SymlinkSafeDelete.linkDestination(of: item.url) ?? item.url.resolvingSymlinksInPath().path
+                Text("Only this link is removed. The original at \(target) is kept.")
+            } else {
+                Text("\(deleteSizeText ?? "…") · This action cannot be undone.")
+            }
+        }
+        .task(id: itemToDelete?.id) {
+            deleteSizeText = nil
+            guard let item = itemToDelete, !item.isSymlink else { return }
+            let url = item.url
+            let summary = await Task.detached(priority: .userInitiated) {
+                SymlinkSafeDelete.recursiveSize(of: url)
+            }.value
+            let size = ByteCountFormatter.string(fromByteCount: summary.bytes, countStyle: .file)
+            deleteSizeText = item.isDirectory
+                ? String(localized: "\(summary.files) files, \(size)")
+                : size
         }
         .sheet(item: $previewingFile) { file in
             FilePreviewSheet(item: file)
@@ -1046,17 +1064,20 @@ class FileBrowserViewModel: ObservableObject {
     func deleteItem(_ item: FileItem) {
         let fm = FileManager.default
         do {
-            // For symlinks, also try removing the resolved target
-            if item.isSymlink {
-                let resolved = item.url.resolvingSymlinksInPath()
-                try? MountedFolderCoordinator.remove(at: resolved)
-            }
-            // Remove the item (or symlink) at the logical path.
             // Use the path relative to currentPath to ensure we hit the right file
             // in case the URL was resolved differently.
             let logicalURL = currentPath.resolvingSymlinksInPath().appendingPathComponent(item.name)
             let removedURL: URL
-            if fm.fileExists(atPath: logicalURL.path) {
+            if item.isSymlink || SymlinkSafeDelete.isSymlink(logicalURL) {
+                let linkURL = SymlinkSafeDelete.isSymlink(logicalURL) ? logicalURL : item.url
+                if Self.isMountRootLink(linkURL) {
+                    errorMessage = String(localized: "\"\(item.name)\" is a mounted folder. To remove it, unmount it in Settings → Mount External Folders. Its files are not touched.")
+                    showError = true
+                    return
+                }
+                try SymlinkSafeDelete.unlinkSymlink(at: linkURL)
+                removedURL = linkURL
+            } else if fm.fileExists(atPath: logicalURL.path) {
                 try MountedFolderCoordinator.remove(at: logicalURL)
                 removedURL = logicalURL
             } else {
@@ -1082,6 +1103,17 @@ class FileBrowserViewModel: ObservableObject {
             errorMessage = "Cannot delete \"\(item.name)\": \(error.localizedDescription)"
             showError = true
         }
+    }
+
+    /// True for the `var/minis/mounts/<name>` link that anchors a mounted
+    /// external folder. Unlinking it is pointless (mount refresh recreates it)
+    /// and reads like deleting the folder, so it's routed to "unmount".
+    private static func isMountRootLink(_ url: URL) -> Bool {
+        let mountsDir = RootfsManager.shared.dataPath
+            .appendingPathComponent("var/minis/mounts", isDirectory: true)
+            .resolvingSymlinksInPath().standardized.path
+        let parent = url.deletingLastPathComponent().resolvingSymlinksInPath().standardized.path
+        return parent == mountsDir
     }
 
     /// Maps a Linux path under `/var/minis/{shared,skills,memory}/...` to the

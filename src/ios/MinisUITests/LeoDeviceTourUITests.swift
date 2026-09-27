@@ -109,9 +109,11 @@ final class LeoDeviceTourUITests: XCTestCase {
         settle(2.0)
         dismissWhatsNew(app)
         settle(0.8)
-        // 深链直接打开能力自检并自动开跑
+        // 深链只打开能力自检页,由用户点「开始自检」
         app.open(URL(string: "leophoneagent://settings/selftest")!)
         settle(2.0)
+        if app.buttons["开始自检"].exists { app.buttons["开始自检"].tap() }
+        settle(1.0)
         shot("20-selftest-start")
         // 最多等 90 秒跑完
         let deadline = Date().addingTimeInterval(90)

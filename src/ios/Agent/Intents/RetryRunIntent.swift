@@ -10,6 +10,7 @@ struct RetryRunIntent: AppIntent {
     static var title: LocalizedStringResource = "Retry Run"
     static var description = IntentDescription("Re-runs the AI agent from a specific user message in a session. Presents a list of user messages to choose from, then retries from that point.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Session")
@@ -28,6 +29,9 @@ struct RetryRunIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
+        if SessionLockStore.shared.isHiddenFromSystemSurfaces(session.id) {
+            throw SessionLockedIntentError.locked
+        }
         BackgroundKeepAliveManager.shared.setup()
 
         // [T-shortcuts-eager-keepalive] Arm keep-alive BEFORE any await so
@@ -116,16 +120,36 @@ struct RetryRunIntent: AppIntent {
             )
         }
 
-        // Map entity index back to ChatMessage
+        // Map entity index back to ChatMessage. Entity indices come from the
+        // database and can drift from this list, and retrying truncates
+        // history after the target — so the index must also agree on the
+        // text, and a message that can't be found is an error, never "the
+        // last one".
+        func preview(of msg: ChatMessage) -> String {
+            let text = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "(attachment)" : String(text.prefix(80))
+        }
         let targetIdx = chosenEntity.index - 1
-        let targetMessage: ChatMessage
-        if targetIdx >= 0 && targetIdx < userMessages.count {
-            targetMessage = userMessages[targetIdx]
-        } else {
-            targetMessage = userMessages.last!
+        let indexed = (targetIdx >= 0 && targetIdx < userMessages.count) ? userMessages[targetIdx] : nil
+        guard let targetMessage = indexed.flatMap({ preview(of: $0) == chosenEntity.preview ? $0 : nil })
+                ?? userMessages.last(where: { preview(of: $0) == chosenEntity.preview }) else {
+            abandon(pendingId: pendingId, eagerArmed: eagerResult.armed, reason: "earlyReturn.messageNotFound")
+            return .result(
+                value: SendPromptResult(sessionId: session.id, modelName: "N/A", status: "Error", isNewSession: false),
+                dialog: "That message is no longer in this session. Nothing was retried."
+            )
         }
 
         let promptPreview = String(targetMessage.content.prefix(50))
+        let laterCount = vm.messages.count - 1 - (vm.messages.lastIndex(where: { $0.id == targetMessage.id }) ?? vm.messages.count - 1)
+        do {
+            try await requestConfirmation(
+                actionName: .continue,
+                dialog: IntentDialog("Retry from “\(promptPreview)”? The \(laterCount) message(s) after it will be removed."))
+        } catch {
+            abandon(pendingId: pendingId, eagerArmed: eagerResult.armed, reason: "earlyReturn.confirmationDeclined")
+            throw error
+        }
 
         // Convert intent files to InputAttachments for replacement (if provided)
         var replacementAttachments: [InputAttachment]? = nil
@@ -205,6 +229,16 @@ struct RetryRunIntent: AppIntent {
         )
 
         return .result(value: result, dialog: "Retrying from message: \(promptPreview)\(targetMessage.content.count > 50 ? "…" : "")")
+    }
+
+    /// Bail-out before any agent work: clear the pending marker and the
+    /// eager "running" registration, or the home spinner sticks.
+    @MainActor
+    private func abandon(pendingId: String, eagerArmed: Bool, reason: String) {
+        ShortcutRunTracker.markCompleted(recordId: pendingId, reason: reason)
+        if eagerArmed {
+            SessionActivityTracker.shared.setInactive(session.id, source: "RetryRunIntent.eager.\(reason)")
+        }
     }
 
     static var parameterSummary: some ParameterSummary {

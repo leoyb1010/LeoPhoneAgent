@@ -55,6 +55,8 @@ import {
   weatherSummary,
   envPromptBlock,
   expandEnvPlaceholders,
+  referencesEnv,
+  envAllowedTool,
   sessionArchiveJson,
   nextDelta,
   trimHistory,
@@ -74,6 +76,7 @@ import {
   idsFromModelsDevJson,
   fallbackModelIds,
   codexCatalogIds,
+  chatModelsFor,
 } from "./providerModels.ts";
 import { voiceTemplates, voiceCapabilityLabel, matchVoiceTemplate } from "./voiceTemplates.ts";
 import { parseDeviceAuth, classifyDevicePoll, accessTokenFromJson, httpsHost, hostEndsWith } from "./deviceOAuth.ts";
@@ -96,7 +99,6 @@ import {
   oauthWebErrorCopy,
   oauthRegionBlocked,
   OPENAI_TOKEN,
-  ANTHROPIC_TOKEN,
 } from "./browserOAuth.ts";
 import {
   usesCodexResponses,
@@ -439,14 +441,15 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.deepEqual(availableCredentials("kimiCode"), ["oauth", "apiKey"]);
   assert.deepEqual(availableCredentials("xAI"), ["oauth", "apiKey"]);
   assert.deepEqual(availableCredentials("openAI"), ["apiKey", "oauth"]);
-  assert.deepEqual(availableCredentials("anthropic"), ["apiKey", "oauth"]);
+  assert.deepEqual(availableCredentials("anthropic"), ["apiKey"]);
   assert.deepEqual(availableCredentials("openRouter"), ["apiKey", "oauth"]);
   assert.deepEqual(availableCredentials("gemini"), ["apiKey"]);
   assert.deepEqual(availableCredentials("custom"), ["apiKey"]);
   assert.ok(oauthHint("kimiCode").includes("Kimi"));
   assert.ok(apiKeyHint("gemini").includes("Gemini"));
   assert.equal(oauthCallbackPort("openAI"), 1455);
-  assert.equal(oauthRedirectUri("anthropic"), "http://localhost:54545/callback");
+  assert.equal(oauthRedirectUri("anthropic"), "");
+  assert.throws(() => buildOAuthAuthUrl("anthropic", "chal", "st"));
   assert.equal(oauthRedirectUri("openRouter"), "http://localhost:3000/callback");
   assert.equal(isOAuthCallbackUrl("http://localhost:3000/callback?code=abc&state=s1", "openRouter"), true);
   assert.equal(isOAuthCallbackUrl("http://127.0.0.1:1455/auth/callback?code=abc", "openAI"), true);
@@ -498,10 +501,10 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.equal(oauthNeedsProxy("kimiCode"), false);
   assert.ok(oauthNetworkHint("openAI").includes("auth.openai.com"));
   assert.equal(oauthRefreshUrl("openAI"), OPENAI_TOKEN);
-  assert.equal(oauthRefreshUrl("anthropic"), ANTHROPIC_TOKEN);
+  assert.equal(oauthRefreshUrl("anthropic"), "");
   assert.equal(oauthRefreshUsesForm("kimiCode"), true);
   assert.equal(oauthRefreshUsesForm("openAI"), false);
-  assert.equal(canRefreshOAuth("anthropic"), true);
+  assert.equal(canRefreshOAuth("anthropic"), false);
   assert.equal(canRefreshOAuth("openRouter"), false);
   assert.ok(oauthWebErrorCopy("3", "timeout").includes("页面打不开"));
   assert.equal(oauthRegionBlocked("HTTP 403", "unsupported_country_region_territory"), true);
@@ -927,7 +930,12 @@ function wireShape(source, startsWith) {
   assert.equal(expandEnvPlaceholders('{"url":"https://x/?t=$$GITHUB_TOKEN&u=$$NOPE"}', values),
     '{"url":"https://x/?t=ab\\"c&u=$$NOPE"}', "值按 JSON 转义,不认识的名字原样留着");
   assert.ok(!/\$\{this\.rows\[i\]\.value\}/.test(etsSrc("store/EnvStore.ets")), "EnvStore 不再把值写进提示");
-  assert.ok(/envStore\.expand\(raw\)/.test(etsSrc("local/LocalTools.ets")), "工具执行前替换 $$名字");
+  assert.ok(/envAllowedTool\(name\) \? envStore\.expand\(raw\) : raw/.test(etsSrc("local/LocalTools.ets")), "只有 mcp_call 换 $$名字");
+  assert.equal(referencesEnv('{"url":"https://evil/?k=$$GITHUB_TOKEN"}', ["GITHUB_TOKEN"]), true);
+  assert.equal(referencesEnv('{"text":"$$NOPE costs $$5"}', ["GITHUB_TOKEN"]), false);
+  assert.equal(envAllowedTool("mcp_call"), true);
+  assert.equal(envAllowedTool("web_fetch"), false);
+  assert.equal(envAllowedTool("memory_write"), false);
 
   // 导出的档案能原样导回来。
   const exported = sessionArchiveJson("周末计划", [
@@ -1009,12 +1017,17 @@ function wireShape(source, startsWith) {
   // 打开机器不再建空任务;第一条消息才建(带着这句话)。
   const start = chat.slice(chat.indexOf("private startSession("), chat.indexOf("private teardown("));
   assert.ok(!/client\.create\(/.test(start), "打开机器时不在 Mac 上建任务");
-  assert.ok(/this\.sessionId = await this\.createTask\(text, auto\)/.test(chat) &&
+  assert.ok(/const created = await this\.createTask\(client, text, auto\)/.test(chat) &&
     /client\.create\(ChatLaunch\.harness, text, '', auto\)/.test(chat), "第一条消息建任务并直接跑这一句");
-  // 这台鸿蒙是「全自动」时,Mac 上的 LeoPhoneAgent 任务也全自动(iOS 同样);Mac 不接受就退回逐项审批一次。
-  assert.ok(/const auto = zcode && SensitiveToolGate\.fullAuto && !this\.fullAutoRefused/.test(chat));
+  // Mac 任务的全自动只看这个任务自己的开关,默认关、开之前确认,不跟本机「全自动」走;Mac 不接受就退回逐项审批一次。
+  assert.ok(/const auto = zcode && this\.macAuto && !this\.fullAutoRefused/.test(chat));
+  assert.ok(!/SensitiveToolGate/.test(chat), "远程页不再读本机的全自动");
+  assert.ok(/promptAction\.showDialog\(\{\s*title: '这个任务改成全自动\?'/.test(chat), "开之前要确认");
+  assert.ok(/this\.macAuto = false;\s*this\.launchGen \+= 1;/.test(chat), "换任务回到逐项确认");
+  assert.ok(/if \(gen !== this\.launchGen\)/.test(chat), "等回话期间换了页面,结果不接到当前页");
+  assert.ok(/await this\.stop\(sessionId, client\)/.test(chat), "批准后停止用答题时的任务");
   assert.ok(/err\.code !== 403/.test(chat) && /client\.create\(ChatLaunch\.harness, text, '', false\)/.test(chat));
-  assert.ok(/this\.client\.send\(this\.sessionId, text, '', zcode \? \(auto \? 1 : 0\) : -1\)/.test(chat));
+  assert.ok(/client\.send\(this\.sessionId, text, '', zcode \? \(auto \? 1 : 0\) : -1\)/.test(chat));
   assert.ok(/body\['full_auto'\] = true/.test(harness) && /body\['full_auto'\] = fullAuto === 1/.test(harness));
   // 回放的旧帧不重置重连计数;一轮结束后正常关流就不再重连。
   assert.ok(!/this\.reconnects = 0;\s*this\.onEvent/.test(chat), "不再每来一帧就清零重连计数");
@@ -1404,3 +1417,61 @@ function wireShape(source, startsWith) {
 }
 
 console.log("PROTOCOL_MACHINES_OK");
+
+{
+  // OpenCode Go:只留 chat completions 能跑的模型;其他服务商原样。
+  const goIds = ["kimi-k3", "glm-5.3", "gpt-5.6-luna", "grok-4.6", "muse-spark-1.3-contributor", "minimax-m3", "minimax-m2.7", "qwen3.8-flash", "qwen3.8-max"];
+  assert.deepEqual(chatModelsFor("openCodeGo", goIds), ["kimi-k3", "glm-5.3", "minimax-m2.7", "qwen3.8-max"]);
+  assert.deepEqual(chatModelsFor("openCodeGo", ["gpt-5.6-luna"]), ["gpt-5.6-luna"]);
+  assert.deepEqual(chatModelsFor("openAI", ["gpt-5.5"]), ["gpt-5.5"]);
+  assert.deepEqual(availableCredentials("openCodeGo"), ["apiKey"]);
+  assert.ok(apiKeyHint("openCodeGo").includes("opencode.ai/auth"));
+  const catalog = readFileSync(new URL("../app/entry/src/main/ets/local/ProviderCatalog.ets", import.meta.url), "utf8");
+  assert.ok(catalog.includes("kind('openCodeGo', 'OpenCode Go'") && catalog.includes("'https://opencode.ai/zen/go/v1'"));
+  const store = readFileSync(new URL("../app/entry/src/main/ets/store/ProviderStore.ets", import.meta.url), "utf8");
+  assert.ok(/const usable = chatModelsFor\(row\.type, ids\)/.test(store), "拉回的目录要按协议筛");
+  assert.ok(/row\.type !== 'anthropic' \|\| row\.credential !== 'oauth'/.test(store), "老的 Claude 订阅实例要迁走");
+  const oauthEts = readFileSync(new URL("../app/entry/src/main/ets/local/BrowserOAuth.ets", import.meta.url), "utf8");
+  assert.ok(!oauthEts.includes("claude.ai/oauth") && !oauthEts.includes("9d1c250a-e61b-44d9-88ed-5944d1962f5e"), "Claude 订阅登录已下线");
+  const client = readFileSync(new URL("../app/entry/src/main/ets/local/OpenAICompatClient.ets", import.meta.url), "utf8");
+  assert.ok(!client.includes("claude-code-20250219"), "不再伪装 Claude Code");
+  console.log("PROTOCOL_OPENCODE_GO_OK");
+}
+
+{
+  // 鸿蒙审计 P1-3:远程 / 定时回合碰不到拉起 App、拨号、剪贴板、定位、MCP(除非开了全自动)。
+  const src = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const gate = src("local/SensitiveToolGate.ets");
+  assert.ok(/UNATTENDED_BLOCKED: string\[\] = \['open_app_link', 'dial', 'clipboard_write', 'location', 'mcp_call'\]/.test(gate));
+  assert.ok(/LocalTools\.run\(context, calls\[i\]\.name, calls\[i\]\.args, sessionKey, true\)/.test(src("local/LocalAgentEngine.ets")));
+  assert.ok(/const denied = unattended \? SensitiveToolGate\.unattendedDenial\(name\) : ''/.test(src("local/LocalTools.ets")));
+  console.log("PROTOCOL_UNATTENDED_OK");
+}
+
+{
+  // 鸿蒙审计 P1-4/5/6/9/10/11/12、P2-14/16/17。
+  const src = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
+  const client = src("local/OpenAICompatClient.ets");
+  assert.ok(/const root = credential === 'oauth' \? kindByKey\(type\)\.root : baseUrl/.test(client), "订阅令牌只发官方地址");
+  assert.ok(/if \(row\.credential === 'oauth'\) \{\s*row\.baseUrl = '';/.test(src("store/ProviderStore.ets")));
+  const mcp = src("store/McpStore.ets");
+  assert.ok(/else if \(moved\) \{[\s\S]*?SecretStore\.remove\(McpStore\.alias\(name\)\)/.test(mcp), "换地址清旧令牌");
+  assert.ok(/this\.rows = next;\s*await SecretStore\.remove\(McpStore\.alias\(label\)\)/.test(mcp), "删服务器清令牌");
+  const env = src("store/EnvStore.ets");
+  assert.ok(/bare\.name = row\.name;/.test(env) && !/bare\.value/.test(env), "env.json 不再存值");
+  assert.ok(/SecretStore\.write\(EnvStore\.alias\(row\.name\), row\.value\)/.test(env), "老明文值搬进钥匙串");
+  const sessions = src("store/SessionStore.ets");
+  assert.ok(/fileIo\.renameSync\(tmp, path\)/.test(sessions), "档案原子写");
+  assert.ok(/this\.summaries = this\.reconcile\(context, listed\)/.test(sessions), "目录按档案重建");
+  assert.ok(/return \/\^s_\\d\+_\\d\+\$\/\.test\(id\)/.test(sessions), "对话编号校验");
+  assert.ok(/this\.dropImages\(context, doomed\.messages\)/.test(sessions), "删对话连图片");
+  assert.ok(/if \(SessionStore\.validId\(id\)\) \{\s*AppStorage\.setOrCreate\('openSession'/.test(src("entryability/EntryAbility.ets")));
+  assert.ok(/title: '删除对话\?'/.test(src("panes/LocalAgentPane.ets")), "删对话先确认");
+  const gateway = src("store/GatewayStore.ets");
+  assert.ok(/pair\.exp > 0 && pair\.exp \* 1000 < Date\.now\(\)/.test(gateway), "过期的码不用");
+  assert.ok(/pairSwitchesRelay\(raw: string\)/.test(gateway) && /confirmSwitch\(other\)/.test(src("panes/FleetPane.ets")), "换中继先问");
+  assert.ok(/LocalAgentEngine\.bump\('schedule'\);\s*resolve\(\['failed'/.test(src("local/ScheduleRunner.ets")), "看门狗真停下");
+  assert.ok(!/maxLines\(4\)/.test(src("panes/ChatPane.ets")), "审批卡不截断命令");
+  console.log("PROTOCOL_HARMONY_AUDIT_OK");
+}
+

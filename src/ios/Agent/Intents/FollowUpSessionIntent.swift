@@ -9,6 +9,7 @@ struct FollowUpSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Follow Up Session"
     static var description = IntentDescription("Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Session")
@@ -27,6 +28,9 @@ struct FollowUpSessionIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
+        if SessionLockStore.shared.isHiddenFromSystemSurfaces(session.id) {
+            throw SessionLockedIntentError.locked
+        }
         BackgroundKeepAliveManager.shared.setup()
 
         // [T-shortcuts-eager-keepalive] AppIntent-woken processes get very

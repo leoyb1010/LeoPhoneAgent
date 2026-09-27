@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { leoLocalKey, LEO_HTTP_PORT } from "./leoPaths.js";
+import { leoTreasuryKey, LEO_HTTP_PORT } from "./leoPaths.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
@@ -21,6 +21,7 @@ function resolveScriptPath(): string {
  * [leo] 把藏宝阁登记成用户级 MCP 服务(`~/.agents/mcp.json`),这样任何会话都能用
  * treasury_search / get / save / update,不用每次手工添加。
  * 已经有同名条目就只更新路径与端口,不动用户改过的其它字段。
+ * 钥匙用只能访问藏宝阁的那把:这个文件所有 agent 都读得到,主钥匙不能出现在这里。
  */
 export function registerTreasuryMcpServer(logger: Logger): void {
   try {
@@ -49,7 +50,7 @@ export function registerTreasuryMcpServer(logger: Logger): void {
       env: {
         ...(existing["env"] as Record<string, string> | undefined),
         ELECTRON_RUN_AS_NODE: "1",
-        LEOAGENT_KEY: leoLocalKey(),
+        LEOAGENT_KEY: leoTreasuryKey(),
         LEOAGENT_PORT: String(LEO_HTTP_PORT),
       },
     };

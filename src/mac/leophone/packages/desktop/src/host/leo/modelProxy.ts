@@ -10,17 +10,17 @@ import type {
   ToolCall,
 } from "@earendil-works/pi-ai";
 
-import { loggedInModels, oauthRuntime } from "./oauthRuntime.js";
+import { listOAuthProviders, loggedInModels, oauthRuntime } from "./oauthRuntime.js";
 
 /**
  * [leo] OpenAI 兼容的本机模型代理:`/v1/models` 与 `/v1/chat/completions`。
  *
- * LeoPhoneAgent 的 Agent 说 OpenAI chat-completions;订阅账号(Claude / ChatGPT /
- * Copilot)各有各的协议和鉴权。这里把请求翻成 pi 的 Context,交给 ModelRuntime
+ * LeoPhoneAgent 的 Agent 说 OpenAI chat-completions;订阅账号(ChatGPT / Copilot /
+ * OpenCode Go)各有各的协议和鉴权。这里把请求翻成 pi 的 Context,交给 ModelRuntime
  * 用对应账号去调,再把事件流翻回 OpenAI 的 SSE。工具调用双向都支持,Agent 的
  * 读写文件、跑命令照常可用。
  *
- * 模型 id 形如 `anthropic/claude-sonnet-4-5`:斜杠前是哪一家,后面是那家的模型。
+ * 模型 id 形如 `opencode-go/kimi-k3`:斜杠前是哪一家,后面是那家的模型。
  */
 
 type OpenAIContentPart =
@@ -226,7 +226,9 @@ export async function handleChatCompletions(
   const [providerId, ...rest] = String(request.model ?? "").split("/");
   const modelId = rest.join("/");
   const runtime = await oauthRuntime();
-  const model = providerId && modelId ? runtime.getModel(providerId, modelId) : undefined;
+  // 只放行页面上列出且已登录的那几家:下架的登录方式(比如 Claude 订阅)即使本机还留着旧凭据也不能再用。
+  const listed = (await listOAuthProviders()).some((provider) => provider.id === providerId && provider.loggedIn);
+  const model = listed && providerId && modelId ? runtime.getModel(providerId, modelId) : undefined;
   if (!model) {
     sendJson(res, 404, { error: { message: `模型不存在或该订阅账号没登录:${request.model}`, type: "invalid_request_error" } });
     return;

@@ -140,10 +140,22 @@ export class GatewayStore {
     }
   }
 
+  /** 这张码会不会把已经在用的中继换掉;会的话返回新中继地址,由界面先问一句。 */
+  pairSwitchesRelay(raw: string): string {
+    const pair = decodePair(raw);
+    if (!pair || pair.join.length === 0 || sanitizeKey(this.key).length < 16 || this.apiRoot.length === 0) {
+      return '';
+    }
+    return sameApiRoot(pair.apiRoot, this.apiRoot) ? '' : pair.apiRoot;
+  }
+
   async scanPairCode(raw: string, onProgress: (text: string) => void = () => {}): Promise<string> {
     const pair = decodePair(raw);
     if (!pair) {
       return '不是本 App 的配对码。码里应是中继根和机器名。';
+    }
+    if (pair.exp > 0 && pair.exp * 1000 < Date.now()) {
+      return '这张配对码已经过期了,请让 Mac 重新出码';
     }
     if (pair.join.length > 0) {
       try {

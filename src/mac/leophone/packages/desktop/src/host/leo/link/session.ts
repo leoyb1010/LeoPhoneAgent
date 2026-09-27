@@ -53,6 +53,8 @@ export type LinkSessionDeps = {
   logger: Logger;
   /** 中继 0.2 起为 true:认不出身份的调用方按旧版设备对待(见 LinkBridge.strictCallers)。 */
   strictCallers?: () => boolean;
+  /** 模式变了(含 Mac 桌面上切的):写回任务表,Mac 重启后「关闭全自动」才认得出它。 */
+  onModeChanged?: () => void;
 };
 
 /**
@@ -216,7 +218,10 @@ export class LinkSession {
   private onZCode(event: ZCodeStreamEvent): void {
     switch (event.type) {
       case "mode_update":
-        this.mode = event.currentModeId;
+        if (this.mode !== event.currentModeId) {
+          this.mode = event.currentModeId;
+          this.deps.onModeChanged?.();
+        }
         return;
       case "task_run_started":
         if (this.status !== "waiting_for_approval") this.status = "running";

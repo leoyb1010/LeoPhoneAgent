@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OffloadPermissionDialogModifier: ViewModifier {
     @ObservedObject private var manager = OffloadPermissionManager.shared
@@ -12,20 +13,60 @@ struct OffloadPermissionDialogModifier: ViewModifier {
             .onDisappear { manager.setPresenter(presenterID, available: false) }
             .onChange(of: scenePhase) { _, _ in updatePresenter() }
             .onChange(of: isEnabled) { _, _ in updatePresenter() }
-            .sheet(item: $manager.pendingRequest) { request in
-                OffloadPermissionDialogContent(request: request)
-                    // Both detents — long arg lists were getting pushed below
-                    // the medium detent's bottom edge with the Allow / Deny
-                    // buttons trailing them, leaving no way to respond. Allow
-                    // dragging up to .large; the content is scrollable in
-                    // either height.
-                    .presentationDetents([.medium, .large])
-                    .interactiveDismissDisabled()
+            .onChange(of: manager.pendingRequest?.id) { _, _ in
+                OffloadPermissionSheetPresenter.update(manager.pendingRequest)
             }
+            .onAppear { OffloadPermissionSheetPresenter.update(manager.pendingRequest) }
     }
 
     private func updatePresenter() {
         manager.setPresenter(presenterID, available: isEnabled && scenePhase == .active)
+    }
+}
+
+/// [T-approval-over-sheets] Presented from the top-most UIKit controller. A
+/// SwiftUI `.sheet` on the root can't appear while another sheet (a tool's
+/// live output, Settings…) is up, so the request sat invisible until the
+/// 30-second queue timeout denied it and the task failed.
+@MainActor
+private enum OffloadPermissionSheetPresenter {
+    private static weak var shown: UIViewController?
+    private static var shownId: String?
+
+    static func update(_ pending: PermissionRequest?) {
+        guard pending?.id != shownId else { return }
+        if let shown, shown.presentingViewController != nil, !shown.isBeingDismissed {
+            shown.dismiss(animated: true)
+        }
+        shown = nil
+        shownId = nil
+        guard let request = pending else { return }
+        guard let top = topController() else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                update(OffloadPermissionManager.shared.pendingRequest)
+            }
+            return
+        }
+        let host = UIHostingController(rootView: OffloadPermissionDialogContent(request: request))
+        host.isModalInPresentation = true
+        // Both detents — long arg lists were getting pushed below the medium
+        // detent's bottom edge with the Allow / Deny buttons trailing them.
+        // The content is scrollable in either height.
+        host.sheetPresentationController?.detents = [.medium(), .large()]
+        shown = host
+        shownId = request.id
+        top.present(host, animated: true)
+    }
+
+    private static func topController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
+        while let next = top?.presentedViewController {
+            if next.isBeingDismissed { return nil }
+            top = next
+        }
+        return top
     }
 }
 
@@ -146,7 +187,8 @@ private struct OffloadPermissionDialogContent: View {
                     LeoHaptics.notification(.warning)
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: false)
                 } label: {
-                    Text("Deny in Session")
+                    // Denies this request only; the next one asks again.
+                    Text("Deny")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)

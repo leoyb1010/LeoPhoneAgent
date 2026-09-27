@@ -39,27 +39,33 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
 
     func maskedToken(instanceId: String) -> String? {
         guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instanceId) else { return nil }
-        return ClaudeOAuthManager.maskToken(key)
+        return OAuthTokenMask.mask(key)
     }
 
     func login(instanceId: String) async throws {
+        // A second concurrent login would fight over the same loopback port
+        // and tear down the first attempt's server.
+        guard !isAuthenticating else {
+            logger.warning("OpenRouter login already in progress — ignoring re-entrant call")
+            return
+        }
         logger.info("=== OpenRouter OAuth login started (instance: \(instanceId)) ===")
-        callbackServer?.stop()
-        callbackServer = nil
         isAuthenticating = true
+        var ownServer: OAuthCallbackServer?
         defer {
             isAuthenticating = false
-            callbackServer?.stop()
-            callbackServer = nil
+            ownServer?.stop()
+            if callbackServer === ownServer { callbackServer = nil }
             safariVC?.dismiss(animated: true)
             safariVC = nil
         }
 
         let (verifier, challenge) = generatePKCE()
-        logger.info("PKCE generated — verifier length: \(verifier.count), challenge: \(challenge.prefix(16))...")
+        logger.info("PKCE generated — verifier length: \(verifier.count)")
 
         // 1. Start local HTTP server
         let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/callback")
+        ownServer = server
         self.callbackServer = server
         try server.start()
         logger.info("Callback server started on port \(self.callbackPort)")
@@ -86,11 +92,7 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         // 5. Exchange code for permanent API key
         logger.info("Exchanging code for API key...")
         let apiKey = try await exchangeCode(result.code, verifier: verifier)
-        #if DEBUG
-        logger.info("API key received — prefix: \(apiKey.prefix(16))...")
-        #else
-        logger.info("API key received")
-        #endif
+        logger.info("API key received — length: \(apiKey.count)")
 
         // 6. Store as permanent API key (not OAuth token — it's a permanent key)
         ProviderKeychainHelper.saveAPIKey(apiKey, instanceId: instanceId)
@@ -138,12 +140,13 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         let statusCode = http?.statusCode ?? -1
-        let responseBody = String(data: data, encoding: .utf8) ?? "<binary>"
-
         logger.info("Response status: \(statusCode)")
         guard (200..<300).contains(statusCode) else {
             logger.error("Key exchange FAILED — status \(statusCode)")
-            throw LLMError.providerError(message: "OpenRouter key exchange failed: \(responseBody)")
+            let responseBody = String(data: data, encoding: .utf8) ?? ""
+            let summary = OAuthRefreshErrorClassifier.userFacingSummary(LLMError.providerError(
+                message: OAuthRefreshErrorClassifier.makeErrorMessage(status: statusCode, body: responseBody)))
+            throw LLMError.providerError(message: String(localized: "OpenRouter sign-in failed (\(summary)). Please try again."))
         }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -165,8 +168,19 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }
         let vc = SFSafariViewController(url: url)
+        vc.delegate = self
         topVC.present(vc, animated: true)
         self.safariVC = vc
+    }
+}
+
+extension OpenRouterOAuthManager: SFSafariViewControllerDelegate {
+    nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        Task { @MainActor [weak self] in
+            // Closing Safari cancels the wait instead of holding the port for the full timeout.
+            guard let self, self.safariVC === controller else { return }
+            self.callbackServer?.stop()
+        }
     }
 }
 

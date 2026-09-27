@@ -18,6 +18,7 @@ import { SensitiveToolGate } from './SensitiveToolGate';
 import {
   WRITE_GRANT_MARK,
   allowOpenUrl,
+  envAllowedTool,
   htmlToText,
   nowLine,
   sandboxFileName,
@@ -131,10 +132,22 @@ export class LocalTools {
 
   /** owner：发起这次工具调用的会话。写沙箱的授权按它配对，远程/定时链路拿不到本机用户的授权。 */
   static async run(context: common.Context, name: string, raw: string,
-    owner: string = ''): Promise<ToolResult> {
-    // 模型写的是 $$名字,真实值只在本机这一步换进去。
-    const args = envStore.expand(raw);
+    owner: string = '', unattended: boolean = false): Promise<ToolResult> {
     const out = new ToolResult();
+    const denied = unattended ? SensitiveToolGate.unattendedDenial(name) : '';
+    if (denied.length > 0) {
+      out.title = toolArg(raw, 'tool_title') || name;
+      out.text = denied;
+      return out;
+    }
+    // 模型写的是 $$名字,真实值只在本机这一步换进去 —— 只给 mcp_call(用户自己配的服务器)。
+    // 网页、链接、剪贴板、记忆这些工具一律不换值:提示注入就能让它们把钥匙带去任意地址。
+    if (!envAllowedTool(name) && envStore.referenced(raw)) {
+      out.title = toolArg(raw, 'tool_title') || name;
+      out.text = '环境变量($$名字)只能用在 mcp_call 的参数里,这次没有执行。';
+      return out;
+    }
+    const args = envAllowedTool(name) ? envStore.expand(raw) : raw;
     out.title = toolArg(args, 'tool_title') || name;
     if (!toolArgsComplete(args)) {
       // 参数写到一半被截断:不补全、不执行,让模型重发(iOS、安卓同样处理)。

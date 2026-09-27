@@ -7,7 +7,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     case openAI
     case anthropic
     case gemini
-    case antigravity
     case openRouter
     /// OpenAI Responses API — uses the /v1/responses endpoint format.
     /// Works with OpenAI directly or any Responses-API-compatible service.
@@ -19,6 +18,10 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     /// OpenAI-compatible coding upstream — flows through OpenAIProvider with
     /// custom base URL + OAuth bearer, like xAI. See the Kimi Code OAuth design notes.
     case kimiCode
+    /// OpenCode Go (official opencode.ai subscription API, API key). One
+    /// endpoint family that speaks three wire protocols; the protocol is
+    /// chosen per model id (see OpenCodeGo.wireProtocol(for:)).
+    case openCodeGo
     /// Sentinel for a provider type this app build doesn't recognize — e.g. a
     /// NEWER build synced an instance whose `provider_type` string isn't a known
     /// case here. We DECODE to this instead of throwing/dropping, so the instance
@@ -38,11 +41,11 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .anthropic: return "Anthropic"
         case .gemini: return "Google Gemini"
         case .openAI: return "OpenAI"
-        case .antigravity: return "Antigravity"
         case .openRouter: return "OpenRouter"
         case .openAIResponses: return "Responses API (v3)"
         case .xAI: return "xAI (Grok)"
         case .kimiCode: return "Kimi Code"
+        case .openCodeGo: return "OpenCode Go"
         case .unsupported: return "Unsupported"
         }
     }
@@ -53,11 +56,11 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .anthropic: return LLMModel.allAnthropic
         case .gemini: return LLMModel.allGemini
         case .openAI: return LLMModel.allOpenAI
-        case .antigravity: return LLMModel.allAntigravity
         case .openRouter: return LLMModel.allOpenRouter
         case .openAIResponses: return LLMModel.allOpenAI
         case .xAI: return XAIModelsAPI.allModels
         case .kimiCode: return KimiModelsAPI.allModels
+        case .openCodeGo: return OpenCodeGo.fallbackModels
         case .unsupported: return []
         }
     }
@@ -80,8 +83,8 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             return String(localized: "Works with the Grok series of models")
         case .kimiCode:
             return String(localized: "Sign in with your Kimi Code / Coding Plan subscription")
-        case .antigravity:
-            return String(localized: "\(builtInModels.count) built-in models")
+        case .openCodeGo:
+            return String(localized: "Official OpenCode Go API: Kimi, GLM, DeepSeek, Qwen, MiniMax and more with one key")
         case .unsupported:
             return String(localized: "\(builtInModels.count) built-in models")
         }
@@ -93,11 +96,11 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .anthropic: return .vision
         case .gemini:    return .fullMultimodal
         case .openAI:    return .vision
-        case .antigravity: return .fullMultimodal
         case .openRouter: return .vision
         case .openAIResponses: return .vision
         case .xAI: return .vision
         case .kimiCode: return .vision
+        case .openCodeGo: return .vision
         case .unsupported: return .vision
         }
     }

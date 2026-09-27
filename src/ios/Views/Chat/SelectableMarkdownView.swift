@@ -2640,23 +2640,21 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
               let range = Range(selectedRange, in: text) else { return }
         VoiceOutputPlayer.shared.stopAll()
         Self.activateReadAloudState()
-        VoiceOutputPlayer.shared.enqueueSegmented(String(text[range]), sessionId: VoiceOutputPlayer.manualOwnerId)
+        VoiceOutputPlayer.shared.enqueueSegmented(String(text[range]), sessionId: VoiceOutputPlayer.manualOwnerId, oneShot: true)
     }
 
     @objc func readAllAloud() {
         VoiceOutputPlayer.shared.stopAll()
         Self.activateReadAloudState()
-        VoiceOutputPlayer.shared.enqueueSegmented(text, sessionId: VoiceOutputPlayer.manualOwnerId)
+        VoiceOutputPlayer.shared.enqueueSegmented(text, sessionId: VoiceOutputPlayer.manualOwnerId, oneShot: true)
     }
 
     /// Menu-triggered read-aloud bypasses AIChatViewModel's reply-TTS flow, so
-    /// mirror `readReplyFromStart`'s pre-flight here: force the global
-    /// read-replies switch ON (runtime state + persisted pref, un-muting if
-    /// needed) and push "reading" to the capsule — via the active chat VM when
-    /// one is registered, else directly on the global state object.
+    /// push "reading" to the capsule here — via the active chat VM when one is
+    /// registered, else directly on the global state object. The segments are
+    /// enqueued one-shot, so the persisted read-replies switch is left alone.
     static func activateReadAloudState() {
         let state = VoiceOutputState.shared
-        if !state.isEnabled { state.isEnabled = true }   // didSet persists to prefs
         if state.isMuted { state.isMuted = false }
         if let vm = state.activeController as? AIChatViewModel {
             vm.isReadingAloud = true

@@ -84,6 +84,7 @@ struct SummarizeTextIntent: AppIntent {
     static var title: LocalizedStringResource = "摘要"
     static var description = IntentDescription("把一段文本收成摘要并返回，不打开 App。需要模型或浏览器时会说明要打开 App。")
     static var openAppWhenRun: Bool = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "文本", requestValueDialog: "要摘要什么?")
     var text: String

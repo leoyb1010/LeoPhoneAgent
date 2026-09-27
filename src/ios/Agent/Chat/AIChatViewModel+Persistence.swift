@@ -190,6 +190,8 @@ extension AIChatViewModel {
         // Loop detector state is per-runtime; reload of a session clears it.
         toolLoopDetector.reset()
 
+        enhancedCacheEnabled = UserDefaults.standard.bool(forKey: Self.enhancedCacheKey(for: sessionId))
+
         // Load persisted memory-write toggle
         memoryEnabled = await ChatStore.shared.getMemoryEnabled(sessionId: sessionId)
         // [T-memory-enabled-new-session-bug DIAG] confirm loadSession set
@@ -631,11 +633,18 @@ extension AIChatViewModel {
         // This ensures the first sizeThatFits call returns the correct height,
         // eliminating the estimated→actual contentSize oscillation that causes
         // scroll jitter when cells first enter the viewport.
-        for msg in loadedUIMessages where msg.role == .assistant {
+        // Only the tail that can be on screen at open is done up front: doing
+        // every block of a 500+ message session in one main-actor pass is what
+        // kept it from opening. Older blocks are filled in after the messages
+        // are published (see precacheOlderAttributedStrings).
+        let assistantMessages = loadedUIMessages.filter { $0.role == .assistant }
+        let eagerCount = 40
+        for msg in assistantMessages.suffix(eagerCount) {
             for block in msg.blocks where block.kind == .text && !block.content.isEmpty {
                 cacheAttributedString(for: block)
             }
         }
+        let deferredPrecache = Array(assistantMessages.dropLast(eagerCount))
 
         let phase2bElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000 - phase2aElapsed - phase25Elapsed - phase2sigElapsed
         let buildElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000
@@ -646,16 +655,25 @@ extension AIChatViewModel {
         // Phase 3: Extract tool snapshots
         let snapshotStart = CFAbsoluteTimeGetCurrent()
         var loadedSnapshots: [ToolSnapshotItem] = []
+        // One pass instead of a full rescan per tool result (quadratic on long sessions).
+        var toolUsesById: [String: ToolUse] = [:]
+        for raw in rawMessages {
+            for part in raw.parts {
+                if case .toolUse(let tu) = part, toolUsesById[tu.toolUseId] == nil {
+                    toolUsesById[tu.toolUseId] = tu
+                }
+            }
+        }
         for raw in rawMessages {
             for part in raw.parts {
                 if case .toolResult(let tr) = part, let snap = tr.snapshot {
-                    let toolName = Self.findToolName(for: tr.toolUseId, in: rawMessages)
+                    let toolName = toolUsesById[tr.toolUseId]?.name ?? "tool"
                     // For file_write: ensure snapshot contains file content, not just tool result
                     let finalSnap: ToolSnapshot
                     if toolName == "file_write",
                        let text = snap.text, text.hasPrefix("Wrote to ") || text.hasPrefix("Appended to ") {
                         // Old-format snapshot — recover file content from ToolUse input or disk
-                        let fileContent = Self.recoverFileWriteContent(for: tr.toolUseId, in: rawMessages)
+                        let fileContent = toolUsesById[tr.toolUseId].flatMap(Self.recoverFileWriteContent(from:))
                         if let fileContent, !fileContent.isEmpty {
                             let lines = fileContent.components(separatedBy: "\n")
                             let preview = lines.prefix(200).joined(separator: "\n")
@@ -676,6 +694,7 @@ extension AIChatViewModel {
         // complete data — prevents tables/images from rendering without snapshots.
         toolSnapshots = loadedSnapshots
         messages = loadedUIMessages
+        precacheOlderAttributedStrings(deferredPrecache, sessionId: sessionId)
 
         // [T-ios-scroll-suspend-leak] UI/DB consistency snapshot. `rawMessages` is
         // the source of truth (one row per persisted turn/iteration); `messages`
@@ -841,30 +860,31 @@ extension AIChatViewModel {
     }
 
     /// Find the tool name for a given toolUseId by scanning all messages for a matching toolUse part.
-    private static func findToolName(for toolUseId: String, in messages: [RawMessage]) -> String {
-        for msg in messages {
-            for part in msg.parts {
-                if case .toolUse(let tu) = part, tu.toolUseId == toolUseId {
-                    return tu.name
-                }
-            }
-        }
-        return "tool"
+    /// Recover original file content for a file_write tool from persisted ToolUse input.
+    private static func recoverFileWriteContent(from tu: ToolUse) -> String? {
+        guard tu.name == "file_write",
+              let data = tu.input.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = dict["content"] as? String else { return nil }
+        return content
     }
 
-    /// Recover original file content for a file_write tool from persisted ToolUse input.
-    private static func recoverFileWriteContent(for toolUseId: String, in messages: [RawMessage]) -> String? {
-        for msg in messages {
-            for part in msg.parts {
-                if case .toolUse(let tu) = part, tu.toolUseId == toolUseId, tu.name == "file_write" {
-                    guard let data = tu.input.data(using: .utf8),
-                          let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let content = dict["content"] as? String else { return nil }
-                    return content
+    /// Fills the render cache for blocks loadSession skipped, a few messages at
+    /// a time so the main actor stays responsive. Blocks the list reaches first
+    /// render themselves; this only saves work for later scrolls.
+    func precacheOlderAttributedStrings(_ messages: [ChatMessage], sessionId: String) {
+        guard !messages.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            for chunk in stride(from: messages.count, to: 0, by: -8) {
+                await Task.yield()
+                guard let self, self.sessionId == sessionId else { return }
+                for msg in messages[max(0, chunk - 8)..<chunk] {
+                    for block in msg.blocks where block.kind == .text && !block.content.isEmpty && block.cachedAttributedString == nil {
+                        self.cacheAttributedString(for: block)
+                    }
                 }
             }
         }
-        return nil
     }
 
     /// Apply tool results from a tool-result RawMessage onto an assistant ChatMessage's tool blocks.
@@ -983,6 +1003,10 @@ extension AIChatViewModel {
         // Read it back through getMemoryEnabled so this single source of truth
         // (DB row, which createSession wrote from the global default) drives
         // the flag.
+        if let override = draftMemoryEnabledOverride {
+            draftMemoryEnabledOverride = nil
+            await ChatStore.shared.setMemoryEnabled(sessionId: session.id, enabled: override)
+        }
         memoryEnabled = await ChatStore.shared.getMemoryEnabled(sessionId: session.id)
         AppLogger(category: "MemDiag").info("[MemDiag] ensureSession sid=\(session.id.prefix(8)) → vm.memoryEnabled=\(self.memoryEnabled)")
         // Tracker migration: if this vm was marked active under its draftId,

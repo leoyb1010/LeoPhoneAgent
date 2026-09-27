@@ -1,11 +1,10 @@
 export function availableCredentials(type: string): string[] {
   if (type === "xAI" || type === "kimiCode") return ["oauth", "apiKey"]
-  if (type === "openAI" || type === "anthropic" || type === "openRouter") return ["apiKey", "oauth"]
+  if (type === "openAI" || type === "openRouter") return ["apiKey", "oauth"]
   return ["apiKey"]
 }
 
 export function oauthHint(type: string): string {
-  if (type === "anthropic") return "用 Claude 账号登录"
   if (type === "openAI") return "用 OpenAI Codex 登录"
   if (type === "openRouter") return "用 OpenRouter 登录"
   if (type === "xAI") return "用 xAI 登录（要 SuperGrok 或 X Premium+）"
@@ -20,11 +19,11 @@ export function apiKeyHint(type: string): string {
   if (type === "openRouter") return "OpenRouter 控制台的 API Key"
   if (type === "xAI") return "xAI Console 的 API Key（api.x.ai）"
   if (type === "kimiCode") return "Moonshot 账号的 API Key"
+  if (type === "openCodeGo") return "opencode.ai/auth 里的 API Key（OpenCode Go 会员）"
   return "自己填钥匙"
 }
 
 export function oauthSignInLabel(type: string): string {
-  if (type === "anthropic") return "用 Claude 登录"
   if (type === "openAI") return "用 OpenAI 登录"
   if (type === "openRouter") return "用 OpenRouter 登录"
   if (type === "xAI") return "用 xAI 登录"
@@ -34,7 +33,6 @@ export function oauthSignInLabel(type: string): string {
 
 export function oauthCallbackPort(type: string): number {
   if (type === "openRouter") return 3000
-  if (type === "anthropic") return 54545
   if (type === "openAI") return 1455
   return 0
 }
@@ -91,10 +89,6 @@ export function codeFromCallback(url: string, expectedState: string): string {
 
 export const OPENROUTER_AUTH = "https://openrouter.ai/auth"
 export const OPENROUTER_KEYS = "https://openrouter.ai/api/v1/auth/keys"
-export const ANTHROPIC_AUTH = "https://claude.ai/oauth/authorize"
-export const ANTHROPIC_TOKEN = "https://console.anthropic.com/v1/oauth/token"
-export const ANTHROPIC_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-export const ANTHROPIC_SCOPES = "org:create_api_key user:profile user:inference"
 export const OPENAI_AUTH = "https://auth.openai.com/oauth/authorize"
 export const OPENAI_TOKEN = "https://auth.openai.com/oauth/token"
 export const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -106,9 +100,6 @@ export function buildOAuthAuthUrl(type: string, challenge: string, state: string
   const encodedChallenge = encodeURIComponent(challenge)
   if (type === "openRouter") {
     return `${OPENROUTER_AUTH}?callback_url=${redirect}&code_challenge=${encodedChallenge}&code_challenge_method=S256&state=${encodedState}`
-  }
-  if (type === "anthropic") {
-    return `${ANTHROPIC_AUTH}?client_id=${encodeURIComponent(ANTHROPIC_CLIENT_ID)}&redirect_uri=${redirect}&response_type=code&scope=${encodeURIComponent(ANTHROPIC_SCOPES)}&state=${encodedState}&code_challenge=${encodedChallenge}&code_challenge_method=S256`
   }
   if (type === "openAI") {
     return `${OPENAI_AUTH}?client_id=${encodeURIComponent(OPENAI_CLIENT_ID)}&redirect_uri=${redirect}&response_type=code&scope=${encodeURIComponent(OPENAI_SCOPES)}&state=${encodedState}&code_challenge=${encodedChallenge}&code_challenge_method=S256&codex_cli_simplified_flow=true&originator=codex_cli_rs&id_token_add_organizations=true`
@@ -126,12 +117,11 @@ export function tokenFromExchangeJson(type: string, json: unknown): string {
 }
 
 export function oauthNeedsProxy(type: string): boolean {
-  return type === "openAI" || type === "anthropic" || type === "xAI" || type === "gemini"
+  return type === "openAI" || type === "xAI" || type === "gemini"
 }
 
 export function oauthNetworkHint(type: string): string {
   if (type === "openAI") return "OpenAI 登录页在 auth.openai.com，大陆直连通常打不开，需要可访问境外的网络或代理。"
-  if (type === "anthropic") return "Claude 登录页在 claude.ai，大陆直连通常打不开，需要可访问境外的网络或代理。"
   if (type === "xAI") return "xAI 登录页在 auth.x.ai，大陆直连通常打不开，需要可访问境外的网络或代理。"
   if (type === "gemini") return "Gemini 接口在 generativelanguage.googleapis.com，大陆直连通常不通。"
   if (type === "openRouter") return "OpenRouter 通常可直连。打不开时复制链接换网络再试。"
@@ -141,7 +131,6 @@ export function oauthNetworkHint(type: string): string {
 
 export function oauthRefreshUrl(type: string, tokenUrl: string = ""): string {
   if (type === "openAI") return OPENAI_TOKEN
-  if (type === "anthropic") return ANTHROPIC_TOKEN
   if (type === "kimiCode") return "https://auth.kimi.com/api/oauth/token"
   if (type === "xAI") return tokenUrl
   return ""
@@ -149,7 +138,6 @@ export function oauthRefreshUrl(type: string, tokenUrl: string = ""): string {
 
 export function oauthRefreshClientId(type: string): string {
   if (type === "openAI") return OPENAI_CLIENT_ID
-  if (type === "anthropic") return ANTHROPIC_CLIENT_ID
   if (type === "kimiCode") return "17e5f671-d194-4dfb-9706-5516cb48c098"
   if (type === "xAI") return "b1a00492-073a-47ea-816f-4c329264a828"
   return ""
@@ -160,7 +148,7 @@ export function oauthRefreshUsesForm(type: string): boolean {
 }
 
 export function canRefreshOAuth(type: string): boolean {
-  return type === "openAI" || type === "anthropic" || type === "kimiCode" || type === "xAI"
+  return type === "openAI" || type === "kimiCode" || type === "xAI"
 }
 
 export function oauthRegionBlocked(code: string, info: string): boolean {
@@ -174,8 +162,8 @@ export function oauthRegionBlocked(code: string, info: string): boolean {
 }
 
 export function oauthWebErrorCopy(code: string, info: string, type: string = ""): string {
-  if (oauthRegionBlocked(code, info) && (type === "openAI" || type === "anthropic" || type === "xAI" || type.length === 0)) {
-    const who = type === "anthropic" ? "Claude" : type === "xAI" ? "xAI" : "OpenAI"
+  if (oauthRegionBlocked(code, info) && (type === "openAI" || type === "xAI" || type.length === 0)) {
+    const who = type === "xAI" ? "xAI" : "OpenAI"
     return `${who} 判定当前地区不可用。大陆直连时登录页会白屏或甩一串英文 JSON。打开可访问境外的网络后再进本页，或复制链接换网络打开。授权成功后仍要回到本页才能收码。`
   }
   const detail = [code, info].filter((part) => part.trim().length > 0).join(" ")

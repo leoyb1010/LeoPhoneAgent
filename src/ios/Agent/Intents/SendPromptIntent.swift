@@ -9,6 +9,7 @@ struct SendPromptIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Prompt"
     static var description = IntentDescription("Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background.")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
@@ -30,6 +31,9 @@ struct SendPromptIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
+        if let lockedId = session?.id, SessionLockStore.shared.isHiddenFromSystemSurfaces(lockedId) {
+            throw SessionLockedIntentError.locked
+        }
         // Ensure BackgroundKeepAliveManager is set up
         BackgroundKeepAliveManager.shared.setup()
 
@@ -463,14 +467,17 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         }
         if let sessionId = userInfo["sessionId"] as? String {
             DispatchQueue.main.async {
-                // Buffer first (cold-launch consumer), then post (warm-path
-                // consumer). Whichever runs marks the other's copy dead.
-                NotificationNavigationStore.shared.setPending(sessionId)
-                NotificationCenter.default.post(
-                    name: .openSessionFromIntent,
-                    object: nil,
-                    userInfo: ["sessionId": sessionId]
-                )
+                // Held behind the app lock; buffer first (cold-launch
+                // consumer), then post (warm-path consumer). Whichever runs
+                // marks the other's copy dead.
+                SessionLockStore.shared.runWhenUnlocked {
+                    NotificationNavigationStore.shared.setPending(sessionId)
+                    NotificationCenter.default.post(
+                        name: .openSessionFromIntent,
+                        object: nil,
+                        userInfo: ["sessionId": sessionId]
+                    )
+                }
             }
         } else if let macSessionId = userInfo["harnessSessionId"] as? String, !macSessionId.isEmpty {
             // A Mac's "waiting for you" / "done": open that Mac session, not just the app.
@@ -478,8 +485,10 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
                           "hostId": userInfo["hostId"] as? String ?? "",
                           "machine": userInfo["machine"] as? String ?? ""]
             DispatchQueue.main.async {
-                NotificationNavigationStore.shared.setPendingMac(target)
-                NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
+                SessionLockStore.shared.runWhenUnlocked {
+                    NotificationNavigationStore.shared.setPendingMac(target)
+                    NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
+                }
             }
         }
         completionHandler()
@@ -552,7 +561,7 @@ enum NotificationQuickReply {
     static let actionId = "LEO_QUICK_REPLY"
 
     static var action: UNTextInputNotificationAction {
-        UNTextInputNotificationAction(identifier: actionId, title: String(localized: "回复"), options: [],
+        UNTextInputNotificationAction(identifier: actionId, title: String(localized: "回复"), options: [.authenticationRequired],
                                       textInputButtonTitle: String(localized: "发送"),
                                       textInputPlaceholder: String(localized: "接着说…"))
     }
@@ -567,6 +576,15 @@ enum NotificationQuickReply {
         guard !text.isEmpty else { completion(); return true }
         Task { @MainActor in
             defer { completion() }
+            // Unlocking iPhone is not unlocking a Face ID–locked conversation.
+            if SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId) {
+                let note = UNMutableNotificationContent()
+                note.title = String(localized: "没有发送")
+                note.body = String(localized: "这个会话已用 Face ID 锁定，请在 App 里打开后回复。")
+                try? await UNUserNotificationCenter.current().add(
+                    UNNotificationRequest(identifier: "quick-reply-locked-\(sessionId)", content: note, trigger: nil))
+                return
+            }
             BackgroundKeepAliveManager.shared.setup()
             _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
                 sessionId: sessionId, caller: "NotificationQuickReply")

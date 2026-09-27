@@ -13,6 +13,16 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.3.2",
+    date: "2026-09-27",
+    items: [
+      "接入 OpenCode Go:在订阅账号登录页填 opencode.ai/auth 拿到的 API Key(本机装过 OpenCode 也可以一键导入),会员里的模型直接出现在「订阅账号」里。",
+      "Claude 订阅登录下线:Anthropic 只允许在官方 Claude Code 里用订阅。要用 Claude,在「模型供应商」里填 API Key,或在手机上远程开这台 Mac 上你自己登录的官方 claude。",
+      "手机发起的任务:跑完、要审批时会及时推到手机(原来只有手机开着页面才收得到);手机上能把任务从列表里清理掉,在跑的不能清;很久没动的任务不再算进行中。",
+      "跳过几个版本升级时,「本次更新」会把中间几版一起列出来;按 Esc 关闭。关于窗口、菜单、外部链接提示都改叫 LeoPhoneAgent;Grok 登录续期只认 x.ai 的地址。",
+    ],
+  },
+  {
     version: "1.3.1",
     date: "2026-09-26",
     items: [
@@ -127,15 +137,26 @@ export function currentLeoRelease(version: string): LeoRelease | null {
   return LEO_RELEASE_NOTES.find((entry) => entry.version === version) ?? null;
 }
 
-/** 版本变了、且这一版确实写了条目才弹。看完才记账,所以这里不写入。 */
-export function shouldShowLeoWhatsNew(version: string): boolean {
-  if (!version || version.startsWith("0.0.0")) return false;
-  if (!currentLeoRelease(version)) return false;
+const MAX_UNSEEN = 5;
+
+/**
+ * 这次该弹的条目:从当前版本往回,到上次看过的那版为止(跳版本升级也能看到中间几版)。
+ * 没有已读记录(全新安装或清过数据)只给当前这一版。看完才记账,所以这里不写入。
+ */
+export function unseenLeoReleases(version: string): LeoRelease[] {
+  if (!version || version.startsWith("0.0.0")) return [];
+  const current = LEO_RELEASE_NOTES.findIndex((entry) => entry.version === version);
+  if (current < 0) return [];
+  let lastSeen: string | null;
   try {
-    return localStorage.getItem(SEEN_KEY) !== version;
+    lastSeen = localStorage.getItem(SEEN_KEY);
   } catch {
-    return false;
+    return [];
   }
+  if (lastSeen === version) return [];
+  const seen = lastSeen ? LEO_RELEASE_NOTES.findIndex((entry) => entry.version === lastSeen) : -1;
+  const end = seen > current ? seen : current + 1;
+  return LEO_RELEASE_NOTES.slice(current, Math.min(end, current + MAX_UNSEEN));
 }
 
 export function markLeoWhatsNewSeen(version: string): void {

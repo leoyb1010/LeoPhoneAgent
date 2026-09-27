@@ -61,9 +61,6 @@ export class BrowserOAuth {
     if (type === 'openRouter') {
       return BrowserOAuth.exchangeOpenRouter(code);
     }
-    if (type === 'anthropic') {
-      return BrowserOAuth.exchangeAnthropic(code);
-    }
     if (type === 'openAI') {
       return BrowserOAuth.exchangeOpenAI(code);
     }
@@ -74,16 +71,13 @@ export class BrowserOAuth {
     if (type === 'xAI' || type === 'kimiCode') {
       return ['oauth', 'apiKey'];
     }
-    if (type === 'openAI' || type === 'anthropic' || type === 'openRouter') {
+    if (type === 'openAI' || type === 'openRouter') {
       return ['apiKey', 'oauth'];
     }
     return ['apiKey'];
   }
 
   static oauthHint(type: string): string {
-    if (type === 'anthropic') {
-      return '用 Claude 账号登录';
-    }
     if (type === 'openAI') {
       return '用 OpenAI Codex 登录';
     }
@@ -118,13 +112,13 @@ export class BrowserOAuth {
     if (type === 'kimiCode') {
       return 'Moonshot 账号的 API Key';
     }
+    if (type === 'openCodeGo') {
+      return 'opencode.ai/auth 里的 API Key（OpenCode Go 会员）';
+    }
     return '自己填钥匙';
   }
 
   static signInLabel(type: string): string {
-    if (type === 'anthropic') {
-      return '用 Claude 登录';
-    }
     if (type === 'openAI') {
       return '用 OpenAI 登录';
     }
@@ -145,15 +139,12 @@ export class BrowserOAuth {
   }
 
   static needsProxy(type: string): boolean {
-    return type === 'openAI' || type === 'anthropic' || type === 'xAI' || type === 'gemini';
+    return type === 'openAI' || type === 'xAI' || type === 'gemini';
   }
 
   static networkHint(type: string): string {
     if (type === 'openAI') {
       return 'OpenAI 登录页在 auth.openai.com，大陆直连通常打不开，需要可访问境外的网络或代理。';
-    }
-    if (type === 'anthropic') {
-      return 'Claude 登录页在 claude.ai，大陆直连通常打不开，需要可访问境外的网络或代理。';
     }
     if (type === 'xAI') {
       return 'xAI 登录页在 auth.x.ai，大陆直连通常打不开，需要可访问境外的网络或代理。';
@@ -171,15 +162,12 @@ export class BrowserOAuth {
   }
 
   static canRefresh(type: string): boolean {
-    return type === 'openAI' || type === 'anthropic' || type === 'kimiCode' || type === 'xAI';
+    return type === 'openAI' || type === 'kimiCode' || type === 'xAI';
   }
 
   static refreshUrl(type: string, tokenUrl: string = ''): string {
     if (type === 'openAI') {
       return 'https://auth.openai.com/oauth/token';
-    }
-    if (type === 'anthropic') {
-      return 'https://console.anthropic.com/v1/oauth/token';
     }
     if (type === 'kimiCode') {
       return 'https://auth.kimi.com/api/oauth/token';
@@ -193,9 +181,6 @@ export class BrowserOAuth {
   static refreshClientId(type: string): string {
     if (type === 'openAI') {
       return 'app_EMoamEEZ73f0CkXaXp7hrann';
-    }
-    if (type === 'anthropic') {
-      return '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
     }
     if (type === 'kimiCode') {
       return '17e5f671-d194-4dfb-9706-5516cb48c098';
@@ -218,8 +203,8 @@ export class BrowserOAuth {
 
   static webErrorCopy(code: string, info: string, type: string = ''): string {
     if (BrowserOAuth.regionBlocked(code, info) &&
-      (type === 'openAI' || type === 'anthropic' || type === 'xAI' || type.length === 0)) {
-      const who = type === 'anthropic' ? 'Claude' : type === 'xAI' ? 'xAI' : 'OpenAI';
+      (type === 'openAI' || type === 'xAI' || type.length === 0)) {
+      const who = type === 'xAI' ? 'xAI' : 'OpenAI';
       return `${who} 判定当前地区不可用。大陆直连时登录页会白屏或甩一串英文 JSON。打开可访问境外的网络后再进本页，或复制链接换网络打开。授权成功后仍要回到本页才能收码。`;
     }
     const detail = `${code} ${info}`.trim();
@@ -245,9 +230,6 @@ export class BrowserOAuth {
     if (type === 'openRouter') {
       return 3000;
     }
-    if (type === 'anthropic') {
-      return 54545;
-    }
     if (type === 'openAI') {
       return 1455;
     }
@@ -272,9 +254,6 @@ export class BrowserOAuth {
     const encodedChallenge = encodeURIComponent(challenge);
     if (type === 'openRouter') {
       return `https://openrouter.ai/auth?callback_url=${redirect}&code_challenge=${encodedChallenge}&code_challenge_method=S256&state=${encodedState}`;
-    }
-    if (type === 'anthropic') {
-      return `https://claude.ai/oauth/authorize?client_id=${encodeURIComponent('9d1c250a-e61b-44d9-88ed-5944d1962f5e')}&redirect_uri=${redirect}&response_type=code&scope=${encodeURIComponent('org:create_api_key user:profile user:inference')}&state=${encodedState}&code_challenge=${encodedChallenge}&code_challenge_method=S256`;
     }
     if (type === 'openAI') {
       return `https://auth.openai.com/oauth/authorize?client_id=${encodeURIComponent('app_EMoamEEZ73f0CkXaXp7hrann')}&redirect_uri=${redirect}&response_type=code&scope=${encodeURIComponent('openid profile email offline_access')}&state=${encodedState}&code_challenge=${encodedChallenge}&code_challenge_method=S256&codex_cli_simplified_flow=true&originator=codex_cli_rs&id_token_add_organizations=true`;
@@ -326,15 +305,6 @@ export class BrowserOAuth {
       throw new Error('OpenRouter 没有返回 key');
     }
     return key;
-  }
-
-  private static async exchangeAnthropic(code: string): Promise<string> {
-    const body = `{"grant_type":"authorization_code","client_id":"9d1c250a-e61b-44d9-88ed-5944d1962f5e","code":${JSON.stringify(code)},"redirect_uri":${JSON.stringify(BrowserOAuth.redirect('anthropic'))},"code_verifier":${JSON.stringify(BrowserOAuth.verifier)},"state":${JSON.stringify(BrowserOAuth.state)}}`;
-    const json = await BrowserOAuth.postJson('https://console.anthropic.com/v1/oauth/token', body, {
-      'Content-Type': 'application/json'
-    });
-    OAuthSession.stash(json, 'anthropic');
-    return BrowserOAuth.requireAccess(json);
   }
 
   private static async exchangeOpenAI(code: string): Promise<string> {

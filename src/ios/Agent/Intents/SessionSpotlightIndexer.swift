@@ -43,6 +43,10 @@ enum SessionSpotlightIndexer {
     /// changes; CoreSpotlight coalesces.
     static func index(session: ChatSession) {
         guard isEnabled else { return }
+        guard !SessionLockStore.isHiddenFromSystemSurfaces(session.id) else {
+            remove(sessionId: session.id)
+            return
+        }
         let attributes = CSSearchableItemAttributeSet(contentType: .content)
         attributes.title = session.title?.isEmpty == false
             ? session.title
@@ -96,7 +100,8 @@ enum SessionSpotlightIndexer {
         }
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastReindexKey)
         let sessions = await ChatStore.shared.listSessions()
-        let items = sessions.prefix(limit).map { session -> CSSearchableItem in
+        let visible = sessions.filter { !SessionLockStore.isHiddenFromSystemSurfaces($0.id) }
+        let items = visible.prefix(limit).map { session -> CSSearchableItem in
             let attributes = CSSearchableItemAttributeSet(contentType: .content)
             attributes.title = session.title?.isEmpty == false
                 ? session.title

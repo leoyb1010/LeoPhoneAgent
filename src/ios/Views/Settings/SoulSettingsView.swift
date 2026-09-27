@@ -15,11 +15,13 @@ struct SoulSettingsView: View {
     @State private var didJustSave: Bool = false
     @State private var showRestoreConfirm: Bool = false
     @State private var showForceSyncDone: Bool = false
+    @State private var confirmDiscard = false
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var loadedRef = LoadedFileRef()
     /// Mirrors `SyncV2Bootstrap.isEnabled` so the Force iCloud Sync row
     /// shows / hides reactively when the user toggles iCloud sync in
     /// Settings. Same pattern as SkillDetailView (#440 / 3a4fe546).
-    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
 
     private static var langOptions: [(label: String, value: String)] {
         [
@@ -106,6 +108,13 @@ struct SoulSettingsView: View {
                     .disabled(!isDirty || isBodyOverLimit)
             }
         }
+        .confirmDiscardOnBack(hasChanges: isDirty, isPresented: $confirmDiscard,
+                              onSave: {
+                                  guard !isBodyOverLimit else { return }
+                                  save()
+                                  if saveError == nil { dismiss() }
+                              },
+                              onDiscard: { dismiss() })
         .onAppear(perform: reload)
         // Using .alert (not .confirmationDialog) so the dialog stays
         // centered on iPad / Mac. confirmationDialog without a source
@@ -255,7 +264,7 @@ struct SoulSettingsView: View {
                 withAnimation { didJustSave = false }
             }
         } catch {
-            saveError = "Save failed: \(error.localizedDescription)"
+            saveError = String(localized: "Save failed: \(error.localizedDescription)")
         }
     }
 
@@ -266,6 +275,16 @@ struct SoulSettingsView: View {
     @available(iOS 17.0, *)
     @MainActor
     private func forceSyncSoul() async {
+        // The post-sync reload() replaces the form with what's on disk, so
+        // unsaved edits have to land on disk first or they're silently lost.
+        if isDirty {
+            guard !isBodyOverLimit else {
+                saveError = String(localized: "Save your changes before syncing.")
+                return
+            }
+            save()
+            guard saveError == nil else { return }
+        }
         // 1. Re-mark local SOUL.md dirty (if present) so the upload
         //    side ships our copy.
         _ = await ForceSyncHelper.markSoulDirty()

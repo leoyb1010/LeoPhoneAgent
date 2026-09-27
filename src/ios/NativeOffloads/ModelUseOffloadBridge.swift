@@ -267,7 +267,7 @@ private let logger = AppLogger(category: "ModelUseOffload")
             ProviderConfigStore.shared.instance(for: entry.providerInstanceId)?.providerType
         }
         switch providerType {
-        case .gemini, .antigravity:
+        case .gemini:
             return """
             Hint — \(entry.model.displayName) is a Gemini image model. Pass image params under \
             `generation_config` in the input JSON:
@@ -279,7 +279,7 @@ private let logger = AppLogger(category: "ModelUseOffload")
               {"messages":[{"role":"user","content":"<prompt>"}],
                "generation_config":{"aspect_ratio":"16:9","image_size":"2K"}}
             """
-        case .unsupported:
+        case .unsupported, .openCodeGo:
             return ""
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode:
             return """

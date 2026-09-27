@@ -1,9 +1,9 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.45.0%20(127)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.47.0%20(130)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.21-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -49,7 +49,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.21`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.22`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -57,7 +57,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.21
+## HarmonyOS 0.3.0-alpha.22
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
 本机 Agent 能用手机能力（天气、定位、闹钟、提醒、通知、手电、复制、拨号盘、打开链接），
@@ -66,7 +66,10 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 远控 Mac 可以接着没做完的任务或接手桌面任务。
 界面对齐 iOS / 安卓（回答不套气泡、工具胶囊、卡片输入框）；宽度 600vp 起就左右分栏（折叠屏展开也分）。
 回答边出边显示到最后（alpha.20 及更早经常停在半截，要退出对话再进来才看全）。
-界面在 Mac 上用 DevEco 预览器截图核对过（手机、折叠屏展开、浅色、深色）；alpha.20 已装到鸿蒙真机用过，alpha.21 还没装。
+界面在 Mac 上用 DevEco 预览器截图核对过（手机、折叠屏展开、浅色、深色）；alpha.20 已装到鸿蒙真机用过，alpha.21、alpha.22 还没装。
+alpha.22:新增 OpenCode Go(API Key,只列 chat/completions 模型);Claude 订阅登录下线(旧实例首启改成 API Key 方式);
+远控 Mac 的全自动按任务单独开、开前确认;环境变量只进 mcp_call、值存钥匙串;远程 / 定时回合不能拉起 App、拨号、写剪贴板、读定位、调 MCP;
+对话档案原子写、目录坏了按档案重建。证据:源码断言 + 未签名 HAP 构建;真机未验证。
 
 OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
 
@@ -157,7 +160,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.45.0 (127)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.47.0 (130)`;Bundle ID `com.leoyuan.leophoneagent`
+- 1.47.0:接入 OpenCode Go;下线 Claude 订阅 / Antigravity / Gemini CLI 登录,订阅令牌只存本机;锁屏批准和 Siri 都要解锁、上锁会话不外露;对话终端链接只填不跑、草稿按对话保存、删符号链接不删目标。证据:Release 真机构建 + 发版门禁 + 新增单测;未装机
 - 1.45.0:设置 → Apple Watch:手表怎么回答(自动 / 总是手表直连 / 只经 iPhone)、手表直连单独选模型(任何 API Key 方式的 OpenAI 兼容或 Anthropic 模型)
 - 1.44.0:审批三档(逐项确认 / 智能批准 / 全自动,风险分级只提示不加步骤);iPad 菜单栏、聊天检查器、
   多窗口(右键或拖出会话开新窗口、iPadOS 27 关窗确认)、设置双栏、拖入链接与文字;做完的一轮收成
@@ -189,7 +193,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 版本:`1.2.5`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
+- 源码版本:`1.3.2`(1.3.2:接入 OpenCode Go、Claude 订阅登录下线、手机发起的任务及时推送;源码 + typecheck + Leo host 测试,未签名打包)
+- 最近签名构建:`1.2.5`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
   1.2.5 已 Developer ID 签名,公证待补(Mac Studio 上没有 notarytool 凭据),尚未发布到 GitHub Releases
   (更新源 `leocodebox-updates` 最新仍是 1.0.1;旧的 leocodebox 2.x 只作回退)
 - Leo Link:手机经中继在 Mac 上开任务、流式看进度、审批、全自动、停止、断线续传,并能接着做 Mac 桌面上开的任务

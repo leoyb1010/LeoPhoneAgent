@@ -26,8 +26,14 @@ struct SessionInspectorView: View {
         vm.sessionTokenStats
     }
 
+    /// The session's bound model. `vm.selectedModel` only syncs at send time,
+    /// so after a switch it kept showing the previous model.
+    private var currentModel: LLMModel {
+        vm.resolveCurrentEntry()?.model ?? vm.selectedModel
+    }
+
     private var contextWindow: Int {
-        vm.selectedModel.contextWindowTokens
+        currentModel.contextWindowTokens
     }
 
     private var contextFraction: Double {
@@ -39,7 +45,7 @@ struct SessionInspectorView: View {
         NavigationStack {
             List {
                 Section("Model") {
-                    LabeledContent("Current model", value: vm.selectedModel.displayName)
+                    LabeledContent("Current model", value: currentModel.displayName)
                     if contextWindow > 0 {
                         LabeledContent("Context window", value: "\(compact(contextWindow)) tokens")
                     }

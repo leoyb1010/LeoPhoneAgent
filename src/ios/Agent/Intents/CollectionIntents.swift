@@ -49,6 +49,7 @@ struct SearchTreasuryIntent: AppIntent {
     static let description = IntentDescription(
         "搜索本机藏宝阁并返回少量标题和来源。不会读取或朗读收藏正文。")
     static let openAppWhenRun = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "搜索内容", requestValueDialog: "要在藏宝阁里搜索什么？")
     var query: String
@@ -78,6 +79,7 @@ struct OpenTreasuryIntent: AppIntent {
     static let title: LocalizedStringResource = "打开藏宝阁"
     static let description = IntentDescription("打开 LeoPhoneAgent 的藏宝阁。")
     static let openAppWhenRun = true
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {

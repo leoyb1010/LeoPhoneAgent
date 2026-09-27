@@ -56,15 +56,14 @@ final class MCPOAuthController: NSObject, ObservableObject {
     private let logger = AppLogger(category: "MCPOAuth")
     private var activeSession: ASWebAuthenticationSession?
     /// [T-mcp-oauth-loopback] Loopback path state (RFC 8252): local HTTP
-    /// server + in-app Safari, same pattern as ClaudeOAuthManager /
-    /// CodexOAuthManager. OAuthCallbackServer is the shared implementation
-    /// from ClaudeOAuthManager.swift (internal — same target).
+    /// server + in-app Safari, same pattern as CodexOAuthManager.
+    /// OAuthCallbackServer is the shared implementation in OAuthLoopback.swift.
     private var callbackServer: OAuthCallbackServer?
     private weak var safariVC: SFSafariViewController?
 
     /// [T-mcp-oauth-loopback] Fixed loopback port for MCP OAuth. Chosen clear
-    /// of the ports the other managers hold: Claude 54545, Codex 1455,
-    /// Gemini 8085, Antigravity 8086, OpenRouter 3000, xAI 56121.
+    /// of the ports the other managers hold: Codex 1455, OpenRouter 3000,
+    /// xAI 56121.
     static let loopbackPort: UInt16 = 54546
     /// Default redirect: loopback HTTP (Google "Web application"/"Desktop"
     /// clients accept http://localhost:*; custom schemes they reject).
@@ -513,7 +512,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
     // MARK: - Presentation flows
 
     /// [T-mcp-oauth-loopback] RFC 8252 loopback: local HTTP server on the
-    /// redirect URI's port/path + in-app Safari. Mirrors ClaudeOAuthManager.
+    /// redirect URI's port/path + in-app Safari. Mirrors CodexOAuthManager.
     private func runLoopbackFlow(authURL: URL, redirectURL: URL, state: String) async throws -> String {
         // Defensive cleanup of a previous failed attempt.
         callbackServer?.stop()
@@ -571,7 +570,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
     }
 
     /// Present the authorization page in in-app Safari, on top of whatever is
-    /// currently presented (the MCP form sheet). Mirrors ClaudeOAuthManager.
+    /// currently presented (the MCP form sheet). Mirrors CodexOAuthManager.
     private func presentSafari(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).activeFirst,

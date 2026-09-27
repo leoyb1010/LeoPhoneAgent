@@ -71,7 +71,7 @@ struct NoteEditorView: View {
                     .onChange(of: body_) { _, _ in scheduleSave() }
                     .overlay(alignment: .topLeading) {
                         if body_.isEmpty {
-                            Text("写点什么…支持 Markdown")
+                            Text("写点什么…")
                                 .foregroundStyle(.tertiary)
                                 .padding(.horizontal, 17)
                                 .padding(.top, 8)
@@ -83,6 +83,9 @@ struct NoteEditorView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("完成") { dismiss() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     previewing.toggle()

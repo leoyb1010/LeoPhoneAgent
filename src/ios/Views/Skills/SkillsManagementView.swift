@@ -33,6 +33,9 @@ struct SkillsManagementView: View {
     @State private var showSkillCatalog = false
     @State private var searchQuery = ""
     @State private var forceSyncAllToast: String?
+    /// A swipe-delete waiting for confirmation: skills are user content and
+    /// the swipe used to delete instantly with no undo.
+    @State private var pendingDeleteSkill: (id: String, name: String)?
     /// Subscribed mirror of `SyncV2Bootstrap.isEnabled` so the
     /// Force-iCloud-Sync menu entry shows / hides reactively when
     /// the user flips the toggle in Settings.
@@ -109,9 +112,22 @@ struct SkillsManagementView: View {
                 }
             }
             .onDelete { offsets in
-                let ids = offsets.map { filteredSkills[$0].id }
-                for id in ids { store.deleteSkill(id) }
+                guard let first = offsets.first else { return }
+                let skill = filteredSkills[first]
+                pendingDeleteSkill = (skill.id, skill.name)
             }
+        }
+        .alert(String(localized: "Delete Skill"), isPresented: Binding(
+            get: { pendingDeleteSkill != nil },
+            set: { if !$0 { pendingDeleteSkill = nil } }
+        )) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                if let id = pendingDeleteSkill?.id { store.deleteSkill(id) }
+                pendingDeleteSkill = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteSkill = nil }
+        } message: {
+            Text(String(localized: "Delete \"\(pendingDeleteSkill?.name ?? "")\"? This action cannot be undone."))
         }
         .navigationTitle("Skills")
         // 与其他设置子页一致用小标题:大标题 + 常驻搜索栏在设置表单里会叠到列表第一行上(真机 1.41.0 截图)。

@@ -4107,19 +4107,22 @@ extension RawMessage {
         return cleaned.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Remove `<system-reminder>...</system-reminder>` segments from display text
-    /// before display. Markers are kept in agentHistory so the model still sees them
-    /// on resume/continue, but they should never surface in the chat bubble.
+    /// Remove `<system-reminder>...</system-reminder>` and injected
+    /// `<treasury_context …>…</treasury_context>` segments from display text.
+    /// They are kept in agentHistory so the model still sees them on
+    /// resume/continue, but they should never surface in the chat bubble (or in
+    /// copy / edit / share, which read the bubble text).
     static func stripSystemReminders(_ text: String) -> String {
-        guard text.contains("<system-reminder>") else { return text }
-        let pattern = "<system-reminder>[\\s\\S]*?</system-reminder>"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        guard text.contains("<system-reminder>") || text.contains("<treasury_context") else { return text }
         let ns = text as NSString
-        let stripped = regex.stringByReplacingMatches(
+        return displayOnlyBlockRegex?.stringByReplacingMatches(
             in: text, range: NSRange(location: 0, length: ns.length), withTemplate: ""
-        )
-        return stripped
+        ) ?? text
     }
+
+    private static let displayOnlyBlockRegex = try? NSRegularExpression(
+        pattern: "<system-reminder>[\\s\\S]*?</system-reminder>|<treasury_context\\b[^>]*>[\\s\\S]*?</treasury_context>"
+    )
 }
 
 // MARK: - AgentMessage Conversion

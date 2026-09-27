@@ -165,7 +165,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             UserDefaults.standard.set(liveActivityPrivacyMode, forKey: "liveActivityPrivacyMode")
             // [T-la-privacy-repush] The card on screen follows the switch now,
             // not at the next tool call.
-            if liveActivityPrivacyMode != oldValue { updateLiveActivityIfNeeded(source: "privacyToggle") }
+            if liveActivityPrivacyMode != oldValue {
+                updateLiveActivityIfNeeded(source: "privacyToggle")
+                if liveActivityPrivacyMode { WidgetDataMirror.applyPrivacyToMirroredContent() }
+            }
         }
     }
 
@@ -888,10 +891,12 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
-        if liveActivityPrivacyMode && interrupted && !isError {
+        // A Face ID–locked session is always reported neutrally.
+        let redact = liveActivityPrivacyMode || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
+        if redact && interrupted && !isError {
             content.title = String(localized: "⏸ 任务中断")
             content.body = String(localized: "回到 App 点「继续」")
-        } else if liveActivityPrivacyMode {
+        } else if redact {
             // [T-ios-live-activity-privacy-mode] Neutral report only: no session
             // title, no reply summary. sessionId stays in userInfo below so the
             // tap-to-open jump keeps working, and the badge logic is untouched.

@@ -451,6 +451,7 @@ struct StopAllTasksFromWidgetIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop Running Tasks"
     static let description = IntentDescription("Cancels every running LeoPhoneAgent task.")
     static let openAppWhenRun = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     func perform() async throws -> some IntentResult {
         await WidgetIntentBridge.shared.stopAllTasks()
@@ -472,6 +473,7 @@ struct RunQuickTaskFromWidgetIntent: LiveActivityIntent {
     static let description = IntentDescription("Runs a LeoPhoneAgent quick task in the background.")
     /// Stay out of the way: the point of the widget button is not opening the app.
     static let openAppWhenRun = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Task")
     var taskId: String

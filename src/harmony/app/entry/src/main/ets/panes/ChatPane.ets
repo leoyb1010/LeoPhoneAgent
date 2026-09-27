@@ -1,13 +1,12 @@
 import { http } from '@kit.NetworkKit';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { Composer } from '../chat/Composer';
 import { AssistantHead, NoticeRow, UserBubble } from '../chat/ChatViews';
 import { MarkdownText } from '../theme/Markdown';
 import { Sym } from '../theme/Symbols';
 import { displayName } from '../net/Protocol';
 import { ApprovalState, ChatLaunch, ChatLine, HarnessClient, HttpError } from '../net/HarnessClient';
-import { SensitiveToolGate } from '../local/SensitiveToolGate';
 import { gatewayStore } from '../store/GatewayStore';
 import { Tokens } from '../theme/Tokens';
 
@@ -32,7 +31,6 @@ function choiceLabel(choice: string): string {
 
 @Component
 export struct ChatPane {
-  @StorageProp('approvalTick') approvalTick: number = 0;
   @Prop machine: string = '';
   /** 手机上推进来的一页:左上角返回。 */
   @Prop showBack: boolean = false;
@@ -60,6 +58,13 @@ export struct ChatPane {
   private ended: boolean = false;
   /** Mac 拒过这台设备的全自动(旧版 Mac 或中继认不出设备):这个任务里不再请求。 */
   private fullAutoRefused: boolean = false;
+  /**
+   * 这个远程任务要不要全自动。和本机「全自动」分开:本机那个只管沙箱写文件,
+   * 这里一开 Mac 上的命令就不再问你 —— 所以默认关、每次打开任务都回到关,开之前先确认。
+   */
+  @State macAuto: boolean = false;
+  /** 每次换机器 / 换任务 +1:等回来的结果对不上就丢掉,不记到别的机器名下。 */
+  private launchGen: number = 0;
 
   aboutToAppear(): void {
     this.startSession();
@@ -83,6 +88,8 @@ export struct ChatPane {
     this.ended = false;
     this.reconnects = 0;
     this.fullAutoRefused = false;
+    this.macAuto = false;
+    this.launchGen += 1;
     this.startSession();
   }
 
@@ -201,18 +208,24 @@ export struct ChatPane {
                   .fontColor(Tokens.text)
                   .margin({ left: 6 })
               }
-              Text(this.approval.command)
-                .fontSize(13)
-                .lineHeight(19)
-                .fontFamily('monospace')
-                .fontColor(Tokens.secondary)
-                .maxLines(4)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .width('100%')
-                .padding(10)
-                .backgroundColor(Tokens.chip)
-                .borderRadius(10)
-                .margin({ top: 8 })
+              // 批准前要能看到整条命令:长命令在框里滚动,不截断。
+              Scroll() {
+                Text(this.approval.command)
+                  .fontSize(13)
+                  .lineHeight(19)
+                  .fontFamily('monospace')
+                  .fontColor(Tokens.secondary)
+                  .copyOption(CopyOptions.LocalDevice)
+                  .width('100%')
+                  .padding(10)
+              }
+              .scrollBar(BarState.Auto)
+              .constraintSize({ maxHeight: 220 })
+              .width('100%')
+              .align(Alignment.TopStart)
+              .backgroundColor(Tokens.chip)
+              .borderRadius(10)
+              .margin({ top: 8 })
               Flex({ wrap: FlexWrap.Wrap }) {
                 ForEach(this.approval.choices, (choice: string) => {
                   Text(choiceLabel(choice))
@@ -251,7 +264,7 @@ export struct ChatPane {
             placeholder: `给 ${this.machine.length > 0 ? displayName(this.machine) : '远程机器'} 发任务`,
             running: this.status === '进行中',
             showApproval: ChatLaunch.harness === 'zcode',
-            fullAuto: SensitiveToolGate.fullAuto && this.approvalTick >= 0,
+            fullAuto: this.macAuto,
             tools: false,
             showMic: false,
             onSend: () => {
@@ -261,8 +274,7 @@ export struct ChatPane {
               this.stop();
             },
             onApproval: () => {
-              const ctx = getContext(this) as common.UIAbilityContext;
-              SensitiveToolGate.setFullAuto(ctx, !SensitiveToolGate.fullAuto);
+              this.toggleMacAuto();
             }
           })
         }
@@ -518,27 +530,60 @@ export struct ChatPane {
     this.liveText = delta;
   }
 
+  private async toggleMacAuto(): Promise<void> {
+    if (this.macAuto) {
+      this.macAuto = false;
+      return;
+    }
+    const gen = this.launchGen;
+    try {
+      const picked = await promptAction.showDialog({
+        title: '这个任务改成全自动?',
+        message: `${this.machine.length > 0 ? displayName(this.machine) : 'Mac'} 上的这个任务会直接执行命令、改文件,不再逐项问你。只对这一个任务有效,重新打开就恢复逐项确认。`,
+        buttons: [{ text: '改成全自动', color: '#D94B16' }, { text: '取消', color: '#007AFF' }]
+      });
+      if (picked.index === 0 && gen === this.launchGen) {
+        this.macAuto = true;
+      }
+    } catch (_err) {
+      // 对话框被系统收起:保持逐项确认
+    }
+  }
+
   private async send(): Promise<void> {
     const text = this.draft.trim();
     if (!text || !this.client) {
       return;
     }
+    const client = this.client;
+    const gen = this.launchGen;
+    const machine = this.machine;
+    const harness = ChatLaunch.harness;
     this.draft = '';
     // 先显示,再等 Mac 回话;Mac 的回显到了就认作这一条,不再显示第二遍。
     this.pendingEcho.push(text);
     const line = this.push('user', text);
     this.status = '进行中';
     try {
-      // 这台鸿蒙开了「全自动」时,Mac 上的 LeoPhoneAgent 任务也按全自动跑(和 iOS 一样跟着本机的开关)。
-      const zcode = ChatLaunch.harness === 'zcode';
-      const auto = zcode && SensitiveToolGate.fullAuto && !this.fullAutoRefused;
+      // 只看这个任务自己的开关(macAuto),不跟本机「全自动」走;每条都明确带上,关着就是逐项确认。
+      const zcode = harness === 'zcode';
+      const auto = zcode && this.macAuto && !this.fullAutoRefused;
       if (!this.sessionId) {
         // 第一条消息才在 Mac 上建任务,建的同时就跑这一句。
-        this.sessionId = await this.createTask(text, auto);
-        ChatLaunch.sessions.set(ChatLaunch.key(this.machine, ChatLaunch.harness), this.sessionId);
+        const created = await this.createTask(client, text, auto);
+        if (gen !== this.launchGen) {
+          // 等 Mac 回话时换了机器或任务:这个任务属于原来那台,记在它名下,不接到当前页上。
+          ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), created);
+          return;
+        }
+        this.sessionId = created;
+        ChatLaunch.sessions.set(ChatLaunch.key(machine, harness), this.sessionId);
         this.listen(0);
       } else {
-        await this.client.send(this.sessionId, text, '', zcode ? (auto ? 1 : 0) : -1);
+        await client.send(this.sessionId, text, '', zcode ? (auto ? 1 : 0) : -1);
+        if (gen !== this.launchGen) {
+          return;
+        }
         if (!this.stream) {
           this.reconnects = 0;
           this.listen(this.lastSeq);
@@ -557,8 +602,7 @@ export struct ChatPane {
     }
   }
 
-  private async createTask(text: string, auto: boolean): Promise<string> {
-    const client = this.client as HarnessClient;
+  private async createTask(client: HarnessClient, text: string, auto: boolean): Promise<string> {
     try {
       return await client.create(ChatLaunch.harness, text, '', auto);
     } catch (err) {
@@ -572,12 +616,14 @@ export struct ChatPane {
     }
   }
 
-  private async stop(): Promise<void> {
-    if (!this.sessionId || !this.client) {
+  private async stop(forSession?: string, forClient?: HarnessClient): Promise<void> {
+    const sessionId = forSession ?? this.sessionId;
+    const client = forClient ?? this.client;
+    if (!sessionId || !client) {
       return;
     }
     try {
-      await this.client.stop(this.sessionId);
+      await client.stop(sessionId);
     } catch (err) {
       this.status = err instanceof Error ? err.message : `${err}`;
     }
@@ -585,14 +631,17 @@ export struct ChatPane {
 
   private async answer(choice: string, thenStop: boolean): Promise<void> {
     const current = this.approval;
-    if (!current.id || !this.client) {
+    const client = this.client;
+    const sessionId = this.sessionId;
+    if (!current.id || !client) {
       return;
     }
     try {
-      await this.client.approve(this.sessionId, choice, current.id);
+      await client.approve(sessionId, choice, current.id);
       this.dropApproval(current.id);
       if (thenStop) {
-        await this.stop();
+        // 用答题时的那台、那个任务:等回话期间换了页面,也不能停到别的任务上。
+        await this.stop(sessionId, client);
       }
     } catch (err) {
       if (err instanceof HttpError && err.code === 409) {

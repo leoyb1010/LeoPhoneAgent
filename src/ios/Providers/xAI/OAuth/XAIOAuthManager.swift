@@ -48,7 +48,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 
     func maskedToken(instanceId: String) -> String? {
         guard let token = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self)?.accessToken else { return nil }
-        return ClaudeOAuthManager.maskToken(token)
+        return OAuthTokenMask.mask(token)
     }
 
     func email(instanceId: String) -> String? {
@@ -76,13 +76,12 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             return
         }
         logger.info("=== xAI OAuth login started (instance: \(instanceId)) ===")
-        callbackServer?.stop()
-        callbackServer = nil
         isAuthenticating = true
+        var ownServer: OAuthCallbackServer?
         defer {
             isAuthenticating = false
-            callbackServer?.stop()
-            callbackServer = nil
+            ownServer?.stop()
+            if callbackServer === ownServer { callbackServer = nil }
             safariVC?.dismiss(animated: true)
             safariVC = nil
         }
@@ -94,7 +93,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         let (verifier, challenge) = generateHexPKCE()
         let state = randomURLSafe(byteCount: 32)
         let nonce = randomURLSafe(byteCount: 32)
-        logger.info("PKCE (hex) generated — verifier length: \(verifier.count), challenge: \(challenge.prefix(16))...")
+        logger.info("PKCE (hex) generated — verifier length: \(verifier.count)")
 
         // 1. Start local HTTP server (with CORS-aware OPTIONS support).
         let server = OAuthCallbackServer(
@@ -102,6 +101,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             callbackPath: "/callback",
             optionsCORSAllowedHosts: trustedHosts
         )
+        ownServer = server
         self.callbackServer = server
         try server.start()
         logger.info("Callback server started on port \(self.callbackPort)")
@@ -163,7 +163,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 
     func validAccessToken(instanceId: String) async throws -> String {
         guard var storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self) else {
-            throw LLMError.invalidAPIKey(detail: "xAI: no OAuth token found for instance \(instanceId)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to xAI. Sign in again in Settings → Providers."))
         }
 
         let needsRefresh = storage.refreshToken != nil
@@ -174,7 +174,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         }
 
         guard !storage.accessToken.isEmpty else {
-            throw LLMError.invalidAPIKey(detail: "xAI: access token is empty for instance \(instanceId)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to xAI. Sign in again in Settings → Providers."))
         }
         return storage.accessToken
     }
@@ -192,7 +192,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 
     /// [T-oauth-refresh-race] Refresh under instance-level single-flight, with a
     /// compare-before-delete backstop on failure so a stale concurrent refresh
-    /// never wipes a token another caller just rotated. Mirrors ClaudeOAuthManager.
+    /// never wipes a token another caller just rotated.
     private func refreshTokenGuarded(instanceId: String, existingStorage: XAITokenStorage) async throws -> XAITokenStorage {
         let staleRefreshToken = existingStorage.refreshToken!
         let cachedEndpoint = existingStorage.tokenEndpoint
@@ -384,8 +384,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             email = claims?["email"] as? String
             displayName = (claims?["name"] as? String) ?? (claims?["preferred_username"] as? String)
             accountId = (claims?["sub"] as? String) ?? (claims?["account_id"] as? String)
-            if let e = email { logger.info("Extracted email: \(e)") }
-            if let aid = accountId { logger.info("Extracted accountId: \(aid)") }
+            logger.info("ID token claims — email present: \(email != nil), account present: \(accountId != nil)")
         }
 
         return XAITokenStorage(
@@ -436,7 +435,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 extension XAIOAuthManager: SFSafariViewControllerDelegate {
     nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.safariVC === controller else { return }
             // Stopping the server resumes any in-flight waitForCallback
             // with a "cancelled" error, which lets the login()'s defer
             // run and resets `isAuthenticating` — so the user can tap
@@ -452,6 +451,30 @@ private extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+// MARK: - Credential selection
+
+/// Which credential an xAI OAuth instance uses. One ordering shared by chat,
+/// model listing and credential probing: borrowed Mac login (auto-renewing) >
+/// on-device OAuth (refreshable) > manual static token (expires in hours).
+enum XAICredentialSource {
+    case viaMac
+    case oauthLogin
+    case manualToken(String)
+    case none
+
+    static func resolve(instanceId: String) -> XAICredentialSource {
+        if GrokViaMacBroker.hostMarker(instanceId: instanceId) != nil { return .viaMac }
+        if ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self) != nil {
+            return .oauthLogin
+        }
+        if let manual = ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: "manual-oauth-token"),
+           !manual.isEmpty {
+            return .manualToken(manual)
+        }
+        return .none
     }
 }
 

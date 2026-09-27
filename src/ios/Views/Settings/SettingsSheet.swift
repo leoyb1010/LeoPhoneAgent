@@ -264,9 +264,7 @@ struct SettingsSheet: View {
         case .environments: show(.environments)
         case .mcpIntegrations: show(.mcpIntegrations)
         case .mcpServerDetail(let id): show(.mcpServerDetail(serverId: id))
-        case .selfTest:
-            CapabilitySelfTest.shared.autoRunRequested = true
-            show(.selfTest)
+        case .selfTest: show(.selfTest)
         case .macConsole: show(.macConsole)
         case .automations: show(.automations)
         case .scheduledTasks: show(.scheduledTasks)

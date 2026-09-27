@@ -126,10 +126,14 @@ export class McpStore {
       row.label = name;
       this.rows = this.rows.concat([row]);
     }
+    const moved = row.url.length > 0 && row.url !== safeRoot;
     row.url = safeRoot;
     row.secret = secret.trim();
     if (row.secret.length > 0) {
       await SecretStore.write(McpStore.alias(name), row.secret);
+    } else if (moved) {
+      // 换了地址又没填新令牌:旧令牌不能跟去新地址。
+      await SecretStore.remove(McpStore.alias(name));
     }
     row.tools = await McpStore.listTools(row);
     await this.save(context);
@@ -143,6 +147,7 @@ export class McpStore {
       }
     }
     this.rows = next;
+    await SecretStore.remove(McpStore.alias(label));
     await this.save(context);
   }
 

@@ -46,6 +46,17 @@ final class HarnessLiveActivityBridge {
         }
     }
 
+    /// Live Activity "stop" for a Mac session: these have no view model, so
+    /// the stop has to go to the Mac. Returns false if `sessionId` isn't one.
+    @discardableResult
+    func stop(sessionId: String) -> Bool {
+        guard let driver = entries.values.compactMap(\.driver).first(where: { $0.sessionId == sessionId }) else {
+            return false
+        }
+        driver.stop()
+        return true
+    }
+
     func register(driver: HarnessSessionDriver, hostName: String?) {
         entries[ObjectIdentifier(driver)] = Entry(driver: driver, hostName: hostName ?? "Mac")
         // [T-liveactivity-filter] 关键:AgentLiveActivityManager 的

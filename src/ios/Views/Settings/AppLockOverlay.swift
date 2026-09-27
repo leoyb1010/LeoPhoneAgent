@@ -1,8 +1,13 @@
+import Combine
 import SwiftUI
+import UIKit
 
 struct AppLockOverlay: View {
     @ObservedObject private var store = SessionLockStore.shared
     @State private var isAuthenticating = false
+    /// Shared across windows so an iPad with several scenes shows a single
+    /// system prompt instead of one per lock window.
+    @MainActor private static var promptInFlight = false
 
     var body: some View {
         if store.appIsLocked {
@@ -46,8 +51,9 @@ struct AppLockOverlay: View {
     }
 
     private func authenticate() {
-        guard !isAuthenticating else { return }
+        guard !isAuthenticating, !Self.promptInFlight else { return }
         isAuthenticating = true
+        Self.promptInFlight = true
         Task { @MainActor in
             let reason = String(localized: "Unlock LeoPhoneAgent")
             let ok = await BiometricAuth.authenticate(reason: reason)
@@ -62,6 +68,56 @@ struct AppLockOverlay: View {
                 }
             }
             isAuthenticating = false
+            Self.promptInFlight = false
         }
+    }
+}
+
+/// Hosts `AppLockOverlay` in its own window above every sheet, full-screen
+/// cover and alert of the scene. Modal presentations always sit above the
+/// root SwiftUI view, so an overlay inside the root ZStack could never cover
+/// an open Settings / Treasury / terminal page.
+@MainActor
+final class AppLockWindowController {
+    static let shared = AppLockWindowController()
+
+    private var windows: [ObjectIdentifier: UIWindow] = [:]
+    private var cancellable: AnyCancellable?
+    private var covering = false
+
+    func attach(to scene: UIWindowScene) {
+        let key = ObjectIdentifier(scene)
+        guard windows[key] == nil else { return }
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert + 1
+        window.backgroundColor = .clear
+        let host = UIHostingController(rootView: AppLockOverlay())
+        host.view.backgroundColor = .clear
+        window.rootViewController = host
+        window.isHidden = !covering
+        windows[key] = window
+        observeIfNeeded()
+    }
+
+    func detach(from scene: UIWindowScene) {
+        windows.removeValue(forKey: ObjectIdentifier(scene))?.isHidden = true
+    }
+
+    private func observeIfNeeded() {
+        guard cancellable == nil else { return }
+        let store = SessionLockStore.shared
+        cancellable = Publishers.CombineLatest(store.$appIsLocked, store.$showPrivacyScreen)
+            .map { $0 || $1 }
+            .removeDuplicates()
+            .sink { [weak self] cover in self?.apply(cover: cover) }
+    }
+
+    private func apply(cover: Bool) {
+        covering = cover
+        if cover {
+            // A focused text field would keep the keyboard window above us.
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        for window in windows.values { window.isHidden = !cover }
     }
 }

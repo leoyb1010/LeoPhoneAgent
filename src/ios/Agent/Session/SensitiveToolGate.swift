@@ -411,11 +411,14 @@ final class SensitiveToolGate: ObservableObject {
     nonisolated static let notifyAllowSessionAction = "SENSITIVE_ALLOW_SESSION"
     nonisolated static let notifyDenyAction = "SENSITIVE_DENY"
 
-    /// [T-approval-vocab] 锁屏、横幅、手表上直接批,不用先打开 App。
+    /// [T-approval-vocab] 锁屏、横幅上直接批,不用先打开 App;但「允许」必须先解锁手机
+    /// (捡到锁屏手机的人不能放行命令),「拒绝」免解锁。
     nonisolated static var notificationCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: notifyCategoryId, actions: [
-            UNNotificationAction(identifier: notifyAllowOnceAction, title: String(localized: "允许一次")),
-            UNNotificationAction(identifier: notifyAllowSessionAction, title: String(localized: "本次会话允许")),
+            UNNotificationAction(identifier: notifyAllowOnceAction, title: String(localized: "允许一次"),
+                                 options: [.authenticationRequired]),
+            UNNotificationAction(identifier: notifyAllowSessionAction, title: String(localized: "本次会话允许"),
+                                 options: [.authenticationRequired]),
             UNNotificationAction(identifier: notifyDenyAction, title: String(localized: "拒绝"), options: [.destructive]),
         ], intentIdentifiers: [])
     }
@@ -476,7 +479,11 @@ final class SensitiveToolGate: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "任务需要你确认一下"
-        content.body = "「\(request.category.humanName)」在等你批准:\(String(request.host.prefix(80)))"
+        // Task Status Privacy (default on): the lock screen names the tool only.
+        let privacy = UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true
+        content.body = privacy
+            ? "「\(request.category.humanName)」在等你批准"
+            : "「\(request.category.humanName)」在等你批准:\(String(request.host.prefix(80)))"
         content.sound = .default
         content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = Self.notifyCategoryId

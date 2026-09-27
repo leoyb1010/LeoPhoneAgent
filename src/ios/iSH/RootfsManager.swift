@@ -115,8 +115,10 @@ class RootfsManager {
             // Backup /root directory
             let userDataPath = dataPath.appendingPathComponent("root")
             if FileManager.default.fileExists(atPath: userDataPath.path) {
-                let backupPath = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("rootfs-backup-\(Date().timeIntervalSince1970)")
+                // Application Support, not tmp: the backup must survive the
+                // relaunch the reset asks for, and tmp is purged by the system.
+                let backupPath = userDataBackupsDirectory
+                    .appendingPathComponent("rootfs-backup-\(Int(Date().timeIntervalSince1970))")
                     .appendingPathComponent("root")
 
                 try FileManager.default.createDirectory(
@@ -151,7 +153,37 @@ class RootfsManager {
         return backupURL
     }
 
-    /// Restore user data from a backup
+    var userDataBackupsDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("RootfsBackups", isDirectory: true)
+    }
+
+    /// `/root` backups made by `reset(keepUserData: true)`, newest first.
+    /// Includes ones older builds left in tmp, while the system hasn't purged them.
+    func existingUserDataBackups() -> [URL] {
+        let fm = FileManager.default
+        let parents = [userDataBackupsDirectory, fm.temporaryDirectory]
+        let backups = parents.flatMap { dir -> [URL] in
+            let items = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            return items
+                .filter { $0.lastPathComponent.hasPrefix("rootfs-backup-") }
+                .map { $0.appendingPathComponent("root") }
+                .filter { fm.fileExists(atPath: $0.path) }
+        }
+        return backups.sorted { Self.backupTimestamp($0) > Self.backupTimestamp($1) }
+    }
+
+    static func backupTimestamp(_ backupURL: URL) -> TimeInterval {
+        let name = backupURL.deletingLastPathComponent().lastPathComponent
+        return TimeInterval(name.dropFirst("rootfs-backup-".count)) ?? 0
+    }
+
+    func deleteUserDataBackup(_ backupURL: URL) throws {
+        try FileManager.default.removeItem(at: backupURL.deletingLastPathComponent())
+    }
+
+    /// Restore user data from a backup. The backup is copied, not moved, so it
+    /// stays available until deleted.
     /// - Parameter backupURL: URL of backup created by reset(keepUserData: true)
     func restoreUserData(from backupURL: URL) throws {
         guard isInstalled else {
@@ -162,15 +194,18 @@ class RootfsManager {
             )
         }
 
+        let fm = FileManager.default
         let userDataPath = dataPath.appendingPathComponent("root")
-
-        // Remove existing /root directory
-        if FileManager.default.fileExists(atPath: userDataPath.path) {
-            try FileManager.default.removeItem(at: userDataPath)
+        // Copy next to the target first, so a failed copy leaves /root intact.
+        let staging = dataPath.appendingPathComponent(".root-restore-\(UUID().uuidString)")
+        try fm.copyItem(at: backupURL, to: staging)
+        if fm.fileExists(atPath: userDataPath.path) {
+            removeFakefsPath("/root")
+            try fm.removeItem(at: userDataPath)
         }
-
-        // Copy backup to rootfs
-        try FileManager.default.copyItem(at: backupURL, to: userDataPath)
+        try fm.moveItem(at: staging, to: userDataPath)
+        // Host-side files are invisible to the guest until they are in meta.db.
+        registerSubtreeInMetaDB(hostRoot: userDataPath)
 
         print("RootfsManager: User data restored from \(backupURL.path)")
     }

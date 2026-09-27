@@ -1091,6 +1091,11 @@ extension AIChatViewModel {
         var finalOutput: String
         if toolOutput.isEmpty {
             finalOutput = "(no output)"
+        } else if tu.name == "file_read" {
+            // file_read already pages (max_length / next_offset, hard-capped).
+            // Offloading it would write the page to a new file the model then
+            // reads back — which gets offloaded again, forever.
+            finalOutput = toolOutput
         } else if toolOutput.count > maxToolResultLength {
             let offloadResult = offloadToolOutput(toolOutput, toolName: tu.name, toolId: tu.id)
             let offloadMinisURL = linuxPathToMinisURL(offloadResult.linuxPath)

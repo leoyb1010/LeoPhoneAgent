@@ -799,7 +799,22 @@ export function weatherSummary(json: any, place: string): string {
 /** 与 LocalProtocol.ets 保持一致:环境变量只列名字,执行时替换 $$名字。 */
 export function envPromptBlock(names: string[]): string {
   if (names.length === 0) return ""
-  return `环境变量(只给名字,值留在本机):${names.join("、")}。工具参数里要用时写 $$名字,执行时换成真实值;不要让用户把值念出来。`
+  return `环境变量(只给名字,值留在本机):${names.join("、")}。只有 mcp_call 的参数里可以写 $$名字,执行时换成真实值;别的工具(网页、链接、剪贴板、记忆等)里写了会被拒绝。不要让用户把值念出来。`
+}
+
+/** 参数里有没有引用已知的环境变量;有就只允许 mcp_call 执行,其他工具拒绝,防止钥匙被带去任意地址。 */
+export function referencesEnv(args: string, names: string[]): boolean {
+  if (names.length === 0 || args.indexOf("$$") < 0) return false
+  const re = /\$\$([A-Za-z_][A-Za-z0-9_]*)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(args)) !== null) {
+    if (names.indexOf(m[1]) >= 0) return true
+  }
+  return false
+}
+
+export function envAllowedTool(name: string): boolean {
+  return name === "mcp_call"
 }
 
 export function expandEnvPlaceholders(args: string, values: Map<string, string>): string {

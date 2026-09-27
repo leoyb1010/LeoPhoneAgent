@@ -694,7 +694,7 @@ struct MinisMarkdownPreviewView: View {
                         }
                         Button {
                             VoiceOutputPlayer.shared.stopAll()
-                            VoiceOutputPlayer.shared.enqueueSegmented(markdownContent, sessionId: VoiceOutputPlayer.manualOwnerId)
+                            VoiceOutputPlayer.shared.enqueueSegmented(markdownContent, sessionId: VoiceOutputPlayer.manualOwnerId, oneShot: true)
                         } label: {
                             Label(String(localized: "Read Aloud"), systemImage: "speaker.wave.2")
                         }

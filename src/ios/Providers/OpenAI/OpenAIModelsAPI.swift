@@ -113,12 +113,14 @@ enum OpenAIModelsAPI {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rows = json["models"] as? [[String: Any]] else { return [] }
         var ceilings: [String: String] = [:]
+        var floors: [String: String] = [:]
         let listed = rows.filter { ($0["visibility"] as? String ?? "list") == "list" }
             .sorted { ($0["priority"] as? Int ?? Int.max) < ($1["priority"] as? Int ?? Int.max) }
         let models: [LLMModel] = listed.compactMap { row in
             guard let slug = row["slug"] as? String, !slug.isEmpty else { return nil }
             let efforts = (row["supported_reasoning_levels"] as? [[String: Any]] ?? []).compactMap { $0["effort"] as? String }
             if let top = CodexReasoningCeiling.highest(of: efforts) { ceilings[slug] = top.rawValue }
+            if let low = CodexReasoningCeiling.lowest(of: efforts) { floors[slug] = low }
             let inputs = row["input_modalities"] as? [String] ?? ["text"]
             var modality: ModelModality = [.textInput, .textOutput]
             if inputs.contains("image") { modality.insert(.imageInput) }
@@ -131,6 +133,7 @@ enum OpenAIModelsAPI {
                 supportsReasoning: !efforts.isEmpty)
         }
         if !ceilings.isEmpty { CodexReasoningCeiling.save(ceilings) }
+        if !floors.isEmpty { CodexReasoningCeiling.saveFloors(floors) }
         return models
     }
 

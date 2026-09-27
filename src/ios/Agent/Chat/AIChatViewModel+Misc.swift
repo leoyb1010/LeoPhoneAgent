@@ -385,6 +385,7 @@ extension AIChatViewModel {
         }
         guard !Task.isCancelled, !userDidCancel else { return }
         nativeRunOutcome = result.outcome
+        if result.outcome == .failed { typedErrorRetry = (spoken, .unavailable) }
         errorMessage = result.outcome == .failed ? spoken : nil
         canResume = result.outcome == .waitingForUser || result.outcome == .suspended
         if result.outcome == .cancelled { userDidCancel = true }

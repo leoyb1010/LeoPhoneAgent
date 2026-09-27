@@ -329,20 +329,14 @@ struct InlineVoiceInputView: View {
             }
         ))
         .animation(.easeInOut(duration: 0.28), value: expanded)
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        let f = geo.frame(in: .global)
-                        lastPanelFrame = f
-                        VoiceLog.log("[panel-layout] frame y=\(Int(f.minY))…\(Int(f.maxY)) x=\(Int(f.minX))…\(Int(f.maxX)) w=\(Int(f.width)) h=\(Int(f.height)) expanded=\(expanded)")
-                    }
-                    .onChange(of: geo.frame(in: .global)) { f in
-                        lastPanelFrame = f
-                        VoiceLog.log("[panel-layout] frame y=\(Int(f.minY))…\(Int(f.maxY)) x=\(Int(f.minX))…\(Int(f.maxX)) w=\(Int(f.width)) h=\(Int(f.height)) expanded=\(expanded)")
-                    }
-            }
-        )
+        // [T-ios-geometry-observer-crash] Writing state from
+        // onChange(of: geo.frame) is the v1.8b13 SIGTRAP pattern.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { f in
+            lastPanelFrame = f
+            VoiceLog.log("[panel-layout] frame y=\(Int(f.minY))…\(Int(f.maxY)) x=\(Int(f.minX))…\(Int(f.maxX)) w=\(Int(f.width)) h=\(Int(f.height)) expanded=\(expanded)")
+        }
         // [T-voice-bg-fg-gap] (b) Keyboard notifications relative to this panel —
         // frame + who holds focus. The 48pt background shift could only be
         // attributed by seeing whether UIKit broadcast a keyboard frame during

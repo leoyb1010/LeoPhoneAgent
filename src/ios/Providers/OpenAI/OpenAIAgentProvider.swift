@@ -435,7 +435,8 @@ final class OpenAIAgentProvider: AgentProvider {
         } else if isCodexOAuth {
             // Codex requires a `reasoning` object on every request — fall back
             // to "low" when the user has thinking off.
-            body["reasoning"] = ["effort": "low", "summary": "auto"]
+            let effort = CodexReasoningCeiling.clampOffEffort("low", floor: CodexReasoningCeiling.floorEffort(for: model.id))
+            body["reasoning"] = ["effort": effort, "summary": "auto"]
             reasoningRequested = true
         } else if model.supportsReasoning ?? false,
                   let offEffort = Self.explicitOffEffort(for: provider, model: model, level: thinkingLevel) {
@@ -824,7 +825,9 @@ final class OpenAIAgentProvider: AgentProvider {
     /// is exactly the pre-fix behavior.
     static func explicitOffEffort(for provider: OpenAIProvider, model: LLMModel, level: ThinkingLevel) -> String? {
         guard !level.isEnabled else { return nil }
-        if provider.customBaseURL == nil && !provider.isAzure { return "none" }
+        if provider.customBaseURL == nil && !provider.isAzure {
+            return CodexReasoningCeiling.clampOffEffort("none", floor: CodexReasoningCeiling.floorEffort(for: model.id))
+        }
         let base = provider.customBaseURL?.lowercased() ?? ""
         let lid = model.id.lowercased()
         if base.contains("volces") || base.contains("ark.")
@@ -1488,19 +1491,22 @@ final class OpenAIAgentProvider: AgentProvider {
                echo.modelId == self.model.id {
                 for item in echo.items {
                     if case .openaiReasoning(let id, let encrypted, let summary) = item {
+                        // Requests use `store: false`, so the server never kept
+                        // this item; replaying a bare id is a 404 "Item not
+                        // found". Only items carrying encrypted_content stand
+                        // on their own.
+                        guard let encrypted, !encrypted.isEmpty else { continue }
                         // `summary` is a required field on input reasoning items
                         // even when empty (server returns
                         //   400 Missing required parameter: 'input[N].summary'
                         // otherwise). Always emit an array — populated when we
                         // captured summary text, empty otherwise.
-                        var entry: [String: Any] = [
+                        let entry: [String: Any] = [
                             "type": "reasoning",
                             "id": id,
                             "summary": summary.map { ["type": "summary_text", "text": $0] },
+                            "encrypted_content": encrypted,
                         ]
-                        if let encrypted, !encrypted.isEmpty {
-                            entry["encrypted_content"] = encrypted
-                        }
                         result.append(entry)
                     }
                 }

@@ -109,7 +109,14 @@ struct RootfsManagementView: View {
                 if viewModel.hasBackup {
                     Button(action: { viewModel.restoreBackup() }) {
                         Label {
-                            Text("Restore User Data")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Restore User Data")
+                                if let date = viewModel.latestBackupDate {
+                                    Text("/root backup from \(date.formatted(date: .abbreviated, time: .shortened))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         } icon: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 9))
@@ -118,7 +125,14 @@ struct RootfsManagementView: View {
                                 .background(.teal, in: Circle())
                         }
                     }
-                    .disabled(viewModel.isProcessing || !viewModel.isInstalled)
+                    .disabled(viewModel.isProcessing || viewModel.terminalNeedsRelaunch)
+                    .swipeActions(allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            viewModel.showDeleteBackupConfirmation = true
+                        } label: {
+                            Label("Delete Backup", systemImage: "trash")
+                        }
+                    }
                 }
             }
 
@@ -149,7 +163,7 @@ struct RootfsManagementView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Text("• Reset: Delete everything\n• Backup: Save /root directory\n• Restore: Recover saved data")
+                    Text("• Reset: Delete everything\n• Backup: Save /root directory, kept on this device until you delete it\n• Restore: Put the latest /root backup back (installs the rootfs first if needed)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -174,7 +188,15 @@ struct RootfsManagementView: View {
                 viewModel.resetRootfs(keepUserData: true)
             }
         } message: {
-            Text("This will backup your /root directory, then reset the rootfs. You can restore the backup later.")
+            Text("This will backup your /root directory, then reset the rootfs. The backup stays on this device; after the app restarts, come back here and tap Restore User Data.")
+        }
+        .alert("Delete Backup?", isPresented: $viewModel.showDeleteBackupConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                viewModel.deleteLatestBackup()
+            }
+        } message: {
+            Text("The saved /root backup will be permanently deleted.")
         }
         .sheet(isPresented: $showFileBrowser) {
             NavigationStack {
@@ -194,8 +216,13 @@ class RootfsManagementViewModel: ObservableObject {
     @Published var hasBackup = false
     @Published var showResetConfirmation = false
     @Published var showResetWithBackupConfirmation = false
+    @Published var showDeleteBackupConfirmation = false
+    @Published var latestBackupDate: Date?
 
     private var backupURL: URL?
+
+    /// Reset while the kernel was booted: the guest can't be touched until relaunch.
+    var terminalNeedsRelaunch: Bool { RootfsManager.shared.didResetWhileBooted }
 
     var rootfsPath: String {
         RootfsManager.shared.rootfsPath.path
@@ -207,6 +234,9 @@ class RootfsManagementViewModel: ObservableObject {
 
     func refresh() {
         isInstalled = RootfsManager.shared.isInstalled
+        backupURL = RootfsManager.shared.existingUserDataBackups().first
+        hasBackup = backupURL != nil
+        latestBackupDate = backupURL.map { Date(timeIntervalSince1970: RootfsManager.backupTimestamp($0)) }
 
         if isInstalled {
             DispatchQueue.global(qos: .utility).async {
@@ -263,7 +293,9 @@ class RootfsManagementViewModel: ObservableObject {
                     self.hasBackup = backup != nil
 
                     if keepUserData {
-                        self.resultMessage = "✅ Rootfs reset with backup created"
+                        self.resultMessage = backup != nil
+                            ? String(localized: "✅ Rootfs reset. /root was backed up on this device — restart the app, then tap Restore User Data.")
+                            : String(localized: "✅ Rootfs reset. There was no /root to back up.")
                     } else {
                         self.resultMessage = "✅ Rootfs reset complete. Restart app to reinstall."
                     }
@@ -280,6 +312,17 @@ class RootfsManagementViewModel: ObservableObject {
         }
     }
 
+    func deleteLatestBackup() {
+        guard let backupURL else { return }
+        do {
+            try RootfsManager.shared.deleteUserDataBackup(backupURL)
+        } catch {
+            lastOperationSuccess = false
+            resultMessage = "❌ \(error.localizedDescription)"
+        }
+        refresh()
+    }
+
     func restoreBackup() {
         guard let backupURL = backupURL else {
             resultMessage = "❌ No backup available"
@@ -292,12 +335,16 @@ class RootfsManagementViewModel: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
+                if !RootfsManager.shared.isInstalled {
+                    DispatchQueue.main.async { self.statusMessage = String(localized: "Installing rootfs...") }
+                    try RootfsManager.shared.installIfNeeded()
+                }
                 try RootfsManager.shared.restoreUserData(from: backupURL)
 
                 DispatchQueue.main.async {
                     self.isProcessing = false
                     self.lastOperationSuccess = true
-                    self.resultMessage = "✅ User data restored successfully"
+                    self.resultMessage = String(localized: "✅ /root restored. The backup is kept until you delete it.")
                     self.refresh()
                 }
             } catch {

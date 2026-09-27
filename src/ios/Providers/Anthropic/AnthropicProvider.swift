@@ -24,9 +24,6 @@ final class AnthropicProvider: LLMProvider {
     /// The underlying SDK service — exposed for direct tool-use calls.
     let service: AnthropicService
 
-    /// Whether this provider uses Claude Code OAuth credentials.
-    let isClaudeCode: Bool
-
     /// Beta headers sent with each request (for debug logging).
     let betaHeaders: [String]?
 
@@ -39,31 +36,6 @@ final class AnthropicProvider: LLMProvider {
     /// those endpoints only, and leave the official endpoint alone
     /// where signature-less thinking blocks are rejected.
     let isOfficialAnthropicEndpoint: Bool
-
-    /// Required system prompt prefix for Claude Code OAuth credentials.
-    ///
-    /// The value is not hardcoded here: at build time the "Generate Provider
-    /// Customization" script phase reads the `ANTHROPIC_OAUTH_IDENTIFIER_PROMPT`
-    /// build setting (sourced from `Configs/ProviderCustomization.xcconfig`) and
-    /// emits `ProviderCustomizationGenerated.anthropicOAuthIdentifierPrompt`,
-    /// which is compiled into the binary. The value is deliberately NOT stored
-    /// in Info.plist. That xcconfig is tracked in the private repo (filled in)
-    /// but excluded from the public mirror, which ships only
-    /// `ProviderCustomization.xcconfig.example` with an empty value — so a build
-    /// there generates an empty string and fails here the first time an OAuth
-    /// (Claude Code) request needs the prompt, by design.
-    static let claudeCodeSystemPrompt: String = {
-        let value = ProviderCustomizationGenerated.anthropicOAuthIdentifierPrompt
-        guard !value.isEmpty else {
-            fatalError(
-                "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT is not configured. Copy "
-                + "Configs/ProviderCustomization.xcconfig.example to "
-                + "Configs/ProviderCustomization.xcconfig and set "
-                + "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT before building with Claude Code OAuth."
-            )
-        }
-        return value
-    }()
 
     /// Parse the `-<major>-<minor>` (or `-<major>.<minor>`) version out of a Claude model id.
     /// The minor segment is optional: a single-segment version (`claude-fable-5`,
@@ -129,7 +101,6 @@ final class AnthropicProvider: LLMProvider {
 
     init(apiKey: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil) {
         self.model = model
-        self.isClaudeCode = false
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
             ? stripV1Suffix(basePath ?? "https://api.anthropic.com")
@@ -147,7 +118,6 @@ final class AnthropicProvider: LLMProvider {
     /// for maximum compatibility with third-party proxies and Coding Plan endpoints.
     init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil) {
         self.model = model
-        self.isClaudeCode = false
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
             ? stripV1Suffix(basePath ?? "https://api.anthropic.com")
@@ -161,52 +131,13 @@ final class AnthropicProvider: LLMProvider {
         )
     }
 
-    init(
-        oauthTokenProvider: @escaping @Sendable () async throws -> String,
-        model: LLMModel = .claudeHaiku45,
-        basePath: String? = nil,
-        appendV1Suffix: Bool = true
-    ) {
-        let headers = ["oauth-2025-04-20"]
-        self.model = model
-        self.isClaudeCode = true
-        self.betaHeaders = headers
-        let resolvedBase = appendV1Suffix
-            ? stripV1Suffix(basePath ?? "https://api.anthropic.com")
-            : (basePath ?? "https://api.anthropic.com")
-        self.isOfficialAnthropicEndpoint = Self.isOfficialEndpoint(resolvedBase)
-        self.service = AnthropicServiceFactory.service(
-            apiKey: "oauth-placeholder",
-            basePath: resolvedBase,
-            betaHeaders: headers,
-            httpClient: OAuthHTTPClient(tokenProvider: oauthTokenProvider)
-        )
-    }
-
     /// Build the effective system prompt.
-    /// For Claude Code OAuth, uses array format with the required prefix as a separate text block.
-    /// This ensures Anthropic's server-side check sees the exact Claude Code prompt as the first block.
     func resolveSystemPrompt(_ userPrompt: String?) -> MessageParameter.System? {
         // [T-cache-prefix-stability] The assembled prompt may carry a
         // cache-boundary marker separating the byte-stable prefix from the
         // volatile tail (clock, memory logs). The stable block carries the
         // cache_control breakpoint; the tail is emitted WITHOUT one so its
         // churn never invalidates the cached tools+system prefix.
-        if isClaudeCode {
-            // OAuth (Claude Code): required Claude Code prompt first, then the
-            // cached stable block, then the uncached volatile tail.
-            let base = MessageParameter.Cache(text: Self.claudeCodeSystemPrompt, cacheControl: nil)
-            guard let extra = userPrompt, !extra.isEmpty else {
-                return .list([base])
-            }
-            let (stable, volatileTail) = SystemPromptCacheBoundary.split(extra)
-            var blocks = [base, MessageParameter.Cache(text: stable,
-                cacheControl: .init(type: .ephemeral))]
-            if let volatileTail {
-                blocks.append(MessageParameter.Cache(text: volatileTail, cacheControl: nil))
-            }
-            return .list(blocks)
-        }
         // API key (including Anthropic-compatible proxies): cached stable block
         // plus uncached volatile tail, so prompt caching works on all
         // Anthropic-compatible endpoints.
@@ -345,7 +276,6 @@ final class AnthropicProvider: LLMProvider {
         parts.append("  temperature: \(parameter.temperature.map { String($0) } ?? "nil")")
         parts.append("  stream: \(parameter.stream)")
         parts.append("  betaHeaders: \(betaHeaders?.joined(separator: ", ") ?? "none")")
-        parts.append("  authMode: \(isClaudeCode ? "OAuth (Claude Code)" : "API Key")")
         parts.append("  messages: \(parameter.messages.count)")
 
         // System prompt metadata only. Never log its text.

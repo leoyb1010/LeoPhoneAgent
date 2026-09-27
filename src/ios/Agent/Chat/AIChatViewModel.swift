@@ -498,6 +498,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if let observer = fontChangeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = composerDraftBackgroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         if let observer = syncChangeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -569,8 +572,17 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
             updateSlashMenuState()
             updateMentionMenuState()
+            if inputText != oldValue { scheduleComposerDraftSave() }
         }
     }
+    /// User's own draft set aside while the composer is borrowed to edit a
+    /// sent message; restored when the edit is sent or cancelled.
+    var draftStashedForEdit: ComposerDraftSnapshot?
+    var composerDraftSaveTask: Task<Void, Never>?
+    /// Off until `restoreComposerDraftIfNeeded()` so a VM never writes an
+    /// empty draft over a saved one before it had the chance to load it.
+    var composerDraftPersistenceEnabled = false
+    nonisolated(unsafe) var composerDraftBackgroundObserver: NSObjectProtocol?
     /// Hidden structured material selected from Treasury. It is emitted as a
     /// separate Agent content part before the user's instruction, never folded
     /// into the editable prompt string.
@@ -734,6 +746,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// re-evaluates the view.
     var hasCompletedInitialLoad = false
     @Published var errorMessage: String?
+    enum ErrorBannerRetry {
+        case reply
+        case compaction(UUID, includesBoundary: Bool)
+        /// Nothing to redo in place (e.g. a native route already answered).
+        case unavailable
+    }
+    /// What the banner's Retry redoes, tied to the message it was set with so
+    /// any later `errorMessage` falls back to retrying the reply.
+    var typedErrorRetry: (message: String, retry: ErrorBannerRetry)?
+    var errorBannerRetry: ErrorBannerRetry {
+        if let typed = typedErrorRetry, typed.message == errorMessage { return typed.retry }
+        return .reply
+    }
     /// Transient banner / toast message for in-loop notices (e.g. "older
     /// N image(s) elided from request to fit 25MB budget"). Set by the
     /// request-level image budget pass when it had to drop history images;
@@ -820,7 +845,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         set { VoiceOutputState.shared.isEnabled = newValue }
     }
     /// When enabled, uses 1-hour cache TTL instead of 5-minute for Anthropic requests.
-    @Published var enhancedCacheEnabled = false
+    /// Persisted per session: it used to reset silently on eviction or relaunch.
+    @Published var enhancedCacheEnabled = false {
+        didSet {
+            guard oldValue != enhancedCacheEnabled, let sid = sessionId else { return }
+            Self.saveEnhancedCache(enhancedCacheEnabled, for: sid)
+        }
+    }
+
+    nonisolated static func enhancedCacheKey(for sessionId: String) -> String {
+        "enhancedCache.session.\(sessionId)"
+    }
+
+    static func saveEnhancedCache(_ enabled: Bool, for sessionId: String) {
+        let key = enhancedCacheKey(for: sessionId)
+        if enabled { UserDefaults.standard.set(true, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+    }
 
     /// Whether the Enhanced Cache toggle should be visible. Only Anthropic
     /// official API (no custom base URL) supports the cache TTL protocol.
@@ -881,6 +921,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var skipCompactCheck = false
     /// When false, memory_write tool calls are skipped (returns "Memory disabled") in this session.
     @Published var memoryEnabled = true
+    /// `/memory` toggled before the chat had a session; applied once it does.
+    var draftMemoryEnabledOverride: Bool?
 
     // MARK: - Session Stats
     /// Accumulated streaming duration (seconds) for output token speed calculation.
@@ -991,9 +1033,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         case .openAI, .openAIResponses:
             // Custom/local base only — never official OpenAI.
             return instance.customBaseURL?.isEmpty == false
-        case .openRouter, .xAI, .kimiCode:
+        case .openRouter, .xAI, .kimiCode, .openCodeGo:
             return true
-        case .anthropic, .gemini, .antigravity, .unsupported:
+        case .anthropic, .gemini, .unsupported:
             return false
         }
     }
@@ -1076,10 +1118,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 level = OpenAIAgentProvider.reasoningEffort(for: model, level: thinkLvl) ?? "—"
             case .unsupported:
                 level = "—"
-            case .antigravity:
-                let lid = model.id.lowercased()
-                if lid.contains("claude") { level = "budget: \(AnthropicAgentProvider.thinkingBudget(for: model, maxTokens: 64000, level: thinkLvl))" }
-                else { level = thinkLvl.displayName }
+            case .openCodeGo:
+                if OpenCodeGo.wireProtocol(for: model.id) == .anthropicMessages {
+                    level = "budget: \(AnthropicAgentProvider.thinkingBudget(for: model, maxTokens: 64000, level: thinkLvl))"
+                } else {
+                    level = OpenAIAgentProvider.reasoningEffort(for: model, level: thinkLvl) ?? "—"
+                }
             }
         }
         return (supported, enabled, level)
@@ -1095,12 +1139,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var toolSnapshots: [ToolSnapshotItem] = []
 
     // Attachments
-    @Published var attachments: [InputAttachment] = []
+    @Published var attachments: [InputAttachment] = [] {
+        didSet { scheduleComposerDraftSave() }
+    }
     /// Number of videos currently being imported from the photo picker.
     @Published var loadingVideoCount = 0
     /// [T-long-paste-fold] Long pastes folded out of the draft; the draft
     /// holds "[Pasted#N]" tokens that send() expands back to the full text.
-    @Published var pastedBlocks: [PastedBlock] = []
+    @Published var pastedBlocks: [PastedBlock] = [] {
+        didSet { if pastedBlocks != oldValue { scheduleComposerDraftSave() } }
+    }
 
     /// Old iOS releases visibly jitter when the actively streaming markdown block
     /// re-self-sizes during user scroll/deceleration. While this flag is set, the
@@ -1297,8 +1345,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     /// Read an entire assistant reply aloud FROM THE START. Clears any in-progress
-    /// TTS (so it doesn't overlap), enables read-replies, then queues the whole
-    /// reply split into sentences. No-op while that reply is still streaming (the
+    /// TTS (so it doesn't overlap), then queues the whole reply split into
+    /// sentences as a one-shot: automatic read-replies stays as the user set it. No-op while that reply is still streaming (the
     /// caller greys the menu item out, but we guard here too).
     func readReplyFromStart(_ message: ChatMessage) {
         // Build the reply's plain text from its text blocks.
@@ -1314,17 +1362,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Clear whatever THIS session is playing/queuing so the replay starts
         // clean — other concurrent sessions' queued speech is left alone.
         stopSpeechForThisSession()
-        // Ensure read-replies is on (and reflected in prefs/voice VM).
-        if !speakEnabled {
-            speakEnabled = true
-            VoiceOutputPreferences.isEnabled = true
-        }
         isReadingAloud = true
         // Split into sentences and queue each — reuses the streaming segmenter so
         // sizing / dynamic window behave the same as live playback.
         let (sentences, _) = extractNewSentences(from: fullText, spokenOffset: 0)
         let units = sentences.isEmpty ? [fullText] : sentences
-        for s in units { speakQueued(s) }
+        for s in units { speakQueued(s, oneShot: true) }
     }
 
     /// Turn read-replies off entirely, stopping playback.
@@ -1439,20 +1482,21 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
-    /// Speak text aloud if speakEnabled is on. Interrupts any current speech.
+    /// Speak user-selected text once, even when automatic read-replies is off.
+    /// Interrupts any current speech.
     /// When Background Speak is enabled, configures audio session for .playback
     /// so TTS continues in the background and keeps the process alive.
     func speakText(_ rawText: String) {
         // Strip emoji / non-speakable glyphs before TTS.
         let text = VoiceTextSanitizer.sanitize(rawText)
-        guard canSpeakNow, !text.isEmpty else { return }
+        guard !VoiceModePreference.shared.isCapturing, !text.isEmpty else { return }
         isReadingAloud = true
         syncSpeechStateToGlobal(registerActive: true)
         // Reply TTS (System + cloud are the SAME source/intent) — declare it once
         // up front; the resolved provider then picks the engine.
         AudioSessionCoordinator.shared.begin(.replyTTS)
         if useCloudTTS {
-            VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "")
+            VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "", oneShot: true)
             return
         }
         if BackgroundKeepAliveManager.shared.backgroundSpeakEnabled {
@@ -1569,10 +1613,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Used for streaming text playback — sentences are queued in order.
     /// AVSpeechSynthesizer automatically queues multiple speak() calls; the cloud
     /// player keeps its own ordered queue + synthesize pipeline.
-    func speakQueued(_ rawText: String) {
+    func speakQueued(_ rawText: String, oneShot: Bool = false) {
         // Strip emoji / non-speakable glyphs before TTS.
         let text = VoiceTextSanitizer.sanitize(rawText)
-        guard canSpeakNow, !text.isEmpty else {
+        let allowed = oneShot ? !VoiceModePreference.shared.isCapturing : canSpeakNow
+        guard allowed, !text.isEmpty else {
             VoiceLog.log("speakQueued SKIP — speakEnabled=\(speakEnabled) isCapturing=\(AudioSessionCoordinator.shared.isCapturing) empty=\(text.isEmpty)")
             return
         }
@@ -1580,7 +1625,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal(registerActive: true)
         AudioSessionCoordinator.shared.begin(.replyTTS)
         if useCloudTTS {
-            VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "")
+            VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "", oneShot: oneShot)
             return
         }
         if BackgroundKeepAliveManager.shared.backgroundSpeakEnabled {
@@ -2078,7 +2123,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// Session ID for persistence integration. Set by the view on appear.
     var sessionId: String? {
-        didSet { browserTabPool.sessionId = sessionId }
+        didSet {
+            browserTabPool.sessionId = sessionId
+            // A new chat just got its session: move the draft to the chat's
+            // own key so the next new chat doesn't inherit it.
+            if oldValue == nil, sessionId != nil, composerDraftPersistenceEnabled {
+                ComposerDraftStore.remove(key: ComposerDraftStore.newChatKey)
+                flushComposerDraft()
+            }
+            if oldValue == nil, let sid = sessionId, enhancedCacheEnabled {
+                Self.saveEnhancedCache(true, for: sid)
+            }
+        }
     }
 
     /// The draft ID assigned by the parent view (e.g. "__new__<UUID>").
@@ -2451,6 +2507,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         // Snapshot and clear attachments synchronously so the UI clears immediately
         clearAttachments()
+        restoreStashedComposerDraft()
         scrollToBottomSignal.send()
 
         isProcessing = true
@@ -3420,6 +3477,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// message and nothing precedes it in that turn, this is equivalent to
     /// truncating at the preceding user message — delegate to
     /// retryFromMessage(precedingUser) and skip the sub-message rewrite.
+    /// User turns after the message with `messageId` — what a retry / re-run /
+    /// edit from that point permanently deletes besides its own reply.
+    func laterUserTurnCount(after messageId: UUID) -> Int {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return 0 }
+        return messages[(idx + 1)...].filter { $0.role == .user && !$0.isCompactedHistory }.count
+    }
+
+    func laterUserTurnCount(afterBlock blockId: UUID) -> Int {
+        guard let msg = messages.first(where: { m in m.blocks.contains { $0.id == blockId } }) else { return 0 }
+        return laterUserTurnCount(after: msg.id)
+    }
+
     func retryFromToolBlock(blockId: UUID) {
         guard !isProcessing else { return }
 
@@ -3676,6 +3745,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
+        // Set the user's draft aside; the edited message must neither
+        // overwrite it nor send its attachments along.
+        stashComposerDraftForEdit()
+        pastedBlocks = []
+        attachments = []
         inputText = text
         editingMessageIndex = idx
 
@@ -3718,6 +3792,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         editingMessageIndex = nil
         inputText = ""
         attachments = []
+        pastedBlocks = []
+        restoreStashedComposerDraft()
         logger.info("✏️ cancelEdit")
     }
 
@@ -6062,14 +6138,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Returns `true` if a user-chosen level was written, so the caller can
     /// keep the group-default seeding (createInitialBinding) from clobbering it.
     ///
-    /// [T-first-msg-thinking-level-clobber] Note the `pending != .off` guard:
-    /// `.off` is indistinguishable from "unset" in SessionInferenceConfig, so a
-    /// user who explicitly picks Off before the first send still inherits the
-    /// group default. That pre-existing limitation is unchanged here — this fix
-    /// only stops a real (enabled) override from being overwritten.
+    /// [T-first-msg-thinking-level-clobber] An explicit Off is flushed too:
+    /// `preferredThinkingLevel` is non-nil `.off`, which is distinct from
+    /// unset, and returning true keeps the group default from seeding over it.
     @discardableResult
     func flushPendingThinkingLevel() -> Bool {
-        guard let pending = pendingThinkingLevel, pending != .off, let sid = sessionId else { return false }
+        guard let pending = pendingThinkingLevel, let sid = sessionId else { return false }
         var cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) ?? SessionInferenceConfig()
         cfg.preferredThinkingLevel = pending
         cfg.thinkingLevel = pending

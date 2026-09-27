@@ -14,6 +14,9 @@ struct EnvironmentVariablesView: View {
     @State private var prefillValue = ""
     @State private var prefillNote = ""
     @State private var overwriteConfirm: OverwriteRequest?
+    /// Swipe-delete waiting for confirmation: the value is a secret that
+    /// can't be recovered once the Keychain item is gone.
+    @State private var pendingDelete: EnvVarEntry?
 
     private struct OverwriteRequest: Identifiable {
         let id = UUID()
@@ -61,6 +64,18 @@ struct EnvironmentVariablesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .alert(String(localized: "Delete Variable"), isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                if let id = pendingDelete?.id { store.delete(id: id) }
+                pendingDelete = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(String(localized: "Delete \(pendingDelete?.key ?? "")? Its value is removed from this device and can't be recovered."))
+        }
         .searchable(text: $searchText, prompt: "Filter by name")
         .navigationTitle("Environment Variables")
         .navigationBarTitleDisplayMode(.inline)
@@ -195,10 +210,8 @@ struct EnvironmentVariablesView: View {
     }
 
     private func deleteEntries(at offsets: IndexSet) {
-        let entriesToDelete = offsets.map { filteredEntries[$0] }
-        for entry in entriesToDelete {
-            store.delete(id: entry.id)
-        }
+        guard let first = offsets.first else { return }
+        pendingDelete = filteredEntries[first]
     }
 }
 

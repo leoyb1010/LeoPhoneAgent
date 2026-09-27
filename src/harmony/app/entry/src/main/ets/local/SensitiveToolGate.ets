@@ -129,6 +129,20 @@ export class SensitiveToolGate {
     return decision;
   }
 
+  /**
+   * 没人看着的回合(别的设备远控这台、定时任务)里不能碰的手机能力:拉起别的 App、拨号、
+   * 写剪贴板、读定位、调 MCP。网页里一段提示注入就能让模型去做这些,而这两条链路没有人能点「允许」。
+   * 只有这台鸿蒙开了「全自动」才放行。
+   */
+  static readonly UNATTENDED_BLOCKED: string[] = ['open_app_link', 'dial', 'clipboard_write', 'location', 'mcp_call'];
+
+  static unattendedDenial(name: string): string {
+    if (SensitiveToolGate.fullAuto || SensitiveToolGate.UNATTENDED_BLOCKED.indexOf(name) < 0) {
+      return '';
+    }
+    return `远程和定时任务不能用 ${name}(这台鸿蒙是「逐项确认」)。不要重试,把需要做的事告诉用户,让他在手机上自己点。`;
+  }
+
   static fileWrite(): SensitiveDecision {
     const decision = new SensitiveDecision();
     decision.askFirst = !SensitiveToolGate.fullAuto;

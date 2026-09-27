@@ -364,7 +364,7 @@ struct ContentView: View {
     /// flips the toggle in Settings — without this, calling the
     /// static getter inline would only re-read on the next unrelated
     /// state change. `SyncV2Bootstrap.setEnabled` writes the same key.
-    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
 
     // Multi-select
     @State private var isSelecting = false
@@ -455,8 +455,15 @@ struct ContentView: View {
     /// Last `QuickActionRouter.newChatTrigger` value we've already routed.
     /// SwiftUI's `onChange` fires for transitions, not for initial values,
     /// so we use this to decide whether `onAppear` (or `onChange`) still
-    /// owes a `handleNewChatRequest()` call.
-    @State private var consumedQuickActionTrigger: Int = 0
+    /// owes a `handleNewChatRequest()` call. Process-wide, not per view: a
+    /// window opened later (or a remount from a language switch) must not
+    /// replay a shortcut another window already handled.
+    private static var consumedQuickActionTrigger: Int = 0
+    private var consumedQuickActionTrigger: Int {
+        get { Self.consumedQuickActionTrigger }
+        nonmutating set { Self.consumedQuickActionTrigger = newValue }
+    }
+    @State private var homeTerminalInitCommand: String?
 
     /// Set when `handleNewChatRequest()` had to pop the iPhone
     /// NavigationStack before it could open the new draft session.
@@ -611,7 +618,8 @@ struct ContentView: View {
                 // as sensitive as the briefing / memory / status mirrors — all of
                 // which redact under Privacy Mode. This one did not.
                 let redact = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
-                let items = newValue.prefix(8).map { session in
+                let lockStore = SessionLockStore.shared
+                let items = newValue.lazy.filter { !lockStore.isHiddenFromSystemSurfaces($0.id) }.prefix(8).map { session in
                     WidgetRecentSessionItem(
                         id: session.id,
                         title: redact
@@ -637,7 +645,8 @@ struct ContentView: View {
             // we therefore also check the initial value on appear and route
             // any unconsumed bumps then.
             .onChange(of: quickActionRouter.newChatTrigger) { newValue in
-                guard newValue != consumedQuickActionTrigger else { return }
+                guard WindowRegistry.shared.isPrimary(windowId),
+                      newValue != consumedQuickActionTrigger else { return }
                 consumedQuickActionTrigger = newValue
                 handleNewChatRequest()
             }
@@ -648,12 +657,13 @@ struct ContentView: View {
                 // Workflow advanced to pendingDispatch (either same-runloop
                 // because we were already home, or after markHome fired
                 // from a navigation change). Open the new session now.
-                if case .pendingDispatch = newState {
+                if case .pendingDispatch = newState, WindowRegistry.shared.isPrimary(windowId) {
                     openSessionForPendingQuickAction()
                 }
             }
             .onAppear {
-                if quickActionRouter.newChatTrigger != consumedQuickActionTrigger {
+                if quickActionRouter.newChatTrigger != consumedQuickActionTrigger,
+                   WindowRegistry.shared.isPrimary(windowId) {
                     consumedQuickActionTrigger = quickActionRouter.newChatTrigger
                     // Defer one runloop so the NavigationStack body has a
                     // chance to attach `$navigationPath` before we append to
@@ -806,9 +816,9 @@ struct ContentView: View {
             // row tapped behind it would push a chat under the sheet.
             .presentationDetents([.medium, .large])
         }
-        .fullScreenCover(isPresented: $showTerminal) {
+        .fullScreenCover(isPresented: $showTerminal, onDismiss: { homeTerminalInitCommand = nil }) {
                 NavigationStack {
-                    ISHTerminalView(showCloseButton: true)
+                    ISHTerminalView(showCloseButton: true, initCommand: homeTerminalInitCommand)
                 }
             }
             .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
@@ -1130,7 +1140,8 @@ struct ContentView: View {
                 }
                 // iPad: detail cleared (newValue == nil) — if a quick-action
                 // workflow is ensuring-home, advance it now.
-                if newValue == nil, case .ensuringHome = QuickActionWorkflow.shared.state {
+                if newValue == nil, case .ensuringHome = QuickActionWorkflow.shared.state,
+                   WindowRegistry.shared.isPrimary(windowId) {
                     QuickActionWorkflow.shared.markHome()
                 }
                 // [T-ios-search-focus-sticky] iPad split: selecting a session (or
@@ -1169,7 +1180,8 @@ struct ContentView: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     // If a quick-action workflow asked us to ensure-home,
                     // we're there now — let it advance to pendingDispatch.
-                    if case .ensuringHome = QuickActionWorkflow.shared.state {
+                    if case .ensuringHome = QuickActionWorkflow.shared.state,
+                       WindowRegistry.shared.isPrimary(windowId) {
                         QuickActionWorkflow.shared.markHome()
                     }
                 }
@@ -1197,17 +1209,17 @@ struct ContentView: View {
                 }
             }
             .onChange(of: deepLink.showEnvironmentVariables) { show in
-                if show {
+                if show, WindowRegistry.shared.isPrimary(windowId) {
                     activeToolSheet = .settings
                 }
             }
             .onChange(of: deepLink.showPermissions) { show in
-                if show {
+                if show, WindowRegistry.shared.isPrimary(windowId) {
                     activeToolSheet = .settings
                 }
             }
             .onChange(of: deepLink.showAlarmList) { show in
-                if show {
+                if show, WindowRegistry.shared.isPrimary(windowId) {
                     showAlarmList = true
                     deepLink.showAlarmList = false
                 }
@@ -1216,25 +1228,38 @@ struct ContentView: View {
             // target. SettingsSheet itself reads `deepLink.pendingSettingsTarget`
             // in onAppear/onChange to push the right destination, then clears it.
             .onChange(of: deepLink.pendingSettingsTarget) { target in
-                guard target != nil else { return }
+                guard target != nil, WindowRegistry.shared.isPrimary(windowId) else { return }
                 if activeToolSheet != .settings {
                     activeToolSheet = .settings
                 }
             }
             .onChange(of: deepLink.pendingCollections) { pending in
-                if pending, deepLink.consumePendingCollections() {
+                if pending, WindowRegistry.shared.isPrimary(windowId), deepLink.consumePendingCollections() {
                     activeToolSheet = .collections
                 }
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: TreasuryIntentRouteStore.openNotification
             )) { _ in
-                if TreasuryIntentRouteStore.consumeOpen() {
-                    activeToolSheet = .collections
+                SessionLockStore.shared.runWhenUnlocked {
+                    if TreasuryIntentRouteStore.consumeOpen() {
+                        activeToolSheet = .collections
+                    }
                 }
             }
+            // AIChatView consumes this while a chat is on screen; on the home
+            // screen nobody did, the flag stuck at true and every later
+            // open_terminal link was a true→true no-op until relaunch.
+            .onChange(of: deepLink.showTerminal) { show in
+                guard show, onScreenSessionId == nil,
+                      WindowRegistry.shared.isPrimary(windowId) else { return }
+                homeTerminalInitCommand = deepLink.terminalInitCommand
+                deepLink.showTerminal = false
+                deepLink.terminalInitCommand = nil
+                showTerminal = true
+            }
             .onChange(of: deepLink.pendingRootfsManagement) { pending in
-                if pending {
+                if pending, WindowRegistry.shared.isPrimary(windowId) {
                     activeToolSheet = .rootfsManagement
                     deepLink.pendingRootfsManagement = false
                 }
@@ -1467,6 +1492,12 @@ struct ContentView: View {
             return sessions.filter { matchedIds.contains($0.id) }
         }()
         return searched.filter { sessionExtras.passes($0.id) }
+    }
+
+    /// Multi-select may only act on rows the user can see: archived rows and
+    /// rows hidden by the search or folder filter must never be swept in.
+    private var selectableSessionIDs: Set<String> {
+        Set(filteredSessions.map(\.id))
     }
 
     /// Group sessions by date period for section display, with pinned sessions at the top.
@@ -1766,9 +1797,13 @@ struct ContentView: View {
     /// 以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步。
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     /// 1.46.1:标题点一下折叠;每行左滑(或长按)——在跑的「停止」,跑完的「清理」。
+    private var macLiveSectionVisible: Bool {
+        homeCardsEnabled && !isSelecting && !macLive.rows.isEmpty
+    }
+
     @ViewBuilder
     private var macLiveSection: some View {
-        if homeCardsEnabled, !isSelecting, !macLive.rows.isEmpty {
+        if macLiveSectionVisible {
             Section {
                 if !macLiveCollapsed {
                     ForEach(macLive.rows) { row in
@@ -2000,7 +2035,7 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 只有"库里真的没有会话"才铺满屏的空状态。
         // 筛选筛空时铺这层会把上面刚恢复的 chips 整个盖住,等于没修。
-        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching, !showSearchBar { emptyState } }
+        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching, !showSearchBar, !macLiveSectionVisible { emptyState } }
         // [T-home-simplify-1.41] 底部是输入栏(它自己就是文本输入,跟随键盘上移是对的,
         // 所以不再忽略键盘安全区)。搜索时收起输入栏,免得两个输入框同时在屏上。
         // [T-home-composer-edge] safeAreaBar(iOS 26)而不是 safeAreaInset:系统会在输入栏后面给列表加一层
@@ -2129,7 +2164,7 @@ struct ContentView: View {
         // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。起手建议在右侧工作台,侧栏只留一句话。
         .overlay {
             // The unsaved New-Chat placeholder row counts: it sits right above this text.
-            if didInitialLoad, sessions.isEmpty, displaySessions.isEmpty, !isSearching {
+            if didInitialLoad, sessions.isEmpty, displaySessions.isEmpty, !isSearching, !macLiveSectionVisible {
                 VStack(spacing: 6) {
                     Text("还没有对话").font(.headline)
                     Text("交代的任务会按时间排在这里。")
@@ -2408,11 +2443,13 @@ struct ContentView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             if isSelecting {
-                Button(selectedIds.count == sessions.count ? "Deselect All" : "Select All") {
-                    if selectedIds.count == sessions.count {
+                let selectable = selectableSessionIDs
+                let allSelected = !selectable.isEmpty && selectable.isSubset(of: selectedIds)
+                Button(allSelected ? "Deselect All" : "Select All") {
+                    if allSelected {
                         selectedIds.removeAll()
                     } else {
-                        selectedIds = Set(sessions.map(\.id))
+                        selectedIds = selectable
                     }
                 }
             } else if hasAlarms, isWideLayout {
@@ -2951,6 +2988,7 @@ struct ContentView: View {
                 .background(selected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.10), in: Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var emptyState: some View {
@@ -3007,6 +3045,15 @@ struct ContentView: View {
                 }
                 if filteredSessions.isEmpty, !sessions.isEmpty, !isSearching {
                     emptyFilterHint
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                if isSearching, searchMatchedIds != nil, filteredSessions.isEmpty {
+                    Label("没有找到匹配的会话", systemImage: "magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -3394,6 +3441,9 @@ struct ContentView: View {
         searchMatchSnippets = [:]
         searchTask?.cancel()
         searchFocused = false
+        // The filter chips only render while searching, so a filter left
+        // behind would silently hide sessions with no visible way back.
+        sessionExtras.filter = .all
     }
 
     /// [T-ios-search-focus-sticky] Auto-exit the search bar when the user
@@ -3406,6 +3456,9 @@ struct ContentView: View {
     private func dismissSearchIfEmptyOnNavigate() {
         guard showSearchBar else { return }
         guard searchDraft.trimmed.isEmpty else { return }
+        // Keep the bar (and its chips) up while a filter is active so the user
+        // comes back to the same filtered list instead of losing it.
+        guard sessionExtras.filter == .all else { return }
         dismissSearch()
     }
 
@@ -3665,6 +3718,7 @@ struct ContentView: View {
             .padding(.leading, 16)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selectedIds.contains(session.id) ? .isSelected : [])
     }
 
     // MARK: - Section Header
@@ -3788,7 +3842,7 @@ struct ContentView: View {
                 deleteInfo = nil
                 isComputingDelete = true
                 showDeleteConfirm = true
-                let ids = selectedIds
+                let ids = selectedIds.intersection(selectableSessionIDs)
                 let totalSessions = sessions.count
                 Task { @MainActor in
                     let info = await Task.detached {
@@ -3974,7 +4028,7 @@ struct ContentView: View {
     }
 
     private func deleteSelectedSessions() {
-        let ids = selectedIds
+        let ids = selectedIds.intersection(selectableSessionIDs)
         // Same draft-id-aware matching as deleteSession: clear the selection
         // when ANY deleted id is the one currently displayed (including a
         // draft-created session whose selection id differs from its row id).
@@ -4995,10 +5049,7 @@ private struct SessionContextMenu: View, Equatable {
     }
 
     private var iCloudSyncVisible: Bool {
-        if #available(iOS 17.0, *) {
-            return UserDefaults.standard.bool(forKey: "cloudSync.v2.enabled")
-        }
-        return false
+        SyncV2Bootstrap.isEnabled
     }
 }
 

@@ -24,6 +24,11 @@ export function providerKinds(): ProviderKind[] {
         'grok-3-mini']),
     kind('kimiCode', 'Kimi Code', '#5C6BC0', 'K', 'https://api.kimi.com/coding/v1',
       ['kimi-k3', 'kimi-k2']),
+    // OpenCode Go 会员:opencode.ai/auth 发的 API Key,一个根下多家模型。这里只走 chat completions,
+    // 需要 Responses / Messages 协议的几款(gpt / grok / muse-spark / minimax-m3 / qwen3.8-flash)不列。
+    kind('openCodeGo', 'OpenCode Go', '#1F2937', 'O', 'https://opencode.ai/zen/go/v1',
+      ['kimi-k3', 'glm-5.3', 'deepseek-v4-pro', 'deepseek-v4-flash', 'qwen3.8-max', 'kimi-k2.7-code',
+        'mimo-v2.5-pro', 'minimax-m2.7']),
     kind('openRouter', 'OpenRouter', '#00BCD4', 'R', 'https://openrouter.ai/api/v1',
       ['anthropic/claude-sonnet-4', 'google/gemini-2.5-flash', 'openai/gpt-4o',
         'meta-llama/llama-4-maverick']),

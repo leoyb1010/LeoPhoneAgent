@@ -23,10 +23,12 @@ import argparse
 import asyncio
 import hmac
 import json
+from urllib.parse import urlparse
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
+import aiohttp
 from aiohttp import web
 
 from . import harness
@@ -141,17 +143,23 @@ class LeoAgentServer:
             exp = datetime.now(timezone.utc)
         if exp - datetime.now(timezone.utc) < timedelta(minutes=10):
             import aiohttp as _aiohttp
-            issuer = str(entry.get("oidc_issuer") or "https://auth.x.ai")
-            async with _aiohttp.ClientSession() as http:
+            issuer = str(entry.get("oidc_issuer") or "https://auth.x.ai").rstrip("/")
+            issuer_host = urlparse(issuer).hostname or ""
+            # refresh token 只发给 xAI 自己的授权服务器,auth.json 被改了也不外发。
+            if urlparse(issuer).scheme != "https" or not (issuer_host == "x.ai" or issuer_host.endswith(".x.ai")):
+                return web.json_response(
+                    {"error": {"message": "grok 登录里的授权地址不是 x.ai,已拒绝刷新:在 Mac 终端重新 grok login。"}},
+                    status=502)
+            async with aiohttp.ClientSession() as http:
                 async with http.get(
                         issuer + "/.well-known/openid-configuration",
-                        timeout=_aiohttp.ClientTimeout(total=15)) as r:
+                        timeout=aiohttp.ClientTimeout(total=15)) as r:
                     token_endpoint = (await r.json())["token_endpoint"]
                 async with http.post(token_endpoint, data={
                         "grant_type": "refresh_token",
                         "refresh_token": entry["refresh_token"],
                         "client_id": str(entry.get("oidc_client_id") or ""),
-                }, timeout=_aiohttp.ClientTimeout(total=20)) as r:
+                }, timeout=aiohttp.ClientTimeout(total=20)) as r:
                     if r.status != 200:
                         detail = (await r.text())[:200]
                         return web.json_response(
@@ -164,7 +172,10 @@ class LeoAgentServer:
             new_exp = datetime.now(timezone.utc) + timedelta(seconds=int(tok.get("expires_in") or 3600))
             entry["expires_at"] = new_exp.isoformat().replace("+00:00", "Z")
             tmp = auth_path + ".tmp"
-            with open(tmp, "w") as f:
+            # 里面有 refresh token:按 0600 建,不跟着 umask 变成 0644。
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                os.fchmod(f.fileno(), 0o600)
                 json.dump(data, f, indent=2)
             os.replace(tmp, auth_path)
             exp = new_exp
@@ -292,6 +303,17 @@ class LeoAgentServer:
             )
         return web.json_response({"ok": True, "choice": choice, "approval_id": approval_id})
 
+    async def archive(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return _unauthorized()
+        session = self.manager.get(request.match_info["session_id"])
+        if session is not None and session.status in ("starting", "running", "waiting_for_approval"):
+            return web.json_response({"error": {"message": "任务还在跑:先停止,再清理"}}, status=409)
+        archived = await self.manager.archive(request.match_info["session_id"])
+        if not archived:
+            return web.json_response({"error": {"message": "No such session"}}, status=404)
+        return web.json_response({"ok": True, "archived": True})
+
     async def stop(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return _unauthorized()
@@ -319,7 +341,53 @@ class LeoAgentServer:
         app.router.add_post("/harness/sessions/{session_id}/send", self.send)
         app.router.add_post("/harness/sessions/{session_id}/approval", self.approve)
         app.router.add_post("/harness/sessions/{session_id}/stop", self.stop)
+        app.router.add_post("/harness/sessions/{session_id}/archive", self.archive)
         return app
+
+
+class MacBridgeEventSink:
+    """把 harness 的关键事件 POST 给本机 LeoPhoneAgent(Mac 桥接),由它推到手机。
+
+    与 relay_client 同样的做法:同步入队、专职协程发送;Mac 没开就留在队里等下次。
+    """
+
+    OUTBOX_LIMIT = 200
+
+    def __init__(self, url: str, key: str) -> None:
+        self.url = url
+        self.key = key
+        self._outbox: List[Dict[str, Any]] = []
+        self._wake: Optional[asyncio.Event] = None
+
+    def push(self, event: Dict[str, Any]) -> None:
+        if event.get("event") not in harness.PUSHABLE_EVENTS:
+            return
+        self._outbox.append(event)
+        if len(self._outbox) > self.OUTBOX_LIMIT:
+            del self._outbox[: len(self._outbox) - self.OUTBOX_LIMIT]
+        if self._wake is not None:
+            self._wake.set()
+
+    async def run_forever(self) -> None:
+        self._wake = asyncio.Event()
+        async with aiohttp.ClientSession() as http:
+            while True:
+                if not self._outbox:
+                    await self._wake.wait()
+                    self._wake.clear()
+                    continue
+                event = self._outbox[0]
+                try:
+                    async with http.post(self.url, json={"event": event},
+                                         headers={"Authorization": f"Bearer {self.key}"},
+                                         timeout=aiohttp.ClientTimeout(total=10)) as r:
+                        # 4xx 重发也不会好(钥匙不对、Mac 版本太旧),丢掉这一条。
+                        if r.status < 500:
+                            self._outbox.pop(0)
+                            continue
+                except Exception:  # noqa: BLE001
+                    pass
+                await asyncio.sleep(15)
 
 
 def _lan_ip() -> Optional[str]:
@@ -406,6 +474,15 @@ def main(argv: Optional[list] = None) -> int:
             harness.set_event_sink(client.push_event)
             started["_relay_task"] = asyncio.get_event_loop().create_task(client.run_forever())
         app.on_startup.append(_start_relay)
+    else:
+        # 切到 Mac 桥接后不再自己注册中继:审批 / 完成事件交给 Mac,由它经中继推给手机。
+        sink = MacBridgeEventSink(os.getenv("LEOAGENT_MAC_EVENT_URL", "").strip()
+                                  or "http://127.0.0.1:38473/api/leo/link/leoagent-event", key)
+        harness.set_event_sink(sink.push)
+
+        async def _start_sink(started: web.Application) -> None:
+            started["_mac_sink_task"] = asyncio.get_event_loop().create_task(sink.run_forever())
+        app.on_startup.append(_start_sink)
     print(f"LeoAgent {VERSION} listening on http://{args.host}:{args.port}", flush=True)
     try:
         web.run_app(app, host=args.host, port=args.port, print=None)

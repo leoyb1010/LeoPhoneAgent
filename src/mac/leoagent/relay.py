@@ -1345,7 +1345,8 @@ class Relay:
             if kind == "approval.request":
                 await self.apns.send_alert(
                     title=f"🖥 {machine_name} 等你审批",
-                    body=str(event.get("command") or "")[:200],
+                    # 锁屏和 APNs 只写工具名:命令里可能带密钥,详情进 App 再看。
+                    body=f"{str(event.get('tool') or '一条命令')[:60]} · 打开 App 查看详情",
                     user_info={
                         "harnessApproval": True,
                         "sent_at": time.time(),
@@ -1365,7 +1366,7 @@ class Relay:
             elif kind == "run.completed":
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
-                    body=str(event.get("output") or "任务已结束")[:200],
+                    body="任务已结束,打开 App 查看结果",
                     user_info={"harnessSessionId": str(event.get("session_id") or ""),
                                "sent_at": time.time()},
                 

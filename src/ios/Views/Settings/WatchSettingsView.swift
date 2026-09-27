@@ -14,7 +14,7 @@ struct WatchSettingsView: View {
     @AppStorage(WatchStandalone.entryKey) private var entryId = ""
     @State private var candidates: [WatchStandalone.Candidate] = []
     @State private var toolRows: [WatchStandalone.ToolRow] = []
-    @State private var toolsOff: Set<String> = []
+    @State private var toolsOn: Set<String> = []
 
     private var isOff: Bool { mode == WatchStandalone.Mode.off.rawValue }
 
@@ -63,10 +63,10 @@ struct WatchSettingsView: View {
                     }
                     ForEach(toolRows) { row in
                         Toggle(isOn: Binding(
-                            get: { row.usable && !toolsOff.contains(row.id) },
+                            get: { row.usable && toolsOn.contains(row.id) },
                             set: { on in
-                                if on { toolsOff.remove(row.id) } else { toolsOff.insert(row.id) }
-                                WatchStandalone.toolsOff = toolsOff
+                                if on { toolsOn.insert(row.id) } else { toolsOn.remove(row.id) }
+                                WatchStandalone.toolsOn = toolsOn
                                 WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true)
                             }
                         )) {
@@ -82,7 +82,7 @@ struct WatchSettingsView: View {
                 } header: {
                     Text("手表直连时能用的工具")
                 } footer: {
-                    Text("iPhone 在身边时,手表的问题交给 iPhone 上的 Leo,所有技能和工具都能用。手表自己回答时,能用这里打开的远程工具(联网搜索、地图、天气这类);要在 iPhone 本机环境里跑的技能、需要登录授权的工具只能经 iPhone。工具的地址和钥匙经加密通道存进手表自己的钥匙串。")
+                    Text("iPhone 在身边时,手表的问题交给 iPhone 上的 Leo,所有技能和工具都能用。手表自己回答时,只能用你在这里逐个打开的远程工具(默认全关):手表上调用工具不会再问你,打开的工具连同它的地址和钥匙会经加密通道存进手表自己的钥匙串,所以只开只读的(联网搜索、地图、天气这类)。要在 iPhone 本机环境里跑的技能、需要登录授权的工具只能经 iPhone。")
                 }
             }
 
@@ -100,7 +100,7 @@ struct WatchSettingsView: View {
         .onAppear {
             candidates = WatchStandalone.candidates()
             toolRows = WatchStandalone.toolRows()
-            toolsOff = WatchStandalone.toolsOff
+            toolsOn = WatchStandalone.toolsOn
             // 选过的模型被删了或服务商关了:回到跟默认分组走
             if !entryId.isEmpty, !candidates.contains(where: { $0.id == entryId }) { entryId = "" }
         }

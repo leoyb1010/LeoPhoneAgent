@@ -118,7 +118,7 @@ struct SettingsHomeView: View {
                               icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "general", title: "外观与通用", entries: [
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中 手电筒 待办",
+                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
                 SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
@@ -345,7 +345,8 @@ struct SettingsHomeView: View {
                     .background(Color.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text("反馈与建议").font(.subheadline.weight(.semibold))
                 Spacer()
-                Image(systemName: "arrow.up.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                // Feedback is saved locally, so no external-link arrow.
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 58)

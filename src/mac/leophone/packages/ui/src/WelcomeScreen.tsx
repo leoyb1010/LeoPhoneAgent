@@ -370,7 +370,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
                 void onComplete("skip");
               }}
             >
-              用订阅账号登录(Claude / ChatGPT / Copilot)
+              用订阅账号登录(ChatGPT / Copilot / OpenCode Go)
             </Button>
             <Button
               variant="outline"

@@ -16,6 +16,7 @@ struct ScheduledTaskSettingsView: View {
     @State private var editing: ScheduledTask?
     @State private var showCreate = false
     @State private var runNowMessage: String?
+    @State private var pendingDeleteIds: [String]?
 
     @AppStorage(ScheduledTaskRunner.notifyDefaultsKey) private var notifyOnComplete = true
 
@@ -40,8 +41,7 @@ struct ScheduledTaskSettingsView: View {
                         // `store.delete` shrinks the published array, so on a
                         // multi-row delete the second lookup indexed a shifted
                         // array — wrong row removed, or an out-of-range crash.
-                        let ids = offsets.map { store.tasks[$0].id }
-                        for id in ids { store.delete(id: id) }
+                        pendingDeleteIds = offsets.map { store.tasks[$0].id }
                     }
                 }
             } header: {
@@ -98,6 +98,15 @@ struct ScheduledTaskSettingsView: View {
         .sheet(item: $editing) { task in
             ScheduledTaskEditorView(existing: task)
         }
+        .alert(String(localized: "Delete this scheduled task?"),
+               isPresented: Binding(get: { pendingDeleteIds != nil },
+                                    set: { if !$0 { pendingDeleteIds = nil } })) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                for id in pendingDeleteIds ?? [] { store.delete(id: id) }
+                pendingDeleteIds = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteIds = nil }
+        }
     }
 
     private func row(_ task: ScheduledTask) -> some View {
@@ -122,7 +131,7 @@ struct ScheduledTaskSettingsView: View {
                 }
             }
             Spacer(minLength: 0)
-            Toggle("", isOn: Binding(
+            Toggle(name, isOn: Binding(
                 get: { task.isEnabled },
                 set: { store.setEnabled($0, id: task.id) }
             ))

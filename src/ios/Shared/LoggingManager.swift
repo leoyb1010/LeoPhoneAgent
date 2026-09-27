@@ -569,7 +569,9 @@ final class LoggingManager: ObservableObject {
     }
 
     func deleteAllLogs() {
-        for file in logFiles() {
+        // Feedback records are promised long-term retention (see LogManagementView);
+        // they are only removed one by one.
+        for file in logFiles() where !file.url.lastPathComponent.hasPrefix("feedback-") {
             try? FileManager.default.removeItem(at: file.url)
         }
         // [T-logging-zombie-fd-ios] As in deleteLog, drop the stale handle to

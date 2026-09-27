@@ -1,6 +1,7 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
-import { envPromptBlock, expandEnvPlaceholders } from '../local/LocalProtocol';
+import { envPromptBlock, expandEnvPlaceholders, referencesEnv } from '../local/LocalProtocol';
+import { SecretStore } from './SecretStore';
 
 export class EnvEntry {
   name: string = '';
@@ -30,7 +31,21 @@ export class EnvStore {
         this.rows = [];
       }
     }
+    // 值放在系统钥匙串里,env.json 只记名字。老版本写在 env.json 里的明文值搬过去一次。
+    let migrated = false;
+    for (let i = 0; i < this.rows.length; i++) {
+      const row = this.rows[i];
+      if (row.value.length > 0) {
+        await SecretStore.write(EnvStore.alias(row.name), row.value);
+        migrated = true;
+      } else {
+        row.value = await SecretStore.read(EnvStore.alias(row.name));
+      }
+    }
     this.loaded = true;
+    if (migrated) {
+      await this.save(context);
+    }
   }
 
   async save(context: common.Context): Promise<void> {
@@ -38,7 +53,11 @@ export class EnvStore {
       throw new Error('环境变量档案读坏了，先别保存');
     }
     const body = new EnvFile();
-    body.rows = this.rows;
+    body.rows = this.rows.map((row: EnvEntry) => {
+      const bare = new EnvEntry();
+      bare.name = row.name;
+      return bare;
+    });
     const path = context.filesDir + '/env.json';
     const file = fileIo.openSync(path,
       fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
@@ -68,6 +87,7 @@ export class EnvStore {
       row.value = value;
       this.rows = this.rows.concat([row]);
     }
+    await SecretStore.write(EnvStore.alias(key), value);
     await this.save(context);
   }
 
@@ -79,7 +99,12 @@ export class EnvStore {
       }
     }
     this.rows = next;
+    await SecretStore.remove(EnvStore.alias(name));
     await this.save(context);
+  }
+
+  private static alias(name: string): string {
+    return `leo.harmony.env.${name}`;
   }
 
   /**
@@ -88,6 +113,10 @@ export class EnvStore {
    */
   promptBlock(): string {
     return envPromptBlock(this.rows.map((row: EnvEntry) => row.name));
+  }
+
+  referenced(args: string): boolean {
+    return referencesEnv(args, this.rows.map((row: EnvEntry) => row.name));
   }
 
   expand(args: string): string {

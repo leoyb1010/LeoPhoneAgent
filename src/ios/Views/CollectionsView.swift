@@ -22,6 +22,7 @@ import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import VisionKit
 
 private enum TreasuryView: String, CaseIterable, Identifiable {
     case inbox, processing, failed, unread, recent, all
@@ -64,7 +65,7 @@ struct CollectionsView: View {
     @State private var annotationDraft = ""
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
-    @State private var treasuryView = TreasuryView.inbox
+    @AppStorage("treasury.lastView") private var treasuryView = TreasuryView.all
     // [T-attachments] 三条导入入口
     @State private var showFileImporter = false
     @State private var showScanner = false
@@ -75,7 +76,13 @@ struct CollectionsView: View {
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
     @State private var toast: String?
+    @State private var toastIsError = false
     @State private var toastID = UUID()
+    /// Deleted rows stay hidden (not yet tombstoned) while the undo bar is up.
+    @State private var pendingDeletion: Set<String> = []
+    @State private var pendingDeletionTask: Task<Void, Never>?
+    @State private var confirmBatchDelete = false
+    @State private var newNoteID: String?
     /// [T-collections-fulltext] 当前查询在全文索引里的命中(条目 id)。
     @State private var fullTextMatches: [String] = []
     @State private var fullTextSnippets: [String: String] = [:]
@@ -169,7 +176,7 @@ struct CollectionsView: View {
 
     @ToolbarContentBuilder
     private var closeToolbarItem: some ToolbarContent {
-        if let onClose {
+        if let onClose, !editMode.isEditing {
             ToolbarItem(placement: .cancellationAction) {
                 Button("完成", action: onClose)
             }
@@ -219,7 +226,7 @@ struct CollectionsView: View {
                     let ids = Set(offsets.compactMap {
                         visible.indices.contains($0) ? visible[$0].id : nil
                     })
-                    purge(ids)
+                    requestDelete(ids)
                 }
             }
         }
@@ -279,7 +286,7 @@ struct CollectionsView: View {
             .ignoresSafeArea()
         }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
-        .sheet(item: $editingNote) { note in
+        .sheet(item: $editingNote, onDismiss: discardUntouchedNewNote) { note in
             NavigationStack {
                 NoteEditorView(item: note) { updated in
                     CollectionStore.update(updated)
@@ -329,7 +336,8 @@ struct CollectionsView: View {
             }
         }
         .fullScreenCover(item: $readerTarget) { target in
-            LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode)
+            LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode,
+                          onFinish: { readerTarget = nil })
                 .ignoresSafeArea()
         }
         .sheet(isPresented: $showImportSheet) {
@@ -340,11 +348,26 @@ struct CollectionsView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let toast {
-                HStack(spacing: 7) {
-                    Image(systemName: "checkmark.circle.fill")
+            if !pendingDeletion.isEmpty {
+                HStack(spacing: 12) {
+                    Image(systemName: "trash")
                         .font(.system(size: 14))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.secondary)
+                    Text("已删除 \(pendingDeletion.count) 条").font(.system(size: 13, weight: .semibold))
+                    Button("撤销") { undoPendingDeletion() }
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.10), radius: 12, y: 4)
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let toast {
+                HStack(spacing: 7) {
+                    Image(systemName: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(toastIsError ? Color.orange : Color.green)
                     Text(toast).font(.system(size: 13, weight: .semibold))
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
@@ -358,6 +381,15 @@ struct CollectionsView: View {
         .onAppear {
             reload()
             processPendingJobs()
+        }
+        .onDisappear { commitPendingDeletion() }
+        .confirmationDialog("删除所选的 \(selection.count) 条收藏？", isPresented: $confirmBatchDelete,
+                            titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                requestDelete(selection)
+                selection = []
+            }
+            Button("取消", role: .cancel) {}
         }
     }
 
@@ -444,7 +476,13 @@ struct CollectionsView: View {
         return LazyVGrid(columns: columns, spacing: 8) {
             treasuryAction("笔记", icon: "square.and.pencil", tint: .indigo, index: 0) { newNote() }
             treasuryAction("粘贴", icon: "doc.on.clipboard", tint: .orange, index: 1) { showImportSheet = true }
-            treasuryAction("扫描", icon: "doc.viewfinder", tint: .teal, index: 2) { showScanner = true }
+            treasuryAction("扫描", icon: "doc.viewfinder", tint: .teal, index: 2) {
+                if VNDocumentCameraViewController.isSupported {
+                    showScanner = true
+                } else {
+                    flash("这台设备不支持文档扫描", isError: true)
+                }
+            }
             Menu {
                 Button { showPhotoPicker = true } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
                 Button { showFileImporter = true } label: { Label("从文件导入", systemImage: "folder") }
@@ -577,15 +615,13 @@ struct CollectionsView: View {
             }
             Divider()
             Button(role: .destructive) {
-                purge([item.id])
+                requestDelete([item.id])
             } label: { Label("删除", systemImage: "trash") }
         }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                purge([item.id])
+                requestDelete([item.id])
             } label: { Label("删除", systemImage: "trash") }
-        }
-        .swipeActions(edge: .trailing) {
             Button {
                 var updated = item
                 updated.archived.toggle()
@@ -598,7 +634,7 @@ struct CollectionsView: View {
             }
             .tint(.gray)
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 sendToAgent(item, prompt: nil)
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
@@ -660,8 +696,7 @@ struct CollectionsView: View {
                     .disabled(selection.isEmpty)
 
                     Button(role: .destructive) {
-                        purge(selection)
-                        selection = []
+                        confirmBatchDelete = true
                     } label: {
                         Label("删除所选", systemImage: "trash")
                     }
@@ -692,7 +727,7 @@ struct CollectionsView: View {
                     Task { @MainActor in
                         reload()
                         processPendingJobs()
-                        flash(added > 0 ? "已收藏 \(added) 条" : "剪贴板里没有可收藏的内容")
+                        flash(added > 0 ? "已收藏 \(added) 条" : "剪贴板里没有可收藏的内容", isError: added == 0)
                     }
                 }
                 .labelStyle(.iconOnly)
@@ -845,7 +880,7 @@ struct CollectionsView: View {
             await MainActor.run {
                 importing = false
                 if made.isEmpty {
-                    flash("没能导入(格式不支持或读取失败)")
+                    flash("没能导入(格式不支持或读取失败)", isError: true)
                 } else {
                     CollectionStore.add(made)
                     reload()
@@ -861,7 +896,26 @@ struct CollectionsView: View {
         let note = CollectedItem.newNote()
         CollectionStore.add([note])
         reload()
+        newNoteID = note.id
         editingNote = note
+    }
+
+    /// 「笔记」先落库再开编辑器;什么都没写就关掉时,别留一条空的「未命名笔记」。
+    private func discardUntouchedNewNote() {
+        guard let id = newNoteID else { return }
+        newNoteID = nil
+        Task { @MainActor in
+            // The editor persists on disappear; let that write land first.
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let note = CollectionStore.load().first(where: { $0.id == id }),
+                  (note.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            if let file = note.bodyFile {
+                let body = await NoteBodyStore.load(file)
+                guard body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            }
+            purge([id])
+        }
     }
 
     /// 批注保存:进条目、也进全文索引(想法本身就该能搜到)。
@@ -879,7 +933,7 @@ struct CollectionsView: View {
     }
 
     private func reload() {
-        items = CollectionStore.load()
+        items = CollectionStore.load().filter { !pendingDeletion.contains($0.id) }
         syncToRelay()
     }
 
@@ -893,6 +947,39 @@ struct CollectionsView: View {
                 .first(where: { $0.relayEventsURL != nil }) else { return }
             await client.syncTreasuryChanges()
         }
+    }
+
+    /// Hide first, tombstone after the undo window. A newer delete commits the
+    /// previous batch so only one undo is ever outstanding.
+    private func requestDelete(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        commitPendingDeletion()
+        if let selectedReadingItemID, ids.contains(selectedReadingItemID) {
+            self.selectedReadingItemID = nil
+        }
+        withAnimation(.spring(duration: 0.35, bounce: 0.25)) { pendingDeletion = ids }
+        reload()
+        pendingDeletionTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled else { return }
+            commitPendingDeletion()
+        }
+    }
+
+    private func undoPendingDeletion() {
+        pendingDeletionTask?.cancel()
+        pendingDeletionTask = nil
+        withAnimation { pendingDeletion = [] }
+        reload()
+    }
+
+    private func commitPendingDeletion() {
+        pendingDeletionTask?.cancel()
+        pendingDeletionTask = nil
+        let ids = pendingDeletion
+        guard !ids.isEmpty else { return }
+        withAnimation { pendingDeletion = [] }
+        purge(ids)
     }
 
     /// 删除条目时把全文索引与系统搜索一并清掉——只删一半会留下
@@ -1076,10 +1163,12 @@ struct CollectionsView: View {
     /// autoHide=false 用于"正在导入…"这类进行中提示:导入 OCR 是串行的,
     /// 九张图要跑十几秒,1.8 秒就消失等于中途界面毫无动静。
     /// toastID 挡竞态:前一条的隐藏任务醒来时若已有新 toast,不许掐掉它。
-    private func flash(_ message: String, autoHide: Bool = true) {
+    private func flash(_ message: String, autoHide: Bool = true, isError: Bool = false) {
         let id = UUID()
         toastID = id
+        toastIsError = isError
         withAnimation(.spring(duration: 0.35, bounce: 0.25)) { toast = message }
+        UIAccessibility.post(notification: .announcement, argument: message)
         guard autoHide else { return }
         Task {
             try? await Task.sleep(nanoseconds: 1_800_000_000)
@@ -1125,7 +1214,7 @@ struct CollectionsView: View {
             case .readInApp(let url):
                 readerTarget = ReaderTarget(url: url)
             case .unopenable:
-                flash("这条链接打不开")
+                flash("这条链接打不开", isError: true)
             }
         }
     }
@@ -1831,6 +1920,18 @@ private struct CollectionPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        if item.kind == .link, let url = URL(string: item.value) {
+            // Safari brings its own bar and close button; wrapping it in a
+            // NavigationStack stacked two bars and two close buttons.
+            LeoReaderView(url: url, preferReaderMode: ReaderTarget(url: url).preferReaderMode,
+                          onFinish: { dismiss() })
+                .ignoresSafeArea()
+        } else {
+            navigationContent
+        }
+    }
+
+    private var navigationContent: some View {
         NavigationStack {
             content
                 .navigationTitle(item.sourceLabel)

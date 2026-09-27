@@ -9,8 +9,9 @@ import SwiftUI
 
 struct MemoryManagementView: View {
     @State private var memoryFiles: [MemoryFileItem] = []
+    @State private var pendingDeleteOffsets: IndexSet?
     @State private var forceSyncToast: String?
-    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
     /// [T-memory-global-toggle-settings-ui-ios] Global default for whether
     /// a NEW session starts with memory enabled. Default true preserves
     /// today's behavior. Already-created sessions keep their own per-
@@ -52,12 +53,27 @@ struct MemoryManagementView: View {
                         }
                     }
                 }
+                // GLOBAL.md can be emptied from its editor but never deleted.
+                .deleteDisabled(file.isGlobal)
             }
             .onDelete { offsets in
-                deleteFiles(at: offsets)
+                pendingDeleteOffsets = offsets
             }
         }
         .navigationTitle("Memory")
+        .alert(String(localized: "Delete this memory file?"),
+               isPresented: Binding(get: { pendingDeleteOffsets != nil },
+                                    set: { if !$0 { pendingDeleteOffsets = nil } })) {
+            Button(String(localized: "Delete"), role: .destructive) {
+                if let offsets = pendingDeleteOffsets { deleteFiles(at: offsets) }
+                pendingDeleteOffsets = nil
+            }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteOffsets = nil }
+        } message: {
+            Text(iCloudSyncEnabled
+                 ? String(localized: "This removes it from this device only. A copy on another iCloud device may sync it back.")
+                 : String(localized: "This cannot be undone."))
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if #available(iOS 17.0, *), iCloudSyncEnabled {
@@ -206,6 +222,8 @@ private struct MemoryFileEditView: View {
     /// refreshes (onAppear / inbound sync) doesn't trip the
     /// `onChange { hasChanges = true }` and leave the Save button stuck.
     @State private var suppressNextChange = false
+    @State private var confirmDiscard = false
+    @Environment(\.dismiss) private var dismiss
 
     private var fileURL: URL {
         AIChatViewModel.minisMemoryPersistentDir.appendingPathComponent(fileName)
@@ -265,6 +283,9 @@ private struct MemoryFileEditView: View {
                 Button("Save") { save() }
             }
         }
+        .confirmDiscardOnBack(hasChanges: hasChanges, isPresented: $confirmDiscard,
+                              onSave: { save(); if !hasChanges { dismiss() } },
+                              onDiscard: { dismiss() })
         .onAppear {
             let fm = FileManager.default
             let exists = fm.fileExists(atPath: fileURL.path)
@@ -272,8 +293,10 @@ private struct MemoryFileEditView: View {
             let sz = (attrs?[.size] as? Int) ?? -1
             let raw = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
             AppLogger(category: "MemoryEdit").info("[MemoryEdit] onAppear file=\(fileName) isGlobal=\(isGlobal) exists=\(exists) bytes=\(sz) contentChars=\(raw.count) path=\(fileURL.path)")
-            suppressNextChange = true
-            content = raw
+            if raw != content {
+                suppressNextChange = true
+                content = raw
+            }
             hasChanges = false
         }
         // Inbound sync / tool writes may update this file while the user is
@@ -331,4 +354,46 @@ extension Notification.Name {
     /// memory_write tool, or by an inbound iCloud sync merge. Observers
     /// can use this to refresh their in-memory snapshot of memory files.
     static let memoryFilesDidChange = Notification.Name("com.leoyuan.leophoneagent.memoryFilesDidChange")
+}
+
+extension View {
+    /// Swaps the system back button for one that asks before throwing away
+    /// unsaved edits. Only when pushed (a split-view detail root has no back
+    /// button to guard) and only while `hasChanges` is true.
+    func confirmDiscardOnBack(hasChanges: Bool, isPresented: Binding<Bool>,
+                              onSave: @escaping () -> Void,
+                              onDiscard: @escaping () -> Void) -> some View {
+        modifier(ConfirmDiscardOnBack(hasChanges: hasChanges, isPresented: isPresented,
+                                      onSave: onSave, onDiscard: onDiscard))
+    }
+}
+
+private struct ConfirmDiscardOnBack: ViewModifier {
+    let hasChanges: Bool
+    @Binding var isPresented: Bool
+    let onSave: () -> Void
+    let onDiscard: () -> Void
+    @Environment(\.isPresented) private var isPushed
+
+    func body(content: Content) -> some View {
+        let guarding = hasChanges && isPushed
+        content
+            .navigationBarBackButtonHidden(guarding)
+            .toolbar {
+                if guarding {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            isPresented = true
+                        } label: {
+                            Label(String(localized: "Back"), systemImage: "chevron.backward")
+                        }
+                    }
+                }
+            }
+            .alert(String(localized: "Discard unsaved changes?"), isPresented: $isPresented) {
+                Button(String(localized: "Save"), action: onSave)
+                Button(String(localized: "Discard"), role: .destructive, action: onDiscard)
+                Button(String(localized: "Keep Editing"), role: .cancel) {}
+            }
+    }
 }

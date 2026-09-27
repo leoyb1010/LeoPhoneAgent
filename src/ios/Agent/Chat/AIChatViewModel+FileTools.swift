@@ -319,8 +319,19 @@ extension AIChatViewModel {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let path = dict["path"] as? String,
-              let content = dict["content"] as? String else {
+              var content = dict["content"] as? String else {
             return FileToolResult(output: "Error: Missing required 'path' and/or 'content' parameters", success: false)
+        }
+
+        var restoredNote = ""
+        switch await resolveOffloadPlaceholders(in: content, field: "content") {
+        case .clean: break
+        case .resolved(let restored):
+            content = restored
+            restoredNote = " — offload placeholder replaced with the saved content"
+        case .rejected(let message):
+            logger.warning("[FileWrite] rejected offload placeholder path=\(path)")
+            return FileToolResult(output: message, success: false)
         }
 
         #if DEBUG
@@ -506,7 +517,7 @@ extension AIChatViewModel {
 
         let bytesWritten = contentData.count
         let action = appendMode ? "Appended" : "Wrote"
-        var result = "\(action) to \(path) (\(bytesWritten) bytes)"
+        var result = "\(action) to \(path) (\(bytesWritten) bytes)\(restoredNote)"
         if let minisURL = linuxPathToMinisURL(path) {
             result += "\nminis_url: \(minisURL)"
         }
@@ -518,8 +529,16 @@ extension AIChatViewModel {
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let path = dict["path"] as? String,
               let oldString = dict["old_string"] as? String,
-              let newString = dict["new_string"] as? String else {
+              var newString = dict["new_string"] as? String else {
             return FileToolResult(output: "Error: Missing required parameters (path, old_string, new_string)", success: false)
+        }
+
+        switch await resolveOffloadPlaceholders(in: newString, field: "new_string") {
+        case .clean: break
+        case .resolved(let restored): newString = restored
+        case .rejected(let message):
+            logger.warning("[FileEdit] rejected offload placeholder path=\(path)")
+            return FileToolResult(output: message, success: false)
         }
 
         // Pre-reject edits to read-only mounts via Linux path first — immune
@@ -654,6 +673,20 @@ extension AIChatViewModel {
             result += "\nminis_url: \(minisURL)"
         }
         return FileToolResult(output: result, success: true)
+    }
+
+    /// Reads back the content behind `[CONTEXT OFFLOADED]` stubs (only from
+    /// the offloads dir the stubs point at) and runs the placeholder guard.
+    private func resolveOffloadPlaceholders(in text: String, field: String) async -> OffloadPlaceholderGuard.Outcome {
+        var contents: [String: String] = [:]
+        for path in OffloadPlaceholderGuard.referencedContentPaths(in: text)
+        where contents[path] == nil && path.hasPrefix(Self.minisOffloadsLinuxDir + "/") && !path.contains("..") {
+            if let url = await resolvePathForDirectRead(path),
+               let saved = try? String(contentsOf: url, encoding: .utf8) {
+                contents[path] = saved
+            }
+        }
+        return OffloadPlaceholderGuard.check(text, field: field, contents: contents)
     }
 
     /// Find every (non-overlapping) range of `needle` in `haystack`,

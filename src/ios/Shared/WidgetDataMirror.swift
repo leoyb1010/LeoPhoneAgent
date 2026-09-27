@@ -26,18 +26,23 @@ enum WidgetDataMirror {
     @discardableResult
     @MainActor
     static func recordBriefing(taskName: String, sessionId: String, runId: String) async -> Bool {
-        guard !BackgroundKeepAliveManager.shared.liveActivityPrivacyMode else {
-            logger.info("briefing skipped (privacy mode) session=\(sessionId.prefix(8))")
-            return false
-        }
         guard let receipt = AgentActivityLog.shared.runState(runId: runId),
               receipt.sessionId == sessionId, receipt.phase == .completed else { return false }
         if let existing = WidgetBriefingStore.load(), existing.generatedAt > receipt.updatedAt {
             return true // a newer completed run already owns the briefing slot
         }
-        let text = await AgentRunResultReader.text(sessionId: sessionId, runId: runId)
-        let summary = text.isEmpty
-            ? String(localized: "任务已完成，可打开对话查看执行记录。") : text
+        // Privacy Mode / a Face ID–locked session: publish a card that only
+        // says it is ready, so the widget isn't stuck on "tap Generate".
+        let redact = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+            || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
+        let summary: String
+        if redact {
+            summary = String(localized: "已生成 · 打开 App 查看")
+        } else {
+            let text = await AgentRunResultReader.text(sessionId: sessionId, runId: runId)
+            summary = text.isEmpty
+                ? String(localized: "任务已完成，可打开对话查看执行记录。") : text
+        }
 
         WidgetBriefingStore.save(WidgetBriefing(
             // [T-briefing-timestamp] Use the reply's own timestamp. Using
@@ -94,10 +99,6 @@ enum WidgetDataMirror {
                 continue
             }
             guard outcome.canPublishBriefing else { continue }
-            if BackgroundKeepAliveManager.shared.liveActivityPrivacyMode {
-                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
-                continue
-            }
             if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId, runId: state.runId) {
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
                 // [T-scheduled-report] Close the loop for scheduled runs: the
@@ -229,10 +230,12 @@ enum WidgetDataMirror {
         let recent = snapshots
             .sorted { $0.artifact.updatedAt > $1.artifact.updatedAt }
             .prefix(8)
+        let lockStore = SessionLockStore.shared
         let items = recent.map { snap in
             WidgetArtifactItem(
                 id: snap.artifact.id,
-                title: redacted ? kindLabel(snap.artifact.kind) : snap.artifact.title,
+                title: redacted || lockStore.isHiddenFromSystemSurfaces(snap.artifact.sessionId)
+                    ? kindLabel(snap.artifact.kind) : snap.artifact.title,
                 kind: snap.artifact.kind.rawValue,
                 sessionId: snap.artifact.sessionId,
                 updatedAt: snap.artifact.updatedAt,
@@ -273,5 +276,37 @@ enum WidgetDataMirror {
         await refreshUsage()
         refreshMemory()
         await refreshArtifacts()
+        applyPrivacyToMirroredContent()
+    }
+
+    /// Re-redacts content that was mirrored before Privacy Mode was turned on
+    /// or a session was Face ID–locked. The recent-sessions list is otherwise
+    /// only rewritten when the session list changes.
+    @MainActor
+    static func applyPrivacyToMirroredContent() {
+        let privacy = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+        let lockStore = SessionLockStore.shared
+        let current = WidgetRecentSessionsStore.load()
+        var items = current.filter { !lockStore.isHiddenFromSystemSurfaces($0.id) }
+        if privacy {
+            items = items.map { item in
+                var item = item
+                item.title = String(localized: "Conversation")
+                return item
+            }
+        }
+        if items != current {
+            WidgetRecentSessionsStore.save(items)
+            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.recentSessions)
+        }
+        let redactedSummary = String(localized: "已生成 · 打开 App 查看")
+        if var briefing = WidgetBriefingStore.load(),
+           privacy || lockStore.isHiddenFromSystemSurfaces(briefing.sessionId),
+           briefing.summary != redactedSummary {
+            briefing.summary = redactedSummary
+            WidgetBriefingStore.save(briefing)
+            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.briefing)
+            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+        }
     }
 }

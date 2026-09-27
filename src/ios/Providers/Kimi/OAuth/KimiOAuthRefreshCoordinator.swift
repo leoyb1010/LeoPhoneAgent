@@ -4,7 +4,7 @@ import Foundation
 
 /// Persisted Kimi Code OAuth credentials. Kept UIKit-free (this file compiles
 /// into the unit-test target) so the refresh-race logic below is testable in
-/// isolation. Mirrors `ClaudeTokenStorage`, plus the RFC 8628 device identity.
+/// isolation. Carries the RFC 8628 device identity alongside the tokens.
 struct KimiTokenStorage: Codable {
     let accessToken: String
     let refreshToken: String?
@@ -28,21 +28,25 @@ struct KimiTokenStorage: Codable {
 /// delete it). All I/O is injected so the test drives credential state
 /// deterministically without touching the real Keychain.
 ///
-/// This is a deliberate copy of `ClaudeOAuthRefreshCoordinator`'s shape: the
-/// compare-before-delete guard is the load-bearing correctness requirement for
-/// Kimi too, and reusing the proven contract avoids re-deriving it.
+/// Same contract as `OAuthRefreshCoordinator`: the compare-before-delete guard
+/// is the load-bearing correctness requirement.
 enum KimiOAuthRefreshCoordinator {
+
+    private static let providerName = "Kimi"
 
     /// Classify a refresh error as "refresh token itself invalid" (revoked /
     /// reused / expired → clear credentials) vs transient (network → keep).
     /// Pure + in the test target so both the coordinator and its tests share
     /// one classification.
+    /// Only an explicit OAuth error code counts; a bare HTTP status or a body
+    /// that merely mentions "refresh_token" stays transient.
+    static let fatalErrorCodes: Set<String> = [
+        "invalid_grant", "invalid_token", "invalid_request",
+        "unauthorized_client", "refresh_token_reused", "expired_token",
+    ]
+
     static func isRefreshTokenInvalid(_ error: LLMError) -> Bool {
-        guard case .providerError(let message) = error else { return false }
-        let msg = message.lowercased()
-        return msg.contains("400") || msg.contains("401") || msg.contains("403")
-            || msg.contains("invalid_grant") || msg.contains("refresh_token_reused")
-            || msg.contains("refresh_token")
+        OAuthRefreshErrorClassifier.isTokenInvalid(error, fatalErrorCodes: fatalErrorCodes)
     }
 
     /// Decide what storage to use (or whether to clear credentials) after a
@@ -71,18 +75,20 @@ enum KimiOAuthRefreshCoordinator {
                 log?("Stale invalid_grant ignored — token already rotated; keeping new credentials")
                 return current
             }
-            log?("Refresh token invalid, clearing credentials: \(llmError)")
+            let summary = OAuthRefreshErrorClassifier.userFacingSummary(llmError)
+            log?("Refresh token invalid, clearing credentials: \(summary)")
             deleteCredentials()
-            throw LLMError.invalidAPIKey(detail: "Kimi: refresh token invalid — \(llmError)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
         }
 
         // Non-fatal (network / transient). Prefer whatever is now stored (a
         // concurrent winner may have refreshed); else keep the caller's copy.
         let fallback = current ?? existingStorage
-        log?("Refresh failed, keeping existing token: \(error)")
+        let summary = OAuthRefreshErrorClassifier.userFacingSummary(error)
+        log?("Refresh failed, keeping existing token: \(summary)")
         if fallback.isExpired {
             log?("Existing token is also expired — re-auth required")
-            throw LLMError.invalidAPIKey(detail: "Kimi: token expired and refresh failed — \(error)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Could not renew the \(providerName) sign-in right now. Check your connection and try again.") + " (\(summary))")
         }
         return fallback
     }

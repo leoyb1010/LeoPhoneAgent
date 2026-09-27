@@ -19,48 +19,22 @@ private let geminiStreamingSession: URLSession = {
 
 /// LLMProvider implementation for Google Gemini models.
 /// Calls the Gemini REST API directly via URLSession (no SDK dependency).
-/// Supports both API key and OAuth Bearer token authentication.
+/// Authenticates with a Google AI Studio API key.
 final class GeminiProvider: LLMProvider {
     let name = "Google"
     var model: LLMModel
 
     private static let defaultBasePath = "https://generativelanguage.googleapis.com/v1beta"
     private let basePath: String
-    private let cloudCodeBase = "https://cloudcode-pa.googleapis.com/v1internal"
-    private let authMode: GeminiAuthMode
-
-    /// GCP project ID for Cloud Code Assist routing. Set externally after OAuth + project discovery.
-    var gcpProjectID: String?
+    private let apiKey: String
 
     /// Extra generation config fields to merge into `generationConfig` (e.g. aspect ratio, resolution).
     /// Set by callers like ModelUseOffloadBridge before calling sendMessage.
     var extraGenerationConfig: [String: Any]?
 
-
-    /// Stable session ID for Cloud Code Assist (persists for the lifetime of this provider instance).
-    private let sessionId = UUID().uuidString
-
-
-    /// When true, requests route through Cloud Code Assist (cloudcode-pa.googleapis.com).
-    private var useCloudCode: Bool {
-        if case .oauth = authMode, gcpProjectID != nil { return true }
-        return false
-    }
-
-    enum GeminiAuthMode {
-        case apiKey(String)
-        case oauth(() async throws -> String)
-    }
-
     init(apiKey: String, model: LLMModel = .gemini25Flash, customBasePath: String? = nil) {
         self.model = model
-        self.authMode = .apiKey(apiKey)
-        self.basePath = customBasePath ?? Self.defaultBasePath
-    }
-
-    init(oauthTokenProvider: @escaping () async throws -> String, model: LLMModel = .gemini25Flash, customBasePath: String? = nil) {
-        self.model = model
-        self.authMode = .oauth(oauthTokenProvider)
+        self.apiKey = apiKey
         self.basePath = customBasePath ?? Self.defaultBasePath
     }
 
@@ -443,25 +417,8 @@ final class GeminiProvider: LLMProvider {
     }
 
     private func buildRequest(path: String, body: [String: Any]) async throws -> URLRequest {
-        let urlString: String
-        let finalBody: [String: Any]
-
-        if useCloudCode {
-            // Cloud Code Assist endpoint — `<base>:<method>` (Google method syntax,
-            // not a path segment). Pass the colon-form as a single trailing
-            // segment so URLBuilding.join doesn't tokenize it.
-            urlString = URLBuilding.join(cloudCodeBase + ":" + path)
-            finalBody = wrapCloudCodeBody(body)
-        } else {
-            switch authMode {
-            case .apiKey(let key):
-                let separator = path.contains("?") ? "&" : "?"
-                urlString = URLBuilding.join(basePath, "models", "\(model.id):\(path)\(separator)key=\(key)")
-            case .oauth:
-                urlString = URLBuilding.join(basePath, "models", "\(model.id):\(path)")
-            }
-            finalBody = body
-        }
+        let separator = path.contains("?") ? "&" : "?"
+        let urlString = URLBuilding.join(basePath, "models", "\(model.id):\(path)\(separator)key=\(apiKey)")
 
         guard let url = URL(string: urlString) else {
             throw LLMError.providerError(message: "Invalid Gemini API URL")
@@ -470,76 +427,16 @@ final class GeminiProvider: LLMProvider {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        if case .oauth(let tokenProvider) = authMode {
-            let token = try await tokenProvider()
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        if useCloudCode {
-            // Cloud Code Assist (OAuth) requires the identity-locked GeminiCLI UA.
-            applyGeminiCLIHeaders(&request)
-        } else {
-            // Direct REST (api-key / manual-token) path sets no UA otherwise, so
-            // URLSession would send its build-number default. Use the app default
-            // (LeoPhoneAgent/<marketing>) instead. Never overrides the Cloud Code UA above.
-            request.setValue(MinisUserAgent.default, forHTTPHeaderField: "User-Agent")
-        }
+        // Without an explicit UA URLSession sends its build-number default.
+        request.setValue(MinisUserAgent.default, forHTTPHeaderField: "User-Agent")
 
         // sortedKeys: stable byte-level prefix so server-side prompt caches
         // (Gemini implicit cache, disk-cached providers, etc.) can match across calls.
-        request.httpBody = try JSONSerialization.data(withJSONObject: finalBody, options: [.sortedKeys])
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         return request
     }
 
-    // MARK: - Cloud Code Assist Helpers
-
-    /// Client metadata for Cloud Code Assist — matches Gemini CLI's enum values.
-    private let cloudCodeClientMetadata: [String: String] = [
-        "ideType": "GEMINI_CLI",
-        "platform": "DARWIN_ARM64",
-        "pluginType": "GEMINI",
-    ]
-
-    /// Apply Gemini CLI-compatible headers for Cloud Code Assist requests.
-    /// User-Agent + Client-Metadata are set — the OAuth2 Bearer token is added separately in buildRequest().
-    private func applyGeminiCLIHeaders(_ request: inout URLRequest) {
-        request.setValue("GeminiCLI/0.30.0/\(model.id) (darwin; arm64)", forHTTPHeaderField: "User-Agent")
-        if let metadataJSON = try? JSONSerialization.data(withJSONObject: cloudCodeClientMetadata),
-           let metadataStr = String(data: metadataJSON, encoding: .utf8) {
-            request.setValue(metadataStr, forHTTPHeaderField: "Client-Metadata")
-        }
-    }
-
-    /// Generate a short random hex prompt ID matching Gemini CLI format:
-    /// `Math.random().toString(16).slice(2)` → e.g. "a1b2c3d4e5f67"
-    private func generatePromptId() -> String {
-        let hex = String(UInt64.random(in: 0...UInt64.max), radix: 16)
-        return String(hex.prefix(13))
-    }
-
-    /// Wrap the standard Gemini request body in the Cloud Code Assist envelope (Gemini CLI format).
-    private func wrapCloudCodeBody(_ body: [String: Any]) -> [String: Any] {
-        var request = body
-        request["session_id"] = sessionId
-        return [
-            "model": model.id,
-            "project": gcpProjectID!,
-            "user_prompt_id": generatePromptId(),
-            "request": request,
-        ]
-    }
-
     // MARK: - Response Parsing
-
-    /// Unwrap Cloud Code Assist envelope if present.
-    /// Cloud Code wraps: `{ "response": { "candidates": [...] } }` instead of `{ "candidates": [...] }`.
-    private func unwrapCloudCodeResponse(_ json: [String: Any]) -> [String: Any] {
-        if useCloudCode, let inner = json["response"] as? [String: Any] {
-            return inner
-        }
-        return json
-    }
 
     /// Parsed function call from a response, including optional thought signature.
     struct ParsedFunctionCall {
@@ -548,7 +445,7 @@ final class GeminiProvider: LLMProvider {
     }
 
     private func extractResponseContent(_ json: [String: Any]) -> (text: String, functionCalls: [ParsedFunctionCall], media: [LLMMediaAttachment]) {
-        let effective = unwrapCloudCodeResponse(json)
+        let effective = json
         guard let candidates = effective["candidates"] as? [[String: Any]],
               let first = candidates.first,
               let content = first["content"] as? [String: Any],
@@ -586,7 +483,7 @@ final class GeminiProvider: LLMProvider {
     }
 
     private func extractUsage(_ json: [String: Any]) -> LLMUsage? {
-        let effective = unwrapCloudCodeResponse(json)
+        let effective = json
         guard let usage = effective["usageMetadata"] as? [String: Any] else { return nil }
         let input = usage["promptTokenCount"] as? Int ?? 0
         let output = usage["candidatesTokenCount"] as? Int ?? 0
@@ -597,7 +494,7 @@ final class GeminiProvider: LLMProvider {
     /// Parse a single SSE chunk from streaming response into events.
     private func parseStreamChunk(_ json: [String: Any]) -> [GeminiStreamEvent] {
         var events: [GeminiStreamEvent] = []
-        let effective = unwrapCloudCodeResponse(json)
+        let effective = json
 
         guard let candidates = effective["candidates"] as? [[String: Any]],
               let first = candidates.first,
@@ -653,7 +550,7 @@ final class GeminiProvider: LLMProvider {
         let usage = extractUsage(json)
 
         // Check finish reason
-        let effective = unwrapCloudCodeResponse(json)
+        let effective = json
         var finishReason: String? = nil
         if let candidates = effective["candidates"] as? [[String: Any]],
            let first = candidates.first {
@@ -741,10 +638,6 @@ final class GeminiProvider: LLMProvider {
     private func logRequest(_ body: [String: Any]) {
         var parts: [String] = ["📤 Gemini Request"]
         parts.append("  model: \(model.id)")
-        parts.append("  endpoint: \(useCloudCode ? "Cloud Code Assist" : "standard")")
-        if useCloudCode, let project = gcpProjectID {
-            parts.append("  project: \(project)")
-        }
         if let contents = body["contents"] as? [[String: Any]] {
             parts.append("  messages: \(contents.count)")
         }

@@ -6,7 +6,7 @@ import { ScheduleRunner } from '../local/ScheduleRunner';
 import { startBody } from '../net/OutboundClient';
 import { gatewayStore } from '../store/GatewayStore';
 import { scheduleStore } from '../store/ScheduleStore';
-import { sessionStore } from '../store/SessionStore';
+import { SessionStore, sessionStore } from '../store/SessionStore';
 import { themeStore } from '../store/ThemeStore';
 import { UiState } from '../store/UiState';
 import { PushRegistrar } from '../push/PushRegistrar';
@@ -76,7 +76,7 @@ export default class EntryAbility extends UIAbility {
   private takeOpen(want: Want): void {
     const params = want.parameters;
     const id = params ? `${params['openSession'] ?? ''}` : '';
-    if (id.length > 0) {
+    if (SessionStore.validId(id)) {
       AppStorage.setOrCreate('openSession', id);
     }
   }

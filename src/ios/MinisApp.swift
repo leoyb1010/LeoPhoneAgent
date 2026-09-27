@@ -98,7 +98,6 @@ struct MinisApp: App {
     /// presenting `WebAppWebViewScreen`. Cleared when the user dismisses the
     /// immersive WebView (back-edge swipe / programmatic dismiss).
     @State private var pendingWebAppPresentation: WebAppPresentation?
-    @State private var pendingURLWhileLocked: URL?
     @State private var isPresentingReleaseNotes = false
 
     #if DEBUG
@@ -173,23 +172,12 @@ struct MinisApp: App {
                 // copy). It lays itself out full-screen (bottom-trailing capsule +
                 // tap-to-dismiss catcher), so no positioning wrapper here.
                 SpeechPlayerControl()
-                AppLockOverlay()
+                // The lock screen lives in its own window above every sheet
+                // (AppLockWindowController, attached by SceneDelegate).
             }
                 .offloadPermissionDialog(isEnabled: !sessionLockStore.appIsLocked)
-                .onReceive(SessionLockStore.shared.$appIsLocked) { locked in
-                    guard !locked, let url = pendingURLWhileLocked else { return }
-                    pendingURLWhileLocked = nil
-                    if ExternalFileImporter.canIngest(url) {
-                        ExternalFileImporter.ingest(url, into: shareCoordinator)
-                        return
-                    }
-                    // [T-whatsnew-hide] 真机巡检用:先收起「本次更新」再打开别的页面。只收起、不记成已读,
-                    // 下次冷启动还会再弹,不会让你错过这一版的说明。
-                    if url.host == "whatsnew", url.path == "/hide" {
-                        isPresentingReleaseNotes = false
-                        return
-                    }
-                    DeepLinkRouter.handle(url: url, shareCoordinator: shareCoordinator)
+                .onReceive(NotificationCenter.default.publisher(for: .hideReleaseNotesRequested)) { _ in
+                    isPresentingReleaseNotes = false
                 }
                 // Force a full ContentView rebuild whenever the user-selected
                 // language changes. Without this, SwiftUI keeps Text/Label
@@ -236,22 +224,7 @@ struct MinisApp: App {
                 .dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
                 .onOpenURL { url in
                     shareLog.info("[Share] onOpenURL scheme=\(url.scheme ?? "nil") host=\(url.host ?? "nil")")
-                    guard !SessionLockStore.shared.appIsLocked else {
-                        shareLog.info("[Share] onOpenURL deferred — app is locked")
-                        pendingURLWhileLocked = url
-                        return
-                    }
-                    if ExternalFileImporter.canIngest(url) {
-                        ExternalFileImporter.ingest(url, into: shareCoordinator)
-                        return
-                    }
-                    // [T-whatsnew-hide] 真机巡检用:先收起「本次更新」再打开别的页面。只收起、不记成已读,
-                    // 下次冷启动还会再弹,不会让你错过这一版的说明。
-                    if url.host == "whatsnew", url.path == "/hide" {
-                        isPresentingReleaseNotes = false
-                        return
-                    }
-                    DeepLinkRouter.handle(url: url, shareCoordinator: shareCoordinator)
+                    AppURLEntry.open(url, source: "onOpenURL")
                 }
                 // Fullscreen immersive WebView for HTML web-app shortcuts.
                 // Driven by `.openWebAppDeepLink` (posted by DeepLinkRouter
@@ -512,8 +485,6 @@ struct MinisApp: App {
                         let hasKey = ProviderKeychainHelper.loadAPIKey(instanceId: inst.id) != nil
                         let hasOAuthTok: Bool
                         switch inst.type {
-                        case .anthropic: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: ClaudeTokenStorage.self) != nil
-                        case .gemini: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: GeminiTokenStorage.self) != nil
                         case .openAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: CodexTokenStorage.self) != nil
                         case .xAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: XAITokenStorage.self) != nil
                         case .kimiCode: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: KimiTokenStorage.self) != nil

@@ -101,6 +101,12 @@ final class SessionLockStore: ObservableObject {
                 self?.publishSettingsChangeIfNeeded()
             }
         }
+        // Lock badges render as locked while the probe is pending; re-render
+        // once it resolves so a passcode-less device drops them.
+        Task { @MainActor [weak self] in
+            _ = await BiometricAuth.resolveAvailability()
+            self?.objectWillChange.send()
+        }
     }
 
     private static func settingsSnapshot(from defaults: UserDefaults) -> SettingsSnapshot {
@@ -174,7 +180,7 @@ final class SessionLockStore: ObservableObject {
     /// Used by the chat-list row, the chat-screen gate overlay, and the
     /// navbar title blur — kept here so all three sites stay in sync.
     func isVisuallyLocked(_ sessionId: String) -> Bool {
-        guard globalEnabled, BiometricAuth.isAvailable else { return false }
+        guard globalEnabled, BiometricAuth.isAvailableOrUnknown else { return false }
         guard isLocked(sessionId) else { return false }
         return !isCurrentlyUnlocked(sessionId)
     }
@@ -187,6 +193,11 @@ final class SessionLockStore: ObservableObject {
         if lockedSessionIds.insert(sessionId).inserted {
             unlockedAt.removeValue(forKey: sessionId)
             persistLocked()
+            if globalEnabled {
+                SessionSpotlightIndexer.remove(sessionId: sessionId)
+                WidgetDataMirror.applyPrivacyToMirroredContent()
+                Task { await WidgetDataMirror.refreshArtifacts() }
+            }
         }
     }
 
@@ -279,8 +290,26 @@ final class SessionLockStore: ObservableObject {
     /// every check.
     func isProtectionActive(for sessionId: String) -> Bool {
         guard globalEnabled else { return false }
-        guard BiometricAuth.isAvailable else { return false }
+        guard BiometricAuth.isAvailableOrUnknown else { return false }
         return isLocked(sessionId)
+    }
+
+    /// Locked sessions must stay off every surface outside the gated chat
+    /// screen (Spotlight, widgets, Shortcuts results, notifications, exports),
+    /// regardless of the in-app unlock window: those surfaces are readable
+    /// without passing the app's own Face ID gate.
+    func isHiddenFromSystemSurfaces(_ sessionId: String) -> Bool {
+        globalEnabled && isLocked(sessionId)
+    }
+
+    /// Thread-agnostic read of the same rule for background intent / indexer
+    /// code that is not on the main actor.
+    nonisolated static func isHiddenFromSystemSurfaces(_ sessionId: String) -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: SessionLockDefaultsKey.enabled),
+              let data = defaults.data(forKey: SessionLockDefaultsKey.lockedIds),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return false }
+        return ids.contains(sessionId)
     }
 
     // MARK: - App-level lock
@@ -326,7 +355,9 @@ final class SessionLockStore: ObservableObject {
     @Published private(set) var appIsLocked: Bool = {
         guard UserDefaults.standard.bool(forKey: SessionLockDefaultsKey.appLockEnabled) else { return false }
         return true
-    }()
+    }() {
+        didSet { if !appIsLocked { drainDeferredWork() } }
+    }
 
     /// Call on app launch and foreground return to evaluate lock state.
     func evaluateAppLock() {
@@ -336,7 +367,21 @@ final class SessionLockStore: ObservableObject {
         let backgroundedFor: TimeInterval? = appBackgroundedAt.map { Date().timeIntervalSince($0) }
         appBackgroundedAt = nil
 
-        guard appLockEnabled, BiometricAuth.isAvailable else {
+        guard appLockEnabled else {
+            appIsLocked = false
+            return
+        }
+        // Until the capability probe lands we cannot tell "no passcode" from
+        // "not probed yet"; stay locked and decide once it resolves.
+        guard BiometricAuth.isResolved else {
+            appIsLocked = true
+            Task { @MainActor in
+                _ = await BiometricAuth.resolveAvailability()
+                self.evaluateAppLock()
+            }
+            return
+        }
+        guard BiometricAuth.isAvailable else {
             appIsLocked = false
             return
         }
@@ -372,6 +417,31 @@ final class SessionLockStore: ObservableObject {
     func noteAppUnlock() {
         appUnlockedAt = Date()
         appIsLocked = false
+    }
+
+    // MARK: - Work deferred while locked
+
+    private var deferredWhileLocked: [@MainActor () -> Void] = []
+
+    /// Run `work` now, or once the app lock is lifted. Every external entry
+    /// (URLs, Spotlight, notification taps, intents that open UI) goes through
+    /// here so nothing surfaces content behind the lock screen.
+    func runWhenUnlocked(_ work: @escaping @MainActor () -> Void) {
+        guard appIsLocked else { work(); return }
+        // Keep the queue bounded; only the most recent entries matter.
+        if deferredWhileLocked.count >= 8 { deferredWhileLocked.removeFirst() }
+        deferredWhileLocked.append(work)
+    }
+
+    private func drainDeferredWork() {
+        guard !appIsLocked, !deferredWhileLocked.isEmpty else { return }
+        let work = deferredWhileLocked
+        deferredWhileLocked.removeAll()
+        // Let the lock window hide and the root view re-activate first.
+        Task { @MainActor in
+            await Task.yield()
+            for item in work { item() }
+        }
     }
 
     /// [T-applock-repeated-faceid] Note that the app entered background. Records
@@ -478,6 +548,42 @@ enum BiometricAuth {
     static var isAvailable: Bool {
         lock.lock(); defer { lock.unlock() }
         return _cached?.available ?? false
+    }
+
+    /// Whether the launch probe has finished.
+    static var isResolved: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return _cached != nil
+    }
+
+    /// Lock gates must fail closed: before the probe lands, treat
+    /// authentication as available so locked content stays covered.
+    static var isAvailableOrUnknown: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return _cached?.available ?? true
+    }
+
+    /// Resolve the capability without blocking the main thread.
+    static func resolveAvailability() async -> Bool {
+        lock.lock()
+        if let c = _cached { lock.unlock(); return c.available }
+        lock.unlock()
+        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                cont.resume(returning: cached().available)
+            }
+        }
+    }
+
+    /// Gate for settings that lower protection (turning off Face ID / app
+    /// lock, "never" re-lock, full-auto approvals, allow-all). A device with no
+    /// passcode at all has nothing to authenticate against, so it passes.
+    @MainActor
+    static func authorizeLoweringProtection(reason: String) async -> Bool {
+        let ctx = LAContext()
+        var err: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return true }
+        return await authenticate(reason: reason)
     }
 
     /// Localized name of the available biometric mechanism — "Face ID",

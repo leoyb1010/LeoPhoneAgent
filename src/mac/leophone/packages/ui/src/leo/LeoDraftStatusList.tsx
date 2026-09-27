@@ -75,7 +75,7 @@ function LeoDraftStatusListBody({
                     task.unreadAt,
                   )
                 }
-                className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-150 hover:bg-hover"
+                className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:bg-hover focus-visible:outline-2! focus-visible:-outline-offset-2! focus-visible:outline-brand!"
               >
                 <span
                   aria-hidden="true"

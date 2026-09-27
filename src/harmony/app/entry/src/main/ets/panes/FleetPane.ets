@@ -20,6 +20,7 @@ export struct FleetPane {
   @State message: string = '';
   @State hosts: SavedHost[] = [];
   @State busy: boolean = false;
+  @State joining: boolean = false;
   @State ready: boolean = false;
   @State setupOpen: boolean = true;
 
@@ -319,13 +320,39 @@ export struct FleetPane {
   }
 
   private async joinPair(): Promise<void> {
-    const ctx = getContext(this) as common.UIAbilityContext;
-    await gatewayStore.ensureLoaded(ctx);
-    this.message = await gatewayStore.scanPairCode(this.pairDraft, (text: string) => {
-      this.message = text;
-    });
-    this.hosts = gatewayStore.hosts.slice();
-    await gatewayStore.save(ctx);
+    if (this.joining) {
+      return;
+    }
+    this.joining = true;
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      await gatewayStore.ensureLoaded(ctx);
+      const other = gatewayStore.pairSwitchesRelay(this.pairDraft);
+      if (other.length > 0 && !await this.confirmSwitch(other)) {
+        this.message = '没加入,还在用原来的中继';
+        return;
+      }
+      this.message = await gatewayStore.scanPairCode(this.pairDraft, (text: string) => {
+        this.message = text;
+      });
+      this.hosts = gatewayStore.hosts.slice();
+      await gatewayStore.save(ctx);
+    } finally {
+      this.joining = false;
+    }
+  }
+
+  private async confirmSwitch(root: string): Promise<boolean> {
+    try {
+      const picked = await promptAction.showDialog({
+        title: '换一台中继?',
+        message: `这张码来自另一台中继:${root}\n加入后会改用它,原来中继上的机器要重新配对。只在你确定这张码是自己的 Mac 出的时候才继续。`,
+        buttons: [{ text: '换过去', color: '#D94B16' }, { text: '取消', color: '#007AFF' }]
+      });
+      return picked.index === 0;
+    } catch (_err) {
+      return false;
+    }
   }
 
   private async refresh(): Promise<void> {

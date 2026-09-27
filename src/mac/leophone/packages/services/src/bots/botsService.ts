@@ -1719,7 +1719,7 @@ export function createBotsService(
       () => [],
     );
     const resolvedProvider = normalizeAgentProviderToZCodeAgent(activeTask.provider);
-    // Bot 硬锁 yolo：继承当前 task 时也强制 yolo，不沿用原 task 的 mode。
+    // [leo] Bot 锁定 BOT_FORCED_MODE(build)：继承当前 task 时也强制，不沿用原 task 的 mode。
     const forcedMode = resolveSupportedDraftMode(configOptions, BOT_FORCED_MODE, resolvedProvider);
     const currentModel = readCurrentActiveTaskModel(activeTask, configOptions);
     const parsedSelection = currentModel ? parseBotModelOptionValue(currentModel) : undefined;
@@ -1822,8 +1822,8 @@ export function createBotsService(
     const modeOption = configOptions.find(
       (option) => option.category === "mode" && option.type === "select",
     );
-    // Bot 硬锁 yolo：无论草稿/继承的 mode 是什么，建 task 时一律下发 yolo。
-    // 这是 mode 真正进入 agent session 的唯一咽喉，保证任何 bot task 都免交互权限。
+    // [leo] Bot 锁定 BOT_FORCED_MODE(build)：无论草稿/继承的 mode 是什么，建 task 时一律下发。
+    // 这是 mode 真正进入 agent session 的唯一咽喉，保证任何 bot task 的危险动作都要批。
     const forcedDraftMode = resolveSupportedDraftMode(
       configOptions,
       BOT_FORCED_MODE,
@@ -1836,10 +1836,10 @@ export function createBotsService(
         mode: forcedDraftMode as ZCodeTaskMode,
       });
     } else if (modeOption?.id) {
-      // provider 不支持 yolo（非 ZCode Agent）：保持其自身默认模式，避免首条消息回调失败。
+      // provider 不支持该模式（非 ZCode Agent）：保持其自身默认模式，避免首条消息回调失败。
       botsLogger.debug(
         traceId,
-        `skip forced yolo mode unsupported provider=${draftOptions.provider}`,
+        `skip forced bot mode unsupported provider=${draftOptions.provider}`,
       );
     }
   }
@@ -5805,7 +5805,7 @@ export function createBotsService(
             const auth = await withAuthorizedContext(message, commandName);
             if (!auth.ok) return auth.reply;
             if (command.type === "mode.list") {
-              // Bot 硬锁 yolo：不提供模式选择。
+              // [leo] Bot 锁定 build：不提供模式选择。
               return [createOutbound(message.actor, msg(auth.locale, "modeLocked"))];
             }
             if (await isContextActiveTaskRunning(auth.context)) {
@@ -5920,7 +5920,7 @@ export function createBotsService(
             const auth = await withAuthorizedContext(message, commandName);
             if (!auth.ok) return auth.reply;
             if (command.type === "mode.set") {
-              // Bot 硬锁 yolo：拒绝任何模式切换请求。
+              // [leo] Bot 锁定 build：拒绝任何模式切换请求。
               return [createOutbound(message.actor, msg(auth.locale, "modeLocked"))];
             }
             if (await isContextActiveTaskRunning(auth.context)) {

@@ -282,8 +282,14 @@ struct AddProviderPage {
               .width('100%')
               .padding({ top: 4, bottom: 8 })
             }
+            if (this.type === 'openCodeGo') {
+              Text('在 opencode.ai/auth 登录后复制 API Key（需要 OpenCode Go 会员）。根地址保持默认即可。')
+                .fontSize(12)
+                .fontColor(Tokens.muted)
+                .padding({ top: 4, bottom: 8 })
+            }
             if (this.type === 'anthropic') {
-              Text('官方 Messages API 这一版走 OpenAI 兼容根。直连 api.anthropic.com 需要兼容网关。')
+              Text('填 Anthropic 控制台的 API Key，直连 api.anthropic.com 走官方 Messages API。Claude 订阅登录不再提供：要用订阅，远控 Mac 上你自己登录的官方 claude。')
                 .fontSize(12)
                 .fontColor(Tokens.muted)
                 .padding({ top: 4, bottom: 8 })

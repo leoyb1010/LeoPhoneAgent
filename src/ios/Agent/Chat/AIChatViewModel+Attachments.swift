@@ -525,3 +525,179 @@ extension AIChatViewModel {
         return expanded
     }
 }
+
+// MARK: - Composer draft persistence
+
+/// Unsent composer contents. `inputText` / attachments / folded pastes used to
+/// live only in the VM, so an LRU eviction, memory warning or app kill lost
+/// them silently.
+struct ComposerDraftSnapshot {
+    var text: String
+    var attachments: [InputAttachment]
+    var pastedBlocks: [PastedBlock]
+
+    var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty && pastedBlocks.isEmpty
+    }
+}
+
+enum ComposerDraftStore {
+    /// Drafts typed before a new chat has a session id.
+    static let newChatKey = "__new_chat__"
+
+    private struct Stored: Codable {
+        struct Attachment: Codable { let fileName: String; let path: String; let kind: String }
+        struct Pasted: Codable { let index: Int; let text: String }
+        let text: String
+        let attachments: [Attachment]
+        let pasted: [Pasted]
+    }
+
+    private static var directory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ComposerDrafts", isDirectory: true)
+    }
+
+    private static func fileURL(for key: String) -> URL {
+        let safe = key.replacingOccurrences(of: "/", with: "_")
+        return directory.appendingPathComponent("\(safe).json")
+    }
+
+    static func save(_ draft: ComposerDraftSnapshot, key: String) {
+        let url = fileURL(for: key)
+        guard !draft.isEmpty else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        let stored = Stored(
+            text: draft.text,
+            attachments: draft.attachments.filter { $0.loadState == .ready }.map {
+                .init(fileName: $0.fileName, path: $0.cacheURL.path, kind: kindName($0.kind))
+            },
+            pasted: draft.pastedBlocks.map { .init(index: $0.index, text: $0.text) }
+        )
+        guard let data = try? JSONEncoder().encode(stored) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    static func load(key: String) -> ComposerDraftSnapshot? {
+        guard let data = try? Data(contentsOf: fileURL(for: key)),
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let attachments = stored.attachments.compactMap { a -> InputAttachment? in
+            guard FileManager.default.fileExists(atPath: a.path) else { return nil }
+            return InputAttachment(fileName: a.fileName, cacheURL: URL(fileURLWithPath: a.path), kind: kind(named: a.kind))
+        }
+        let blocks = stored.pasted.map { p -> PastedBlock in
+            let firstLine = p.text
+                .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+                .first { !$0.allSatisfy(\.isWhitespace) }
+                .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            let preview = firstLine.count > 60 ? String(firstLine.prefix(60)) + "…" : firstLine
+            return PastedBlock(id: UUID(), index: p.index, text: p.text, preview: preview, charCount: p.text.count)
+        }
+        let snapshot = ComposerDraftSnapshot(text: stored.text, attachments: attachments, pastedBlocks: blocks)
+        return snapshot.isEmpty ? nil : snapshot
+    }
+
+    static func remove(key: String) {
+        try? FileManager.default.removeItem(at: fileURL(for: key))
+    }
+
+    private static func kindName(_ kind: InputAttachment.Kind) -> String {
+        switch kind {
+        case .image: "image"
+        case .video: "video"
+        case .document: "document"
+        }
+    }
+
+    private static func kind(named name: String) -> InputAttachment.Kind {
+        switch name {
+        case "image": .image
+        case "video": .video
+        default: .document
+        }
+    }
+}
+
+extension AIChatViewModel {
+    var composerDraftKey: String { sessionId ?? ComposerDraftStore.newChatKey }
+
+    var currentComposerDraft: ComposerDraftSnapshot {
+        ComposerDraftSnapshot(text: inputText, attachments: attachments, pastedBlocks: pastedBlocks)
+    }
+
+    /// What should survive a relaunch: while the composer is borrowed for
+    /// editing a sent message, that's the user's own draft set aside, not the
+    /// message being edited.
+    private var persistableComposerDraft: ComposerDraftSnapshot {
+        draftStashedForEdit ?? currentComposerDraft
+    }
+
+    func scheduleComposerDraftSave() {
+        guard composerDraftPersistenceEnabled else { return }
+        composerDraftSaveTask?.cancel()
+        composerDraftSaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            self?.flushComposerDraft()
+        }
+    }
+
+    func flushComposerDraft() {
+        guard composerDraftPersistenceEnabled else { return }
+        composerDraftSaveTask?.cancel()
+        composerDraftSaveTask = nil
+        ComposerDraftStore.save(persistableComposerDraft, key: composerDraftKey)
+    }
+
+    /// Restores the persisted draft into an empty composer and starts
+    /// persisting further edits. Call once the VM's session id is known.
+    func restoreComposerDraftIfNeeded() {
+        if !composerDraftPersistenceEnabled {
+            composerDraftPersistenceEnabled = true
+            composerDraftBackgroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushComposerDraft() }
+            }
+        }
+        guard currentComposerDraft.isEmpty, editingMessageIndex == nil,
+              let saved = ComposerDraftStore.load(key: composerDraftKey) else { return }
+        pastedBlocks = saved.pastedBlocks
+        attachments = saved.attachments
+        inputText = saved.text
+        logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] restored persisted draft text=\(saved.text.count)ch attachments=\(saved.attachments.count) key=\(self.composerDraftKey)")
+    }
+
+    /// Sets the composer aside (for message editing) and clears it.
+    func stashComposerDraftForEdit() {
+        guard draftStashedForEdit == nil else { return }
+        draftStashedForEdit = currentComposerDraft
+    }
+
+    /// Sends `prompt` as its own turn without consuming the composer: the
+    /// user's draft text, attachments and folded pastes stay where they are.
+    func sendDetachedPrompt(_ prompt: String) {
+        guard !isProcessing, editingMessageIndex == nil else { return }
+        let saved = currentComposerDraft
+        pastedBlocks = []
+        attachments = []
+        inputText = prompt
+        // send() snapshots and clears the composer synchronously.
+        send()
+        pastedBlocks = saved.pastedBlocks
+        attachments = saved.attachments
+        inputText = saved.text
+    }
+
+    /// Puts back the draft set aside by `stashComposerDraftForEdit`.
+    func restoreStashedComposerDraft() {
+        guard let stash = draftStashedForEdit else { return }
+        draftStashedForEdit = nil
+        pastedBlocks = stash.pastedBlocks
+        attachments = stash.attachments
+        inputText = stash.text
+    }
+}

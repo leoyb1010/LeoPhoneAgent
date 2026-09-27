@@ -142,6 +142,7 @@ struct CommandMacIntent: AppIntent {
     static var title: LocalizedStringResource = "指挥一台 Mac"
     static var description = IntentDescription("在指定 Mac 上用指定编码 CLI 开始一个任务,后台执行,不打开 app。")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Mac", requestValueDialog: "在哪台 Mac 上?")
     var mac: MacHostEntity
@@ -213,6 +214,7 @@ struct MacFleetStatusIntent: AppIntent {
     static var title: LocalizedStringResource = "Mac 任务汇报"
     static var description = IntentDescription("汇报三台 Mac 上进行中的编码任务与等待审批的数量。")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
@@ -259,8 +261,9 @@ struct MacFleetStatusIntent: AppIntent {
 @available(iOS 16.0, *)
 struct ApprovePendingMacIntent: AppIntent {
     static var title: LocalizedStringResource = "批准 Mac 待审批"
-    static var description = IntentDescription("批准最近一条等待审批的 Mac 任务操作(允许一次)。")
+    static var description = IntentDescription("念出最近一条等待审批的 Mac 操作,你确认后批准这一条(允许一次)。高风险命令不经 Siri 批准。")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
@@ -291,26 +294,39 @@ struct ApprovePendingMacIntent: AppIntent {
                            view: ApprovalResultSnippet(machine: "—", command: "无待审批", approved: false))
         }
 
-        // [T-approve-retry] 首台失败不该让其余待审批全部落空,继续试下一条。
-        var lastError: String?
-        for candidate in candidates {
-            guard let client = GatewayHostStore.shared.client(for: candidate.host) else { continue }
-            let cmd = candidate.session.pendingApprovalCommand ?? candidate.session.name
-            do {
-                try await client.approveHarness(sessionId: candidate.session.id,
-                                                choice: "once", approvalId: candidate.approvalId)
-                return .result(
-                    dialog: "已批准 \(candidate.host.name) 上的操作:\(String(cmd.prefix(60)))",
-                    view: ApprovalResultSnippet(machine: candidate.host.name,
-                                                command: cmd, approved: true))
-            } catch {
-                lastError = error.localizedDescription
-                continue
-            }
+        // Only the one the user heard and confirmed is approved. A failure
+        // stops here: falling through to the next candidate would run a
+        // command nobody was told about.
+        let candidate = candidates[0]
+        let cmd = candidate.session.pendingApprovalCommand ?? candidate.session.name
+        let spoken = String(cmd.prefix(80))
+        let others = candidates.count > 1 ? "(还有 \(candidates.count - 1) 条在排队)" : ""
+
+        if let command = candidate.session.pendingApprovalCommand, CommandRisk.assess(command) == .high {
+            return .result(dialog: IntentDialog(stringLiteral: "\(candidate.host.name) 上这条是高风险命令:\(spoken)。请在 iPhone 上看过再批。"),
+                           view: ApprovalResultSnippet(machine: candidate.host.name, command: cmd, approved: false))
         }
-        return .result(dialog: "批准没送达:\(lastError ?? "未知原因")",
-                       view: ApprovalResultSnippet(machine: candidates[0].host.name,
-                                                   command: lastError ?? "", approved: false))
+
+        try await requestConfirmation(
+            actionName: .continue,
+            dialog: IntentDialog(stringLiteral: "批准 \(candidate.host.name) 上的这条操作吗?\(spoken)" + others))
+
+        guard let client = GatewayHostStore.shared.client(for: candidate.host) else {
+            return .result(dialog: IntentDialog(stringLiteral: "找不到 \(candidate.host.name) 的访问密钥,没有批准。"),
+                           view: ApprovalResultSnippet(machine: candidate.host.name, command: cmd, approved: false))
+        }
+        do {
+            try await client.approveHarness(sessionId: candidate.session.id,
+                                            choice: "once", approvalId: candidate.approvalId)
+            return .result(
+                dialog: "已批准 \(candidate.host.name) 上的操作:\(String(cmd.prefix(60)))",
+                view: ApprovalResultSnippet(machine: candidate.host.name,
+                                            command: cmd, approved: true))
+        } catch {
+            return .result(dialog: IntentDialog(stringLiteral: "批准没送达:\(error.localizedDescription)"),
+                           view: ApprovalResultSnippet(machine: candidate.host.name,
+                                                       command: error.localizedDescription, approved: false))
+        }
     }
 }
 
@@ -319,8 +335,9 @@ struct ApprovePendingMacIntent: AppIntent {
 @available(iOS 16.0, *)
 struct StopMacTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "停止 Mac 任务"
-    static var description = IntentDescription("停止指定 Mac 上最近的进行中任务。")
+    static var description = IntentDescription("停止指定 Mac 上所有正在跑的任务;不止一个时会先问你。")
     static var openAppWhenRun = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Mac", requestValueDialog: "停哪台 Mac 上的任务?")
     var mac: MacHostEntity
@@ -335,13 +352,23 @@ struct StopMacTaskIntent: AppIntent {
               let client = GatewayHostStore.shared.client(for: host) else {
             return .result(dialog: "找不到 \(mac.name) 的访问密钥。")
         }
-        let sessions = (try? await client.harnessSessions()) ?? []
+        let sessions: [HarnessSessionSummary]
+        do {
+            sessions = try await client.harnessSessions()
+        } catch {
+            return .result(dialog: "连不上 \(mac.name):\(error.localizedDescription)")
+        }
         // What is actually working, not "active": idle sessions only wait for a
         // message (the desktop app lists up to 50 of them, newest first, the
         // Python service oldest first — picking by position stopped the wrong one).
         let working = sessions.filter { ["starting", "running", "waiting_for_approval"].contains($0.status) }
         guard !working.isEmpty else {
             return .result(dialog: "\(mac.name) 上没有正在跑的任务。")
+        }
+        if working.count > 1 {
+            try await requestConfirmation(
+                actionName: .continue,
+                dialog: IntentDialog(stringLiteral: "\(mac.name) 上有 \(working.count) 个任务在跑,全部停止吗?"))
         }
         do {
             for session in working { try await client.stopHarness(sessionId: session.id) }

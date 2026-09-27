@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { RefreshCw, Smartphone } from "lucide-react";
 
@@ -32,7 +32,10 @@ type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 type LeoLinkBridge = {
   status(): Promise<IpcResult<LinkStatus>>;
   pair(): Promise<IpcResult<PairingCode>>;
+  revoke?(payload: string): Promise<IpcResult<unknown>>;
 };
+
+const FOCUS_RING = "focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!";
 
 function getLeoLinkBridge(): LeoLinkBridge | null {
   if (typeof window === "undefined") return null;
@@ -81,9 +84,19 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
     return () => window.clearInterval(timer);
   }, [code]);
 
+  // 码是凭据:换码、关弹层时把没用掉的那个在中继上作废,同一时间最多一个有效码。
+  const issuedPayload = useRef<string | null>(null);
+  const revokeIssued = useCallback(() => {
+    const payload = issuedPayload.current;
+    issuedPayload.current = null;
+    if (payload) void bridge.revoke?.(payload);
+  }, [bridge]);
+  useEffect(() => revokeIssued, [revokeIssued]);
+
   const generate = useCallback(async () => {
     setPending(true);
     setError(null);
+    revokeIssued();
     try {
       const result = await bridge.pair();
       if (!result.ok) {
@@ -91,6 +104,7 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
         setCode(null);
         return;
       }
+      issuedPayload.current = result.data.payload;
       const image = await QRCode.toDataURL(result.data.payload, {
         margin: 1,
         width: 360,
@@ -105,7 +119,7 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
     } finally {
       setPending(false);
     }
-  }, [bridge]);
+  }, [bridge, revokeIssued]);
 
   const remaining = code ? Math.max(0, Math.round(code.exp - now / 1000)) : 0;
   const expired = code !== null && remaining === 0;
@@ -153,9 +167,12 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
               type="button"
               onClick={() => void generate()}
               disabled={pending}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-foreground-subtle transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-foreground-subtle transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50",
+                FOCUS_RING,
+              )}
             >
-              <RefreshCw className={cn("size-3", pending && "animate-spin")} />
+              <RefreshCw className={cn("size-3", pending && "motion-safe:animate-spin")} />
               换一个码
             </button>
           </div>
@@ -166,15 +183,18 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
             type="button"
             onClick={() => void generate()}
             disabled={!ready || relayTooOld || pending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-ui-base font-medium text-foreground-inverse transition-[filter,opacity] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-ui-base font-medium text-foreground-inverse transition-[filter,opacity] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40",
+              FOCUS_RING,
+            )}
           >
-            {pending ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+            {pending ? <RefreshCw className="size-3.5 motion-safe:animate-spin" /> : null}
             {relayTooOld ? "中继待升级" : expired ? "码已过期,再生成一个" : "扫码连接手机"}
           </button>
           <span className="text-ui-caption text-foreground-subtlest">
             {relayTooOld
               ? "连着的中继还是旧版,升级到 0.2 后才能扫码加手机"
-              : "不用再把钥匙抄到手机上"}
+              : setupHint(status) ?? "不用再把钥匙抄到手机上"}
           </span>
         </div>
       )}
@@ -194,6 +214,14 @@ function describeStatus(status: LinkStatus | null): string {
     return `${status.machine} 已连上中继${version}`;
   }
   return status.lastError ? `正在重连中继(${status.lastError})` : "正在连接中继…";
+}
+
+/** 连接面板不能是死胡同:没配好时告诉用户下一步在哪做。 */
+function setupHint(status: LinkStatus | null): string | null {
+  if (!status) return null;
+  if (!status.configured) return "在 ~/.leoagent/relay.json 写入中继地址和钥匙({\"url\",\"key\"}),保存后 15 秒内自动连上";
+  if (!status.enabled) return "运行 src/mac/leophone/scripts/leo-link-switch.sh 打开手机连接,不用重启 App";
+  return null;
 }
 
 function formatRemaining(seconds: number): string {

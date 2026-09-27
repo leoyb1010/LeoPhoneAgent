@@ -25,6 +25,52 @@ enum ProviderMigration {
             migrateOAuthTokens(store: store)
             UserDefaults.standard.set(true, forKey: oauthMigrationKey)
         }
+
+        if !UserDefaults.standard.bool(forKey: deviceOnlyOAuthMigrationKey) {
+            for instance in store.instances where instance.credentialType == .oauth {
+                ProviderKeychainHelper.migrateOAuthTokenToDeviceOnly(instanceId: instance.id)
+            }
+            UserDefaults.standard.set(true, forKey: deviceOnlyOAuthMigrationKey)
+        }
+
+        // Every launch: instances can arrive later through iCloud sync.
+        retireDiscontinuedSignIns(store: store)
+    }
+
+    private static let deviceOnlyOAuthMigrationKey = "com.leoyuan.leophoneagent.provider-migration-oauth-device-only-v3-done"
+
+    // MARK: - Retired sign-in methods (Claude subscription, Gemini Google login, Antigravity)
+
+    /// Disables instances whose sign-in method is gone and deletes their stored
+    /// tokens. The instance itself stays so the user sees the notice and can
+    /// switch it to an API key. Idempotent.
+    private static func retireDiscontinuedSignIns(store: ProviderConfigStore) {
+        for singleton in ["com.leoyuan.leophoneagent.claude-oauth", "com.leoyuan.leophoneagent.gemini-oauth"] {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: singleton,
+            ]
+            SecItemDelete(query as CFDictionary)
+        }
+        for key in ["com.leoyuan.leophoneagent.gemini-email", "com.leoyuan.leophoneagent.gemini-gcp-project"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        for instance in store.instances where instance.retiredSignInNotice != nil {
+            if ProviderKeychainHelper.migrateOAuthTokenToDeviceOnly(instanceId: instance.id) != nil {
+                ProviderKeychainHelper.deleteOAuthToken(instanceId: instance.id)
+            }
+            for account in ["oauth-email", "oauth-gcp-project", "oauth-base-url"]
+            where ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: account) != nil {
+                ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: account)
+            }
+            if instance.isEnabled {
+                var disabled = instance
+                disabled.isEnabled = false
+                store.updateInstance(disabled)
+                logger.info("Retired sign-in: disabled instance \(instance.id.prefix(8))")
+            }
+        }
     }
 
     // MARK: - V2: Migrate singleton OAuth tokens → per-instance storage
@@ -34,35 +80,9 @@ enum ProviderMigration {
 
         for instance in store.instances where instance.credentialType == .oauth {
             switch instance.providerType {
-            case .anthropic:
-                // Skip if per-instance token already exists
-                if ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: ClaudeTokenStorage.self) != nil {
-                    continue
-                }
-                if let token = ClaudeOAuthManager.loadLegacyToken() {
-                    ProviderKeychainHelper.saveOAuthToken(token, instanceId: instance.id)
-                    ClaudeOAuthManager.deleteLegacyToken()
-                    logger.info("Migrated Claude OAuth token to instance \(instance.id)")
-                }
-
-            case .gemini:
-                if ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: GeminiTokenStorage.self) != nil {
-                    continue
-                }
-                if let token = GeminiOAuthManager.loadLegacyToken() {
-                    ProviderKeychainHelper.saveOAuthToken(token, instanceId: instance.id)
-                    GeminiOAuthManager.deleteLegacyToken()
-                    logger.info("Migrated Gemini OAuth token to instance \(instance.id)")
-                }
-                // Migrate email and project ID from UserDefaults
-                if let email = UserDefaults.standard.string(forKey: GeminiOAuthManager.legacyEmailKey) {
-                    ProviderKeychainHelper.saveOAuthString(email, instanceId: instance.id, account: "oauth-email")
-                    UserDefaults.standard.removeObject(forKey: GeminiOAuthManager.legacyEmailKey)
-                }
-                if let projectID = UserDefaults.standard.string(forKey: GeminiOAuthManager.legacyProjectIDKey) {
-                    ProviderKeychainHelper.saveOAuthString(projectID, instanceId: instance.id, account: "oauth-gcp-project")
-                    UserDefaults.standard.removeObject(forKey: GeminiOAuthManager.legacyProjectIDKey)
-                }
+            case .anthropic, .gemini:
+                // Subscription / Google sign-in is retired; see retireDiscontinuedSignIns.
+                break
 
             case .openAI:
                 if ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: CodexTokenStorage.self) != nil {
@@ -74,8 +94,7 @@ enum ProviderMigration {
                     logger.info("Migrated Codex OAuth token to instance \(instance.id)")
                 }
 
-            case .antigravity:
-                // No legacy tokens to migrate for Antigravity (new provider)
+            case .openCodeGo:
                 break
             case .openRouter:
                 // No legacy tokens to migrate for OpenRouter (new provider)
@@ -124,24 +143,6 @@ enum ProviderMigration {
             }
         }
 
-        // OAuth — check legacy singleton keychain directly
-        if ClaudeOAuthManager.loadLegacyToken() != nil {
-            let instance = ProviderInstance(
-                label: "Claude OAuth",
-                providerType: .anthropic,
-                credentialType: .oauth
-            )
-            config.instances.append(instance)
-            let entries = LLMModel.allAnthropic.map {
-                ModelEntry(providerInstanceId: instance.id, model: $0)
-            }
-            config.modelEntries.append(contentsOf: entries)
-
-            if isLegacyActiveProvider("OAuth") {
-                firstGroupEntryIds = entries.map(\.id)
-            }
-        }
-
         // MARK: - Gemini
 
         // API Key
@@ -159,24 +160,6 @@ enum ProviderMigration {
             ProviderKeychainHelper.saveAPIKey(key, instanceId: instance.id)
 
             if isLegacyActiveProvider("Gemini API Key") {
-                firstGroupEntryIds = entries.map(\.id)
-            }
-        }
-
-        // OAuth
-        if GeminiOAuthManager.loadLegacyToken() != nil {
-            let instance = ProviderInstance(
-                label: "Gemini OAuth",
-                providerType: .gemini,
-                credentialType: .oauth
-            )
-            config.instances.append(instance)
-            let entries = LLMModel.allGemini.map {
-                ModelEntry(providerInstanceId: instance.id, model: $0)
-            }
-            config.modelEntries.append(contentsOf: entries)
-
-            if isLegacyActiveProvider("Gemini OAuth") {
                 firstGroupEntryIds = entries.map(\.id)
             }
         }

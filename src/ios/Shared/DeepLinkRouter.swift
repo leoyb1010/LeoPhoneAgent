@@ -106,11 +106,21 @@ enum DeepLinkRouter {
                 deepLinkLog.info("\(host) URL missing or reserved id")
                 return
             }
-            NotificationCenter.default.post(
-                name: .openSessionFromIntent,
-                object: nil,
-                userInfo: ["sessionId": id]
-            )
+            // An id that isn't a local session (a Mac task's id from a Live
+            // Activity, a stale link) would open an empty ghost chat.
+            // Buffered as well: a cold launch has no receiver mounted yet.
+            Task { @MainActor in
+                guard await ChatStore.shared.sessionExists(id: id) else {
+                    deepLinkLog.info("\(host) URL for unknown session — ignored")
+                    return
+                }
+                NotificationNavigationStore.shared.setPending(id)
+                NotificationCenter.default.post(
+                    name: .openSessionFromIntent,
+                    object: nil,
+                    userInfo: ["sessionId": id]
+                )
+            }
 
         case "settings":
             handleSettings(url: url, coord: coord)
@@ -200,10 +210,8 @@ enum DeepLinkRouter {
             coord.pendingSettingsTarget = .permissions
 
         case "selftest", "self-test", "self_test":
-            // `?chat=1`:连同"真发一句话"一起测(自检只发固定的 "OK",不带任何用户数据)。
-            if components?.queryItems?.first(where: { $0.name == "chat" })?.value == "1" {
-                CapabilitySelfTest.shared.includeChat = true
-            }
+            // 只导航:自检会真发模型请求、连弹系统授权框,必须由用户在页面上点「开始」。
+            // 旧链接里的 `?chat=1` 一律忽略。
             coord.pendingSettingsTarget = .selfTest
 
         case "mac", "mac-console", "gateway":

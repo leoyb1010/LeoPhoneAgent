@@ -4,9 +4,9 @@ import Foundation
 
 /// [T-oauth-refresh-race] The minimal shape the refresh-race guard needs from a
 /// provider's persisted OAuth credential. Every provider's `*TokenStorage`
-/// (Claude / Gemini / xAI / Codex / Antigravity) already satisfies this, so they
-/// conform with an empty extension and share ONE tested decision engine —
-/// avoiding five divergent copies of the "when to delete vs keep" semantics.
+/// (xAI / Codex / …) already satisfies this, so they conform with an empty
+/// extension and share ONE tested decision engine — avoiding divergent copies
+/// of the "when to delete vs keep" semantics.
 protocol RefreshableOAuthToken {
     var accessToken: String { get }
     var refreshToken: String? { get }
@@ -34,9 +34,10 @@ protocol RefreshableOAuthToken {
 ///      scraped from the body), via the `oauth_http_status=<code>` marker; and
 ///   2. the OAuth `error` field parsed from the JSON body with JSONDecoder.
 ///
-/// A failure is fatal (delete-worthy) only when the HTTP status is one of the
-/// auth-rejection codes AND/OR the parsed `error` code is in the provider's
-/// known-fatal set. Providers pass their own fatal-code set so the differing
+/// A failure is fatal (delete-worthy) only when the token endpoint returned an
+/// explicit OAuth error code from the provider's known-fatal set. An auth-ish
+/// HTTP status on its own (e.g. a 403 Cloudflare challenge page, a 401 from a
+/// proxy) is treated as transient. Providers pass their own fatal-code set so the differing
 /// semantics (xAI/Codex honor `refresh_token_reused`; Google honors
 /// `invalid_token`) stay explicit while the fragile parsing is shared + tested.
 enum OAuthRefreshErrorClassifier {
@@ -47,15 +48,40 @@ enum OAuthRefreshErrorClassifier {
     static let statusMarkerPrefix = "oauth_http_status="
 
     /// Build the machine-readable message a token-endpoint throw site should use:
-    /// `oauth_http_status=<code> <body>`. The classifier parses the marker; the
-    /// body is preserved verbatim for logs/UI.
+    /// `oauth_http_status=<code> <sanitized body>`. The body is reduced to the
+    /// OAuth `error` / `error_description` fields (or a short plain-text body);
+    /// anything else (HTML challenge pages, echoed request data) is dropped so
+    /// it never reaches logs or the UI.
     static func makeErrorMessage(status: Int, body: String) -> String {
-        "\(statusMarkerPrefix)\(status) \(body)"
+        "\(statusMarkerPrefix)\(status) \(sanitizedBody(body))"
     }
 
-    /// HTTP statuses that indicate the refresh token / grant itself is rejected
-    /// (not a transient 5xx / network blip).
-    static let fatalStatuses: Set<Int> = [400, 401, 403]
+    static func sanitizedBody(_ body: String) -> String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = trimmed.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            var kept: [String: String] = [:]
+            if let code = obj["error"] as? String { kept["error"] = String(code.prefix(64)) }
+            if let desc = obj["error_description"] as? String { kept["error_description"] = String(desc.prefix(160)) }
+            guard !kept.isEmpty,
+                  let out = try? JSONSerialization.data(withJSONObject: kept, options: [.sortedKeys]),
+                  let str = String(data: out, encoding: .utf8) else { return "{}" }
+            return str
+        }
+        if trimmed.count <= 120, !trimmed.contains("<") { return trimmed }
+        return "(\(body.utf8.count)-byte non-JSON response)"
+    }
+
+    /// Short, user-presentable description of a token-endpoint failure, e.g.
+    /// `HTTP 400 · invalid_grant`. Never includes response bodies.
+    static func userFacingSummary(_ error: Error) -> String {
+        guard let llm = error as? LLMError, case .providerError(let message) = llm else {
+            return error.localizedDescription
+        }
+        guard let status = parseStatus(from: message) else { return message }
+        if let code = parseErrorCode(fromBody: message) { return "HTTP \(status) · \(code)" }
+        return "HTTP \(status)"
+    }
 
     /// Extract the structured HTTP status embedded by `makeErrorMessage`, if any.
     /// Returns nil when the message carries no marker (e.g. a network error, or a
@@ -107,15 +133,7 @@ enum OAuthRefreshErrorClassifier {
             return true
         }
 
-        // 2. Real HTTP status (structurally embedded, not scraped) in the
-        //    auth-rejection set. A 400/401/403 from the token endpoint means the
-        //    grant was rejected. Absence of the marker → status unknown → this
-        //    branch does not fire (transient/network stays non-fatal).
-        if let status = parseStatus(from: message), fatalStatuses.contains(status) {
-            return true
-        }
-
-        // 3. Fallback for non-JSON error bodies: match a fatal error code only as
+        // 2. Fallback for non-JSON error bodies: match a fatal error code only as
         //    a WHOLE identifier token (delimited by non-identifier chars), never a
         //    loose substring. This still catches a plain-text `refresh_token_reused`
         //    while refusing to fire on "400" inside a request id or "refresh_token"
@@ -171,7 +189,7 @@ enum OAuthRefreshCoordinator {
     /// refresh attempt threw `error`.
     ///
     /// The critical guard is *compare-before-delete*: on a token-invalid error
-    /// (`invalid_grant` / `refresh_token_reused` / HTTP 400-403) we clear the
+    /// (`invalid_grant` / `refresh_token_reused` / …) we clear the
     /// stored credentials ONLY when the currently-persisted refresh token is
     /// still the one we failed with. If a concurrent refresh already rotated it
     /// to a new value, this request is stale and returning `current` preserves
@@ -209,18 +227,20 @@ enum OAuthRefreshCoordinator {
                 log?("Stale invalid_grant ignored — token already rotated; keeping new credentials")
                 return current
             }
-            log?("Refresh token invalid, clearing credentials: \(llmError)")
+            let summary = OAuthRefreshErrorClassifier.userFacingSummary(llmError)
+            log?("Refresh token invalid, clearing credentials: \(summary)")
             deleteCredentials()
-            throw LLMError.invalidAPIKey(detail: "\(providerName): refresh token invalid — \(llmError)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
         }
 
         // Non-fatal (network / transient). Prefer whatever is now stored (a
         // concurrent winner may have refreshed); else keep the caller's copy.
         let fallback = current ?? existingStorage
-        log?("Refresh failed, keeping existing token: \(error)")
+        let summary = OAuthRefreshErrorClassifier.userFacingSummary(error)
+        log?("Refresh failed, keeping existing token: \(summary)")
         if fallback.isExpired {
             log?("Existing token is also expired — re-auth required")
-            throw LLMError.invalidAPIKey(detail: "\(providerName): token expired and refresh failed — \(error)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Could not renew the \(providerName) sign-in right now. Check your connection and try again.") + " (\(summary))")
         }
         return fallback
     }

@@ -46,7 +46,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
     func maskedToken(instanceId: String) -> String? {
         guard let token = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: CodexTokenStorage.self)?.accessToken else { return nil }
-        return ClaudeOAuthManager.maskToken(token)
+        return OAuthTokenMask.mask(token)
     }
 
     func accountId(instanceId: String) -> String? {
@@ -58,25 +58,30 @@ final class CodexOAuthManager: NSObject, ObservableObject {
     }
 
     func login(instanceId: String) async throws {
+        // A second concurrent login would fight over the same loopback port
+        // and tear down the first attempt's server.
+        guard !isAuthenticating else {
+            logger.warning("Codex login already in progress — ignoring re-entrant call")
+            return
+        }
         logger.info("=== Codex OAuth login started (instance: \(instanceId)) ===")
-        // Defensive cleanup: stop any leftover server from a previous failed attempt
-        callbackServer?.stop()
-        callbackServer = nil
         isAuthenticating = true
+        var ownServer: OAuthCallbackServer?
         defer {
             isAuthenticating = false
-            callbackServer?.stop()
-            callbackServer = nil
+            ownServer?.stop()
+            if callbackServer === ownServer { callbackServer = nil }
             safariVC?.dismiss(animated: true)
             safariVC = nil
         }
 
         let (verifier, challenge) = generatePKCE()
         let state = generateState()
-        logger.info("PKCE generated — verifier length: \(verifier.count), challenge: \(challenge.prefix(16))...")
+        logger.info("PKCE generated — verifier length: \(verifier.count)")
 
         // 1. Start local HTTP server
         let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/auth/callback")
+        ownServer = server
         self.callbackServer = server
         try server.start()
         logger.info("Callback server started on port \(self.callbackPort)")
@@ -109,7 +114,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         // 5. Validate state
         guard result.state == state else {
             logger.error("State mismatch!")
-            throw LLMError.providerError(message: "OAuth state mismatch")
+            throw LLMError.providerError(message: String(localized: "Sign-in could not be verified. Please try again."))
         }
 
         // 6. Exchange code for token
@@ -128,7 +133,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
     func validAccessToken(instanceId: String) async throws -> String {
         guard var storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: CodexTokenStorage.self) else {
-            throw LLMError.invalidAPIKey(detail: "Codex: no OAuth token found for instance \(instanceId)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to ChatGPT. Sign in again in Settings → Providers."))
         }
 
         let needsRefresh = storage.refreshToken != nil
@@ -139,7 +144,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         }
 
         guard let token = Optional(storage.accessToken), !token.isEmpty else {
-            throw LLMError.invalidAPIKey(detail: "Codex: access token is empty for instance \(instanceId)")
+            throw LLMError.invalidAPIKey(detail: String(localized: "Not signed in to ChatGPT. Sign in again in Settings → Providers."))
         }
         return token
     }
@@ -162,7 +167,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
     /// [T-oauth-refresh-race] Refresh under instance-level single-flight, with a
     /// compare-before-delete backstop on failure so a stale concurrent refresh
-    /// never wipes a token another caller just rotated. Mirrors ClaudeOAuthManager.
+    /// never wipes a token another caller just rotated.
     private func refreshTokenGuarded(instanceId: String, existingStorage: CodexTokenStorage) async throws -> CodexTokenStorage {
         let staleRefreshToken = existingStorage.refreshToken!
         do {
@@ -245,7 +250,12 @@ final class CodexOAuthManager: NSObject, ObservableObject {
             "code_verifier": verifier,
         ]
 
-        return try await postTokenRequest(body: body, context: "Token exchange")
+        do {
+            return try await postTokenRequest(body: body, context: "Token exchange")
+        } catch let error as LLMError {
+            guard case .providerError = error else { throw error }
+            throw LLMError.providerError(message: String(localized: "ChatGPT sign-in failed (\(OAuthRefreshErrorClassifier.userFacingSummary(error))). Please try again."))
+        }
     }
 
     private func performRefresh(refreshToken: String) async throws -> CodexTokenStorage {
@@ -286,16 +296,11 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         let statusCode = http?.statusCode ?? -1
-        let responseBody = String(data: data, encoding: .utf8) ?? "<binary>"
-
         logger.info("\(context) Response status: \(statusCode)")
 
         guard (200..<300).contains(statusCode) else {
-            #if DEBUG
             logger.error("\(context) FAILED — status \(statusCode)")
-            #else
-            logger.error("\(context) FAILED — status \(statusCode)")
-            #endif
+            let responseBody = String(data: data, encoding: .utf8) ?? ""
             // [T-oauth-refresh-race-classify] Embed real HTTP status structurally.
             throw LLMError.providerError(message: "\(context) failed: " + OAuthRefreshErrorClassifier.makeErrorMessage(status: statusCode, body: responseBody))
         }
@@ -323,12 +328,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
             let claims = Self.decodeJWTPayload(idToken)
             extractedAccountId = claims?["chatgpt_account_id"] as? String
             extractedPlanType = claims?["chatgpt_plan_type"] as? String
-            if let aid = extractedAccountId {
-                logger.info("Extracted accountId: \(aid)")
-            }
-            if let plan = extractedPlanType {
-                logger.info("Extracted planType: \(plan)")
-            }
+            logger.info("ID token claims — account present: \(extractedAccountId != nil), plan present: \(extractedPlanType != nil)")
         }
 
         return CodexTokenStorage(
@@ -371,8 +371,19 @@ final class CodexOAuthManager: NSObject, ObservableObject {
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }
         let vc = SFSafariViewController(url: url)
+        vc.delegate = self
         topVC.present(vc, animated: true)
         self.safariVC = vc
+    }
+}
+
+extension CodexOAuthManager: SFSafariViewControllerDelegate {
+    nonisolated func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        Task { @MainActor [weak self] in
+            // Closing Safari cancels the wait instead of holding the port for the full timeout.
+            guard let self, self.safariVC === controller else { return }
+            self.callbackServer?.stop()
+        }
     }
 }
 

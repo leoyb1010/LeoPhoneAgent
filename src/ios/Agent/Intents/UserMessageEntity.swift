@@ -65,7 +65,7 @@ struct UserMessageEntityQuery: EntityQuery {
         }
 
         var results: [UserMessageEntity] = []
-        for (sessionId, indices) in bySession {
+        for (sessionId, indices) in bySession where !SessionLockStore.isHiddenFromSystemSurfaces(sessionId) {
             let session = await ChatStore.shared.getSession(sessionId)
             let title = session?.title ?? "Untitled"
             let all = await UserMessageEntity.loadFromDB(sessionId: sessionId, sessionTitle: title)
@@ -86,7 +86,7 @@ struct UserMessageEntityQuery: EntityQuery {
         // Fallback (no session selected): recent sessions' messages
         let sessions = await ChatStore.shared.listSessions()
         var entities: [UserMessageEntity] = []
-        for session in sessions.prefix(10) {
+        for session in sessions.lazy.filter({ !SessionLockStore.isHiddenFromSystemSurfaces($0.id) }).prefix(10) {
             let msgs = await UserMessageEntity.loadFromDB(
                 sessionId: session.id,
                 sessionTitle: session.title ?? "Untitled"

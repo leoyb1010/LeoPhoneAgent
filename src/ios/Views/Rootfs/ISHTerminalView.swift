@@ -111,7 +111,11 @@ struct ISHTerminalView: View {
                         Button {
                             switchShell(to: session)
                         } label: {
-                            Label(session.title ?? String(session.id.prefix(8)), systemImage: activeShellSessionId == session.id ? "checkmark" : "terminal")
+                            if SessionLockStore.shared.isVisuallyLocked(session.id) {
+                                Label("Locked conversation", systemImage: "lock.fill")
+                            } else {
+                                Label(session.title ?? String(session.id.prefix(8)), systemImage: activeShellSessionId == session.id ? "checkmark" : "terminal")
+                            }
                         }
                     }
                 } label: {
@@ -207,12 +211,25 @@ struct ISHTerminalView: View {
     private var shellTitle: String {
         if let sid = activeShellSessionId,
            let session = shellSessions.first(where: { $0.id == sid }) {
-            return session.title ?? "Shell"
+            return SessionLockStore.shared.isLocked(session.id) ? "Shell" : session.title ?? "Shell"
         }
         return "LeoPhoneAgent Shell"
     }
 
     private func switchShell(to session: ChatSession) {
+        let lockStore = SessionLockStore.shared
+        guard lockStore.isVisuallyLocked(session.id) else {
+            mountShell(for: session)
+            return
+        }
+        Task { @MainActor in
+            guard await BiometricAuth.authenticate(reason: String(localized: "Unlock to open this conversation's workspace")) else { return }
+            lockStore.noteUnlock(session.id)
+            mountShell(for: session)
+        }
+    }
+
+    private func mountShell(for session: ChatSession) {
         activeShellSessionId = session.id
         Task.detached {
             await ISHExecutionCoordinator.shared.mountForSession(session.id)

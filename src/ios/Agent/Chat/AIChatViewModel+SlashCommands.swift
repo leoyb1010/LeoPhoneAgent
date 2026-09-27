@@ -35,7 +35,7 @@ extension AIChatViewModel {
     static let availableSlashCommands: [SlashCommand] = [
         SlashCommand(id: "clear", icon: "trash", title: "Clear", subtitle: "清空本对话的全部消息"),
         SlashCommand(id: "compact", icon: "arrow.down.right.and.arrow.up.left", title: "Compact", subtitle: "把对话历史压缩成摘要"),
-        SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "记忆写入开 / 关(读取不受影响)"),
+        SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "记忆开 / 关(关闭后不读也不写)"),
         SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "深度思考开 / 关"),
         // [T-model-quickswitch] /model kimi 一步切换;单独 /model 打开快切面板
         SlashCommand(id: "model", icon: "cpu", title: "Model", subtitle: "切换本会话模型,可直接跟名字:/model kimi"),
@@ -174,7 +174,7 @@ extension AIChatViewModel {
         var commands = Self.availableSlashCommands.map { cmd -> SlashCommand in
             if cmd.id == "memory" {
                 let status = memoryEnabled ? "已开" : "已关"
-                return SlashCommand(id: cmd.id, icon: cmd.icon, title: cmd.title, subtitle: "记忆写入\(status) · 点按切换")
+                return SlashCommand(id: cmd.id, icon: cmd.icon, title: cmd.title, subtitle: "记忆\(status) · 点按切换")
             }
             return cmd
         }
@@ -411,26 +411,35 @@ extension AIChatViewModel {
             memoryEnabled.toggle()
             if let sid = sessionId {
                 Task { await ChatStore.shared.setMemoryEnabled(sessionId: sid, enabled: memoryEnabled) }
+            } else {
+                draftMemoryEnabledOverride = memoryEnabled
             }
-            appendSystemInfo(memoryEnabled ? "已开启记忆写入,读取不受影响。" : "已关闭记忆写入,读取不受影响。",
+            appendSystemInfo(memoryEnabled ? "已开启记忆:会读取并写入记忆。" : "已关闭记忆:本对话不读取也不写入记忆。",
                              icon: "brain.head.profile")
         case "clear":
             clearChatConfirmRequested = true
         case "model":
             handleModelSlashCommand()
         case "tasks":
-            NotificationCenter.default.post(name: .leoOpenQuickTaskPicker, object: nil)
+            NotificationCenter.default.post(name: .leoOpenQuickTaskPicker, object: self)
         case "mac":
-            NotificationCenter.default.post(name: .leoOpenMacSwitch, object: nil)
+            NotificationCenter.default.post(name: .leoOpenMacSwitch, object: self)
         case "auto":
             let on = !FullAutoStore.shared.enabled
-            FullAutoStore.shared.enabled = on
-            UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
-            LeoHaptics.impact(on ? .medium : .light)
-            appendSystemInfo(on
-                ? "全自动已打开:写文件、跑命令、调用手机能力、改设置都不再逐项确认。点输入框上方的「全自动」或再发 /auto 关闭。"
-                : "全自动已关闭,回到「\(FullAutoStore.shared.mode.title)」。",
-                icon: on ? "bolt.fill" : "bolt")
+            Task { @MainActor in
+                if on {
+                    guard await BiometricAuth.authorizeLoweringProtection(
+                        reason: String(localized: "Turn on full-auto approvals")
+                    ) else { return }
+                }
+                FullAutoStore.shared.enabled = on
+                UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
+                LeoHaptics.impact(on ? .medium : .light)
+                self.appendSystemInfo(on
+                    ? "全自动已打开:写文件、跑命令、调用手机能力、改设置都不再逐项确认。点输入框上方的「全自动」或再发 /auto 关闭。"
+                    : "全自动已关闭,回到「\(FullAutoStore.shared.mode.title)」。",
+                    icon: on ? "bolt.fill" : "bolt")
+            }
         default:
             break
         }
@@ -438,7 +447,7 @@ extension AIChatViewModel {
 
     /// [T-model-quickswitch] 无参数的 `/model`:请 UI 打开快切面板。
     private func handleModelSlashCommand() {
-        NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: nil)
+        NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: self)
     }
 
     /// [T-model-quickswitch] 发送前拦截 `/model <名字>`。
@@ -456,7 +465,7 @@ extension AIChatViewModel {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         inputText = ""
         guard !arg.isEmpty else {
-            NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: nil)
+            NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: self)
             return true
         }
         let hits = ModelSwitcher.search(arg, store: ProviderConfigStore.shared)

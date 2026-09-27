@@ -1179,9 +1179,7 @@ final class OpenAIProvider: LLMProvider {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
-        let tokenPrefix = String(token.prefix(12))
-        let tokenSuffix = String(token.suffix(4))
-        logger.info("🖼️ /images/generations auth: \(tokenPrefix)...\(tokenSuffix) (len=\(token.count)) isOAuth=\(isOAuth)")
+        logger.info("🖼️ /images/generations auth: len=\(token.count) isOAuth=\(isOAuth)")
 
         var body: [String: Any] = [
             "model": model.id,

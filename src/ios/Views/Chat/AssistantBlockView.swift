@@ -568,14 +568,72 @@ extension Notification.Name {
 /// trimmed assistant row in the DB), then re-runs the agent loop. If the
 /// target is the first block with nothing preceding it, that path degrades
 /// to a preceding-user-message truncation automatically.
+/// Also hosts the chat's shared "discard later turns?" confirmation (retry
+/// and edit set `pendingRewind` too), so AIChatView.body gains no modifier.
 struct RerunFromToolBlockListener: ViewModifier {
     let vm: AIChatViewModel
+    @Binding var pendingRewind: PendingChatRewind?
 
     func body(content: Content) -> some View {
-        content.onReceive(NotificationCenter.default.publisher(for: .rerunFromToolBlock)) { note in
-            guard let blockId = note.userInfo?["blockId"] as? UUID else { return }
-            vm.retryFromToolBlock(blockId: blockId)
-            vm.forceScrollToBottom.send()
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .rerunFromToolBlock)) { note in
+                guard let blockId = note.userInfo?["blockId"] as? UUID else { return }
+                let run = { [vm] in
+                    vm.retryFromToolBlock(blockId: blockId)
+                    vm.forceScrollToBottom.send()
+                }
+                let later = vm.laterUserTurnCount(afterBlock: blockId)
+                if later > 0 {
+                    pendingRewind = PendingChatRewind(kind: .rerun, laterTurns: later, perform: run)
+                } else {
+                    run()
+                }
+            }
+            .modifier(ChatRewindConfirmation(pending: $pendingRewind))
+    }
+}
+
+/// A retry / re-run / edit that would permanently drop later turns. The
+/// in-place "从此处删除" already confirmed; these three did not.
+struct PendingChatRewind: Identifiable {
+    enum Kind { case retry, rerun, edit }
+    let id = UUID()
+    let kind: Kind
+    let laterTurns: Int
+    let perform: () -> Void
+}
+
+struct ChatRewindConfirmation: ViewModifier {
+    @Binding var pending: PendingChatRewind?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            title,
+            isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+            titleVisibility: .visible,
+            presenting: pending
+        ) { rewind in
+            Button(actionTitle(rewind.kind), role: .destructive) { rewind.perform() }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: { rewind in
+            Text(rewind.kind == .edit
+                 ? String(localized: "Sending the edited message deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone.")
+                 : String(localized: "This deletes the \(rewind.laterTurns) later turns in this chat. This can't be undone."))
+        }
+    }
+
+    private var title: String {
+        switch pending?.kind {
+        case .edit: String(localized: "Edit and Discard Later Turns?")
+        default: String(localized: "Discard Later Turns?")
+        }
+    }
+
+    private func actionTitle(_ kind: PendingChatRewind.Kind) -> String {
+        switch kind {
+        case .retry: String(localized: "Retry and Delete Later Turns")
+        case .rerun: String(localized: "Re-run and Delete Later Turns")
+        case .edit: String(localized: "Edit Anyway")
         }
     }
 }

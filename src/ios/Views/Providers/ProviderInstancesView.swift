@@ -337,10 +337,9 @@ extension ProviderInstance {
             return true
         }
         switch self.providerType {
-        case .anthropic: return ClaudeOAuthManager.shared.isAuthenticated(instanceId: self.id)
-        case .gemini: return GeminiOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .anthropic, .gemini: return false // subscription / Google sign-in retired
         case .openAI: return CodexOAuthManager.shared.isAuthenticated(instanceId: self.id)
-        case .antigravity: return AntigravityOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .openCodeGo: return false // API key only
         case .openRouter: return OpenRouterOAuthManager.shared.isAuthenticated(instanceId: self.id)
         case .openAIResponses: return false // API key only
         case .xAI: return XAIOAuthManager.shared.isAuthenticated(instanceId: self.id)

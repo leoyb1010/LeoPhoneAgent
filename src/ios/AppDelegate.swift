@@ -105,13 +105,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         // [T-widget-stop] Console "stop" button. Cancels the real underlying
         // work for every running session — a cached ViewModel always exists
-        // for a processing session (ViewModelCache never evicts those).
+        // for a processing session (ViewModelCache never evicts those); a Mac
+        // session has none and is stopped on the Mac.
         WidgetIntentBridge.shared.stopAllTasksHandler = {
             await MainActor.run {
                 var stopped = 0
                 for sessionId in SessionActivityTracker.shared.activeSessions {
                     if let vm = ViewModelCache.shared.get(for: sessionId) {
                         vm.cancel(queuePolicy: .discardQueuedPrompts)
+                        stopped += 1
+                    } else if HarnessLiveActivityBridge.shared.stop(sessionId: sessionId) {
                         stopped += 1
                     } else {
                         // [T-widget-stop-eager-placeholder] An intent registers
@@ -138,8 +141,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 case .voice:
                     QuickActionRouter.shared.startVoiceChat()
                 case .camera:
-                    QuickActionWorkflow.shared.start(.openCamera)
-                    QuickActionRouter.shared.startNewChat()
+                    QuickActionRouter.shared.startCameraChat()
                 }
             }
         }
@@ -221,6 +223,11 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
+        if let windowScene = scene as? UIWindowScene {
+            MainActor.assumeIsolated {
+                AppLockWindowController.shared.attach(to: windowScene)
+            }
+        }
         if let item = connectionOptions.shortcutItem {
             logger.info("scene willConnectTo: cold-launch shortcut type=\(item.type)")
             // Bump synchronously on the main actor. ContentView's
@@ -251,32 +258,61 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         }
     }
 
+    func sceneDidDisconnect(_ scene: UIScene) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        MainActor.assumeIsolated {
+            AppLockWindowController.shared.detach(from: windowScene)
+        }
+    }
+
     /// Warm tap on a Spotlight result, or a session dropped on this window.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         guard !SessionWindow.accept(userActivity, in: scene) else { return }
         Self.handleUserActivity(userActivity, phase: "continue")
     }
 
-    /// A Spotlight item's unique identifier IS the session id, so this reuses
-    /// the existing open-session route rather than inventing a second one.
+    /// Session items use the bare session id; Treasury items are prefixed
+    /// `collection:` (see CollectionSearchIndex).
     private static func handleUserActivity(_ activity: NSUserActivity, phase: String) {
         guard activity.activityType == CSSearchableItemActionType,
-              let sessionId = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-              !sessionId.isEmpty else { return }
+              let itemId = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+              !itemId.isEmpty else { return }
+        if itemId.hasPrefix("collection:") {
+            logger.info("[Spotlight] open treasury item phase=\(phase)")
+            Task { @MainActor in
+                SessionLockStore.shared.runWhenUnlocked {
+                    DeepLinkCoordinator.shared.pendingCollections = true
+                }
+            }
+            return
+        }
+        let sessionId = itemId
         logger.info("[Spotlight] open session \(sessionId.prefix(8)) phase=\(phase)")
         Task { @MainActor in
-            // [T-spotlight-cold-launch] Buffer BEFORE posting: on a cold launch
-            // ContentView's onReceive is not mounted yet and a bare post is
-            // simply lost — the app opened to the default session instead of
-            // the search result. Same pending store the notification-tap path
-            // uses; the launch .task consumes it once the UI is up, and a warm
-            // tap is handled by the post + markHandled inside the receiver.
-            NotificationNavigationStore.shared.setPending(sessionId)
-            NotificationCenter.default.post(
-                name: .openSessionFromIntent, object: nil,
-                userInfo: ["sessionId": sessionId]
-            )
+            guard await ChatStore.shared.sessionExists(id: sessionId) else {
+                logger.info("[Spotlight] stale session item — dropping")
+                CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: [sessionId]) { _ in }
+                return
+            }
+            SessionLockStore.shared.runWhenUnlocked {
+                Self.openSession(sessionId)
+            }
         }
+    }
+
+    @MainActor
+    private static func openSession(_ sessionId: String) {
+        // [T-spotlight-cold-launch] Buffer BEFORE posting: on a cold launch
+        // ContentView's onReceive is not mounted yet and a bare post is
+        // simply lost — the app opened to the default session instead of
+        // the search result. Same pending store the notification-tap path
+        // uses; the launch .task consumes it once the UI is up, and a warm
+        // tap is handled by the post + markHandled inside the receiver.
+        NotificationNavigationStore.shared.setPending(sessionId)
+        NotificationCenter.default.post(
+            name: .openSessionFromIntent, object: nil,
+            userInfo: ["sessionId": sessionId]
+        )
     }
 
     func windowScene(
@@ -311,14 +347,51 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
             let url = context.url
             logger.info("[Share] scene \(phase) URL scheme=\(url.scheme ?? "nil") host=\(url.host ?? "nil")")
             Task { @MainActor in
-                let coordinator = ShareCoordinator.shared
-                if ExternalFileImporter.canIngest(url) {
-                    ExternalFileImporter.ingest(url, into: coordinator)
-                } else {
-                    DeepLinkRouter.handle(url: url, shareCoordinator: coordinator)
-                }
+                AppURLEntry.open(url, source: phase)
             }
         }
     }
 
+}
+
+extension Notification.Name {
+    static let hideReleaseNotesRequested = Notification.Name("hideReleaseNotesRequested")
+}
+
+/// The one entry for externally opened URLs. SwiftUI's `.onOpenURL` and the
+/// custom scene delegate can both observe the same URL depending on launch
+/// path, so both funnel here: de-duplicated, and held until the app lock is
+/// lifted.
+@MainActor
+enum AppURLEntry {
+    private static var lastURL: URL?
+    private static var lastAt: Date = .distantPast
+
+    static func open(_ url: URL, source: String) {
+        if url == lastURL, Date().timeIntervalSince(lastAt) < 2 {
+            logger.info("[URL] duplicate delivery via \(source) ignored")
+            return
+        }
+        lastURL = url
+        lastAt = Date()
+        if SessionLockStore.shared.appIsLocked {
+            logger.info("[URL] deferred until unlock (\(source))")
+        }
+        SessionLockStore.shared.runWhenUnlocked { dispatch(url) }
+    }
+
+    private static func dispatch(_ url: URL) {
+        let coordinator = ShareCoordinator.shared
+        if ExternalFileImporter.canIngest(url) {
+            ExternalFileImporter.ingest(url, into: coordinator)
+            return
+        }
+        // [T-whatsnew-hide] 真机巡检用:先收起「本次更新」再打开别的页面。只收起、不记成已读,
+        // 下次冷启动还会再弹,不会让你错过这一版的说明。
+        if url.scheme == "leophoneagent", url.host == "whatsnew", url.path == "/hide" {
+            NotificationCenter.default.post(name: .hideReleaseNotesRequested, object: nil)
+            return
+        }
+        DeepLinkRouter.handle(url: url, shareCoordinator: coordinator)
+    }
 }

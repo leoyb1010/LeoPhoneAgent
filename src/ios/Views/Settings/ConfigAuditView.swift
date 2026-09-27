@@ -15,6 +15,7 @@ struct ConfigAuditView: View {
     /// in one scene. Confirmation dialogs render via UIAlertController
     /// and aren't subject to that restriction.
     @State private var revertCandidate: ConfigAuditEntry?
+    @State private var confirmClearAll = false
 
     var body: some View {
         List {
@@ -26,8 +27,7 @@ struct ConfigAuditView: View {
                     Spacer()
                     if !entries.isEmpty {
                         Button("Clear All", role: .destructive) {
-                            ConfigAuditLog.shared.clearAll()
-                            reload()
+                            confirmClearAll = true
                         }
                         .font(.footnote)
                     }
@@ -49,6 +49,15 @@ struct ConfigAuditView: View {
         .alert(item: $revertResult) { msg in
             Alert(title: Text(msg.title), message: Text(msg.body),
                   dismissButton: .default(Text("OK")))
+        }
+        .alert("Clear all config changes?", isPresented: $confirmClearAll) {
+            Button("Clear All", role: .destructive) {
+                ConfigAuditLog.shared.clearAll()
+                reload()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Cleared entries can no longer be reverted.")
         }
         .confirmationDialog(
             "Revert this change?",

@@ -232,9 +232,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// No-op when read-aloud is off or the text is blank. Order is preserved.
     /// `sessionId` tags the unit's owner so `stopSession` can clear one
     /// session's speech without touching concurrent sessions'.
-    func enqueue(_ text: String, sessionId: String) {
+    /// `oneShot` is an explicit "read this" tap: it plays even when automatic
+    /// read-replies is off, without turning that setting on.
+    func enqueue(_ text: String, sessionId: String, oneShot: Bool = false) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard VoiceOutputPreferences.isEnabled, !trimmed.isEmpty else { return }
+        guard oneShot || VoiceOutputPreferences.isEnabled, !trimmed.isEmpty else { return }
 
         let unit = Unit(seq: nextSeq, text: trimmed, ownerSessionId: sessionId); nextSeq += 1
         queue.append(unit)
@@ -250,11 +252,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// and enqueue each segment. Used by long-press "Read Aloud" / markdown
     /// preview / "Read Selected" — same splitting as live streaming TTS.
     /// Non-session callers pass `VoiceOutputPlayer.manualOwnerId`.
-    func enqueueSegmented(_ rawText: String, sessionId: String) {
+    func enqueueSegmented(_ rawText: String, sessionId: String, oneShot: Bool = false) {
         let sanitized = VoiceTextSanitizer.sanitize(rawText)
         guard !sanitized.isEmpty else { return }
         let segments = AIChatViewModel.splitIntoSpeechSegments(sanitized)
-        for s in segments { enqueue(s, sessionId: sessionId) }
+        for s in segments { enqueue(s, sessionId: sessionId, oneShot: oneShot) }
     }
 
     /// Stop everything: cancel in-flight synth, clear the queue, stop playback.

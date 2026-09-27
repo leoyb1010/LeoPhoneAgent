@@ -1,9 +1,9 @@
 import XCTest
 
 /// [T-oauth-refresh-race] Regression coverage for the shared refresh-race guard
-/// applied to xAI, Codex, Gemini, and Antigravity (mirroring the Claude fix).
+/// applied to the OAuth providers that refresh tokens (xAI, Codex, Kimi).
 ///
-/// All four providers route refresh failures through
+/// These providers route refresh failures through
 /// `OAuthRefreshCoordinator.resolveAfterRefreshFailure`, so these tests exercise
 /// that generic engine with a lightweight conforming token plus each provider's
 /// actual fatal-error classifier (`isRefreshTokenInvalid`), including the
@@ -60,13 +60,11 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
 
     private var providers: [Provider] {
         [
-            Provider(name: "Gemini", isFatal: fatal(googleFatal),
-                     rotationError: rotationError(status: 400, body: "{\"error\":\"invalid_grant\"}")),
             Provider(name: "xAI", isFatal: fatal(rotatingFatal),
                      rotationError: rotationError(status: 400, body: "{\"error\":\"refresh_token_reused\"}")),
             Provider(name: "Codex", isFatal: fatal(rotatingFatal),
                      rotationError: rotationError(status: 400, body: "{\"error\":\"refresh_token_reused\"}")),
-            Provider(name: "Antigravity", isFatal: fatal(googleFatal),
+            Provider(name: "Kimi", isFatal: KimiOAuthRefreshCoordinator.isRefreshTokenInvalid,
                      rotationError: rotationError(status: 400, body: "{\"error\":\"invalid_grant\"}")),
         ]
     }
@@ -169,16 +167,15 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
     }
 
     // MARK: - Provider-specific: xAI/Codex refresh_token_reused is fatal;
-    // Gemini/Antigravity do NOT treat a bare "reused" string as fatal.
+    // a provider that doesn't list reuse does NOT treat a bare "reused" string as fatal.
 
     func testRotationSignalClassification() {
         // A bare, non-JSON reuse string with a non-fatal (200) status.
         let reused = LLMError.providerError(message: "Token refresh failed: " +
             OAuthRefreshErrorClassifier.makeErrorMessage(status: 200, body: "refresh_token_reused"))
         XCTAssertTrue(fatal(rotatingFatal)(reused), "xAI/Codex must treat refresh_token_reused as fatal")
-        // Gemini/Antigravity don't list reuse; a bare reuse string (no 4xx /
-        // invalid_grant) is NOT fatal for them — token kept (correct: Google
-        // returns invalid_grant on real revocation, which IS in their list).
-        XCTAssertFalse(fatal(googleFatal)(reused), "Gemini/Antigravity do not list reuse")
+        // A Google-style fatal set doesn't list reuse; a bare reuse string is
+        // NOT fatal for it — token kept.
+        XCTAssertFalse(fatal(googleFatal)(reused), "providers that don't list reuse keep the token")
     }
 }

@@ -30,7 +30,9 @@ struct SessionEntity: AppEntity {
 struct SessionEntityQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [SessionEntity] {
         var results: [SessionEntity] = []
-        for id in identifiers {
+        // Face ID–locked sessions are invisible to Shortcuts/Siri: they can
+        // neither be listed nor resolved from a saved shortcut.
+        for id in identifiers where !SessionLockStore.isHiddenFromSystemSurfaces(id) {
             if let session = await ChatStore.shared.getSession(id) {
                 results.append(SessionEntity(from: session))
             }
@@ -40,6 +42,17 @@ struct SessionEntityQuery: EntityQuery {
 
     func suggestedEntities() async throws -> [SessionEntity] {
         let sessions = await ChatStore.shared.listSessions()
-        return sessions.prefix(100).map { SessionEntity(from: $0) }
+        return sessions.lazy
+            .filter { !SessionLockStore.isHiddenFromSystemSurfaces($0.id) }
+            .prefix(100)
+            .map { SessionEntity(from: $0) }
+    }
+}
+
+enum SessionLockedIntentError: Error, CustomLocalizedStringResourceConvertible {
+    case locked
+
+    var localizedStringResource: LocalizedStringResource {
+        "这个会话已用 Face ID 锁定，请在 App 里打开查看。"
     }
 }

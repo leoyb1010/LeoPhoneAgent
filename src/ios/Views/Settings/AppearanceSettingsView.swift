@@ -229,11 +229,10 @@ struct AppearanceSettingsView: View {
                     ForEach(iconOptions) { option in
                         Button {
                             guard appIconMode != option.id else { return }
-                            appIconMode = option.id
+                            // Record the choice only once iOS accepts it, or the
+                            // checkmark and the real icon drift apart.
                             UIApplication.shared.setAlternateIconName(option.iconName) { error in
-                                if let error = error {
-                                    print("[AppIcon] Failed to set icon: \(error.localizedDescription)")
-                                }
+                                if error == nil { appIconMode = option.id }
                             }
                         } label: {
                             HStack(spacing: 14) {
@@ -304,7 +303,7 @@ struct AppearanceSettingsView: View {
                                     .foregroundStyle(.secondary)
                                     .frame(width: 28)
                             }
-                            Text(lang.name)
+                            Text(lang.id.isEmpty ? String(localized: "System") : lang.name)
                                 .foregroundStyle(.primary)
                             Spacer()
                             if appLanguage == lang.id {

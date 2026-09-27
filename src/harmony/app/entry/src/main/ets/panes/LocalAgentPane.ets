@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { FirstMessage, LocalChatLaunch, LocalChatPane } from './LocalChatPane';
 import { Attachments } from '../chat/Attachments';
 import { Composer } from '../chat/Composer';
@@ -958,6 +958,22 @@ export struct LocalAgentPane {
 
   private async removeSession(id: string): Promise<void> {
     const ctx = getContext(this) as common.UIAbilityContext;
+    const title = sessionStore.summaries.find((row: LocalSessionSummary) => row.id === id)?.title ?? '这条对话';
+    try {
+      const picked = await promptAction.showDialog({
+        title: '删除对话?',
+        message: `「${title}」和里面的图片会从这台设备上删掉,不能恢复。`,
+        buttons: [
+          { text: '删除', color: '#E5484D' },
+          { text: '取消', color: '#8E8E93' }
+        ]
+      });
+      if (picked.index !== 0) {
+        return;
+      }
+    } catch (_err) {
+      return;
+    }
     try {
       ChatRuns.forget(id);
       await sessionStore.remove(ctx, id);

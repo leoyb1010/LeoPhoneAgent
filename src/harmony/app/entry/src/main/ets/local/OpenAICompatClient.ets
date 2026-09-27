@@ -34,6 +34,7 @@ import {
 import { OAuthSession, OAuthToken } from './OAuthSession';
 import { CODEX_MODELS_URL, codexCatalogIds } from './ProviderModels';
 import { providerStore } from '../store/ProviderStore';
+import { kindByKey } from './ProviderCatalog';
 
 export class StreamTurn {
   text: string = '';
@@ -47,20 +48,24 @@ export class OpenAICompatClient {
   private readonly key: string;
   private readonly model: string;
   private readonly mode: string;
-  private readonly oauth: boolean;
   private readonly account: string;
 
   static async open(baseUrl: string, apiKey: string, model: string, type: string,
     credential: string, instanceId: string): Promise<OpenAICompatClient> {
     let key = apiKey;
     let account = '';
+    if (credential === 'oauth' && type === 'anthropic') {
+      throw new Error('Claude 订阅登录已下线(Anthropic 不允许第三方应用用订阅账号调用)。请到「AI 服务商」里把这一家改成 Anthropic 控制台的 API Key;要用订阅,可以远控 Mac 上你自己登录的官方 claude。');
+    }
     if (credential === 'oauth') {
       const fresh: OAuthToken = await OAuthSession.ensure(instanceId, apiKey, type);
       key = fresh.access;
       account = fresh.account;
       providerStore.rememberKey(instanceId, key);
     }
-    return new OpenAICompatClient(baseUrl, key, model, type, credential, account);
+    // 订阅登录拿到的令牌只发给这家官方地址,不跟着自填的 API 根走。
+    const root = credential === 'oauth' ? kindByKey(type).root : baseUrl;
+    return new OpenAICompatClient(root, key, model, type, credential, account);
   }
 
   /** ChatGPT 登录的模型目录(和 Codex CLI 同一份)。拉不到就抛错,调用方保留原来的列表。 */
@@ -103,7 +108,6 @@ export class OpenAICompatClient {
     account: string) {
     this.key = apiKey.trim();
     this.model = model.trim();
-    this.oauth = credential === 'oauth';
     this.account = account;
     if (usesCodexResponses(type, credential, baseUrl)) {
       this.mode = 'codex';
@@ -300,15 +304,6 @@ export class OpenAICompatClient {
 
   private headers(): Record<string, string> {
     if (this.mode === 'anthropic') {
-      if (this.oauth) {
-        return {
-          'Authorization': `Bearer ${this.key}`,
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219',
-          'Accept': 'text/event-stream',
-          'Content-Type': 'application/json'
-        };
-      }
       return {
         'x-api-key': this.key,
         'anthropic-version': '2023-06-01',

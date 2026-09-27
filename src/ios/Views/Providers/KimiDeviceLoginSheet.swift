@@ -150,10 +150,13 @@ struct KimiDeviceLoginSheet: View {
     }
 
     /// Open the verification page in an in-app SFSafariViewController — matching
-    /// how the other OAuth providers (Claude / Codex / Gemini) present their auth
-    /// pages, rather than jumping out to system Safari. Presented from the
-    /// top-most VC (which is this sheet) so it stacks over the login sheet.
+    /// how the other OAuth providers (Codex / xAI) present their auth pages,
+    /// rather than jumping out to system Safari. Presented from the top-most VC
+    /// (which is this sheet) so it stacks over the login sheet.
+    /// The URL comes from the device-authorization response; SFSafariViewController
+    /// raises on anything but http(s), and plain http would expose the user code.
     private func presentSafari(_ url: URL) {
+        guard url.scheme?.lowercased() == "https", url.host?.isEmpty == false else { return }
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }

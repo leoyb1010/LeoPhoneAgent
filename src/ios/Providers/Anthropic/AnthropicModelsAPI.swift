@@ -25,7 +25,7 @@ enum AnthropicModelsAPI {
     /// Used for manual OAuth tokens on proxy/third-party endpoints.
     /// Sends both `Authorization: Bearer` and `x-api-key` for maximum compatibility.
     static func fetchModels(bearerToken: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false, userAgent: String? = nil) async throws -> [LLMModel] {
-        try await fetchWithFallback(credential: bearerToken, baseURL: baseURL, appendV1Suffix: appendV1Suffix, forceRefresh: forceRefresh) { request in
+        try await fetchWithFallback(credential: bearerToken, baseURL: baseURL, appendV1Suffix: appendV1Suffix, forceRefresh: forceRefresh, climbParentPaths: false) { request in
             request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
             request.setValue(bearerToken, forHTTPHeaderField: "x-api-key")
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
@@ -33,23 +33,17 @@ enum AnthropicModelsAPI {
         }
     }
 
-    static func fetchModels(oauthToken: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false) async throws -> [LLMModel] {
-        try await fetchWithFallback(credential: oauthToken, baseURL: baseURL, appendV1Suffix: appendV1Suffix, forceRefresh: forceRefresh) { request in
-            request.setValue("Bearer \(oauthToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        }
-    }
-
     /// Try `{base}/v1/models`; on failure, climb the URL path one segment at a
     /// time (up to 3 levels) and retry. Lets users enter vendor-specific bases
     /// like `https://api.deepseek.com/anthropic` and still discover the
     /// `/v1/models` endpoint at `https://api.deepseek.com`.
+    /// Bearer tokens skip the climb: they are only sent to the exact base the user entered.
     private static func fetchWithFallback(
         credential: String,
         baseURL: String?,
         appendV1Suffix: Bool,
         forceRefresh: Bool,
+        climbParentPaths: Bool = true,
         applyAuth: (inout URLRequest) -> Void
     ) async throws -> [LLMModel] {
         if !forceRefresh, let cached = ModelsCache.load(credential: credential) { return cached }
@@ -61,7 +55,7 @@ enum AnthropicModelsAPI {
 
         var bases = [initialBase]
         var current = initialBase
-        for _ in 0..<3 {
+        for _ in 0..<(climbParentPaths ? 3 : 0) {
             guard let parent = parentPath(of: current), parent != current else { break }
             bases.append(parent)
             current = parent

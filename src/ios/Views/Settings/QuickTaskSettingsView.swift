@@ -106,7 +106,7 @@ struct QuickTaskSettingsView: View {
                     showResetConfirmation = true
                 }
             } footer: {
-                Text("Restoring resets the eight built-in names, prompts, icons, and order. Custom tasks are kept.")
+                Text("Restoring resets the built-in tasks' names, prompts, icons, and order. Custom tasks are kept.")
             }
         }
         .navigationTitle("Quick Tasks")
