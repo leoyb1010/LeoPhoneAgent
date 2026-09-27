@@ -10,14 +10,15 @@ extension AIChatViewModel {
 
     /// Construct an AgentProvider from a ModelEntry by looking up its ProviderInstance and credential.
     func makeAgentProvider(for entry: ModelEntry) async -> AgentProvider {
-        return await Self.makeAgentProvider(for: entry)
+        return await Self.makeAgentProvider(for: entry, sessionId: sessionId)
     }
 
     /// Static variant — used by sub-task call sites (title generation, etc.)
     /// that don't have a viewmodel context. Same lookup logic as the instance
     /// method, since the resolution depends only on global state
     /// (ProviderConfigStore + LLMProviderFactory).
-    static func makeAgentProvider(for entry: ModelEntry) async -> AgentProvider {
+    /// `sessionId` is the conversation the provider serves, when there is one.
+    static func makeAgentProvider(for entry: ModelEntry, sessionId: String? = nil) async -> AgentProvider {
         let store = ProviderConfigStore.shared
         guard let instance = store.instance(for: entry.providerInstanceId) else {
             logger.error("No ProviderInstance found for entry \(entry.id)")
@@ -34,7 +35,7 @@ extension AIChatViewModel {
         case .openAI:
             return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model))
         case .openCodeGo:
-            switch LLMProviderFactory.makeOpenCodeGoProvider(instance: instance, model: entry.model) {
+            switch LLMProviderFactory.makeOpenCodeGoProvider(instance: instance, model: entry.model, sessionId: sessionId) {
             case let anthropic as AnthropicProvider:
                 return AnthropicAgentProvider(provider: anthropic)
             case let openAI as OpenAIProvider:

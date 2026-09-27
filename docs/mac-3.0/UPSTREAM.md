@@ -121,3 +121,12 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 - 配置:`~/.leophoneagent/cli/config.json`(或项目 `zcode.json` / `.zcode/config.json`)的 `"leo"` 段,环境变量 `ZCODE_LEO_AGENT`(同结构 JSON)优先:
   `{"editMode":{"default":"replace","models":{"*glm*":"hashline"}},"readLineNumbers":{"default":true,"models":{}},"leanProfile":false,"promptCacheKey":true}`。
   内置默认:所有模型都走 replace(`"hashlineFamilies": true` 才让 GLM / Kimi / MiniMax 走 hashline,评测台在真实模型上跑出提升再考虑默认打开);行号默认保留;精简档默认关;`prompt_cache_key` 默认只发给 api.openai.com / openrouter.ai。
+
+## Mac 1.3.3 补丁(2026-09-27,OpenCode Go)
+- 上游配置 `config/provider/zcode-builtin.json`(revision 31):`opencode-go-chat` / `-responses` 两个模板补齐
+  opencode.ai/v2/docs/console/go 端点表里的全部模型(共 34 个),新模型的 `templateModelRules` / `providerSiteRules`
+  照同模板已有条目写。同步上游时这几条若被冲掉,只是「模型供应商」里少几个模型,不影响能否调用。
+- 新增文件(零冲突):`packages/desktop/src/host/leo/openCodeGoModels.ts`(+ `.test.ts`):「订阅账号」里的 OpenCode Go
+  以官方实时列表为准,去掉已下线模型,MiniMax / Qwen 按文档走 Anthropic Messages;`openCodeSessionHeaders()`
+  给经模型代理(`modelProxy.ts`)发往 opencode.ai 的请求补 `x-opencode-session`(Go 不带会拒,400 MissingSessionID)。
+  上游 Agent 自己的请求头在 `apps/zcode-cli/packages/adapters/src/model/runner-attribution.ts`,本来就带,无需改动。

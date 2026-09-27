@@ -123,17 +123,23 @@ enum LLMProviderFactory {
     }
 
     /// OpenCode Go: one key, three wire protocols chosen by model family.
-    static func makeOpenCodeGoProvider(instance: ProviderInstance, model: LLMModel) -> any LLMProvider {
+    /// `sessionId` is the conversation's id (Go rejects requests without one);
+    /// calls outside a conversation, such as the connection test, get a fresh id.
+    static func makeOpenCodeGoProvider(instance: ProviderInstance, model: LLMModel, sessionId: String? = nil) -> any LLMProvider {
         let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
+        let session = [OpenCodeGo.sessionHeader: sessionId.flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString]
         switch OpenCodeGo.wireProtocol(for: model.id) {
         case .anthropicMessages:
-            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default)
+            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, extraHeaders: session)
         case .responses:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
             provider.forceResponsesAPI = true
+            provider.extraHeaders.merge(session) { _, new in new }
             return applyCustomUserAgent(provider, instance: instance, manualToken: nil)
         case .chatCompletions:
-            return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true), instance: instance, manualToken: nil)
+            let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
+            provider.extraHeaders.merge(session) { _, new in new }
+            return applyCustomUserAgent(provider, instance: instance, manualToken: nil)
         }
     }
 

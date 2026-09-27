@@ -49,9 +49,11 @@ export class OpenAICompatClient {
   private readonly model: string;
   private readonly mode: string;
   private readonly account: string;
+  // OpenCode Go 不带会话 id 的请求一律 400 MissingSessionID;同一个对话用同一个 id,方便它路由和缓存。
+  private readonly session: string;
 
   static async open(baseUrl: string, apiKey: string, model: string, type: string,
-    credential: string, instanceId: string): Promise<OpenAICompatClient> {
+    credential: string, instanceId: string, session: string = ''): Promise<OpenAICompatClient> {
     let key = apiKey;
     let account = '';
     if (credential === 'oauth' && type === 'anthropic') {
@@ -65,7 +67,7 @@ export class OpenAICompatClient {
     }
     // 订阅登录拿到的令牌只发给这家官方地址,不跟着自填的 API 根走。
     const root = credential === 'oauth' ? kindByKey(type).root : baseUrl;
-    return new OpenAICompatClient(root, key, model, type, credential, account);
+    return new OpenAICompatClient(root, key, model, type, credential, account, session);
   }
 
   /** ChatGPT 登录的模型目录(和 Codex CLI 同一份)。拉不到就抛错,调用方保留原来的列表。 */
@@ -105,10 +107,11 @@ export class OpenAICompatClient {
   }
 
   constructor(baseUrl: string, apiKey: string, model: string, type: string, credential: string,
-    account: string) {
+    account: string, session: string = '') {
     this.key = apiKey.trim();
     this.model = model.trim();
     this.account = account;
+    this.session = session.length > 0 ? session : util.generateRandomUUID(false);
     if (usesCodexResponses(type, credential, baseUrl)) {
       this.mode = 'codex';
       this.url = CODEX_RESPONSES_URL;
@@ -303,6 +306,14 @@ export class OpenAICompatClient {
   }
 
   private headers(): Record<string, string> {
+    const headers = this.baseHeaders();
+    if (this.url.startsWith('https://opencode.ai/')) {
+      headers['x-opencode-session'] = this.session;
+    }
+    return headers;
+  }
+
+  private baseHeaders(): Record<string, string> {
     if (this.mode === 'anthropic') {
       return {
         'x-api-key': this.key,

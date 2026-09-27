@@ -1111,7 +1111,7 @@ struct ProviderInstanceDetailView: View {
         case .openAI: return "sk-..."
         case .xAI: return "xai-..."
         case .kimiCode: return "" // OAuth only
-        case .openCodeGo: return "sk-..."
+        case .openCodeGo: return "oc_sk_..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."
         case .unsupported: return ""

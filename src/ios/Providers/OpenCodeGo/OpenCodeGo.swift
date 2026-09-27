@@ -14,6 +14,17 @@ enum OpenCodeGo {
     static let keyPageURL = URL(string: "https://opencode.ai/auth")!
     static let providerName = "OpenCode Go"
 
+    /// Go refuses every model request that carries no conversation id (HTTP 400
+    /// `MissingSessionID`, probed 2026-09-27); the docs ask for one stable id per
+    /// conversation so it can route and prompt-cache it.
+    static let sessionHeader = "x-opencode-session"
+
+    /// Still listed by `GET /models` but answered with "Model is unavailable"
+    /// (probed 2026-09-27), so they are never offered.
+    static let retiredModelIds: Set<String> = [
+        "kimi-k2.5", "glm-5", "qwen3.5-plus", "mimo-v2-pro", "mimo-v2-omni", "hy3-preview", "grok-4.5",
+    ]
+
     typealias WireProtocol = OpenCodeGoWireProtocol
 
     /// The model's own `provider.npm` in the models.dev `opencode-go` catalog
@@ -39,9 +50,9 @@ enum OpenCodeGo {
         LLMModel(id: "grok-4.6", displayName: "Grok 4.6", provider: providerName),
     ]
 
-    /// `GET /zen/go/v1/models` with the Bearer key. Throws on auth / network
-    /// failure so "Test & Save" can report a bad key; an empty catalog falls
-    /// back to the built-in list.
+    /// `GET /zen/go/v1/models` with the Bearer key, minus `retiredModelIds`.
+    /// Throws on auth / network failure so "Test & Save" can report a bad key;
+    /// an empty catalog falls back to the built-in list.
     static func fetchModels(apiKey: String, forceRefresh: Bool = false) async throws -> [LLMModel] {
         let fetched = try await OpenAIModelsAPI.fetchModels(
             apiKey: apiKey,
@@ -50,11 +61,12 @@ enum OpenCodeGo {
             forceRefresh: forceRefresh,
             userAgent: MinisUserAgent.default
         )
-        guard !fetched.isEmpty else {
+        let offered = fetched.filter { !retiredModelIds.contains(WireProtocol.bareId($0.id)) }
+        guard !offered.isEmpty else {
             logger.info("Empty /models catalog; using \(fallbackModels.count) built-in models")
             return ModelsDevAPI.enrichModels(fallbackModels)
         }
-        return fetched.map {
+        return offered.map {
             LLMModel(
                 id: $0.id,
                 displayName: $0.displayName,

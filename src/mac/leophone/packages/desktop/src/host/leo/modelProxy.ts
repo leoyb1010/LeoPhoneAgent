@@ -10,7 +10,13 @@ import type {
   ToolCall,
 } from "@earendil-works/pi-ai";
 
-import { listOAuthProviders, loggedInModels, oauthRuntime } from "./oauthRuntime.js";
+import {
+  listOAuthProviders,
+  loggedInModels,
+  oauthRuntime,
+  resolveProxyModel,
+} from "./oauthRuntime.js";
+import { openCodeSessionHeaders } from "./openCodeGoModels.js";
 
 /**
  * [leo] OpenAI 兼容的本机模型代理:`/v1/models` 与 `/v1/chat/completions`。
@@ -30,7 +36,11 @@ type OpenAIContentPart =
 interface OpenAIMessage {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: string | OpenAIContentPart[] | null;
-  tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
   tool_call_id?: string;
   name?: string;
 }
@@ -38,7 +48,10 @@ interface OpenAIMessage {
 interface OpenAIRequest {
   model: string;
   messages: OpenAIMessage[];
-  tools?: Array<{ type: "function"; function: { name: string; description?: string; parameters?: unknown } }>;
+  tools?: Array<{
+    type: "function";
+    function: { name: string; description?: string; parameters?: unknown };
+  }>;
   stream?: boolean;
   max_tokens?: number;
   max_completion_tokens?: number;
@@ -98,7 +111,12 @@ export function toPiContext(request: OpenAIRequest): Context {
       if (text) content.push({ type: "text", text });
       for (const call of message.tool_calls ?? []) {
         toolNames.set(call.id, call.function.name);
-        content.push({ type: "toolCall", id: call.id, name: call.function.name, arguments: safeJson(call.function.arguments) });
+        content.push({
+          type: "toolCall",
+          id: call.id,
+          name: call.function.name,
+          arguments: safeJson(call.function.arguments),
+        });
       }
       messages.push({
         role: "assistant",
@@ -125,7 +143,10 @@ export function toPiContext(request: OpenAIRequest): Context {
         role: "toolResult",
         toolCallId: callId,
         toolName: toolNames.get(callId) ?? message.name ?? "tool",
-        content: partsOf(message.content).length > 0 ? partsOf(message.content) : [{ type: "text", text: textOf(message.content) }],
+        content:
+          partsOf(message.content).length > 0
+            ? partsOf(message.content)
+            : [{ type: "text", text: textOf(message.content) }],
         isError: false,
         timestamp: now,
       });
@@ -135,7 +156,10 @@ export function toPiContext(request: OpenAIRequest): Context {
     name: tool.function.name,
     description: tool.function.description ?? "",
     // OpenAI 的 parameters 就是 JSON Schema;pi 的 Tool 参数也是 JSON Schema(TypeBox 产物同构)。
-    parameters: (tool.function.parameters ?? { type: "object", properties: {} }) as Tool["parameters"],
+    parameters: (tool.function.parameters ?? {
+      type: "object",
+      properties: {},
+    }) as Tool["parameters"],
   }));
   return {
     ...(system.length > 0 ? { systemPrompt: system.join("\n\n") } : {}),
@@ -203,17 +227,32 @@ async function upstreamFailure(
   if (status === 429) {
     return {
       status,
-      body: { error: { message: `订阅额度已用完或请求过于频繁,稍后会自动重试。(上游:${detail})`, type: "rate_limit_error" } },
+      body: {
+        error: {
+          message: `订阅额度已用完或请求过于频繁,稍后会自动重试。(上游:${detail})`,
+          type: "rate_limit_error",
+        },
+      },
     };
   }
-  return { status, body: { error: { message: detail, type: status < 500 ? "invalid_request_error" : "upstream_error" } } };
+  return {
+    status,
+    body: {
+      error: { message: detail, type: status < 500 ? "invalid_request_error" : "upstream_error" },
+    },
+  };
 }
 
 export async function handleModelsRequest(res: ServerResponse): Promise<void> {
   const models = await loggedInModels();
   sendJson(res, 200, {
     object: "list",
-    data: models.map((model) => ({ id: model.id, object: "model", owned_by: model.id.split("/")[0], name: model.name })),
+    data: models.map((model) => ({
+      id: model.id,
+      object: "model",
+      owned_by: model.id.split("/")[0],
+      name: model.name,
+    })),
   });
 }
 
@@ -224,17 +263,27 @@ export async function handleChatCompletions(
 ): Promise<void> {
   const request = body as unknown as OpenAIRequest;
   if (!Array.isArray(request.messages)) {
-    sendJson(res, 400, { error: { message: "messages is required", type: "invalid_request_error" } });
+    sendJson(res, 400, {
+      error: { message: "messages is required", type: "invalid_request_error" },
+    });
     return;
   }
   const [providerId, ...rest] = String(request.model ?? "").split("/");
   const modelId = rest.join("/");
   const runtime = await oauthRuntime();
   // 只放行页面上列出且已登录的那几家:下架的登录方式(比如 Claude 订阅)即使本机还留着旧凭据也不能再用。
-  const listed = (await listOAuthProviders()).some((provider) => provider.id === providerId && provider.loggedIn);
-  const model = listed && providerId && modelId ? runtime.getModel(providerId, modelId) : undefined;
+  const listed = (await listOAuthProviders()).some(
+    (provider) => provider.id === providerId && provider.loggedIn,
+  );
+  const model =
+    listed && providerId && modelId ? await resolveProxyModel(providerId, modelId) : undefined;
   if (!model) {
-    sendJson(res, 404, { error: { message: `模型不存在或该订阅账号没登录:${request.model}`, type: "invalid_request_error" } });
+    sendJson(res, 404, {
+      error: {
+        message: `模型不存在或该订阅账号没登录:${request.model}`,
+        type: "invalid_request_error",
+      },
+    });
     return;
   }
 
@@ -244,12 +293,13 @@ export async function handleChatCompletions(
   res.on("close", () => {
     if (!res.writableFinished) abort.abort();
   });
-  void req;
   const maxTokens = request.max_completion_tokens ?? request.max_tokens;
+  const sessionHeaders = openCodeSessionHeaders(model, req.headers);
   const stream = runtime.streamSimple(model, toPiContext(request), {
     signal: abort.signal,
     ...(maxTokens ? { maxTokens } : {}),
     ...(typeof request.temperature === "number" ? { temperature: request.temperature } : {}),
+    ...(sessionHeaders ? { headers: sessionHeaders } : {}),
   } as never);
 
   const id = `chatcmpl-leo-${Date.now().toString(36)}`;
@@ -267,11 +317,18 @@ export async function handleChatCompletions(
       }
     }
     if (!final) {
-      const failure = await upstreamFailure(failedMessage, errorText ?? "模型没有返回", model.contextWindow);
+      const failure = await upstreamFailure(
+        failedMessage,
+        errorText ?? "模型没有返回",
+        model.contextWindow,
+      );
       sendJson(res, failure.status, failure.body);
       return;
     }
-    const text = final.content.filter((part): part is TextContent => part.type === "text").map((part) => part.text).join("");
+    const text = final.content
+      .filter((part): part is TextContent => part.type === "text")
+      .map((part) => part.text)
+      .join("");
     const calls = final.content.filter((part): part is ToolCall => part.type === "toolCall");
     sendJson(res, 200, {
       id,
@@ -344,7 +401,10 @@ export async function handleChatCompletions(
               index: toolIndex,
               id: event.toolCall.id,
               type: "function",
-              function: { name: event.toolCall.name, arguments: JSON.stringify(event.toolCall.arguments ?? {}) },
+              function: {
+                name: event.toolCall.name,
+                arguments: JSON.stringify(event.toolCall.arguments ?? {}),
+              },
             },
           ],
         });
@@ -366,7 +426,9 @@ export async function handleChatCompletions(
       sendJson(res, failure.status, failure.body);
       return;
     }
-    res.write(`data: ${JSON.stringify({ error: { message: String(error), type: "upstream_error" } })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ error: { message: String(error), type: "upstream_error" } })}\n\n`,
+    );
   }
   begin();
   res.write("data: [DONE]\n\n");

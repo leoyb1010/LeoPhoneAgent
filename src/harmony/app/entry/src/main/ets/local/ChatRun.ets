@@ -493,7 +493,7 @@ export class ChatRun {
     const slot = queue[this.failIndex];
     const client = await OpenAICompatClient.open(providerStore.slotRoot(slot.instanceId),
       providerStore.keyFor(slot.instanceId), slot.model, providerStore.slotType(slot.instanceId),
-      providerStore.slotCredential(slot.instanceId), slot.instanceId);
+      providerStore.slotCredential(slot.instanceId), slot.instanceId, this.sessionId);
     // 登录态刷新要走网络,这期间点了停止就不再开流。
     if (gen !== this.runGen) {
       return;

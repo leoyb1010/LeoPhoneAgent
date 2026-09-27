@@ -136,6 +136,9 @@ export function codexCatalogIds(json: object): string[] {
 // 按 https://opencode.ai/docs/go/ 的端点表:GPT / Grok / Muse Spark 走 /v1/responses,
 // MiniMax 和 Qwen 全部走 /v1/messages。和 iOS OpenCodeGoWireProtocol、providerModels.ts 保持一致。
 const OPENCODE_GO_NON_CHAT_PREFIXES: string[] = ['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen'];
+// /models 里还挂着、一调用就回 "Model is unavailable" 的下线模型(2026-09-27 实测),不给选。
+const OPENCODE_GO_RETIRED: string[] =
+  ['kimi-k2.5', 'glm-5', 'qwen3.5-plus', 'mimo-v2-pro', 'mimo-v2-omni', 'hy3-preview', 'grok-4.5'];
 
 export function chatModelsFor(type: string, ids: string[]): string[] {
   if (type !== 'openCodeGo') {
@@ -144,6 +147,9 @@ export function chatModelsFor(type: string, ids: string[]): string[] {
   const kept: string[] = ids.filter((id: string) => {
     const parts = id.toLowerCase().split('/');
     const bare = parts[parts.length - 1];
+    if (OPENCODE_GO_RETIRED.includes(bare)) {
+      return false;
+    }
     for (let i = 0; i < OPENCODE_GO_NON_CHAT_PREFIXES.length; i++) {
       if (bare.startsWith(OPENCODE_GO_NON_CHAT_PREFIXES[i])) {
         return false;

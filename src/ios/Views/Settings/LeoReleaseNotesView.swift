@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.47.1",
+            date: "2026-09-27",
+            title: "OpenCode Go 修好了:填上 Key 就能连,模型列表只留能用的",
+            highlights: [
+                "修好 OpenCode Go 填了 Key 却连不上:OpenCode 现在要求每个请求带上所属对话的编号(官方文档的要求),上一版没带,请求全被拒。现在同一个对话用同一个编号,Chat、Responses、Anthropic 三种接口都能用。之前没加成功的,重新添加一次即可。",
+                "模型列表只列能用的:OpenCode 的目录里还挂着 7 个已下线的模型(GLM-5、Kimi K2.5、Qwen3.5 Plus、MiMo V2 Pro / Omni、Hy3 Preview、Grok 4.5),一选就报「Model is unavailable」,现在不再列出。Muse Spark 两个模型要先在 OpenCode 控制台的隐私设置里允许「会用请求数据训练」的模型才能用。",
+                "Key 输入框的示例改成新版控制台发的 oc_sk_ 开头格式。"
+            ]
+        ),
+        LeoRelease(
             version: "1.47.0",
             date: "2026-09-27",
             title: "接入 OpenCode Go;下线 Claude 订阅等非官方登录;锁、审批和对话数据全面加固",

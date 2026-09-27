@@ -116,7 +116,7 @@ final class AnthropicProvider: LLMProvider {
 
     /// Manual token constructor: sends both `x-api-key` and `Authorization: Bearer` headers
     /// for maximum compatibility with third-party proxies and Coding Plan endpoints.
-    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil) {
+    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil, extraHeaders: [String: String] = [:]) {
         self.model = model
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
@@ -127,7 +127,7 @@ final class AnthropicProvider: LLMProvider {
             apiKey: manualToken,
             basePath: resolvedBase,
             betaHeaders: nil,
-            httpClient: DualAuthHTTPClient(customUserAgent: customUserAgent)
+            httpClient: DualAuthHTTPClient(customUserAgent: customUserAgent, extraHeaders: extraHeaders)
         )
     }
 

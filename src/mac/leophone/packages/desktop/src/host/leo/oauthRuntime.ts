@@ -7,6 +7,7 @@ import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import { leoPath } from "./leoPaths.js";
+import { OPENCODE_GO, providerModels } from "./openCodeGoModels.js";
 
 /**
  * [leo] 订阅账号登录:ChatGPT(Codex)、GitHub Copilot 等走 OAuth,OpenCode Go 走 API Key。
@@ -30,7 +31,11 @@ async function loadModelRuntimeClass(): Promise<typeof ModelRuntime> {
   const packagedPiDir = process.resourcesPath
     ? join(process.resourcesPath, "app.asar", "node_modules", "@earendil-works", "pi-coding-agent")
     : "";
-  if (!process.env["PI_PACKAGE_DIR"] && packagedPiDir && existsSync(join(packagedPiDir, "package.json"))) {
+  if (
+    !process.env["PI_PACKAGE_DIR"] &&
+    packagedPiDir &&
+    existsSync(join(packagedPiDir, "package.json"))
+  ) {
     process.env["PI_PACKAGE_DIR"] = packagedPiDir;
   }
   const mod = await import("@earendil-works/pi-coding-agent");
@@ -136,7 +141,7 @@ export async function listOAuthProviders(): Promise<OAuthProviderInfo[]> {
         name: provider.name ?? provider.id,
         authType: "api_key",
         loggedIn,
-        modelCount: loggedIn ? runtime.getModels(provider.id).length : 0,
+        modelCount: loggedIn ? (await providerModels(runtime, provider.id)).length : 0,
         ...API_KEY_PROVIDER_HELP[provider.id],
         importable: Boolean(readOpenCodeCliKey(provider.id)),
       });
@@ -177,7 +182,7 @@ export async function loggedInModels(): Promise<ProxyModel[]> {
   const providers = await listOAuthProviders();
   const models: ProxyModel[] = [];
   for (const provider of providers.filter((p) => p.loggedIn)) {
-    for (const model of runtime.getModels(provider.id)) {
+    for (const model of await providerModels(runtime, provider.id)) {
       const input = (model as unknown as { input?: string[] }).input ?? [];
       models.push({
         id: `${provider.id}/${model.id}`,
@@ -188,6 +193,18 @@ export async function loggedInModels(): Promise<ProxyModel[]> {
     }
   }
   return models;
+}
+
+/**
+ * 代理收到 `<provider>/<model>` 时找回模型。OpenCode Go 只认页面上列出的那份(官方列表,去掉下线的,
+ * MiniMax / Qwen 已改走 Anthropic 接口);直接查 pi 的表会绕开这些修正。
+ */
+export async function resolveProxyModel(providerId: string, modelId: string) {
+  const runtime = await oauthRuntime();
+  if (providerId === OPENCODE_GO) {
+    return (await providerModels(runtime, providerId)).find((model) => model.id === modelId);
+  }
+  return runtime.getModel(providerId, modelId);
 }
 
 // -- 登录流程 ----------------------------------------------------------------
@@ -201,7 +218,13 @@ interface LoginFlow {
   status: "running" | "done" | "error" | "cancelled";
   startedAt: number;
   events: Array<Record<string, unknown>>;
-  prompt: { id: string; type: string; message: string; placeholder?: string; options?: unknown } | null;
+  prompt: {
+    id: string;
+    type: string;
+    message: string;
+    placeholder?: string;
+    options?: unknown;
+  } | null;
   resolvePrompt: ((value: string) => void) | null;
   error?: string;
   abort: AbortController;
@@ -220,13 +243,13 @@ const LOGIN_TIMEOUT_MS = 10 * 60_000;
 export function readOpenCodeCliKey(providerId: string): string | null {
   const dataHome = process.env["XDG_DATA_HOME"]?.trim() || join(homedir(), ".local", "share");
   try {
-    const parsed = JSON.parse(readFileSync(join(dataHome, "opencode", "auth.json"), "utf8")) as Record<
-      string,
-      { type?: unknown; key?: unknown } | undefined
-    >;
+    const parsed = JSON.parse(
+      readFileSync(join(dataHome, "opencode", "auth.json"), "utf8"),
+    ) as Record<string, { type?: unknown; key?: unknown } | undefined>;
     for (const id of [providerId, "opencode"]) {
       const entry = parsed[id];
-      if (entry?.type === "api" && typeof entry.key === "string" && entry.key.trim()) return entry.key.trim();
+      if (entry?.type === "api" && typeof entry.key === "string" && entry.key.trim())
+        return entry.key.trim();
     }
   } catch {
     // 没装或没登过 OpenCode
@@ -250,7 +273,8 @@ export async function startOAuthLogin(
   }
   const authType = isApiKeyProvider(providerId) ? "api_key" : "oauth";
   const importedKey = options.importFromOpenCodeCli ? readOpenCodeCliKey(providerId) : null;
-  if (options.importFromOpenCodeCli && !importedKey) throw new OAuthRequestError("本机 OpenCode 里没有找到这家的 API Key");
+  if (options.importFromOpenCodeCli && !importedKey)
+    throw new OAuthRequestError("本机 OpenCode 里没有找到这家的 API Key");
   const flow: LoginFlow = {
     id: randomUUID(),
     provider: providerId,
@@ -277,14 +301,27 @@ export async function startOAuthLogin(
           resolve(importedKey);
           return;
         }
-        const p = prompt as unknown as { type: string; message: string; placeholder?: string; options?: unknown };
-        flow.prompt = { id: randomUUID(), type: p.type, message: p.message, placeholder: p.placeholder, options: p.options };
+        const p = prompt as unknown as {
+          type: string;
+          message: string;
+          placeholder?: string;
+          options?: unknown;
+        };
+        flow.prompt = {
+          id: randomUUID(),
+          type: p.type,
+          message: p.message,
+          placeholder: p.placeholder,
+          options: p.options,
+        };
         flow.resolvePrompt = (value) => {
           flow.prompt = null;
           flow.resolvePrompt = null;
           resolve(value);
         };
-        flow.abort.signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+        flow.abort.signal.addEventListener("abort", () => reject(new Error("cancelled")), {
+          once: true,
+        });
         // manual_code 提示和本机回调服务器是赛跑关系:浏览器回跳先到,pi 会撤掉这个提示,
         // 页面上的「粘贴授权码」输入框也要跟着消失。
         prompt.signal?.addEventListener(

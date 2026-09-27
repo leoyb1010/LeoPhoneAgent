@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.3.3",
+    date: "2026-09-27",
+    items: [
+      "修好「订阅账号」里的 OpenCode Go:OpenCode 现在要求每个请求带上所属对话的编号,上一版经订阅账号发出的请求没带,全被拒。现在按对话自动带上;「模型供应商」里内置的 OpenCode Go 模板本来就带,不受影响。",
+      "OpenCode Go 模型列全:「订阅账号」按官方实时目录列出全部能用的模型(去掉 7 个已下线、一选就报「Model is unavailable」的);MiniMax、Qwen 按官方文档改走 Anthropic 接口,MiniMax M2.7 不再报「不支持这个协议」。「模型供应商」的 OpenCode Go 模板补齐官方文档里的 34 个模型(新增 LongCat 2.0、MiMo V2.6、GPT 6 Luna、Grok 4.7 等)。",
+      "Muse Spark 两个模型要先在 OpenCode 控制台的隐私设置里允许「会用请求数据训练」的模型才能用。",
+    ],
+  },
+  {
     version: "1.3.2",
     date: "2026-09-27",
     items: [

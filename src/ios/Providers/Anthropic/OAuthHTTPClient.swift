@@ -1009,14 +1009,18 @@ final class EagerStreamingHTTPClient: HTTPClient {
 final class DualAuthHTTPClient: HTTPClient {
     private let underlying: URLSessionHTTPClientAdapter
 
-    /// - Parameter customUserAgent: see `EagerStreamingHTTPClient.init`.
-    init(customUserAgent: String? = nil) {
+    /// - Parameters:
+    ///   - customUserAgent: see `EagerStreamingHTTPClient.init`.
+    ///   - extraHeaders: sent on every request (e.g. OpenCode Go's session id).
+    init(customUserAgent: String? = nil, extraHeaders: [String: String] = [:]) {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 600
         config.protocolClasses = [DualAuthURLProtocol.self]
-        if let ua = customUserAgent {
+        var headers = extraHeaders
+        if let ua = customUserAgent { headers["User-Agent"] = ua }
+        if !headers.isEmpty {
             config.httpAdditionalHeaders = (config.httpAdditionalHeaders ?? [:]).merging(
-                ["User-Agent": ua]) { _, new in new }
+                headers as [AnyHashable: Any]) { _, new in new }
         }
         let session = URLSession(configuration: config)
         self.underlying = URLSessionHTTPClientAdapter(urlSession: session)

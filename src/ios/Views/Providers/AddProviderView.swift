@@ -1108,7 +1108,7 @@ struct AddProviderView: View {
         case .anthropic: return "sk-ant-..."
         case .gemini: return "Gemini API Key..."
         case .openAI: return "sk-..."
-        case .openCodeGo: return "sk-..."
+        case .openCodeGo: return "oc_sk_..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."
         case .xAI: return "xai-..."

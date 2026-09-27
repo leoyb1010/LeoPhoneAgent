@@ -1426,6 +1426,8 @@ console.log("PROTOCOL_MACHINES_OK");
   assert.deepEqual(chatModelsFor("openCodeGo", ["opencode-go/MiniMax-M2.7", "opencode-go/GLM-5.3"]), ["opencode-go/GLM-5.3"]);
   const modelsEts = readFileSync(new URL("../app/entry/src/main/ets/local/ProviderModels.ets", import.meta.url), "utf8");
   assert.ok(modelsEts.includes("['gpt-', 'grok-', 'muse-spark-', 'minimax-', 'qwen']"), "ProviderModels.ets 的 OpenCode Go 表要和 providerModels.ts 一致");
+  assert.deepEqual(chatModelsFor("openCodeGo", ["glm-5", "glm-5.3", "kimi-k2.5", "opencode-go/HY3-Preview"]), ["glm-5.3"]);
+  assert.ok(modelsEts.includes("['kimi-k2.5', 'glm-5', 'qwen3.5-plus', 'mimo-v2-pro', 'mimo-v2-omni', 'hy3-preview', 'grok-4.5']"), "ProviderModels.ets 的下线表要和 providerModels.ts 一致");
   assert.deepEqual(chatModelsFor("openCodeGo", ["gpt-5.6-luna"]), ["gpt-5.6-luna"]);
   assert.deepEqual(chatModelsFor("openAI", ["gpt-5.5"]), ["gpt-5.5"]);
   assert.deepEqual(availableCredentials("openCodeGo"), ["apiKey"]);
@@ -1439,6 +1441,10 @@ console.log("PROTOCOL_MACHINES_OK");
   assert.ok(!oauthEts.includes("claude.ai/oauth") && !oauthEts.includes("9d1c250a-e61b-44d9-88ed-5944d1962f5e"), "Claude 订阅登录已下线");
   const client = readFileSync(new URL("../app/entry/src/main/ets/local/OpenAICompatClient.ets", import.meta.url), "utf8");
   assert.ok(!client.includes("claude-code-20250219"), "不再伪装 Claude Code");
+  // OpenCode Go 不带会话 id 的请求一律 400 MissingSessionID。
+  assert.ok(/headers\['x-opencode-session'\] = this\.session/.test(client), "OpenCode Go 请求要带 x-opencode-session");
+  const chatRun = readFileSync(new URL("../app/entry/src/main/ets/local/ChatRun.ets", import.meta.url), "utf8");
+  assert.ok(/slot\.instanceId, this\.sessionId\)/.test(chatRun), "对话里的请求用对话 id 当会话 id");
   console.log("PROTOCOL_OPENCODE_GO_OK");
 }
 

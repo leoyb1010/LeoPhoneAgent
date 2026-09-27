@@ -165,7 +165,7 @@ export class LocalAgentEngine {
     const key = providerStore.keyFor(slot.instanceId);
     const client = await OpenAICompatClient.open(providerStore.slotRoot(slot.instanceId), key, slot.model,
       providerStore.slotType(slot.instanceId), providerStore.slotCredential(slot.instanceId),
-      slot.instanceId);
+      slot.instanceId, sessionKey);
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
       return;
     }
