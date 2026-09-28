@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        E5SRP0001 /* SyncRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRP0003 /* SyncRetryPolicy.swift */; };
+        E5SRP0002 /* SyncRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRP0003 /* SyncRetryPolicy.swift */; };
 		0EF3A9F3129DD3B5DB6880DB /* ChatInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE72FB7BDDEFE88EF490860 /* ChatInspector.swift */; };
 		227CA5FA422444E132B384B6 /* LeoCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC6BA9709F38B2477D55C67 /* LeoCommands.swift */; };
 		1002171D84B5B80449161785 /* CommandRisk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B74F300D94BD261002831C /* CommandRisk.swift */; };
@@ -705,6 +707,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        E5SRP0003 /* SyncRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRetryPolicy.swift; sourceTree = "<group>"; };
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
 		0F5379380323FA8C6477708C /* GroupSlotPicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupSlotPicker.swift; sourceTree = "<group>"; };
 		28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceLog.swift; sourceTree = "<group>"; };
@@ -2316,6 +2319,7 @@
 				E5W000012 /* Syncable.swift */,
 				E5W000013 /* SyncableTypeRegistry.swift */,
 				E5W000014 /* SyncTransport.swift */,
+				E5SRP0003 /* SyncRetryPolicy.swift */,
 				E5W000015 /* LANTransport.swift */,
 				E5W000016 /* SyncedTypes.swift */,
 				E5W000017 /* SyncCore.swift */,
@@ -2879,6 +2883,7 @@
 				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
 				E5T5L0003 /* T5ShellBridgeLogic.swift in Sources */,
 				E5T6L0003 /* T6RelayLogic.swift in Sources */,
+				E5SRP0002 /* SyncRetryPolicy.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
@@ -3364,6 +3369,7 @@
 				E5W000005 /* LANTransport.swift in Sources */,
 				E5W000006 /* SyncedTypes.swift in Sources */,
 				E5W000007 /* SyncCore.swift in Sources */,
+				E5SRP0001 /* SyncRetryPolicy.swift in Sources */,
 				E5W000008 /* SyncCoreHydrators.swift in Sources */,
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
 				E5W000009 /* ICloudSharedZoneTransport.swift in Sources */,

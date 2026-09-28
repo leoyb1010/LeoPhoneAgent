@@ -234,12 +234,19 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     private static func configTypeAnchoredKey(_ type: String) -> String {
         "cloudSync.v2.configAnchored.\(type)"
     }
-    /// Consecutive fetchRecentV2 runs that hit at least one CKQuery error.
-    /// Drives exponential backoff via `retryAfter`; reset to 0 on a clean run.
-    private var consecutiveFetchFailures: Int = 0
-    /// Backoff schedule (seconds) indexed by failure count, capped at the
-    /// last entry. ~2min → 5min → 10min → 20min → 30min ceiling.
-    private static let fetchBackoffSchedule: [TimeInterval] = [120, 300, 600, 1200, 1800]
+    /// 缺失类型只影响自己的查询；只有服务端明确的提示能限制整个服务。
+    private static let retryPolicyKey = "cloudSync.v2.retryPolicy.v1"
+    private var retryPolicy = SyncRetryPolicy() {
+        didSet {
+            if let data = try? JSONEncoder().encode(retryPolicy) {
+                UserDefaults.standard.set(data, forKey: Self.retryPolicyKey)
+            }
+        }
+    }
+
+    private func observeServiceRetry(_ seconds: TimeInterval) {
+        retryPolicy.observeServiceRetry(after: seconds, at: Date())
+    }
 
     // [T-ios-icloud-ckrecordid-nilname-crash] Pre-flight validation for
     // `CKRecord.ID(recordName:zoneID:)`. iOS 26.6 Beta raises an ObjC
@@ -301,7 +308,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
 
     /// Most recent CloudKit-issued throttle deadline. Read by SyncCore
     /// to gate sendNow.
-    private(set) var retryAfter: Date?
+    var retryAfter: Date? { retryPolicy.serviceNotBefore }
 
     // MARK: - Init
 
@@ -313,6 +320,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.stateURL = dir.appendingPathComponent("state-v2.bin")
         super.init()
+        if let data = UserDefaults.standard.data(forKey: Self.retryPolicyKey),
+           let saved = try? JSONDecoder().decode(SyncRetryPolicy.self, from: data) {
+            retryPolicy = saved
+        }
         if let data = try? Data(contentsOf: stateURL) {
             self.stateSerialization = try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: data)
         }
@@ -587,25 +598,14 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         let now = Date()
         // Default (high-volume types: sessions / messages / files) cutoff: the
         // bandwidth-optimised 24h window anchored to the last successful run.
-        let defaultCutoff: Date
-        if let lastTs = UserDefaults.standard.object(forKey: Self.recentFetchLastKey) as? Double, lastTs > 0 {
-            // 5min slack so a record whose createdAt is just barely
-            // before our cursor still gets caught (clock skew, write
-            // ordering on server side).
-            defaultCutoff = max(Date(timeIntervalSince1970: lastTs - 300), now.addingTimeInterval(-Self.recentFetchWindow))
-        } else {
-            defaultCutoff = now.addingTimeInterval(-Self.recentFetchWindow)
-        }
-        // [T-icloud-fresh-restore-provider-groups] Per-type cutoff: a config
-        // type that hasn't been anchored yet (fresh device / never successfully
-        // applied) pulls its FULL history so months-old providers/groups are not
-        // missed by the 24h floor. `cutoffFor` returns the right floor per type.
         func cutoffFor(_ type: String) -> Date {
             if Self.fullHistoryConfigTypes.contains(type),
                !UserDefaults.standard.bool(forKey: Self.configTypeAnchoredKey(type)) {
                 return .distantPast
             }
-            return defaultCutoff
+            let last = UserDefaults.standard.double(forKey: Self.recentFetchLastKey + "." + type)
+            let windowStart = now.addingTimeInterval(-Self.recentFetchWindow)
+            return last > 0 ? max(Date(timeIntervalSince1970: last - 300), windowStart) : windowStart
         }
         // (recordType, fieldName) — use createdAt where present, else
         // updatedAt for records that have no createdAt.
@@ -650,19 +650,14 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         var totalFetched = 0
         var byType: [String: Int] = [:]
         var portables: [PortableRecord] = []
-        // [T-ios-cloudkit-nsoperation-weak-clear-crash] Track whether any
-        // per-type CKQuery threw this run, to drive exponential backoff below.
-        var fetchHadError = false
-        // [T-icloud-provider-anchor-per-type] Track WHICH types failed this run.
-        // A full-history config type must anchor as soon as ITS OWN pull
-        // succeeds — gating anchoring on the batch-wide `fetchHadError` meant a
-        // failure in ANY type (e.g. a transient backoff on another record type)
-        // prevented provider types from ever anchoring, so they re-pulled their
-        // entire history every cold start (the full 700+-record fetchRecentV2 +
-        // apply storm behind the scroll stalls). Anchor per-type instead.
-        var typesWithError: Set<String> = []
+        // 只有实际完成的类型才能推进游标或配置锚点；跳过不等于成功。
+        var successfulTypes: Set<String> = []
         let registry = SyncableTypeRegistry.shared
         for (type, dateKey) in typesAndKeys {
+            guard retryPolicy.isEligible(.query(type), at: Date()) else {
+                logger.debug("[iCloudTrace] query deferred type=\(type)")
+                continue
+            }
             // Resolve the type's home zone; fall back to the shared zone for
             // any type not explicitly mapped (keeps behavior safe if a new
             // type is added to the poll list before the zone map).
@@ -692,7 +687,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             // ships 300+), and silently truncating to 200 would drop the rest —
             // including model-group members. Steady-state 24h windows almost
             // never exceed one page, so keep their single-page behavior.
-            let paginate = (cutoff == .distantPast)
+            let fullHistory = (cutoff == .distantPast)
             let outcome: Result<[(CKRecord, PortableRecord?)], Error>
             outcome = await Task.detached(priority: .utility) { [self] () -> Result<[(CKRecord, PortableRecord?)], Error> in
                 do {
@@ -705,14 +700,12 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                     )
                     while true {
                         for (_, recResult) in result.matchResults {
-                            if case .success(let rec) = recResult {
-                                // toPortable is nonisolated — safe to call off-actor.
-                                // Reads only rec + registry, no instance mutable state.
-                                let p = self.toPortable(rec, registry: registry)
-                                rows.append((rec, p))
-                            }
+                            // 部分记录读取失败也不能推进该类型游标，否则会永久漏收。
+                            let rec = try recResult.get()
+                            let p = self.toPortable(rec, registry: registry)
+                            rows.append((rec, p))
                         }
-                        guard paginate, let cursor = result.queryCursor else { break }
+                        guard let cursor = result.queryCursor else { break }
                         result = try await db.records(continuingMatchFrom: cursor, desiredKeys: nil, resultsLimit: 200)
                     }
                     return .success(rows)
@@ -722,6 +715,9 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             }.value
             switch outcome {
             case .success(let rows):
+                retryPolicy.succeeded(.query(type))
+                successfulTypes.insert(type)
+                UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.recentFetchLastKey + "." + type)
                 for (rec, p) in rows {
                     totalFetched += 1
                     byType[type, default: 0] += 1
@@ -734,7 +730,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                 // so a field log shows whether providers/groups actually arrived
                 // from CloudKit (vs being dropped downstream by a not-yet-open DB).
                 if Self.fullHistoryConfigTypes.contains(type) {
-                    logger.info("[iCloudTrace][v3sync] fetchRecentV2 config type=\(type) fetched=\(byType[type] ?? 0) fullHistory=\(paginate)")
+                    logger.info("[iCloudTrace][v3sync] fetchRecentV2 config type=\(type) fetched=\(byType[type] ?? 0) fullHistory=\(fullHistory)")
                 } else {
                     logger.info("[iCloudTrace] fetchRecentV2 type=\(type) done count=\(byType[type] ?? 0)")
                 }
@@ -742,12 +738,11 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                 let nse = error as NSError
                 let ck = error as? CKError
                 logger.warning("[iCloudTrace] fetchRecentV2 type=\(type) field=\(dateKey) failed: code=\(nse.code) ck=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription)")
-                fetchHadError = true
-                typesWithError.insert(type)
+                retryPolicy.failed(.query(type), at: Date(), jitter: Double.random(in: 0...1))
                 if let after = ck?.retryAfterSeconds {
                     let until = Date().addingTimeInterval(after)
                     if (self.retryAfter ?? .distantPast) < until {
-                        self.retryAfter = until
+                        self.observeServiceRetry(after)
                     }
                 }
                 continue
@@ -774,7 +769,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         // cold start.
         for type in Self.fullHistoryConfigTypes
         where !UserDefaults.standard.bool(forKey: Self.configTypeAnchoredKey(type)) {
-            if typesWithError.contains(type) {
+            if !successfulTypes.contains(type) {
                 logger.info("[iCloudTrace] fetchRecentV2 NOT anchoring \(type) — this type's pull errored, will re-pull next run")
                 continue
             }
@@ -798,44 +793,25 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             }
         }
         // Also poke CKSyncEngine to keep its token catching up.
-        if let engine = syncEngine {
+        if let engine = syncEngine, retryPolicy.isEligible(.changes, at: Date()) {
             do {
                 try await engine.fetchChanges()
+                retryPolicy.succeeded(.changes)
                 logger.info("[iCloudTrace] fetchRecentV2 token-fetch ok")
             } catch {
                 let nse = error as NSError
                 let ck = error as? CKError
                 logger.warning("[iCloudTrace] fetchRecentV2 engine.fetchChanges failed: code=\(nse.code) ck=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription)")
-                fetchHadError = true
+                retryPolicy.failed(.changes, at: Date(), jitter: Double.random(in: 0...1))
                 if let after = ck?.retryAfterSeconds {
                     let until = Date().addingTimeInterval(after)
                     if (self.retryAfter ?? .distantPast) < until {
-                        self.retryAfter = until
+                        self.observeServiceRetry(after)
                     }
                 }
             }
         }
-        // [T-ios-cloudkit-nsoperation-weak-clear-crash] Exponential backoff on
-        // any fetch error this run (per-type CKQuery or token-fetch). A flaky
-        // CloudKit layer — the iOS 26.5 XPC/CKQuery dealloc crash window often
-        // coincides with connection errors — gets progressively more breathing
-        // room via `retryAfter` instead of being polled hard every cycle.
-        // Server-signalled retryAfterSeconds above already sets a floor; this
-        // ensures even errors WITHOUT a retryAfter hint back off. A fully
-        // clean run resets the streak so steady-state latency is unaffected.
-        if fetchHadError {
-            consecutiveFetchFailures += 1
-            let idx = min(consecutiveFetchFailures - 1, Self.fetchBackoffSchedule.count - 1)
-            let backoff = Self.fetchBackoffSchedule[idx]
-            let until = Date().addingTimeInterval(backoff)
-            if (self.retryAfter ?? .distantPast) < until {
-                self.retryAfter = until
-            }
-            logger.warning("[iCloudTrace] fetchRecentV2 backoff — failures=\(consecutiveFetchFailures) next attempt gated for \(Int(backoff))s")
-        } else if consecutiveFetchFailures > 0 {
-            logger.info("[iCloudTrace] fetchRecentV2 recovered — clearing failure streak (was \(consecutiveFetchFailures))")
-            consecutiveFetchFailures = 0
-        }
+        // 单个查询的本地退避不再污染 retryAfter；上传与健康类型仍然继续。
     }
 
     /// Per-session CKQuery returning portables WITHOUT applying them.
@@ -1039,7 +1015,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                         let until = Date().addingTimeInterval(after)
                         await MainActor.run { [weak self] in
                             if let self, (self.retryAfter ?? .distantPast) < until {
-                                self.retryAfter = until
+                                self.observeServiceRetry(after)
                                 logger.warning("[SyncTransport] CloudKit throttle: retry-after \(after)s (gate=\(until))")
                             }
                         }
@@ -1328,6 +1304,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
             // Treat as start-from-scratch on next start().
             Task { @MainActor [weak self] in
                 self?.serverRecordCache.removeAll()
+                self?.retryPolicy = SyncRetryPolicy()
             }
         case .fetchedRecordZoneChanges(let zoneChanges):
             Task { @MainActor [weak self] in
@@ -1503,6 +1480,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
             var firstSeen = 0
             var repeats = 0
             for r in sent.savedRecords {
+                retryPolicy.succeeded(.query(r.recordType))
                 if Self.observedSavedRecordIDs.insert(r.recordID.recordName).inserted {
                     firstSeen += 1
                 } else {
@@ -1760,7 +1738,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                     if let after = ck?.retryAfterSeconds {
                         let until = Date().addingTimeInterval(after)
                         if (self.retryAfter ?? .distantPast) < until {
-                            self.retryAfter = until
+                            self.observeServiceRetry(after)
                             logger.warning("[SyncTransport] v1-delete CloudKit throttle: retry-after \(after)s (gate=\(until))")
                         }
                     }
