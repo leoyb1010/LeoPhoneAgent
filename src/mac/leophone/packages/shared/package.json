@@ -10,6 +10,7 @@
     "./node-repl-browser-broker": "./src/browser-use/nodeReplBroker.ts",
     "./process-diagnostic": "./src/process-diagnostic.ts",
     "./leo-network-guard": "./src/leoNetworkGuard.ts",
+    "./leo-device": "./src/leoDevice.ts",
     "./model-selection": "./src/model-selection.ts",
     "./account-provider-state": "./src/account-provider-state.ts",
     "./model-config": "./src/model-config.ts",
