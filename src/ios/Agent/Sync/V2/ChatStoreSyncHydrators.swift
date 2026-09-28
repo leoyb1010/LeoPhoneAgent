@@ -188,14 +188,22 @@ enum ChatStoreSyncHydrators {
         }
     }
 
-    static func stageAllArtifacts() async {
+    /// `destination` stages only for that destination (replica seed); nil marks dirty for all.
+    static func stageAllArtifacts(destination: String? = nil) async {
         guard UploadPolicy.isEnabled(.artifacts),
               let snapshots = try? await ArtifactRepository.shared.list(includeTrashed: true) else { return }
+        func stage(_ type: String, _ id: String) async {
+            if let destination {
+                await ChatStore.shared.seedSyncDestination(destination, recordType: type, recordId: id)
+            } else {
+                await ChatStore.shared.markDirty(recordType: type, recordId: id)
+            }
+        }
         for snapshot in snapshots {
-            await ChatStore.shared.markDirty(recordType: "ArtifactV2", recordId: snapshot.artifact.id)
+            await stage("ArtifactV2", snapshot.artifact.id)
             let versions = (try? await ArtifactRepository.shared.versions(artifactId: snapshot.artifact.id)) ?? []
             for version in versions where version.byteCount <= Int64(UploadPolicy.maxArtifactSizeBytes) {
-                await ChatStore.shared.markDirty(recordType: "ArtifactVersionV2", recordId: version.id)
+                await stage("ArtifactVersionV2", version.id)
             }
         }
     }
@@ -205,7 +213,9 @@ enum ChatStoreSyncHydrators {
     private static func buildSession(id: String) async -> PortableRecord? {
         guard let session = await ChatStore.shared.getSession(id) else { return nil }
         let extras = await ChatStore.shared.getSessionExtras(id)
-        let synced = SyncedSession.from(session, memoryEnabled: extras.memoryEnabled, modelBinding: extras.modelBinding)
+        let provenance = await ChatStore.shared.sessionProvenance(id)
+        let synced = SyncedSession.from(session, memoryEnabled: extras.memoryEnabled, modelBinding: extras.modelBinding,
+                                        originDeviceId: provenance.origin, lastWriterDeviceId: provenance.writer)
         return SyncableTypeRegistry.shared
             .metadata(for: "SessionV2")?
             .buildPortable(synced)
@@ -230,13 +240,15 @@ enum ChatStoreSyncHydrators {
             createdAt: createdAt, updatedAt: updatedAt
         )
         session.pinnedAt = pinnedAt
-        // v2 doesn't currently track per-device origin in PortableRecord;
-        // pass an empty string as a sentinel ("unknown remote device").
+        // Creator and last editor are independent; old peers omit both.
+        let origin = optionalStringField(record, "originDeviceId")
         await ChatStore.shared.mergeRemoteSession(
-            session, fromDeviceId: "",
+            session, fromDeviceId: origin ?? "",
             memoryEnabled: memoryEnabled,
             modelBinding: modelBinding,
-            remotePinnedAtRaw: pinnedAt
+            remotePinnedAtRaw: pinnedAt,
+            originDeviceId: origin,
+            lastWriterDeviceId: optionalStringField(record, "lastWriterDeviceId")
         )
     }
 

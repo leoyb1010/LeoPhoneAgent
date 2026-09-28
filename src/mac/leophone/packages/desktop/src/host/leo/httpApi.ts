@@ -2,7 +2,15 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LEO_HTTP_PORT, leoLocalKey, leoPairSecret, leoTreasuryKey } from "./leoPaths.js";
-import { createLeoPairingCode, forwardLeoagentEvent, leoLinkStatus, revokeLeoPairingCode } from "./link/index.js";
+import {
+  configureLeoDirect,
+  createLeoDirectPairingCode,
+  revokeLeoDirectDevice,
+  createLeoPairingCode,
+  forwardLeoagentEvent,
+  leoLinkStatus,
+  revokeLeoPairingCode,
+} from "./link/index.js";
 import { handleChatCompletions, handleModelsRequest } from "./modelProxy.js";
 import { OAUTH_PAGE_HTML } from "./oauthPage.js";
 import {
@@ -18,7 +26,10 @@ import {
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
 
-type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+type Logger = {
+  info: (msg: string, meta?: unknown) => void;
+  warn: (msg: string, meta?: unknown) => void;
+};
 
 /** 订阅代理的长上下文也远到不了这个量;超了直接 413,不给本机进程拿大包拖垮 Host 的机会。 */
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -41,7 +52,13 @@ class HttpError extends Error {
 function secretMatcher(secret: string): (candidate: string | undefined) => boolean {
   const expected = createHash("sha256").update(secret).digest();
   return (candidate) =>
-    secret.length > 0 && timingSafeEqual(createHash("sha256").update(candidate ?? "").digest(), expected);
+    secret.length > 0 &&
+    timingSafeEqual(
+      createHash("sha256")
+        .update(candidate ?? "")
+        .digest(),
+      expected,
+    );
 }
 
 /** 路径里的 id:`%` 转义写坏了回 400,不要变成 500 和一条告警。 */
@@ -54,7 +71,10 @@ function decodeParam(value: string): string {
 }
 
 /** 按 Buffer 收齐再一次性解码:逐块 `raw += chunk` 会把跨块的多字节中文切成 U+FFFD。 */
-export function readJsonBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<Record<string, unknown>> {
+export function readJsonBody(
+  req: IncomingMessage,
+  limit = MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -84,7 +104,11 @@ export function readJsonBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Prom
       }
       try {
         const parsed: unknown = JSON.parse(raw);
-        resolve(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {});
+        resolve(
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : {},
+        );
       } catch {
         reject(new HttpError(400, "invalid JSON body"));
       }
@@ -191,7 +215,11 @@ export function startLeoHttpApi(deps: {
       if (flow && req.method === "POST" && flow[2] === "/answer") {
         const body = await readJsonBody(req);
         const ok = answerOAuthFlow(flow[1]!, String(body["value"] ?? ""));
-        json(res, ok ? 200 : 409, ok ? { ok: true } : { ok: false, error: "flow is not waiting for input" });
+        json(
+          res,
+          ok ? 200 : 409,
+          ok ? { ok: true } : { ok: false, error: "flow is not waiting for input" },
+        );
         return;
       }
       if (flow && req.method === "POST" && flow[2] === "/cancel") {
@@ -219,7 +247,11 @@ export function startLeoHttpApi(deps: {
     if (url.pathname === "/api/leo/link/leoagent-event" && req.method === "POST") {
       const body = await readJsonBody(req, 256 * 1024);
       const status = forwardLeoagentEvent(authorization, body.event);
-      json(res, status, status === 200 ? { ok: true } : { error: status === 503 ? "link not running" : "rejected" });
+      json(
+        res,
+        status,
+        status === 200 ? { ok: true } : { error: status === 503 ? "link not running" : "rejected" },
+      );
       return;
     }
     const treasuryPath = url.pathname.startsWith("/api/leo/treasury/");
@@ -259,7 +291,11 @@ export function startLeoHttpApi(deps: {
       } catch (error) {
         if (!(error instanceof HttpError) || error.status !== 413) throw error;
         json(res, 400, {
-          error: { message: "请求太大(对话里的图片或文件太多)", type: "invalid_request_error", code: "context_length_exceeded" },
+          error: {
+            message: "请求太大(对话里的图片或文件太多)",
+            type: "invalid_request_error",
+            code: "context_length_exceeded",
+          },
         });
         return;
       }
@@ -270,8 +306,36 @@ export function startLeoHttpApi(deps: {
       json(res, 200, leoLinkStatus());
       return;
     }
+    if (url.pathname.startsWith("/api/leo/link/direct/") && req.method === "POST") {
+      if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
+        json(res, 403, { error: "直连授权只能在 LeoPhoneAgent 界面上操作" });
+        return;
+      }
+      try {
+        if (url.pathname === "/api/leo/link/direct/pair")
+          json(res, 200, { ...createLeoDirectPairingCode(), machine: leoLinkStatus().machine });
+        else if (url.pathname === "/api/leo/link/direct/configure") {
+          await configureLeoDirect(await readJsonBody(req, 4096));
+          json(res, 200, { ok: true });
+        } else if (url.pathname === "/api/leo/link/direct/revoke") {
+          const body = await readJsonBody(req, 4096);
+          if (typeof body["deviceId"] !== "string") {
+            json(res, 400, { error: "deviceId is required" });
+            return;
+          }
+          await revokeLeoDirectDevice(body["deviceId"]);
+          json(res, 200, { ok: true });
+        } else json(res, 404, { error: "not found" });
+      } catch (cause) {
+        json(res, 400, { error: cause instanceof Error ? cause.message : "直连操作失败" });
+      }
+      return;
+    }
     // 出码 / 作废码:除了主钥匙,还要主进程内存里的口令 —— 只有界面上点了才会经 IPC 带上。
-    if (url.pathname === "/api/leo/link/pair" && (req.method === "POST" || req.method === "DELETE")) {
+    if (
+      url.pathname === "/api/leo/link/pair" &&
+      (req.method === "POST" || req.method === "DELETE")
+    ) {
       if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
         json(res, 403, { error: "配对码只能在 LeoPhoneAgent 界面上生成" });
         return;
@@ -295,8 +359,10 @@ export function startLeoHttpApi(deps: {
 
   const server = createServer((req, res) => {
     handle(req, res).catch((error: unknown) => {
-      const status = error instanceof HttpError ? error.status : error instanceof OAuthRequestError ? 400 : 500;
-      if (status === 500) deps.logger.warn("[leo] local api request failed", { error: String(error) });
+      const status =
+        error instanceof HttpError ? error.status : error instanceof OAuthRequestError ? 400 : 500;
+      if (status === 500)
+        deps.logger.warn("[leo] local api request failed", { error: String(error) });
       json(res, status, { error: error instanceof Error ? error.message : String(error) });
     });
   });

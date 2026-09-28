@@ -452,11 +452,7 @@ extension LeoAgentClient {
         "text/plain", "video/mp4", "video/mpeg", "video/quicktime", "video/webm",
     ]
 
-    private nonisolated var treasuryRelayRoot: URL? {
-        guard let eventsURL = relayEventsURL,
-              let range = eventsURL.absoluteString.range(of: "/relay/api/") else { return nil }
-        return URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "treasury/")
-    }
+    private nonisolated var treasuryRelayRoot: URL? { relayServices?.treasuryURL }
 
     private nonisolated func treasuryCursorKey(_ root: URL, direction: String) -> String {
         let digest = SHA256.hash(data: Data(root.absoluteString.utf8))
@@ -765,12 +761,7 @@ extension LeoAgentClient {
     /// 事件端点是同一中继下的 `/relay/api/events`。用字符串回退两级
     /// 不可靠(URL 不做 `..` 归一),所以按 "/m/" 切一刀取中继根。
     /// 不是中继模式(直连某台 Mac)时返回 nil —— 那种拓扑没有中继事件。
-    nonisolated var relayEventsURL: URL? {
-        guard let harnessBase = harnessBaseURLForRelay else { return nil }
-        let full = harnessBase.absoluteString
-        guard let range = full.range(of: "/m/", options: .backwards) else { return nil }
-        return URL(string: String(full[full.startIndex..<range.lowerBound]) + "/events")
-    }
+    nonisolated var relayEventsURL: URL? { relayServices?.eventsURL }
 
     /// 取中继上暂存的关键事件。`after` 是上次看到的时间水位。
     func relayEvents(after: Double) async throws -> RelayEventPayload {

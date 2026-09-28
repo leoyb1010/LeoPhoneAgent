@@ -18,19 +18,8 @@ enum MigrationStatus: String, Codable {
 /// "CKErrorDomain error 15" tells the user nothing; the userInfo usually
 /// names the actual rejection ("invalid record type…", quota, schema…).
 func migrationDescribeCKError(_ error: Error) -> String {
-    guard let ck = error as? CKError else { return error.localizedDescription }
-    var parts = ["CKError \(ck.code.rawValue)"]
-    if let server = ck.userInfo["ServerErrorDescription"] as? String { parts.append(server) }
-    if let partial = ck.partialErrorsByItemID?.values.first as? CKError {
-        parts.append("first item: CKError \(partial.code.rawValue)")
-        if let ps = partial.userInfo["ServerErrorDescription"] as? String { parts.append(ps) }
-    }
-    // [T-ck15-explain] 服务器常常不给原话(HTTP 500 空响应);CKError 自己的描述里还带着底层码
-    // (如 15/2000)、HTTP 状态和请求编号 —— 查原因、报给 Apple 要的正是这些。去掉内存地址。
-    let raw = String(describing: ck).replacingOccurrences(of: "0x[0-9a-fA-F]+:? ?", with: "", options: .regularExpression)
-    if !raw.isEmpty { parts.append(String(raw.prefix(600))) }
-    if parts.count == 1 { parts.append(ck.localizedDescription) }
-    return parts.joined(separator: " — ")
+    // 错误描述与 userInfo 可能包含记录正文或凭据，只显示经过筛选的诊断字段。
+    SyncFailure(operation: "migration", error: error as NSError).diagnostic
 }
 
 /// [T-ck15-explain] 给人看的 iCloud 错误:先一句话说是什么、能做什么,再附上 migrationDescribeCKError 的详情。
@@ -40,7 +29,7 @@ func cloudKitProblemDescription(_ error: Error) -> String {
     guard let ck = error as? CKError else { return detail }
     switch ck.code {
     case .serverRejectedRequest:
-        return "iCloud 服务器拒绝了这个 App 的同步请求(错误 15),连只读的请求也被拒。这不是 App 里哪个开关没开:同一个 Apple 账号的设备会一起被拒,多半是 iCloud 服务器那边的问题,也可能是网络经过的代理 / VPN 把 iCloud 请求拦了。可以先关掉 VPN / 代理、换蜂窝网络,再点「重新检查」;仍然不行,把下面的详情截图留着 —— 向 Apple 反馈要用里面的编号。拒收期间改的内容会留在本机,恢复后自动补传。\n详情:\(detail)"
+        return "iCloud 拒绝了这次请求（错误 15）。单凭这个错误码不能确定是容器配置、账户状态还是服务端异常。未确认上传的改动会保留在本机；请查看具体失败类型和下面的请求编号。\n详情:\(detail)"
     case .notAuthenticated:
         return "这台设备没有登录 iCloud,或者在 设置 → Apple 账户 → iCloud 里关掉了 LeoPhoneAgent。\n详情:\(detail)"
     case .networkUnavailable, .networkFailure:

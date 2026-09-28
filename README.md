@@ -193,11 +193,11 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 源码版本:`1.3.2`(1.3.2:接入 OpenCode Go、Claude 订阅登录下线、手机发起的任务及时推送;源码 + typecheck + Leo host 测试,未签名打包)
-- 最近签名构建:`1.2.5`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
-  1.2.5 已 Developer ID 签名,公证待补(Mac Studio 上没有 notarytool 凭据),尚未发布到 GitHub Releases
-  (更新源 `leocodebox-updates` 最新仍是 1.0.1;旧的 leocodebox 2.x 只作回退)
-- Leo Link:手机经中继在 Mac 上开任务、流式看进度、审批、全自动、停止、断线续传,并能接着做 Mac 桌面上开的任务
+- 当前源码版本：`1.3.4`，主工程 `src/mac/leophone/`。最近公开热更新为 `1.3.3`；1.3.4 已完成 Developer ID 签名与 Apple 公证；尚未公开发布或安装，等待最终 iOS + Mac 集成门禁和实机验收。
+- Leo Link：手机可经中继或已配置的 Tailscale HTTPS 直连同一 Mac Host/runtime，支持会话、审批、全自动、停止与事件续传。直连使用独立设备授权，支持一次性扫码与撤销。
+- 远控操作使用稳定请求编号和持久化回执，保留任务编号与 V4 输入 admission 对账；未知执行结果明确提示，不盲目重放。
+- 「连接手机」中可分别启用同步副本与藏宝阁访问。Tailscale Serve 的 HTTPS 转发需显式配置；不会自动覆盖现有规则。
+- 源码与自动化门禁、签名公证、真实设备覆盖安装分别记录，不能以编译成功替代最终设备验收。
 
 ## 当前 Android 版本
 

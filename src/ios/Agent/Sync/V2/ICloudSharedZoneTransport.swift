@@ -22,6 +22,20 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
 
     let name = "iCloud"
     let capabilities: TransportCapabilities = [.deltaFetch, .assets, .persistence, .conflictDetect]
+    private(set) var health = SyncTransportHealth()
+    private var failedSaveTypes: [CKRecord.ID: String] = [:]
+
+    func checkConnection() async throws {
+        if let gate = retryAfter, gate > Date() { throw SyncTransportError.retryDeferred(gate) }
+        do {
+            _ = try await container.privateCloudDatabase.allRecordZones()
+            health.succeeded("probe")
+        } catch {
+            health.failed("probe", error: error as NSError)
+            if let after = (error as? CKError)?.retryAfterSeconds { observeServiceRetry(after) }
+            throw error
+        }
+    }
 
     private var observeHandler: ((SyncInboundBatch) -> Void)?
 
@@ -514,9 +528,11 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         logger.info("[SyncTransport] start STEP=initialSendChanges begin")
         do {
             try await engine.sendChanges()
+            health.succeeded("initialize")
             logger.info("[SyncTransport] start STEP=initialSendChanges done")
         } catch {
             let nse = error as NSError
+            health.failed("initialize", error: nse)
             logger.warning("[SyncTransport] start STEP=initialSendChanges error code=\(nse.code) desc=\(error.localizedDescription)")
         }
         logger.info("[SyncTransport] start STEP=exit")
@@ -715,6 +731,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             }.value
             switch outcome {
             case .success(let rows):
+                health.succeeded("query:" + type)
                 retryPolicy.succeeded(.query(type))
                 successfulTypes.insert(type)
                 UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.recentFetchLastKey + "." + type)
@@ -737,6 +754,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             case .failure(let error):
                 let nse = error as NSError
                 let ck = error as? CKError
+                health.failed("query:" + type, error: nse)
                 logger.warning("[iCloudTrace] fetchRecentV2 type=\(type) field=\(dateKey) failed: code=\(nse.code) ck=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription)")
                 retryPolicy.failed(.query(type), at: Date(), jitter: Double.random(in: 0...1))
                 if let after = ck?.retryAfterSeconds {
@@ -796,11 +814,13 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         if let engine = syncEngine, retryPolicy.isEligible(.changes, at: Date()) {
             do {
                 try await engine.fetchChanges()
+                health.succeeded("fetch")
                 retryPolicy.succeeded(.changes)
                 logger.info("[iCloudTrace] fetchRecentV2 token-fetch ok")
             } catch {
                 let nse = error as NSError
                 let ck = error as? CKError
+                health.failed("fetch", error: nse)
                 logger.warning("[iCloudTrace] fetchRecentV2 engine.fetchChanges failed: code=\(nse.code) ck=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription)")
                 retryPolicy.failed(.changes, at: Date(), jitter: Double.random(in: 0...1))
                 if let after = ck?.retryAfterSeconds {
@@ -895,8 +915,12 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             var failed: [(String, Error)] = []
             for (id, r) in result.saveResults {
                 switch r {
-                case .success:           saved.append(id.zoneName)
-                case .failure(let e):    failed.append((id.zoneName, e))
+                case .success:
+                    saved.append(id.zoneName)
+                    health.succeeded("zone:" + id.zoneName)
+                case .failure(let e):
+                    failed.append((id.zoneName, e))
+                    health.failed("zone:" + id.zoneName, error: e as NSError)
                 }
             }
             logger.info("[SyncTransport] ensureZonesExist: saved=\(saved) failed=\(failed.map{ $0.0 })")
@@ -907,6 +931,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         } catch {
             let nse = error as NSError
             let ck = error as? CKError
+            health.failed("initialize", error: nse)
             logger.warning("[SyncTransport] ensureZonesExist threw: code=\(nse.code) ckCode=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription) userInfoKeys=\(Array(nse.userInfo.keys))")
         }
     }
@@ -1100,10 +1125,13 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         pendingOutcomes.removeAll()
         flushEtagCacheIfDirty()
         if outcomes.isEmpty {
+            health.failed("send", error: error as NSError)
             // No partial outcomes — propagate the error so SyncCore can
             // schedule a retry without applying anything.
             sendCompletion?.resume(throwing: error)
         } else {
+            health.succeeded("send")
+            health.failed("save:batch", error: error as NSError)
             logger.warning("[SyncTransport] iCloud send error preserved \(outcomes.count) partial outcomes")
             sendCompletion?.resume(returning: outcomes)
         }
@@ -1111,6 +1139,8 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     }
 
     private func completeSend() {
+        health.succeeded("send")
+        health.succeeded("save:batch")
         let outcomes = Array(pendingOutcomes.values)
         pendingOutcomes.removeAll()
         flushEtagCacheIfDirty()
@@ -1165,6 +1195,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     }
 
     private func completeFetch() {
+        health.succeeded("fetch")
         let acc = fetchAccumulator ?? (records: [], deletes: [])
         let batch = SyncInboundBatch(records: acc.records, deletes: acc.deletes, sourceDeviceId: nil)
         fetchAccumulator = nil
@@ -1174,6 +1205,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     }
 
     private func completeFetchWithError(_ error: Error) {
+        health.failed("fetch", error: error as NSError)
         fetchAccumulator = nil
         fetchCompletion?.resume(throwing: error)
         fetchCompletion = nil
@@ -1294,32 +1326,34 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
 
 @available(iOS 17.0, *)
 extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
-    nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) {
-        switch event {
-        case .stateUpdate(let stateUpdate):
-            Task { @MainActor [weak self] in
-                self?.persistState(stateUpdate.stateSerialization)
+    nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
+        // SDK 会等待这个回调。不能另起未等待的 Task，否则 sendChanges 完成时
+        // pendingOutcomes 可能尚未记账，导致成功记录被重复发送或部分错误丢失。
+        await MainActor.run {
+            switch event {
+            case .stateUpdate(let stateUpdate):
+                self.persistState(stateUpdate.stateSerialization)
+            case .accountChange:
+                self.serverRecordCache.removeAll()
+                self.retryPolicy = SyncRetryPolicy()
+                self.health = SyncTransportHealth()
+                self.failedSaveTypes.removeAll()
+            case .fetchedRecordZoneChanges(let zoneChanges):
+                self.handleFetchedZoneChanges(zoneChanges)
+            case .sentRecordZoneChanges(let sent):
+                self.handleSentRecordZoneChanges(sent)
+            case .sentDatabaseChanges(let sent):
+                for zone in sent.savedZones { self.health.succeeded("zone:" + zone.zoneID.zoneName) }
+                for failed in sent.failedZoneSaves {
+                    self.health.failed("zone:" + failed.zone.zoneID.zoneName, error: failed.error as NSError)
+                }
+            case .fetchedDatabaseChanges, .didSendChanges, .didFetchChanges,
+                 .didFetchRecordZoneChanges, .willSendChanges, .willFetchChanges,
+                 .willFetchRecordZoneChanges:
+                break
+            @unknown default:
+                break
             }
-        case .accountChange:
-            // Treat as start-from-scratch on next start().
-            Task { @MainActor [weak self] in
-                self?.serverRecordCache.removeAll()
-                self?.retryPolicy = SyncRetryPolicy()
-            }
-        case .fetchedRecordZoneChanges(let zoneChanges):
-            Task { @MainActor [weak self] in
-                self?.handleFetchedZoneChanges(zoneChanges)
-            }
-        case .sentRecordZoneChanges(let sent):
-            Task { @MainActor [weak self] in
-                self?.handleSentRecordZoneChanges(sent)
-            }
-        case .fetchedDatabaseChanges, .didSendChanges, .didFetchChanges,
-             .didFetchRecordZoneChanges, .willSendChanges, .willFetchChanges,
-             .willFetchRecordZoneChanges, .sentDatabaseChanges:
-            break
-        @unknown default:
-            break
         }
     }
 
@@ -1357,6 +1391,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
 
     @MainActor
     private func handleFetchedZoneChanges(_ zoneChanges: CKSyncEngine.Event.FetchedRecordZoneChanges) {
+        health.succeeded("fetch")
         logger.info("[iCloudTrace] handleFetchedZoneChanges called: mods=\(zoneChanges.modifications.count) dels=\(zoneChanges.deletions.count)")
         let registry = SyncableTypeRegistry.shared
         let v2Zones: Set<String> = [Self.sharedZoneName, Self.devicesZoneName, Self.secretsZoneName]
@@ -1479,14 +1514,23 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
             // rather than the old UserDefaults event counter.
             var firstSeen = 0
             var repeats = 0
+            var savedTypes = Set<String>()
             for r in sent.savedRecords {
-                retryPolicy.succeeded(.query(r.recordType))
+                failedSaveTypes.removeValue(forKey: r.recordID)
+                savedTypes.insert(r.recordType)
                 if Self.observedSavedRecordIDs.insert(r.recordID.recordName).inserted {
                     firstSeen += 1
                 } else {
                     repeats += 1
                 }
             }
+            // Once per type: retryPolicy's didSet persists to UserDefaults.
+            var policy = retryPolicy
+            for type in savedTypes {
+                if !failedSaveTypes.values.contains(type) { health.succeeded("save:" + type) }
+                policy.succeeded(.query(type))
+            }
+            retryPolicy = policy
             // Persistent unique-record counter. INSERT OR IGNORE keeps
             // the same recordName from being counted twice across
             // launches.
@@ -1546,6 +1590,8 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
         }
         Self.republishV1DeletePending(pendingV1Deletions.count)
         for failed in sent.failedRecordSaves {
+            failedSaveTypes[failed.record.recordID] = failed.record.recordType
+            health.failed("save:" + failed.record.recordType, error: failed.error as NSError)
             let id = parseRecordName(failed.record.recordID.recordName)
             if failed.error.code == .serverRecordChanged, let server = failed.error.serverRecord,
                let portable = toPortable(server, registry: SyncableTypeRegistry.shared) {
@@ -1567,12 +1613,10 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
             } else if Self.isTransientCKError(failed.error) {
                 pendingOutcomes[failed.record.recordID.recordName] = .transientFailure(id, retryAfter: failed.error.retryAfterSeconds)
-                // Same C1 fix: re-append the record body so the engine
-                // actually has something to send next pass. The record
-                // already has the correct etag (it just transiently
-                // failed, server didn't change anything).
-                pendingRecords.append(failed.record)
-                syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
+                if let after = failed.error.retryAfterSeconds { observeServiceRetry(after) }
+                // 重试由 SyncCore 按记录截止时间重建最新内容。这里立刻重排会让
+                // CKSyncEngine 绕开调度器，在同一次 sendChanges 内再次发送旧内容。
+                syncEngine?.state.remove(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
             } else if failed.error.code == .serverRejectedRequest {
                 // [T-ck15-keep-dirty] 服务器整体拒收(错误 15)不是这条记录本身的错。不在引擎里马上重排
                 // (那就是重试风暴),但也不能按永久失败把改动丢掉:以前 SyncCore 收到永久失败会清掉脏标记,
@@ -1797,12 +1841,14 @@ enum SyncTransportError: Error, LocalizedError {
     case notStarted
     case sendInFlight
     case fetchInFlight
+    case retryDeferred(Date)
 
     var errorDescription: String? {
         switch self {
         case .notStarted:    return "Transport not started"
         case .sendInFlight:  return "Another send is already in flight"
         case .fetchInFlight: return "Another fetch is already in flight"
+        case .retryDeferred(let until): return String(localized: "Retry available at \(until.formatted(date: .omitted, time: .standard))")
         }
     }
 }

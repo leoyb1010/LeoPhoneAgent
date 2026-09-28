@@ -5,6 +5,8 @@ import { contextBridge, ipcRenderer } from "electron";
  * 通道名与 main/leoLinkIpc.ts 一致;这里不引 main 的模块,preload 只依赖 electron。
  */
 contextBridge.exposeInMainWorld("leoLink", {
+  direct: (action: "pair" | "configure" | "revoke", body?: unknown) =>
+    ipcRenderer.invoke("leo:link:direct", action, body),
   status: () => ipcRenderer.invoke("leo:link:status"),
   pair: () => ipcRenderer.invoke("leo:link:pair"),
   revoke: (payload: string) => ipcRenderer.invoke("leo:link:revoke", payload),

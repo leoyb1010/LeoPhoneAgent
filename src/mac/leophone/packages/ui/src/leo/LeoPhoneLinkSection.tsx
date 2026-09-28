@@ -1,3 +1,4 @@
+import { DirectConnectionSettings } from "./DirectConnectionSettings.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { RefreshCw, Smartphone } from "lucide-react";
@@ -12,7 +13,7 @@ import { logger } from "@/logger.js";
  * 现在点一下出一个一次性码,手机「远程机器 → 扫码添加机器」扫了就领到自己的钥匙。
  * 码是凭据:只在点按钮时才向中继要,5 分钟过期、只能用一次,关掉弹层就丢弃。
  */
-type LinkStatus = {
+export type LinkStatus = {
   enabled: boolean;
   configured: boolean;
   running: boolean;
@@ -23,19 +24,31 @@ type LinkStatus = {
   relayHost: string | null;
   relayVersion: string | null;
   lastError: string | null;
+  direct?: {
+    running: boolean;
+    deviceId: string | null;
+    baseURL: string | null;
+    port: number | null;
+    error: string | null;
+    syncEnabled: boolean;
+    treasuryEnabled: boolean;
+    devices: { deviceId: string; name: string; expiresAt: number }[];
+  };
 };
 
 type PairingCode = { payload: string; machine: string; exp: number };
 
 type IpcResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-type LeoLinkBridge = {
+export type LeoLinkBridge = {
   status(): Promise<IpcResult<LinkStatus>>;
   pair(): Promise<IpcResult<PairingCode>>;
+  direct?(action: "pair" | "configure" | "revoke", body?: unknown): Promise<IpcResult<PairingCode>>;
   revoke?(payload: string): Promise<IpcResult<unknown>>;
 };
 
-const FOCUS_RING = "focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!";
+const FOCUS_RING =
+  "focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!";
 
 function getLeoLinkBridge(): LeoLinkBridge | null {
   if (typeof window === "undefined") return null;
@@ -50,10 +63,16 @@ export function LeoPhoneLinkSection({ className }: { className?: string }) {
   return <LeoPhoneLinkSectionBody bridge={bridge} className={className} />;
 }
 
-function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge; className?: string }) {
+function LeoPhoneLinkSectionBody({
+  bridge,
+  className,
+}: {
+  bridge: LeoLinkBridge;
+  className?: string;
+}) {
   const [status, setStatus] = useState<LinkStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [code, setCode] = useState<{ image: string; exp: number; machine: string } | null>(null);
+  const [code, setCode] = useState<{ image: string; exp: number; machine: string; direct: boolean } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -93,39 +112,43 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
   }, [bridge]);
   useEffect(() => revokeIssued, [revokeIssued]);
 
-  const generate = useCallback(async () => {
-    setPending(true);
-    setError(null);
-    revokeIssued();
-    try {
-      const result = await bridge.pair();
-      if (!result.ok) {
-        setError(result.error);
-        setCode(null);
-        return;
+  const generate = useCallback(
+    async (direct = false) => {
+      setPending(true);
+      setError(null);
+      revokeIssued();
+      try {
+        const result = direct && bridge.direct ? await bridge.direct("pair") : await bridge.pair();
+        if (!result.ok) {
+          setError(result.error);
+          setCode(null);
+          return;
+        }
+        issuedPayload.current = result.data.payload;
+        const image = await QRCode.toDataURL(result.data.payload, {
+          margin: 1,
+          width: 360,
+          errorCorrectionLevel: "M",
+          color: { dark: "#101413", light: "#ffffff" },
+        });
+        setNow(Date.now());
+        setCode({ image, exp: result.data.exp, machine: result.data.machine, direct });
+      } catch (cause) {
+        logger.warn("[leo/link] 生成配对码失败", { error: String(cause) });
+        setError("生成配对码失败");
+      } finally {
+        setPending(false);
       }
-      issuedPayload.current = result.data.payload;
-      const image = await QRCode.toDataURL(result.data.payload, {
-        margin: 1,
-        width: 360,
-        errorCorrectionLevel: "M",
-        color: { dark: "#101413", light: "#ffffff" },
-      });
-      setNow(Date.now());
-      setCode({ image, exp: result.data.exp, machine: result.data.machine });
-    } catch (cause) {
-      logger.warn("[leo/link] 生成配对码失败", { error: String(cause) });
-      setError("生成配对码失败");
-    } finally {
-      setPending(false);
-    }
-  }, [bridge, revokeIssued]);
+    },
+    [bridge, revokeIssued],
+  );
 
   const remaining = code ? Math.max(0, Math.round(code.exp - now / 1000)) : 0;
   const expired = code !== null && remaining === 0;
   const ready = Boolean(status?.running && status.connected);
   const relayTooOld = ready && status?.pairing === "unsupported";
-  const statusLine = statusError && !status ? `读不到连接状态(${statusError})` : describeStatus(status);
+  const statusLine =
+    statusError && !status ? `读不到连接状态(${statusError})` : describeStatus(status);
 
   return (
     <section className={cn("rounded-xl border border-border bg-card p-4", className)}>
@@ -138,7 +161,11 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
               aria-hidden="true"
               className={cn(
                 "size-1.5 shrink-0 rounded-full",
-                ready ? "bg-brand" : status ? "bg-[var(--leo-attention,#d08a2e)]" : "bg-foreground-subtlest",
+                ready
+                  ? "bg-brand"
+                  : status
+                    ? "bg-[var(--leo-attention,#d08a2e)]"
+                    : "bg-foreground-subtlest",
               )}
             />
             <span className="truncate">{statusLine}</span>
@@ -160,12 +187,10 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
               手机上打开 LeoPhoneAgent → 设置 → 远程机器 → 扫码添加机器。每台手机领到自己的钥匙,
               丢了一台不影响其他。
             </p>
-            <p className="tabular-nums">
-              {formatRemaining(remaining)} 后失效 · 只能用一次
-            </p>
+            <p className="tabular-nums">{formatRemaining(remaining)} 后失效 · 只能用一次</p>
             <button
               type="button"
-              onClick={() => void generate()}
+              onClick={() => void generate(code.direct)}
               disabled={pending}
               className={cn(
                 "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-foreground-subtle transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-50",
@@ -194,10 +219,19 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
           <span className="text-ui-caption text-foreground-subtlest">
             {relayTooOld
               ? "连着的中继还是旧版,升级到 0.2 后才能扫码加手机"
-              : setupHint(status) ?? "不用再把钥匙抄到手机上"}
+              : (setupHint(status) ?? "不用再把钥匙抄到手机上")}
           </span>
         </div>
       )}
+
+      {bridge.direct ? (
+        <DirectConnectionSettings
+          bridge={bridge}
+          status={status}
+          onPair={() => void generate(true)}
+          pending={pending}
+        />
+      ) : null}
 
       {error ? <p className="mt-3 text-ui-caption text-destructive">{error}</p> : null}
     </section>
@@ -206,6 +240,7 @@ function LeoPhoneLinkSectionBody({ bridge, className }: { bridge: LeoLinkBridge;
 
 function describeStatus(status: LinkStatus | null): string {
   if (!status) return "正在读取连接状态…";
+  if (!status.configured && status.direct?.running) return `${status.machine} 直连接口已启动`;
   if (!status.configured) return "这台 Mac 还没配置中继";
   if (!status.enabled) return "手机连接未开启";
   if (!status.running) return "手机连接正在启动…";
@@ -219,8 +254,10 @@ function describeStatus(status: LinkStatus | null): string {
 /** 连接面板不能是死胡同:没配好时告诉用户下一步在哪做。 */
 function setupHint(status: LinkStatus | null): string | null {
   if (!status) return null;
-  if (!status.configured) return "在 ~/.leoagent/relay.json 写入中继地址和钥匙({\"url\",\"key\"}),保存后 15 秒内自动连上";
-  if (!status.enabled) return "运行 src/mac/leophone/scripts/leo-link-switch.sh 打开手机连接,不用重启 App";
+  if (!status.configured)
+    return '在 ~/.leoagent/relay.json 写入中继地址和钥匙({"url","key"}),保存后 15 秒内自动连上';
+  if (!status.enabled)
+    return "运行 src/mac/leophone/scripts/leo-link-switch.sh 打开手机连接,不用重启 App";
   return null;
 }
 

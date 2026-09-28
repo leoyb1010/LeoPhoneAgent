@@ -66,33 +66,27 @@ final class SyncCoreHydrators {
         builders[recordType] != nil
     }
 
-    func mergeRemote(_ record: PortableRecord) async {
-        // Honour the same per-category upload toggle on the inbound side.
-        // If the user has turned off, say, Memory Files in iCloud Sync
-        // settings, this device should neither push local writes nor
-        // accept remote ones — otherwise toggling off only "saves your
-        // own bandwidth" while peer writes still silently land on disk.
-        // SyncDeviceV2 / unknown record types pass through (same rule as
-        // UploadPolicy.allowsRecordType).
-        guard UploadPolicy.allowsRecordType(record.id.type) else {
-            return
-        }
-        guard let m = mergers[record.id.type] else { return }
-        await m(record)
+    /// True means the record was handled: merged, or intentionally ignored because
+    /// the user turned the category off or this build has no applier for it.
+    /// Ignoring must not withhold a transport cursor, or one unsupported record
+    /// would replay the same page forever and block every later change.
+    @discardableResult
+    func mergeRemote(_ record: PortableRecord) async -> Bool {
+        // Same per-category toggle as uploads: a category the user turned off
+        // neither pushes local writes nor accepts peer ones.
+        guard UploadPolicy.allowsRecordType(record.id.type) else { return true }
+        guard let merger = mergers[record.id.type] else { return true }
+        await merger(record)
+        return true
     }
 
-    func applyRemoteDeletion(_ id: SyncRecordID) async {
-        // Same gate as mergeRemote — a disabled category should not have
-        // its local rows wiped by a remote tombstone either.
-        guard UploadPolicy.allowsRecordType(id.type) else { return }
-        if let d = deleters[id.type] {
-            await d(id.id)
-            return
-        }
-        // No-op fallback. Stores that don't register a deletion applier
-        // get default-keep behavior (the record stays locally), which is
-        // safe but not necessarily what the type wants. SyncCore logs the
-        // gap so the omission is visible at runtime.
+    @discardableResult
+    func applyRemoteDeletion(_ id: SyncRecordID) async -> Bool {
+        guard UploadPolicy.allowsRecordType(id.type) else { return true }
+        // Types without a deletion applier keep the local copy (safe default).
+        guard let deleter = deleters[id.type] else { return true }
+        await deleter(id.id)
+        return true
     }
 
     var registeredRecordTypes: [String] {

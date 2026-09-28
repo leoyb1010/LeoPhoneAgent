@@ -139,6 +139,29 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
         _, ack = await self.register("MacBook", MASTER)
         self.assertEqual(ack["type"], "registered")
 
+    async def test_revoke_is_notified_and_replayed_on_reconnect(self):
+        ws, machine_key = await self.pinned_mac()
+        r = await self.client.post("/relay/api/device/exchange", json={"name": "phone"}, headers=self.auth(MASTER))
+        device_id = (await r.json())["deviceId"]
+        r = await self.client.delete(f"/relay/api/devices/{device_id}", headers=self.auth(machine_key))
+        self.assertEqual(r.status, 200)
+        event = await ws.receive_json(timeout=1)
+        self.assertEqual(event, {"type": "device_revoked", "device_id": device_id})
+        await ws.close()
+        _, ack = await self.register("MacBook", machine_key)
+        self.assertIn(device_id, ack["revokedDeviceIds"])
+        with open(self.relay.state_path, encoding="utf-8") as handle:
+            self.assertIn(device_id, json.load(handle)["revoked_devices"])
+
+    async def test_revoke_does_not_claim_durability_when_state_write_fails(self):
+        r = await self.client.post("/relay/api/device/exchange", json={"name": "phone"}, headers=self.auth(MASTER))
+        device_id = (await r.json())["deviceId"]
+        with mock.patch.object(self.relay, "_save_state", return_value=False):
+            r = await self.client.delete(f"/relay/api/devices/{device_id}", headers=self.auth(MASTER))
+        self.assertEqual(r.status, 503)
+        r = await self.client.delete(f"/relay/api/devices/{device_id}", headers=self.auth(MASTER))
+        self.assertEqual(r.status, 200)
+
     async def test_exchange_then_revoke_stops_the_device(self):
         r = await self.client.post("/relay/api/device/exchange", json={"name": "iPhone 18"}, headers=self.auth(MASTER))
         body = await r.json()

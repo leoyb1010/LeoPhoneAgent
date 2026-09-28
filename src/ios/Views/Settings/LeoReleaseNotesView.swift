@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.49.0",
+            date: "2026-09-28",
+            title: "iCloud 同步故障可诊断，Mac 设备直连与持久副本",
+            highlights: [
+                "iCloud 同步把服务限流、缺少云端类型或索引、部分记录失败分开显示；失败的更改留在本机，恢复后继续补传。",
+                "我的设备支持扫码授权 Mac 直连；有条件时优先经 Tailscale 连接，直连不可用时已配置的中继仍可接管远控。连接状态会显示当前路径与错误。",
+                "会话来源设备与最近编辑设备分别记录，其他设备建的对话会标出来源。可以另外开启「同步到已授权的 Mac 副本」：与 iCloud 各自确认、互不影响，开启时只给这台 Mac 补传历史，不会把历史再推一遍 iCloud；文件逐个校验完整性，断了能续传。",
+                "同步更轻：启动时同步推迟十几秒，不和打开 App 抢资源；自己刚发出的内容同步回来不再让对话重刷；Mac 副本连不上时逐步放慢重试，不再反复重启 iCloud 同步。"
+            ]
+        ),
+        LeoRelease(
             version: "1.48.0",
             date: "2026-09-28",
             title: "邮箱接进来了:授权 Gmail / QQ / 163 等邮箱,对话里直接读邮件",

@@ -7,12 +7,14 @@ struct SyncRetryPolicy: Codable {
         case send
         case changes
         case query(String)
+        case record(String)
 
         fileprivate var key: String {
             switch self {
             case .send: return "send"
             case .changes: return "changes"
             case .query(let type): return "query:\(type)"
+            case .record(let id): return "record:\(id)"
             }
         }
     }
@@ -34,6 +36,23 @@ struct SyncRetryPolicy: Codable {
         return now >= deadline
     }
 
+    /// 每条记录独立等待。失败的 Skill 不应拖住同批新消息；服务端限流仍优先。
+    func select(recordIDs: [String], at now: Date, serviceDeadline: Date? = nil)
+        -> (eligible: Set<String>, nextRetryAt: Date?) {
+        var eligible: Set<String> = []
+        var nextRetryAt: Date?
+        for id in recordIDs {
+            let until = [deadline(for: .send), deadline(for: .record(id)), serviceDeadline]
+                .compactMap { $0 }.max()
+            if let until, until > now {
+                nextRetryAt = min(nextRetryAt ?? .distantFuture, until)
+            } else {
+                eligible.insert(id)
+            }
+        }
+        return (eligible, nextRetryAt)
+    }
+
     mutating func observeServiceRetry(after seconds: TimeInterval, at now: Date) {
         guard seconds.isFinite, seconds > 0 else { return }
         let until = now.addingTimeInterval(seconds)
@@ -45,7 +64,7 @@ struct SyncRetryPolicy: Codable {
         let failures = min((attempts[scope.key]?.failures ?? 0) + 1, 16)
         let schedule: [TimeInterval]
         switch scope {
-        case .send: schedule = [10, 20, 40, 80, 160, 300]
+        case .send, .record: schedule = [10, 20, 40, 80, 160, 300]
         case .changes, .query: schedule = [120, 300, 600, 1200, 1800]
         }
         let base = schedule[min(failures - 1, schedule.count - 1)]

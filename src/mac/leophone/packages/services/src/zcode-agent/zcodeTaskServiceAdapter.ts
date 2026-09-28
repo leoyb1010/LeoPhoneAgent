@@ -1840,6 +1840,7 @@ export function createZCodeTaskServiceAdapter(
               envelope: createHostCommandEnvelope({
                 type: "createSession",
                 sessionId: null,
+                ...(params.operationId ? { commandId: params.operationId, clientId: "leo-link" } : {}),
                 payload: {
                   workspaceId: target.workspaceIdentity?.trim() || target.workspacePath,
                   config: {
@@ -1915,6 +1916,16 @@ export function createZCodeTaskServiceAdapter(
         ...meta,
         initialSlashCommands: snapshot.slashCommands ?? EMPTY_SLASH_COMMANDS,
       };
+    },
+
+    async queryOperation(params) {
+      const target = normalizeWorkspaceParams(params);
+      const result = await options.zcodeAgentService.queryConversationCommandsV4({
+        ...target,
+        commands: [{ sessionId: params.taskId, commandId: params.operationId }],
+      });
+      const ack = result.results.find((item) => item.key.commandId === params.operationId && item.key.sessionId === params.taskId)?.result;
+      return !ack || ack === "unknown" ? null : ack;
     },
 
     async sendPrompt(params): Promise<void> {

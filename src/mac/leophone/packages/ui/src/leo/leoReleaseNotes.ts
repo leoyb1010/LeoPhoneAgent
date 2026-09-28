@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.3.4",
+    date: "2026-09-28",
+    items: [
+      "手机连接增加 Tailscale 直连：在「连接手机」中配置 HTTPS 地址，已配对手机可直接连接这台 Mac，中继保留为备用。直连使用独立设备授权，可单独撤销。",
+      "远控操作增加持久化回执：断线、切换直连与中继或 Mac 重启后，用同一操作编号恢复结果，避免重复创建任务和重复发送。无法确认的历史操作会明确提示核对状态。",
+      "可将这台 Mac 设为同步副本设备，并允许已授权手机访问本机藏宝阁；两项能力分别启用，保留原有 iCloud 同步。直连接口不开放本机管理 API。",
+    ],
+  },
+  {
     version: "1.3.3",
     date: "2026-09-27",
     items: [

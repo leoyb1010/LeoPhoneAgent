@@ -51,6 +51,7 @@ struct SyncMigrationDetailView: View {
     struct VM {
         var v2Enabled: Bool = false
         var isRunning: Bool = false
+        var cloudState: SyncTransportHealth.State = .starting
         var transportName: String = ""
         var pendingPush: Int = 0          // current V2 dirty count (sum)
         var pendingPushNew: Int = 0       // priority=0 (user-driven)
@@ -121,6 +122,7 @@ struct SyncMigrationDetailView: View {
                         .foregroundStyle(vm.v2Enabled ? .green : .secondary)
                 }
                 if vm.v2Enabled {
+                    LabeledContent("Status", value: vm.cloudState.localizedLabel)
                     HStack {
                         Text("Engine")
                         Spacer()
@@ -933,6 +935,7 @@ struct SyncMigrationDetailView: View {
         var next = VM()
         next.v2Enabled = SyncV2Bootstrap.isEnabled
         next.isRunning = SyncCore.shared.isRunning
+        next.cloudState = SyncCore.shared.cloudHealth.state
         next.transportName = SyncCore.shared.transports.first?.name ?? ""
         next.totalSent = SyncCore.shared.totalSent
         next.totalReceived = SyncCore.shared.totalReceived

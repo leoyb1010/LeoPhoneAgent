@@ -25,6 +25,8 @@ struct RemoteHost: Codable, Identifiable, Hashable {
     var host: String
     var port: Int = 22
     var username: String
+    /// Explicit user association; never inferred from an IP address or display name.
+    var deviceId: String? = nil
 }
 
 @MainActor

@@ -1,0 +1,962 @@
+{
+  "formatVersion": 1,
+  "container": "iCloud.com.leoyuan.leophoneagent",
+  "database": "PRIVATE",
+  "types": {
+    "SessionV2": {
+      "zone": "minis-shared",
+      "version": 2,
+      "fields": {
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "title": {
+          "type": "STRING",
+          "optional": true
+        },
+        "category": {
+          "type": "STRING",
+          "optional": true
+        },
+        "modelId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "memoryEnabled": {
+          "type": "INT64",
+          "optional": false
+        },
+        "modelBinding": {
+          "type": "STRING",
+          "optional": true
+        },
+        "pinnedAt": {
+          "type": "TIMESTAMP",
+          "optional": true
+        },
+        "originDeviceId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "lastWriterDeviceId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "createdAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ],
+        "sessionId": [
+          "QUERYABLE"
+        ]
+      }
+    },
+    "MessageV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "messageId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "role": {
+          "type": "STRING",
+          "optional": false
+        },
+        "partsJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "tokenUsageJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "reasoningContent": {
+          "type": "STRING",
+          "optional": true
+        },
+        "streamInterruptCount": {
+          "type": "INT64",
+          "optional": false
+        },
+        "sortOrder": {
+          "type": "INT64",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "createdAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ],
+        "sessionId": [
+          "QUERYABLE"
+        ]
+      }
+    },
+    "CompactMarkerV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "markerId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "summary": {
+          "type": "STRING",
+          "optional": false
+        },
+        "firstKeptSortOrder": {
+          "type": "INT64",
+          "optional": false
+        },
+        "compactedCount": {
+          "type": "INT64",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "uiBoundarySortOrder": {
+          "type": "INT64",
+          "optional": true
+        },
+        "boundaryMessageId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "firstKeptMessageId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "lastCompactedMessageId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "markerVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "createdAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ],
+        "sessionId": [
+          "QUERYABLE"
+        ]
+      }
+    },
+    "SessionFileV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "relativePath": {
+          "type": "STRING",
+          "optional": false
+        },
+        "fileSize": {
+          "type": "INT64",
+          "optional": false
+        },
+        "mimeType": {
+          "type": "STRING",
+          "optional": true
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        },
+        "asset": {
+          "type": "ASSET",
+          "optional": true
+        },
+        "asset_size": {
+          "type": "INT64",
+          "optional": true
+        },
+        "asset_mime": {
+          "type": "STRING",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ArtifactV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "artifactId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sourceMessageId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "sourcePath": {
+          "type": "STRING",
+          "optional": true
+        },
+        "title": {
+          "type": "STRING",
+          "optional": false
+        },
+        "kind": {
+          "type": "STRING",
+          "optional": false
+        },
+        "mimeType": {
+          "type": "STRING",
+          "optional": false
+        },
+        "currentVersionId": {
+          "type": "STRING",
+          "optional": true
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "trashedAt": {
+          "type": "TIMESTAMP",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ArtifactVersionV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "versionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "artifactId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sessionId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "versionNumber": {
+          "type": "INT64",
+          "optional": false
+        },
+        "originalFileName": {
+          "type": "STRING",
+          "optional": false
+        },
+        "byteCount": {
+          "type": "INT64",
+          "optional": false
+        },
+        "sha256": {
+          "type": "STRING",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "mimeType": {
+          "type": "STRING",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        },
+        "asset": {
+          "type": "ASSET",
+          "optional": true
+        },
+        "asset_size": {
+          "type": "INT64",
+          "optional": true
+        },
+        "asset_mime": {
+          "type": "STRING",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "createdAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "SkillV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "skillId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "name": {
+          "type": "STRING",
+          "optional": false
+        },
+        "description": {
+          "type": "STRING",
+          "optional": false
+        },
+        "version": {
+          "type": "STRING",
+          "optional": false
+        },
+        "importSource": {
+          "type": "STRING",
+          "optional": false
+        },
+        "isEnabled": {
+          "type": "INT64",
+          "optional": false
+        },
+        "installedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "bodyText": {
+          "type": "STRING",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        },
+        "bundleAsset": {
+          "type": "ASSET",
+          "optional": true
+        },
+        "bundleAsset_size": {
+          "type": "INT64",
+          "optional": true
+        },
+        "bundleAsset_mime": {
+          "type": "STRING",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ProviderConfigV2": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "configJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "secretsJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "MCPServersV2": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "serversJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "MCPServerItem": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "serverName": {
+          "type": "STRING",
+          "optional": false
+        },
+        "entryJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ProviderInstanceV3": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "label": {
+          "type": "STRING",
+          "optional": false
+        },
+        "providerType": {
+          "type": "STRING",
+          "optional": false
+        },
+        "credentialType": {
+          "type": "STRING",
+          "optional": true
+        },
+        "customBaseURL": {
+          "type": "STRING",
+          "optional": true
+        },
+        "appendV1Suffix": {
+          "type": "INT64",
+          "optional": false
+        },
+        "imageEndpointMode": {
+          "type": "STRING",
+          "optional": true
+        },
+        "imageEndpointResolved": {
+          "type": "STRING",
+          "optional": true
+        },
+        "isEnabled": {
+          "type": "INT64",
+          "optional": false
+        },
+        "sortOrder": {
+          "type": "INT64",
+          "optional": false
+        },
+        "secretBlob": {
+          "type": "STRING",
+          "optional": true
+        },
+        "secretKind": {
+          "type": "STRING",
+          "optional": true
+        },
+        "secretUpdatedAt": {
+          "type": "TIMESTAMP",
+          "optional": true
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "extrasJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "customUserAgent": {
+          "type": "STRING",
+          "optional": true
+        },
+        "azureMode": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ProviderModelEntryV3": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "providerInstanceId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "baseModelJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "overridesJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "isCustom": {
+          "type": "INT64",
+          "optional": false
+        },
+        "isHidden": {
+          "type": "INT64",
+          "optional": false
+        },
+        "userModifiedAt": {
+          "type": "TIMESTAMP",
+          "optional": true
+        },
+        "sortOrder": {
+          "type": "INT64",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "extrasJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "legacyUuid": {
+          "type": "STRING",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "ProviderModelGroupV3": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "name": {
+          "type": "STRING",
+          "optional": false
+        },
+        "strategy": {
+          "type": "STRING",
+          "optional": false
+        },
+        "fallbackStrategy": {
+          "type": "STRING",
+          "optional": false
+        },
+        "defaultThinkingLevel": {
+          "type": "STRING",
+          "optional": true
+        },
+        "contextLimitTokens": {
+          "type": "INT64",
+          "optional": true
+        },
+        "contextLimitRemembered": {
+          "type": "INT64",
+          "optional": true
+        },
+        "memberEntryIdsJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "sortOrder": {
+          "type": "INT64",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "extrasJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "removedMembersJson": {
+          "type": "STRING",
+          "optional": true
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "EnvVarV2": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "envVarsJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "envSecretsJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {}
+    },
+    "EnvVarItem": {
+      "zone": "minis-secrets",
+      "version": 1,
+      "fields": {
+        "entryId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "key": {
+          "type": "STRING",
+          "optional": false
+        },
+        "valueB64": {
+          "type": "STRING",
+          "optional": false
+        },
+        "note": {
+          "type": "STRING",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "SyncDeviceV2": {
+      "zone": "minis-devices",
+      "version": 1,
+      "fields": {
+        "deviceId": {
+          "type": "STRING",
+          "optional": false
+        },
+        "deviceName": {
+          "type": "STRING",
+          "optional": false
+        },
+        "lastSeen": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "osVersion": {
+          "type": "STRING",
+          "optional": false
+        },
+        "uploadTypes": {
+          "type": "STRING",
+          "optional": false
+        },
+        "appVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {}
+    },
+    "SoulV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "contentMarkdown": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "MemoryGlobalV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "contentMarkdown": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    },
+    "MemoryDailyV2": {
+      "zone": "minis-shared",
+      "version": 1,
+      "fields": {
+        "dateKey": {
+          "type": "STRING",
+          "optional": false
+        },
+        "entriesJson": {
+          "type": "STRING",
+          "optional": false
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP",
+          "optional": false
+        },
+        "syncSchemaVersion": {
+          "type": "INT64",
+          "optional": false
+        },
+        "syncMinimumCompatibleVersion": {
+          "type": "INT64",
+          "optional": true
+        }
+      },
+      "indexes": {
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ]
+      }
+    }
+  }
+}

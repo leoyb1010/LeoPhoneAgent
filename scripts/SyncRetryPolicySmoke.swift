@@ -44,6 +44,14 @@ enum SyncRetryPolicySmoke {
         invalid.observeServiceRetry(after: .nan, at: now)
         invalid.observeServiceRetry(after: -10, at: now)
         expect(invalid.serviceNotBefore == nil, "invalid hints must not poison scheduler")
+        var records = SyncRetryPolicy()
+        records.failed(.record("SkillV2:one"), at: now, minimumDelay: 60, jitter: 0)
+        let selection = records.select(recordIDs: ["SkillV2:one", "MessageV2:two"], at: now)
+        expect(selection.eligible == ["MessageV2:two"], "one rejected record must not hold healthy records")
+        expect(selection.nextRetryAt == now.addingTimeInterval(60), "record retry retains its hint")
+        let throttled = records.select(recordIDs: ["MessageV2:two"], at: now, serviceDeadline: now.addingTimeInterval(180))
+        expect(throttled.eligible.isEmpty, "transport service hint gates otherwise healthy records")
+        expect(throttled.nextRetryAt == now.addingTimeInterval(180), "transport service floor is honored")
         print("SyncRetryPolicySmoke: isolation, server floors, recovery, bounds and persistence passed")
     }
 

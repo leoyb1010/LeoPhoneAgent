@@ -137,6 +137,7 @@ class Relay:
             os.path.join(os.path.dirname(device_keys_path), "relay-state.json")
             if device_keys_path else DEFAULT_STATE_PATH)
         self.devices: Dict[str, Dict[str, Any]] = {}
+        self.revoked_devices: set[str] = set()
         self.device_by_hash: Dict[str, str] = {}
         self.pins: Dict[str, str] = {}
         self.register_key_hash: Optional[str] = None
@@ -849,6 +850,9 @@ class Relay:
         except (OSError, json.JSONDecodeError):
             saved = {}
         if isinstance(saved, dict):
+            revoked = saved.get("revoked_devices", [])
+            if isinstance(revoked, list):
+                self.revoked_devices = {value for value in revoked if isinstance(value, str)}
             devices = saved.get("devices")
             if isinstance(devices, dict):
                 self.devices = {str(k): v for k, v in devices.items()
@@ -906,7 +910,7 @@ class Relay:
     def _reindex_devices(self) -> None:
         self.device_by_hash = {str(d["key_hash"]): device_id for device_id, d in self.devices.items()}
 
-    def _save_state(self) -> None:
+    def _save_state(self) -> bool:
         directory = os.path.dirname(self.state_path)
         try:
             os.makedirs(directory, mode=0o700, exist_ok=True)
@@ -916,14 +920,18 @@ class Relay:
                 json.dump({
                     "version": 2,
                     "devices": self.devices,
+                    "revoked_devices": sorted(self.revoked_devices),
                     "pins": self.pins,
                     "register_key_hash": self.register_key_hash,
                     "master_expires_at": self.master_expires_at,
                 }, f)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, self.state_path)
             os.chmod(self.state_path, 0o600)
+            return True
         except OSError:
-            pass
+            return False
 
     def _touch_device(self, device_id: str, now: float) -> None:
         device = self.devices.get(device_id)
@@ -1145,10 +1153,12 @@ class Relay:
         """撤销一台设备:钥匙立即失效,推送 token 一并删除。"""
         if self._admin(request) is None:
             return self._unauthorized()
-        device = self.devices.pop(request.match_info["device_id"], None)
-        if device is None:
+        device_id = request.match_info["device_id"]
+        device = self.devices.pop(device_id, None)
+        if device is None and device_id not in self.revoked_devices:
             return web.json_response({"error": {"message": "unknown device"}}, status=404)
-        push = device.get("push")
+        self.revoked_devices.add(device_id)
+        push = (device or {}).get("push")
         if isinstance(push, dict) and push.get("token"):
             forget = getattr(self.apns, "_forget", None)
             if callable(forget):
@@ -1157,7 +1167,13 @@ class Relay:
                 except Exception:  # noqa: BLE001
                     pass
         self._reindex_devices()
-        self._save_state()
+        # 撤销必须先持久化；掉线的 Mac 下次注册从快照补齐，不能只靠一次通知。
+        if not self._save_state():
+            return web.json_response({"error": {"message": "revocation persistence unavailable"}}, status=503)
+        await asyncio.gather(*(
+            asyncio.wait_for(machine.ws.send_json({"type": "device_revoked", "device_id": device_id}), timeout=3)
+            for machine in list(self.machines.values())
+        ), return_exceptions=True)
         return web.json_response({"ok": True})
 
     async def rotate_keys(self, request: web.Request) -> web.Response:
@@ -1237,7 +1253,8 @@ class Relay:
                     machine = Machine(name, ws, dict(frame.get("info") or {}))
                     self.machines[name] = machine
                     print(f"[relay] {name} online", flush=True)
-                    ack: Dict[str, Any] = {"type": "registered", "version": VERSION}
+                    ack: Dict[str, Any] = {"type": "registered", "version": VERSION,
+                                            "revokedDeviceIds": sorted(self.revoked_devices)}
                     if not pinned and frame.get("pin") is True and caller.kind in ("master", "register"):
                         machine_key = secrets.token_urlsafe(32)
                         self.pins[name] = self._hash_key(machine_key)

@@ -9,6 +9,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
+
 import type { LinkBridge, LinkRequest } from "./bridge.js";
 import { RelayLink, tailnetLookup, type MachineKeyStore } from "./relayLink.js";
 
@@ -23,7 +25,11 @@ const macRoot = path.resolve(here, "../../../../../../..");
 const relaySource = path.join(macRoot, "leoagent", "relay.py");
 
 function pickPython(): string | null {
-  for (const candidate of [process.env["LEO_RELAY_PYTHON"], path.join(os.homedir(), ".leoagent/venv/bin/python"), "python3"]) {
+  for (const candidate of [
+    process.env["LEO_RELAY_PYTHON"],
+    path.join(os.homedir(), ".leoagent/venv/bin/python"),
+    "python3",
+  ]) {
     if (!candidate) continue;
     const probe = spawnSync(candidate, ["-c", "import aiohttp"], { stdio: "ignore" });
     if (probe.status === 0) return candidate;
@@ -42,7 +48,10 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function waitFor<T>(probe: () => Promise<T | null | undefined | false>, timeoutMs = 8000): Promise<T> {
+async function waitFor<T>(
+  probe: () => Promise<T | null | undefined | false>,
+  timeoutMs = 8000,
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
@@ -70,108 +79,192 @@ function memoryKeys(): MachineKeyStore & { value: string | null } {
 
 const python = existsSync(relaySource) ? pickPython() : null;
 
-test("RelayLink against the real relay 0.2: pin, caller, request id, stream, push, reconnect", { skip: python ? false : "no python with aiohttp" }, async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-relay-"));
-  const port = await freePort();
-  const launcher = [
-    "import os, sys",
-    "sys.path.insert(0, sys.argv[1])",
-    "from aiohttp import web",
-    "from leoagent.relay import Relay",
-    "tmp = sys.argv[2]",
-    "relay = Relay(os.environ['RELAY_KEY'], rejected_log=os.path.join(tmp, 'rejected.log'),",
-    "  device_keys_path=os.path.join(tmp, 'device-keys.json'), treasury_sync_path=os.path.join(tmp, 'treasury.json'),",
-    "  treasury_asset_dir=os.path.join(tmp, 'assets'))",
-    "web.run_app(relay.build_app(), host='127.0.0.1', port=int(sys.argv[3]), print=None)",
-  ].join("\n");
-  const relay: ChildProcess = spawn(python!, ["-c", launcher, macRoot, dir, String(port)], {
-    // HOME 指到临时目录:中继的默认路径(推送配置、设备表)都落在 ~/.leoagent,测试绝不能碰真的。
-    env: { ...process.env, HOME: dir, RELAY_KEY: MASTER },
-    stdio: "ignore",
-  });
-  const base = `http://127.0.0.1:${port}`;
-  const auth = (key: string) => ({ Authorization: `Bearer ${key}` });
-  const seen: LinkRequest[] = [];
-  const bridge = {
-    async handle(req: LinkRequest) {
-      seen.push(req);
-      return { status: 200, body: { path: req.path } };
-    },
-    async stream(req: LinkRequest, write: (data: string) => void, signal: AbortSignal) {
-      seen.push(req);
-      write(JSON.stringify({ event: "message.delta", seq: 1, delta: "hi" }));
-      await new Promise<void>((resolve) => {
-        if (signal.aborted) return resolve();
-        signal.addEventListener("abort", () => resolve(), { once: true });
-        setTimeout(resolve, 300);
+test(
+  "RelayLink against the real relay 0.2: pin, caller, request id, stream, push, reconnect",
+  { skip: python ? false : "no python with aiohttp" },
+  async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "leo-relay-"));
+    const port = await freePort();
+    const launcher = [
+      "import os, sys",
+      "sys.path.insert(0, sys.argv[1])",
+      "from aiohttp import web",
+      "from leoagent.relay import Relay",
+      "tmp = sys.argv[2]",
+      "relay = Relay(os.environ['RELAY_KEY'], rejected_log=os.path.join(tmp, 'rejected.log'),",
+      "  device_keys_path=os.path.join(tmp, 'device-keys.json'), treasury_sync_path=os.path.join(tmp, 'treasury.json'),",
+      "  treasury_asset_dir=os.path.join(tmp, 'assets'))",
+      "web.run_app(relay.build_app(), host='127.0.0.1', port=int(sys.argv[3]), print=None)",
+    ].join("\n");
+    const relay: ChildProcess = spawn(python!, ["-c", launcher, macRoot, dir, String(port)], {
+      // HOME 指到临时目录:中继的默认路径(推送配置、设备表)都落在 ~/.leoagent,测试绝不能碰真的。
+      env: { ...process.env, HOME: dir, RELAY_KEY: MASTER },
+      stdio: "ignore",
+    });
+    const base = `http://127.0.0.1:${port}`;
+    const auth = (key: string) => ({ Authorization: `Bearer ${key}` });
+    const seen: LinkRequest[] = [];
+    const revoked: string[] = [];
+    const bridge = {
+      async revokeCaller(deviceId: string) {
+        revoked.push(deviceId);
+      },
+      async handle(req: LinkRequest) {
+        seen.push(req);
+        return { status: 200, body: { path: req.path } };
+      },
+      async stream(req: LinkRequest, write: (data: string) => void, signal: AbortSignal) {
+        seen.push(req);
+        write(JSON.stringify({ event: "message.delta", seq: 1, delta: "hi" }));
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) return resolve();
+          signal.addEventListener("abort", () => resolve(), { once: true });
+          setTimeout(resolve, 300);
+        });
+      },
+    } as unknown as LinkBridge;
+    const keys = memoryKeys();
+    const config = {
+      wsUrl: `ws://127.0.0.1:${port}/relay/agent`,
+      name: "TestMac",
+      registerKey: MASTER,
+    };
+    const silent = { info() {}, warn() {} };
+    const device: LeoDeviceDescriptor = {
+      schemaVersion: 1,
+      deviceId: "9c0f2c99-17cf-47a1-a370-d97161f68f9a",
+      name: "My Mac",
+      platform: "macos",
+      capabilities: ["harness"],
+      endpoints: [],
+    };
+    let link = new RelayLink(config, bridge, keys, silent, "test", device);
+    try {
+      await waitFor(async () => (await fetch(`${base}/relay/health`)).ok);
+      link.start();
+      // 首次注册用主钥匙,领到机器专属钥匙
+      const machineKey = await waitFor(async () => keys.value);
+      assert.ok(machineKey.length >= 16);
+      const machines = await waitFor(async () => {
+        const body = (await (
+          await fetch(`${base}/relay/api/machines`, { headers: auth(MASTER) })
+        ).json()) as { machines: { name: string; device?: LeoDeviceDescriptor }[] };
+        return body.machines.some((m) => m.name === "TestMac") ? body.machines : null;
       });
-    },
-  } as unknown as LinkBridge;
-  const keys = memoryKeys();
-  const config = { wsUrl: `ws://127.0.0.1:${port}/relay/agent`, name: "TestMac", registerKey: MASTER };
-  const silent = { info() {}, warn() {} };
-  let link = new RelayLink(config, bridge, keys, silent, "test");
-  try {
-    await waitFor(async () => (await fetch(`${base}/relay/health`)).ok);
-    link.start();
-    // 首次注册用主钥匙,领到机器专属钥匙
-    const machineKey = await waitFor(async () => keys.value);
-    assert.ok(machineKey.length >= 16);
-    const machines = await waitFor(async () => {
-      const body = (await (await fetch(`${base}/relay/api/machines`, { headers: auth(MASTER) })).json()) as { machines: { name: string }[] };
-      return body.machines.some((m) => m.name === "TestMac") ? body.machines : null;
-    });
-    assert.ok(machines.length >= 1);
+      assert.deepEqual(machines.find((machine) => machine.name === "TestMac")?.device, device);
+      assert.ok(machines.length >= 1);
 
-    const exchanged = (await (await fetch(`${base}/relay/api/device/exchange`, {
-      method: "POST", headers: { ...auth(MASTER), "Content-Type": "application/json" }, body: JSON.stringify({ name: "iPhone" }),
-    })).json()) as { accessKey: string; deviceId: string };
+      const exchanged = (await (
+        await fetch(`${base}/relay/api/device/exchange`, {
+          method: "POST",
+          headers: { ...auth(MASTER), "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "iPhone" }),
+        })
+      ).json()) as { accessKey: string; deviceId: string };
 
-    const health = await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) });
-    assert.equal(health.status, 200);
-    assert.deepEqual(seen.at(-1)?.caller, { kind: "iphone", deviceId: exchanged.deviceId, name: "iPhone" });
+      const health = await fetch(`${base}/relay/api/m/TestMac/health`, {
+        headers: auth(exchanged.accessKey),
+      });
+      assert.equal(health.status, 200);
+      assert.deepEqual(seen.at(-1)?.caller, {
+        kind: "iphone",
+        deviceId: exchanged.deviceId,
+        name: "iPhone",
+      });
 
-    const created = await fetch(`${base}/relay/api/m/TestMac/harness/sessions`, {
-      method: "POST",
-      headers: { ...auth(exchanged.accessKey), "Content-Type": "application/json", "X-Leo-Request-Id": "req-42" },
-      body: JSON.stringify({ harness: "zcode", prompt: "hi" }),
-    });
-    assert.equal(created.status, 200);
-    assert.equal(seen.at(-1)?.requestId, "req-42");
-    assert.deepEqual(seen.at(-1)?.body, { harness: "zcode", prompt: "hi" });
+      const created = await fetch(`${base}/relay/api/m/TestMac/harness/sessions`, {
+        method: "POST",
+        headers: {
+          ...auth(exchanged.accessKey),
+          "Content-Type": "application/json",
+          "X-Leo-Request-Id": "req-42",
+        },
+        body: JSON.stringify({ harness: "zcode", prompt: "hi" }),
+      });
+      assert.equal(created.status, 200);
+      assert.equal(seen.at(-1)?.requestId, "req-42");
+      assert.deepEqual(seen.at(-1)?.body, { harness: "zcode", prompt: "hi" });
 
-    const stream = await fetch(`${base}/relay/api/m/TestMac/harness/sessions/s1/events?after=0`, { headers: auth(exchanged.accessKey) });
-    assert.ok((await stream.text()).includes('data: {"event":"message.delta","seq":1,"delta":"hi"}'));
+      const stream = await fetch(`${base}/relay/api/m/TestMac/harness/sessions/s1/events?after=0`, {
+        headers: auth(exchanged.accessKey),
+      });
+      assert.ok(
+        (await stream.text()).includes('data: {"event":"message.delta","seq":1,"delta":"hi"}'),
+      );
 
-    link.pushEvent({ event: "run.completed", session_id: "s1", seq: 2 });
-    const events = await waitFor(async () => {
-      const body = (await (await fetch(`${base}/relay/api/events`, { headers: auth(exchanged.accessKey) })).json()) as { events: { machine: string; event: { event: string } }[] };
-      return body.events.find((e) => e.machine === "TestMac" && e.event.event === "run.completed");
-    });
-    assert.ok(events);
+      link.pushEvent({ event: "run.completed", session_id: "s1", seq: 2 });
+      const events = await waitFor(async () => {
+        const body = (await (
+          await fetch(`${base}/relay/api/events`, { headers: auth(exchanged.accessKey) })
+        ).json()) as { events: { machine: string; event: { event: string } }[] };
+        return body.events.find(
+          (e) => e.machine === "TestMac" && e.event.event === "run.completed",
+        );
+      });
+      assert.ok(events);
 
-    // 重连只用机器钥匙;主钥匙已经顶不掉这个名字
-    link.stop();
-    link = new RelayLink({ ...config, registerKey: "wrong-key-0123456789abcdef" }, bridge, keys, silent, "test");
-    link.start();
-    await waitFor(async () => (await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) })).status === 200);
+      // 重连只用机器钥匙;主钥匙已经顶不掉这个名字
+      link.stop();
+      link = new RelayLink(
+        { ...config, registerKey: "wrong-key-0123456789abcdef" },
+        bridge,
+        keys,
+        silent,
+        "test",
+      );
+      link.start();
+      await waitFor(
+        async () =>
+          (
+            await fetch(`${base}/relay/api/m/TestMac/health`, {
+              headers: auth(exchanged.accessKey),
+            })
+          ).status === 200,
+      );
 
-    // 中继解了钉(或丢了状态):存着的机器钥匙不再被认(4001),链路改用注册钥匙重新领一把,而不是一直被拒
-    link.stop();
-    const unpinned = await fetch(`${base}/relay/api/machines/TestMac/unpin`, { method: "POST", headers: auth(MASTER) });
-    assert.equal(unpinned.status, 200);
-    const stale = keys.value;
-    link = new RelayLink(config, bridge, keys, silent, "test");
-    link.start();
-    const fresh = await waitFor(async () => (keys.value !== stale ? keys.value : null), 15_000);
-    assert.ok(fresh && fresh.length >= 16);
-    await waitFor(async () => (await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) })).status === 200);
-  } finally {
-    link.stop();
-    relay.kill();
-    await rm(dir, { recursive: true, force: true });
-  }
-});
+      // 中继解了钉(或丢了状态):存着的机器钥匙不再被认(4001),链路改用注册钥匙重新领一把,而不是一直被拒
+      link.stop();
+      const unpinned = await fetch(`${base}/relay/api/machines/TestMac/unpin`, {
+        method: "POST",
+        headers: auth(MASTER),
+      });
+      assert.equal(unpinned.status, 200);
+      const stale = keys.value;
+      link = new RelayLink(config, bridge, keys, silent, "test");
+      link.start();
+      const fresh = await waitFor(async () => (keys.value !== stale ? keys.value : null), 15_000);
+      assert.ok(fresh && fresh.length >= 16);
+      await waitFor(
+        async () =>
+          (
+            await fetch(`${base}/relay/api/m/TestMac/health`, {
+              headers: auth(exchanged.accessKey),
+            })
+          ).status === 200,
+      );
+      const removed = await fetch(`${base}/relay/api/devices/${exchanged.deviceId}`, {
+        method: "DELETE",
+        headers: auth(MASTER),
+      });
+      assert.equal(removed.status, 200);
+      await waitFor(async () => revoked.includes(exchanged.deviceId));
+      assert.equal(
+        (await fetch(`${base}/relay/api/m/TestMac/health`, { headers: auth(exchanged.accessKey) }))
+          .status,
+        401,
+      );
+      link.stop();
+      revoked.length = 0;
+      link = new RelayLink(config, bridge, keys, silent, "test");
+      link.start();
+      await waitFor(async () => revoked.includes(exchanged.deviceId));
+    } finally {
+      link.stop();
+      relay.kill();
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 test("tailnetLookup only touches *.ts.net names and falls back to the system resolver", async () => {
   // 故意给一个不可达的 DNS:tailnet 名字解析失败时必须退回系统解析,而不是报错卡住连接。

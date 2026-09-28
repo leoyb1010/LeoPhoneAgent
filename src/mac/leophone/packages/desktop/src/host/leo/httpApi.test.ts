@@ -205,3 +205,13 @@ test("a chat body past the proxy limit reads as context overflow so the agent co
   assert.equal(res.status, 400);
   assert.equal((res.body["error"] as Record<string, unknown>)["code"], "context_length_exceeded");
 });
+
+test("direct configuration, pairing and revocation require the same local UI-only secret", async () => {
+  const bearer = { authorization: `Bearer ${leoLocalKey()}` };
+  for (const action of ["configure", "pair", "revoke"]) {
+    assert.equal((await call("POST", `/api/leo/link/direct/${action}`, bearer, "{}")).status, 403);
+    assert.equal((await call("POST", `/api/leo/link/direct/${action}`, { authorization: `Bearer ${leoTreasuryKey()}`, "x-leo-pair": "pair-secret-for-test" }, "{}")).status, 401);
+  }
+  const invalid = await call("POST", "/api/leo/link/direct/configure", { ...bearer, "x-leo-pair": "pair-secret-for-test" }, JSON.stringify({ enabled: true, baseURL: "http://not-tailnet.example", port: 38474 }));
+  assert.equal(invalid.status, 400);
+});

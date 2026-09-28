@@ -21,6 +21,8 @@ struct SyncedSession: Syncable {
     var memoryEnabled: Int          // 0/1
     var modelBinding: String?
     var pinnedAt: Date?
+    var originDeviceId: String?
+    var lastWriterDeviceId: String?
 
     static let syncMetadata: SyncTypeMetadata<SyncedSession> = {
         typealias F = FieldDescriptor<SyncedSession>
@@ -38,13 +40,15 @@ struct SyncedSession: Syncable {
                 F.int("memoryEnabled",       \SyncedSession.memoryEnabled),
                 F.optionalString("modelBinding", \SyncedSession.modelBinding),
                 F.optionalDate("pinnedAt",   \SyncedSession.pinnedAt),
+                F.optionalString("originDeviceId", \SyncedSession.originDeviceId),
+                F.optionalString("lastWriterDeviceId", \SyncedSession.lastWriterDeviceId),
             ],
             conflictPolicy: .lastWriteWinsByField(\SyncedSession.updatedAt),
-            version: 1
+            version: 2
         )
     }()
 
-    static func from(_ s: ChatSession, memoryEnabled: Bool, modelBinding: String?) -> SyncedSession {
+    static func from(_ s: ChatSession, memoryEnabled: Bool, modelBinding: String?, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) -> SyncedSession {
         SyncedSession(
             id: s.id,
             title: s.title,
@@ -54,7 +58,9 @@ struct SyncedSession: Syncable {
             updatedAt: s.updatedAt,
             memoryEnabled: memoryEnabled ? 1 : 0,
             modelBinding: modelBinding,
-            pinnedAt: s.pinnedAt
+            pinnedAt: s.pinnedAt,
+            originDeviceId: originDeviceId,
+            lastWriterDeviceId: lastWriterDeviceId
         )
     }
 }

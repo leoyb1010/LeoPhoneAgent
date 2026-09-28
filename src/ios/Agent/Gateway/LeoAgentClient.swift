@@ -178,13 +178,24 @@ enum GatewayService: Sendable {
 /// An actor so a session driver and a background health probe can share one
 /// instance without racing on URLSession configuration.
 actor LeoAgentClient {
-    private let baseURL: URL
+    let baseURL: URL
     /// Where the harness service lives (tailnet :8647 → local :8646). nil for
     /// hosts configured before this existed; harness calls then fail with a
     /// named, actionable error instead of hitting the engine port and 404ing.
-    private nonisolated let harnessBaseURL: URL?
-    private nonisolated let apiKey: String
+    nonisolated let harnessBaseURL: URL?
+    nonisolated let apiKey: String
     let session: URLSession
+    let directSession: URLSession
+    var directRoute: DirectDeviceRoute?
+    var directProbeUntil = Date.distantPast
+    var directCooldownUntil = Date.distantPast
+    var directLastFailure: Date?
+    var directEnrollmentAttempted = false
+    var directEnrollmentAfter = Date.distantPast
+    let supportsDirectDiscovery: Bool
+    let expectedDeviceId: String?
+    let directOnly: Bool
+    nonisolated let relayServices: GatewayRelayServices?
     /// [T-siri-fleet] 这个 client 属于哪台 Mac(GatewayHostStore 填)。
     /// Siri 审批通知需要跨进程回溯到主机来重建 client,靠它寻址。
     nonisolated let hostId: String?
@@ -206,7 +217,15 @@ actor LeoAgentClient {
     nonisolated var apiKeyForRelay: String { apiKey }
 
     init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil,
-         hostId: String? = nil, hostName: String? = nil) {
+         hostId: String? = nil, hostName: String? = nil, supportsDirectDiscovery: Bool = false, expectedDeviceId: String? = nil, directOnly: Bool = false, relayServices: GatewayRelayServices? = nil) {
+        self.relayServices = relayServices ?? harnessBaseURL.flatMap {
+            RelayMachinesClient.apiRoot(fromHarnessURL: $0.absoluteString).flatMap { GatewayRelayServices(apiRoot: $0) }
+        }
+        self.directOnly = directOnly
+        self.expectedDeviceId = expectedDeviceId
+        self.supportsDirectDiscovery = supportsDirectDiscovery
+        if let hostId, let stored = GatewayHostStore.accessKey(hostId: hostId + ".direct"),
+           let data = stored.data(using: .utf8) { self.directRoute = DirectDeviceRoute.decode(data) }
         self.baseURL = baseURL
         self.harnessBaseURL = harnessBaseURL
         self.apiKey = apiKey
@@ -220,6 +239,11 @@ actor LeoAgentClient {
         config.waitsForConnectivity = true
         config.httpAdditionalHeaders = ["Accept-Encoding": "identity"]
         self.session = URLSession(configuration: config)
+        let directConfig = URLSessionConfiguration.ephemeral
+        directConfig.timeoutIntervalForRequest = 5
+        directConfig.timeoutIntervalForResource = 3600
+        directConfig.waitsForConnectivity = false
+        self.directSession = URLSession(configuration: directConfig, delegate: GatewayNoRedirect(), delegateQueue: nil)
     }
 
     // MARK: Request plumbing
@@ -250,7 +274,13 @@ actor LeoAgentClient {
         }
         guard let url = resolved else { throw GatewayError.badURL }
         var req = URLRequest(url: url)
+        if directOnly, let expectedDeviceId { req.setValue(expectedDeviceId, forHTTPHeaderField: "X-Leo-Device-ID") }
         req.httpMethod = method
+        if method != "GET" && method != "HEAD" {
+            let operation = UUID().uuidString.lowercased()
+            req.setValue(operation, forHTTPHeaderField: "X-Leo-Request-Id")
+            req.setValue(operation, forHTTPHeaderField: "X-Request-ID")
+        }
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body {
@@ -260,7 +290,7 @@ actor LeoAgentClient {
     }
 
     private func send(_ req: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await routedData(for: req)
         try Self.validate(response: response, data: data)
         return data
     }
@@ -318,6 +348,9 @@ actor LeoAgentClient {
         let data = try JSONSerialization.data(withJSONObject: body)
         var req = try request(path, method: "POST", body: data, service: service)
         for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
+        if let operation = req.value(forHTTPHeaderField: "X-Leo-Request-Id") {
+            req.setValue(operation, forHTTPHeaderField: "X-Request-ID")
+        }
         let raw = try await send(req)
         return (try? Self.json(raw)) ?? [:]
     }

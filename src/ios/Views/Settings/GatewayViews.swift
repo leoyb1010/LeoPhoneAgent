@@ -43,6 +43,7 @@ private let RELAY_BASE = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-rel
 
 struct GatewaySettingsView: View {
     @StateObject private var store = GatewayHostStore.shared
+    @ObservedObject private var sshStore = RemoteHostStore.shared
     @ObservedObject private var editor = GatewayEditorCoordinator.shared
     @State private var reachable: [String: Bool] = [:]
     @State private var showQuickSetup = false
@@ -115,7 +116,13 @@ struct GatewaySettingsView: View {
                         Button {
                             editor.beginEdit(host)
                         } label: {
-                            GatewayHostRow(host: host, isReachable: reachable[host.id])
+                            VStack(alignment: .leading, spacing: 4) {
+                                GatewayHostRow(host: host, isReachable: reachable[host.id], route: store.routeStatuses[host.id])
+                                if let deviceId = host.device?.deviceId,
+                                   sshStore.hosts.contains(where: { $0.deviceId == deviceId }) {
+                                    Label("SSH 已配置", systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -138,11 +145,22 @@ struct GatewaySettingsView: View {
                         Label("扫码添加机器", systemImage: "qrcode.viewfinder")
                     }
                 } footer: {
-                    Text("码里只有中继地址和机器名，钥匙不进码。")
+                    Text("扫描 Mac 出示的短时配对码。访问授权仅保存在本机。")
+                }
+            }
+            Section("SSH 主机") {
+                NavigationLink(destination: RemoteHostSettingsView()) {
+                    Label("管理 SSH 连接", systemImage: "terminal")
+                }
+                ForEach(sshStore.hosts.filter { $0.deviceId == nil }) { host in
+                    VStack(alignment: .leading) {
+                        Text(host.name)
+                        Text("仅配置 SSH，尚未关联远控设备").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
-        .navigationTitle(Text("远程机器"))
+        .navigationTitle(Text("我的设备"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await refresh() }
         .sheet(isPresented: $showQuickSetup) {
@@ -212,6 +230,14 @@ struct GatewaySettingsView: View {
                     return
                 }
                 let raw = (data?["payload"] as? String) ?? ""
+                if let directPair = DirectPairPayload.parse(raw) {
+                    do {
+                        let host = try await store.pairDirect(directPair, name: UIDevice.current.name)
+                        scanMessage = "已加入 \(host.name)"
+                        await refresh()
+                    } catch { scanMessage = "直连配对失败，请让 Mac 重新出示配对码。" }
+                    return
+                }
                 guard let pair = RelayPairPayload.parse(raw) else {
                     scanMessage = "不是本 App 的配对码。码里应是中继根和机器名。"
                     return
@@ -317,7 +343,7 @@ private struct QuickFleetSetupSheet: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
                         Text("把复制的命令粘贴到 Mac 终端，再把返回的密钥粘贴到上方。")
-                        Label("如果本机开着 Shadowrocket 等代理，请将 *.ts.net 设为直连。",
+                        Label("连接失败时检查目标设备、授权和 Tailscale 可达性。",
                               systemImage: "exclamationmark.triangle.fill")
                     }
                 }
@@ -364,6 +390,7 @@ private struct QuickFleetSetupSheet: View {
 private struct GatewayHostRow: View {
     let host: GatewayHost
     let isReachable: Bool?
+    var route: GatewayRouteStatus? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -373,6 +400,15 @@ private struct GatewayHostRow: View {
                 .leoPulse(active: isReachable == nil)
             VStack(alignment: .leading, spacing: 2) {
                 Text(host.name).font(.system(size: 16, weight: .medium))
+                if let route {
+                    HStack {
+                        Text(!route.available ? "连接不可用" : (route.direct ? "直连目标" : "经应用中继"))
+                        if let ms = route.latencyMilliseconds { Text("\(ms) ms") }
+                    }.font(.caption).foregroundStyle(.secondary)
+                }
+                if let device = host.device {
+                    Text(device.capabilities.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                }
                 if let address = displayedAddress {
                     Text(address)
                         .font(.system(size: 12, design: .monospaced))

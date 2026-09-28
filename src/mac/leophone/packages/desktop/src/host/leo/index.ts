@@ -10,7 +10,10 @@ import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
 import { TreasuryStore } from "./treasuryStore.js";
 
-type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+type Logger = {
+  info: (msg: string, meta?: unknown) => void;
+  warn: (msg: string, meta?: unknown) => void;
+};
 
 let started = false;
 let httpServer: Server | null = null;
@@ -73,7 +76,8 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           const syncLink = () => {
             const wanted = linkEnabled();
             const relaySignature = relayConfigSignature();
-            if (wanted && link && relaySignature !== linkRelaySignature) stopLink("relay config changed");
+            if (wanted && link && relaySignature !== linkRelaySignature)
+              stopLink("relay config changed");
             if (wanted && !link) {
               linkRelaySignature = relaySignature;
               const starting: Promise<{ stop(): Promise<void> } | null> = linkStopped
@@ -83,6 +87,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
                     settingService: deps.services.get(ISettingService),
                     logger: deps.logger,
                     appVersion: ZCODE_VERSION,
+                    treasuryStore: store ?? undefined,
                   }),
                 )
                 .catch((error: unknown) => {

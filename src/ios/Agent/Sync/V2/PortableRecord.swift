@@ -3,7 +3,7 @@ import Foundation
 /// Transport-neutral record identifier. Combines record type + opaque id.
 /// Multiple transports (iCloud / LAN / etc.) all use this same identity
 /// so a record routed through any transport refers to the same logical thing.
-struct SyncRecordID: Hashable, Codable, CustomStringConvertible {
+struct SyncRecordID: Hashable, Codable, CustomStringConvertible, Sendable {
     let type: String   // e.g. "MessageV2"
     let id: String     // e.g. "AB12CDEF-..."
 
@@ -26,7 +26,7 @@ struct SyncRecordID: Hashable, Codable, CustomStringConvertible {
 /// Transport-neutral field value. Every supported scalar / blob type maps
 /// here. Both the iCloud transport (CKRecord field setter) and any future
 /// LAN transport (JSON encode) consume this same enum.
-enum PortableFieldValue: Codable, Equatable {
+enum PortableFieldValue: Codable, Equatable, Sendable {
     case null
     case string(String)
     case int(Int)
@@ -80,7 +80,7 @@ enum PortableFieldValue: Codable, Equatable {
 /// Transport-neutral asset reference. Always points to a local file URL —
 /// the transport is responsible for uploading/streaming/etc as appropriate
 /// (CKAsset wrap for iCloud, multipart over WebSocket for LAN, etc.).
-struct PortableAsset: Codable, Equatable {
+struct PortableAsset: Codable, Equatable, Sendable {
     let key: String          // field name on the record (e.g. "partsAsset")
     let fileURL: URL         // local path
     let size: Int            // bytes
@@ -94,7 +94,7 @@ struct PortableAsset: Codable, Equatable {
 /// app version does not recognise — they MUST be carried back into any
 /// outbound write so newer-version data is not silently destroyed by an
 /// older client. See §3.6 of the v2 design.
-struct PortableRecord: Codable, Equatable {
+struct PortableRecord: Codable, Equatable, Sendable {
     let id: SyncRecordID
     let fields: [String: PortableFieldValue]
     let assets: [String: PortableAsset]
@@ -143,6 +143,16 @@ struct PortableRecord: Codable, Equatable {
 struct SyncOutboundBatch {
     let records: [PortableRecord]
     let deletes: [SyncRecordID]
+    /// 变更在业务 DB 中冻结的 revision 与 changeId；仅外发投递时携带。
+    /// 同一修订经不同 transport 重试必须使用完全相同的票据与正文。
+    let deliveryTickets: [String: SyncDeliveryTicket]
+
+    init(records: [PortableRecord], deletes: [SyncRecordID],
+         deliveryTickets: [String: SyncDeliveryTicket] = [:]) {
+        self.records = records
+        self.deletes = deletes
+        self.deliveryTickets = deliveryTickets
+    }
 }
 
 struct SyncInboundBatch {

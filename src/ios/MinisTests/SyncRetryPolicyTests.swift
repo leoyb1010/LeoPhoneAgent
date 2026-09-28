@@ -42,4 +42,21 @@ final class SyncRetryPolicyTests: XCTestCase {
         XCTAssertFalse(policy.isEligible(.query("SkillV2"), at: now))
         XCTAssertTrue(policy.isEligible(.send, at: now))
     }
+
+    func testRecordRetryDoesNotHoldAnotherReadyRecord() {
+        var policy = SyncRetryPolicy()
+        policy.failed(.record("SkillV2:one"), at: now, minimumDelay: 60, jitter: 0)
+        let result = policy.select(recordIDs: ["SkillV2:one", "MessageV2:two"], at: now)
+        XCTAssertEqual(result.eligible, ["MessageV2:two"])
+        XCTAssertEqual(result.nextRetryAt, now.addingTimeInterval(60))
+        XCTAssertEqual(policy.select(recordIDs: ["SkillV2:one"], at: now.addingTimeInterval(60)).eligible, ["SkillV2:one"])
+    }
+
+    func testTransportServerHintTakesPrecedenceOverRecordEligibility() {
+        let policy = SyncRetryPolicy()
+        let until = now.addingTimeInterval(180)
+        let result = policy.select(recordIDs: ["MessageV2:two"], at: now, serviceDeadline: until)
+        XCTAssertTrue(result.eligible.isEmpty)
+        XCTAssertEqual(result.nextRetryAt, until)
+    }
 }

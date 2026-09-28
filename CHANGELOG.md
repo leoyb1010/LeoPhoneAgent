@@ -1,5 +1,39 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.49.0 (134) · iCloud 故障恢复与 Mac 直连 - 2026-09-28
+
+- iCloud 查询、上传和单记录失败独立重试；同步状态显示部分失败，待传变更按目的地和 revision 持久保存，避免单路成功清掉另一条通道的待传数据。
+- 会话创建来源与最后编辑者分开保存；旧记录没有来源时按本机历史处理，不在列表里标「来源未知」、也不当成另一台设备重复列出。Mac 直连以设备授权、能力和 TLS 身份绑定为基础，保留原中继回退。
+- Mac 同步副本由用户为指定设备单独启用；附件按 hash 校验、分块传输和断点恢复。Production CloudKit schema 与签名环境必须经过独立发布门禁，不以代码清单冒充线上部署。
+- 流畅度收尾（审查 Codex 交接代码后修正）：
+  - 恢复冷启动 15 秒延后联网。
+  - 去掉仅 iCloud 用户也跑的 30 秒轮询；Mac 副本连不上时按 30s→10min 退避重试，不再每 30 秒重启 iCloud 传输。
+  - 自己刚推送的记录回流时仍走 LWW 合并，但不再触发全部打开对话重载。
+  - 单一目的地不再为每条记录复制附件和冻结 BLOB。
+  - 路由状态只在可见变化时发布，不再每个请求都让聊天页重绘；直连探测改为 120 秒一次，未开直连的 Mac 5 分钟才重试授权；只有直连流断开才判直连失败，离开对话取消流不算。
+  - iCloud 成功回执按类型合并写入重试状态，不再逐条写 UserDefaults。
+- 正确性修正：
+  - 没有合并/删除处理器的类型、以及用户关掉的类别，都视为已处理，不再卡住 Tailnet 游标、反复重放同一页。
+  - 恢复入站按类别开关过滤。
+  - 关闭或更换 Mac 副本时清掉它的待传票据，已被其余目的地确认的 dirty 行随之出队；副本只是暂时连不上时保留队列。
+  - 副本拉取跳过本机刚写入的变更，自己上传的附件不再下载回来。
+  - 副本补传按会话让出执行，不再一次锁住聊天库数秒。
+  - 同步设置里 iCloud 检查失败的友好说明不再被刷新覆盖。
+- 验证：Release 构建通过；MinisLogicTests 455 项通过；Ledger（含副本补传/清理）、Tailnet IO、Bootstrap（含清理/保留队列）三项 smoke 通过。
+- 装机（2026-09-28，经 InstallIOSRelease.sh 发版闸门）：iPhone 18 Pro Max、iPad Pro 13（M4）、Apple Watch 均为 1.49.0 (134)，devicectl 已核对。未部署 Production CloudKit schema（单独发布动作）。
+
+## Mac 1.3.4 · Tailscale 直连、设备授权与同步副本 - 2026-09-28
+
+- 新增同一 Host/runtime 的受鉴权直连接口、持久设备身份、直连配对二维码、授权撤销及中继回退协议；配置入口位于「连接手机」。
+- 远控写操作按调用设备和稳定请求编号持久化回执；首条输入之前持久化任务编号，重启后查询既有 V4 admission 事实，不重复创建或发送。无法对账的旧运行时操作显示明确的不确定状态。
+- 同步副本与藏宝阁使用独立授权范围，仅在本机明确启用后开放；不透传本机管理 API，不自动更改 Tailscale Serve/Funnel。
+- 源码验证：链路、鉴权、撤销、重启恢复与副本测试；类型、lint、架构门禁。Mac 1.3.4 已完成 Developer ID 签名、Apple Accepted 公证、DMG/App staple 与带 quarantine 副本的 Gatekeeper 验证；63 项相关测试通过。
+- 发布与装机（2026-09-28）：
+  - 已发布 https://github.com/leoyb1010/leocodebox-updates/releases/tag/v1.3.4，latest 清单与 latest-mac.yml 均指向 1.3.4。
+  - 中继 0.2.0 已在 Mac mini 上线（备份在 `~/.leoagent/backup-relay-*`）。
+  - MacBook、Mac Studio、Mac mini 均为 1.3.4：已接管中继连接（relay 显示 3 台在线），直连监听 127.0.0.1:38474，Tailscale Serve 新增 8445→38474（仅 tailnet，未改动原有 Serve/Funnel），未授权请求返回 401。
+  - Mac mini 设为同步副本（syncEnabled=true），其余两台未开副本。
+
 ## iOS 1.47.0 (130) · 接入 OpenCode Go、下线非官方登录、锁与数据加固 - 2026-09-27
 
 ### 服务商 / 登录

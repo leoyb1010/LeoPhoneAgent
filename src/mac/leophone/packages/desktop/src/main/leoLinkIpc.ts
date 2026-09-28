@@ -60,18 +60,27 @@ async function callLeo(
   path: string,
   method: "GET" | "POST" | "DELETE",
   extraHeaders: Record<string, string> = {},
+  body?: unknown,
 ): Promise<LeoLinkIpcResult> {
   const key = leoLocalKey();
   if (!key) return { ok: false, error: "本机 Leo 服务还没启动" };
   try {
     const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}${path}`, {
       method,
-      headers: { authorization: `Bearer ${key}`, ...extraHeaders },
+      headers: {
+        authorization: `Bearer ${key}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...extraHeaders,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(25_000),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      return { ok: false, error: typeof body["error"] === "string" ? body["error"] : `HTTP ${res.status}` };
+      return {
+        ok: false,
+        error: typeof body["error"] === "string" ? body["error"] : `HTTP ${res.status}`,
+      };
     }
     return { ok: true, data: body };
   } catch (error) {
@@ -85,7 +94,9 @@ async function callLeo(
  */
 async function ownHostListening(): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/health`, { signal: AbortSignal.timeout(5_000) });
+    const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/health`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return body["app"] === "leophoneagent-1.x";
   } catch {
@@ -96,8 +107,21 @@ async function ownHostListening(): Promise<boolean> {
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
 export function registerLeoLinkIpc(): void {
+  ipcMain.handle("leo:link:direct", async (event, action: unknown, body: unknown) => {
+    if (!trustedSender(event) || !["pair", "configure", "revoke"].includes(String(action)))
+      return { ok: false, error: "forbidden" };
+    if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
+    return callLeo(
+      `/api/leo/link/direct/${String(action)}`,
+      "POST",
+      { "x-leo-pair": LEO_PAIR_SECRET },
+      body,
+    );
+  });
   ipcMain.handle(LEO_LINK_STATUS_CHANNEL, (event) =>
-    trustedSender(event) ? callLeo("/api/leo/link/status", "GET") : { ok: false, error: "forbidden" },
+    trustedSender(event)
+      ? callLeo("/api/leo/link/status", "GET")
+      : { ok: false, error: "forbidden" },
   );
   ipcMain.handle(LEO_LINK_PAIR_CHANNEL, async (event) => {
     if (!trustedSender(event)) return { ok: false, error: "forbidden" };
@@ -105,7 +129,8 @@ export function registerLeoLinkIpc(): void {
     return callLeo("/api/leo/link/pair", "POST", { "x-leo-pair": LEO_PAIR_SECRET });
   });
   ipcMain.handle(LEO_LINK_REVOKE_CHANNEL, async (event, payload: unknown) => {
-    if (!trustedSender(event) || typeof payload !== "string") return { ok: false, error: "forbidden" };
+    if (!trustedSender(event) || typeof payload !== "string")
+      return { ok: false, error: "forbidden" };
     if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
     return callLeo(`/api/leo/link/pair?payload=${encodeURIComponent(payload)}`, "DELETE", {
       "x-leo-pair": LEO_PAIR_SECRET,

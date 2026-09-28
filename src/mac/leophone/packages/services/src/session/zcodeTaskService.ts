@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- ZCode task wrapper service 接口集中承载 app/runtime API，拆散会让替换阶段更难追踪。 */
 import type { Event } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
-import type { CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
+import type { CommandPayloadMap, CommandAck } from "@zcode/shared/zcode-protocol-v4";
 import { createServiceDescriptor } from "#src/descriptors.js";
 import type {
   ZCodeImportSessionsResult,
@@ -237,7 +237,12 @@ export interface IZCodeTaskService {
     deferPersistenceUntilFirstPrompt?: boolean;
     /** Bot/host 使用 v4 原生 createSession 建立 draft，再配置并发送。 */
     v4Create?: boolean;
+    /** 手机跨路径重试的稳定 V4 admission ID；不改变未指定时的旧行为。 */
+    operationId?: string;
   }): Promise<ZCodeTaskCreateResult>;
+
+  /** 查询既有 V4 持久化 command facts，不以 HTTP 超时推断命令未执行。 */
+  queryOperation(params: { workspacePath: string; workspaceIdentity?: string; taskId: string | null; operationId: string }): Promise<CommandAck | null>;
 
   /** 发送 prompt 到指定 task */
   sendPrompt(

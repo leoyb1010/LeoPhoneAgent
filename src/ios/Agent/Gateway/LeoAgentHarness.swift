@@ -182,12 +182,14 @@ extension LeoAgentClient {
         after: Int,
         into continuation: AsyncThrowingStream<HarnessEvent, Error>.Continuation
     ) async {
+        var viaDirect = false
         do {
             var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)&journal_status=1",
                                   service: .harness)
             req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
             req.timeoutInterval = 3600
-            let (bytes, response) = try await session.bytes(for: req)
+            let (bytes, response) = try await routedBytes(for: req)
+            viaDirect = response.url?.host != req.url?.host
             guard let http = response as? HTTPURLResponse else {
                 throw GatewayError.malformedResponse("not an HTTP response")
             }
@@ -226,6 +228,11 @@ extension LeoAgentClient {
             }
             continuation.finish()
         } catch {
+            // Only a dropped direct stream says anything about the direct route;
+            // leaving the chat cancels the stream and is not a failure.
+            if viaDirect, let urlError = error as? URLError, urlError.code != .cancelled, !Task.isCancelled {
+                await directFailed()
+            }
             continuation.finish(throwing: error)
         }
     }

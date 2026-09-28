@@ -4,12 +4,16 @@ import type { LookupFunction } from "node:net";
 import { promisify } from "node:util";
 
 import WebSocket from "ws";
+import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
 import type { LinkBridge, LinkRequest } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
 import type { Caller, CallerKind } from "./session.js";
 
-type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+type Logger = {
+  info: (msg: string, meta?: unknown) => void;
+  warn: (msg: string, meta?: unknown) => void;
+};
 
 export type RelayConfig = {
   /** wss://…/relay/agent */
@@ -48,12 +52,20 @@ const TAILNET_DNS = "100.100.100.100";
 export function tailnetLookup(servers: string[] = [TAILNET_DNS]): LookupFunction {
   const resolver = new dns.Resolver({ timeout: 1500, tries: 1 });
   resolver.setServers(servers);
-  return ((hostname: string, options: dns.LookupOptions, callback: (...args: unknown[]) => void) => {
+  return ((
+    hostname: string,
+    options: dns.LookupOptions,
+    callback: (...args: unknown[]) => void,
+  ) => {
     const fallback = () => dns.lookup(hostname, options, callback as never);
     if (!hostname.endsWith(".ts.net")) return fallback();
     resolver.resolve4(hostname, (error, addresses) => {
       if (error || addresses.length === 0) return fallback();
-      if (options.all) callback(null, addresses.map((address) => ({ address, family: 4 })));
+      if (options.all)
+        callback(
+          null,
+          addresses.map((address) => ({ address, family: 4 })),
+        );
       else callback(null, addresses[0], 4);
     });
   }) as LookupFunction;
@@ -82,6 +94,7 @@ export function callerFrom(frame: Record<string, unknown>): Caller {
 export class RelayLink {
   private stopped = false;
   private activeWs: WebSocket | null = null;
+  private revocations: Promise<void> = Promise.resolve();
   /** 中继拒了存着的机器钥匙;领到新钥匙前改用注册钥匙。 */
   private machineKeyRejected = false;
   private readonly outbox: Record<string, unknown>[] = [];
@@ -100,6 +113,7 @@ export class RelayLink {
     private readonly machineKeys: MachineKeyStore,
     private readonly logger: Logger,
     private readonly appVersion: string | null,
+    private readonly device?: LeoDeviceDescriptor,
   ) {}
 
   start(): void {
@@ -162,7 +176,10 @@ export class RelayLink {
   private async runOnce(): Promise<void> {
     const machineKey = this.machineKeyRejected ? null : await this.machineKeys.get();
     await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000, lookup: tailnetLookup() });
+      const ws = new WebSocket(this.config.wsUrl, {
+        handshakeTimeout: 15_000,
+        lookup: tailnetLookup(),
+      });
       this.activeWs = ws;
       let lastPong = Date.now();
       let pingTimer: NodeJS.Timeout | null = null;
@@ -186,14 +203,21 @@ export class RelayLink {
       };
 
       ws.on("open", () => {
-        ws.send(JSON.stringify({
-          type: "register",
-          name: this.config.name,
-          key: machineKey ?? this.config.registerKey,
-          // 中继 0.2:首次注册领取机器专属钥匙,名字从此只认它;0.1 忽略这个字段。
-          pin: true,
-          info: { platform: "leoagent", server: "leophoneagent", version: this.appVersion },
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "register",
+            name: this.config.name,
+            key: machineKey ?? this.config.registerKey,
+            // 中继 0.2:首次注册领取机器专属钥匙,名字从此只认它;0.1 忽略这个字段。
+            pin: true,
+            info: {
+              platform: "leoagent",
+              server: "leophoneagent",
+              version: this.appVersion,
+              device: this.device,
+            },
+          }),
+        );
         lastPong = Date.now();
         pingTimer = setInterval(() => {
           if (Date.now() - lastPong > PONG_TIMEOUT_MS) {
@@ -223,18 +247,30 @@ export class RelayLink {
         }
         switch (frame["type"]) {
           case "registered":
-            this.logger.info("[leo/link] connected to relay", { name: this.config.name, relay: frame["version"] ?? "0.1" });
+            if (Array.isArray(frame["revokedDeviceIds"]))
+              this.applyRevocations(frame["revokedDeviceIds"]);
+            this.logger.info("[leo/link] connected to relay", {
+              name: this.config.name,
+              relay: frame["version"] ?? "0.1",
+            });
             this.state.connected = true;
             this.state.connectedAt = Date.now();
-            this.state.relayVersion = typeof frame["version"] === "string" ? frame["version"] : "0.1";
+            this.state.relayVersion =
+              typeof frame["version"] === "string" ? frame["version"] : "0.1";
             // 0.2 起回执带 version,并且每个请求都附调用方:从此认不出身份的请求按旧版设备对待。
             this.bridge.strictCallers = typeof frame["version"] === "string";
             if (typeof frame["machine_key"] === "string" && frame["machine_key"]) {
               this.machineKeyRejected = false;
               void this.machineKeys.set(frame["machine_key"]).catch((error: unknown) =>
-                this.logger.warn("[leo/link] storing machine key failed", { error: String(error) }));
+                this.logger.warn("[leo/link] storing machine key failed", {
+                  error: String(error),
+                }),
+              );
             }
             this.flushOutbox(ws);
+            break;
+          case "device_revoked":
+            this.applyRevocations([frame["device_id"]]);
             break;
           case "http":
             void this.handleHttp(ws, frame);
@@ -279,8 +315,21 @@ export class RelayLink {
     }
   }
 
+  private applyRevocations(ids: unknown[]): void {
+    this.revocations = this.revocations.then(async () => {
+      for (const id of ids)
+        if (typeof id === "string" && id.length <= 256) await this.bridge.revokeCaller(id);
+    });
+    void this.revocations.catch(() =>
+      this.logger.warn("[leo/link] revocation persistence failed; remote admission blocked"),
+    );
+  }
+
   private request(frame: Record<string, unknown>): LinkRequest {
-    const requestId = typeof frame["request_id"] === "string" && frame["request_id"] ? frame["request_id"] : undefined;
+    const requestId =
+      typeof frame["request_id"] === "string" && frame["request_id"]
+        ? frame["request_id"]
+        : undefined;
     return {
       method: String(frame["method"] ?? "GET"),
       path: String(frame["path"] ?? "/"),
@@ -293,6 +342,7 @@ export class RelayLink {
   private async handleHttp(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
     const id = frame["id"];
     try {
+      await this.revocations;
       const response = await this.bridge.handle(this.request(frame));
       this.send(ws, { type: "resp", id, status: response.status, body: response.body });
     } catch (error) {
@@ -310,11 +360,20 @@ export class RelayLink {
     const controller = new AbortController();
     this.streamAborts.set(id, controller);
     // 经 NAT / 代理的长连接要有心跳;中继把它转成 SSE 注释帧。
-    const keepAlive = setInterval(() => this.send(ws, { type: "stream_keepalive", id }), STREAM_KEEPALIVE_MS);
+    const keepAlive = setInterval(
+      () => this.send(ws, { type: "stream_keepalive", id }),
+      STREAM_KEEPALIVE_MS,
+    );
     try {
-      await this.bridge.stream(this.request(frame), (data) => this.send(ws, { type: "stream_data", id, data }), controller.signal);
+      await this.revocations;
+      await this.bridge.stream(
+        this.request(frame),
+        (data) => this.send(ws, { type: "stream_data", id, data }),
+        controller.signal,
+      );
     } catch (error) {
-      if (!controller.signal.aborted) this.logger.warn("[leo/link] stream failed", { error: String(error) });
+      if (!controller.signal.aborted)
+        this.logger.warn("[leo/link] stream failed", { error: String(error) });
     } finally {
       clearInterval(keepAlive);
       this.streamAborts.delete(id);
@@ -327,14 +386,24 @@ export class RelayLink {
  * 机器专属钥匙存 macOS 钥匙串。写入走 `security -i` 的标准输入,钥匙不出现在
  * 命令行参数里(`ps` 看不到);Host 进程没有别的钥匙串通道。
  */
-export function keychainMachineKeyStore(rawAccount: string, service = "com.leoyuan.leophoneagent.link"): MachineKeyStore {
+export function keychainMachineKeyStore(
+  rawAccount: string,
+  service = "com.leoyuan.leophoneagent.link",
+): MachineKeyStore {
   const run = promisify(execFile);
   // 机器名来自主机名或环境变量,会被写进 `security -i` 的命令行:只留安全字符,挡掉引号、反引号、$ 这类注入。
   const account = rawAccount.replace(/[^A-Za-z0-9._-]/g, "_") || "mac";
   return {
     async get() {
       try {
-        const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", service, "-a", account, "-w"]);
+        const { stdout } = await run("/usr/bin/security", [
+          "find-generic-password",
+          "-s",
+          service,
+          "-a",
+          account,
+          "-w",
+        ]);
         const key = stdout.trim();
         return key || null;
       } catch {
@@ -342,7 +411,8 @@ export function keychainMachineKeyStore(rawAccount: string, service = "com.leoyu
       }
     },
     async set(key: string) {
-      if (!/^[A-Za-z0-9_\-.~+/=]{16,512}$/.test(key)) throw new Error("unexpected machine key format");
+      if (!/^[A-Za-z0-9_\-.~+/=]{16,512}$/.test(key))
+        throw new Error("unexpected machine key format");
       await new Promise<void>((resolve, reject) => {
         const child = spawn("/usr/bin/security", ["-i"], { stdio: ["pipe", "ignore", "pipe"] });
         let stderr = "";
@@ -350,7 +420,11 @@ export function keychainMachineKeyStore(rawAccount: string, service = "com.leoyu
           stderr += String(chunk);
         });
         child.on("error", reject);
-        child.on("close", (code) => (code === 0 && !stderr.trim() ? resolve() : reject(new Error(stderr.trim() || `security exited ${code}`))));
+        child.on("close", (code) =>
+          code === 0 && !stderr.trim()
+            ? resolve()
+            : reject(new Error(stderr.trim() || `security exited ${code}`)),
+        );
         child.stdin.end(`add-generic-password -U -s "${service}" -a "${account}" -w "${key}"\n`);
       });
     },

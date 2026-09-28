@@ -6,6 +6,7 @@ struct RelayDiscoveredMachine: Equatable, Sendable {
     let platform: String?
     let server: String?
     let version: String?
+    var device: LeoDeviceDescriptor? = nil
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
 }
@@ -45,9 +46,17 @@ enum RelayMachinesClient {
                 online: row["online"] as? Bool ?? true,
                 platform: nestedOrTop(row, "platform"),
                 server: nestedOrTop(row, "server"),
-                version: nestedOrTop(row, "version")
+                version: nestedOrTop(row, "version"),
+                device: descriptor(row["device"] ?? (row["info"] as? [String: Any])?["device"])
             )
         }
+    }
+
+    private static func descriptor(_ raw: Any?) -> LeoDeviceDescriptor? {
+        guard let raw, JSONSerialization.isValidJSONObject(raw),
+              let data = try? JSONSerialization.data(withJSONObject: raw),
+              let device = try? JSONDecoder().decode(LeoDeviceDescriptor.self, from: data), device.valid else { return nil }
+        return device
     }
 
     static func join(apiRoot: String, token: String) async throws -> (key: String, machine: String) {

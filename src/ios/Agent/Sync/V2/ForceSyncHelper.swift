@@ -51,15 +51,21 @@ enum ForceSyncHelper {
     /// Returns the number of rows newly marked.
     @MainActor
     @discardableResult
-    static func markMemoryDirty() async -> Int {
+    static func markMemoryDirty(destination: String? = nil) async -> Int {
+        func stage(_ type: String, _ id: String) async {
+            if let destination {
+                await ChatStore.shared.seedSyncDestination(destination, recordType: type, recordId: id)
+            } else {
+                await ChatStore.shared.markDirty(recordType: type, recordId: id)
+            }
+        }
         let fm = FileManager.default
         let memDir = AIChatViewModel.minisMemoryPersistentDir
         var count = 0
         // GLOBAL.md
         let globalURL = memDir.appendingPathComponent("GLOBAL.md")
         if fm.fileExists(atPath: globalURL.path) {
-            await ChatStore.shared.markDirty(recordType: "MemoryGlobalV2",
-                                             recordId: "memory-global")
+            await stage("MemoryGlobalV2", "memory-global")
             count += 1
         }
         // Daily logs within the 30-day window (same rule as
@@ -73,8 +79,7 @@ enum ForceSyncHelper {
                 && url.lastPathComponent != "GLOBAL.md" {
                 let stem = (url.lastPathComponent as NSString).deletingPathExtension
                 if let fileDate = fmt.date(from: stem), fileDate >= cutoff {
-                    await ChatStore.shared.markDirty(recordType: "MemoryDailyV2",
-                                                     recordId: stem)
+                    await stage("MemoryDailyV2", stem)
                     count += 1
                 }
             }
@@ -97,10 +102,14 @@ enum ForceSyncHelper {
     /// would just cycle through buildSoul returning nil).
     @MainActor
     @discardableResult
-    static func markSoulDirty() async -> Int {
+    static func markSoulDirty(destination: String? = nil) async -> Int {
         let url = SoulStore.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else { return 0 }
-        await ChatStore.shared.markDirty(recordType: "SoulV2", recordId: "soul")
+        if let destination {
+            await ChatStore.shared.seedSyncDestination(destination, recordType: "SoulV2", recordId: "soul")
+        } else {
+            await ChatStore.shared.markDirty(recordType: "SoulV2", recordId: "soul")
+        }
         return 1
     }
 }

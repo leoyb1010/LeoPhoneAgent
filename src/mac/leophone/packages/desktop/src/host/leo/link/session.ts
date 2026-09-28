@@ -88,6 +88,7 @@ export class LinkSession {
   private stopTimer: NodeJS.Timeout | null = null;
   /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问不代答,审批和完成不推手机。 */
   private phoneTurn = false;
+  private recordedOperations: Set<string> | null = null;
   /** 发出时就定好要推的事件;落盘回调来得晚,那时 phoneTurn 可能已经清掉。 */
   private readonly pushSeqs = new Set<number>();
 
@@ -151,10 +152,23 @@ export class LinkSession {
 
   // -- 手机发来的动作 -------------------------------------------------------
 
-  async send(text: string, caller: Caller): Promise<void> {
+  async send(text: string, caller: Caller, operationId?: string): Promise<void> {
     this.lastCaller = caller;
     this.phoneTurn = true;
-    this.emit({ event: "user.message", text });
+    if (operationId) {
+      if (!this.recordedOperations) {
+        this.recordedOperations = new Set();
+        for await (const event of this.journal.replay()) {
+          if (event["event"] === "user.message" && typeof event["operation_id"] === "string") this.recordedOperations.add(event["operation_id"]);
+        }
+      }
+      if (!this.recordedOperations.has(operationId)) {
+        this.emit({ event: "user.message", text, operation_id: operationId });
+        const health = await this.journal.flush();
+        if (health.durable_seq < this.seq) throw new Error("Input journal is not durable; command not submitted");
+        this.recordedOperations.add(operationId);
+      }
+    } else this.emit({ event: "user.message", text });
     this.status = "running";
     try {
       if (this.needsResume) {
@@ -164,7 +178,7 @@ export class LinkSession {
       // sendPrompt 在远端 ACK 后就返回,不等这一轮跑完。
       await this.deps.taskService.sendPrompt({
         taskId: this.sessionId,
-        traceId: generateTraceId(this.sessionId),
+        traceId: operationId ?? generateTraceId(this.sessionId),
         content: text,
         clientLabel: "leo-link",
       });

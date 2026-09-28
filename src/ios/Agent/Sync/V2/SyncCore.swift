@@ -30,14 +30,38 @@ enum SyncDirtyReason: String {
 @MainActor
 final class SyncCore {
     static let shared = SyncCore()
-    private init() {}
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: Self.sendRetryKey),
+           let saved = try? JSONDecoder().decode([String: SyncRetryPolicy].self, from: data) {
+            sendRetryPolicies = saved
+        }
+    }
+
+    private static let sendRetryKey = "cloudSync.v2.sendRetryPolicies.v1"
+    private var sendRetryPolicies: [String: SyncRetryPolicy] = [:] {
+        didSet {
+            if let data = try? JSONEncoder().encode(sendRetryPolicies) {
+                UserDefaults.standard.set(data, forKey: Self.sendRetryKey)
+            }
+        }
+    }
 
     // MARK: - Configuration
 
-    /// Transports SyncCore broadcasts to. Multiple transports run in
-    /// parallel — the first one to deliver a record wins (others see it
-    /// as a no-op because the record id already merged locally).
+    /// Each registered transport is an independent durable destination.
+    /// A success on one destination never acknowledges another.
     private(set) var transports: [SyncTransport] = []
+
+    var cloudHealth: SyncTransportHealth {
+        transports.first { $0.name == "iCloud" }?.health ?? SyncTransportHealth()
+    }
+
+    func checkCloudConnection() async throws {
+        guard let cloud = transports.first(where: { $0.name == "iCloud" }) else {
+            throw SyncTransportError.notStarted
+        }
+        try await cloud.checkConnection()
+    }
 
     /// [T-ios-log-noise-reduction] First-seen dedup for the
     /// `[SyncSchema] unknownFields` log. The server sends new fields
@@ -120,7 +144,17 @@ final class SyncCore {
     /// HTTP 429), this absolute time gates the next send attempt. Prevents
     /// the chained sendNow / scheduleSend retry loop from hammering iCloud
     /// inside the throttle window.
-    private(set) var nextEarliestSendAt: Date?
+    /// 只有所有通道都在等待时才暂停整个发送器。后续新增直连通道不会被云端拖住。
+    var nextEarliestSendAt: Date? {
+        let now = Date()
+        let deadlines = transports.compactMap { transport -> Date? in
+            let gate = [transport.retryAfter, sendRetryPolicies[transport.name]?.deadline(for: .send)]
+                .compactMap { $0 }.max()
+            return gate.flatMap { $0 > now ? $0 : nil }
+        }
+        guard !transports.isEmpty, deadlines.count == transports.count else { return nil }
+        return deadlines.min()
+    }
 
     /// User-initiated pause deadline. When set and in the future, sendNow
     /// is a no-op (markDirty still records, so nothing is lost — the queue
@@ -198,6 +232,23 @@ final class SyncCore {
         logger.info("[SyncCore] transport registered: \(transport.name) caps=\(String(transport.capabilities.rawValue, radix: 16))")
     }
 
+    /// Serial reconfiguration preserves durable tickets while removing disabled routes.
+    func replaceTransports(_ replacements: [SyncTransport]) async {
+        // Same instances already running: restarting would redo CloudKit zone
+        // setup and initial sends for nothing.
+        if isRunning, replacements.map({ ObjectIdentifier($0 as AnyObject) }) == transports.map({ ObjectIdentifier($0 as AnyObject) }) {
+            return
+        }
+        await stop()
+        while isSending {
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
+        }
+        transports = replacements
+        do { try await ChatStore.shared.configureSyncDestinations(Set(replacements.map(\.name))) }
+        catch { logger.error("[SyncCore] destination configuration failed: \(error)"); return }
+        if !replacements.isEmpty { await start() }
+    }
+
     /// Boot all registered transports. Idempotent.
     func start() async {
         guard !isRunning else { return }
@@ -209,7 +260,10 @@ final class SyncCore {
         for t in transports {
             t.observe { [weak self] batch in
                 Task { @MainActor [weak self] in
-                    self?.processInbound(batch, from: t.name)
+                    if await self?.processInbound(batch, from: t.name) == true {
+                        do { try await t.acknowledgeInbound(batch) }
+                        catch { logger.error("[SyncCore] inbound checkpoint failed: \(error)") }
+                    }
                 }
             }
         }
@@ -255,6 +309,7 @@ final class SyncCore {
     }
 
     func stop() async {
+        isRunning = false
         pendingSendTask?.cancel()
         pendingSendTask = nil
         for t in transports {
@@ -358,162 +413,82 @@ final class SyncCore {
         // up in this push cycle. Cheap when nothing pending.
         await drainSessionFileChangesIntoDirty()
 
-        // Snapshot dirty rows.
-        let dirty = await ChatStore.shared.loadDirtyRecords(v2Only: true)
-        guard !dirty.isEmpty else {
-            // DIAG: was debug-level, but "nothing dirty when user expects
-            // a write to have just happened" is the single most useful
-            // signal for sync regressions (proves markDirty was the silent
-            // step). Promote to info so it lands in user-shared logs.
-            logger.info("[SyncCore] sendNow: nothing dirty trigger=\(trigger.rawValue)")
+        do {
+            try await ChatStore.shared.configureSyncDestinations(Set(transports.map(\.name)))
+            if trigger == .manual { try await ChatStore.shared.retrySyncDeliveryFailures() }
+        } catch {
+            logger.error("[SyncCore] delivery ledger unavailable: \(error)")
             return
         }
 
-        // Build a PortableRecord for every dirty row whose recordType is
-        // registered. Records the registry doesn't recognize are left in
-        // the dirty table — a future build (with that type registered)
-        // will pick them up.
-        let registry = SyncableTypeRegistry.shared
-        var batchRecords: [PortableRecord] = []
-        var batchDeletes: [SyncRecordID] = []
-
-        for row in dirty {
-            guard let metadata = registry.metadata(for: row.recordType) else {
-                continue
-            }
-            let recordId = SyncRecordID(type: row.recordType, id: row.recordId)
-            if row.operation == "delete" {
-                batchDeletes.append(recordId)
-                _ = metadata
-                if row.recordType == "Message" {
-                    logger.warning("[EditSync] [SyncCore] queued delete tombstone Message id=\(row.recordId.prefix(8)) — will be sent to iCloud")
-                }
-                continue
-            }
-            // Build via the type's owner — SyncCore doesn't know how to
-            // hydrate a SyncedX from local SQLite (that's per-type
-            // ChatStore work). We delegate to a hydrator registered per
-            // recordType (see `SyncCoreHydrators`).
-            if let portable = await SyncCoreHydrators.shared.buildPortable(
-                recordType: row.recordType, id: row.recordId
-            ) {
-                batchRecords.append(portable)
-            }
-            // If buildPortable returned nil there are two distinct cases:
-            //   (a) no builder is registered for this recordType — KEEP
-            //       the dirty row so a future patch with a registered
-            //       builder can pick it up. Clearing it here would lose
-            //       data silently (audit C3).
-            //   (b) builder is registered but returned nil — local row
-            //       is gone, clear the dirty so we don't loop trying to
-            //       rebuild a missing record.
-            else if !SyncCoreHydrators.shared.hasBuilder(recordType: row.recordType) {
-                logger.warning("[SyncSchema] noBuilderForType: \(row.recordType):\(row.recordId.prefix(8)) — keeping dirty for future builder")
-            } else {
-                logger.info("[SyncCore] dropping stale dirty: \(row.recordType):\(row.recordId.prefix(8)) (no local row)")
-                await ChatStore.shared.clearDirtyRecord(recordName: "\(row.recordType):\(row.recordId)")
-            }
-        }
-
-        let batch = SyncOutboundBatch(records: batchRecords, deletes: batchDeletes)
-        guard !batch.records.isEmpty || !batch.deletes.isEmpty else {
-            return
-        }
-
-        var typeCounts: [String: Int] = [:]
-        for r in batch.records { typeCounts[r.id.type, default: 0] += 1 }
-        let breakdown = typeCounts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
-        var deleteCounts: [String: Int] = [:]
-        for d in batch.deletes { deleteCounts[d.type, default: 0] += 1 }
-        let deleteBreakdown = deleteCounts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
-        logger.info("[SyncCore] sending batch: records=\(batch.records.count) deletes=\(batch.deletes.count) [\(breakdown)] delTypes=[\(deleteBreakdown)] trigger=\(trigger.rawValue) transports=\(self.transports.count)")
-        // Trace: list the head IDs so we can follow specific messages
-        // through send → server-ack → peer hydrate.
-        let traceIds = batch.records.prefix(5)
-            .map { "\($0.id.type):\($0.id.id.prefix(8))" }
-            .joined(separator: " ")
-        if !traceIds.isEmpty {
-            logger.info("[iCloudTrace] outgoing batch head: \(traceIds)")
-        }
-        let traceDelIds = batch.deletes.prefix(5)
-            .map { "\($0.type):\($0.id.prefix(8))" }
-            .joined(separator: " ")
-        if !traceDelIds.isEmpty {
-            logger.info("[iCloudTrace] outgoing deletes head: \(traceDelIds)")
-        }
-
-        // [OwnEchoSkip 2026-05-17 follow-up] Pre-register every id we're
-        // about to push into the echo-suppress map BEFORE the network
-        // call, not only after a successful outcome. fetchRecentV2 runs
-        // on a separate task and can race the push — if it pulls our
-        // own freshly-written record back during the ~1s window between
-        // engine.sendChanges() start and pendingOutcomes finalization,
-        // applyOutcomes hasn't stamped the id yet, so inbound treats it
-        // as a peer write, fires cloudSyncDidFetchChanges, and the
-        // chat view runs reloadMessagesFromDB.
-        //
-        // Stamping at send-time guarantees the suppression window opens
-        // before any race can fire. The success path still re-stamps
-        // (refreshes TTL), and we never clear an id here even on
-        // transient/permanent failure — worst case the id stays in the
-        // map for the full echoTTL, which is fine.
-        let nowStamp = Date()
-        for r in batch.records {
-            recentlyPushedIds[r.id.description] = nowStamp
-        }
-        for d in batch.deletes {
-            recentlyPushedIds[d.description] = nowStamp
-        }
-
-        // Fan out to each transport. Each transport's outcomes drive
-        // dirty cleanup independently.
         var retryNeeded = false
+        var sentAnyBatch = false
+        var recordRetryAt: Date?
         for t in transports {
+            guard isRunning else { break }
             do {
-                let outcomes = try await t.send(batch, trigger: trigger)
-                await applyOutcomes(outcomes, transport: t.name)
-                // Pull any throttle gate the transport learned about
-                // server-side (e.g. CloudKit returned 429 with a partial
-                // batch — we got outcomes back rather than a throw, but
-                // CKError still carried retryAfterSeconds).
-                if let gate = t.retryAfter, gate > Date(),
-                   (nextEarliestSendAt ?? .distantPast) < gate {
-                    nextEarliestSendAt = gate
-                    logger.warning("[SyncCore] iCloud throttle gate set: nextEarliest=\(gate) (\(String(format: "%.1f", gate.timeIntervalSinceNow))s)")
+                let tickets = try await ChatStore.shared.loadSyncDeliveryTickets(destination: t.name)
+                guard !tickets.isEmpty else { continue }
+                let policy = sendRetryPolicies[t.name] ?? SyncRetryPolicy()
+                let selection = policy.select(recordIDs: tickets.map(\.recordName), at: Date(), serviceDeadline: t.retryAfter)
+                if let next = selection.nextRetryAt {
+                    recordRetryAt = min(recordRetryAt ?? .distantFuture, next)
+                    retryNeeded = true
                 }
-                // If any outcome was transient, schedule another send
-                // so the engine drains the queue without waiting for
-                // an external markDirty.
+                var records: [PortableRecord] = []
+                var deletes: [SyncRecordID] = []
+                var snapshots: [String: SyncDeliveryTicket] = [:]
+                for ticket in tickets where selection.eligible.contains(ticket.recordName) {
+                    guard SyncableTypeRegistry.shared.metadata(for: ticket.recordType) != nil else {
+                        try await ChatStore.shared.failSyncDelivery(ticket, reason: "unregistered record type")
+                        continue
+                    }
+                    if ticket.operation == "delete" {
+                        deletes.append(SyncRecordID(type: ticket.recordType, id: ticket.recordId))
+                    } else {
+                        guard let record = try await frozenRecord(for: ticket) else {
+                            if try await ChatStore.shared.isSyncDeliveryCurrent(ticket) {
+                                // Nil is not proof of deletion: missing builder, unavailable file,
+                                // disabled category and corrupt data must retain visible work.
+                                try await ChatStore.shared.failSyncDelivery(ticket, reason: "record payload unavailable; retry after restoring source")
+                            }
+                            continue
+                        }
+                        records.append(record)
+                    }
+                    snapshots[ticket.recordName] = ticket
+                }
+                guard !snapshots.isEmpty else { continue }
+                let selectedBatch = SyncOutboundBatch(records: records, deletes: deletes, deliveryTickets: snapshots)
+                for name in snapshots.keys { recentlyPushedIds[name] = Date() }
+                sentAnyBatch = true
+                let outcomes = try await t.send(selectedBatch, trigger: trigger)
+                try await applyOutcomes(outcomes, transport: t.name, tickets: snapshots)
                 if outcomes.contains(where: {
                     if case .transientFailure = $0 { return true }
                     if case .conflict = $0 { return true }
                     return false
-                }) {
-                    retryNeeded = true
-                }
+                }) { retryNeeded = true }
             } catch {
                 let nse = error as NSError
                 let ck = error as? CKError
-                logger.error("[SyncCore] \(t.name) send threw: \(error.localizedDescription) domain=\(nse.domain) code=\(nse.code) userInfo=\(nse.userInfo)")
-                // CloudKit asks us to back off. Read CKErrorRetryAfterKey
-                // (also exposed as CKError.retryAfterSeconds) and gate the
-                // next send so we don't make the throttle window worse.
-                if let retryAfter = ck?.retryAfterSeconds {
-                    let until = Date().addingTimeInterval(retryAfter)
-                    if (nextEarliestSendAt ?? .distantPast) < until {
-                        nextEarliestSendAt = until
-                        logger.warning("[SyncCore] iCloud throttle gate set: nextEarliest=\(until) retryAfter=\(retryAfter)s")
-                    }
-                }
+                logger.error("[SyncCore] \(t.name) send threw: domain=\(nse.domain) code=\(nse.code)")
+                var policy = sendRetryPolicies[t.name] ?? SyncRetryPolicy()
+                policy.failed(.send, at: Date(), jitter: Double.random(in: 0...1))
+                if let after = ck?.retryAfterSeconds { policy.observeServiceRetry(after: after, at: Date()) }
+                sendRetryPolicies[t.name] = policy
                 retryNeeded = true
             }
         }
+        await cleanupDeliverySnapshots()
         if retryNeeded {
             // If a throttle gate was set, schedule respecting it; otherwise
             // a generic 10s backoff (network blip, transient partial).
             let delay: TimeInterval
             if let gate = nextEarliestSendAt, gate > Date() {
                 delay = max(gate.timeIntervalSinceNow + 0.5, 10)
+            } else if !sentAnyBatch, let next = recordRetryAt {
+                delay = max(next.timeIntervalSinceNow + 0.5, 1)
             } else {
                 delay = 10
             }
@@ -524,46 +499,110 @@ final class SyncCore {
             // when 100k+ rows pending — the migration initial-push case).
             // Schedule another debounced send so the queue actually
             // drains. Skip when queue is empty.
-            let after = await ChatStore.shared.countDirtyRecords()
-            if after.total > 0 {
-                logger.info("[SyncCore] sendNow done, dirty.total=\(after.total) remaining — chaining another send (delay=\(currentSendDelay)s, throttle=\(throttleLabel))")
+            let pending = (try? await ChatStore.shared.countSyncDeliveries()) ?? 0
+            if pending > 0 {
+                logger.info("[SyncCore] \(pending) enabled delivery tickets remain; chaining send")
                 scheduleSend(delay: currentSendDelay)
             }
         }
     }
 
-    /// Process per-record outcomes from a single transport. Successes →
-    /// clear dirty. Transient failures → keep dirty. Permanent failures
-    /// → clear dirty (we'd loop forever otherwise). Conflicts are
+    /// Freeze bytes once per revision before any destination sees them. Retrying
+    /// the same changeId must never send a different PortableRecord or file body.
+    private func frozenRecord(for ticket: SyncDeliveryTicket) async throws -> PortableRecord? {
+        if let data = try await ChatStore.shared.syncDeliveryPayload(ticket) {
+            return try JSONDecoder().decode(PortableRecord.self, from: data)
+        }
+        guard let record = await SyncCoreHydrators.shared.buildPortable(recordType: ticket.recordType, id: ticket.recordId) else { return nil }
+        // A single destination has nobody to stay byte-identical with; skip the
+        // asset copies + BLOB round trip (the common iCloud-only case).
+        if transports.count <= 1 { return record }
+        let copy = try await Task.detached(priority: .utility) {
+            let manager = FileManager.default
+            let root = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                .appendingPathComponent("SyncDeliverySnapshots", isDirectory: true)
+                .appendingPathComponent(ticket.changeId, isDirectory: true)
+            var assets: [String: PortableAsset] = [:]
+            // No persisted payload points here yet; remove abandoned pre-commit
+            // copies left by a crash before retrying this same revision.
+            if manager.fileExists(atPath: root.path) { try manager.removeItem(at: root) }
+            if !record.assets.isEmpty { try manager.createDirectory(at: root, withIntermediateDirectories: true) }
+            for (key, asset) in record.assets {
+                let target = root.appendingPathComponent(UUID().uuidString)
+                try manager.copyItem(at: asset.fileURL, to: target)
+                let copiedSize = (try manager.attributesOfItem(atPath: target.path)[.size] as? NSNumber)?.intValue
+                guard copiedSize == asset.size else { throw CocoaError(.fileReadCorruptFile) }
+                let handle = try FileHandle(forWritingTo: target)
+                try handle.synchronize()
+                try handle.close()
+                assets[key] = PortableAsset(key: key, fileURL: target, size: asset.size, mimeType: asset.mimeType)
+            }
+            return PortableRecord(id: record.id, fields: record.fields, assets: assets,
+                schemaVersion: record.schemaVersion, minimumCompatibleVersion: record.minimumCompatibleVersion,
+                unknownFields: record.unknownFields, updatedAt: record.updatedAt)
+        }.value
+        let data = try JSONEncoder().encode(copy)
+        guard try await ChatStore.shared.freezeSyncDelivery(ticket, payload: data) else { return nil }
+        // Another destination may have frozen it while hydration suspended.
+        guard let frozen = try await ChatStore.shared.syncDeliveryPayload(ticket) else { return nil }
+        return try JSONDecoder().decode(PortableRecord.self, from: frozen)
+    }
+
+    private func cleanupDeliverySnapshots() async {
+        guard let active = try? await ChatStore.shared.activeSyncDeliveryChangeIDs() else { return }
+        await Task.detached(priority: .utility) {
+            let manager = FileManager.default
+            guard let root = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("SyncDeliverySnapshots"),
+                  let children = try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
+            for child in children where !active.contains(child.lastPathComponent) {
+                try? manager.removeItem(at: child)
+            }
+        }.value
+    }
+
+    /// Success acknowledges only the exact selected destination/revision.
+    /// Permanent failures retain a visible blocked ticket; manual retry or a
+    /// newer local edit reactivates it. Transient failures remain queued. Conflicts are
     /// handled by re-merging the server record locally; the transport
     /// is expected to also re-queue the record if it wants a retry.
-    private func applyOutcomes(_ outcomes: [SyncOutcome], transport: String) async {
+    private func applyOutcomes(_ outcomes: [SyncOutcome], transport: String, tickets: [String: SyncDeliveryTicket]) async throws {
         var ok = 0, transient = 0, permanent = 0, conflict = 0
+        var policy = sendRetryPolicies[transport] ?? SyncRetryPolicy()
+        policy.succeeded(.send)
         for outcome in outcomes {
             switch outcome {
             case .success(let id):
+                policy.succeeded(.record(id.description))
                 ok += 1
                 // Remember this id so a fetchRecentV2 echoing it back in
                 // the next 30s is recognized as our own write and skipped
                 // — avoids re-triggering reloadMessagesFromDB for every
                 // freshly-typed message.
                 recentlyPushedIds[id.description] = Date()
-                await ChatStore.shared.clearDirtyRecord(recordName: id.description)
+                if let ticket = tickets[id.description] {
+                    try await ChatStore.shared.acknowledgeSyncDelivery(ticket)
+                }
             case .conflict(_, let serverRecord):
                 conflict += 1
-                processInbound(SyncInboundBatch(records: [serverRecord], deletes: [], sourceDeviceId: nil), from: transport, countAsReceived: false)
+                _ = await processInbound(SyncInboundBatch(records: [serverRecord], deletes: [], sourceDeviceId: nil), from: transport, countAsReceived: false)
                 // Note: we deliberately do NOT clear dirty here. The
                 // transport (CloudKit) re-queues the record so the next
                 // send retries with the fresh server etag.
-            case .transientFailure:
+            case .transientFailure(let id, let after):
                 transient += 1
-                // dirty preserved — next send retries
+                policy.failed(.record(id.description), at: Date(), minimumDelay: after ?? 0,
+                              jitter: Double.random(in: 0...1))
+                // 保留 dirty，下一轮只重发已经到期的记录。
             case .permanentFailure(let id, let reason):
+                policy.succeeded(.record(id.description))
                 permanent += 1
                 logger.error("[SyncCore] permanent failure \(id) via \(transport): \(reason)")
-                await ChatStore.shared.clearDirtyRecord(recordName: id.description)
+                if let ticket = tickets[id.description] {
+                    try await ChatStore.shared.failSyncDelivery(ticket, reason: reason)
+                }
             }
         }
+        sendRetryPolicies[transport] = policy
         logger.info("[SyncCore] \(transport) outcomes: ok=\(ok) conflict=\(conflict) transient=\(transient) permanent=\(permanent)")
         if ok > 0 || conflict > 0 {
             lastSendAt = Date()
@@ -584,8 +623,9 @@ final class SyncCore {
     /// Apply a remote batch to local SQLite via per-type appliers
     /// registered through `SyncCoreHydrators`. Skips records whose
     /// recordType is not registered (per §3.6.3).
-    func processInbound(_ batch: SyncInboundBatch, from transport: String, countAsReceived: Bool = true) {
-        guard !batch.records.isEmpty || !batch.deletes.isEmpty else { return }
+    @discardableResult
+    func processInbound(_ batch: SyncInboundBatch, from transport: String, countAsReceived: Bool = true) async -> Bool {
+        guard !batch.records.isEmpty || !batch.deletes.isEmpty else { return true }
         // Don't inflate Sync Activity counters when this batch is just the
         // server-side echo from a conflict (our own send racing another
         // device). Real remote fetches and observe-driven inbound do
@@ -602,102 +642,84 @@ final class SyncCore {
         // thrashes ChatStore + UI for tens of seconds, and ARC has no
         // chance to release intermediate Codable structs. Observed:
         // 3+GB resident before OOM crash on a 1196-session migration.
-        Task { @MainActor [weak self] in
-            var applied = 0, skipped = 0, blocked = 0, ownEcho = 0
-            let allRecords = batch.records
-            let allDeletes = batch.deletes
-            let chunkSize = 25
-            var i = 0
-            // Prune stale echo-suppress entries once per batch so the map
-            // doesn't grow unbounded over an idle session.
-            let now = Date()
-            if let strongSelf = self {
-                let ttl = strongSelf.echoTTL
-                strongSelf.recentlyPushedIds = strongSelf.recentlyPushedIds.filter { now.timeIntervalSince($0.value) < ttl }
-            }
-            while i < allRecords.count {
-                let end = min(i + chunkSize, allRecords.count)
-                for j in i..<end {
-                    let record = allRecords[j]
-                    guard let metadata = registry.metadata(for: record.id.type) else {
-                        logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=ignored")
-                        skipped += 1
-                        continue
-                    }
-                    if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
-                        logger.warning("[SyncSchema] minimumCompatibleVersionBlocked: type=\(record.id.type) required=\(minimum) local=\(metadata.version)")
-                        blocked += 1
-                        continue
-                    }
-                    // [OwnEchoSkip 2026-05-17] If we just pushed this exact
-                    // record id within echoTTL, fetchRecentV2 is echoing
-                    // it back at us. Hydrator's LWW would skip the write
-                    // anyway, but it would still count toward `applied`
-                    // and fire cloudSyncDidFetchChanges — re-rendering
-                    // every cached AIChatViewModel for nothing. Drop it
-                    // from the inbound flow so the notification only
-                    // fires for genuinely new peer writes.
-                    if let pushedAt = self?.recentlyPushedIds[record.id.description],
-                       now.timeIntervalSince(pushedAt) < (self?.echoTTL ?? 30) {
-                        ownEcho += 1
-                        continue
-                    }
-                    if record.schemaVersion != metadata.version {
-                        logger.info("[SyncSchema] schemaVersionMismatch: type=\(record.id.type) local=\(metadata.version) remote=\(record.schemaVersion)")
-                    }
-                    if !record.unknownFields.isEmpty {
-                        // [T-ios-log-noise-reduction] Dedup by (type + sorted
-                        // keys): log the first occurrence of each combination
-                        // once, then suppress. Downgraded to debug so even the
-                        // first-seen line is Debug-only.
-                        let dedupKey = "\(record.id.type)|\(record.unknownFields.keys.sorted().joined(separator: ","))"
-                        if loggedUnknownFieldKeys.insert(dedupKey).inserted {
-                            logger.debug("[SyncSchema] unknownFields (first-seen, further occurrences suppressed): type=\(record.id.type) keys=\(record.unknownFields.keys.sorted())")
-                        }
-                    }
-                    await SyncCoreHydrators.shared.mergeRemote(record)
-                    applied += 1
-                }
-                i = end
-                // Yield so the main thread can run UI / scrolling / SwiftUI
-                // diff for whatever the user is doing in the foreground,
-                // and so ARC has a chance to release the chunk's Codable
-                // intermediaries before the next chunk allocates more.
-                try? await Task.sleep(nanoseconds: 50_000_000)
-            }
-            for deleteId in allDeletes {
-                guard registry.metadata(for: deleteId.type) != nil else {
+        var applied = 0, skipped = 0, blocked = 0
+        // Records we pushed moments ago still run their LWW merger (a peer may
+        // have edited them too) but don't count as a visible change, so our own
+        // echo doesn't make every open chat reload.
+        var visible = 0
+        let allRecords = batch.records
+        let allDeletes = batch.deletes
+        let chunkSize = 25
+        var i = 0
+        // Prune stale echo-suppress entries once per batch so the map
+        // doesn't grow unbounded over an idle session.
+        let now = Date()
+        recentlyPushedIds = recentlyPushedIds.filter { now.timeIntervalSince($0.value) < echoTTL }
+        while i < allRecords.count {
+            let end = min(i + chunkSize, allRecords.count)
+            for j in i..<end {
+                let record = allRecords[j]
+                guard let metadata = registry.metadata(for: record.id.type) else {
+                    logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=ignored")
                     skipped += 1
-                    if deleteId.type == "Message" {
-                        logger.warning("[EditSync] inbound delete SKIPPED — no registry metadata for type=Message id=\(deleteId.id.prefix(8))")
-                    }
                     continue
                 }
-                if deleteId.type == "Message" {
-                    logger.warning("[EditSync] applying inbound delete Message id=\(deleteId.id.prefix(8)) — calling hydrator.applyRemoteDeletion")
+                if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
+                    logger.warning("[SyncSchema] minimumCompatibleVersionBlocked: type=\(record.id.type) required=\(minimum) local=\(metadata.version)")
+                    blocked += 1
+                    continue
                 }
-                await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId)
-                applied += 1
+                // An ID alone does not prove an echo: a peer may edit that same
+                // record during our send window. Always run its LWW merger before
+                // allowing a durable replica cursor to advance.
+                if record.schemaVersion != metadata.version {
+                    logger.info("[SyncSchema] schemaVersionMismatch: type=\(record.id.type) local=\(metadata.version) remote=\(record.schemaVersion)")
+                }
+                if !record.unknownFields.isEmpty {
+                    // [T-ios-log-noise-reduction] Dedup by (type + sorted
+                    // keys): log the first occurrence of each combination
+                    // once, then suppress. Downgraded to debug so even the
+                    // first-seen line is Debug-only.
+                    let dedupKey = "\(record.id.type)|\(record.unknownFields.keys.sorted().joined(separator: ","))"
+                    if loggedUnknownFieldKeys.insert(dedupKey).inserted {
+                        logger.debug("[SyncSchema] unknownFields (first-seen, further occurrences suppressed): type=\(record.id.type) keys=\(record.unknownFields.keys.sorted())")
+                    }
+                }
+                if await SyncCoreHydrators.shared.mergeRemote(record) {
+                    applied += 1
+                    if recentlyPushedIds[record.id.description] == nil { visible += 1 }
+                } else { blocked += 1 }
             }
-            logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked) ownEcho=\(ownEcho)")
-            // Wake up any AIChatViewModel currently rendering an affected
-            // session so it can `reloadMessagesFromDB`. Without this, the
-            // SQLite rows landed but the on-screen messages array stays
-            // frozen — `lastMessage` in session list updates (it reads
-            // from DB) yet the chat view doesn't. The legacy v1
-            // CloudSyncEngine posts the same notification; the v2 SyncCore
-            // had been silently skipping it, leaving v2-only setups stale.
-            //
-            // [OwnEchoSkip 2026-05-17] `applied` no longer counts records
-            // we just pushed (those are filtered as `ownEcho` above), so
-            // this notification only fires for genuinely new peer
-            // changes — no more reload thrash from our own writes
-            // round-tripping through fetchRecentV2.
-            if applied > 0 {
-                NotificationCenter.default.post(name: .cloudSyncDidFetchChanges, object: nil)
-            }
-            _ = self
+            i = end
+            // Yield so the main thread can run UI / scrolling / SwiftUI
+            // diff for whatever the user is doing in the foreground,
+            // and so ARC has a chance to release the chunk's Codable
+            // intermediaries before the next chunk allocates more.
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
+        for deleteId in allDeletes {
+            guard registry.metadata(for: deleteId.type) != nil else {
+                skipped += 1
+                if deleteId.type == "Message" {
+                    logger.warning("[EditSync] inbound delete SKIPPED — no registry metadata for type=Message id=\(deleteId.id.prefix(8))")
+                }
+                continue
+            }
+            if deleteId.type == "Message" {
+                logger.warning("[EditSync] applying inbound delete Message id=\(deleteId.id.prefix(8)) — calling hydrator.applyRemoteDeletion")
+            }
+            if await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId) {
+                applied += 1
+                if recentlyPushedIds[deleteId.description] == nil { visible += 1 }
+            } else { blocked += 1 }
+        }
+        logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked)")
+        // Refresh after awaited domain callbacks; cursor checkpointing remains
+        // the caller's responsibility and unsupported records withhold it.
+        if visible > 0 {
+            NotificationCenter.default.post(name: .cloudSyncDidFetchChanges, object: nil)
+        }
+        return skipped == 0 && blocked == 0 && !Task.isCancelled
     }
 
     // MARK: - Diagnostics
@@ -713,13 +735,13 @@ final class SyncCore {
     /// Trigger an incremental fetch on every transport that supports
     /// `.deltaFetch`. Inbound batches arrive via the observe callback so
     /// no return value is needed.
-    func fetchNow(trigger: SyncFetchTrigger) async {
+    func fetchNow(trigger: SyncFetchTrigger, only name: String? = nil) async {
         guard isRunning else { return }
-        for t in transports where t.capabilities.contains(.deltaFetch) {
+        for t in transports where t.capabilities.contains(.deltaFetch) && (name == nil || t.name == name) {
             do {
                 let batch = try await t.fetchChanges(trigger: trigger)
-                if !batch.records.isEmpty || !batch.deletes.isEmpty {
-                    processInbound(batch, from: t.name)
+                if await processInbound(batch, from: t.name) {
+                    try await t.acknowledgeInbound(batch)
                 }
             } catch {
                 logger.error("[SyncCore] \(t.name) fetchChanges threw: \(error.localizedDescription)")
@@ -745,7 +767,9 @@ final class SyncCore {
         for t in transports {
             do {
                 let batch = try await t.fullFetch(trigger: trigger)
-                processInbound(batch, from: t.name)
+                if await processInbound(batch, from: t.name) {
+                    try await t.acknowledgeInbound(batch)
+                }
                 logger.info("[SyncCore] fullFetch via \(t.name): records=\(batch.records.count) deletes=\(batch.deletes.count) (reconcile skipped — see C2 in audit)")
             } catch {
                 logger.error("[SyncCore] \(t.name) fullFetch threw: \(error.localizedDescription)")
@@ -794,9 +818,7 @@ final class SyncCore {
         while i < portables.count {
             let end = min(i + chunk, portables.count)
             let slice = Array(portables[i..<end])
-            await MainActor.run {
-                self.processInbound(SyncInboundBatch(records: slice, deletes: [], sourceDeviceId: nil), from: transportName)
-            }
+            _ = await processInbound(SyncInboundBatch(records: slice, deletes: [], sourceDeviceId: nil), from: transportName)
             i = end
         }
     }

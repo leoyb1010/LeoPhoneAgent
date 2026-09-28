@@ -100,6 +100,7 @@ private final class HostEditModel: ObservableObject {
     @Published var address: String
     @Published var port: String
     @Published var username: String
+    @Published var deviceId: String
     @Published var password = ""
     @Published var testResult: String?
     @Published var testing = false
@@ -115,6 +116,7 @@ private final class HostEditModel: ObservableObject {
         address = host?.host ?? ""
         port = host.map { String($0.port) } ?? "22"
         username = host?.username ?? ""
+        deviceId = host?.deviceId ?? ""
         pubkey = RemoteHostStore.devicePublicKeyLine()
         hasStoredPassword = host.map { RemoteHostStore.password(hostId: $0.id)?.isEmpty == false } ?? false
     }
@@ -125,7 +127,8 @@ private final class HostEditModel: ObservableObject {
             name: name.trimmingCharacters(in: .whitespaces),
             host: address.trimmingCharacters(in: .whitespaces),
             port: Int(port) ?? 22,
-            username: username.trimmingCharacters(in: .whitespaces)
+            username: username.trimmingCharacters(in: .whitespaces),
+            deviceId: deviceId.isEmpty ? nil : deviceId
         )
     }
 
@@ -189,6 +192,18 @@ private struct RemoteHostEditSheet: View {
                         .keyboardType(.numberPad)
                     TextField(String(localized: "Username"), text: $model.username)
                         .autocorrectionDisabled().textInputAutocapitalization(.never)
+                }
+                Section {
+                    Picker("设备", selection: $model.deviceId) {
+                        Text("独立 SSH 主机").tag("")
+                        ForEach(GatewayHostStore.shared.hosts.filter { $0.device != nil }) { host in
+                            Text(host.name).tag(host.device!.deviceId)
+                        }
+                    }
+                } header: {
+                    Text("所属设备")
+                } footer: {
+                    Text("仅合并设备展示，SSH 和远控仍分别验证授权。")
                 }
                 Section {
                     SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)

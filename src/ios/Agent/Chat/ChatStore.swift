@@ -50,6 +50,9 @@ struct ChatSession: Identifiable, Codable, Hashable {
     var lastSyncedAt: Date?   // non-nil if successfully synced to iCloud
     var remoteDeviceId: String?   // non-nil if this session came from another device via iCloud
     var remoteDeviceName: String? // human-readable name of the remote device
+    var originDeviceId: String? // nil means creator cannot be established
+    var originDeviceName: String?
+    var lastWriterDeviceId: String?
     var pinnedAt: Date?       // non-nil if session is pinned; timestamp of when it was pinned
 
     /// Whether this session is from a remote device (read-only).
@@ -88,6 +91,9 @@ struct ChatSession: Identifiable, Codable, Hashable {
             && lhs.lastSyncedAt == rhs.lastSyncedAt
             && lhs.remoteDeviceId == rhs.remoteDeviceId
             && lhs.remoteDeviceName == rhs.remoteDeviceName
+            && lhs.originDeviceId == rhs.originDeviceId
+            && lhs.originDeviceName == rhs.originDeviceName
+            && lhs.lastWriterDeviceId == rhs.lastWriterDeviceId
         // Intentionally NOT comparing `lastMessage` (long string; `updatedAt`
         // is its change proxy) or the immutable `modelId` / `createdAt`.
     }
@@ -356,6 +362,11 @@ struct RawMessage: Identifiable, Codable, Hashable {
 actor ChatStore {
     static let shared = ChatStore()
 
+    private var syncMutationFailures: [Bool] = []
+    /// [T-replica-seed] Destination a history seed is filling right now. Set and
+    /// cleared inside one non-suspending actor call, so an ordinary edit can
+    /// never be diverted into a single destination.
+    private var seedingDestination: String?
     private var db: OpaquePointer?
     /// Base URL for per-session media storage: Library/MinisChat/minis/
     let minisBaseURL: URL
@@ -502,6 +513,8 @@ actor ChatStore {
         addColumnIfMissing(table: "sessions", column: "memory_enabled", definition: "INTEGER NOT NULL DEFAULT 1")
         addColumnIfMissing(table: "sessions", column: "last_synced_at", definition: "REAL")
         addColumnIfMissing(table: "sessions", column: "remote_origin_device_id", definition: "TEXT")
+        do { try SessionProvenanceStore.migrate(db) }
+        catch { logger.error("[Store] session provenance migration failed: \(error)") }
         addColumnIfMissing(table: "sessions", column: "pinned_at", definition: "REAL")
         addColumnIfMissing(table: "messages", column: "updated_at", definition: "REAL")
         // [T-error-persist-ios] Device-local error string shown on a failed
@@ -614,6 +627,8 @@ actor ChatStore {
         """)
         addColumnIfMissing(table: "sync_dirty_records", column: "priority", definition: "INTEGER NOT NULL DEFAULT 0")
         addColumnIfMissing(table: "sync_dirty_records", column: "created_at", definition: "REAL NOT NULL DEFAULT 0")
+        do { try SyncDeliveryLedger.migrate(db, recordTypes: Self.v2SyncRecordTypes) }
+        catch { logger.error("[Store] delivery ledger migration failed: \(error)") }
         // Distinct recordIDs that have ever been confirmed saved to
         // iCloud (via CKSyncEngine SentRecordZoneChanges). Used by the
         // migration progress UI to show a real "unique records pushed"
@@ -867,6 +882,7 @@ actor ChatStore {
             bindOptionalText(stmt, index: 6, value: source)
             sqlite3_bind_int(stmt, 7, globalMemoryEnabled ? 1 : 0)
             let rc = sqlite3_step(stmt)
+            if rc == SQLITE_DONE { SessionProvenanceStore.createdLocally(db, id: session.id, deviceID: DeviceIdentity.deviceId) }
             memDiagLogger.info("[MemDiag] createSession INSERT step rc=\(rc) (101=DONE) sid=\(session.id.prefix(8))")
         } else {
             memDiagLogger.error("[MemDiag] createSession prepare FAILED sid=\(session.id.prefix(8))")
@@ -1060,6 +1076,8 @@ actor ChatStore {
                        AND m.role = 'user'
                        AND (m.part_flags & \(userMask)) != 0
                      ORDER BY m.sort_order DESC LIMIT 1)
+                 , s.origin_device_id, s.last_writer_device_id,
+                   (SELECT d.device_name FROM sync_devices d WHERE d.device_id = s.origin_device_id)
             FROM sessions s ORDER BY s.updated_at DESC
             """
             // Note: `remote_tombstoned_at` column still exists on the
@@ -1124,7 +1142,11 @@ actor ChatStore {
                     id: id, title: title, category: category, modelId: modelId,
                     createdAt: createdAt, updatedAt: updatedAt, lastMessage: lastMessage,
                     source: source, lastSyncedAt: lastSyncedAt,
-                    remoteDeviceId: remoteDeviceId, pinnedAt: pinnedAt
+                    remoteDeviceId: remoteDeviceId,
+                    originDeviceId: sqlite3_column_text(stmt, 14).map { String(cString: $0) },
+                    originDeviceName: sqlite3_column_text(stmt, 16).map { String(cString: $0) },
+                    lastWriterDeviceId: sqlite3_column_text(stmt, 15).map { String(cString: $0) },
+                    pinnedAt: pinnedAt
                 ))
             }
         }
@@ -1685,12 +1707,16 @@ actor ChatStore {
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (modelId as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
+            }
         }
         sqlite3_finalize(stmt)
     }
 
     func updateSessionTitle(_ id: String, title: String, category: String? = nil) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
@@ -1699,7 +1725,9 @@ actor ChatStore {
             bindOptionalText(stmt, index: 2, value: category)
             sqlite3_bind_double(stmt, 3, Date().timeIntervalSince1970)
             sqlite3_bind_text(stmt, 4, (id as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
+            }
         }
         sqlite3_finalize(stmt)
         markDirty(recordType: "Session", recordId: id)
@@ -1720,6 +1748,8 @@ actor ChatStore {
     /// Toggle pin state for a session. Returns the new pinned state.
     @discardableResult
     func toggleSessionPin(_ id: String) -> Bool {
+        guard beginSyncMutation() else { return false }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         // Check current pin state
         var isPinned = false
@@ -1743,7 +1773,9 @@ actor ChatStore {
                 sqlite3_bind_null(stmt, 1)
             }
             sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
+            }
         }
         sqlite3_finalize(stmt)
         markDirty(recordType: "Session", recordId: id)
@@ -1794,12 +1826,16 @@ actor ChatStore {
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_int(stmt, 1, enabled ? 1 : 0)
             sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                SessionProvenanceStore.editedLocally(db, id: sessionId, deviceID: DeviceIdentity.deviceId)
+            }
         }
         sqlite3_finalize(stmt)
     }
 
     func deleteSession(_ id: String) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         // Queue cloud deletions BEFORE removing local rows so the SELECTs
         // below can still enumerate child ids. Peers receive op=delete
@@ -2304,6 +2340,8 @@ actor ChatStore {
     }
 
     func deleteMessages(sessionId: String) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         // Mark every message dirty for cloud deletion BEFORE the DELETE so other
         // devices remove them on next sync. Without this, Clear Chat wipes
@@ -2336,6 +2374,8 @@ actor ChatStore {
     /// boundary; it does not rewrite a kept row). Mirrors appendMessage's
     /// parts_json encoding.
     func updateMessageParts(messageId: String, parts: [ContentPart]) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         let partsJSON: String
         do {
@@ -2379,6 +2419,8 @@ actor ChatStore {
     /// keepCount-th row (ascending, 1-based), then delete strictly AFTER it.
     /// This is correct regardless of whether sort_order is dense or shifted.
     func deleteMessagesAfter(sessionId: String, keepCount: Int) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         invalidateSessionListCache()
         // DIAG: snapshot state before delete
         let beforeStats = sessionWriteStats(sessionId: sessionId)
@@ -2480,6 +2522,8 @@ actor ChatStore {
     /// truncation contract is agentHistory index == row index (see
     /// deleteMessagesAfter / retryFromMessage).
     func deleteMessagesFromHere(sessionId: String, fromRowIndex: Int) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         deleteMessagesAfter(sessionId: sessionId, keepCount: max(0, fromRowIndex))
         touchSession(sessionId)
         markDirty(recordType: "Session", recordId: sessionId)
@@ -2559,6 +2603,8 @@ actor ChatStore {
 
     /// Insert a compact marker after a successful compaction.
     func insertCompactMarker(_ marker: CompactMarker) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         let sql = """
             INSERT INTO compact_markers (id, session_id, summary, first_kept_sort_order, compacted_count, created_at, ui_boundary_sort_order, boundary_message_id, first_kept_message_id, last_compacted_message_id, version)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2608,6 +2654,8 @@ actor ChatStore {
     /// the same code path so all columns (including legacy migrations) flow
     /// through one INSERT.
     func updateCompactMarker(_ marker: CompactMarker) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         let delSql = "DELETE FROM compact_markers WHERE id = ?"
         var delStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
@@ -2675,6 +2723,10 @@ actor ChatStore {
         }
 
         insertCompactMarker(marker)
+    }
+
+    func sessionProvenance(_ id: String) -> SessionProvenanceStore.Provenance {
+        SessionProvenanceStore.read(db, id: id)
     }
 
     /// Extra session fields for iCloud sync (memory_enabled, model_binding).
@@ -3023,6 +3075,8 @@ actor ChatStore {
     /// actually deleted.
     @discardableResult
     func deleteCompactMarker(id: String) -> Bool {
+        guard beginSyncMutation() else { return false }
+        defer { finishSyncMutation() }
         markDirty(recordType: "CompactMarker", recordId: id, operation: "delete")
         return deleteLocalCompactMarker(id: id)
     }
@@ -3047,6 +3101,8 @@ actor ChatStore {
 
     /// Delete all compact markers for a session.
     func deleteCompactMarkers(sessionId: String) {
+        guard beginSyncMutation() else { return }
+        defer { finishSyncMutation() }
         // Mark every marker dirty for cloud deletion BEFORE the DELETE so iCloud
         // doesn't repopulate them. Mirrors the messages-side fix in
         // deleteMessages — required for Clear Chat to actually clear.
@@ -3547,7 +3603,9 @@ actor ChatStore {
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
             sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
+                SessionProvenanceStore.editedLocally(db, id: sessionId, deviceID: DeviceIdentity.deviceId)
+            }
         }
         sqlite3_finalize(stmt)
     }
@@ -4192,6 +4250,65 @@ extension ChatStore {
 
     // MARK: - Sync Dirty Tracking
 
+    private func beginSyncMutation() -> Bool {
+        guard sqlite3_exec(db, "SAVEPOINT sync_business_mutation", nil, nil, nil) == SQLITE_OK else {
+            iCloudLogger.error("[SyncCore] unable to begin durable business mutation")
+            return false
+        }
+        syncMutationFailures.append(false)
+        return true
+    }
+    private func noteSyncMutationFailure() {
+        if !syncMutationFailures.isEmpty { syncMutationFailures[syncMutationFailures.count - 1] = true }
+    }
+    private func finishSyncMutation() {
+        let failed = syncMutationFailures.popLast() ?? true
+        if failed {
+            sqlite3_exec(db, "ROLLBACK TO sync_business_mutation", nil, nil, nil)
+            noteSyncMutationFailure()
+            iCloudLogger.error("[SyncCore] business mutation rolled back because outbox persistence failed")
+        }
+        if sqlite3_exec(db, "RELEASE sync_business_mutation", nil, nil, nil) != SQLITE_OK {
+            iCloudLogger.error("[SyncCore] unable to commit durable business mutation")
+            noteSyncMutationFailure()
+        }
+    }
+
+    func configureSyncDestinations(_ enabled: Set<String>) throws {
+        try SyncDeliveryLedger.configure(db, enabled: enabled)
+    }
+    @discardableResult
+    func purgeSyncDestinations(prefix: String, keeping: Set<String>) throws -> [String] {
+        try SyncDeliveryLedger.purge(db, prefix: prefix, keeping: keeping)
+    }
+    func loadSyncDeliveryTickets(destination: String, limit: Int = 100) throws -> [SyncDeliveryTicket] {
+        try SyncDeliveryLedger.load(db, destination: destination, limit: limit)
+    }
+    func acknowledgeSyncDelivery(_ ticket: SyncDeliveryTicket) throws {
+        try SyncDeliveryLedger.acknowledge(db, ticket: ticket)
+    }
+    func failSyncDelivery(_ ticket: SyncDeliveryTicket, reason: String) throws {
+        try SyncDeliveryLedger.fail(db, ticket: ticket, reason: reason)
+    }
+    func activeSyncDeliveryChangeIDs() throws -> Set<String> { try SyncDeliveryLedger.activeChangeIDs(db) }
+    func syncDeliveryFailures() throws -> [(destination: String, recordType: String, recordId: String, reason: String)] {
+        try SyncDeliveryLedger.failures(db)
+    }
+    func retrySyncDeliveryFailures() throws { try SyncDeliveryLedger.retryFailures(db) }
+    func countSyncDeliveries(enabledOnly: Bool = true, includeBlocked: Bool = false) throws -> Int {
+        try SyncDeliveryLedger.count(db, enabledOnly: enabledOnly, includeBlocked: includeBlocked)
+    }
+    func isSyncDeliveryCurrent(_ ticket: SyncDeliveryTicket) throws -> Bool {
+        try SyncDeliveryLedger.isCurrent(db, ticket: ticket)
+    }
+    func syncDeliveryPayload(_ ticket: SyncDeliveryTicket) throws -> Data? {
+        try SyncDeliveryLedger.payload(db, ticket: ticket)
+    }
+    func freezeSyncDelivery(_ ticket: SyncDeliveryTicket, payload: Data) throws -> Bool {
+        try SyncDeliveryLedger.freeze(db, ticket: ticket, payload: payload)
+    }
+
+
     /// Mark a record as needing sync to iCloud. Only active in DEBUG builds.
     func markDirty(recordType: String, recordId: String, operation: String = "upsert", priority: Int = 0) {
         // DIAG: log every silent early-return so "I added a Skill but
@@ -4209,6 +4326,15 @@ extension ChatStore {
         // always allowed because peer discovery depends on it.
         guard UploadPolicy.allowsRecordType(recordType) else {
             iCloudLogger.info("[iCloudTrace] markDirty SKIP type=\(recordType) id=\(recordId.prefix(20)) op=\(operation) reason=uploadPolicyDisabled(user-toggled-off-in-Settings)")
+            return
+        }
+        if let destination = seedingDestination {
+            do {
+                try SyncDeliveryLedger.seed(db, destination: destination,
+                                            recordType: Self.v2RecordType(forV1: recordType), recordId: recordId)
+            } catch {
+                iCloudLogger.error("[SyncCore] replica seed failed type=\(recordType): \(error)")
+            }
             return
         }
         // [T-icloud-record-delete-resurrection] A local op=delete on these
@@ -4273,7 +4399,7 @@ extension ChatStore {
         // SyncV2Bootstrap.* is a Swift-6 concurrency annotation, not a
         // real main-thread requirement.
         let v2Type = Self.v2RecordType(forV1: recordType)
-        let v2Enabled = UserDefaults.standard.bool(forKey: "cloudSync.v2.enabled")
+        let v2Enabled = SyncV2Bootstrap.isAnyEnabled
         let migStatus = UserDefaults.standard.string(forKey: "cloudSync.v2.migrationStatus") ?? "pending"
         let v1Paused = v2Enabled && migStatus != "failed"
         let writeV1Row = !(v1Paused && v2Type != recordType)
@@ -4300,6 +4426,7 @@ extension ChatStore {
                 changesAfter = Int32(sqlite3_changes(db))
             }
             sqlite3_finalize(stmt)
+            if prepareRC != SQLITE_OK || stepRC != SQLITE_DONE { noteSyncMutationFailure() }
         }
         if recordType.hasPrefix("Memory") || recordType == "SoulV2" {
             let errMsg = String(cString: sqlite3_errmsg(db))
@@ -4318,8 +4445,8 @@ extension ChatStore {
                 sqlite3_bind_text(v2Stmt, 4, (operation as NSString).utf8String, -1, nil)
                 sqlite3_bind_int(v2Stmt, 5, Int32(priority))
                 sqlite3_bind_double(v2Stmt, 6, now)
-                sqlite3_step(v2Stmt)
-            }
+                if sqlite3_step(v2Stmt) != SQLITE_DONE { noteSyncMutationFailure() }
+            } else { noteSyncMutationFailure() }
             sqlite3_finalize(v2Stmt)
 
             // Resurrect cascade was needed under the old soft-tombstone
@@ -4337,7 +4464,7 @@ extension ChatStore {
             if #available(iOS 17.0, *) {
                 Task { @MainActor in
                     // Drive whichever engine the user is currently on.
-                    if SyncV2Bootstrap.isEnabled {
+                    if SyncV2Bootstrap.isAnyEnabled {
                         SyncCore.shared.scheduleSend()
                     } else {
                         CloudSyncEngine.shared.scheduleSend()
@@ -4364,6 +4491,68 @@ extension ChatStore {
         case "MCPServers":      return "MCPServersV2"   // [T-mcp-integration-ios]
         default:                return v1Type
         }
+    }
+
+    // MARK: - Replica seed [T-replica-seed]
+
+    /// Queue one record for a single destination (a new or rebuilt Mac replica).
+    func seedSyncDestination(_ destination: String, recordType: String, recordId: String) {
+        seedingDestination = destination
+        defer { seedingDestination = nil }
+        markDirty(recordType: recordType, recordId: recordId)
+    }
+
+    nonisolated static func replicaSeedCursorKey(_ destination: String) -> String {
+        "tailnet.sync.seedCursor.\(destination)"
+    }
+
+    /// Stage this device's chat history for one destination only. Its own
+    /// (updated_at, id) cursor, resumable across launches — never the iCloud
+    /// backlog cursor or cancel flag. Returns true once all history is staged.
+    func seedReplicaHistory(destination: String) async -> Bool {
+        let cursorKey = Self.replicaSeedCursorKey(destination)
+        if UserDefaults.standard.object(forKey: cursorKey) == nil {
+            seedSyncDestination(destination, recordType: "ProviderConfig", recordId: "provider-config")
+            seedSyncDestination(destination, recordType: "EnvVar", recordId: "env-vars")
+        }
+        while !Task.isCancelled {
+            let saved = UserDefaults.standard.array(forKey: cursorKey)
+            let afterTime = saved?.first as? Double ?? .greatestFiniteMagnitude
+            let afterId = saved?.last as? String ?? ""
+            let sql = """
+                SELECT id, updated_at FROM sessions
+                WHERE (updated_at < ? OR (updated_at = ? AND id < ?))
+                  AND EXISTS (SELECT 1 FROM messages m WHERE m.session_id = sessions.id)
+                ORDER BY updated_at DESC, id DESC LIMIT 100
+                """
+            var page: [(id: String, updatedAt: Double)] = []
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(stmt, 1, afterTime)
+                sqlite3_bind_double(stmt, 2, afterTime)
+                sqlite3_bind_text(stmt, 3, (afterId as NSString).utf8String, -1, nil)
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    page.append((String(cString: sqlite3_column_text(stmt, 0)), sqlite3_column_double(stmt, 1)))
+                }
+            }
+            sqlite3_finalize(stmt)
+            guard !page.isEmpty else {
+                iCloudLogger.info("[SyncCore] replica seed complete destination=\(destination)")
+                return true
+            }
+            for session in page {
+                guard !Task.isCancelled else { return false }
+                // The flag window stays synchronous: a real edit's markDirty
+                // must never run while it is set, or iCloud would miss it.
+                seedingDestination = destination
+                _ = stageSessionAndChildrenForReupload(sessionId: session.id, priority: 1)
+                seedingDestination = nil
+                UserDefaults.standard.set([session.updatedAt, session.id], forKey: cursorKey)
+                // Let chat reads/writes and sends interleave between sessions.
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
+        return false
     }
 
     /// Force-mark everything locally syncable as dirty for a full re-upload to iCloud.
@@ -5094,6 +5283,7 @@ extension ChatStore {
         return Int(sessions + messages + markers)
     }
 
+    /// Explicit cancellation / legacy V1 cleanup. V2 success must acknowledge an exact delivery ticket.
     func clearDirtyRecord(recordName: String) {
         // recordName format is "Type:id"
         let parts = recordName.split(separator: ":", maxSplits: 1)
@@ -5249,7 +5439,7 @@ extension ChatStore {
     /// Merge a remote session into local sessions table.
     /// - `remotePinnedAtRaw`: The raw pinnedAt Date from CKRecord. nil = old device (field absent),
     ///   epoch 0 = explicitly unpinned, positive = pinned timestamp.
-    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil) {
+    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) {
         invalidateSessionListCache()
         // Check if local session exists and its updated_at + pinned_at
         var localUpdatedAt: Double?
@@ -5391,6 +5581,11 @@ extension ChatStore {
             // (T-inbound-session-no-refresh).
             NotificationCenter.default.post(name: .sessionDidCreate, object: session.id)
         }
+
+        SessionProvenanceStore.merge(
+            db, id: session.id, origin: originDeviceId ?? (fromDeviceId.isEmpty ? nil : fromDeviceId),
+            writer: lastWriterDeviceId, acceptsWriter: localUpdatedAt.map { remoteUpdated > $0 } ?? true
+        )
 
         // Backfill: messages may have arrived before this session was merged,
         // or the session already existed locally and remote messages were stored

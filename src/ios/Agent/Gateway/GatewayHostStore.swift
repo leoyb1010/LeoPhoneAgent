@@ -38,6 +38,9 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var platform: String? = nil
     /// From relay `/machines` `info.server` (minis / leocodebox).
     var server: String? = nil
+    var device: LeoDeviceDescriptor? = nil
+    var directOnly: Bool? = nil
+    var relayServices: GatewayRelayServices? = nil
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
     /// Mac 1.2 起由 LeoPhoneAgent 自己接中继(`info.server = leophoneagent`):
@@ -60,6 +63,7 @@ final class GatewayHostStore: ObservableObject {
     nonisolated private static let keychainService = "com.leoyuan.leophoneagent.gateway"
 
     @Published private(set) var hosts: [GatewayHost]
+    @Published private(set) var routeStatuses: [String: GatewayRouteStatus] = [:]
     /// Built clients live here, not in a view body: `client(for:)` does a
     /// synchronous Keychain read and spins up a URLSession, and SwiftUI would
     /// re-run both on every redraw of the host list.
@@ -94,12 +98,16 @@ final class GatewayHostStore: ObservableObject {
         var changed = false
         for machine in machines {
             guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }
-            let id = name.lowercased()
+            let known = machine.device.flatMap { descriptor in hosts.first { $0.device?.deviceId == descriptor.deviceId } }
+            let id = known?.id ?? name.lowercased()
             if explicit {
                 deletedIds.remove(id)
-            } else if deletedIds.contains(id) {
+                if let deviceId = machine.device?.deviceId { deletedIds.remove(deviceId) }
+            } else if deletedIds.contains(id) || machine.device.map({ deletedIds.contains($0.deviceId) }) == true {
                 continue
             }
+            if let old = hosts.first(where: { $0.id == id })?.device, let new = machine.device,
+               old.deviceId != new.deviceId { continue }
             let harness = RelayMachinesClient.harnessURL(for: name, apiRoot: apiRoot)
             // [T-relay-keychain-churn] 只在密钥真的变了时才写 Keychain。
             // 原来每台机器无条件写一次:下拉刷新一下就把每台主机的
@@ -110,8 +118,15 @@ final class GatewayHostStore: ObservableObject {
             }
             if let index = hosts.firstIndex(where: { $0.id == id }) {
                 let before = hosts[index]
+                if let device = machine.device, hosts[index].device != device {
+                    hosts[index].device = device
+                    clients.removeValue(forKey: id)
+                    changed = true
+                }
                 if before.harnessURL != harness {
                     hosts[index].harnessURL = harness
+                    hosts[index].directOnly = false
+                    hosts[index].relayServices = GatewayRelayServices(apiRoot: apiRoot)
                     clients.removeValue(forKey: id)
                     changed = true
                 }
@@ -132,7 +147,9 @@ final class GatewayHostStore: ObservableObject {
                     baseURL: "",
                     harnessURL: harness,
                     platform: machine.platform,
-                    server: machine.server
+                    server: machine.server,
+                    device: machine.device,
+                    relayServices: GatewayRelayServices(apiRoot: apiRoot)
                 ))
                 changed = true
             }
@@ -157,9 +174,11 @@ final class GatewayHostStore: ObservableObject {
 
     func delete(id: String) {
         deletedIds.insert(id)
+        if let deviceId = hosts.first(where: { $0.id == id })?.device?.deviceId { deletedIds.insert(deviceId) }
         hosts.removeAll { $0.id == id }
         clients.removeValue(forKey: id)
         Self.deleteKey(hostId: id)
+        Self.deleteKey(hostId: id + ".direct")
         persist()
     }
 
@@ -171,6 +190,49 @@ final class GatewayHostStore: ObservableObject {
             machine: machine
         ) else { return nil }
         return hosts[index]
+    }
+
+    func pairDirect(_ pair: DirectPairPayload, name: String) async throws -> GatewayHost {
+        guard let url = URL(string: pair.apiRoot.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/direct-pair") else { throw GatewayError.badURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["join": pair.join, "targetDeviceId": pair.deviceId, "name": name])
+        let session = URLSession(configuration: .ephemeral, delegate: GatewayNoRedirect(), delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
+              let route = DirectDeviceRoute.decode(data, expectedDeviceId: pair.deviceId),
+              let endpoint = route.endpoint() else { throw GatewayError.unauthorized }
+        // An explicit trusted UUID may match an existing device; a display name/IP never may.
+        if let existing = hosts.first(where: { $0.device?.deviceId == pair.deviceId }) {
+            guard let json = String(data: data, encoding: .utf8), Self.saveAccessKey(json, hostId: existing.id + ".direct") else { throw GatewayError.unauthorized }
+            clients.removeValue(forKey: existing.id)
+            return existing
+        }
+        let host = GatewayHost(id: pair.deviceId, name: route.device.name, baseURL: "", harnessURL: endpoint.absoluteString,
+                               platform: route.device.platform, server: "leophoneagent", device: route.device, directOnly: true)
+        guard let json = String(data: data, encoding: .utf8), Self.saveAccessKey(json, hostId: host.id + ".direct"),
+              Self.saveAccessKey(route.grant.token, hostId: host.id) else { throw GatewayError.unauthorized }
+        upsert(host)
+        return host
+    }
+
+    func recordRoute(id: String, status: GatewayRouteStatus, device: LeoDeviceDescriptor? = nil) {
+        // Called per request; publish only visible changes so observing views
+        // (chat, host list) don't re-render on every HTTP call.
+        let old = routeStatuses[id]
+        if old == nil || old!.direct != status.direct || old!.available != status.available ||
+            (old!.failedAt == nil) != (status.failedAt == nil) ||
+            abs((old!.latencyMilliseconds ?? -1000) - (status.latencyMilliseconds ?? -1000)) >= 100 {
+            routeStatuses[id] = status
+        }
+        if let device, device.valid, let index = hosts.firstIndex(where: { $0.id == id }), hosts[index].device != device,
+           hosts[index].device == nil || hosts[index].device?.deviceId == device.deviceId {
+            hosts[index].device = device
+            persist()
+        }
     }
 
     func markSeen(id: String) {
@@ -199,8 +261,11 @@ final class GatewayHostStore: ObservableObject {
         // 只控编码 CLI 的主机可以不配引擎地址;engine 调用会打到 harness 服务
         // 并返回明确错误,而不是让整台主机在 UI 里消失。
         guard let base = engine ?? harnessBase else { return nil }
+        let services = host.relayServices ?? host.harnessURL.flatMap {
+            RelayMachinesClient.apiRoot(fromHarnessURL: $0).flatMap { GatewayRelayServices(apiRoot: $0) }
+        }
         let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
-                                   hostId: host.id, hostName: host.name)
+                                   hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services)
         clients[host.id] = built
         return built
     }

@@ -64,6 +64,8 @@ protocol SyncTransport: AnyObject {
     /// Default protocol implementation returns nil for transports that
     /// don't surface a throttle signal.
     var retryAfter: Date? { get }
+    var health: SyncTransportHealth { get }
+    func checkConnection() async throws
 
     /// Boot the transport. Idempotent: calling start twice is a no-op
     /// after the first successful start.
@@ -89,6 +91,11 @@ protocol SyncTransport: AnyObject {
     /// without `.deltaFetch` should fall back to fullFetch.
     func fetchChanges(trigger: SyncFetchTrigger) async throws -> SyncInboundBatch
 
+    /// Called only after the receiver has finished processing the returned
+    /// batch. A transport with a durable cursor may advance it here; the
+    /// default CloudKit path keeps CKSyncEngine's existing token handling.
+    func acknowledgeInbound(_ batch: SyncInboundBatch) async throws
+
     /// Hard delete a set of records by id. Returns one outcome per id.
     func delete(_ ids: [SyncRecordID]) async throws -> [SyncOutcome]
 }
@@ -96,4 +103,7 @@ protocol SyncTransport: AnyObject {
 extension SyncTransport {
     /// Default: no throttle signal. CloudKit transport overrides.
     var retryAfter: Date? { nil }
+    var health: SyncTransportHealth { SyncTransportHealth() }
+    func checkConnection() async throws { throw SyncTransportError.notStarted }
+    func acknowledgeInbound(_ batch: SyncInboundBatch) async throws { _ = batch }
 }

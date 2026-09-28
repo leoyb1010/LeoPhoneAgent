@@ -2868,7 +2868,7 @@ struct ContentView: View {
             Section {
                 ForEach(entry.ids, id: \.self) { sessionId in
                     if let session = byId["\(entry.deviceId):\(sessionId)"] {
-                        NavigationLink(value: "remote:\(entry.deviceId):\(session.id)") {
+                        NavigationLink(value: session.id) {
                             RemoteSessionRow(session: session)
                         }
                         .listRowInsets(EdgeInsets())
@@ -2878,10 +2878,9 @@ struct ContentView: View {
                                 // [T-ios-state-publish-offmain-crash] @MainActor
                                 // so the @State write stays on the main thread.
                                 let sid = session.id
-                                let deviceId = entry.deviceId
                                 Task { @MainActor in
-                                    if let forked = await SessionForkManager.shared.forkSession(
-                                        remoteSessionId: sid, remoteDeviceId: deviceId
+                                    if let forked = await SessionForkManager.shared.duplicateSession(
+                                        sessionId: sid
                                     ) {
                                         refreshSessionList()
                                         selectedSessionId = forked.id
@@ -2905,19 +2904,22 @@ struct ContentView: View {
     // thread (the [ChatSession] AttributeGraph-compare crash path).
     @MainActor
     private func refreshRemoteDeviceSessions() async {
+        // V2 sessions are merged into the main table. The legacy remote_sessions
+        // cache is neither a complete directory nor an authoritative source.
         let allDevices = await ChatStore.shared.listSyncDevices()
-        let devices = allDevices.filter { $0.id != DeviceIdentity.deviceId }
-        syncLog.info("[RemoteSync] refreshRemoteDeviceSessions: \(allDevices.count) total devices, \(devices.count) remote (self=\(DeviceIdentity.deviceId))")
-        var result: [(device: SyncDevice, sessions: [ChatSession])] = []
-        for device in devices {
-            let remoteSessions = await ChatStore.shared.listRemoteSessions(deviceId: device.id)
-            syncLog.info("[RemoteSync] device \(device.id) (\(device.deviceName)): \(remoteSessions.count) sessions")
-            if !remoteSessions.isEmpty {
-                result.append((device: device, sessions: remoteSessions))
-            }
+        let localSessions = await ChatStore.shared.listSessions()
+        // Legacy rows have no recorded origin; they are this device's own history,
+        // not a separate "unknown" device.
+        let groups = Dictionary(grouping: localSessions.filter {
+            $0.originDeviceId != nil && $0.originDeviceId != DeviceIdentity.deviceId
+        }) { $0.originDeviceId ?? "" }
+        remoteDeviceSessions = groups.keys.sorted().map { origin in
+            let device = allDevices.first { $0.id == origin } ?? SyncDevice(
+                id: origin, deviceName: String(origin.prefix(8)),
+                zoneName: "", lastSeen: .distantPast, osVersion: "", uploadTypes: []
+            )
+            return (device: device, sessions: groups[origin] ?? [])
         }
-        syncLog.info("[RemoteSync] Final result: \(result.count) devices with sessions")
-        remoteDeviceSessions = result
     }
 
     private let syncLog = AppLogger(category: "RemoteSync")
@@ -5373,6 +5375,15 @@ private struct SessionRow: View, Equatable {
                     color: Color(UIColor.label)
                 )
                 .lineLimit(1)
+
+                if let origin = session.originDeviceId, origin != DeviceIdentity.deviceId {
+                    let label = session.originDeviceName ?? String(origin.prefix(8))
+                    Text(label)
+                        .font(.system(size: fontSettings.scaledApp(11)))
+                        .foregroundStyle(Color(UIColor.secondaryLabel))
+                        .lineLimit(1)
+                        .accessibilityLabel(Text("创建来源") + Text(": ") + Text(label))
+                }
 
                 if let snippet = matchSnippet, !snippet.isEmpty {
                     // During active search, prefer the body-match snippet over

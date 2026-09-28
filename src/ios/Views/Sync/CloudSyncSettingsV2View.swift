@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 
 /// V2 iCloud Sync settings page. Replaces the v1 CloudSyncSettingsView
@@ -9,6 +10,11 @@ import SwiftUI
 /// - Discovered remote devices (read from sync_devices table populated
 ///   by mergeDevice hydrator on inbound SyncDeviceV2 records)
 struct CloudSyncSettingsV2View: View {
+    @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    @State private var tailnetEnabled = false
+    @State private var replicaHostID = ""
+    @State private var replicaStatus = ""
+    @State private var deliveryFailures: [String] = []
     @State private var v2Enabled: Bool = false
     @State private var deviceName: String = ""
     @State private var deviceNameDraft: String = ""
@@ -21,6 +27,9 @@ struct CloudSyncSettingsV2View: View {
     /// [T-ck15-explain] 打开页面时查一次 iCloud 通不通;不通就把原因摆出来(以前照样显示「运行中」,设备列表空着,看不出为什么)。
     @State private var cloudProblem: String?
     @State private var checkingCloud = false
+    @State private var health = SyncTransportHealth()
+    @State private var pendingCount = 0
+    @State private var retryAt: Date?
     // [T-ios-migration-timer-sessionlist-uaf-crash] 5s refresh cadence is driven by
     // a `.task` async loop (see refreshLoop), NOT a process-lived
     // `Timer.publish(every:5).autoconnect()` + `.onReceive`. A graph-bound Combine
@@ -55,7 +64,49 @@ struct CloudSyncSettingsV2View: View {
                 }
             }
 
-            if v2Enabled {
+            Section {
+                Picker("同步副本 Mac", selection: Binding(
+                    get: { replicaHostID },
+                    set: { id in
+                        replicaHostID = id
+                        SyncV2Bootstrap.setTailnetEnabled(tailnetEnabled, hostID: id)
+                    }
+                )) {
+                    Text("请选择设备").tag("")
+                    ForEach(gatewayStore.activeHosts) { host in Text(host.name).tag(host.id) }
+                }
+                Toggle("启用 Tailscale 同步副本", isOn: Binding(
+                    get: { tailnetEnabled },
+                    set: { enabled in
+                        tailnetEnabled = enabled
+                        SyncV2Bootstrap.setTailnetEnabled(enabled, hostID: replicaHostID)
+                    }
+                ))
+                .disabled(replicaHostID.isEmpty)
+                if !replicaStatus.isEmpty { LabeledContent("Status", value: replicaStatus) }
+                if tailnetEnabled {
+                    Button("立即同步副本") {
+                        Task {
+                            await SyncV2Bootstrap.startIfEnabled()
+                            await SyncCore.shared.sendNow(trigger: .manual)
+                            await SyncCore.shared.fetchNow(trigger: .manual)
+                            await refresh()
+                        }
+                    }
+                }
+            } header: {
+                Text("Tailscale 同步副本")
+            } footer: {
+                Text("选择已配对并授权同步的常在线 Mac。首次启用会发送已允许同步的数据；iCloud 开关独立生效。关闭后保留待传数据。")
+            }
+
+            if !deliveryFailures.isEmpty {
+                Section("待处理同步问题") {
+                    ForEach(deliveryFailures, id: \.self) { Text($0).font(.caption).textSelection(.enabled) }
+                }
+            }
+
+            if v2Enabled || tailnetEnabled {
                 Section {
                     Button {
                         deviceNameDraft = deviceName
@@ -145,22 +196,32 @@ struct CloudSyncSettingsV2View: View {
                         }
                     }
                 } footer: {
-                    Text("Choose which data this device pushes to iCloud. Environment variables and provider API keys are stored in your private iCloud encoded, not encrypted. Turn those two categories off to keep secrets on this device.")
+                    Text("选择此设备上传到已启用目的地的数据。环境变量和服务商密钥沿用现有编码策略；关闭对应类别可将它们保留在本机。")
                         .font(.caption)
                 }
 
-                if let cloudProblem {
+                if v2Enabled, let cloudProblem {
                     Section {
-                        Text(cloudProblem)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
+                        Text(health.state == .degraded ? String(localized: "Some sync operations are waiting; other data can continue.") : String(localized: "Sync needs attention. Local changes are kept on this device."))
+                            .foregroundStyle(.secondary)
+                        DisclosureGroup("Sync diagnostics") {
+                            Text(cloudProblem).font(.caption).textSelection(.enabled)
+                        }
                         Button(checkingCloud ? "正在检查…" : "重新检查") {
                             Task { await checkCloud() }
                         }
                         .disabled(checkingCloud)
                     } header: {
                         Text("iCloud 连接")
+                    }
+                }
+
+                Section("Sync activity") {
+                    LabeledContent("Pending upload", value: String(pendingCount))
+                    LabeledContent("Last successful upload", value: health.lastSendAt.map(relativeDate) ?? "—")
+                    LabeledContent("Last successful download", value: health.lastFetchAt.map(relativeDate) ?? "—")
+                    if let retryAt, retryAt > Date() {
+                        LabeledContent("Retry after", value: retryAt.formatted(date: .omitted, time: .standard))
                     }
                 }
 
@@ -195,7 +256,7 @@ struct CloudSyncSettingsV2View: View {
                 }
             }
         }
-        .navigationTitle("iCloud Sync")
+        .navigationTitle("设备同步")
 #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
 #endif
@@ -257,6 +318,17 @@ struct CloudSyncSettingsV2View: View {
         if #available(iOS 17.0, *) {
             v2Enabled = SyncV2Bootstrap.isEnabled
         }
+        tailnetEnabled = SyncV2Bootstrap.isTailnetEnabled
+        replicaHostID = SyncV2Bootstrap.selectedReplicaHostID
+        replicaStatus = SyncV2Bootstrap.tailnetStatus
+        if #available(iOS 17.0, *) {
+            if let replica = SyncCore.shared.transports.first(where: { $0.name.hasPrefix("tailnet:") }) {
+                replicaStatus = "\(SyncV2Bootstrap.tailnetStatus) · \(replica.health.state.localizedLabel)"
+            }
+            deliveryFailures = ((try? await ChatStore.shared.syncDeliveryFailures()) ?? []).map {
+                "\($0.destination) · \($0.recordType): \($0.reason)"
+            }
+        }
         deviceName = UploadPolicy.customDeviceName ?? DeviceIdentity.deviceName
         for cat in UploadPolicy.Category.allCases {
             categoriesEnabled[cat] = UploadPolicy.isEnabled(cat)
@@ -267,8 +339,25 @@ struct CloudSyncSettingsV2View: View {
         let me = DeviceIdentity.deviceId
         let all = await ChatStore.shared.listSyncDevices()
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
-        if #available(iOS 17.0, *), v2Enabled {
-            statusText = cloudProblem != nil ? String(localized: "iCloud 出错") : SyncCore.shared.isRunning ? String(localized: "Running") : String(localized: "Starting")
+        if #available(iOS 17.0, *), v2Enabled || tailnetEnabled {
+            health = v2Enabled ? SyncCore.shared.cloudHealth : (SyncCore.shared.transports.first { $0.name.hasPrefix("tailnet:") }?.health ?? SyncTransportHealth())
+            pendingCount = await ChatStore.shared.countDirtyRecords().total
+            retryAt = SyncCore.shared.nextEarliestSendAt
+            let issues = health.issues.values.sorted { $0.operation < $1.operation }
+            if let first = issues.first {
+                // Lead with what it means and what to do; keep the codes for support.
+                var lines = issues.map { "\($0.operation): \($0.diagnostic)" }
+                if first.domain == CKErrorDomain,
+                   let headline = cloudKitProblemDescription(NSError(domain: first.domain, code: first.code))
+                    .components(separatedBy: "\n详情").first {
+                    lines.insert(headline, at: 0)
+                }
+                cloudProblem = lines.joined(separator: "\n")
+            } else {
+                cloudProblem = nil
+            }
+            statusText = health.state.localizedLabel
+            if SyncCore.shared.pausedUntil != nil { statusText = String(localized: "Paused") }
         } else {
             statusText = String(localized: "Off")
         }
@@ -280,13 +369,12 @@ struct CloudSyncSettingsV2View: View {
         guard #available(iOS 17.0, *), v2Enabled, !checkingCloud else { return }
         checkingCloud = true
         defer { checkingCloud = false }
-        do {
-            _ = try await V1FetcherShim.listAllZones()
-            cloudProblem = nil
-        } catch {
-            cloudProblem = cloudKitProblemDescription(error)
-        }
-        statusText = cloudProblem != nil ? String(localized: "iCloud 出错") : SyncCore.shared.isRunning ? String(localized: "Running") : String(localized: "Starting")
+        var problem: String?
+        do { try await SyncCore.shared.checkCloudConnection() }
+        catch { problem = cloudKitProblemDescription(error) }
+        await refresh()
+        // The explicit check result wins over the aggregated health text.
+        if let problem { cloudProblem = problem }
     }
 
     /// Whenever the user changes their upload preferences or device
