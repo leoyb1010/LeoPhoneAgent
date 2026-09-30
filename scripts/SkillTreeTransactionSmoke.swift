@@ -5,7 +5,7 @@ import Glibc
 import Darwin
 #endif
 
-@main enum SkillTreeTransactionSmoke {
+@MainActor @main enum SkillTreeTransactionSmoke {
     static let fm = FileManager.default
     static func check(_ value: Bool) { precondition(value) }
     static func expectFailure(_ body: () throws -> Void) {
