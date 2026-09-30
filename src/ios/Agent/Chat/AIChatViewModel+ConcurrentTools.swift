@@ -202,6 +202,14 @@ extension AIChatViewModel {
             )
         }
 
+        // 智能批准的 Git 只读检查必须与实际执行一致：禁用 fsmonitor 与
+        // 可选索引写入，然后把同一命令同时交给审批和执行路径。
+        if FullAutoGate.mode == .smart, ["shell_execute", "remote_shell"].contains(tu.name),
+           let command = toolArgs["command"] as? String,
+           let prepared = SmartShellApproval.preparedCommand(command) {
+            toolArgs["command"] = prepared
+        }
+
         let argsJson: String = {
             if let data = try? JSONSerialization.data(withJSONObject: toolArgs),
                let str = String(data: data, encoding: .utf8) {

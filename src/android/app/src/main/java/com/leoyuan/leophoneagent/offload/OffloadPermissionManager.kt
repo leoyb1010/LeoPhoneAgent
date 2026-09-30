@@ -474,17 +474,8 @@ object OffloadPermissionManager {
                 val grants = sessionGrants.getOrPut(sessionId) { mutableSetOf() }
                 if (toolName in grants) return true
 
-                // Opening another app backgrounds Leo. ASK_ONCE then
-                // fail-closed because ChatScreen cannot draw a dialog —
-                // that is exactly when android-a11y-cli is needed.
-                // The system Accessibility toggle is the consent; do not
-                // refuse a connected service just because we left our UI.
-                if (toolName == "a11y_cli" &&
-                    com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService.getInstance() != null
-                ) {
-                    return true
-                }
-
+                // 系统服务已连接不代表用户同意本会话；ASK_ONCE 必须保留前台授权。
+                // 没有可见的提示宿主时，由 promptForPermission 原有路径拒绝。
                 promptForPermission(toolName, toolTitle, sessionId, description, singleUseOnly = false)
             }
         }

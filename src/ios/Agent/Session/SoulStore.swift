@@ -319,7 +319,7 @@ enum SoulStore {
     /// local file (the cloud record's updatedAt is the authority, not
     /// our local file mtime).
     @MainActor
-    static func applyRemoteContent(_ markdown: String, remoteUpdatedAt: Date) {
+    static func applyRemoteContent(_ markdown: String, remoteUpdatedAt: Date) throws {
         let url = fileURL
         let fm = FileManager.default
         // Compare local file mtime against the remote updatedAt; skip
@@ -350,12 +350,12 @@ enum SoulStore {
            localText != defaultContent {
             return
         }
-        try? fm.createDirectory(at: url.deletingLastPathComponent(),
+        try fm.createDirectory(at: url.deletingLastPathComponent(),
                                 withIntermediateDirectories: true)
-        try? markdown.data(using: .utf8)?.write(to: url, options: .atomic)
+        try Data(markdown.utf8).write(to: url, options: .atomic)
         // Stamp the file's mtime to match the remote updatedAt so the
         // local mtime comparison stays meaningful across round-trips.
-        try? fm.setAttributes([.modificationDate: remoteUpdatedAt],
+        try fm.setAttributes([.modificationDate: remoteUpdatedAt],
                               ofItemAtPath: url.path)
         if let parsed = SoulMDParser.parse(markdown).metadata as SoulMetadata? {
             cachedMetadata = parsed

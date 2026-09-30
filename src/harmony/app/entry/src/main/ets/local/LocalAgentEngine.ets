@@ -93,14 +93,14 @@ export class LocalAgentEngine {
 
   static run(context: common.Context, sessionKey: string, mine: number, text: string,
     thinking: string, onDelta: (delta: string) => void, onDone: (output: string) => void,
-    onError: (message: string) => void): http.HttpRequest | null {
+    onError: (message: string) => void, initialTurns: LoopTurn[] = []): http.HttpRequest | null {
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
       return null;
     }
     taskStatus.setRunning(true);
     LocalAgentEngine.guards.set(sessionKey, new ToolLoopGuard());
     LocalAgentEngine.drafts.set(sessionKey, new DeltaDraft());
-    FastLocalActions.tryRoute(context, text, 0).then((spoken: string) => {
+    FastLocalActions.tryRoute(context, text, 0, true).then((spoken: string) => {
       if (!LocalAgentEngine.alive(sessionKey, mine)) {
         return;
       }
@@ -109,11 +109,13 @@ export class LocalAgentEngine {
         onDone(spoken);
         return;
       }
-      const turns: LoopTurn[] = [];
-      const user = new LoopTurn();
-      user.role = 'user';
-      user.content = text;
-      turns.push(user);
+      const turns: LoopTurn[] = initialTurns.slice();
+      if (turns.length === 0) {
+        const user = new LoopTurn();
+        user.role = 'user';
+        user.content = text;
+        turns.push(user);
+      }
       LocalAgentEngine.loop(context, sessionKey, mine, turns, thinking, 0, 0, onDelta, onDone, onError);
     }).catch((err: Error) => {
       taskStatus.setRunning(false);

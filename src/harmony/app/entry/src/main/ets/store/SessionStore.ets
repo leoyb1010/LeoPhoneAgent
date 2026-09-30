@@ -1,3 +1,5 @@
+import { image } from '@kit.ImageKit';
+import { atomicWriteText } from './AtomicFile';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
@@ -230,7 +232,7 @@ export class SessionStore {
       session.archived = obj['archived'] === true;
       session.pinned = obj['pinned'] === true;
       session.running = obj['running'] === true;
-      const archive = sessionArchiveFromJson(obj);
+      const archive = sessionArchiveFromJson(obj, true);
       session.messages = archive ? archive.messages : [];
       const wrote = this.hydrateImages(context, session.messages);
       this.fillImageBytes(context, session.messages);
@@ -342,7 +344,7 @@ export class SessionStore {
   /** 删掉这条对话自己的图片;「复制对话」的副本和它共用图片文件,还有别的对话引用的就留着。 */
   private dropImages(context: common.Context, messages: LocalChatMessage[]): void {
     const paths = messages.map((line: LocalChatMessage) => line.imagePath)
-      .filter((path: string) => path.length > 0 && fileIo.accessSync(path));
+      .filter((path: string) => SessionStore.ownedImage(context, path));
     if (paths.length === 0) {
       return;
     }
@@ -351,7 +353,8 @@ export class SessionStore {
       try {
         others.push(fileIo.readTextSync(SessionStore.sessionPath(context, this.summaries[i].id)));
       } catch (_err) {
-        // 读不到的档案不影响判断
+        // 读不到其它档案时不能证明图片无人引用，保留附件。
+        return;
       }
     }
     for (let i = 0; i < paths.length; i++) {
@@ -418,6 +421,7 @@ export class SessionStore {
   async importArchive(context: common.Context, raw: string): Promise<LocalSession> {
     await this.ensureLoaded(context);
     this.assertWritable();
+    if (raw.length > 32 * 1024 * 1024) throw new Error('导入档案过大');
     let json: object;
     try {
       json = JSON.parse(raw) as object;
@@ -428,9 +432,16 @@ export class SessionStore {
     if (!archive) {
       throw new Error('导入只接受带 messages 的档案');
     }
+    // 外部档案只接收经过验证的图片字节，不接受另一台设备的宿主路径。
+    for (let i = 0; i < archive.messages.length; i++) {
+      const line = archive.messages[i];
+      line.imagePath = '';
+      if (line.imageB64.length > 0) await SessionStore.validateImportedImage(line);
+    }
     const session = await this.create(context);
     session.title = archive.title;
     session.messages = archive.messages;
+    this.hydrateImages(context, session.messages);
     session.updatedAt = Date.now();
     this.upsertSummary(session);
     this.persist(context, session);
@@ -440,6 +451,10 @@ export class SessionStore {
   private fillImageBytes(context: common.Context, messages: LocalChatMessage[]): void {
     for (let i = 0; i < messages.length; i++) {
       const line = messages[i];
+      if (line.imagePath.length > 0 && !SessionStore.ownedImage(context, line.imagePath)) {
+        line.imagePath = '';
+        line.imageB64 = '';
+      }
       if (line.imageB64.length > 0 || line.imagePath.length === 0) {
         continue;
       }
@@ -447,11 +462,12 @@ export class SessionStore {
         continue;
       }
       try {
-        const file = fileIo.openSync(line.imagePath, fileIo.OpenMode.READ_ONLY);
+        const file = fileIo.openSync(line.imagePath, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
         try {
-          const stat = fileIo.statSync(line.imagePath);
+          const stat = fileIo.statSync(file.fd);
+          if (!stat.isFile() || stat.size <= 0 || stat.size > SessionStore.MAX_IMAGE_BYTES) continue;
           const buf = new ArrayBuffer(stat.size);
-          fileIo.readSync(file.fd, buf);
+          if (fileIo.readSync(file.fd, buf) !== stat.size) continue;
           const helper = new util.Base64Helper();
           line.imageB64 = helper.encodeToStringSync(new Uint8Array(buf));
         } finally {
@@ -467,8 +483,12 @@ export class SessionStore {
     let changed = false;
     for (let i = 0; i < messages.length; i++) {
       const line = messages[i];
-      if (line.imagePath.length > 0 && fileIo.accessSync(line.imagePath)) {
+      if (SessionStore.ownedImage(context, line.imagePath)) {
         continue;
+      }
+      if (line.imagePath.length > 0) {
+        line.imagePath = '';
+        changed = true;
       }
       if (line.imageB64.length === 0) {
         continue;
@@ -481,18 +501,61 @@ export class SessionStore {
     return changed;
   }
 
+  private static readonly MAX_IMAGE_BYTES: number = 8 * 1024 * 1024;
+  private static readonly MAX_IMAGE_PIXELS: number = 24 * 1024 * 1024;
+
+  /** 附件必须是本机生成的平面文件；根目录和叶子都不能是符号链接。 */
+  private static ownedImage(context: common.Context, path: string): boolean {
+    const root = context.filesDir + '/chat-images';
+    if (!path.startsWith(root + '/')) return false;
+    const name = path.substring(root.length + 1);
+    if (!/^\d+(_\d+)?\.(jpg|png)$/.test(name)) return false;
+    try {
+      const dir = fileIo.lstatSync(root);
+      const file = fileIo.lstatSync(path);
+      return dir.isDirectory() && !dir.isSymbolicLink() && file.isFile() && !file.isSymbolicLink();
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  private static async validateImportedImage(line: LocalChatMessage): Promise<void> {
+    if (line.imageB64.length > SessionStore.MAX_IMAGE_BYTES * 4 / 3 + 4 ||
+      (line.imageMime !== 'image/jpeg' && line.imageMime !== 'image/png')) throw new Error('导入图片格式或大小不受支持');
+    const bytes = new util.Base64Helper().decodeSync(line.imageB64);
+    if (bytes.byteLength === 0 || bytes.byteLength > SessionStore.MAX_IMAGE_BYTES) throw new Error('导入图片过大');
+    const png = bytes.length >= 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 &&
+      bytes[4] === 13 && bytes[5] === 10 && bytes[6] === 26 && bytes[7] === 10;
+    const jpeg = bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+    if ((line.imageMime === 'image/png' && !png) || (line.imageMime === 'image/jpeg' && !jpeg)) {
+      throw new Error('导入图片内容与格式不符');
+    }
+    const source = image.createImageSource(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    try {
+      const info = await source.getImageInfo();
+      if (info.size.width <= 0 || info.size.height <= 0 ||
+        info.size.width * info.size.height > SessionStore.MAX_IMAGE_PIXELS) throw new Error('导入图片像素过多');
+    } finally {
+      await source.release();
+    }
+  }
+
   static writeImageBytes(context: common.Context, buf: ArrayBuffer, mime: string): string {
+    if (buf.byteLength <= 0 || buf.byteLength > SessionStore.MAX_IMAGE_BYTES) throw new Error('图片过大');
     const dir = context.filesDir + '/chat-images';
     SessionStore.ensureDir(dir);
+    const dirStat = fileIo.lstatSync(dir);
+    if (!dirStat.isDirectory() || dirStat.isSymbolicLink()) throw new Error('图片目录不安全');
     const ext = mime.indexOf('png') >= 0 ? 'png' : 'jpg';
     // 原来文件名只有 Date.now()。hydrateImages 是一个同步 for 循环，
     // 连着两张图很容易落在同一毫秒，第二张直接覆盖第一张，两条消息指向同一个文件。
     // 导入带多张图的档案时必现。加随机后缀。
     const path = `${dir}/${Date.now()}_${Math.floor(Math.random() * 1000000)}.${ext}`;
     const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC | fileIo.OpenMode.NOFOLLOW);
     try {
-      fileIo.writeSync(file.fd, buf);
+      if (fileIo.writeSync(file.fd, buf) !== buf.byteLength) throw new Error('图片写入不完整');
+      fileIo.fsyncSync(file.fd);
     } finally {
       fileIo.closeSync(file);
     }
@@ -500,7 +563,7 @@ export class SessionStore {
   }
 
   static writeImageB64(context: common.Context, raw: string, mime: string): string {
-    if (raw.length === 0) {
+    if (raw.length === 0 || raw.length > SessionStore.MAX_IMAGE_BYTES * 4 / 3 + 4) {
       return '';
     }
     try {
@@ -593,16 +656,7 @@ export class SessionStore {
 
   /** 先写临时文件再改名:写到一半被杀掉,旧档案还是完整的。 */
   private static writeText(path: string, text: string): void {
-    const tmp = `${path}.tmp`;
-    const file = fileIo.openSync(tmp,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, text);
-      fileIo.fsyncSync(file.fd);
-    } finally {
-      fileIo.closeSync(file);
-    }
-    fileIo.renameSync(tmp, path);
+    atomicWriteText(path, text);
   }
 }
 

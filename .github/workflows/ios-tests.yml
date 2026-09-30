@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/audit-hardening-*']
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:
@@ -19,6 +19,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      include_legacy_mac:
+        description: 'Also check the archived leocodebox desktop (not current Mac 1.x)'
+        type: boolean
+        default: false
 # 只读即可:本工作流只跑测试和审计,不写仓库。不声明就继承仓库默认权限,
 # 默认可能是可写的 —— android.yml 早就声明了,这里一直漏。
 permissions:
@@ -42,6 +47,16 @@ jobs:
           ./scripts/IOSReleaseReadinessAudit.sh
           ./scripts/IOSAccessibilityMotionAudit.sh
           ./scripts/IOSVisibleControlAudit.sh
+          python3 scripts/RepositoryEntryPointAudit.py
+          ./scripts/RunCoreSecurityTests.sh
+          python3 scripts/CoreExecutionSmoke.py -v
+          python3 scripts/CloudKitInboundDurabilityTests.py -v
+          bash scripts/CloudKitTransportSDKTypecheck.sh
+          python3 scripts/SyncBoundaryTests.py -v
+          bash scripts/SkillArchiveCompressionTests.sh
+          python3 scripts/SkillTreeTransactionTests.py
+          python3 scripts/CloudKitDependencyProgressTests.py
+          python3 scripts/SyncSQLiteDurabilityTests.py
       - name: Run MinisTests
         run: |
           set -euo pipefail        # 管道里任一命令失败即失败,不被 tail 掩盖
@@ -61,7 +76,10 @@ jobs:
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
 
-  mac-quality:
+  legacy-mac-quality:
+    # Archived desktop remains independently checkable; it is not the current
+    # leophone product and cannot supply its green check.
+    if: github.event_name == 'workflow_dispatch' && inputs.include_legacy_mac
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -83,3 +101,79 @@ jobs:
           npm run lint
           npm test
           npm run build
+
+
+  mac-quality:
+    name: Current Mac 1.x source checks
+    env:
+      ZCODE_ENV: production
+      ZCODE_PRODUCT_IDENTITY: leo
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: src/mac/leophone
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+          cache-dependency-path: src/mac/leophone/pnpm-lock.yaml
+      - name: Install exact current Mac dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build CLI contracts required by the desktop host
+        run: pnpm --filter '@zcode/contracts...' build
+      - name: Typecheck current Mac app and CLI
+        run: |
+          set -euo pipefail
+          pnpm typecheck
+          PATH="$PWD/node_modules/.bin:$PATH" pnpm --dir apps/zcode-cli typecheck
+      - name: Lint and architecture gate
+        run: |
+          set -euo pipefail
+          pnpm lint
+          pnpm architecture:check
+      - name: Current Mac regression tests
+        run: |
+          set -euo pipefail
+          pnpm leo:test:agent
+          node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
+      - name: Build current Mac source (distribution assets gated separately)
+        run: |
+          set -euo pipefail
+          PATH="$PWD/node_modules/.bin:$PATH" pnpm --dir apps/zcode-cli build
+          pnpm build:bootstrap
+
+  relay-tests:
+    name: Active relay protocol and security tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install relay test dependencies
+        run: python -m pip install aiohttp
+      - name: Test relay
+        run: PYTHONPATH=src/mac python -m unittest discover -s src/mac/leoagent -t src/mac -p 'test_relay*.py' -v
+
+  harmony-source-tests:
+    name: Harmony protocol and source regressions (no native HAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test actual Harmony source with platform IO fixtures
+        run: |
+          set -euo pipefail
+          node src/harmony/protocol/protocol.test.mjs
+          node src/harmony/protocol/security-boundaries.test.mjs
+          bash src/harmony/scripts/verify_harmony_release_notes.sh

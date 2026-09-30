@@ -99,6 +99,8 @@ export class RelayLink {
   private machineKeyRejected = false;
   private readonly outbox: Record<string, unknown>[] = [];
   private readonly streamAborts = new Map<string, AbortController>();
+  private readonly streamCallers = new Map<string, string | undefined>();
+  private readonly pendingRevocations = new Set<string>();
   private readonly state: RelayLinkStatus = {
     connected: false,
     relayVersion: null,
@@ -193,6 +195,7 @@ export class RelayLink {
         this.state.connected = false;
         for (const controller of this.streamAborts.values()) controller.abort();
         this.streamAborts.clear();
+        this.streamCallers.clear();
         try {
           ws.terminate();
         } catch {
@@ -316,9 +319,19 @@ export class RelayLink {
   }
 
   private applyRevocations(ids: unknown[]): void {
-    this.revocations = this.revocations.then(async () => {
-      for (const id of ids)
-        if (typeof id === "string" && id.length <= 256) await this.bridge.revokeCaller(id);
+    for (const id of ids) {
+      if (typeof id !== "string" || !id || id.length > 256) continue;
+      this.pendingRevocations.add(id);
+      // 先关订阅，不等磁盘；撤销写失败也不能继续把私密内容发出去。
+      for (const [streamId, deviceId] of this.streamCallers)
+        if (deviceId === id) this.streamAborts.get(streamId)?.abort();
+    }
+    // 失败项留在集合里；重连快照/重复通知会重试，不能让 rejected promise 永久毒化队列。
+    this.revocations = this.revocations.catch(() => undefined).then(async () => {
+      const pending = [...this.pendingRevocations];
+      if (!pending.length) return;
+      await this.bridge.revokeCallers(pending);
+      for (const id of pending) this.pendingRevocations.delete(id);
     });
     void this.revocations.catch(() =>
       this.logger.warn("[leo/link] revocation persistence failed; remote admission blocked"),
@@ -359,16 +372,18 @@ export class RelayLink {
     const id = String(frame["id"]);
     const controller = new AbortController();
     this.streamAborts.set(id, controller);
+    this.streamCallers.set(id, callerFrom(frame).deviceId);
     // 经 NAT / 代理的长连接要有心跳;中继把它转成 SSE 注释帧。
     const keepAlive = setInterval(
-      () => this.send(ws, { type: "stream_keepalive", id }),
+      () => { if (!controller.signal.aborted) this.send(ws, { type: "stream_keepalive", id }); },
       STREAM_KEEPALIVE_MS,
     );
     try {
       await this.revocations;
+      if (controller.signal.aborted) return;
       await this.bridge.stream(
         this.request(frame),
-        (data) => this.send(ws, { type: "stream_data", id, data }),
+        (data) => { if (!controller.signal.aborted) this.send(ws, { type: "stream_data", id, data }); },
         controller.signal,
       );
     } catch (error) {
@@ -377,6 +392,7 @@ export class RelayLink {
     } finally {
       clearInterval(keepAlive);
       this.streamAborts.delete(id);
+      this.streamCallers.delete(id);
       this.send(ws, { type: "stream_close", id });
     }
   }

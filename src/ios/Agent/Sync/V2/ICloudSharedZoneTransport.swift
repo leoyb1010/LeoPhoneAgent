@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import CryptoKit
 
 private let logger = AppLogger(category: "SyncTransport")
 
@@ -101,6 +102,132 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     private var syncEngine: CKSyncEngine?
     private var stateSerialization: CKSyncEngine.State.Serialization?
     private let stateURL: URL
+    private var inboundJournal: CloudKitInboundJournal?
+    private var inboundPass = CloudKitInboundJournal.DeliveryPass()
+    private var dependencyFetchAfter: [SyncRecordID: Date] = [:]
+    private var dependencyFetchesThisPass = 0
+    private var issuedInboundJournals: [String: CloudKitInboundJournal] = [:]
+    private var inboundCheckpointBlocked = false
+    private var activeAccountID: String?
+    private var startInFlight = false
+    private var isStopped = true
+    private var lifecycleGeneration: UInt64 = 0
+
+    /// Failed staging must never be followed by a newer CK token write. Drop
+    /// this engine instance; the next explicit/poll fetch restarts from the
+    /// last persisted token, while already staged pages remain replayable.
+    private func blockInboundCheckpoint(_ error: Error) {
+        inboundCheckpointBlocked = true
+        health.failed("inbound:journal", error: error as NSError)
+        syncEngine = nil
+        logger.error("[SyncTransport] inbound persistence failed; checkpoint paused: \(error.localizedDescription)")
+    }
+
+    private func stageInbound(records: [PortableRecord], deletes: [SyncRecordID]) throws {
+        guard let journal = inboundJournal else { throw SyncTransportError.notStarted }
+        var offset = 0
+        while offset < records.count {
+            let end = min(offset + 50, records.count)
+            try journal.append(records: Array(records[offset..<end]), deletes: [])
+            offset = end
+        }
+        if !deletes.isEmpty { try journal.append(records: [], deletes: deletes) }
+    }
+
+    private func beginInboundPass() {
+        inboundPass.begin()
+        dependencyFetchesThisPass = 0
+    }
+
+    private func claimInboundBatch() throws -> SyncInboundBatch? {
+        do {
+            guard let journal = inboundJournal, let page = try inboundPass.claim(from: journal) else { return nil }
+            // An account switch/reconfiguration must ACK the journal that
+            // issued the page, not whichever account is current afterward.
+            issuedInboundJournals[page.id] = journal
+            return page.batch
+        } catch { blockInboundCheckpoint(error); throw error }
+    }
+
+    /// Only one owner may apply a page, including across replacement transport
+    /// instances. Negative completion releases it without deleting the inbox.
+    private func deliverPendingInbound() {
+        guard !isStopped, let handler = observeHandler else { return }
+        do { if let batch = try claimInboundBatch() { handler(batch) } }
+        catch { /* claimInboundBatch records the recoverable storage failure. */ }
+    }
+
+    func acknowledgeInbound(_ batch: SyncInboundBatch) async throws {
+        guard let id = batch.inboundDeliveryID else { return } // empty fetch
+        guard let journal = issuedInboundJournals[id] ?? inboundJournal else { throw SyncTransportError.notStarted }
+        do {
+            let removed = try journal.acknowledge(batch)
+            journal.release(id)
+            issuedInboundJournals[id] = nil
+            if removed, journal === inboundJournal {
+                inboundPass.acknowledged()
+                health.succeeded("inbound:journal")
+                if try journal.peek() == nil { health.succeeded("inbound:apply") }
+            }
+            deliverPendingInbound()
+        } catch {
+            journal.release(id)
+            issuedInboundJournals[id] = nil
+            health.failed("inbound:journal", error: error as NSError)
+            throw error
+        }
+    }
+
+    func deferInbound(_ batch: SyncInboundBatch) async {
+        guard let id = batch.inboundDeliveryID else { return }
+        let journal = issuedInboundJournals.removeValue(forKey: id) ?? inboundJournal
+        journal?.release(id)
+        health.failed("inbound:apply", error: NSError(domain: "CloudKitInbound", code: 1))
+        // Retain this exact entry; a different record (including a parent in
+        // the same/later page) may progress. The pass bounds failed retries.
+        deliverPendingInbound()
+        guard journal === inboundJournal, let record = batch.records.first,
+              let dependency = CloudKitInboundJournal.dependency(for: record) else { return }
+        await fetchInboundDependency(dependency)
+    }
+
+    /// Fetch a required parent by its stable CK record ID, without the 24-hour
+    /// query window. Never ACK the child or apply a parent outside the journal.
+    /// Existing queued parent mutations/deletes always keep their position.
+    private func fetchInboundDependency(_ dependency: SyncRecordID) async {
+        guard !isStopped, !inboundCheckpointBlocked, let engine = syncEngine,
+              let journal = inboundJournal, let account = activeAccountID,
+              dependencyFetchesThisPass < 20,
+              (dependencyFetchAfter[dependency] ?? .distantPast) <= Date(),
+              retryAfter.map({ $0 <= Date() }) ?? true,
+              let zone = Self.zoneByRecordType[dependency.type],
+              Self.isValidCKRecordName(dependency.description) else { return }
+        do {
+            if try journal.hasPendingMutation(for: dependency) { return }
+        } catch { blockInboundCheckpoint(error); return }
+        dependencyFetchesThisPass += 1
+        dependencyFetchAfter = dependencyFetchAfter.filter { $0.value > Date() }
+        dependencyFetchAfter[dependency] = Date().addingTimeInterval(120)
+        let generation = lifecycleGeneration
+        let ckID = CKRecord.ID(recordName: dependency.description, zoneID: CKRecordZone.ID(zoneName: zone))
+        do {
+            let record = try await container.privateCloudDatabase.record(for: ckID)
+            guard generation == lifecycleGeneration, syncEngine === engine,
+                  activeAccountID == account, inboundJournal === journal, !inboundCheckpointBlocked else { return }
+            guard let portable = toPortable(record, registry: SyncableTypeRegistry.shared),
+                  portable.id == dependency else { throw URLError(.cannotParseResponse) }
+            do { try stageInbound(records: [portable], deletes: []) }
+            catch { blockInboundCheckpoint(error); return }
+            health.succeeded("inbound:dependency")
+            deliverPendingInbound()
+        } catch {
+            guard generation == lifecycleGeneration, syncEngine === engine else { return }
+            health.failed("inbound:dependency", error: error as NSError)
+            if let after = (error as? CKError)?.retryAfterSeconds { observeServiceRetry(after) }
+            // Unknown item, transient network and local store failures all
+            // leave the original child durable for a later external wake.
+        }
+    }
 
     /// In-memory etag cache. Records survived a save/fetch cycle so we
     /// reuse their CKRecord system fields on the next write — preserving
@@ -156,10 +283,9 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     private var pendingOutcomes: [String: SyncOutcome] = [:]
     private var sendCompletion: CheckedContinuation<[SyncOutcome], Error>?
 
-    /// Set during fullFetch / fetchChanges so the inbound delegate can
-    /// accumulate records into a single batch the caller awaits.
-    private var fetchAccumulator: (records: [PortableRecord], deletes: [SyncRecordID])?
+    /// Explicit fetches stage into the same durable inbox as pushed changes.
     private var fetchCompletion: CheckedContinuation<SyncInboundBatch, Error>?
+    private var fetchRequestID: UUID?
 
     /// V1 record IDs corresponding to V2 records that have been confirmed
     /// saved on the server. Drained in batches of `v1DeleteBatchSize` so
@@ -484,8 +610,31 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     }
 
     func start() async throws {
-        guard syncEngine == nil else { return }
+        guard syncEngine == nil, !startInFlight else { return }
+        startInFlight = true
+        let generation = lifecycleGeneration
+        defer { startInFlight = false }
         logger.info("[SyncTransport] start STEP=enter")
+        do {
+            // Never replay an inbox under a different Apple ID. Failure to
+            // establish identity postpones replay rather than guessing.
+            let accountID = try await container.userRecordID().recordName
+            guard generation == lifecycleGeneration else { throw CancellationError() }
+            let accountDirectory = SHA256.hash(data: Data(accountID.utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            let root = stateURL.deletingLastPathComponent()
+                .appendingPathComponent("inbound", isDirectory: true)
+                .appendingPathComponent(accountDirectory, isDirectory: true)
+            let journal = try CloudKitInboundJournal(directory: root)
+            if let activeAccountID, activeAccountID != accountID { stateSerialization = nil }
+            activeAccountID = accountID
+            inboundJournal = journal
+            inboundCheckpointBlocked = false
+            health.succeeded("inbound:account")
+        } catch {
+            if generation == lifecycleGeneration { blockInboundCheckpoint(error) }
+            throw error
+        }
         // Restore etag cache before any send; without this, the first
         // post-launch send rebuilds CKRecords without etags and the
         // server rejects them all with serverRecordChanged.
@@ -505,6 +654,8 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         logger.info("[SyncTransport] start STEP=configBuilt hasState=\(self.stateSerialization != nil)")
         let engine = CKSyncEngine(config)
         self.syncEngine = engine
+        isStopped = false
+        beginInboundPass()
         logger.info("[SyncTransport] start STEP=engineCreated")
         // Ensure the three zones exist. Idempotent on the engine side.
         engine.state.add(pendingDatabaseChanges: [
@@ -520,6 +671,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         // "the zones exist now" signal.
         logger.info("[SyncTransport] start STEP=ensureZonesExist begin")
         await ensureZonesExist()
+        guard generation == lifecycleGeneration else { throw CancellationError() }
         logger.info("[SyncTransport] start STEP=ensureZonesExist done")
         // Now drive engine to flush pendingDatabaseChanges (the saveZone
         // entries we queued above). With zones already on cloud the
@@ -535,12 +687,14 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             health.failed("initialize", error: nse)
             logger.warning("[SyncTransport] start STEP=initialSendChanges error code=\(nse.code) desc=\(error.localizedDescription)")
         }
+        guard generation == lifecycleGeneration else { throw CancellationError() }
         logger.info("[SyncTransport] start STEP=exit")
         // Kick the recent-window fast-path immediately, then schedule
         // a periodic re-run. Independent of CKSyncEngine's token-driven
         // fetch so newly-typed peer messages don't have to wait behind
         // a multi-day migration backlog.
         scheduleRecentFetchTimer()
+        deliverPendingInbound()
         Task { await fetchRecentV2() }
     }
 
@@ -570,6 +724,14 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     @MainActor
     private func fetchRecentV2() async {
         logger.info("[iCloudTrace] fetchRecentV2 entering")
+        if inboundCheckpointBlocked {
+            do { try await start() } catch { return }
+        }
+        guard syncEngine != nil, let queryAccountID = activeAccountID else { return }
+        beginInboundPass()
+        deliverPendingInbound()
+        // Continue ingestion even if retained children are waiting for an old
+        // parent. A backlog is not evidence that all dependencies are local.
         guard !recentFetchInFlight else {
             logger.info("[iCloudTrace] fetchRecentV2 skip — already in flight")
             // Safety net: if a previous run got stuck for any reason
@@ -665,7 +827,6 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         ]
         var totalFetched = 0
         var byType: [String: Int] = [:]
-        var portables: [PortableRecord] = []
         // 只有实际完成的类型才能推进游标或配置锚点；跳过不等于成功。
         var successfulTypes: Set<String> = []
         let registry = SyncableTypeRegistry.shared
@@ -729,18 +890,30 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                     return .failure(error)
                 }
             }.value
+            guard activeAccountID == queryAccountID, syncEngine != nil, !inboundCheckpointBlocked else { return }
             switch outcome {
             case .success(let rows):
+                do {
+                    // Own CKAsset bytes and payloads before advancing query
+                    // timestamps or first-history anchors. Merge can fail later.
+                    let records = try rows.map { row -> PortableRecord in
+                        guard let portable = row.1 else { throw URLError(.cannotParseResponse) }
+                        return portable
+                    }
+                    try stageInbound(records: records, deletes: [])
+                } catch {
+                    blockInboundCheckpoint(error)
+                    return
+                }
                 health.succeeded("query:" + type)
                 retryPolicy.succeeded(.query(type))
                 successfulTypes.insert(type)
                 UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.recentFetchLastKey + "." + type)
-                for (rec, p) in rows {
+                for (rec, _) in rows {
                     totalFetched += 1
                     byType[type, default: 0] += 1
                     serverRecordCache[rec.recordID] = rec
                     etagCacheDirty = true
-                    if let p { portables.append(p) }
                 }
                 // [T-icloud-fresh-restore-provider-groups] For the long-lived
                 // config types, log the count at INFO with the full-history flag
@@ -800,16 +973,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         }
         let breakdown = byType.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
         logger.info("[iCloudTrace] fetchRecentV2 ok total=\(totalFetched) byType=[\(breakdown)] window=\(Int(Self.recentFetchWindow))s")
-        if !portables.isEmpty, let h = observeHandler {
-            // Slice into 50-record chunks (same as token-driven path).
-            let chunk = 50
-            var i = 0
-            while i < portables.count {
-                let end = min(i + chunk, portables.count)
-                h(SyncInboundBatch(records: Array(portables[i..<end]), deletes: [], sourceDeviceId: nil))
-                i = end
-            }
-        }
+        deliverPendingInbound()
         // Also poke CKSyncEngine to keep its token catching up.
         if let engine = syncEngine, retryPolicy.isEligible(.changes, at: Date()) {
             do {
@@ -937,7 +1101,12 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     }
 
     func stop() async {
+        lifecycleGeneration &+= 1
+        isStopped = true
         syncEngine = nil
+        fetchCompletion?.resume(throwing: CancellationError())
+        fetchCompletion = nil
+        fetchRequestID = nil
         recentFetchTimer?.cancel()
         recentFetchTimer = nil
     }
@@ -1151,21 +1320,26 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     // MARK: - fetch
 
     func fetchChanges(trigger: SyncFetchTrigger) async throws -> SyncInboundBatch {
+        if inboundCheckpointBlocked { try await start() }
         guard let engine = syncEngine else { throw SyncTransportError.notStarted }
-        if fetchCompletion != nil {
-            throw SyncTransportError.fetchInFlight
-        }
+        beginInboundPass()
+        return try await fetchFromEngine(engine)
+    }
+
+    private func fetchFromEngine(_ engine: CKSyncEngine) async throws -> SyncInboundBatch {
+        if fetchCompletion != nil { throw SyncTransportError.fetchInFlight }
+        let requestID = UUID()
+        fetchRequestID = requestID
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<SyncInboundBatch, Error>) in
-            self.fetchAccumulator = (records: [], deletes: [])
             self.fetchCompletion = cont
             Task.detached {
                 do {
                     try await engine.fetchChanges()
                 } catch {
-                    await self.completeFetchWithError(error)
+                    await self.completeFetchWithError(error, requestID: requestID)
                     return
                 }
-                await self.completeFetch()
+                await self.completeFetch(requestID: requestID)
             }
         }
     }
@@ -1181,34 +1355,48 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         if let cont = fetchCompletion {
             cont.resume(throwing: SyncTransportError.notStarted)
             fetchCompletion = nil
+            fetchRequestID = nil
         }
         pendingRecords.removeAll()
         pendingDeletes.removeAll()
         pendingOutcomes.removeAll()
-        fetchAccumulator = nil
+        // Retain the durable inbox while resetting the remote token. Fresh
+        // full-fetch pages append behind it, never replacing unfinished work.
         // Reset state.bin so the next fetch re-fetches everything.
         stateSerialization = nil
         try? FileManager.default.removeItem(at: stateURL)
         syncEngine = nil
         try await start()
-        return try await fetchChanges(trigger: trigger)
+        guard let engine = syncEngine else { throw SyncTransportError.notStarted }
+        return try await fetchFromEngine(engine)
     }
 
-    private func completeFetch() {
+    private func completeFetch(requestID: UUID) {
+        guard fetchRequestID == requestID else { return }
+        guard !inboundCheckpointBlocked else {
+            completeFetchWithError(URLError(.cannotWriteToFile), requestID: requestID)
+            return
+        }
         health.succeeded("fetch")
-        let acc = fetchAccumulator ?? (records: [], deletes: [])
-        let batch = SyncInboundBatch(records: acc.records, deletes: acc.deletes, sourceDeviceId: nil)
-        fetchAccumulator = nil
+        let batch: SyncInboundBatch
+        do {
+            batch = try claimInboundBatch() ?? SyncInboundBatch(records: [], deletes: [], sourceDeviceId: nil)
+        } catch {
+            completeFetchWithError(error, requestID: requestID)
+            return
+        }
         flushEtagCacheIfDirty()
         fetchCompletion?.resume(returning: batch)
         fetchCompletion = nil
+        fetchRequestID = nil
     }
 
-    private func completeFetchWithError(_ error: Error) {
+    private func completeFetchWithError(_ error: Error, requestID: UUID) {
+        guard fetchRequestID == requestID else { return }
         health.failed("fetch", error: error as NSError)
-        fetchAccumulator = nil
         fetchCompletion?.resume(throwing: error)
         fetchCompletion = nil
+        fetchRequestID = nil
     }
 
     // MARK: - delete
@@ -1330,13 +1518,30 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
         // SDK 会等待这个回调。不能另起未等待的 Task，否则 sendChanges 完成时
         // pendingOutcomes 可能尚未记账，导致成功记录被重复发送或部分错误丢失。
         await MainActor.run {
+            // A persistence failure retires the engine. Ignore any callbacks
+            // already queued by it, especially stateUpdate after a failed stage.
+            guard self.syncEngine === syncEngine else { return }
             switch event {
             case .stateUpdate(let stateUpdate):
                 self.persistState(stateUpdate.stateSerialization)
-            case .accountChange:
+            case .accountChange(let accountChange):
+                switch accountChange.changeType {
+                case .signOut, .switchAccounts:
+                    self.lifecycleGeneration &+= 1
+                    // Keep old-account files, but never emit them for a new ID.
+                    self.syncEngine = nil
+                    self.inboundJournal = nil
+                    self.inboundCheckpointBlocked = true
+                    self.stateSerialization = nil
+                case .signIn: break
+                @unknown default: break
+                }
                 self.serverRecordCache.removeAll()
                 self.retryPolicy = SyncRetryPolicy()
                 self.health = SyncTransportHealth()
+                if self.inboundCheckpointBlocked {
+                    self.health.failed("inbound:account", error: NSError(domain: "CloudKitInbound", code: 2))
+                }
                 self.failedSaveTypes.removeAll()
             case .fetchedRecordZoneChanges(let zoneChanges):
                 self.handleFetchedZoneChanges(zoneChanges)
@@ -1406,6 +1611,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
         var deletes: [SyncRecordID] = []
         var skippedV1 = 0
         var skippedOwnEcho = 0
+        var invalidRecord = false
         // Filter + parse inside an autoreleasepool so the temporary
         // CKRecord/CKAsset objects from a 600-record fetch are released
         // promptly instead of piling up until the function returns.
@@ -1437,8 +1643,14 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 etagCacheDirty = true
                 if let portable = toPortable(rec, registry: registry) {
                     records.append(portable)
+                } else {
+                    invalidRecord = true
                 }
             }
+        }
+        if invalidRecord {
+            blockInboundCheckpoint(URLError(.cannotParseResponse))
+            return
         }
         if skippedV1 > 0 {
             logger.info("[iCloudTrace] skipped \(skippedV1) v1-zone records (handled by legacy CloudSyncEngine)")
@@ -1477,26 +1689,13 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 logger.warning("[EditSync] [iCloudTrace] inbound delete tombstone Message id=\(sid.id.prefix(8)) — will hand off to deletionApplier")
             }
         }
-        // Append into fetch accumulator (if a fetchChanges() is in flight)
-        // and broadcast to the live observer.
-        if let acc = fetchAccumulator {
-            fetchAccumulator = (records: acc.records + records, deletes: acc.deletes + deletes)
-        }
-        if (!records.isEmpty || !deletes.isEmpty), let h = observeHandler {
-            // Slice into 50-record sub-batches before fan-out so the
-            // downstream hydrator (SyncCore.processInbound) doesn't
-            // hold a 600-portable array in main-actor scope all at once.
-            let chunk = 50
-            var i = 0
-            while i < records.count {
-                let end = min(i + chunk, records.count)
-                let slice = Array(records[i..<end])
-                h(SyncInboundBatch(records: slice, deletes: [], sourceDeviceId: nil))
-                i = end
-            }
-            if !deletes.isEmpty {
-                h(SyncInboundBatch(records: [], deletes: deletes, sourceDeviceId: nil))
-            }
+        do {
+            // The delegate does not return until this inbox owns the payload
+            // and copied CKAssets. A following stateUpdate can now be saved.
+            try stageInbound(records: records, deletes: deletes)
+            if fetchCompletion == nil { deliverPendingInbound() }
+        } catch {
+            blockInboundCheckpoint(error)
         }
     }
 
@@ -1691,9 +1890,14 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
 
     @MainActor
     private func persistState(_ state: CKSyncEngine.State.Serialization) {
-        self.stateSerialization = state
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: stateURL, options: .atomic)
+        guard !inboundCheckpointBlocked, inboundJournal != nil else { return }
+        do {
+            try CloudKitInboundJournal.writeDurably(JSONEncoder().encode(state), to: stateURL)
+            self.stateSerialization = state
+            health.succeeded("inbound:checkpoint")
+        } catch {
+            health.failed("inbound:checkpoint", error: error as NSError)
+            blockInboundCheckpoint(error)
         }
     }
 

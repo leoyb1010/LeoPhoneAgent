@@ -1,3 +1,5 @@
+import { BoundSecret } from './BoundSecret';
+import { AtomicTextFile } from './AtomicFile';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
@@ -20,6 +22,7 @@ const OLD_FILE = 'provider.json';
 
 export class ProviderInstance {
   id: string = '';
+  secretRef: string = '';
   label: string = '';
   type: string = 'openAI';
   baseUrl: string = '';
@@ -46,6 +49,7 @@ class ProviderFile {
 }
 
 export class ProviderStore {
+  private readonly configFile: AtomicTextFile = new AtomicTextFile();
   instances: ProviderInstance[] = [];
   groups: ModelGroup[] = [];
   activeId: string = '';
@@ -56,6 +60,23 @@ export class ProviderStore {
   private loaded: boolean = false;
   private pending: Promise<void> | null = null;
   private keys: Map<string, string> = new Map();
+  private keyBindings: Map<string, string> = new Map();
+  private context: common.Context | null = null;
+  private writes: Promise<void> = Promise.resolve();
+
+  private serial(action: () => Promise<void>): Promise<void> {
+    const next = this.writes.then(action);
+    this.writes = next.catch(() => {});
+    return next;
+  }
+
+  credentialReference(id: string): string {
+    return this.instances.find((row: ProviderInstance) => row.id === id)?.secretRef ?? '';
+  }
+
+  private binding(row: ProviderInstance): string {
+    return JSON.stringify(['provider', row.id, row.type, row.credential, this.effectiveRoot(row), row.azureMode]);
+  }
 
   get baseUrl(): string {
     const row = this.active();
@@ -108,15 +129,23 @@ export class ProviderStore {
   }
 
   keyFor(id: string): string {
+    const row = this.instances.find((item: ProviderInstance) => item.id === id);
+    if (!row || this.keyBindings.get(id) !== this.binding(row)) return '';
     return (this.keys.get(id) ?? '').trim();
   }
 
-  rememberKey(id: string, key: string): void {
-    this.keys.set(id, key.trim());
-    const current = this.active();
-    if (current && current.id === id) {
-      this.apiKey = key.trim();
-    }
+  /** OAuth 刷新也提交新一代；异步刷新不能更新后来换过配置的实例。 */
+  commitRefreshedKey(id: string, expectedRef: string, key: string, oauth: string): Promise<void> {
+    return this.serial(async () => {
+      const context = this.context;
+      const row = this.instances.find((item: ProviderInstance) => item.id === id);
+      if (!context || !row || row.secretRef !== expectedRef || row.credential !== 'oauth') {
+        throw new Error('AI 服务商已变化，本次刷新没有写入');
+      }
+      const keys = this.snapshotKeys(); keys.set(id, key);
+      const tokens: Map<string, string> = new Map(); tokens.set(id, oauth);
+      await this.persistSnapshot(context, this.instances, keys, this.activeId, this.groups, this.activeGroupId, tokens);
+    });
   }
 
   effectiveRoot(row: ProviderInstance): string {
@@ -149,11 +178,12 @@ export class ProviderStore {
   }
 
   ensureLoaded(context: common.Context): Promise<void> {
+    if (this.pending) return this.pending;
     if (this.loaded) {
       return Promise.resolve();
     }
     if (!this.pending) {
-      this.pending = this.load(context).catch((err: Error) => {
+      this.pending = this.readDisk(context, true).catch((err: Error) => {
         this.pending = null;
         throw err;
       });
@@ -161,144 +191,148 @@ export class ProviderStore {
     return this.pending;
   }
 
-  async load(context: common.Context): Promise<void> {
-    this.jsonLoadFailed = false;
-    this.lastError = '';
-    // 重新加载时先清掉内存里的密钥，否则已删除实例的钥匙会一直留在 Map 里
-    this.keys.clear();
-    const path = ProviderStore.filePath(context, FILE_NAME);
-    if (fileIo.accessSync(path)) {
-      try {
-        const obj = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
+  reload(context: common.Context): Promise<void> {
+    return this.serial(async () => {
+      if (this.pending) await this.pending.catch(() => {});
+      await this.recoverFromDisk(context);
+    });
+  }
+
+  private async recoverFromDisk(context: common.Context): Promise<void> {
+    this.loaded = false; this.pending = null;
+    await this.readDisk(context, false);
+  }
+
+  load(context: common.Context): Promise<void> { return this.ensureLoaded(context); }
+
+  private async readDisk(context: common.Context, migrate: boolean): Promise<void> {
+    this.context = context;
+    this.jsonLoadFailed = false; this.lastError = '';
+    this.instances = []; this.groups = []; this.activeId = ''; this.activeGroupId = '';
+    this.keys.clear(); this.keyBindings.clear();
+    try {
+      const raw = this.configFile.read(ProviderStore.filePath(context, FILE_NAME));
+      if (raw) {
+        const obj = JSON.parse(raw) as Record<string, Object>;
         this.activeId = `${obj['activeId'] ?? ''}`;
         this.activeGroupId = `${obj['activeGroupId'] ?? ''}`;
         this.instances = ProviderStore.parseInstances(obj['instances']);
         this.groups = ProviderStore.parseGroups(obj['groups']);
-      } catch (err) {
-        this.jsonLoadFailed = true;
-        this.lastError = `${err}`;
-        this.instances = [];
+      } else {
+        this.readLegacy(context);
       }
-    } else {
-      await this.migrateOld(context);
-    }
-    for (let i = 0; i < this.instances.length; i++) {
-      const id = this.instances[i].id;
-      const key = await SecretStore.readProviderKeyFor(id);
-      if (key.length > 0) {
-        this.keys.set(id, key);
+      let changed = false;
+      for (let i = 0; i < this.instances.length; i++) {
+        const row = this.instances[i];
+        let key = row.secretRef ? await BoundSecret.read(row.secretRef, this.binding(row)) :
+          await SecretStore.readProviderKeyFor(row.id);
+        if (!row.secretRef && !key && row.id === 'legacy') key = await SecretStore.readProviderKey();
+        if (row.type === 'anthropic' && row.credential === 'oauth') {
+          row.credential = 'apiKey'; key = ''; changed = true;
+        }
+        this.keys.set(row.id, key); this.keyBindings.set(row.id, this.binding(row));
+        if (!row.secretRef) changed = true;
       }
-    }
-    await this.adoptLegacyKey();
-    const retired = await this.retireClaudeOAuth();
-    const current = this.active();
-    this.apiKey = current ? this.keyFor(current.id) : '';
-    this.loaded = true;
-    if (retired) {
-      await this.save(context);
+      this.loaded = true;
+      this.apiKey = this.active() ? this.keyFor(this.active()!.id) : '';
+      if (migrate && changed) {
+        await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, this.groups, this.activeGroupId);
+      }
+    } catch (error) {
+      this.lastError = `${error}`;
+      if (!this.loaded) { this.jsonLoadFailed = true; this.instances = []; this.keys.clear(); this.keyBindings.clear(); }
+      this.loaded = false;
+      throw error;
     }
   }
 
-  // Claude 订阅登录已下线:老实例改成 API Key 档并清掉订阅令牌,
-  // 否则令牌会被当成 x-api-key 发出去。用户在详情页填上控制台的 Key 就能接着用。
-  private async retireClaudeOAuth(): Promise<boolean> {
-    if (this.jsonLoadFailed) {
-      return false;
-    }
-    let changed = false;
-    for (let i = 0; i < this.instances.length; i++) {
-      const row = this.instances[i];
-      if (row.type !== 'anthropic' || row.credential !== 'oauth') {
-        continue;
-      }
-      row.credential = 'apiKey';
-      this.keys.delete(row.id);
-      await SecretStore.removeProviderKeyFor(row.id);
-      await SecretStore.remove(`${OAUTH_ALIAS}.${row.id}`);
-      changed = true;
-    }
-    return changed;
+  private readLegacy(context: common.Context): void {
+    const path = ProviderStore.filePath(context, OLD_FILE);
+    if (!fileIo.accessSync(path)) return;
+    const obj = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
+    const root = `${obj['baseUrl'] ?? ''}`;
+    if (!root) return;
+    const row = new ProviderInstance();
+    row.id = 'legacy'; row.label = '本机 AI 服务商'; row.type = 'custom'; row.baseUrl = root;
+    row.model = `${obj['model'] ?? 'gpt-4o-mini'}`; row.models = [row.model]; row.createdAt = Date.now();
+    this.instances = [row]; this.activeId = row.id;
   }
 
-  // 老版本只有一个供应商，密钥存在全局别名 leo.harmony.provider_key 下。
-  // 以前 SecretStore.readProviderKeyFor 会让「所有」没有自己密钥的实例都读到它，
-  // 于是新加的供应商会拿着旧供应商的钥匙去打自己的接口。
-  // 这里改成只认领一次：给当前供应商（老档案里就是那唯一一个），认领完立刻删掉全局别名，
-  // 之后不会再有第二个实例继承它。
-  private async adoptLegacyKey(): Promise<void> {
-    const legacy = await SecretStore.readProviderKey();
-    if (legacy.length === 0) {
-      return;
-    }
-    // 档案读坏时 instances 被清成空数组，active() 必然是 null，原来的写法照样往下
-    // 走到 removeProviderKey() —— 等于把用户唯一的那把钥匙永久销毁，而且这一轮
-    // 刚把 readProviderKeyFor 的全局回落删掉，销毁之后再也找不回来。
-    // save() 在同样的情况下会 assertWritable() 拒绝落盘（「避免覆盖」），这里保持
-    // 同一个态度：什么都不动，等下次启动（或用户修好档案）再认领。
-    if (this.jsonLoadFailed) {
-      return;
-    }
-    const target = this.active();
-    if (!target) {
-      // 一个供应商都没有（全新安装，或老档案迁移没迁出实例）。别名留着不会再被
-      // 任何实例读到（readProviderKeyFor 已经不回落了），但删掉就找不回来 —— 留着。
-      return;
-    }
-    if (this.keyFor(target.id).length === 0) {
-      this.keys.set(target.id, legacy);
-      await SecretStore.writeProviderKeyFor(target.id, legacy);
-    }
-    // 到这里要么刚认领完，要么目标本来就有自己的钥匙（别名确实冗余了）。
-    // 顺序是「先写 per-instance 再删别名」：写失败会抛出去，别名还在，下次启动重来。
-    await SecretStore.removeProviderKey();
+  private snapshotKeys(): Map<string, string> {
+    const keys: Map<string, string> = new Map();
+    for (let i = 0; i < this.instances.length; i++) keys.set(this.instances[i].id, this.keyFor(this.instances[i].id));
+    return keys;
   }
 
-  async save(context: common.Context): Promise<void> {
-    await this.ensureLoaded(context);
+  private async persistSnapshot(context: common.Context, rows: ProviderInstance[], keys: Map<string, string>,
+    activeId: string, groups: ModelGroup[], activeGroupId: string,
+    oauthUpdates: Map<string, string> = new Map()): Promise<void> {
     this.assertWritable();
-    const body = new ProviderFile();
-    body.activeId = this.activeId;
-    body.activeGroupId = this.activeGroupId;
-    body.instances = this.instances;
-    body.groups = this.groups;
-    ProviderStore.writeText(ProviderStore.filePath(context, FILE_NAME), JSON.stringify(body));
-    const current = this.active();
-    this.apiKey = current ? this.keyFor(current.id) : '';
-    AppStorage.setOrCreate('providerTick', Date.now());
+    const previous = this.instances;
+    const next = ProviderStore.parseInstances(JSON.parse(JSON.stringify(rows)) as Object[]);
+    try {
+      for (let i = 0; i < next.length; i++) {
+        const row = next[i];
+        const old = previous.find((item: ProviderInstance) => item.id === row.id);
+        row.secretRef = await BoundSecret.stage(this.binding(row), keys.get(row.id) ?? '');
+        if (row.credential === 'oauth') {
+          const oauth = oauthUpdates.get(row.id) ?? (old && this.binding(old) === this.binding(row) ?
+            await SecretStore.read(`${OAUTH_ALIAS}.${old.secretRef || old.id}`) : '');
+          if (oauth) await SecretStore.write(`${OAUTH_ALIAS}.${row.secretRef}`, oauth);
+        }
+      }
+      const body = new ProviderFile(); body.instances = next; body.groups = groups;
+      body.activeId = activeId; body.activeGroupId = activeGroupId;
+      this.configFile.write(ProviderStore.filePath(context, FILE_NAME), JSON.stringify(body));
+      this.instances = next; this.groups = groups; this.activeId = activeId; this.activeGroupId = activeGroupId;
+      this.keys = keys; this.keyBindings.clear();
+      for (let i = 0; i < next.length; i++) this.keyBindings.set(next[i].id, this.binding(next[i]));
+      const current = this.active(); this.apiKey = current ? this.keyFor(current.id) : '';
+      AppStorage.setOrCreate('providerTick', Date.now());
+    } catch (error) {
+      // 包括 rename 后结果不确定：读回真实 metadata 和匹配代的钥匙，错误仍上抛。
+      await this.recoverFromDisk(context);
+      throw error;
+    }
+    for (let i = 0; i < previous.length; i++) {
+      const old = previous[i];
+      if (old.secretRef) {
+        await BoundSecret.retire(old.secretRef);
+        await SecretStore.remove(`${OAUTH_ALIAS}.${old.secretRef}`);
+      }
+      else {
+        await SecretStore.removeProviderKeyFor(old.id);
+        await SecretStore.remove(`${OAUTH_ALIAS}.${old.id}`);
+        if (old.id === 'legacy') await SecretStore.removeProviderKey();
+      }
+      // 清理只发生在整代 metadata 确认持久化之后。
+    }
   }
 
-  async upsert(context: common.Context, row: ProviderInstance, key: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.assertWritable();
-    if (row.credential === 'oauth') {
-      row.baseUrl = '';
-    } else if (row.baseUrl.length > 0) {
-      row.baseUrl = requireProviderRoot(this.normalizeRoot(row));
-    }
-    if (!row.model.trim()) {
-      const built = kindByKey(row.type).models;
-      row.model = built.length > 0 ? built[0] : '';
-    }
-    row.model = row.model.trim();
-    let found = false;
-    for (let i = 0; i < this.instances.length; i++) {
-      if (this.instances[i].id === row.id) {
-        this.instances[i] = row;
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      this.instances = this.instances.concat([row]);
-      this.activeId = row.id;
-    } else if (!this.activeId) {
-      this.activeId = row.id;
-    }
-    if (key.trim().length > 0) {
-      this.keys.set(row.id, key.trim());
-      await SecretStore.writeProviderKeyFor(row.id, key.trim());
-    }
-    await this.save(context);
+  save(context: common.Context): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context);
+      await this.persistSnapshot(context, this.instances, this.snapshotKeys(), this.activeId, this.groups, this.activeGroupId);
+    });
+  }
+
+  upsert(context: common.Context, input: ProviderInstance, key: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      const row = ProviderStore.parseInstances(JSON.parse(JSON.stringify([input])) as Object[])[0];
+      if (!row) throw new Error('AI 服务商编号不能为空');
+      if (row.credential === 'oauth') row.baseUrl = '';
+      else if (row.baseUrl.length > 0) row.baseUrl = requireProviderRoot(this.normalizeRoot(row));
+      if (!row.model.trim()) row.model = kindByKey(row.type).models[0] ?? '';
+      row.model = row.model.trim();
+      const old = this.instances.find((item: ProviderInstance) => item.id === row.id);
+      const keys = this.snapshotKeys();
+      keys.set(row.id, key.trim() || (old && this.binding(old) === this.binding(row) ? this.keyFor(row.id) : ''));
+      const next = this.instances.slice();
+      const index = next.findIndex((item: ProviderInstance) => item.id === row.id);
+      if (index >= 0) next[index] = row; else next.push(row);
+      await this.persistSnapshot(context, next, keys, !old || !this.activeId ? row.id : this.activeId, this.groups, this.activeGroupId);
+    });
   }
 
   async setActiveModel(context: common.Context, id: string, model: string): Promise<void> {
@@ -320,33 +354,22 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async remove(context: common.Context, id: string): Promise<void> {
-    await this.ensureLoaded(context);
-    this.assertWritable();
-    const gone = this.instances.find((row: ProviderInstance) => row.id === id);
-    this.instances = this.instances.filter((row: ProviderInstance) => row.id !== id);
-    // 模型组里这一家的条目(`${标签}/${模型}`)一起清掉;清空了的组连同「当前组」指针一起去掉。
-    // 原来留着,组看着还在,实际一个条目都对不上(iOS、安卓删服务商时同样清理)。
-    const tag = gone ? (gone.label.length > 0 ? gone.label : gone.type) : '';
-    const shared = this.instances.some((row: ProviderInstance) => (row.label.length > 0 ? row.label : row.type) === tag);
-    if (tag.length > 0 && !shared) {
-      for (let i = 0; i < this.groups.length; i++) {
-        this.groups[i].modelIds = this.groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${tag}/`));
+  remove(context: common.Context, id: string): Promise<void> {
+    return this.serial(async () => {
+      await this.ensureLoaded(context); this.assertWritable();
+      const gone = this.instances.find((row: ProviderInstance) => row.id === id);
+      const next = this.instances.filter((row: ProviderInstance) => row.id !== id);
+      const groups = ProviderStore.parseGroups(JSON.parse(JSON.stringify(this.groups)) as Object[]);
+      const tag = gone ? (gone.label || gone.type) : '';
+      if (tag && !next.some((row: ProviderInstance) => (row.label || row.type) === tag)) {
+        for (let i = 0; i < groups.length; i++) groups[i].modelIds = groups[i].modelIds.filter((entry: string) => !entry.startsWith(`${tag}/`));
       }
-      this.groups = this.groups.filter((row: ModelGroup) => row.modelIds.length > 0);
-      if (!this.groups.some((row: ModelGroup) => row.id === this.activeGroupId)) {
-        this.activeGroupId = '';
-      }
-    }
-    this.keys.delete(id);
-    // 之前只清了内存里的 Map，Asset 库里这个实例的 API Key 和 OAuth refresh_token 都还留着。
-    // 删了供应商却把凭据留在设备上，属于该清没清。
-    await SecretStore.removeProviderKeyFor(id);
-    await SecretStore.remove(`${OAUTH_ALIAS}.${id}`);
-    if (this.activeId === id) {
-      this.activeId = this.instances.length > 0 ? this.instances[0].id : '';
-    }
-    await this.save(context);
+      const kept = groups.filter((row: ModelGroup) => row.modelIds.length > 0);
+      const keys = this.snapshotKeys(); keys.delete(id);
+      await this.persistSnapshot(context, next, keys,
+        this.activeId === id ? (next[0]?.id ?? '') : this.activeId, kept,
+        kept.some((row: ModelGroup) => row.id === this.activeGroupId) ? this.activeGroupId : '');
+    });
   }
 
   async setActive(context: common.Context, id: string): Promise<void> {
@@ -433,7 +456,29 @@ export class ProviderStore {
     await this.save(context);
   }
 
-  async refreshModels(row: ProviderInstance): Promise<string[]> {
+  /** 拉取使用快照，提交只更新当前实例的模型字段，允许期间发生同一服务商的 OAuth 换代。 */
+  async refreshModels(context: common.Context, id: string,
+    fetch: ((row: ProviderInstance) => Promise<string[]>) | null = null): Promise<ProviderInstance> {
+    await this.ensureLoaded(context);
+    const current = this.instances.find((row: ProviderInstance) => row.id === id);
+    if (!current) throw new Error('先保存再拉模型');
+    const snapshot = ProviderStore.parseInstances(JSON.parse(JSON.stringify([current])) as Object[])[0];
+    const ids = fetch ? await fetch(snapshot) : await this.fetchModels(snapshot);
+    let saved = new ProviderInstance();
+    await this.serial(async () => {
+      const live = this.instances.find((row: ProviderInstance) => row.id === id);
+      if (!live || this.binding(live) !== this.binding(snapshot)) throw new Error('AI 服务商已变化，请重新拉模型');
+      const next = ProviderStore.parseInstances(JSON.parse(JSON.stringify(this.instances)) as Object[]);
+      const updated = next.find((row: ProviderInstance) => row.id === id)!;
+      this.applyModels(updated, ids);
+      await this.persistSnapshot(context, next, this.snapshotKeys(), this.activeId, this.groups, this.activeGroupId);
+      const committed = this.instances.find((row: ProviderInstance) => row.id === id)!;
+      saved = ProviderStore.parseInstances(JSON.parse(JSON.stringify([committed])) as Object[])[0];
+    });
+    return saved;
+  }
+
+  private async fetchModels(row: ProviderInstance): Promise<string[]> {
     if (skipUpstreamModels(row.type, row.credential)) {
       const built = kindByKey(row.type).models;
       if (row.models.length === 0) {
@@ -474,7 +519,7 @@ export class ProviderStore {
     throw new Error(lastError.length > 0 ? lastError : '上游没有返回模型');
   }
 
-  applyModels(row: ProviderInstance, ids: string[]): void {
+  private applyModels(row: ProviderInstance, ids: string[]): void {
     const usable = chatModelsFor(row.type, ids);
     row.models = usable;
     if (usable.indexOf(row.model) < 0) {
@@ -530,51 +575,6 @@ export class ProviderStore {
     return raw;
   }
 
-  private async migrateOld(context: common.Context): Promise<void> {
-    const path = ProviderStore.filePath(context, OLD_FILE);
-    if (!fileIo.accessSync(path)) {
-      return;
-    }
-    try {
-      const obj = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
-      const baseUrl = `${obj['baseUrl'] ?? ''}`;
-      const model = `${obj['model'] ?? 'gpt-4o-mini'}`;
-      if (!baseUrl) {
-        return;
-      }
-      const row = new ProviderInstance();
-      row.id = 'legacy';
-      row.label = '本机 AI 服务商';
-      row.type = 'custom';
-      row.baseUrl = baseUrl;
-      row.model = model;
-      row.models = [model];
-      row.createdAt = Date.now();
-      this.instances = [row];
-      this.activeId = row.id;
-      const oldKey = await SecretStore.readProviderKey();
-      if (oldKey.length > 0) {
-        this.keys.set(row.id, oldKey);
-        await SecretStore.writeProviderKeyFor(row.id, oldKey);
-      }
-      // 这里原来调的是 this.save(context)，而 save() 第一行是 await this.ensureLoaded(context)。
-      // migrateOld 只会在 load() 内部被调用，此时 ensureLoaded 的 pending 就是当前这个 load 的
-      // Promise —— 于是 save 等 load、load 等 save，直接死锁：ensureLoaded 永远不 resolve。
-      // 触发条件是「有旧 provider.json、没有新 providers.json」，也就是老版本覆盖升级的用户，
-      // 表现为本机聊天永远停在「准备中」、定时任务和当身体全部静默不动。
-      // 改成直接落盘：此刻 instances/activeId 已经就绪，不需要再走 save() 那圈。
-      const body = new ProviderFile();
-      body.activeId = this.activeId;
-      body.activeGroupId = this.activeGroupId;
-      body.instances = this.instances;
-      body.groups = this.groups;
-      ProviderStore.writeText(ProviderStore.filePath(context, FILE_NAME), JSON.stringify(body));
-    } catch (err) {
-      this.jsonLoadFailed = true;
-      this.lastError = `${err}`;
-    }
-  }
-
   private assertWritable(): void {
     if (this.jsonLoadFailed) {
       throw new Error('AI 服务商档案读坏了，先别保存，避免覆盖');
@@ -590,6 +590,7 @@ export class ProviderStore {
       const item = raw[i] as Record<string, Object>;
       const row = new ProviderInstance();
       row.id = `${item['id'] ?? ''}`;
+      row.secretRef = `${item['secretRef'] ?? ''}`;
       row.label = `${item['label'] ?? ''}`;
       row.type = `${item['type'] ?? 'custom'}`;
       row.baseUrl = `${item['baseUrl'] ?? ''}`;
@@ -631,15 +632,7 @@ export class ProviderStore {
     return context.filesDir + '/' + name;
   }
 
-  private static writeText(path: string, text: string): void {
-    const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, text);
-    } finally {
-      fileIo.closeSync(file);
-    }
-  }
+
 }
 
 export class ProviderLaunch {

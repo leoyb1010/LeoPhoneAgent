@@ -86,6 +86,19 @@ import SQLite3
         sqlite3_prepare_v2(db, "SELECT count(*) FROM sync_dirty_records WHERE record_id='pinned'", -1, &dirtyStmt, nil)
         sqlite3_step(dirtyStmt); let pinnedRows = sqlite3_column_int(dirtyStmt, 0); sqlite3_finalize(dirtyStmt)
         expect(pinnedRows == 0, "row acknowledged by every remaining destination is drained")
+        // A disabled category retains its tickets but must not occupy the
+        // bounded ready page ahead of enabled categories.
+        try SyncDeliveryLedger.configure(db, enabled: ["tailnet:solo"])
+        for index in 0..<120 { try SyncDeliveryLedger.seed(db, destination: "tailnet:solo", recordType: "EnvVarItem", recordId: "private-\(index)") }
+        try SyncDeliveryLedger.seed(db, destination: "tailnet:solo", recordType: "SessionV2", recordId: "allowed")
+        let permitted = try SyncDeliveryLedger.load(db, destination: "tailnet:solo", excludingTypes: ["EnvVarItem"])
+        expect(permitted.contains { $0.recordId == "allowed" } && permitted.allSatisfy { $0.recordType != "EnvVarItem" }, "disabled category must not starve enabled records")
+        let privateTicket = try SyncDeliveryLedger.load(db, destination: "tailnet:solo").first { $0.recordType == "EnvVarItem" }!
+        expect(try SyncDeliveryLedger.freeze(db, ticket: privateTicket, payload: Data("single-destination-v1".utf8)))
+        sqlite3_close(db); db = nil; precondition(sqlite3_open(path.path, &db) == SQLITE_OK)
+        expect(try SyncDeliveryLedger.payload(db, ticket: privateTicket) == Data("single-destination-v1".utf8), "single-destination lost-ACK restart preserves payload")
+        expect(try SyncDeliveryLedger.freeze(db, ticket: privateTicket, payload: Data("single-destination-v2".utf8)))
+        expect(try SyncDeliveryLedger.payload(db, ticket: privateTicket) == Data("single-destination-v1".utf8), "same receipt ID must retain original bytes after restart")
         print("SyncDeliveryLedgerSmoke: multi-destination, restart, stale ACK, immutable snapshot, disable, cancel, monotonic recreate, permanent failure, transactional rollback, replica seed, replica purge passed")
     }
 }

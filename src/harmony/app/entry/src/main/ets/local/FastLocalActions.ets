@@ -1,3 +1,4 @@
+import { SensitiveToolGate } from './SensitiveToolGate';
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
 import { camera } from '@kit.CameraKit';
 import { reminderAgentManager } from '@kit.BackgroundTasksKit';
@@ -18,7 +19,8 @@ const ABILITY = 'EntryAbility';
  * permission quirks — throw falls through to the existing agent path.
  */
 export class FastLocalActions {
-  static async tryRoute(context: common.Context, text: string, imageCount: number): Promise<string> {
+  static async tryRoute(context: common.Context, text: string, imageCount: number, unattended: boolean = false): Promise<string> {
+    if (unattended) await SensitiveToolGate.load(context);
     const route = ActionRouter.decide(text, imageCount);
     if (route.path === 'clarify') {
       // 缺时间、缺车次这类:只追问缺的那一项,不让模型去猜。
@@ -52,7 +54,9 @@ export class FastLocalActions {
       ok = await FastLocalActions.addTravel(context, route);
       nextStep = '在系统设置里允许「提醒」后再说一次';
     } else if (route.kind === 'writeClipboard') {
-      ok = await FastLocalActions.copyText(route.label);
+      const denied = unattended ? SensitiveToolGate.unattendedDenial('clipboard_write') : '';
+      if (denied.length > 0) return denied;
+      ok = await FastLocalActions.copyText(route.label, unattended);
     } else if (route.kind === 'deviceInfo') {
       summary = FastLocalActions.deviceSummary();
       ok = true;
@@ -101,7 +105,8 @@ export class FastLocalActions {
     ].join('\n');
   }
 
-  static async copyText(text: string): Promise<boolean> {
+  static async copyText(text: string, unattended: boolean = false): Promise<boolean> {
+    if (unattended && SensitiveToolGate.unattendedDenial('clipboard_write').length > 0) return false;
     if (text.length === 0) {
       return false;
     }

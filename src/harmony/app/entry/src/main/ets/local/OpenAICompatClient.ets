@@ -63,7 +63,6 @@ export class OpenAICompatClient {
       const fresh: OAuthToken = await OAuthSession.ensure(instanceId, apiKey, type);
       key = fresh.access;
       account = fresh.account;
-      providerStore.rememberKey(instanceId, key);
     }
     // 订阅登录拿到的令牌只发给这家官方地址,不跟着自填的 API 根走。
     const root = credential === 'oauth' ? kindByKey(type).root : baseUrl;
@@ -73,7 +72,6 @@ export class OpenAICompatClient {
   /** ChatGPT 登录的模型目录(和 Codex CLI 同一份)。拉不到就抛错,调用方保留原来的列表。 */
   static async codexModels(instanceId: string): Promise<string[]> {
     const fresh: OAuthToken = await OAuthSession.ensure(instanceId, providerStore.keyFor(instanceId), 'openAI');
-    providerStore.rememberKey(instanceId, fresh.access);
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${fresh.access}`,
       'Version': CODEX_CLIENT_VERSION,

@@ -119,15 +119,19 @@ enum SyncDeliveryLedger {
         }
     }
 
-    static func load(_ db: OpaquePointer?, destination: String, limit: Int = 100) throws -> [SyncDeliveryTicket] {
+    static func load(_ db: OpaquePointer?, destination: String, limit: Int = 100, excludingTypes: Set<String> = []) throws -> [SyncDeliveryTicket] {
+        let excluded = excludingTypes.sorted()
+        let clause = excluded.isEmpty ? "" : " AND t.record_type NOT IN (" + Array(repeating: "?", count: excluded.count).joined(separator: ",") + ")"
         let stmt = try prepare(db, """
             SELECT t.destination,t.record_type,t.record_id,t.revision,t.change_id,t.operation,t.updated_at
             FROM sync_delivery_tickets t JOIN sync_delivery_destinations d ON d.id=t.destination
-            WHERE t.destination=? AND d.enabled=1 AND t.failure IS NULL
+            WHERE t.destination=? AND d.enabled=1 AND t.failure IS NULL\(clause)
             ORDER BY t.priority,CASE t.record_type WHEN 'SessionV2' THEN 0 WHEN 'MessageV2' THEN 1 ELSE 2 END,t.updated_at DESC LIMIT ?
             """)
         defer { sqlite3_finalize(stmt) }
-        bind(stmt, 1, destination); sqlite3_bind_int(stmt, 2, Int32(max(1, min(limit, 100))))
+        bind(stmt, 1, destination)
+        for (index, type) in excluded.enumerated() { bind(stmt, Int32(index + 2), type) }
+        sqlite3_bind_int(stmt, Int32(excluded.count + 2), Int32(max(1, min(limit, 100))))
         var result: [SyncDeliveryTicket] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             result.append(SyncDeliveryTicket(destination: text(stmt, 0), recordType: text(stmt, 1), recordId: text(stmt, 2), revision: sqlite3_column_int64(stmt, 3), changeId: text(stmt, 4), operation: text(stmt, 5), updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6))))

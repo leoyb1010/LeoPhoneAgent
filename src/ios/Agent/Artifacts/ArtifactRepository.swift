@@ -246,6 +246,7 @@ actor ArtifactRepository {
     }
 
     private func purge(id: String, emitChange: Bool) throws {
+        guard isSafeIdentifier(id) else { throw RepositoryError.unsafePath }
         let versionIds = try versions(artifactId: id).map(\.id)
         let directory = artifactsURL.appendingPathComponent(id, isDirectory: true).standardizedFileURL
         let root = artifactsURL.standardizedFileURL.path + "/"
@@ -262,10 +263,36 @@ actor ArtifactRepository {
                 throw error
             }
             try execute("COMMIT")
-            try? FileManager.default.removeItem(at: directory)
+            if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
             if emitChange {
                 notifyChange(artifactId: id, versionIds: versionIds, operation: .delete)
             }
+        } catch {
+            _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
+
+    /// Immutable-version tombstones can arrive before the parent tombstone.
+    /// Remove the asset while its durable metadata is still available for retry.
+    func purgeVersionFromRemote(id: String) throws {
+        guard isSafeIdentifier(id) else { throw RepositoryError.unsafePath }
+        guard let existing = try version(id: id) else { return }
+        let file = try fileURL(for: existing)
+        try execute("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+            let deletion = try prepare("DELETE FROM artifact_versions WHERE id = ?")
+            defer { sqlite3_finalize(deletion) }
+            bindText(deletion, 1, id)
+            try stepDone(deletion)
+            let current = try prepare("UPDATE artifacts SET current_version_id = (SELECT id FROM artifact_versions WHERE artifact_id = ? ORDER BY version_number DESC LIMIT 1) WHERE id = ? AND current_version_id = ?")
+            defer { sqlite3_finalize(current) }
+            bindText(current, 1, existing.artifactId)
+            bindText(current, 2, existing.artifactId)
+            bindText(current, 3, id)
+            try stepDone(current)
+            try execute("COMMIT")
         } catch {
             _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
             throw error

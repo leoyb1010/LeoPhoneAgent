@@ -19,6 +19,7 @@ export async function readResponseBody(
   if (contentLength) {
     const parsed = Number.parseInt(contentLength, 10);
     if (Number.isFinite(parsed) && parsed > maxResponseBytes) {
+      await response.body?.cancel().catch(() => undefined);
       throw createHttpClientError({
         code: "too_large",
         url,
@@ -47,6 +48,7 @@ export async function readResponseBody(
 
   while (true) {
     if (signal.aborted) {
+      await reader.cancel().catch(() => undefined);
       throw createHttpClientError({
         code: "cancelled",
         url,

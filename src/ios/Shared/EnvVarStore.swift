@@ -232,16 +232,18 @@ final class EnvVarStore: ObservableObject {
         return String(data: data, encoding: .utf8)
     }
 
-    nonisolated private static func deleteValue(forKey key: String) {
+    @discardableResult
+    nonisolated private static func deleteValue(forKey key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(query as CFDictionary)
+        let local = SecItemDelete(query as CFDictionary)
         var syncQuery = query
         syncQuery[kSecAttrSynchronizable as String] = true
-        SecItemDelete(syncQuery as CFDictionary)
+        let synced = SecItemDelete(syncQuery as CFDictionary)
+        return [errSecSuccess, errSecItemNotFound].contains(local) && [errSecSuccess, errSecItemNotFound].contains(synced)
     }
 
     /// Non-isolated read for use from CloudSyncEngine (background thread).
@@ -382,62 +384,38 @@ final class EnvVarStore: ObservableObject {
     func applyRemoteItem(
         id: String, key: String, value: String, note: String,
         createdAt: Date, updatedAt: Date
-    ) {
-        if let idx = entries.firstIndex(where: { $0.id == id }) {
-            // Local entry exists — LWW by updatedAt. We don't track a
-            // per-entry updatedAt locally yet (the JSON file only has
-            // createdAt), so we accept any inbound update if the field
-            // values actually differ. This gives us last-writer-wins
-            // semantics relative to the inbound stream — both sides'
-            // mutations go through markEntryDirty and produce records
-            // with monotonic updatedAt = Date(), so the cloud serializes
-            // them and the receiver applies the latest one it sees.
-            let existing = entries[idx]
-            let keyChanged = existing.key != key
-            entries[idx].key = key
-            entries[idx].note = note
-            // Don't overwrite createdAt — keep the earliest timestamp
-            // we've ever seen for this id.
-            if existing.createdAt > createdAt { entries[idx].createdAt = createdAt }
-            if !value.isEmpty {
-                if keyChanged {
-                    Self.deleteValue(forKey: existing.key)
-                }
-                Self.saveValue(value, forKey: key)
-            } else if keyChanged {
-                // Key renamed but no value supplied — migrate the existing
-                // value under the new key so we don't strand it.
-                if let oldVal = Self.loadValue(forKey: existing.key) {
-                    Self.saveValue(oldVal, forKey: key)
-                    Self.deleteValue(forKey: existing.key)
-                }
-            }
-            saveEntries()
-            logger.info("[EnvVarStore] applyRemoteItem UPDATE id=\(id.prefix(8)) key=\(key)")
-        } else {
-            // New entry from a peer.
-            let entry = EnvVarEntry(id: id, key: key, createdAt: createdAt, note: note)
-            entries.append(entry)
-            if !value.isEmpty {
-                Self.saveValue(value, forKey: key)
-            }
-            saveEntries()
-            logger.info("[EnvVarStore] applyRemoteItem INSERT id=\(id.prefix(8)) key=\(key)")
+    ) throws {
+        var next = entries
+        let existing = next.first(where: { $0.id == id })
+        let valueToStore = !value.isEmpty ? value : (existing.flatMap { Self.loadValue(forKey: $0.key) } ?? "")
+        if !valueToStore.isEmpty, !Self.saveValue(valueToStore, forKey: key) { throw CocoaError(.fileWriteUnknown) }
+        if let index = next.firstIndex(where: { $0.id == id }) {
+            next[index].key = key
+            next[index].note = note
+            next[index].createdAt = min(next[index].createdAt, createdAt)
+        } else { next.append(EnvVarEntry(id: id, key: key, createdAt: createdAt, note: note)) }
+        try JSONEncoder().encode(next).write(to: fileURL, options: .atomic)
+        entries = next
+        // Shared keys can be used by more than one entry. Do not delete another
+        // entry's secret after a rename, or before metadata commits.
+        if let existing, existing.key != key, !next.contains(where: { $0.key == existing.key }) {
+            guard Self.deleteValue(forKey: existing.key) else { throw CocoaError(.fileWriteUnknown) }
         }
-        _ = updatedAt  // reserved for a future per-entry updatedAt column
+        _ = updatedAt
     }
 
     /// Hard-delete a per-variable entry locally without re-queueing the
     /// delete back into the sync layer. Mirrors the SessionV2 inbound
     /// delete pattern. Caller is the sync hydrator; the cloud already
     /// holds the tombstone.
-    func applyRemoteDeletion(id: String) {
-        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
-        let key = entries[idx].key
-        entries.remove(at: idx)
-        Self.deleteValue(forKey: key)
-        saveEntries()
-        logger.info("[EnvVarStore] applyRemoteDeletion id=\(id.prefix(8)) key=\(key)")
+    func applyRemoteDeletion(id: String) throws {
+        guard let existing = entries.first(where: { $0.id == id }) else { return }
+        let next = entries.filter { $0.id != id }
+        if !next.contains(where: { $0.key == existing.key }), !Self.deleteValue(forKey: existing.key) {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        try JSONEncoder().encode(next).write(to: fileURL, options: .atomic)
+        entries = next
     }
 
     /// Returns all env vars as a dictionary for injection into shell execution.

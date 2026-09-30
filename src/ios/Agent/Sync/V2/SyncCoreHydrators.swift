@@ -27,28 +27,32 @@ final class SyncCoreHydrators {
 
     /// "Given a remote PortableRecord, merge it into local SQLite using
     /// this type's conflict resolution." Should be a no-op when the
-    /// record cannot be applied (e.g. unknown schema version was already
-    /// filtered upstream by SyncCore).
-    typealias Merger = (_ record: PortableRecord) async -> Void
+    /// record loses a durable conflict-resolution comparison. Throw if the
+    /// write failed, input is invalid, or application must be retried.
+    typealias Merger = (_ record: PortableRecord) async throws -> Void
 
     /// "Given a record id, propagate its remote deletion locally — but
     /// honour soft-delete / tombstone rules per §3.3." Optional; if not
-    /// registered, SyncCore falls back to a hard delete via direct SQL.
-    typealias DeletionApplier = (_ id: String) async -> Void
+    /// registered, the deletion remains pending rather than reporting success.
+    typealias DeletionApplier = (_ id: String) async throws -> Void
 
     private var builders: [String: Builder] = [:]
     private var mergers: [String: Merger] = [:]
     private var deleters: [String: DeletionApplier] = [:]
+    typealias DatedDeletionApplier = (_ id: String, _ updatedAt: Date?) async throws -> Void
+    private var datedDeleters: [String: DatedDeletionApplier] = [:]
 
     func register(
         recordType: String,
         builder: Builder?,
         merger: Merger?,
-        deletionApplier: DeletionApplier? = nil
+        deletionApplier: DeletionApplier? = nil,
+        datedDeletionApplier: DatedDeletionApplier? = nil
     ) {
         if let b = builder { builders[recordType] = b }
         if let m = merger { mergers[recordType] = m }
         if let d = deletionApplier { deleters[recordType] = d }
+        if let d = datedDeletionApplier { datedDeleters[recordType] = d }
     }
 
     func buildPortable(recordType: String, id: String) async -> PortableRecord? {
@@ -66,30 +70,36 @@ final class SyncCoreHydrators {
         builders[recordType] != nil
     }
 
-    /// True means the record was handled: merged, or intentionally ignored because
-    /// the user turned the category off or this build has no applier for it.
-    /// Ignoring must not withhold a transport cursor, or one unsupported record
-    /// would replay the same page forever and block every later change.
+    /// Success means durable apply or an explicit conflict-resolution no-op.
+    /// Upload preferences never discard inbound records. Missing handlers and
+    /// deferred/failed storage operations retain the transport's durable inbox.
     @discardableResult
     func mergeRemote(_ record: PortableRecord) async -> Bool {
-        // Same per-category toggle as uploads: a category the user turned off
-        // neither pushes local writes nor accepts peer ones.
-        guard UploadPolicy.allowsRecordType(record.id.type) else { return true }
-        guard let merger = mergers[record.id.type] else { return true }
-        await merger(record)
-        return true
+        guard let merger = mergers[record.id.type] else { return false }
+        do {
+            try await merger(record)
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
     }
 
     @discardableResult
-    func applyRemoteDeletion(_ id: SyncRecordID) async -> Bool {
-        guard UploadPolicy.allowsRecordType(id.type) else { return true }
-        // Types without a deletion applier keep the local copy (safe default).
-        guard let deleter = deleters[id.type] else { return true }
-        await deleter(id.id)
-        return true
+    func applyRemoteDeletion(_ id: SyncRecordID, updatedAt: Date? = nil) async -> Bool {
+        if let deleter = datedDeleters[id.type] {
+            do { try await deleter(id.id, updatedAt); return !Task.isCancelled }
+            catch { return false }
+        }
+        guard let deleter = deleters[id.type] else { return false }
+        do {
+            try await deleter(id.id)
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
     }
 
     var registeredRecordTypes: [String] {
-        Array(Set(builders.keys).union(mergers.keys).union(deleters.keys)).sorted()
+        Array(Set(builders.keys).union(mergers.keys).union(deleters.keys).union(datedDeleters.keys)).sorted()
     }
 }

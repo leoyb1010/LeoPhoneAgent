@@ -27,6 +27,9 @@ struct RemoteHost: Codable, Identifiable, Hashable {
     var username: String
     /// Explicit user association; never inferred from an IP address or display name.
     var deviceId: String? = nil
+    /// 用户从目标主机可信控制台取得的 OpenSSH 公钥；旧配置默认未受信。
+    var trustedHostKey: String? = nil
+    var trustedHostKeyEndpoint: String? = nil
 }
 
 @MainActor

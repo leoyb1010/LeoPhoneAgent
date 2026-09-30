@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 // MARK: - Wire types
 
@@ -200,6 +201,8 @@ actor LeoAgentClient {
     /// Siri 审批通知需要跨进程回溯到主机来重建 client,靠它寻址。
     nonisolated let hostId: String?
     nonisolated let hostName: String?
+    /// 不保存凭据或 URL 明文；主机/设备/端点改变后不会混用旧会话意图。
+    nonisolated let harnessOutboxScope: String
 
     /// Coalesce Treasury sync requests without dropping a request that arrives
     /// while the current cursor pass is suspended on network I/O. Actor
@@ -217,20 +220,26 @@ actor LeoAgentClient {
     nonisolated var apiKeyForRelay: String { apiKey }
 
     init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil,
-         hostId: String? = nil, hostName: String? = nil, supportsDirectDiscovery: Bool = false, expectedDeviceId: String? = nil, directOnly: Bool = false, relayServices: GatewayRelayServices? = nil) {
+         hostId: String? = nil, hostName: String? = nil, supportsDirectDiscovery: Bool = false, expectedDeviceId: String? = nil, directOnly: Bool = false, relayServices: GatewayRelayServices? = nil, outboxIdentity: String? = nil) {
         self.relayServices = relayServices ?? harnessBaseURL.flatMap {
             RelayMachinesClient.apiRoot(fromHarnessURL: $0.absoluteString).flatMap { GatewayRelayServices(apiRoot: $0) }
         }
         self.directOnly = directOnly
         self.expectedDeviceId = expectedDeviceId
         self.supportsDirectDiscovery = supportsDirectDiscovery
-        if let hostId, let stored = GatewayHostStore.accessKey(hostId: hostId + ".direct"),
-           let data = stored.data(using: .utf8) { self.directRoute = DirectDeviceRoute.decode(data) }
+        if let hostId, let expectedDeviceId,
+           let stored = GatewayHostStore.accessKey(hostId: hostId + ".direct"),
+           let data = stored.data(using: .utf8) {
+            self.directRoute = DirectDeviceRoute.decode(data, expectedDeviceId: expectedDeviceId)
+        }
         self.baseURL = baseURL
         self.harnessBaseURL = harnessBaseURL
         self.apiKey = apiKey
         self.hostId = hostId
         self.hostName = hostName
+        let owner = outboxIdentity ?? HarnessOutboxIdentity.initial(hostId: hostId ?? "", endpoint: harnessBaseURL?.absoluteString)
+        let identity = try! JSONEncoder().encode([hostId ?? "", owner])
+        self.harnessOutboxScope = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
         let config = URLSessionConfiguration.ephemeral
         // A run can think for minutes before its first token; the resource
         // timeout must not guillotine a long remote task.
@@ -340,6 +349,12 @@ actor LeoAgentClient {
         var req = try request("/", service: .harness)
         req.url = url
         return try Self.json(try await send(req))
+    }
+
+    /// 回执查询是只读的；不存在或未知都不能授权重新执行副作用。
+    func harnessOperationResult(requestId: String) async throws -> [String: Any] {
+        guard UUID(uuidString: requestId) != nil else { throw GatewayError.badURL }
+        return try await getJSON("/operations/" + requestId, service: .harness)
     }
 
     func postJSON(_ path: String, body: [String: Any],

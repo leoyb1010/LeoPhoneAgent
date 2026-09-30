@@ -1782,7 +1782,8 @@ final class ProviderConfigStore: ObservableObject {
     /// writes it to disk, and publishes the change, but does NOT schedule a re-upload.
     /// The caller decides separately whether the merge produced data that needs to be
     /// pushed back to iCloud (via the existing "localHasUnique" re-upload path).
-    func applyMergedConfigFromSync(_ newConfig: ProviderConfig) {
+    @discardableResult
+    func applyMergedConfigFromSync(_ newConfig: ProviderConfig) -> Bool {
         // Compute the set of instances that ended up with zero model
         // entries after the merge. The remote ProviderConfig snapshot
         // can be missing model rows when the peer hadn't refreshed yet
@@ -1830,9 +1831,18 @@ final class ProviderConfigStore: ObservableObject {
         // genuinely a no-op. Any real change (diff, prune, empty-picker
         // instance) still falls through to the full apply below.
         if deduped == config, prunedEntryIds.isEmpty, instancesNeedingRefresh.isEmpty {
-            return
+            return true
         }
 
+        // The canonical JSON must be committed before this merge can be ACKed.
+        // Publishing in memory first would make a retry look like a durable no-op.
+        do {
+            let data = try JSONEncoder().encode(deduped)
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            logger.error("Failed to persist merged provider config: \(error)")
+            return false
+        }
         config = deduped
         // [T-icloud-fresh-restore-provider-groups] Summary of what this device
         // holds after an inbound merge — the single most useful triage line for
@@ -1840,25 +1850,6 @@ final class ProviderConfigStore: ObservableObject {
         // group counts plus total group members actually present.
         let groupMembers = deduped.modelGroups.reduce(0) { $0 + $1.memberEntryIds.count }
         logger.info("[v3sync] applyMergedConfigFromSync: instances=\(deduped.instances.count) entries=\(deduped.modelEntries.count) groups=\(deduped.modelGroups.count) groupMembers=\(groupMembers) prunedDup=\(prunedEntryIds.count)")
-        // [T-icloud-provider-sync-apply-offmain] Persist to disk WITHOUT going
-        // through `save()` (which would markDirty) — and do the encode + atomic
-        // write OFF the main thread. Encoding the full provider config (hundreds
-        // of model entries) + a synchronous file write was a measurable chunk of
-        // the per-apply main-thread cost behind the scroll stalls. The in-memory
-        // `config` (@Published) is already assigned above, so the disk mirror is
-        // a fire-and-forget snapshot write with no ordering dependency; a later
-        // apply simply overwrites it atomically. The SQLite mirror below is
-        // likewise already off-main.
-        let snapshotForDisk = config
-        let diskURL = fileURL
-        Task.detached(priority: .utility) {
-            do {
-                let data = try JSONEncoder().encode(snapshotForDisk)
-                try data.write(to: diskURL, options: .atomic)
-            } catch {
-                AppLogger(category: "ProviderConfigStore").error("Failed to persist merged provider config: \(error)")
-            }
-        }
         // Mirror the merged config into SQLite too — but suppress v3
         // markDirty emission since this update originated INBOUND from
         // sync (re-emitting it would round-trip the same payload back
@@ -1895,6 +1886,7 @@ final class ProviderConfigStore: ObservableObject {
                 Task { await refreshModels(for: inst) }
             }
         }
+        return true
     }
 
     /// [T-icloud-provider-sync-consistency] Collapse duplicate model entries
@@ -2710,29 +2702,28 @@ enum ProviderKeychainHelper {
         UserDefaults.standard.set(date, forKey: apiKeySavedAtUDKey(instanceId: instanceId))
     }
 
-    static func saveAPIKey(_ key: String, instanceId: String, caller: String = #function) {
+    @discardableResult
+    static func saveAPIKey(_ key: String, instanceId: String, caller: String = #function) -> Bool {
         let service = "com.leoyuan.leophoneagent.provider.\(instanceId)"
-        // Delete both legacy (non-sync) and synchronizable entries
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
-        var syncDelete = deleteQuery
-        syncDelete[kSecAttrSynchronizable as String] = true
-        SecItemDelete(syncDelete as CFDictionary)
-        // Save with iCloud Keychain sync enabled
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = Data(key.utf8)
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        // Stamp the local save time for iCloud LWW conflict resolution.
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: true]
+        let attributes: [String: Any] = [kSecValueData as String: Data(key.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock]
+        var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var addition = query
+            addition.merge(attributes) { _, new in new }
+            status = SecItemAdd(addition as CFDictionary, nil)
+            if status == errSecDuplicateItem { status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary) }
+        }
+        guard status == errSecSuccess else { return false }
+        var legacy = query
+        legacy[kSecAttrSynchronizable as String] = false
+        SecItemDelete(legacy as CFDictionary)
         stampAPIKeySavedAt(Date(), instanceId: instanceId)
-        AppLogger(category: "Keychain").info("write apiKey instanceId=\(instanceId.prefix(8)) keyLen=\(key.count) addStatus=\(addStatus) caller=\(caller)")
-        // Refresh credential-derived UI (provider list "configured" dot, etc).
         notifyAuthChanged(instanceId: instanceId)
+        return true
     }
 
     static func loadAPIKey(instanceId: String, caller: String = #function) -> String? {

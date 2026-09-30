@@ -1892,4 +1892,5 @@
     <string name="newer_db_body">会话数据仍然完好。当前版本无法安全打开更新的数据库，请安装最新版后重新打开。</string>
     <string name="newer_db_versions">当前版本支持数据库版本 %1$d。</string>
     <string name="newer_db_exit">不修改数据并退出</string>
+    <string name="secure_storage_temporarily_unavailable">安全存储暂不可用。原有凭据已保留；新输入的凭据仅在本次运行有效。请重启应用后重试。</string>
 </resources>

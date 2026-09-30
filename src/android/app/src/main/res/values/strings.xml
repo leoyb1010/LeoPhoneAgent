@@ -1968,4 +1968,5 @@
     <string name="newer_db_body">Your conversations are still intact. This build cannot safely open the newer database. Install the latest version, then open the app again.</string>
     <string name="newer_db_versions">This build supports database version %1$d.</string>
     <string name="newer_db_exit">Exit without changing data</string>
+    <string name="secure_storage_temporarily_unavailable">Secure storage is temporarily unavailable. Existing credentials are preserved; new credentials will only last until this app closes. Restart the app to retry.</string>
 </resources>

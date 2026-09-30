@@ -58,3 +58,48 @@ final class CommandRiskTests: XCTestCase {
         XCTAssertTrue(CommandRisk.low < CommandRisk.medium && CommandRisk.medium < CommandRisk.high)
     }
 }
+
+
+final class SmartShellApprovalTests: XCTestCase {
+    func testOnlyNarrowInspectionCommandsAutoApprove() {
+        for command in ["ls -la", "cat README.md", "head -20 README.md", "pwd", "whoami", "uname -a", "git rev-parse HEAD", "git rev-parse --show-toplevel", "git rev-parse --is-inside-work-tree"] {
+            let prepared = SmartShellApproval.preparedCommand(command)
+            XCTAssertNotNil(prepared, command)
+            XCTAssertTrue(prepared.map(SmartShellApproval.isReadOnly) ?? false, command)
+        }
+    }
+
+    func testGitAutoApprovalRequiresTheSafeExecutedForm() {
+        XCTAssertFalse(SmartShellApproval.isReadOnly("git rev-parse HEAD"))
+        let prepared = SmartShellApproval.preparedCommand("git rev-parse HEAD")!
+        XCTAssertTrue(prepared.contains("GIT_OPTIONAL_LOCKS=0"))
+        XCTAssertTrue(prepared.contains("-c core.fsmonitor=false"))
+        XCTAssertTrue(SmartShellApproval.isReadOnly(prepared))
+        XCTAssertNil(SmartShellApproval.preparedCommand("git -c core.fsmonitor=evil status"))
+    }
+
+    func testGitWorktreeCommandsRequireApprovalEvenWithDefensivePrefix() {
+        let prefix = "GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false "
+        for args in ["status", "status --short", "status --porcelain=v2", "ls-files", "ls-files --cached",
+                     "ls-files --modified", "ls-files --others --exclude-standard", "diff --no-ext-diff", "show HEAD"] {
+            XCTAssertNil(SmartShellApproval.preparedCommand("git " + args), args)
+            XCTAssertFalse(SmartShellApproval.isReadOnly(prefix + args), args)
+            XCTAssertNil(SmartShellApproval.preparedCommand(prefix + args), args)
+        }
+    }
+
+    func testExecutableFormsAndWritesAlwaysAsk() {
+        for command in [
+            "awk 'BEGIN { system (\"printf audit\") }'", "awk 'BEGIN { system\t(\"printf audit\") }'",
+            "xxd -r input.hex output.bin", "sed 'w out' in", "sed -n '1,5p' f", "yq .a f.yaml",
+            "/tmp/ls", "./git status", "FOO=1 ls", "LD_PRELOAD=x ls", "time ls", "nice ls", "LS -la",
+            "git config --edit", "git -c alias.x=anything x", "git diff --ext-diff", "git log --output=log",
+            "sort --compress-program=sh f", "rg --pre=sh pattern", "date 01010000", "hostname attacker",
+            "ls; whoami", "ls && pwd", "cat a | head", "ls\nwhoami", "echo $(id)", "ls > out", "ls 2>&1",
+            "cat $FILE", "ls `id`", "ls /tmp/$(id)", "ls \\x", "", "unknown"
+        ] {
+            XCTAssertFalse(SmartShellApproval.isReadOnly(command), command)
+            XCTAssertNil(SmartShellApproval.preparedCommand(command), command)
+        }
+    }
+}

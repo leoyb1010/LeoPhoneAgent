@@ -4,7 +4,6 @@
 
 import http from "node:http";
 import https from "node:https";
-import { Readable } from "node:stream";
 import { ProxyAgent } from "proxy-agent";
 import {
   createHttpClientError,
@@ -27,6 +26,7 @@ import {
   type DnsLookup,
 } from "./public-egress-policy.js";
 import { readResponseBody } from "./response-body.js";
+import { rawHttpResponse } from "./raw-response.js";
 
 const TRACE_HEADER = "x-zcode-trace-id";
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -199,24 +199,13 @@ function fetchHttpResponse(
         lookup: proxyUrl ? undefined : lookup,
       },
       (message) => {
-        const responseHeaders = new Headers();
-        for (const [name, value] of Object.entries(message.headers)) {
-          if (Array.isArray(value)) {
-            for (const item of value) {
-              responseHeaders.append(name, item);
-            }
-          } else if (value !== undefined) {
-            responseHeaders.append(name, String(value));
-          }
+        try {
+          resolve(rawHttpResponse(message, request.method ?? "GET", signal));
+        } catch (error) {
+          // 回调里的 Response/header 校验不在 Promise executor 的同步 try 内。
+          message.destroy();
+          reject(error);
         }
-
-        resolve(
-          new Response(Readable.toWeb(message) as ReadableStream<Uint8Array>, {
-            headers: responseHeaders,
-            status: message.statusCode ?? 502,
-            statusText: message.statusMessage,
-          }),
-        );
       },
     );
 

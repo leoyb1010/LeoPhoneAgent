@@ -22,12 +22,15 @@ export class ScheduleRunner {
     }
     ScheduleRunner.busy = true;
     try {
-      await scheduleStore.load(context);
+      await scheduleStore.reload(context);
       const rows = scheduleStore.dueNow();
+      let started = 0;
       for (let i = 0; i < rows.length; i++) {
+        if (!ScheduleStore.claimSlot(context, rows[i])) continue;
+        started++;
         await ScheduleRunner.runOne(context, rows[i], notify);
       }
-      return rows.length;
+      return started;
     } finally {
       ScheduleRunner.busy = false;
     }

@@ -2981,7 +2981,7 @@ class ChatViewModel(
             // instantiated against the draft key (e.g. user opened the browser
             // sheet before sending a message). Without this, cookies and
             // downloads keep flowing into the draft directory.
-            _browserTabPoolRef?.setSession(session.id)
+            _browserTabPoolRef?.setSession(session.id, migrateExisting = true)
         }
         // Persist the current model binding so it survives re-entry
         val groupId = _selectedGroupId.value

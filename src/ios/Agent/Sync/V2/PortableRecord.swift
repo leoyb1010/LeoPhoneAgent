@@ -158,9 +158,21 @@ struct SyncOutboundBatch {
 struct SyncInboundBatch {
     let records: [PortableRecord]
     let deletes: [SyncRecordID]
-    /// Origin device id when known (for SyncDevice records, audit trails).
-    /// `nil` for records the transport can't attribute to a specific source.
     let sourceDeviceId: String?
+    /// Stable durable inbox envelope identity; nil for legacy/stateless batches.
+    let inboundDeliveryID: String?
+    /// Peer tombstone clock when supplied by the transport. CloudKit record
+    /// deletion events do not supply one; never substitute receipt wall time.
+    let deletionUpdatedAt: [SyncRecordID: Date]
+
+    init(records: [PortableRecord], deletes: [SyncRecordID], sourceDeviceId: String?,
+         inboundDeliveryID: String? = nil, deletionUpdatedAt: [SyncRecordID: Date] = [:]) {
+        self.records = records
+        self.deletes = deletes
+        self.sourceDeviceId = sourceDeviceId
+        self.inboundDeliveryID = inboundDeliveryID
+        self.deletionUpdatedAt = deletionUpdatedAt
+    }
 }
 
 /// Outcome of sending a single record. `transientFailure` means the caller

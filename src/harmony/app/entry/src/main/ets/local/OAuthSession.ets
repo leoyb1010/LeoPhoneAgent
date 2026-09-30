@@ -32,11 +32,14 @@ export class OAuthSession {
     OAuthSession.lastTokenUrl = tokenUrl;
   }
 
-  static async bind(instanceId: string): Promise<void> {
+  static async bind(instanceId: string, expectedAccess: string): Promise<void> {
     if (OAuthSession.lastRefresh.length === 0 && OAuthSession.lastAccount.length === 0) {
       return;
     }
-    await SecretStore.write(`${ALIAS}.${instanceId}`,
+    const ref = providerStore.credentialReference(instanceId);
+    if (!ref || providerStore.keyFor(instanceId) !== expectedAccess.trim() ||
+      providerStore.slotType(instanceId) !== OAuthSession.lastType) throw new Error('AI 服务商已变化，请重新登录');
+    await SecretStore.write(`${ALIAS}.${ref}`,
       `{"refresh":${JSON.stringify(OAuthSession.lastRefresh)},"account":${JSON.stringify(OAuthSession.lastAccount)},"expire":${OAuthSession.lastExpire},"type":${JSON.stringify(OAuthSession.lastType)},"tokenUrl":${JSON.stringify(OAuthSession.lastTokenUrl)}}`);
     OAuthSession.lastRefresh = '';
     OAuthSession.lastAccount = '';
@@ -48,7 +51,8 @@ export class OAuthSession {
   static async ensure(instanceId: string, access: string, type: string = 'openAI'): Promise<OAuthToken> {
     const out = new OAuthToken();
     out.access = access;
-    const raw = await SecretStore.read(`${ALIAS}.${instanceId}`);
+    const reference = providerStore.credentialReference(instanceId);
+    const raw = reference ? await SecretStore.read(`${ALIAS}.${reference}`) : '';
     let refresh = '';
     let expire = 0;
     let storedType = type;
@@ -65,6 +69,7 @@ export class OAuthSession {
         refresh = '';
       }
     }
+    if (storedType !== type) throw new Error('登录凭据与 AI 服务商类型不匹配');
     if (refresh.length === 0 || (expire > 0 && expire - 5 * 60 * 1000 > Date.now())) {
       return out;
     }
@@ -94,12 +99,11 @@ export class OAuthSession {
       if (account.length > 0) {
         out.account = account;
       }
-      await SecretStore.writeProviderKeyFor(instanceId, token);
-      providerStore.rememberKey(instanceId, token);
-      await SecretStore.write(`${ALIAS}.${instanceId}`,
-        `{"refresh":${JSON.stringify(nextRefresh)},"account":${JSON.stringify(out.account)},"expire":${nextExpire},"type":${JSON.stringify(storedType)},"tokenUrl":${JSON.stringify(tokenUrl)}}`);
+      const oauth = `{"refresh":${JSON.stringify(nextRefresh)},"account":${JSON.stringify(out.account)},"expire":${nextExpire},"type":${JSON.stringify(storedType)},"tokenUrl":${JSON.stringify(tokenUrl)}}`;
+      await providerStore.commitRefreshedKey(instanceId, reference, token, oauth);
     } catch (_err) {
-      // keep the stored access token
+      // 更新失败/实例已换代：只能继续用原调用的令牌，不能把另一代缓存写回来。
+      out.access = access;
     }
     return out;
   }

@@ -15,9 +15,9 @@ struct McpPage {
 
   aboutToAppear(): void {
     const ctx = getContext(this) as common.UIAbilityContext;
-    mcpStore.load(ctx).then(() => {
+    mcpStore.reload(ctx).then(() => {
       this.rows = mcpStore.rows.slice();
-    });
+    }).catch((err: Error) => { this.rows = mcpStore.rows.slice(); this.message = `${err}`; });
   }
 
   build() {
@@ -133,6 +133,7 @@ struct McpPage {
       this.secretDraft = '';
       this.message = '已保存';
     } catch (err) {
+      this.rows = mcpStore.rows.slice();
       this.message = `${err}`;
     }
   }
@@ -143,6 +144,7 @@ struct McpPage {
       await mcpStore.remove(ctx, label);
       this.rows = mcpStore.rows.slice();
     } catch (err) {
+      this.rows = mcpStore.rows.slice();
       this.message = `${err}`;
     }
   }

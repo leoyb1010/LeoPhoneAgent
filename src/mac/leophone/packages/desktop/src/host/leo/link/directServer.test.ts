@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
-import type { LinkBridge, LinkRequest } from "./bridge.js";
+import { LinkBridge, type LinkBridgeDeps, type LinkRequest } from "./bridge.js";
 import { DirectGrants } from "./directGrants.js";
 import { startDirectServer } from "./directServer.js";
+import { RelayLink } from "./relayLink.js";
 
 test("direct listener validates local grant and target, ignores spoofed caller, denies management paths, requires mutation id", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "leo-direct-"));
@@ -97,4 +98,103 @@ test("explicit sync and Treasury scopes route only to their injected authenticat
     assert.equal((await fetch(`${base}/treasury/v1/tools`, { headers })).status, 204);
     assert.deepEqual(seen, ["tablet", "tablet"]);
   } finally { await server.stop(); await rm(dir, { recursive: true, force: true }); }
+});
+
+
+for (const ending of ["revoke", "expire"] as const) {
+  test(`active direct stream rechecks ${ending} before its next write`, async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "leo-direct-stream-"));
+    let now = Date.now();
+    const grants = new DirectGrants(path.join(dir, "grants.json"), "target", () => now);
+    await grants.restore();
+    const grant = await grants.issue({ kind: "iphone", deviceId: "phone" });
+    let send: (data: string) => void = () => assert.fail("stream not open");
+    let streamSignal: AbortSignal | undefined;
+    const bridge = {
+      async stream(_req: LinkRequest, write: (data: string) => void, signal: AbortSignal) {
+        send = write;
+        streamSignal = signal;
+        write("first");
+        await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+      },
+    } as unknown as LinkBridge;
+    const device = { schemaVersion: 1, deviceId: "target", name: "Mac", platform: "macos", endpoints: [], capabilities: [] } satisfies LeoDeviceDescriptor;
+    const server = await startDirectServer({ bridge, grants, device, port: 0 });
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/harness/sessions/s/events`, {
+        headers: { Authorization: `Bearer ${grant.token}`, "X-Leo-Device-ID": "target" },
+      });
+      const reader = response.body!.getReader();
+      assert.match(new TextDecoder().decode((await reader.read()).value), /first/);
+      if (ending === "revoke") await grants.revoke("phone");
+      else now = (grant.expiresAt + 1) * 1000;
+      send("must-not-leak");
+      assert.equal(streamSignal?.aborted, true);
+      assert.equal((await reader.read()).done, true);
+    } finally {
+      await server.stop();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("failed relay batch revocation denies every direct token and stream, then persists on retry", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-revoke-batch-"));
+  const file = path.join(dir, "grants.json");
+  const grants = new DirectGrants(file, "target");
+  await grants.restore();
+  const ids = ["a", "b", "other"];
+  const issued = await Promise.all(ids.map((deviceId) => grants.issue({ kind: "iphone", deviceId })));
+  const streams = new Map<string, { send: (data: string) => void; signal: AbortSignal }>();
+  const bridge = new LinkBridge({ directGrants: grants, journalDir: dir,
+    leoagent: { url: "http://127.0.0.1/unused", key: () => null } } as LinkBridgeDeps);
+  bridge.handle = async () => ({ status: 200, body: {} });
+  bridge.stream = async (req, send, signal) => {
+    streams.set(req.caller.deviceId!, { send, signal });
+    send("first");
+    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+  };
+  const device = { schemaVersion: 1, deviceId: "target", name: "Mac", platform: "macos", endpoints: [], capabilities: [] } satisfies LeoDeviceDescriptor;
+  const server = await startDirectServer({ bridge, grants, device, port: 0 });
+  const link = new RelayLink({ wsUrl: "ws://unused.invalid", name: "Mac", registerKey: "fixture" },
+    bridge, { get: async () => null, set: async () => {} }, { info() {}, warn() {} }, "test");
+  const relay = link as unknown as { applyRevocations(ids: string[]): void; revocations: Promise<void>; pendingRevocations: Set<string> };
+  const base = `http://127.0.0.1:${server.port}`;
+  const headers = issued.map(({ token }) => ({ Authorization: `Bearer ${token}`, "X-Leo-Device-ID": "target" }));
+  const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
+  try {
+    for (const header of headers) {
+      const response = await fetch(`${base}/harness/sessions/s/events`, { headers: header });
+      const reader = response.body!.getReader();
+      readers.push(reader);
+      assert.match(new TextDecoder().decode((await reader.read()).value), /first/);
+    }
+    await mkdir(`${file}.tmp`);
+    relay.applyRevocations(["a", "b"]);
+    await assert.rejects(relay.revocations);
+    assert.deepEqual([...relay.pendingRevocations], ["a", "b"]);
+    for (const index of [0, 1]) {
+      assert.equal(grants.authenticate(issued[index]!.token, "target"), null);
+      streams.get(ids[index]!)!.send("must-not-leak");
+      assert.equal(streams.get(ids[index]!)!.signal.aborted, true);
+      assert.equal((await readers[index]!.read()).done, true);
+      assert.equal((await fetch(`${base}/health`, { headers: headers[index] })).status, 401);
+    }
+    streams.get("other")!.send("still-authorized");
+    assert.match(new TextDecoder().decode((await readers[2]!.read()).value), /still-authorized/);
+    assert.equal((await fetch(`${base}/health`, { headers: headers[2] })).status, 200);
+    await rm(`${file}.tmp`, { recursive: true });
+    relay.applyRevocations([]);
+    await relay.revocations;
+    assert.equal(relay.pendingRevocations.size, 0);
+    const restored = new DirectGrants(file, "target");
+    await restored.restore();
+    assert.equal(restored.authenticate(issued[0]!.token, "target"), null);
+    assert.equal(restored.authenticate(issued[1]!.token, "target"), null);
+    assert.equal(restored.authenticate(issued[2]!.token, "target")?.deviceId, "other");
+  } finally {
+    await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
+    await server.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
 });

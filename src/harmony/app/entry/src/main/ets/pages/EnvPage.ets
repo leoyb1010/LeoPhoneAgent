@@ -14,9 +14,9 @@ struct EnvPage {
 
   aboutToAppear(): void {
     const ctx = getContext(this) as common.UIAbilityContext;
-    envStore.load(ctx).then(() => {
+    envStore.reload(ctx).then(() => {
       this.rows = envStore.rows.slice();
-    });
+    }).catch((err: Error) => { this.rows = envStore.rows.slice(); this.message = `${err}`; });
   }
 
   build() {
@@ -110,6 +110,7 @@ struct EnvPage {
       this.valueDraft = '';
       this.message = '已保存';
     } catch (err) {
+      this.rows = envStore.rows.slice();
       this.message = `${err}`;
     }
   }
@@ -120,6 +121,7 @@ struct EnvPage {
       await envStore.remove(ctx, name);
       this.rows = envStore.rows.slice();
     } catch (err) {
+      this.rows = envStore.rows.slice();
       this.message = `${err}`;
     }
   }

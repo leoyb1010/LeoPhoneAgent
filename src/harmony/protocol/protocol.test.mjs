@@ -308,7 +308,7 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.deepEqual(extractLinks("看 https://example.com/a 和 http://evil.example/x"), ["https://example.com/a"]);
   assert.deepEqual(extractLinks("局域网 http://192.168.1.8:3000/docs"), ["http://192.168.1.8:3000/docs"]);
   assert.equal(titleFromPrompt("只回复 pong"), "只回复 pong");
-  const noon = Date.parse("2026-08-19T12:00:00+08:00");
+  const noon = new Date(2026, 7, 19, 12, 0, 0).getTime();
   assert.equal(dateBucket(noon, noon), "today");
   assert.equal(dateBucket(noon - 86400000, noon), "yesterday");
   assert.equal(dateBucket(noon - 3 * 86400000, noon), "week");
@@ -401,9 +401,9 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.deepEqual(replayAfter(log, 2), ['{"seq":3}']);
   assert.deepEqual(replayAfter(log, 3), []);
 
-  const noon = Date.parse("2026-08-20T09:00:20+08:00");
-  const justBefore = Date.parse("2026-08-20T08:59:40+08:00");
-  const miss = Date.parse("2026-08-20T09:01:20+08:00");
+  const noon = new Date(2026, 7, 20, 9, 0, 20).getTime();
+  const justBefore = new Date(2026, 7, 20, 8, 59, 40).getTime();
+  const miss = new Date(2026, 7, 20, 9, 1, 20).getTime();
   const rows = [{ rowId: "a", hour: 9, minute: 0, on: true, lastDay: "" }];
   assert.equal(dueTasks(rows, noon, justBefore).length, 1);
   assert.equal(dueTasks(rows, miss, noon).length, 0);
@@ -958,7 +958,7 @@ function wireShape(source, startsWith) {
   // 启动「自动」生效;删服务商清模型组;流式不硬拽到底。
   assert.ok(/themeStore\.launch === 'auto'/.test(etsSrc("panes/LocalAgentPane.ets")), "「自动」要生效");
   const remove = etsSrc("store/ProviderStore.ets");
-  assert.ok(/startsWith\(`\$\{tag\}\/`\)/.test(remove.slice(remove.indexOf("async remove("), remove.indexOf("async setActive("))),
+  assert.ok(/startsWith\(`\$\{tag\}\/`\)/.test(remove.slice(remove.indexOf("  remove("), remove.indexOf("async setActive("))),
     "删服务商时清掉它在模型组里的条目");
   assert.ok(/!force && !this\.nearBottom/.test(etsSrc("panes/LocalChatPane.ets")), "不在底部时不跟随");
 }
@@ -994,7 +994,7 @@ function wireShape(source, startsWith) {
   assert.ok(protoSrc.includes("(更早的对话太长,已省略)"));
   assert.match(protoSrc, /while \(out\.length > 1 && out\[0\]\.role !== 'user'\)/);
   const chatSrc = readFileSync(new URL("../app/entry/src/main/ets/local/ChatRun.ets", import.meta.url), "utf8");
-  assert.match(chatSrc, /return trimHistory\(out, HISTORY_CHAR_BUDGET\);/);
+  assert.match(readFileSync(new URL("../app/entry/src/main/ets/local/ConversationHistory.ets", import.meta.url), "utf8"), /return trimHistory\(out, HISTORY_CHAR_BUDGET\);/);
 }
 
 {
@@ -1176,7 +1176,7 @@ function wireShape(source, startsWith) {
 {
   // --- 本机独立能力第二批:后台接着跑、继续、压缩、标题、技能、MCP、搜索、看图、附件、App 关着的定时任务 ---
   const etsSrc = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
-  const run = etsSrc("local/ChatRun.ets");
+  const run = etsSrc("local/ChatRun.ets") + etsSrc("local/ConversationHistory.ets");
   const pane = etsSrc("panes/LocalChatPane.ets");
   const entry = etsSrc("entryability/EntryAbility.ets");
   const sessions = etsSrc("store/SessionStore.ets");
@@ -1229,7 +1229,7 @@ function wireShape(source, startsWith) {
   // MCP:握手、Accept 带 event-stream、会话号、过期重握手;结果原样给模型
   assert.ok(/'initialize', mcpInitializeParams\(/.test(mcp) && /mcpNotification\('notifications\/initialized'\)/.test(mcp));
   assert.ok(/'Accept': 'application\/json, text\/event-stream'/.test(mcp) && /header\['Mcp-Session-Id'\] = session/.test(mcp));
-  assert.ok(/resp\.code === 404 && \(McpStore\.sessions\.get\(row\.label\) \?\? ''\)\.length > 0/.test(mcp));
+  assert.ok(/resp\.code === 404 && \(McpStore\.sessions\.get\(McpStore\.sessionKey\(row\)\) \?\? ''\)\.length > 0/.test(mcp));
   assert.ok(/name === 'mcp_tools'/.test(tools) && /envStore\.expand\(row\.url\)/.test(mcp));
   assert.equal(toolArg('{"arguments":{"q":"x"}}', "arguments"), '{"q":"x"}', "对象参数不再变成 [object Object]");
   assert.ok(/typeof value === 'object' \? JSON\.stringify\(value\)/.test(proto));
@@ -1436,7 +1436,7 @@ console.log("PROTOCOL_MACHINES_OK");
   assert.ok(catalog.includes("kind('openCodeGo', 'OpenCode Go'") && catalog.includes("'https://opencode.ai/zen/go/v1'"));
   const store = readFileSync(new URL("../app/entry/src/main/ets/store/ProviderStore.ets", import.meta.url), "utf8");
   assert.ok(/const usable = chatModelsFor\(row\.type, ids\)/.test(store), "拉回的目录要按协议筛");
-  assert.ok(/row\.type !== 'anthropic' \|\| row\.credential !== 'oauth'/.test(store), "老的 Claude 订阅实例要迁走");
+  assert.ok(/row\.type === 'anthropic' && row\.credential === 'oauth'/.test(store), "老的 Claude 订阅实例要迁走");
   const oauthEts = readFileSync(new URL("../app/entry/src/main/ets/local/BrowserOAuth.ets", import.meta.url), "utf8");
   assert.ok(!oauthEts.includes("claude.ai/oauth") && !oauthEts.includes("9d1c250a-e61b-44d9-88ed-5944d1962f5e"), "Claude 订阅登录已下线");
   const client = readFileSync(new URL("../app/entry/src/main/ets/local/OpenAICompatClient.ets", import.meta.url), "utf8");
@@ -1463,14 +1463,14 @@ console.log("PROTOCOL_MACHINES_OK");
   const src = (rel) => readFileSync(new URL(`../app/entry/src/main/ets/${rel}`, import.meta.url), "utf8");
   const client = src("local/OpenAICompatClient.ets");
   assert.ok(/const root = credential === 'oauth' \? kindByKey\(type\)\.root : baseUrl/.test(client), "订阅令牌只发官方地址");
-  assert.ok(/if \(row\.credential === 'oauth'\) \{\s*row\.baseUrl = '';/.test(src("store/ProviderStore.ets")));
+  assert.ok(/if \(row\.credential === 'oauth'\) (?:\{\s*)?row\.baseUrl = '';/.test(src("store/ProviderStore.ets")));
   const mcp = src("store/McpStore.ets");
-  assert.ok(/else if \(moved\) \{[\s\S]*?SecretStore\.remove\(McpStore\.alias\(name\)\)/.test(mcp), "换地址清旧令牌");
-  assert.ok(/this\.rows = next;\s*await SecretStore\.remove\(McpStore\.alias\(label\)\)/.test(mcp), "删服务器清令牌");
+  assert.ok(/BoundSecret\.stage\(McpStore\.binding\(row\), row\.secret\)/.test(mcp), "endpoint 与新凭据绑定独立代");
+  assert.ok(/BoundSecret\.retire\(old\.secretRef\)/.test(mcp), "持久提交后清理旧凭据代");
   const env = src("store/EnvStore.ets");
   assert.ok(/bare\.name = row\.name;/.test(env) && !/bare\.value/.test(env), "env.json 不再存值");
-  assert.ok(/SecretStore\.write\(EnvStore\.alias\(row\.name\), row\.value\)/.test(env), "老明文值搬进钥匙串");
-  const sessions = src("store/SessionStore.ets");
+  assert.ok(/BoundSecret\.stage\(EnvStore\.binding\(row\.name\), row\.value\)/.test(env), "老明文值搬进绑定名字的凭据代");
+  const sessions = src("store/SessionStore.ets") + src("store/AtomicFile.ets");
   assert.ok(/fileIo\.renameSync\(tmp, path\)/.test(sessions), "档案原子写");
   assert.ok(/this\.summaries = this\.reconcile\(context, listed\)/.test(sessions), "目录按档案重建");
   assert.ok(/return \/\^s_\\d\+_\\d\+\$\/\.test\(id\)/.test(sessions), "对话编号校验");

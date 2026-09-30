@@ -46,18 +46,19 @@ enum SessionProvenanceStore {
         merge(db, id: id, origin: nil, writer: deviceID, acceptsWriter: true)
     }
 
-    static func merge(_ db: OpaquePointer?, id: String, origin: String?, writer: String?, acceptsWriter: Bool) {
+    @discardableResult
+    static func merge(_ db: OpaquePointer?, id: String, origin: String?, writer: String?, acceptsWriter: Bool) -> Bool {
         var stmt: OpaquePointer?
         // Known creator survives later edits and unknown legacy peers. An accepted
         // newer legacy edit clears writer because its author cannot be established.
         let sql = "UPDATE sessions SET origin_device_id = COALESCE(NULLIF(origin_device_id, ''), ?), last_writer_device_id = CASE WHEN ? THEN ? ELSE last_writer_device_id END WHERE id = ?"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt) }
         bind(stmt, 1, normalized(origin))
         sqlite3_bind_int(stmt, 2, acceptsWriter ? 1 : 0)
         bind(stmt, 3, normalized(writer))
         bind(stmt, 4, id)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     private static func normalized(_ value: String?) -> String? {

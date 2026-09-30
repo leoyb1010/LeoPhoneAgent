@@ -1,3 +1,5 @@
+import { BoundSecret } from './BoundSecret';
+import { AtomicTextFile } from './AtomicFile';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
@@ -20,6 +22,7 @@ export class McpServer {
   label: string = '';
   url: string = '';
   secret: string = '';
+  secretRef: string = '';
   tools: string = '';
 }
 
@@ -34,69 +37,92 @@ class McpPost {
 }
 
 export class McpStore {
+  private readonly configFile: AtomicTextFile = new AtomicTextFile();
   rows: McpServer[] = [];
   jsonLoadFailed: boolean = false;
   private loaded: boolean = false;
+  private pendingLoad: Promise<void> | null = null;
   /** 握过手的服务器 → Mcp-Session-Id(服务器不发会话号时是空字符串)。 */
   private static sessions: Map<string, string> = new Map();
   private static nextId: number = 1;
 
+  private writes: Promise<void> = Promise.resolve();
+
+  private serial(action: () => Promise<void>): Promise<void> {
+    const next = this.writes.then(action);
+    this.writes = next.catch(() => {});
+    return next;
+  }
+
+  reload(context: common.Context): Promise<void> {
+    return this.serial(async () => {
+      if (this.pendingLoad) await this.pendingLoad.catch(() => {});
+      this.loaded = false; this.rows = []; this.jsonLoadFailed = false;
+      await this.readDisk(context, false);
+    });
+  }
+
   async load(context: common.Context): Promise<void> {
-    if (this.loaded) {
-      return;
-    }
-    const path = context.filesDir + '/mcp.json';
-    let migrated = false;
-    if (fileIo.accessSync(path)) {
-      try {
-        const obj = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
-        this.rows = McpStore.parse(obj['rows']);
-        for (let i = 0; i < this.rows.length; i++) {
-          const row = this.rows[i];
-          if (row.secret.length > 0) {
-            await SecretStore.write(McpStore.alias(row.label), row.secret);
-            migrated = true;
-          } else {
-            row.secret = await SecretStore.read(McpStore.alias(row.label));
-          }
-        }
-      } catch (_err) {
-        this.jsonLoadFailed = true;
-        this.rows = [];
+    if (this.pendingLoad) { await this.pendingLoad; return; }
+    if (this.loaded) return;
+    if (!this.pendingLoad) this.pendingLoad = this.readDisk(context, true).finally(() => { this.pendingLoad = null; });
+    await this.pendingLoad;
+  }
+
+  private async readDisk(context: common.Context, migrate: boolean): Promise<void> {
+    let needsMigration = false;
+    try {
+      const raw = this.configFile.read(context.filesDir + '/mcp.json');
+      this.rows = raw ? McpStore.parse((JSON.parse(raw) as Record<string, Object>)['rows']) : [];
+      for (let i = 0; i < this.rows.length; i++) {
+        const row = this.rows[i];
+        if (!row.secretRef) needsMigration = true;
+        row.secret = row.secretRef ? await BoundSecret.read(row.secretRef, McpStore.binding(row)) :
+          (row.secret || await SecretStore.read(McpStore.alias(row.label)));
       }
+      this.jsonLoadFailed = false;
+      this.loaded = true;
+    } catch (error) {
+      this.rows = []; this.jsonLoadFailed = true;
+      this.loaded = false;
+      throw error;
     }
-    this.loaded = true;
-    if (migrated && !this.jsonLoadFailed) {
-      await this.save(context);
+    if (migrate && needsMigration) await this.persist(context, this.rows);
+  }
+
+  save(context: common.Context): Promise<void> {
+    return this.serial(async () => { await this.load(context); await this.persist(context, this.rows); });
+  }
+
+  private async persist(context: common.Context, rows: McpServer[]): Promise<void> {
+    if (this.jsonLoadFailed) throw new Error('MCP 档案读坏了，先别保存');
+    const previous = this.rows;
+    const next = McpStore.parse(JSON.parse(JSON.stringify(rows)) as Object[]);
+    try {
+      const body = new McpFile();
+      for (let i = 0; i < next.length; i++) {
+        const row = next[i];
+        if (!row.secretRef) row.secretRef = await BoundSecret.stage(McpStore.binding(row), row.secret);
+        const bare = new McpServer();
+        bare.label = row.label; bare.url = row.url; bare.tools = row.tools; bare.secretRef = row.secretRef;
+        body.rows.push(bare);
+      }
+      this.configFile.write(context.filesDir + '/mcp.json', JSON.stringify(body));
+      this.rows = next;
+    } catch (error) {
+      // 恢复不能等待正在执行本次迁移的 pendingLoad，否则会自等待。
+      this.rows = []; this.jsonLoadFailed = false;
+      await this.readDisk(context, false);
+      throw error;
+    }
+    for (let i = 0; i < previous.length; i++) {
+      const old = previous[i];
+      if (old.secretRef && !next.some((row: McpServer) => row.secretRef === old.secretRef)) await BoundSecret.retire(old.secretRef);
+      if (!old.secretRef) await SecretStore.remove(McpStore.alias(old.label));
     }
   }
 
-  async save(context: common.Context): Promise<void> {
-    if (this.jsonLoadFailed) {
-      throw new Error('MCP 档案读坏了，先别保存');
-    }
-    const held: string[] = [];
-    for (let i = 0; i < this.rows.length; i++) {
-      held.push(this.rows[i].secret);
-      this.rows[i].secret = '';
-    }
-    try {
-      const body = new McpFile();
-      body.rows = this.rows;
-      const path = context.filesDir + '/mcp.json';
-      const file = fileIo.openSync(path,
-        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-      try {
-        fileIo.writeSync(file.fd, JSON.stringify(body));
-      } finally {
-        fileIo.closeSync(file);
-      }
-    } finally {
-      for (let i = 0; i < this.rows.length; i++) {
-        this.rows[i].secret = held[i];
-      }
-    }
-  }
+  private static binding(row: McpServer): string { return JSON.stringify(['mcp', row.label, row.url]); }
 
   find(label: string): McpServer | null {
     const needle = label.trim().toLowerCase();
@@ -108,47 +134,35 @@ export class McpStore {
     return this.rows.length === 1 ? this.rows[0] : null;
   }
 
-  async upsert(context: common.Context, label: string, url: string, secret: string): Promise<void> {
-    const name = label.trim();
-    const root = url.trim();
-    if (!name) {
-      throw new Error('名称和地址不能空');
-    }
-    const safeRoot = requireProviderRoot(root);
-    let row: McpServer | null = null;
-    for (let i = 0; i < this.rows.length; i++) {
-      if (this.rows[i].label === name) {
-        row = this.rows[i];
+  upsert(context: common.Context, label: string, url: string, secret: string): Promise<void> {
+    return this.serial(async () => {
+      await this.load(context);
+      const row = new McpServer();
+      row.label = label.trim();
+      if (!row.label) throw new Error('名称和地址不能空');
+      row.url = requireProviderRoot(url.trim());
+      row.secret = secret.trim();
+      // 先提交 endpoint+secretRef 同一代，失败时不会向任何服务器发新令牌。
+      const proposed = this.rows.slice();
+      const index = proposed.findIndex((item: McpServer) => item.label === row.label);
+      if (index >= 0) proposed[index] = row; else proposed.push(row);
+      await this.persist(context, proposed);
+      const committed = this.rows.find((item: McpServer) => item.label === row.label);
+      if (committed) {
+        const tools = await McpStore.listTools(committed);
+        const next = McpStore.parse(JSON.parse(JSON.stringify(this.rows)) as Object[]);
+        const update = next.find((item: McpServer) => item.label === row.label);
+        if (update) update.tools = tools;
+        await this.persist(context, next);
       }
-    }
-    if (!row) {
-      row = new McpServer();
-      row.label = name;
-      this.rows = this.rows.concat([row]);
-    }
-    const moved = row.url.length > 0 && row.url !== safeRoot;
-    row.url = safeRoot;
-    row.secret = secret.trim();
-    if (row.secret.length > 0) {
-      await SecretStore.write(McpStore.alias(name), row.secret);
-    } else if (moved) {
-      // 换了地址又没填新令牌:旧令牌不能跟去新地址。
-      await SecretStore.remove(McpStore.alias(name));
-    }
-    row.tools = await McpStore.listTools(row);
-    await this.save(context);
+    });
   }
 
-  async remove(context: common.Context, label: string): Promise<void> {
-    const next: McpServer[] = [];
-    for (let i = 0; i < this.rows.length; i++) {
-      if (this.rows[i].label !== label) {
-        next.push(this.rows[i]);
-      }
-    }
-    this.rows = next;
-    await SecretStore.remove(McpStore.alias(label));
-    await this.save(context);
+  remove(context: common.Context, label: string): Promise<void> {
+    return this.serial(async () => {
+      await this.load(context);
+      await this.persist(context, this.rows.filter((row: McpServer) => row.label !== label));
+    });
   }
 
   promptBlock(): string {
@@ -200,7 +214,7 @@ export class McpStore {
     McpStore.nextId += 1;
     const id = McpStore.nextId;
     let resp = await McpStore.post(row, mcpRequest(id, method, params), timeout);
-    if (resp.code === 404 && (McpStore.sessions.get(row.label) ?? '').length > 0) {
+    if (resp.code === 404 && (McpStore.sessions.get(McpStore.sessionKey(row)) ?? '').length > 0) {
       await McpStore.handshake(row, true);
       resp = await McpStore.post(row, mcpRequest(id, method, params), timeout);
     }
@@ -213,10 +227,10 @@ export class McpStore {
   }
 
   private static async handshake(row: McpServer, force: boolean): Promise<void> {
-    if (!force && McpStore.sessions.has(row.label)) {
+    if (!force && McpStore.sessions.has(McpStore.sessionKey(row))) {
       return;
     }
-    McpStore.sessions.delete(row.label);
+    McpStore.sessions.delete(McpStore.sessionKey(row));
     const init = await McpStore.post(row, mcpRequest(1, 'initialize', mcpInitializeParams(ReleaseCatalog.currentVersion)),
       60000);
     McpStore.check(init);
@@ -224,7 +238,7 @@ export class McpStore {
     if (err.length > 0) {
       throw new Error(`MCP 握手失败:${err}`);
     }
-    McpStore.sessions.set(row.label, init.session);
+    McpStore.sessions.set(McpStore.sessionKey(row), init.session);
     try {
       await McpStore.post(row, mcpNotification('notifications/initialized'), 30000);
     } catch (_err) {
@@ -247,7 +261,7 @@ export class McpStore {
       'Accept': 'application/json, text/event-stream',
       'MCP-Protocol-Version': MCP_PROTOCOL_VERSION
     };
-    const session = McpStore.sessions.get(row.label) ?? '';
+    const session = McpStore.sessions.get(McpStore.sessionKey(row)) ?? '';
     if (session.length > 0) {
       header['Mcp-Session-Id'] = session;
     }
@@ -284,15 +298,14 @@ export class McpStore {
     }
   }
 
+  private static sessionKey(row: McpServer): string { return JSON.stringify([row.label, row.url, row.secretRef]); }
+
   private static alias(label: string): string {
     return `leo.harmony.mcp.${label}`;
   }
 
   private static async secretFor(row: McpServer): Promise<string> {
-    if (row.secret.length > 0) {
-      return row.secret;
-    }
-    return SecretStore.read(McpStore.alias(row.label));
+    return row.secretRef ? BoundSecret.read(row.secretRef, McpStore.binding(row)) : row.secret;
   }
 
   private static parse(raw: Object | undefined): McpServer[] {
@@ -306,6 +319,7 @@ export class McpStore {
       row.label = `${item['label'] ?? ''}`.trim();
       row.url = `${item['url'] ?? ''}`.trim();
       row.secret = `${item['secret'] ?? ''}`;
+      row.secretRef = `${item['secretRef'] ?? ''}`;
       row.tools = `${item['tools'] ?? ''}`;
       if (row.label.length > 0 && row.url.length > 0) {
         out.push(row);

@@ -1,3 +1,4 @@
+import { SensitiveToolGate } from './SensitiveToolGate';
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
 import { geoLocationManager } from '@kit.LocationKit';
 import { http } from '@kit.NetworkKit';
@@ -22,13 +23,16 @@ export class PhoneTools {
   static readonly NAMES: string[] = ['device_info', 'clipboard_write', 'set_alarm', 'set_reminder', 'notify',
     'flashlight', 'open_app_link', 'dial', 'location', 'weather'];
 
-  static async run(context: common.Context, name: string, args: string): Promise<string> {
+  static async run(context: common.Context, name: string, args: string, unattended: boolean = false): Promise<string> {
+    const capability = name === 'weather' && toolArg(args, 'city').trim().length === 0 ? 'location' : name;
+    const denied = unattended ? SensitiveToolGate.unattendedDenial(capability) : '';
+    if (denied.length > 0) return denied;
     try {
       if (name === 'device_info') {
         return FastLocalActions.deviceSummary();
       }
       if (name === 'clipboard_write') {
-        return await PhoneTools.copy(toolArg(args, 'text'));
+        return await PhoneTools.copy(toolArg(args, 'text'), unattended);
       }
       if (name === 'set_alarm') {
         return await PhoneTools.alarm(context, toolArg(args, 'hour'), toolArg(args, 'minute'),
@@ -54,12 +58,12 @@ export class PhoneTools {
         return await PhoneTools.dial(toolArg(args, 'number'));
       }
       if (name === 'location') {
-        const place = await PhoneTools.locate(context);
+        const place = await PhoneTools.locate(context, unattended);
         return place ? `纬度 ${place.latitude.toFixed(5)},经度 ${place.longitude.toFixed(5)}` +
           (place.name.length > 0 ? `,${place.name}` : '') : '拿不到位置:没有定位权限,或定位没开';
       }
       if (name === 'weather') {
-        return await PhoneTools.weather(context, toolArg(args, 'city'));
+        return await PhoneTools.weather(context, toolArg(args, 'city'), unattended);
       }
       return `没有这个工具：${name}`;
     } catch (err) {
@@ -67,11 +71,11 @@ export class PhoneTools {
     }
   }
 
-  private static async copy(text: string): Promise<string> {
+  private static async copy(text: string, unattended: boolean): Promise<string> {
     if (text.length === 0) {
       return '没有要复制的内容';
     }
-    return await FastLocalActions.copyText(text) ? '已复制到剪贴板' : '没复制上,再试一次';
+    return await FastLocalActions.copyText(text, unattended) ? '已复制到剪贴板' : '没复制上,再试一次';
   }
 
   private static async alarm(context: common.Context, hourRaw: string, minuteRaw: string,
@@ -123,7 +127,8 @@ export class PhoneTools {
     return `已打开拨号盘:${digits}`;
   }
 
-  private static async locate(context: common.Context): Promise<Place | null> {
+  private static async locate(context: common.Context, unattended: boolean): Promise<Place | null> {
+    if (unattended && SensitiveToolGate.unattendedDenial('location').length > 0) return null;
     const perms: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'ohos.permission.LOCATION'];
     try {
       const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, perms);
@@ -156,7 +161,7 @@ export class PhoneTools {
     }
   }
 
-  private static async weather(context: common.Context, city: string): Promise<string> {
+  private static async weather(context: common.Context, city: string, unattended: boolean): Promise<string> {
     let place: Place | null = null;
     if (city.trim().length > 0) {
       place = await PhoneTools.geocode(city.trim());
@@ -164,7 +169,7 @@ export class PhoneTools {
         return `找不到这个地方:${city}`;
       }
     } else {
-      place = await PhoneTools.locate(context);
+      place = await PhoneTools.locate(context, unattended);
       if (!place) {
         return '拿不到位置:没有定位权限,或者说一个城市名';
       }

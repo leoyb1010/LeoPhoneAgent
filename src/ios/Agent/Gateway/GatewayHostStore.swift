@@ -41,6 +41,8 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var device: LeoDeviceDescriptor? = nil
     var directOnly: Bool? = nil
     var relayServices: GatewayRelayServices? = nil
+    /// Local queue ownership; discovery enrichment must not orphan pending input.
+    var outboxIdentity: String? = nil
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
     /// Mac 1.2 起由 LeoPhoneAgent 自己接中继(`info.server = leophoneagent`):
@@ -118,6 +120,14 @@ final class GatewayHostStore: ObservableObject {
             }
             if let index = hosts.firstIndex(where: { $0.id == id }) {
                 let before = hosts[index]
+                let outboxIdentity = HarnessOutboxIdentity.next(existing: before.outboxIdentity, hostId: before.id,
+                    previousEndpoint: before.harnessURL, previousDeviceId: before.device?.deviceId,
+                    endpoint: harness, deviceId: machine.device?.deviceId ?? before.device?.deviceId,
+                    authenticatedDiscovery: true)
+                if hosts[index].outboxIdentity != outboxIdentity {
+                    hosts[index].outboxIdentity = outboxIdentity
+                    changed = true
+                }
                 if let device = machine.device, hosts[index].device != device {
                     hosts[index].device = device
                     clients.removeValue(forKey: id)
@@ -149,7 +159,8 @@ final class GatewayHostStore: ObservableObject {
                     platform: machine.platform,
                     server: machine.server,
                     device: machine.device,
-                    relayServices: GatewayRelayServices(apiRoot: apiRoot)
+                    relayServices: GatewayRelayServices(apiRoot: apiRoot),
+                    outboxIdentity: HarnessOutboxIdentity.newOwner()
                 ))
                 changed = true
             }
@@ -162,10 +173,27 @@ final class GatewayHostStore: ObservableObject {
 
     func upsert(_ host: GatewayHost) {
         deletedIds.remove(host.id)
+        var saved = host
         if let index = hosts.firstIndex(where: { $0.id == host.id }) {
-            hosts[index] = host
+            let previous = hosts[index]
+            // Older editor drafts omit discovered metadata. A name-only edit
+            // must not discard the verified device or reset queue ownership.
+            if previous.harnessURL == host.harnessURL && previous.baseURL == host.baseURL {
+                saved.device = host.device ?? previous.device
+                saved.platform = host.platform ?? previous.platform
+                saved.server = host.server ?? previous.server
+                saved.directOnly = host.directOnly ?? previous.directOnly
+                saved.relayServices = host.relayServices ?? previous.relayServices
+            }
+            saved.outboxIdentity = HarnessOutboxIdentity.next(existing: previous.outboxIdentity, hostId: host.id,
+                previousEndpoint: previous.harnessURL, previousDeviceId: previous.device?.deviceId,
+                endpoint: saved.harnessURL, deviceId: saved.device?.deviceId)
+            hosts[index] = saved
         } else {
-            hosts.append(host)
+            // Re-adding a deleted host is a new owner, even if its display/URL
+            // matches an old one. Do not adopt retired pending input by name.
+            saved.outboxIdentity = HarnessOutboxIdentity.newOwner()
+            hosts.append(saved)
         }
         clients.removeValue(forKey: host.id)   // address or key may have changed
         persist()
@@ -247,7 +275,10 @@ final class GatewayHostStore: ObservableObject {
     }
 
     /// Build a client for a host, or nil when its key is missing.
-    func client(for host: GatewayHost) -> LeoAgentClient? {
+    func client(for requestedHost: GatewayHost) -> LeoAgentClient? {
+        // A view may hold a pre-edit host value across an await. Resolve the
+        // current configured destination before using/cache-building its client.
+        guard let host = hosts.first(where: { $0.id == requestedHost.id }) else { return nil }
         if let cached = clients[host.id] { return cached }
         guard let key = Self.accessKey(hostId: host.id), !key.isEmpty else { return nil }
         // Second line of defence behind the editor's validation: hand-edited
@@ -264,8 +295,14 @@ final class GatewayHostStore: ObservableObject {
         let services = host.relayServices ?? host.harnessURL.flatMap {
             RelayMachinesClient.apiRoot(fromHarnessURL: $0).flatMap { GatewayRelayServices(apiRoot: $0) }
         }
+        let outboxIdentity = host.outboxIdentity ?? HarnessOutboxIdentity.initial(hostId: host.id, endpoint: host.harnessURL)
+        if let index = hosts.firstIndex(where: { $0.id == host.id }), hosts[index].outboxIdentity == nil {
+            hosts[index].outboxIdentity = outboxIdentity
+            persist()
+        }
         let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
-                                   hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services)
+                                   hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services,
+                                   outboxIdentity: outboxIdentity)
         clients[host.id] = built
         return built
     }

@@ -566,10 +566,9 @@ struct AddProviderPage {
       row.azureMode = this.azureMode;
       row.createdAt = Date.now();
       await providerStore.upsert(ctx, row, this.keyDraft);
-      await OAuthSession.bind(row.id);
+      await OAuthSession.bind(row.id, this.keyDraft);
       try {
-        row.models = await providerStore.refreshModels(row);
-        await providerStore.save(ctx);
+        await providerStore.refreshModels(ctx, row.id);
       } catch (_err) {
         // keep built-in list if upstream is down
       }

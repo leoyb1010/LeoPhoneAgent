@@ -21,8 +21,7 @@ export function assertWebFetchLiteralEgress(url: URL): void {
     });
   }
 
-  // DNS preflight 在部分网络下 1s 内无法完成，会让公网 URL 在真实 fetch 前失败。
-  // 当前只保留 URL 字面量层面的本地/私网目标阻断，不对普通域名做本地 DNS 解析。
+  // 这一层只检查字面量；普通域名由 HTTP adapter 的 public 策略在解析与建连时验证。
   if (!isIpLiteral(hostname)) return;
   assertPublicIpAddress(hostname, { hostname, url });
 }

@@ -106,8 +106,8 @@ test(
     const seen: LinkRequest[] = [];
     const revoked: string[] = [];
     const bridge = {
-      async revokeCaller(deviceId: string) {
-        revoked.push(deviceId);
+      async revokeCallers(deviceIds: string[]) {
+        revoked.push(...deviceIds);
       },
       async handle(req: LinkRequest) {
         seen.push(req);
@@ -284,4 +284,52 @@ test("tailnetLookup only touches *.ts.net names and falls back to the system res
   });
   assert.equal(Boolean(tailnet.error), Boolean(system.error));
   assert.equal(tailnet.address, system.address);
+});
+
+test("relay revocation stops only that caller immediately and retries failed persistence", async () => {
+  const streams = new Map<string, { emit: (data: string) => void; signal: AbortSignal }>();
+  let failWrite = true;
+  let attempts = 0;
+  const bridge = {
+    async revokeCallers() {
+      attempts += 1;
+      if (failWrite) throw new Error("injected storage failure");
+    },
+    async stream(req: LinkRequest, emit: (data: string) => void, signal: AbortSignal) {
+      streams.set(req.caller.deviceId!, { emit, signal });
+      emit("first");
+      await new Promise<void>((resolve) => {
+        if (signal.aborted) return resolve();
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    },
+  } as unknown as LinkBridge;
+  const sent: { type: string; id: string; data?: string }[] = [];
+  const socket = { readyState: 1, send: (data: string) => sent.push(JSON.parse(data)) };
+  const link = new RelayLink({ wsUrl: "ws://127.0.0.1/unused", name: "fixture", registerKey: MASTER },
+    bridge, memoryKeys(), { info() {}, warn() {} }, "test");
+  const internals = link as unknown as {
+    handleStream(ws: unknown, frame: Record<string, unknown>): Promise<void>;
+    applyRevocations(ids: unknown[]): void;
+    revocations: Promise<void>;
+    streamAborts: Map<string, AbortController>;
+  };
+  const first = internals.handleStream(socket, { id: "a", path: "/harness/sessions/s/events", caller: { kind: "iphone", device_id: "phone" } });
+  const other = internals.handleStream(socket, { id: "b", path: "/harness/sessions/s/events", caller: { kind: "iphone", device_id: "tablet" } });
+  await Promise.resolve();
+  internals.applyRevocations(["phone"]);
+  assert.equal(streams.get("phone")?.signal.aborted, true);
+  assert.equal(streams.get("tablet")?.signal.aborted, false);
+  streams.get("phone")!.emit("must-not-leak");
+  streams.get("tablet")!.emit("still-authorized");
+  await assert.rejects(internals.revocations, /injected storage failure/);
+  await first;
+  assert.equal(sent.some((frame) => frame.data === "must-not-leak"), false);
+  assert.equal(sent.some((frame) => frame.data === "still-authorized"), true);
+  failWrite = false;
+  internals.applyRevocations([]); // reconnect snapshot retries every pending failed revocation
+  await internals.revocations;
+  assert.equal(attempts, 2);
+  internals.streamAborts.get("b")?.abort();
+  await other;
 });

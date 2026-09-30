@@ -1809,4 +1809,5 @@
     <string name="newer_db_body">對話資料仍然完好。目前版本無法安全開啟更新的資料庫，請安裝最新版後重新開啟。</string>
     <string name="newer_db_versions">目前版本支援資料庫版本 %1$d。</string>
     <string name="newer_db_exit">不修改資料並離開</string>
+    <string name="secure_storage_temporarily_unavailable">安全儲存暫時無法使用。原有憑證已保留；新輸入的憑證只在本次執行有效。請重新啟動應用程式後重試。</string>
 </resources>

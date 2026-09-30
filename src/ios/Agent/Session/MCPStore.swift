@@ -357,7 +357,8 @@ final class MCPStore: ObservableObject {
         return configs
     }
 
-    func save() {
+    @discardableResult
+    func save() -> Bool {
         var map: [String: ServerEntry] = [:]
         for s in servers {
             map[s.id] = ServerEntry(
@@ -379,7 +380,7 @@ final class MCPStore: ObservableObject {
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
         guard let data = try? encoder.encode(file) else {
             AppLogger(category: "MCPStore").error("Failed to encode servers.json")
-            return
+            return false
         }
         do {
             try fm.createDirectory(at: serversFileURL.deletingLastPathComponent(),
@@ -388,8 +389,10 @@ final class MCPStore: ObservableObject {
             // half-written file.
             try data.write(to: serversFileURL, options: .atomic)
             AppLogger(category: "MCPStore").info("[Save] wrote \(servers.count) server(s), \(data.count) bytes to \(serversFileURL.path)")
+            return true
         } catch {
             AppLogger(category: "MCPStore").error("[Save] FAILED writing \(serversFileURL.path): \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -850,11 +853,12 @@ final class MCPStore: ObservableObject {
     /// when the local entry is strictly newer (small slack for clock skew).
     /// Updates the fingerprint so the external-edit scan doesn't echo the
     /// applied content back with a fresh clock.
-    func applyRemoteServerItem(name: String, entryJson: String, remoteCreatedAt: Date, remoteUpdatedAt: Date) {
+    func applyRemoteServerItem(name: String, entryJson: String, remoteCreatedAt: Date, remoteUpdatedAt: Date) throws {
+        let previousServers = servers
         guard let data = entryJson.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             AppLogger(category: "MCPStore").error("[Sync] applyRemoteServerItem '\(name)': unparseable entryJson")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         var incoming = serverConfig(name: name, from: obj)
         incoming.createdAt = (obj["createdAt"] as? Double) ?? remoteCreatedAt.timeIntervalSince1970
@@ -881,7 +885,10 @@ final class MCPStore: ObservableObject {
             servers.append(incoming)
             servers.sort { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
         }
-        save()
+        guard save() else {
+            servers = previousServers
+            throw CocoaError(.fileWriteUnknown)
+        }
         var fp = Self.loadFingerprints()
         fp[name] = Self.semanticFingerprint(incoming)
         Self.saveFingerprints(fp)
@@ -890,10 +897,14 @@ final class MCPStore: ObservableObject {
 
     /// Hard-delete a server locally from an inbound op=delete tombstone,
     /// without re-queueing the delete back into the sync layer.
-    func applyRemoteServerDeletion(name: String) {
+    func applyRemoteServerDeletion(name: String) throws {
+        let previousServers = servers
         guard servers.contains(where: { $0.id == name }) else { return }
         servers.removeAll { $0.id == name }
-        save()
+        guard save() else {
+            servers = previousServers
+            throw CocoaError(.fileWriteUnknown)
+        }
         var fp = Self.loadFingerprints()
         fp.removeValue(forKey: name)
         Self.saveFingerprints(fp)

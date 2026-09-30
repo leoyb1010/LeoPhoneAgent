@@ -37,7 +37,10 @@ class RelayRejectedLogTests(unittest.TestCase):
             path = os.path.join(tmp, "rejected.log")
             with open(path, "wb") as stream:
                 stream.write(b"x" * (64 * 1024))
-            relay = Relay("server-key-0123456789", rejected_log=path)
+            relay = Relay("server-key-0123456789", rejected_log=path,
+                          device_keys_path=os.path.join(tmp, "devices.json"),
+                          treasury_sync_path=os.path.join(tmp, "treasury.json"),
+                          treasury_asset_dir=os.path.join(tmp, "assets"))
             relay._record_rejected(canary, "/relay/api/machines")
             for _ in range(10_000):
                 relay._record_rejected(canary, "/relay/api/machines")
@@ -55,7 +58,12 @@ class RelayMachineListTests(unittest.IsolatedAsyncioTestCase):
     """注册方给的 info 不能盖掉中继自己的权威字段。"""
 
     async def test_registered_info_cannot_override_the_routing_name(self):
-        relay = Relay("server-key-0123456789")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        relay = Relay("server-key-0123456789",
+                      device_keys_path=os.path.join(tmp.name, "devices.json"),
+                      treasury_sync_path=os.path.join(tmp.name, "treasury.json"),
+                      treasury_asset_dir=os.path.join(tmp.name, "assets"))
         relay.machines["mac-mini"] = Machine(
             "mac-mini", None,
             # 一台机器只要在 info 里带个 name,旧实现(固定字段在前、**info 在后)

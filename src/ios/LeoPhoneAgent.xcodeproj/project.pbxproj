@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        E5HOUB001 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
+        E5HOUB002 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
+        E5SSHT001 /* RemoteSSHTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHT003 /* RemoteSSHTrust.swift */; };
+        E5SSHT002 /* RemoteSSHTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHT003 /* RemoteSSHTrust.swift */; };
+        E5CKIJ001 /* CloudKitInboundJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CKIJ003 /* CloudKitInboundJournal.swift */; };
+        E5STRX001 /* SkillSyncTreeTransaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STRX003 /* SkillSyncTreeTransaction.swift */; };
+        E5SZIP001 /* SafeSkillArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SZIP003 /* SafeSkillArchive.swift */; };
+        E5SAFE001 /* SyncFileSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SAFE003 /* SyncFileSafety.swift */; };
         E5RTG0001 /* LeoAgentRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RTG0003 /* LeoAgentRouting.swift */; };
         E5DVC0001 /* DirectDeviceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DVC0003 /* DirectDeviceRoute.swift */; };
         E5DVC0002 /* DirectDeviceRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DVC0003 /* DirectDeviceRoute.swift */; };
@@ -715,6 +723,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        E5HOUB003 /* HarnessOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessOutbox.swift; sourceTree = SOURCE_ROOT; };
+        E5SSHT003 /* RemoteSSHTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/RemoteSSHTrust.swift; sourceTree = SOURCE_ROOT; };
+        E5CKIJ003 /* CloudKitInboundJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Sync/V2/CloudKitInboundJournal.swift; sourceTree = SOURCE_ROOT; };
+        E5STRX003 /* SkillSyncTreeTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillSyncTreeTransaction.swift; sourceTree = "<group>"; };
+        E5SZIP003 /* SafeSkillArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeSkillArchive.swift; sourceTree = "<group>"; };
+        E5SAFE003 /* SyncFileSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncFileSafety.swift; sourceTree = "<group>"; };
         E5RTG0003 /* LeoAgentRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentRouting.swift; sourceTree = SOURCE_ROOT; };
         E5DVC0003 /* DirectDeviceRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/DirectDeviceRoute.swift; sourceTree = SOURCE_ROOT; };
         E5TNV0003 /* TailnetSyncTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailnetSyncTransport.swift; sourceTree = "<group>"; };
@@ -2123,6 +2137,9 @@
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
 				E5RTG0003 /* LeoAgentRouting.swift */,
+                E5HOUB003 /* HarnessOutbox.swift */,
+                E5SSHT003 /* RemoteSSHTrust.swift */,
+                E5CKIJ003 /* CloudKitInboundJournal.swift */,
 				E5DVC0003 /* DirectDeviceRoute.swift */,
 				E5T6L0002 /* T6RelayLogic.swift */,
 				E5SPL0002 /* SessionSpotlightIndexer.swift */,
@@ -2332,6 +2349,9 @@
 			isa = PBXGroup;
 			children = (
 				E5W000011 /* PortableRecord.swift */,
+                E5STRX003 /* SkillSyncTreeTransaction.swift */,
+                E5SZIP003 /* SafeSkillArchive.swift */,
+                E5SAFE003 /* SyncFileSafety.swift */,
 				E5W000012 /* Syncable.swift */,
 				E5W000013 /* SyncableTypeRegistry.swift */,
 				E5W000014 /* SyncTransport.swift */,
@@ -2886,6 +2906,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1002171D84B5B80449161785 /* CommandRisk.swift in Sources */,
+                E5HOUB002 /* HarnessOutbox.swift in Sources */,
+                E5SSHT002 /* RemoteSSHTrust.swift in Sources */,
 				E5TRP001 /* CollectionStore.swift in Sources */,
 				E5TRP002 /* CollectionSearchIndex.swift in Sources */,
 				E5TRP003 /* NoteBodyStore.swift in Sources */,
@@ -3385,6 +3407,9 @@
 				E5S000004 /* CloudSyncSettingsView.swift in Sources */,
 				E5S000006 /* SyncDirtyScanner.swift in Sources */,
 				E5W000001 /* PortableRecord.swift in Sources */,
+                E5STRX001 /* SkillSyncTreeTransaction.swift in Sources */,
+                E5SZIP001 /* SafeSkillArchive.swift in Sources */,
+                E5SAFE001 /* SyncFileSafety.swift in Sources */,
 				E5W000002 /* Syncable.swift in Sources */,
 				E5W000003 /* SyncableTypeRegistry.swift in Sources */,
 				E5W000004 /* SyncTransport.swift in Sources */,
@@ -3397,6 +3422,9 @@
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
 				E5W000009 /* ICloudSharedZoneTransport.swift in Sources */,
 				E5RTG0001 /* LeoAgentRouting.swift in Sources */,
+                E5HOUB001 /* HarnessOutbox.swift in Sources */,
+                E5SSHT001 /* RemoteSSHTrust.swift in Sources */,
+                E5CKIJ001 /* CloudKitInboundJournal.swift in Sources */,
 				E5DVC0001 /* DirectDeviceRoute.swift in Sources */,
 				E5TNV0001 /* TailnetSyncTransport.swift in Sources */,
 				E5DLV0001 /* SyncDeliveryLedger.swift in Sources */,

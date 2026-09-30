@@ -1,3 +1,4 @@
+import { conversationHistory } from './ConversationHistory';
 import { common, wantAgent, WantAgent } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
@@ -8,7 +9,6 @@ import { OpenAICompatClient, StreamTurn } from './OpenAICompatClient';
 import { SensitiveToolGate } from './SensitiveToolGate';
 import { SideModel } from './SideModel';
 import {
-  HISTORY_CHAR_BUDGET,
   LOOP_STOP_AT,
   LOOP_WARN_AT,
   LocalChatMessage,
@@ -21,18 +21,15 @@ import {
   sandboxFileName,
   shouldFailover,
   titleFromPrompt,
-  toolArg,
-  trimHistory
+  toolArg
 } from './LocalProtocol';
 import {
   COMPACT_AT_CHARS,
   COMPACT_KEEP_USER_TURNS,
   COMPACT_SYSTEM_PROMPT,
-  STOPPED_NOTE,
   TITLE_ATTEMPTS,
   TITLE_SYSTEM_PROMPT,
   TextLine,
-  attachedFilesBlock,
   compactCut,
   compactTranscript,
   compactUserMessage,
@@ -40,8 +37,6 @@ import {
   historyChars,
   lastSummaryIndex,
   parseTitleReply,
-  resumeNote,
-  summaryWrapper,
   titleExcerpt,
   titlePrompt,
   toolPlanLine,
@@ -420,54 +415,8 @@ export class ChatRun {
     }
     this.rounds = 0;
     this.failIndex = 0;
-    this.loopTurns = this.historyTurns(session.messages);
+    this.loopTurns = conversationHistory(session.messages);
     this.startModel(gen);
-  }
-
-  /** 发给模型的历史:从最后一个摘要之后开始,摘要包进第一句用户消息;附件清单、没说完的标记、继续都在这里换成模型看的话。 */
-  private historyTurns(messages: LocalChatMessage[]): LoopTurn[] {
-    const all = textLines(messages);
-    const start = lastSummaryIndex(all);
-    const out: LoopTurn[] = [];
-    for (let i = start + 1; i < messages.length; i++) {
-      const line = messages[i];
-      if (line.role !== 'user' && line.role !== 'assistant') {
-        continue;
-      }
-      let content = line.text;
-      if (line.kind === 'resume') {
-        content = resumeNote(all, i);
-      } else if (line.kind === 'partial') {
-        content = `${line.text}\n\n${STOPPED_NOTE}`;
-      }
-      if (line.files.length > 0) {
-        content = `${content}\n\n${attachedFilesBlock(line.files)}`;
-      }
-      // 同一角色连着两条(带工具的一轮里前后两段回答、失败后又发了一句)合成一条:有的服务商不收。
-      const prev = out.length > 0 ? out[out.length - 1] : null;
-      if (prev && prev.role === line.role && prev.imageB64.length === 0 && line.imageB64.length === 0) {
-        prev.content = `${prev.content}\n\n${content}`;
-        continue;
-      }
-      const turn = new LoopTurn();
-      turn.role = line.role;
-      turn.content = content;
-      turn.imageB64 = line.imageB64;
-      turn.imageMime = line.imageMime.length > 0 ? line.imageMime : 'image/jpeg';
-      out.push(turn);
-    }
-    if (start >= 0) {
-      const wrapped = summaryWrapper(messages[start].text);
-      if (out.length > 0 && out[0].role === 'user') {
-        out[0].content = `${wrapped}\n\n${out[0].content}`;
-      } else {
-        const head = new LoopTurn();
-        head.role = 'user';
-        head.content = wrapped;
-        out.unshift(head);
-      }
-    }
-    return trimHistory(out, HISTORY_CHAR_BUDGET);
   }
 
   private startModel(gen: number): void {

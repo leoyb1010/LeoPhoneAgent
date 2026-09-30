@@ -34,6 +34,7 @@ import java.io.File
  */
 class BrowserUseManager(
     val webView: WebView,
+    private val ownerSessionId: String?,
     profile: UserAgentProfile = UserAgentProfile.MOBILE_CHROME,
 ) {
     companion object {
@@ -402,7 +403,9 @@ class BrowserUseManager(
             val host = uri.host ?: return null
             val path = uri.path ?: ""
             val linuxPath = "/var/minis/$host$path"
-            val localFile = com.leoyuan.leophoneagent.sandbox.PRootKernel.resolveHostPath(linuxPath)
+            val owner = ownerSessionId ?: return android.webkit.WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden",
+                emptyMap(), "Browser has no session owner".byteInputStream())
+            val localFile = com.leoyuan.leophoneagent.sandbox.PRootKernel.resolveSessionHostPath(owner, linuxPath, webView.context)
             if (localFile == null || !localFile.exists() || !localFile.isFile) {
                 return android.webkit.WebResourceResponse("text/plain", "UTF-8", 404, "Not Found",
                     emptyMap(), "File not found: $host$path".byteInputStream())

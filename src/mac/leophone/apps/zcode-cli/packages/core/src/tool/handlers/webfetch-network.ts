@@ -49,8 +49,7 @@ export async function fetchAndExtractContent(options: {
   let response: HttpClientResponse | undefined;
 
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
-    // ZCode WebFetch 从 agent runtime 所在机器出网；移除 DNS preflight 后，
-    // 每个真实 GET 前仍要阻断 URL 字面量本地/私网目标，避免 NO_PROXY 绕过安全边界。
+    // 字面量先快速拒绝；域名解析、代理和连接时校验交给同一 HTTP adapter 的 public 策略。
     await assertWebFetchLiteralEgress(currentUrl);
 
     const requestId = `net_${crypto.randomUUID()}`;
@@ -75,6 +74,8 @@ export async function fetchAndExtractContent(options: {
           timeoutMs: DEFAULT_WEBFETCH_TIMEOUT_MS,
           maxResponseBytes: MAX_WEBFETCH_RESPONSE_BYTES,
           redirect: "manual",
+          // 公网约束必须传到实际建连 adapter；仅检查 URL 字面量无法阻止 DNS 指向内网。
+          egressPolicy: "public",
           trace: traceFromContext(options.context),
         },
         { signal: options.context.abortSignal },

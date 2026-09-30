@@ -342,9 +342,10 @@ object PRootKernel {
      * shell-level wrapper is tracked as T219-4 follow-up (optional).
      */
     fun isLinuxPathUnderReadOnlyMount(linuxPath: String): Boolean {
-        if (!linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) return false
+        val normalized = GuestPathPolicy.normalize(linuxPath) ?: return true
+        if (!normalized.startsWith(MOUNTS_LINUX_PREFIX)) return false
         val store = mountedFoldersStore ?: return false
-        val rest = linuxPath.removePrefix(MOUNTS_LINUX_PREFIX)
+        val rest = normalized.removePrefix(MOUNTS_LINUX_PREFIX)
         val name = rest.substringBefore('/')
         if (name.isEmpty()) return false
         val entry = store.entries.value.firstOrNull { it.name == name } ?: return false
@@ -662,39 +663,33 @@ object PRootKernel {
      * shared subdirs (memory/skills/shared) which don't depend on sessionId.
      */
     fun resolveSessionHostPath(sessionId: String, linuxPath: String, context: Context): File? {
-        if (!linuxPath.startsWith("/var/minis/")) return resolveHostPath(linuxPath)
-        val rest = linuxPath.removePrefix("/var/minis/")
-        val slash = rest.indexOf('/')
-        val subdir = if (slash < 0) rest else rest.substring(0, slash)
-        if (subdir !in perSessionSubdirs) return resolveHostPath(linuxPath)
-        val sessionBase = File(context.filesDir, "minis-sessions/$sessionId/$subdir")
-        val tail = if (slash < 0) "" else rest.substring(slash + 1)
-        return if (tail.isEmpty()) sessionBase else File(sessionBase, tail)
+        val normalized = GuestPathPolicy.normalize(linuxPath) ?: return null
+        if (!normalized.startsWith("/var/minis/")) return resolveHostPath(normalized)
+        val rest = normalized.removePrefix("/var/minis/")
+        val subdir = rest.substringBefore('/')
+        if (subdir !in perSessionSubdirs) return resolveHostPath(normalized)
+        if (!GuestPathPolicy.validSessionId(sessionId)) return null
+        // 先固定会话根，再检查子目录，防止符号链接把会话私有挂载指到别处。
+        val sessionsRoot = File(context.filesDir, "minis-sessions")
+        val sessionRoot = GuestPathPolicy.within(sessionsRoot, sessionId) ?: return null
+        if (sessionRoot != File(sessionsRoot.canonicalFile, sessionId)) return null
+        val sessionBase = GuestPathPolicy.within(sessionRoot, subdir) ?: return null
+        val tail = rest.substringAfter('/', "")
+        return GuestPathPolicy.within(sessionBase, tail)
     }
 
-    /**
-     * Resolve a Linux path to a host filesystem File by checking bind mounts.
-     * Returns null if no matching mount is found.
-     */
+    /** Normalize in guest space, then contain the canonical host target in its mount. */
     fun resolveHostPath(linuxPath: String): File? {
-        // Check bind mounts (longest prefix match)
+        val normalized = GuestPathPolicy.normalize(linuxPath) ?: return null
         val sorted = bindMounts.keys.sortedByDescending { it.length }
         for (mountPoint in sorted) {
-            if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
-                val hostBase = bindMounts[mountPoint]!!
-                val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
-                return if (relativePath.isEmpty()) {
-                    File(hostBase)
-                } else {
-                    File(hostBase, relativePath)
-                }
+            if (normalized == mountPoint || normalized.startsWith("$mountPoint/")) {
+                val hostBase = bindMounts[mountPoint] ?: continue
+                return GuestPathPolicy.within(File(hostBase), normalized.removePrefix(mountPoint).removePrefix("/"))
             }
         }
-
-        // Fallback: resolve relative to rootfs
         if (!::rootfsManager.isInitialized) return null
-        val stripped = linuxPath.removePrefix("/")
-        return if (stripped.isEmpty()) rootfsManager.rootfsDir else File(rootfsManager.rootfsDir, stripped)
+        return GuestPathPolicy.within(rootfsManager.rootfsDir, normalized.removePrefix("/"))
     }
 
     /**

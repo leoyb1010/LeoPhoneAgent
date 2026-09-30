@@ -326,6 +326,7 @@ final class HarnessSessionDriver: ObservableObject {
                 }
                 await MainActor.run {
                     self.sessionId = id
+                    self.restoreOutbox()
                     self.status = "running"
                     self.flushQueuedSteers()
                     HarnessLiveActivityBridge.shared.register(driver: self, hostName: self.client.hostName)
@@ -363,23 +364,41 @@ final class HarnessSessionDriver: ObservableObject {
     /// 发一条后续消息;LeoPhoneAgent 任务顺带告诉 Mac 全自动开关的当前状态。
     private func sendSteer(sessionId: String, text: String) async {
         let fullAuto: Bool? = harness.key == "zcode" ? (FullAutoGate.isOn && !fullAutoRefused) : nil
-        let requestId = UUID().uuidString
+        let entry: HarnessOutbox.Entry
         do {
-            if try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto, requestId: requestId) {
-                queuedAtRelay(requestId, text: text, fullAuto: fullAuto)
+            // 必须在网络调用前落盘；中继重启、手机杀进程或丢 ACK 都不丢原文。
+            entry = try HarnessOutbox.shared.record(id: UUID().uuidString, scope: client.harnessOutboxScope,
+                sessionId: sessionId, text: text, fullAuto: fullAuto)
+            relayQueued.append(entry)
+        } catch {
+            steerFailed(text, String(localized: "无法保存待发送内容，本次没有发送；请检查本机存储空间。"))
+            return
+        }
+        do {
+            if try await client.steerHarness(sessionId: sessionId, text: entry.text,
+                    fullAuto: entry.fullAuto, requestId: entry.id) {
+                try HarnessOutbox.shared.markQueued(entry)
+                if let index = relayQueued.firstIndex(where: { $0.id == entry.id }) { relayQueued[index].state = .queued }
+                note(Self.queuedWhileOfflineNote)
+                watchRelayQueue()
+            } else {
+                try finishOutbox(entry)
             }
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
+            // 明确的拒绝才允许使用新编号降级重发，未知结果永不走此路径。
+            do { guard try finishOutbox(entry) else { return } }
+            catch { showUncertain(entry); return }
             fullAutoRefused = true
             note(Self.fullAutoRefusedNote)
-            do {
-                // A fresh request id: the Mac refused the first one, this is a different request.
-                let retryId = UUID().uuidString
-                if try await client.steerHarness(sessionId: sessionId, text: text, requestId: retryId) {
-                    queuedAtRelay(retryId, text: text, fullAuto: nil)
-                }
-            } catch { steerFailed(text, error.localizedDescription) }
+            await sendSteer(sessionId: sessionId, text: text)
+        } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
+            do { try finishOutbox(entry) }
+            catch { showUncertain(entry); return }
+            steerFailed(text, message ?? "HTTP \(status)")
         } catch {
-            steerFailed(text, error.localizedDescription)
+            // timeout/5xx/409 都可能已经发生副作用；保留原编号，不放回可盲重发的输入框。
+            showUncertain(entry)
+            watchRelayQueue()
         }
     }
 
@@ -397,63 +416,95 @@ final class HarnessSessionDriver: ObservableObject {
     /// it delivers, later. Without asking, a follow-up the Mac then refused
     /// (full auto from a sender it doesn't recognise, a finished session)
     /// vanished while the console said it would arrive.
-    private var relayQueued: [(id: String, text: String, fullAuto: Bool?)] = []
+    private var relayQueued: [HarnessOutbox.Entry] = []
     private var relayQueueWatch: Task<Void, Never>?
+    private var announcedUncertain = Set<String>()
 
-    private func queuedAtRelay(_ requestId: String, text: String, fullAuto: Bool?) {
-        note(Self.queuedWhileOfflineNote)
-        relayQueued.append((requestId, text, fullAuto))
-        watchRelayQueue()
+    private func restoreOutbox() {
+        guard let sessionId else { return }
+        do {
+            relayQueued = try HarnessOutbox.shared.entries(scope: client.harnessOutboxScope, sessionId: sessionId)
+            for entry in relayQueued { showUncertain(entry) }
+            watchRelayQueue()
+        } catch {
+            note(String(localized: "未确认消息记录暂时无法读取；没有删除记录，也不会自动重新发送。"))
+        }
+    }
+
+    @discardableResult
+    private func finishOutbox(_ entry: HarnessOutbox.Entry) throws -> Bool {
+        let claimed = try HarnessOutbox.shared.remove(entry)
+        relayQueued.removeAll { $0.id == entry.id }
+        announcedUncertain.remove(entry.id)
+        return claimed
+    }
+
+    private func showUncertain(_ entry: HarnessOutbox.Entry) {
+        guard announcedUncertain.insert(entry.id).inserted else { return }
+        let message = String(localized: "这条输入已保存在本机，但送达状态未确认；正在查询 Mac 回执。不要重复发送，请先核对任务。")
+        lastError = message
+        note(message + "\n" + entry.text)
     }
 
     private func watchRelayQueue() {
         guard relayQueueWatch == nil, !relayQueued.isEmpty else { return }
         relayQueueWatch = Task { [weak self] in
-            // ponytail: polls every 15 s for up to an hour while this console is
-            // open; a push from the relay on delivery would replace it.
-            for _ in 0..<240 {
+            // 仅控制台打开期间查询；离开会取消，重新打开从磁盘恢复。
+            while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 guard let self, !Task.isCancelled else { return }
-                if await self.checkRelayQueue() { break }
+                _ = await self.checkRelayQueue()
+                // 网络 await 期间可能又发送了一条，退出前重读当前队列，不能丢掉新监视。
+                if self.relayQueued.isEmpty { break }
             }
             self?.relayQueueWatch = nil
         }
     }
 
-    /// True once nothing is left waiting at the relay.
+    /// True once nothing is left waiting. Missing relay entries do not imply non-execution.
     private func checkRelayQueue() async -> Bool {
-        for item in relayQueued {
-            let result: [String: Any]
+        for entry in relayQueued {
             do {
-                result = try await client.relayQueueResult(requestId: item.id)
-            } catch GatewayError.http(status: 404, _) {
-                relayQueued.removeAll { $0.id == item.id }   // the relay no longer knows it
-                continue
-            } catch {
-                continue   // relay unreachable: ask again next round
-            }
-            switch result["status"] as? String {
-            case "delivered":
-                relayQueued.removeAll { $0.id == item.id }
-                let http = result["http_status"] as? Int ?? 200
-                if http == 403, item.fullAuto == true, let sessionId {
+                let result = try await client.relayQueueResult(requestId: entry.id)
+                switch HarnessOutbox.relayResolution(result) {
+                case .completed(let http):
+                    let claimed = try finishOutbox(entry)
+                    if http == 403, entry.fullAuto == true, claimed {
+                        fullAutoRefused = true
+                        note(Self.fullAutoRefusedNote)
+                        await sendSteer(sessionId: entry.sessionId, text: entry.text)
+                    } else if !(200..<300).contains(http) {
+                        steerFailed(entry.text, String(localized: "Mac 拒绝了排队的这条（HTTP \(http)）"))
+                    }
+                    continue
+                case .pending:
+                    continue
+                case .needsReceipt:
+                    break // failed/expired/unknown can hide a lost reply, so reconcile below
+                }
+            } catch { /* 404、直连模式或中继失联：继续只读查询 Mac 回执。 */ }
+            do {
+                let receipt = try await client.harnessOperationResult(requestId: entry.id)
+                guard case .completed(let http) = HarnessOutbox.receiptResolution(receipt, requestId: entry.id)
+                else { showUncertain(entry); continue }
+                let claimed = try finishOutbox(entry)
+                if http == 403, entry.fullAuto == true, claimed {
                     fullAutoRefused = true
                     note(Self.fullAutoRefusedNote)
-                    await sendSteer(sessionId: sessionId, text: item.text)
+                    await sendSteer(sessionId: entry.sessionId, text: entry.text)
                 } else if !(200..<300).contains(http) {
-                    steerFailed(item.text, String(localized: "Mac 拒绝了排队的这条（HTTP \(http)）"))
+                    steerFailed(entry.text, "Mac HTTP \(http)")
+                } else {
+                    note(String(localized: "Mac 回执已确认这条输入送达。"))
                 }
-            case "failed", "expired":
-                relayQueued.removeAll { $0.id == item.id }
-                steerFailed(item.text, (result["error"] as? String) ?? String(localized: "排队太久，已过期"))
-            default:
-                break   // still waiting for the Mac
+            } catch {
+                showUncertain(entry) // 旧 Mac 无回执接口，或已重新配对：保留本机记录供核对。
             }
         }
         return relayQueued.isEmpty
     }
 
-    private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，这条已排队，上线后自动送达。")
+    private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，输入已保存在本机并交给中继排队；最终送达需要 Mac 回执确认。")
 
     /// Send a follow-up. Never a dead tap: with no session yet the text is
     /// queued (create in flight) or becomes the first prompt of a fresh
@@ -548,7 +599,7 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     func resumeIfNeeded() {
-        watchRelayQueue()   // back on screen: keep asking about anything still queued
+        restoreOutbox()   // back on screen: reload durable intents before asking again
         guard !isRunning else { return }
         if let sessionId, status == "detached" {
             isRunning = true
@@ -567,6 +618,7 @@ final class HarnessSessionDriver: ObservableObject {
     func attach(existingSessionId: String, knownStatus: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
         sessionId = existingSessionId
+        restoreOutbox()
         isRunning = true
         status = ["idle", "available", "completed"].contains(knownStatus ?? "") ? "idle" : "running"
         HarnessLiveActivityBridge.shared.register(driver: self, hostName: client.hostName)

@@ -102,6 +102,8 @@ private final class HostEditModel: ObservableObject {
     @Published var username: String
     @Published var deviceId: String
     @Published var password = ""
+    @Published var trustedHostKey: String
+    private let originalTrustedEndpoint: String?
     @Published var testResult: String?
     @Published var testing = false
     @Published var failShake = 0
@@ -117,6 +119,8 @@ private final class HostEditModel: ObservableObject {
         port = host.map { String($0.port) } ?? "22"
         username = host?.username ?? ""
         deviceId = host?.deviceId ?? ""
+        trustedHostKey = host?.trustedHostKey ?? ""
+        originalTrustedEndpoint = host?.trustedHostKeyEndpoint
         pubkey = RemoteHostStore.devicePublicKeyLine()
         hasStoredPassword = host.map { RemoteHostStore.password(hostId: $0.id)?.isEmpty == false } ?? false
     }
@@ -128,12 +132,22 @@ private final class HostEditModel: ObservableObject {
             host: address.trimmingCharacters(in: .whitespaces),
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
-            deviceId: deviceId.isEmpty ? nil : deviceId
+            deviceId: deviceId.isEmpty ? nil : deviceId,
+            trustedHostKey: RemoteSSHTrust.normalizedPublicKey(trustedHostKey),
+            trustedHostKeyEndpoint: RemoteSSHTrust.endpoint(host: address, port: Int(port) ?? 22)
         )
     }
 
     var canSave: Bool {
-        !draft.name.isEmpty && !draft.host.isEmpty && !draft.username.isEmpty
+        guard let numericPort = Int(port), (1...65535).contains(numericPort) else { return false }
+        return !draft.name.isEmpty && !draft.host.isEmpty && !draft.username.isEmpty
+            && (1...65535).contains(draft.port)
+            && (trustedHostKey.isEmpty || RemoteSSHExecutor.isValidHostKey(trustedHostKey))
+    }
+
+    var needsTrustConfirmation: Bool {
+        !trustedHostKey.isEmpty && (originalTrustedEndpoint != draft.trustedHostKeyEndpoint
+            || RemoteHostStore.shared.hosts.first(where: { $0.id == draftId })?.trustedHostKey != draft.trustedHostKey)
     }
 
     func runTest() {
@@ -175,6 +189,7 @@ private final class HostEditModel: ObservableObject {
 private struct RemoteHostEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model: HostEditModel
+    @State private var confirmingTrust = false
 
     init(sheetId: String, host: RemoteHost?) {
         _model = StateObject(wrappedValue: HostEditModel(sheetId: sheetId, host: host))
@@ -204,6 +219,19 @@ private struct RemoteHostEditSheet: View {
                     Text("所属设备")
                 } footer: {
                     Text("仅合并设备展示，SSH 和远控仍分别验证授权。")
+                }
+                Section {
+                    TextField("ssh-ed25519 AAAA…", text: $model.trustedHostKey, axis: .vertical)
+                        .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        .font(.caption.monospaced())
+                    if model.needsTrustConfirmation {
+                        Text("保存时需要确认此地址的服务器身份；更换密钥必须重新从可信控制台核对。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("已核实的 SSH 服务器公钥")
+                } footer: {
+                    Text("在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接；不会自动信任网络返回的密钥。")
                 }
                 Section {
                     SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)
@@ -244,7 +272,7 @@ private struct RemoteHostEditSheet: View {
                     } label: {
                         if model.testing { ProgressView() } else { Label("Test connection", systemImage: "bolt.horizontal") }
                     }
-                    .disabled(!model.canSave)
+                    .disabled(!model.canSave || model.needsTrustConfirmation || model.trustedHostKey.isEmpty)
                     if let testResult = model.testResult {
                         Text(testResult)
                             .font(.caption.monospaced())
@@ -253,6 +281,12 @@ private struct RemoteHostEditSheet: View {
                             .leoShineSweep(trigger: model.okSweep)
                     }
                 }
+            }
+            .alert("确认 SSH 服务器身份", isPresented: $confirmingTrust) {
+                Button("已从可信渠道核对，保存") { model.save(); dismiss() }
+                Button("取消", role: .cancel) { }
+            } message: {
+                Text("将此公钥固定到 \(model.draft.host):\(model.draft.port)。服务器密钥不匹配时会拒绝连接，包括经其他主机跳转。请确认已在目标电脑的可信控制台核对公钥。")
             }
             .navigationTitle(Text(model.isEditing ? "Edit Host" : "Add Host"))
             .navigationBarTitleDisplayMode(.inline)
@@ -267,8 +301,8 @@ private struct RemoteHostEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save")) {
-                        model.save()
-                        dismiss()
+                        if model.needsTrustConfirmation { confirmingTrust = true }
+                        else { model.save(); dismiss() }
                     }
                     .disabled(!model.canSave)
                 }

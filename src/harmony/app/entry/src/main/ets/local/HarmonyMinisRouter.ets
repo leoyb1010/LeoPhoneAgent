@@ -1,3 +1,4 @@
+import { conversationHistory } from './ConversationHistory';
 import { common } from '@kit.AbilityKit';
 import { ReleaseCatalog } from '../release/ReleaseCatalog';
 import { errorBody } from '../net/OutboundCodec';
@@ -340,10 +341,12 @@ export class HarmonyMinisRouter {
         });
       }
       return sessionStore.append(ctx, row.localId, 'user', text);
-    }).then(() => {
+    }).then(async () => {
+      const session = row.localId ? await sessionStore.get(ctx, row.localId) : null;
       if (LocalAgentEngine.current(row.id) !== mine) {
         return;
       }
+      if (!session) throw new Error('会话历史不可用，本轮没有执行');
       // 控制端气泡里已经有的全文。完成时 output 给这一份:原来只给最后一轮的话,
       // 带工具的回答在 iPhone 上会把最终答复再显示一遍。
       let shown = '';
@@ -361,7 +364,7 @@ export class HarmonyMinisRouter {
       }, (message: string) => {
         row.status = 'idle';
         this.emit(row, HarmonyMinisRouter.runFailed(message));
-      });
+      }, conversationHistory(session.messages));
     }).catch((err: Error) => {
       if (LocalAgentEngine.current(row.id) !== mine) {
         return;

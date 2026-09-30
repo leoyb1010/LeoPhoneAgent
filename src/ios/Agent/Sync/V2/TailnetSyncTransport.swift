@@ -147,6 +147,7 @@ final class TailnetSyncTransport: SyncTransport {
         var outcomes: [SyncOutcome] = []
         var seen = Set<SyncRecordID>()
         for id in batch.records.map(\.id) + batch.deletes where seen.insert(id).inserted {
+            guard UploadPolicy.allowsRecordType(id.type) else { continue }
             guard let ticket = batch.deliveryTickets[id.description] else {
                 outcomes.append(.permanentFailure(id, reason: "Missing durable delivery ticket"))
                 continue
@@ -158,6 +159,12 @@ final class TailnetSyncTransport: SyncTransport {
                 let (data, response) = try await client.replicaData(
                     path: "/sync/v1/changes", method: "POST", body: payload, requestId: ticket.changeId,
                     headers: ["Content-Type": "application/json"])
+                if response.statusCode == 409,
+                   let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   body["error"] as? String == "changeId reused with different content" {
+                    outcomes.append(.permanentFailure(id, reason: "Replica receipt payload mismatch; retain local data and resolve the queued revision"))
+                    continue
+                }
                 guard response.statusCode == 200 else { throw httpError(response) }
                 let result = try JSONDecoder().decode(TailnetReceipts.self, from: data)
                 guard result.receipts.count == 1,
@@ -206,15 +213,19 @@ final class TailnetSyncTransport: SyncTransport {
             for entry in page.changes { latest[entry.change.id] = entry }
             var records: [PortableRecord] = []
             var deletes: [SyncRecordID] = []
+            var deletionDates: [SyncRecordID: Date] = [:]
             for entry in latest.values.sorted(by: { $0.cursor < $1.cursor })
             where !sentChangeIds.contains(entry.change.changeId) {
                 try Task.checkCancellation()
                 guard !stopped else { throw CancellationError() }
-                if entry.change.operation == "delete" { deletes.append(entry.change.id) }
+                if entry.change.operation == "delete" {
+                    deletes.append(entry.change.id)
+                    deletionDates[entry.change.id] = entry.change.updatedAt
+                }
                 else if let record = entry.change.record { records.append(try await portable(record)) }
                 else { throw URLError(.cannotParseResponse) }
             }
-            let batch = SyncInboundBatch(records: records, deletes: deletes, sourceDeviceId: nil)
+            let batch = SyncInboundBatch(records: records, deletes: deletes, sourceDeviceId: nil, deletionUpdatedAt: deletionDates)
             issuedBatch = batch
             health.succeeded("fetch")
             return batch

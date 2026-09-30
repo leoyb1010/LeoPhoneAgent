@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.47.0%20(130)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.49.0%20(134)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.3.4-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -12,7 +12,7 @@
 手机端本身是一个完整的端上 Agent（模型接入、Linux 沙箱、浏览器自动化、
 技能与记忆);同时通过自营中继,在任意网络(蜂窝/WiFi)远程指挥任意一台
 Mac 上的编码 CLI(Claude Code / Codex / Cursor / Grok),支持断线续传、远程审批、
-会话接管。Mac 侧另有一个完整的桌面端(Cindy 开源桌面的深度改造版)。
+会话接管。Mac 侧当前桌面与运行时主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 保留作归档。
 
 Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Standard
 与 Power 两种构建；Power 版为 Accessibility、Shizuku 与受控系统操作预留
@@ -28,7 +28,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 
 - 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
 - Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
-  `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
+  `src/mac/leophone/`（当前 1.x 主线）。`src/mac/leocodebox/` 是旧版桌面归档；
+  `src/mac/leoagent/` 中 relay.py 仍在服务，其他部分是协议兼容/灰度回退，不是 Android UI 工程。
   藏宝阁 iOS / Android / Mac 三端升级必须先读：
   [`docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md`](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md)。
   当前已完成 Phase 0–5 的本机源码与自动化施工；阶段证据见
@@ -139,7 +140,7 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
   Cursor Agent(one-shot stream-json)、Grok(`grok agent stdio`,ACP/Agent Client Protocol)。
 - **Cursor 快捷配置**:在每台 Mac 上安装 Cursor CLI 后执行
   `cursor-agent login`；Android「我的 Mac」新任务里直接点「Cursor」即可运行。
-  无头机也可向 leocodebox 进程安全注入 `CURSOR_API_KEY`。
+  当前 Mac 的 CLI/Provider 配置以 `src/mac/leophone/` 的说明为准；旧 leocodebox 的部署参数不应直接套用。
 - **安全**:一把 ≥16 字符密钥保护中继与全部端点(个人产品,单用户模型);
   Funnel 只挂中继路径;密钥自动清洗复制残渣(尾部 `%`/换行)。
 
@@ -149,19 +150,18 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
 src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
 src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
 src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
-src/mac/leocodebox/     LeoPhoneAgent · Mac:Electron 桌面工作台、CLI 管理、
-                        本机服务、会话/技能/MCP 与跨设备控制
+src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
+src/mac/leocodebox/     旧版桌面 1.85 归档，不能替代当前 Mac 的构建/测试
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
-                        ※ harness 面已由 leocodebox 1.63+ 接管(协议同构);
-                        leoagent 保留作灰度回退,relay.py 继续服役
+                        ※ 当前桌面主线为 leophone；leoagent 保留作灰度回退，relay.py 继续服役
 deps/  docs/  scripts/  原生依赖构建、文档、工具
 ```
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.47.0 (130)`;Bundle ID `com.leoyuan.leophoneagent`
-- 1.47.0:接入 OpenCode Go;下线 Claude 订阅 / Antigravity / Gemini CLI 登录,订阅令牌只存本机;锁屏批准和 Siri 都要解锁、上锁会话不外露;对话终端链接只填不跑、草稿按对话保存、删符号链接不删目标。证据:Release 真机构建 + 发版门禁 + 新增单测;未装机
+- 当前源码版本/构建:`1.49.0 (134)`;Bundle ID `com.leoyuan.leophoneagent`
+- 历史 1.47.0:接入 OpenCode Go;下线 Claude 订阅 / Antigravity / Gemini CLI 登录,订阅令牌只存本机;锁屏批准和 Siri 都要解锁、上锁会话不外露;对话终端链接只填不跑、草稿按对话保存、删符号链接不删目标。证据:Release 真机构建 + 发版门禁 + 新增单测;未装机
 - 1.45.0:设置 → Apple Watch:手表怎么回答(自动 / 总是手表直连 / 只经 iPhone)、手表直连单独选模型(任何 API Key 方式的 OpenAI 兼容或 Anthropic 模型)
 - 1.44.0:审批三档(逐项确认 / 智能批准 / 全自动,风险分级只提示不加步骤);iPad 菜单栏、聊天检查器、
   多窗口(右键或拖出会话开新窗口、iPadOS 27 关窗确认)、设置双栏、拖入链接与文字;做完的一轮收成
@@ -262,8 +262,8 @@ git submodule update --init --recursive
 | Standard 差异 | `src/android/app/src/standard/` | 不得引入 Power 高权限承诺 |
 | Power 差异 | `src/android/app/src/power/` | Accessibility/Shizuku 继续受系统授权、产品授权和危险操作确认保护 |
 | Android 版本/签名 | `src/android/app/build.gradle.kts` | 每个公开 APK 必须新 `versionCode` 和 `versionName` |
-| Mac 主 harness | `src/mac/leocodebox/` | 改跨端协议时同时验证 Android 调用方 |
-| Mac 灰度回退 | `src/mac/leoagent/` | 不要把新主实现误写到这里 |
+| 当前 Mac Host/runtime | `src/mac/leophone/` | 改跨端协议时同时验证 Android 调用方 |
+| Mac 中继及灰度回退 | `src/mac/leoagent/` | relay.py 仍在服务；不要把新桌面主实现误写到这里 |
 
 Fold8 是 Android 主验收设备：封面屏 `1080×1728`、展开屏 `1768×2208`，
 必须覆盖折叠切换、草稿/会话保留和 200% 字体。没有实际设备或模拟器证据时，
@@ -423,21 +423,23 @@ cd src/android
 生成的 PRoot、Alpine、Debug Skill 与 APK 都是可重建产物，不进入 Git。
 完整要求与测试命令见 [BUILDING.md](BUILDING.md#android)。
 
-Mac 桌面端已并入本仓 `src/mac/leocodebox/`,内部兼容名仍为 leocodebox,
-界面品牌为 **LeoPhoneAgent · Mac**。源码、Issue 与版本说明以本仓为唯一
-事实来源;`leocodebox-updates` 只保存自动更新的签名产物,不再作为源码仓。
+当前 Mac 桌面主工程是 `src/mac/leophone/`，源码版本以其 `package.json` 为准。
+使用 `mise.toml` 固定的 Node 24.14.0 与 pnpm 10.33.2；这是源码构建检查，
+不是签名、公证或实机验收证明。
 
 ```sh
-cd src/mac/leocodebox
-npm ci
-npm run typecheck && npm run lint && npm test && npm run build
-npm run desktop:dist:mac
+cd src/mac/leophone
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm leo:test:agent
+pnpm --dir apps/zcode-cli build
+pnpm build:bootstrap
 ```
 
-- [下载 Mac 1.84.0 DMG](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.84.0/leocodebox-1.84.0-mac-arm64.dmg)
-- [Mac 1.84.0 热更新 ZIP](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.84.0/leocodebox-1.84.0-mac-arm64.zip)
-- DMG SHA-256：`d9b1f330ad48ebf9197efd16caf29c040d3aa01b0a093fa70c3315405216586a`
-- ZIP SHA-256：`b0321319452ded5d970aaea96fb1de4b25c0dc900f2ad1ac1868a5692a3125a8`
+`src/mac/leocodebox/` 是旧版 1.85 桌面归档。其历史安装包与热更新不能替代
+当前 1.x 主线；下载前查看对应 [Release](https://github.com/leoyb1010/LeoPhoneAgent/releases)
+的版本、目标平台与验收说明。旧工程的 `npm` 构建命令仅用于维护该归档。
 
 旧版 `src/mac/leoagent/` 保留作协议灰度回退,`relay.py` 继续服务中继。
 合并和迁移边界见

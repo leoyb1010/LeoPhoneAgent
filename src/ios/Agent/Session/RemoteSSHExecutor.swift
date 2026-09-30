@@ -9,9 +9,8 @@
 //  NativeMCPClient made for HTTP MCP.
 //
 //  MVP scope (deliberate):
-//    • password auth only (Keychain-held; key auth is a later add)
-//    • host-key validation accepts on first use (personal, LAN-first tool;
-//      pinning is a follow-up)
+//    • password or device Ed25519 authentication (Keychain-held)
+//    • explicit host-key pinning, bound to the configured address and port
 //    • one command per connection; a per-call timeout closes the client,
 //      which is also the cancellation story for now
 //
@@ -20,6 +19,7 @@ import Foundation
 import Citadel
 import Network
 import NIOCore
+import NIOSSH
 
 private let logger = AppLogger(category: "RemoteSSH")
 
@@ -36,6 +36,12 @@ actor RemoteSSHExecutor {
     /// Runs one command on `host`. Never throws credentials or the resolved
     /// command into the error text.
     func run(host: RemoteHost, command: String, timeout: TimeInterval, isKeyRetry: Bool = false) async -> ExecResult {
+        // 在读取凭据/建立认证之前要求显式可信 pin，旧配置安全迁移为未受信。
+        guard let keyLine = RemoteSSHTrust.pinnedKey(host: host.host, port: host.port,
+                key: host.trustedHostKey, trustedEndpoint: host.trustedHostKeyEndpoint),
+              let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
+            return ExecResult(output: "SSH host key is not trusted for this address and port. In Settings → Remote Hosts, paste the server public host key obtained from its trusted console before connecting.", succeeded: false)
+        }
         // [T-ssh-key-auth] Password when stored, else the device Ed25519 key —
         // key-only hosts (the recommended setup) no longer require a password.
         let auth: SSHAuthenticationMethod
@@ -57,11 +63,7 @@ actor RemoteSSHExecutor {
                 host: host.host,
                 port: host.port,
                 authenticationMethod: auth,
-                // [T-ssh-tofu-followup] Accept-any host key is a KNOWN
-                // limitation (personal LAN tool, password never echoed).
-                // Trust-on-first-use pinning is the planned follow-up before
-                // this is used across untrusted networks.
-                hostKeyValidator: .acceptAnything(),
+                hostKeyValidator: .trustedKeys([hostKey]),
                 reconnect: .never
             )
             defer { Task { try? await client.close() } }
@@ -134,14 +136,24 @@ actor RemoteSSHExecutor {
     /// usable — no phone-side VPN required. Requires the gateway to hold ssh
     /// keys for the target (set up 2026-07-29 for the user's three machines).
     func runSmart(target: RemoteHost, allHosts: [RemoteHost], command: String, timeout: TimeInterval) async -> ExecResult {
+        guard let targetKey = RemoteSSHTrust.pinnedKey(host: target.host, port: target.port,
+                key: target.trustedHostKey, trustedEndpoint: target.trustedHostKeyEndpoint),
+              Self.isValidHostKey(targetKey) else {
+            return ExecResult(output: "The target SSH host key must be verified in Settings → Remote Hosts before direct or gateway execution.", succeeded: false)
+        }
         if await Self.tcpProbe(host: target.host, port: target.port, timeout: 4) {
             return await run(host: target, command: command, timeout: timeout)
         }
         var lastRelayFailure: String?
         for gateway in allHosts where gateway.id != target.id {
+            guard let gatewayKey = RemoteSSHTrust.pinnedKey(host: gateway.host, port: gateway.port,
+                    key: gateway.trustedHostKey, trustedEndpoint: gateway.trustedHostKeyEndpoint),
+                  Self.isValidHostKey(gatewayKey) else { continue }
             guard await Self.tcpProbe(host: gateway.host, port: gateway.port, timeout: 4) else { continue }
-            let relayed = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -p \(target.port) "
-                + "\(target.username)@\(target.host) \(RemoteShellQuoting.singleQuoted(command))"
+            guard let relayed = RemoteSSHTrust.relayCommand(host: target.host, port: target.port,
+                    username: target.username, publicKey: targetKey, command: command) else {
+                return ExecResult(output: "Invalid SSH target address, port or verified public key.", succeeded: false)
+            }
             let result = await run(host: gateway, command: relayed, timeout: timeout)
             if result.succeeded {
                 return ExecResult(
@@ -181,6 +193,11 @@ actor RemoteSSHExecutor {
         let result = await run(host: host, command: "echo LEO_OK && uname -a", timeout: 15)
         return ExecResult(output: "TCP \(host.host):\(host.port) reachable ✓\n" + result.output,
                           succeeded: result.succeeded)
+    }
+
+    nonisolated static func isValidHostKey(_ value: String) -> Bool {
+        guard let normalized = RemoteSSHTrust.normalizedPublicKey(value) else { return false }
+        return (try? NIOSSHPublicKey(openSSHPublicKey: normalized)) != nil
     }
 
     /// Plain TCP connect probe via Network.framework.
@@ -225,6 +242,6 @@ enum RemoteSSHError: Error {
 /// Shell-single-quote escaping shared by the remote tools.
 enum RemoteShellQuoting {
     static func singleQuoted(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        RemoteSSHTrust.singleQuoted(s)
     }
 }

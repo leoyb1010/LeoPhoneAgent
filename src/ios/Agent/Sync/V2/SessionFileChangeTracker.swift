@@ -95,6 +95,10 @@ actor SessionFileChangeTracker {
 
     // MARK: - Consumer
 
+    func hasPendingChange(sessionId: String, relativePath: String) -> Bool {
+        pending[sessionId]?[relativePath] != nil
+    }
+
     /// Atomically read-and-clear all pending changes. Returns a snapshot
     /// of [sessionId: [relPath: Change]]. Caller (SyncCore) translates
     /// each entry into a markDirty call.

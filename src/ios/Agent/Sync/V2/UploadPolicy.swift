@@ -36,11 +36,11 @@ enum UploadPolicy {
             case .skills:
                 return ["Skill", "SkillV2"]
             case .providers:
-                return ["ProviderConfig", "ProviderConfigV2"]
+                return ["ProviderConfig", "ProviderConfigV2", "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3"]
             case .envVars:
-                return ["EnvVar", "EnvVarV2"]
+                return ["EnvVar", "EnvVarV2", "EnvVarItem"]
             case .memory:
-                return ["MemoryGlobalV2", "MemoryDailyV2"]
+                return ["Soul", "SoulV2", "MemoryGlobalV2", "MemoryDailyV2"]
             }
         }
 

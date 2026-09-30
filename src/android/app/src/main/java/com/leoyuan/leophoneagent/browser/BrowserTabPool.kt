@@ -248,9 +248,49 @@ class BrowserTabPool(private val context: Context) {
 
     // -- Session --
 
-    fun setSession(sessionId: String) {
+    fun setSession(sessionId: String, migrateExisting: Boolean = false) {
+        if (this.sessionId == sessionId) return
+        val previousTabs = _tabs.value
+        val selected = _selectedTabId.value
+        val previousURLs = savedURLs.toMutableMap()
+        for (tab in previousTabs) {
+            previousURLs[tab.id] = tab.manager.currentURL.value
+            tab.inUseGraceJob?.cancel()
+            tab.manager.onNewWindow = null
+            tab.manager.onCloseWindow = null
+            tab.manager.onDownloadStart = null
+        }
+        _tabs.value = emptyList()
+        savedURLs.clear()
         this.sessionId = sessionId
-        loadSavedState()
+        if (migrateExisting) {
+            // 草稿迁移的当前快照优先；磁盘副本仍带原 ID，不能重编号后叠加它。
+            savedURLs.putAll(previousURLs)
+            _selectedTabId.value = selected
+            nextTabId = maxOf(nextTabId, (previousURLs.keys.maxOrNull() ?: -1) + 1)
+        } else {
+            nextTabId = 0
+            _selectedTabId.value = 0
+            _sessionViewportWidth.value = 0
+            _sessionViewportHeight.value = 0
+            loadSavedState()
+        }
+        evictionScope.launch(Dispatchers.Main.immediate) {
+            for (tab in previousTabs) {
+                tab.manager.webView.stopLoading()
+                tab.manager.webView.destroy()
+            }
+            if (migrateExisting && this@BrowserTabPool.sessionId == sessionId) {
+                val restored = _tabs.value.toMutableList()
+                for (tab in previousTabs) {
+                    if (restored.none { it.id == tab.id }) {
+                        createTab(restored, previousURLs[tab.id], restoredId = tab.id)
+                    }
+                }
+                _selectedTabId.value = selected
+                saveState()
+            }
+        }
     }
 
     // -- Downloads --
@@ -778,12 +818,17 @@ class BrowserTabPool(private val context: Context) {
         tab
     }
 
-    private fun createTab(tabs: MutableList<Tab>, url: String? = null): Tab? {
+    private fun createTab(tabs: MutableList<Tab>, url: String? = null, restoredId: Int? = null): Tab? {
         if (tabs.size >= MAX_TABS) return null
 
-        val id = nextTabId++
+        val savedId = if (tabs.isEmpty() && url == null) {
+            savedURLs.keys.firstOrNull { it == _selectedTabId.value } ?: savedURLs.keys.minOrNull()
+        } else null
+        val id = restoredId ?: savedId ?: nextTabId
+        nextTabId = maxOf(nextTabId, id + 1)
+        val savedUrl = savedURLs.remove(id)
         val webView = WebView(context)
-        val manager = BrowserUseManager(webView, userAgentProfile)
+        val manager = BrowserUseManager(webView, sessionId, userAgentProfile)
         if (userAgentProfile == UserAgentProfile.CUSTOM && !customUserAgentString.isNullOrEmpty()) {
             manager.setUserAgent(userAgentProfile, customUserAgentString)
         }
@@ -806,7 +851,7 @@ class BrowserTabPool(private val context: Context) {
         // back in a suspend context — a fresh tab with no page loaded
         // reports WebView's hardcoded 980px fallback, hiding the session
         // viewport override until the first real navigation.
-        val loadUrl = url ?: savedURLs.remove(id)
+        val loadUrl = (url ?: savedUrl)?.takeIf { it.isNotEmpty() }
         if (loadUrl != null) {
             manager.loadURL(loadUrl)
         } else {
@@ -884,7 +929,7 @@ class BrowserTabPool(private val context: Context) {
         }
         val id = nextTabId++
         val newWebView = WebView(context)
-        val manager = BrowserUseManager(newWebView, userAgentProfile)
+        val manager = BrowserUseManager(newWebView, sessionId, userAgentProfile)
         if (userAgentProfile == UserAgentProfile.CUSTOM && !customUserAgentString.isNullOrEmpty()) {
             manager.setUserAgent(userAgentProfile, customUserAgentString)
         }
@@ -1190,6 +1235,7 @@ class BrowserTabPool(private val context: Context) {
             }
             json.put("tabURLs", urlsJson)
             json.put("selectedTabId", _selectedTabId.value)
+            json.put("nextTabId", nextTabId)
             // Persist session viewport override alongside tab URLs so reopening
             // the session restores the override. Mirrors iOS `PersistedTabs`.
             if (_sessionViewportWidth.value > 0 && _sessionViewportHeight.value > 0) {
@@ -1213,9 +1259,11 @@ class BrowserTabPool(private val context: Context) {
                 val keys = urlsJson.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
-                    savedURLs[key.toInt()] = urlsJson.getString(key)
+                    val id = key.toIntOrNull() ?: continue
+                    if (id >= 0) savedURLs[id] = urlsJson.getString(key)
                 }
                 _selectedTabId.value = json.optInt("selectedTabId", 0)
+                nextTabId = maxOf(json.optInt("nextTabId", 0), (savedURLs.keys.maxOrNull() ?: -1) + 1)
             }
             // Restore session viewport override. 0/missing = no override; fall
             // back to the global custom viewport / UA profile default.

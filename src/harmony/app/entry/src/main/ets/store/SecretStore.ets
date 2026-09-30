@@ -1,5 +1,6 @@
 import { asset } from '@kit.AssetStoreKit';
 import { util } from '@kit.ArkTS';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const RELAY_ALIAS = 'leo.harmony.relay_key';
 const PROVIDER_ALIAS = 'leo.harmony.provider_key';
@@ -66,16 +67,15 @@ export class SecretStore {
     query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
     try {
       const result = await asset.query(query);
-      if (!result || result.length === 0) {
-        return '';
-      }
+      // 原生 query 对不存在的别名抛 NOT_FOUND；空/不完整结果也不能当成可迁移的空值。
+      if (result.length !== 1) throw new Error('凭据查询结果不完整，请重试');
       const secret = result[0].get(asset.Tag.SECRET);
-      if (!secret) {
-        return '';
-      }
-      return SecretStore.text(secret as Uint8Array);
-    } catch (_err) {
-      return '';
+      if (!(secret instanceof Uint8Array)) throw new Error('凭据暂不可读，请重试');
+      return SecretStore.text(secret);
+    } catch (error) {
+      // 只有确定不存在才是空值；锁屏、服务/IPC/数据库错误不能触发空凭据迁移或清理。
+      if ((error as BusinessError).code === asset.ErrorCode.NOT_FOUND) return '';
+      throw error;
     }
   }
 

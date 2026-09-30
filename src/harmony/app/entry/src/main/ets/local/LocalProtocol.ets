@@ -184,7 +184,7 @@ export function openAiErrorFromJson(json: object): string {
   return '';
 }
 
-export function sessionArchiveFromJson(json: object): LocalSessionArchive | null {
+export function sessionArchiveFromJson(json: object, trustedPaths: boolean = false): LocalSessionArchive | null {
   const obj = json as Record<string, Object>;
   const rows = obj['messages'];
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -200,7 +200,7 @@ export function sessionArchiveFromJson(json: object): LocalSessionArchive | null
     }
     text = text.trim();
     const imageB64 = `${item['imageB64'] ?? ''}`;
-    const imagePath = `${item['imagePath'] ?? ''}`;
+    const imagePath = trustedPaths ? `${item['imagePath'] ?? ''}` : '';
     if (!role || (text.length === 0 && imageB64.length === 0 && imagePath.length === 0)) {
       continue;
     }

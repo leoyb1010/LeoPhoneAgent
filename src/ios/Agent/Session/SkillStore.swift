@@ -96,7 +96,7 @@ final class SkillStore: ObservableObject {
     private init() {
         openDatabase()
         createTables()
-        loadSkills()
+        guard loadSkills() else { return }
         installBundledSkills()
         migrateMarkBundledSkillsDirty()
     }
@@ -143,6 +143,10 @@ final class SkillStore: ObservableObject {
             installed_at REAL NOT NULL,
             updated_at REAL NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS skill_sync_commits (
+            skill_id TEXT PRIMARY KEY,
+            token TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS session_skill_overrides (
             session_id TEXT NOT NULL,
             skill_id TEXT NOT NULL,
@@ -178,9 +182,10 @@ final class SkillStore: ObservableObject {
 
     private static let SQLITE_TRANSIENT_DB = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
+    @discardableResult
     private func dbInsertSkill(id: String, name: String, description: String, version: String,
                                importSource: SkillImportSource, isEnabled: Bool,
-                               installedAt: Date, updatedAt: Date) {
+                               installedAt: Date, updatedAt: Date) -> Bool {
         // Use INSERT … ON CONFLICT to preserve use_count (local-only, not synced).
         let sql = """
         INSERT INTO skills (id, name, description, version, import_source, is_enabled, installed_at, updated_at)
@@ -194,7 +199,7 @@ final class SkillStore: ObservableObject {
             updated_at = excluded.updated_at
         """
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt) }
 
         sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
@@ -205,7 +210,8 @@ final class SkillStore: ObservableObject {
         sqlite3_bind_int(stmt, 6, isEnabled ? 1 : 0)
         sqlite3_bind_double(stmt, 7, installedAt.timeIntervalSince1970)
         sqlite3_bind_double(stmt, 8, updatedAt.timeIntervalSince1970)
-        sqlite3_step(stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+        return true
     }
 
     private func dbUpdateSkillMeta(id: String, name: String, description: String, version: String, updatedAt: Date) {
@@ -247,21 +253,23 @@ final class SkillStore: ObservableObject {
         sqlite3_step(stmt)
     }
 
-    private func dbDeleteSkill(id: String) {
+    @discardableResult
+    private func dbDeleteSkill(id: String) -> Bool {
         let sql = "DELETE FROM skills WHERE id = ?"
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
-        sqlite3_step(stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
 
         // Also clean session overrides
         let sql2 = "DELETE FROM session_skill_overrides WHERE skill_id = ?"
         var stmt2: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql2, -1, &stmt2, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql2, -1, &stmt2, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt2) }
         sqlite3_bind_text(stmt2, 1, (id as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
-        sqlite3_step(stmt2)
+        guard sqlite3_step(stmt2) == SQLITE_DONE else { return false }
+        return true
     }
 
     private func dbSetSessionOverride(sessionId: String, skillId: String, enabled: Bool) {
@@ -577,6 +585,9 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         }
 
         let id = Self.slugify(parsed.name)
+        for root in [skillsDir, rootfsSkillsDir] {
+            _ = try SyncFileSafety.destination(root: root, relativePath: "\(id)/SKILL.md")
+        }
         let now = Date()
 
         // Preserve enabled state if skill already exists
@@ -633,85 +644,67 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
     /// Unlike `importSkill`, this preserves the remote `skillId` (no re-slugify)
     /// and does NOT mark dirty (to avoid sync ping-pong).
     /// Returns `true` if the remote skill was applied, `false` if it was
-    /// skipped because the local copy is newer (LWW). Callers that also
-    /// process a bundled-file ZIP (importSkillFromSyncWithAsset) MUST honour
-    /// a `false` return and abort the ZIP unpack/prune — otherwise the prune
-    /// step would still delete local bundled files against a stale record.
+    /// skipped because the local copy is newer (LWW). The same transaction
+    /// handles metadata-only sync and imports that include a bundled-file ZIP.
     @discardableResult
     func importSkillFromSync(
         skillId: String, content: String, source: SkillImportSource,
         isEnabled: Bool, installedAt: Date, updatedAt: Date
-    ) -> Bool {
-        // [T-icloud-cloud-overwrites-local-edits] Local-newer guard. Skill
-        // files (SKILL.md + bundled files) are user-editable; below we
-        // overwrite the on-disk SKILL.md + rootfs copy + DB row
-        // unconditionally. A stale cloud record arriving during the window
-        // between a local edit and its push would silently revert the
-        // user's just-saved skill (issue #41, same root cause as the
-        // SessionFile path). Mirror the LWW used by mergeRemoteSession: if
-        // the local skill's updated_at is newer than the inbound record
-        // (+ slack for clock drift), keep local and skip. A skill that
-        // doesn't exist locally always applies.
-        if let local = skills.first(where: { $0.id == skillId }) {
-            let slack: TimeInterval = 5
-            if local.updatedAt.timeIntervalSince(updatedAt) > slack {
-                AppLogger(category: "SkillSync").info("[IMPORT] '\(skillId)' SKIP (local newer): localUpdatedAt=\(local.updatedAt) remoteUpdatedAt=\(updatedAt)")
-                return false
-            }
-        }
-        let parsed = Self.parse(skillMD: content)
-
-        // If a local skill exists with the same slugified name but a different ID,
-        // remove the old one to prevent duplicates.
-        let slugId = Self.slugify(parsed.name)
-        if slugId != skillId, let oldIdx = skills.firstIndex(where: { $0.id == slugId }) {
-            let oldId = skills[oldIdx].id
-            skills.remove(at: oldIdx)
-            dbDeleteSkill(id: oldId)
-            let oldDir = skillsDir.appendingPathComponent(oldId)
-            try? fm.removeItem(at: oldDir)
-            let oldRootfs = rootfsSkillsDir.appendingPathComponent(oldId)
-            try? fm.removeItem(at: oldRootfs)
-        }
-
-        // Preserve local enabled state if skill already exists
-        let existingEnabled = skills.first(where: { $0.id == skillId })?.isEnabled ?? isEnabled
-
-        let skill = Skill(
-            id: skillId,
-            name: parsed.name,
-            description: parsed.description,
-            version: parsed.version,
-            importSource: source,
-            isEnabled: existingEnabled,
-            installedAt: skills.first(where: { $0.id == skillId })?.installedAt ?? installedAt,
-            updatedAt: updatedAt,
-            body: parsed.body
-        )
-
-        // Write SKILL.md to disk
-        let skillDir = skillsDir.appendingPathComponent(skillId)
-        try? fm.createDirectory(at: skillDir, withIntermediateDirectories: true)
-        let skillFile = skillDir.appendingPathComponent("SKILL.md")
-        try? content.write(to: skillFile, atomically: true, encoding: .utf8)
-
-        // Save to DB
-        dbInsertSkill(id: skillId, name: parsed.name, description: parsed.description,
-                      version: parsed.version, importSource: source,
-                      isEnabled: skill.isEnabled, installedAt: skill.installedAt, updatedAt: updatedAt)
-
-        // Sync to rootfs
-        syncToRootfs(skill: skill, content: content)
-
-        // Update in-memory list
-        if let idx = skills.firstIndex(where: { $0.id == skillId }) {
-            skills[idx] = skill
-        } else {
-            skills.append(skill)
-        }
-
-        // Do NOT markDirty — this came from sync, avoid ping-pong
+    ) throws -> Bool {
+        _ = try SyncFileSafety.component(skillId)
+        if let local = skills.first(where: { $0.id == skillId }),
+           local.updatedAt.timeIntervalSince(updatedAt) > 5 { return false }
+        try importSkillFromSyncWithAsset(skillId: skillId, content: content, zipData: nil,
+            source: source, isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt)
         return true
+    }
+
+    private func skillSyncCommitted(skillId: String, token: String) throws -> Bool {
+        guard let db else { throw CocoaError(.fileReadUnknown) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT token FROM skill_sync_commits WHERE skill_id = ?", -1, &statement, nil) == SQLITE_OK else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, (skillId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return false }
+        guard result == SQLITE_ROW, let value = sqlite3_column_text(statement, 0) else { throw CocoaError(.fileReadUnknown) }
+        return String(cString: value) == token
+    }
+
+    private func commitSkillMetadataFromSync(
+        skillId: String, content: String, source: SkillImportSource,
+        isEnabled: Bool, installedAt: Date, updatedAt: Date, token: String
+    ) throws -> Skill {
+        guard let db else { throw CocoaError(.fileWriteUnknown) }
+        let parsed = Self.parse(skillMD: content)
+        let previous = skills.first(where: { $0.id == skillId })
+        let skill = Skill(id: skillId, name: parsed.name, description: parsed.description,
+            version: parsed.version, importSource: source,
+            isEnabled: previous?.isEnabled ?? isEnabled,
+            installedAt: previous?.installedAt ?? installedAt, updatedAt: updatedAt, body: parsed.body,
+            useCount: previous?.useCount ?? 0)
+        guard sqlite3_exec(db, "SAVEPOINT skill_sync_apply", nil, nil, nil) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
+        do {
+            guard dbInsertSkill(id: skillId, name: parsed.name, description: parsed.description,
+                version: parsed.version, importSource: source, isEnabled: skill.isEnabled,
+                installedAt: skill.installedAt, updatedAt: updatedAt) else { throw CocoaError(.fileWriteUnknown) }
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "INSERT INTO skill_sync_commits(skill_id, token) VALUES (?, ?) ON CONFLICT(skill_id) DO UPDATE SET token=excluded.token", -1, &statement, nil) == SQLITE_OK else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_text(statement, 1, (skillId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
+            sqlite3_bind_text(statement, 2, (token as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
+            guard sqlite3_step(statement) == SQLITE_DONE,
+                  sqlite3_exec(db, "RELEASE skill_sync_apply", nil, nil, nil) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
+        } catch {
+            sqlite3_exec(db, "ROLLBACK TO skill_sync_apply", nil, nil, nil)
+            sqlite3_exec(db, "RELEASE skill_sync_apply", nil, nil, nil)
+            throw error
+        }
+        return skill
     }
 
     /// Download and parse SKILL.md without importing. Returns (name, id, content) for preflight checks.
@@ -838,8 +831,6 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
             throw SkillError.invalidContent
         }
 
-        let skill = try importSkill(content: skillContent, source: .file)
-
         let prefix: String
         if skillMDEntry.name == "SKILL.md" {
             prefix = ""
@@ -847,25 +838,35 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
             prefix = String(skillMDEntry.name.dropLast("SKILL.md".count))
         }
 
-        let skillDir = skillsDir.appendingPathComponent(skill.id)
-        let rootfsDir = rootfsSkillsDir.appendingPathComponent(skill.id)
+        let expectedId = Self.slugify(Self.parse(skillMD: skillContent).name)
+        var normalizedPaths = Set<String>()
+        for entry in entries where !entry.isDirectory {
+            if !prefix.isEmpty && !entry.name.hasPrefix(prefix) { continue }
+            let relative = prefix.isEmpty ? entry.name : String(entry.name.dropFirst(prefix.count))
+            guard normalizedPaths.insert(relative.precomposedStringWithCanonicalMapping.lowercased()).inserted else { throw SkillError.invalidArchive }
+            for root in [skillsDir, rootfsSkillsDir] {
+                _ = try SyncFileSafety.destination(root: root, relativePath: "\(expectedId)/\(relative)")
+            }
+        }
+        let skill = try importSkill(content: skillContent, source: .file)
 
         for entry in entries {
             guard !entry.isDirectory else { continue }
             var relativePath = entry.name
-            if !prefix.isEmpty && relativePath.hasPrefix(prefix) {
+            if !prefix.isEmpty {
+                guard relativePath.hasPrefix(prefix) else { continue }
                 relativePath = String(relativePath.dropFirst(prefix.count))
             }
             if relativePath == "SKILL.md" { continue }
             if relativePath.hasPrefix(".") { continue }
 
-            let destFile = skillDir.appendingPathComponent(relativePath)
+            let destFile = try SyncFileSafety.destination(root: skillsDir, relativePath: "\(skill.id)/\(relativePath)")
             try fm.createDirectory(at: destFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try entry.data.write(to: destFile)
+            try entry.data.write(to: destFile, options: .atomic)
 
-            let rootfsFile = rootfsDir.appendingPathComponent(relativePath)
-            try? fm.createDirectory(at: rootfsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? entry.data.write(to: rootfsFile)
+            let rootfsFile = try SyncFileSafety.destination(root: rootfsSkillsDir, relativePath: "\(skill.id)/\(relativePath)")
+            try fm.createDirectory(at: rootfsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try entry.data.write(to: rootfsFile, options: .atomic)
 
             let linuxPath = "/var/minis/skills/\(skill.id)/\(relativePath)"
             ensureParentDirsInMetaDB(for: linuxPath)
@@ -1113,6 +1114,15 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
     }
 
     func deleteSkill(_ skillId: String) {
+        do {
+            _ = try SyncFileSafety.component(skillId)
+            // Complete an earlier inbound transaction before a local deletion
+            // removes the destination that its recovery manifest still names.
+            try SkillSyncTreeTransaction(roots: [skillsDir, rootfsSkillsDir]).recover(isCommitted: skillSyncCommitted)
+        } catch {
+            AppLogger(category: "SkillSync").warning("Skill deletion deferred until transaction recovery succeeds: \(error.localizedDescription)")
+            return
+        }
         skills.removeAll { $0.id == skillId }
         dbDeleteSkill(id: skillId)
 
@@ -1140,14 +1150,19 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
     /// this skill id; the cloud already holds the tombstone so we
     /// must NOT echo it back. Mirrors the SessionV2 / EnvVarItem
     /// inbound-delete pattern.
-    func applyRemoteDeletion(id skillId: String) {
-        guard skills.contains(where: { $0.id == skillId }) else { return }
+    func applyRemoteDeletion(id skillId: String) throws {
+        _ = try SyncFileSafety.component(skillId)
+        // Validate both destinations before any destructive operation.
+        let directories = try [skillsDir, rootfsSkillsDir].map {
+            try SyncFileSafety.destination(root: $0, relativePath: skillId)
+        }
+        guard db != nil else { throw CocoaError(.fileWriteUnknown) }
+        try SkillSyncTreeTransaction(roots: [skillsDir, rootfsSkillsDir]).recover(isCommitted: skillSyncCommitted)
+        for directory in directories where fm.fileExists(atPath: directory.path) {
+            try fm.removeItem(at: directory)
+        }
+        guard dbDeleteSkill(id: skillId) else { throw CocoaError(.fileWriteUnknown) }
         skills.removeAll { $0.id == skillId }
-        dbDeleteSkill(id: skillId)
-        let skillDir = skillsDir.appendingPathComponent(skillId)
-        try? fm.removeItem(at: skillDir)
-        let rootfsDir = rootfsSkillsDir.appendingPathComponent(skillId)
-        try? fm.removeItem(at: rootfsDir)
     }
 
     func setEnabled(_ skillId: String, enabled: Bool) {
@@ -1493,7 +1508,14 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         return latest
     }
 
-    private func loadSkills() {
+    @discardableResult
+    private func loadSkills() -> Bool {
+        do {
+            try SkillSyncTreeTransaction(roots: [skillsDir, rootfsSkillsDir]).recover(isCommitted: skillSyncCommitted)
+        } catch {
+            AppLogger(category: "SkillSync").warning("Skill transaction recovery deferred: \(error.localizedDescription)")
+            return false
+        }
         skills.removeAll()
 
         // 1. Load skills already registered in the DB
@@ -1560,6 +1582,7 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
 
         // 2. Discover skills on disk that are not in the DB (e.g. created by agent in a session)
         discoverNewSkillsOnDisk(knownIds: knownIds)
+        return true
     }
 
     /// Scan skills directory for subdirectories containing SKILL.md that aren't yet in the DB.
@@ -1623,7 +1646,29 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         defer { sqlite3_finalize(checkStmt) }
 
         bindPathBlob(checkStmt, index: 1, path: linuxPath)
-        if sqlite3_step(checkStmt) == SQLITE_ROW { return }
+        if sqlite3_step(checkStmt) == SQLITE_ROW {
+            // A bundle can replace a directory with a file. Clear its old
+            // subtree metadata even when replay starts after the tree/DB commit
+            // and the old canonical paths can no longer be enumerated.
+            let inode = sqlite3_column_int64(checkStmt, 0)
+            var statStmt: OpaquePointer?
+            guard sqlite3_prepare_v2(fdb, "SELECT stat FROM stats WHERE inode = ?", -1, &statStmt, nil) == SQLITE_OK else { return }
+            sqlite3_bind_int64(statStmt, 1, inode)
+            let statResult = sqlite3_step(statStmt)
+            var currentMode: UInt32?
+            if statResult == SQLITE_ROW, let bytes = sqlite3_column_blob(statStmt, 0), sqlite3_column_bytes(statStmt, 0) >= 4 {
+                let stat = Data(bytes: bytes, count: 4)
+                currentMode = UInt32(stat[0]) | UInt32(stat[1]) << 8 | UInt32(stat[2]) << 16 | UInt32(stat[3]) << 24
+            }
+            sqlite3_finalize(statStmt)
+            guard let currentMode else { return }
+            let mode: UInt32 = isDirectory ? 0o040755 : 0o100644
+            guard currentMode & 0o170000 != mode & 0o170000 else { return }
+            // Release this read statement before the cleanup connection writes.
+            sqlite3_reset(checkStmt)
+            removeFakefsPathIfPresent(linuxPath)
+            guard sqlite3_step(checkStmt) == SQLITE_DONE else { return }
+        }
 
         let mode: UInt32 = isDirectory ? 0o040755 : 0o100644
         var statBytes: [UInt8] = Array(repeating: 0, count: 16)
@@ -2133,124 +2178,38 @@ extension SkillStore {
         skillId: String, content: String, zipData: Data?,
         source: SkillImportSource,
         isEnabled: Bool, installedAt: Date, updatedAt: Date
-    ) {
-        let syncLogger = AppLogger(category: "SkillSync")
-
-        // [T-icloud-cloud-overwrites-local-edits] Symmetric edit-window
-        // guard. The SEND (upload) path defers a skill whose files were
-        // touched within the last 60s (isSkillStable) so we never push a
-        // half-written skill. The IMPORT (download) path had NO such guard:
-        // while the user is actively editing, the locally-newer upload keeps
-        // deferring (unstable) yet a STALE cloud record keeps importing every
-        // cycle — and its ZIP-as-truth prune deletes the sibling files the
-        // user just created (e.g. cookies.env vanishing in the debug log,
-        // issue #41 "改完又被覆盖"). Mirror the upload gate here: if the local
-        // skill dir has any file modified within the stability window, the
-        // user is mid-edit — skip this import entirely (SKILL.md write AND
-        // ZIP unpack/prune). A later cycle, once edits settle >60s, applies
-        // genuine peer changes normally. A skill that doesn't exist locally
-        // has no edit window and always applies (first download on a new
-        // device).
-        if skills.contains(where: { $0.id == skillId }), !isSkillStable(skillId) {
-            syncLogger.info("[IMPORT] '\(skillId)' SKIP — local files modified within stability window (user mid-edit); deferring inbound apply to protect local edits")
-            return
+    ) throws {
+        _ = try SyncFileSafety.component(skillId)
+        // Parse the complete archive before staging or touching either live tree.
+        let entries = try zipData.map { try Self.readZipEntries(data: $0) }
+        guard db != nil else { throw CocoaError(.fileWriteUnknown) }
+        let transaction = SkillSyncTreeTransaction(roots: [skillsDir, rootfsSkillsDir])
+        try transaction.recover(isCommitted: skillSyncCommitted)
+        if let local = skills.first(where: { $0.id == skillId }) {
+            if local.updatedAt.timeIntervalSince(updatedAt) > 5 { return }
+            if !isSkillStable(skillId) { throw CocoaError(.fileWriteUnknown) }
         }
-
-        // [T-icloud-local-edit-clobber] Echo short circuit. Applying a record
-        // rewrites SKILL.md (+ ZIP unpack), bumping file mtimes; the dirty
-        // scanner then re-pushes the skill with the SAME updatedAt, every peer
-        // applies + rewrites + re-pushes in turn, and the identical record
-        // ping-pongs between devices forever. An inbound record whose
-        // updatedAt matches the local row (±1s) and whose body matches the
-        // local SKILL.md is that echo — same version, nothing to do.
-        if let local = skills.first(where: { $0.id == skillId }),
-           abs(local.updatedAt.timeIntervalSince(updatedAt)) <= 1,
-           readSkillContent(skillId) == content {
-            syncLogger.info("[IMPORT] '\(skillId)' SKIP — echo of the local version (same updatedAt + same body)")
-            return
+        let oldPaths = Set(collectRelativePaths(in: skillsDir.appendingPathComponent(skillId)))
+            .union(collectRelativePaths(in: rootfsSkillsDir.appendingPathComponent(skillId)))
+        try transaction.apply(skillID: skillId, content: content, entries: entries, updatedAt: updatedAt,
+            isCommitted: skillSyncCommitted, commitMetadata: { token in
+                let skill = try self.commitSkillMetadataFromSync(skillId: skillId, content: content, source: source,
+                    isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt, token: token)
+                // Both roots and SQLite are now committed. Keep memory current
+                // even if later backup cleanup needs a retry.
+                if let index = self.skills.firstIndex(where: { $0.id == skillId }) { self.skills[index] = skill }
+                else { self.skills.append(skill) }
+            })
+        let newPaths = Set(collectRelativePaths(in: skillsDir.appendingPathComponent(skillId)))
+        // Remove obsolete file nodes before adding replacement directories and
+        // descendants; subtree removal after insertion would erase new entries.
+        for path in oldPaths.subtracting(newPaths) {
+            removeFakefsPathIfPresent("/var/minis/skills/\(skillId)/\(path)")
         }
-
-        // First import metadata + SKILL.md (reuses existing importSkillFromSync)
-        syncLogger.info("[IMPORT] '\(skillId)' writing SKILL.md (\(content.count) chars) and updating DB")
-        let applied = importSkillFromSync(
-            skillId: skillId, content: content, source: source,
-            isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt
-        )
-        // [T-icloud-cloud-overwrites-local-edits] Local copy is newer — the
-        // SKILL.md write was skipped above. Abort the ZIP unpack too, or the
-        // "ZIP-as-truth" prune below would delete local bundled files that
-        // the user just added/edited, against this stale remote record.
-        guard applied else {
-            syncLogger.info("[IMPORT] '\(skillId)' skipped ZIP unpack — local newer than remote record")
-            return
-        }
-
-        // If ZIP asset is provided, extract bundled files
-        guard let zipData, !zipData.isEmpty else {
-            syncLogger.info("[IMPORT] '\(skillId)' complete — no bundled files (SKILL.md only)")
-            return
-        }
-        do {
-            let entries = try Self.readZipEntries(data: zipData)
-            let bundledFiles = entries.filter { !$0.isDirectory && $0.name != "SKILL.md" && !$0.name.hasPrefix(".") }
-            syncLogger.info("[IMPORT] '\(skillId)' unpacking ZIP: \(zipData.count) bytes, \(entries.count) entries total, \(bundledFiles.count) bundled files to extract")
-
-            let skillDir = skillsDir.appendingPathComponent(skillId)
-            let rootfsDir = rootfsSkillsDir.appendingPathComponent(skillId)
-
-            // ZIP-as-truth pruning: every bundled file that exists locally
-            // but isn't in the incoming ZIP must have been deleted on the
-            // sender. Without this step the receiver kept stale bundled
-            // files forever (the import only wrote new entries, never
-            // removed obsolete ones), so a delete in scripts/ or
-            // references/ on peer A would silently fail to propagate to
-            // peer B. SKILL.md is excluded from this — it's written by
-            // importSkillFromSync above.
-            let zipPaths = Set(bundledFiles.map { $0.name })
-            let localBundled = collectRelativePaths(in: skillDir).filter { $0 != "SKILL.md" }
-            var prunedCount = 0
-            for rel in localBundled where !zipPaths.contains(rel) {
-                let libFile = skillDir.appendingPathComponent(rel)
-                try? fm.removeItem(at: libFile)
-                let rootfsFile = rootfsDir.appendingPathComponent(rel)
-                try? fm.removeItem(at: rootfsFile)
-                let linuxPath = "/var/minis/skills/\(skillId)/\(rel)"
-                removeFakefsPathIfPresent(linuxPath)
-                prunedCount += 1
-                syncLogger.info("[IMPORT] '\(skillId)' pruned stale bundled file: \(rel)")
-            }
-            if prunedCount > 0 {
-                syncLogger.info("[IMPORT] '\(skillId)' pruned \(prunedCount) local bundled file(s) missing from incoming ZIP")
-            }
-
-            var extractedCount = 0
-            for entry in entries {
-                guard !entry.isDirectory else { continue }
-                let rel = entry.name
-                if rel == "SKILL.md" { continue }   // already written by importSkillFromSync
-                if rel.hasPrefix(".") { continue }
-
-                // Write to Library skill dir
-                let destFile = skillDir.appendingPathComponent(rel)
-                try? fm.createDirectory(at: destFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try entry.data.write(to: destFile)
-
-                // Write to rootfs
-                let rootfsFile = rootfsDir.appendingPathComponent(rel)
-                try? fm.createDirectory(at: rootfsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? entry.data.write(to: rootfsFile)
-
-                let linuxPath = "/var/minis/skills/\(skillId)/\(rel)"
-                ensureParentDirsInMetaDB(for: linuxPath)
-                ensureFakefsMetadata(for: linuxPath, isDirectory: false)
-
-                extractedCount += 1
-                syncLogger.info("[IMPORT] '\(skillId)' extracted: \(rel) (\(entry.data.count) bytes)")
-            }
-
-            syncLogger.info("[IMPORT] '\(skillId)' complete — \(extractedCount) bundled files extracted, \(prunedCount) pruned")
-        } catch {
-            syncLogger.error("[IMPORT] '\(skillId)' failed to unpack ZIP: \(error)")
+        for path in newPaths.union(["SKILL.md"]) {
+            let linuxPath = "/var/minis/skills/\(skillId)/\(path)"
+            ensureParentDirsInMetaDB(for: linuxPath)
+            ensureFakefsMetadata(for: linuxPath, isDirectory: false)
         }
     }
 
@@ -2370,107 +2329,13 @@ private extension Data {
 // MARK: - Minimal ZIP Reader (in-memory)
 
 extension SkillStore {
-    struct ZipEntry {
-        let name: String
-        let isDirectory: Bool
-        let data: Data
-    }
+    typealias ZipEntry = SafeSkillArchive.Entry
 
     static func readZipEntries(data: Data) throws -> [ZipEntry] {
-        guard data.count >= 22 else { throw SkillError.invalidArchive }
-
-        var eocdOffset = -1
-        let searchStart = max(0, data.count - 65557)
-        for i in stride(from: data.count - 22, through: searchStart, by: -1) {
-            if data[i] == 0x50 && data[i+1] == 0x4B && data[i+2] == 0x05 && data[i+3] == 0x06 {
-                eocdOffset = i
-                break
-            }
-        }
-        guard eocdOffset >= 0 else { throw SkillError.invalidArchive }
-
-        let entryCount = readU16(data, at: eocdOffset + 10)
-        let cdOffset = Int(readU32(data, at: eocdOffset + 16))
-
-        var entries: [ZipEntry] = []
-        var pos = cdOffset
-
-        for _ in 0..<entryCount {
-            guard pos + 46 <= data.count else { break }
-            let sig = readU32(data, at: pos)
-            guard sig == 0x02014B50 else { break }
-
-            let method = readU16(data, at: pos + 10)
-            let compSize = Int(readU32(data, at: pos + 20))
-            let uncompSize = Int(readU32(data, at: pos + 24))
-            let nameLen = Int(readU16(data, at: pos + 28))
-            let extraLen = Int(readU16(data, at: pos + 30))
-            let commentLen = Int(readU16(data, at: pos + 32))
-            let localOffset = Int(readU32(data, at: pos + 42))
-
-            let nameData = data[pos+46 ..< pos+46+nameLen]
-            let name = String(data: nameData, encoding: .utf8) ?? ""
-
-            pos += 46 + nameLen + extraLen + commentLen
-
-            let isDir = name.hasSuffix("/")
-
-            guard localOffset + 30 <= data.count else { continue }
-            let localNameLen = Int(readU16(data, at: localOffset + 26))
-            let localExtraLen = Int(readU16(data, at: localOffset + 28))
-            let dataStart = localOffset + 30 + localNameLen + localExtraLen
-
-            guard dataStart + compSize <= data.count else { continue }
-            let compData = data[dataStart ..< dataStart + compSize]
-
-            let entryData: Data
-            if isDir || uncompSize == 0 {
-                entryData = Data()
-            } else if method == 0 {
-                entryData = Data(compData)
-            } else if method == 8 {
-                guard let decompressed = decompress(Data(compData), expectedSize: uncompSize) else { continue }
-                entryData = decompressed
-            } else {
-                continue
-            }
-
-            entries.append(ZipEntry(name: name, isDirectory: isDir, data: entryData))
-        }
-
-        return entries
+        try SafeSkillArchive.read(data)
     }
 
-    private static func readU16(_ data: Data, at offset: Int) -> UInt16 {
-        UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
-    }
 
-    private static func readU32(_ data: Data, at offset: Int) -> UInt32 {
-        UInt32(data[offset]) |
-        (UInt32(data[offset + 1]) << 8) |
-        (UInt32(data[offset + 2]) << 16) |
-        (UInt32(data[offset + 3]) << 24)
-    }
-
-    private static func decompress(_ data: Data, expectedSize: Int) -> Data? {
-        guard expectedSize > 0 else { return Data() }
-        var decompressed = Data(count: expectedSize)
-        let result = decompressed.withUnsafeMutableBytes { destPtr -> Int in
-            data.withUnsafeBytes { srcPtr -> Int in
-                compression_decode_buffer(
-                    destPtr.baseAddress!.assumingMemoryBound(to: UInt8.self),
-                    expectedSize,
-                    srcPtr.baseAddress!.assumingMemoryBound(to: UInt8.self),
-                    data.count,
-                    nil,
-                    COMPRESSION_ZLIB
-                )
-            }
-        }
-        guard result > 0 else { return nil }
-        decompressed.count = result
-        return decompressed
-    }
 }
 
 // MARK: - XML Escape Helper

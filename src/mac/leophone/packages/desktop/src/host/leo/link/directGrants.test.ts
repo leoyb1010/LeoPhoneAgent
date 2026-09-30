@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -53,6 +53,29 @@ test("local pairing is one-use, target-bound, short-lived, and accepts no caller
     const expired = grants.createPairingCode();
     now += 301_000;
     assert.equal(await grants.redeem(expired.join, "target", "phone"), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+
+test("a failed revocation remains denied and a retry persists it across restart", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-grant-retry-"));
+  const file = path.join(dir, "grants.json");
+  try {
+    const grants = new DirectGrants(file, "target");
+    await grants.restore();
+    const issued = await grants.issue({ kind: "iphone", deviceId: "phone" });
+    await mkdir(`${file}.tmp`); // Inject a real write failure without changing filesystem permissions.
+    await assert.rejects(grants.revoke("phone"));
+    assert.equal(grants.authenticate(issued.token, "target"), null);
+    await rm(`${file}.tmp`, { recursive: true });
+    await grants.revoke("phone");
+    const restored = new DirectGrants(file, "target");
+    await restored.restore();
+    assert.equal(restored.authenticate(issued.token, "target"), null);
+    const registry = JSON.parse(await readFile(file, "utf8"));
+    assert.deepEqual(registry.revokedDeviceIds, ["phone"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

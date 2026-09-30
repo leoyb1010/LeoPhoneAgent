@@ -407,14 +407,12 @@ struct ProviderDetailPage {
       if (!live) {
         throw new Error('先保存再拉模型');
       }
-      if (skipUpstreamModels(live.type, live.credential)) {
-        providerStore.applyModels(live, await OpenAICompatClient.codexModels(live.id));
-        this.models = live.models.slice();
-      } else {
-        this.models = await providerStore.refreshModels(live);
-      }
-      this.model = live.model;
-      await providerStore.save(ctx);
+      const updated = skipUpstreamModels(live.type, live.credential) ?
+        await providerStore.refreshModels(ctx, this.rowId,
+          async (snapshot: ProviderInstance): Promise<string[]> => OpenAICompatClient.codexModels(snapshot.id)) :
+        await providerStore.refreshModels(ctx, this.rowId);
+      this.models = updated.models.slice();
+      this.model = updated.model;
       this.message = `已拉取 ${this.models.length} 个模型`;
     } catch (err) {
       this.message = `${err}`;
@@ -440,7 +438,7 @@ struct ProviderDetailPage {
       }
       const ctx = getContext(this) as common.UIAbilityContext;
       await providerStore.upsert(ctx, this.current(), this.keyDraft);
-      await OAuthSession.bind(this.rowId);
+      await OAuthSession.bind(this.rowId, this.keyDraft);
       this.message = '已重新登录';
     } catch (err) {
       this.message = `${err}`;

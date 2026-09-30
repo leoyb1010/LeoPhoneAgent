@@ -285,7 +285,8 @@ final class SensitiveToolGate: ObservableObject {
         let risk = category.allowsSmartApproval ? riskSubject.map(CommandRisk.assess) : nil
         // [T-smart-approve] 智能批准:只读的命令直接放行,其余照常问。风险等级
         // 只用来提示(弹窗标题、手表颜色),不加额外步骤。
-        if FullAutoGate.mode == .smart, risk == .low {
+        if FullAutoGate.mode == .smart, category.allowsSmartApproval,
+           let riskSubject, SmartShellApproval.isReadOnly(riskSubject) {
             FullAutoGate.announce(String(localized: "智能批准 · 只读命令 \(host)"), sessionId: sessionId)
             return .allowed
         }

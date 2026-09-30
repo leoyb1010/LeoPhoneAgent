@@ -118,16 +118,21 @@ export class DirectGrants {
   }
 
   revoke(deviceId: string): Promise<void> {
+    return this.revokeMany([deviceId]);
+  }
+
+  revokeMany(deviceIds: string[]): Promise<void> {
     return this.serial(async () => {
-      if (!this.loaded || !deviceId || deviceId.length > 256) throw new Error("Invalid revocation");
-      if (this.state.revokedDeviceIds.includes(deviceId)) return;
+      if (!this.loaded || deviceIds.some((id) => !id || id.length > 256))
+        throw new Error("Invalid revocation");
+      const revoked = new Set([...this.state.revokedDeviceIds, ...deviceIds]);
       const next: State = {
         ...this.state,
         targetDeviceId: this.targetDeviceId,
-        revokedDeviceIds: [...this.state.revokedDeviceIds, deviceId],
-        grants: this.state.grants.filter((item) => item.caller.deviceId !== deviceId),
+        revokedDeviceIds: [...revoked],
+        grants: this.state.grants.filter((item) => !revoked.has(item.caller.deviceId ?? "")),
       };
-      // 收到撤销后先在内存拒绝；磁盘满时也不能继续放行直连。
+      // 整批先拒绝再写盘；逐个 await 会在首个失败后漏掉其他设备的 direct 授权。
       this.state = next;
       await writeDurableJson(this.file, next);
     });

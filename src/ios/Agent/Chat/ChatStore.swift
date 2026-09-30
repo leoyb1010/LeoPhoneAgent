@@ -1864,6 +1864,47 @@ actor ChatStore {
         deleteSessionLocalRowsOnly(id)
     }
 
+    func deleteSessionFromSync(_ id: String) throws {
+        _ = try SyncFileSafety.component(id)
+        // Preserve the local deletion path's scope. Workspace tombstones are
+        // separate SessionFile records; unsynced workspace content stays local.
+        let directories = try ["browser", "attachments", "images", "generated"].map {
+            try SyncFileSafety.destination(root: minisBaseURL, relativePath: "\(id)/\($0)")
+        }
+        try withInboundMutation {
+            for (table, key) in [("messages", "session_id"), ("compact_markers", "session_id"), ("sessions", "id")] {
+                var statement: OpaquePointer?
+                defer { sqlite3_finalize(statement) }
+                _ = try prepareInbound("DELETE FROM \(table) WHERE \(key) = ?", &statement)
+                sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, nil)
+                _ = try stepInbound(statement)
+            }
+            for directory in directories where FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.removeItem(at: directory)
+            }
+        }
+        invalidateSessionListCache()
+        Task { @MainActor in
+            if #available(iOS 17.0, *) { CloudSyncEngine.shared.removeSessionCache(id) }
+            SessionBadgeStore.shared.clearAll(for: id)
+            SessionActivityTracker.shared.setInactive(id, source: "sessionDeleted")
+            AgentLiveActivityManager.shared.handleSessionDeleted(id)
+            SessionSpotlightIndexer.remove(sessionId: id)
+            ProviderConfigStore.shared.forgetSession(id)
+            SensitiveToolGate.shared.forgetSession(id)
+        }
+    }
+
+    func deleteCompactMarkerFromSync(_ id: String) throws {
+        try withInboundMutation {
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            _ = try prepareInbound("DELETE FROM compact_markers WHERE id = ?", &statement)
+            sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, nil)
+            _ = try stepInbound(statement)
+        }
+    }
+
     /// True if a session row exists locally. Lightweight existence check
     /// for inbound delete handlers — they need to know whether to log a
     /// real deletion or a no-op.
@@ -2605,12 +2646,19 @@ actor ChatStore {
     func insertCompactMarker(_ marker: CompactMarker) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
+        do { try insertCompactMarkerRow(marker) }
+        catch { noteSyncMutationFailure(); return }
+        markDirty(recordType: "CompactMarker", recordId: marker.id)
+    }
+
+    private func insertCompactMarkerRow(_ marker: CompactMarker) throws {
         let sql = """
             INSERT INTO compact_markers (id, session_id, summary, first_kept_sort_order, compacted_count, created_at, ui_boundary_sort_order, boundary_message_id, first_kept_message_id, last_compacted_message_id, version)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+        defer { sqlite3_finalize(stmt) }
+        if try prepareInbound(sql, &stmt) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (marker.id as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 2, (marker.sessionId as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 3, (marker.summary as NSString).utf8String, -1, nil)
@@ -2638,10 +2686,9 @@ actor ChatStore {
                 sqlite3_bind_null(stmt, 10)
             }
             sqlite3_bind_int64(stmt, 11, Int64(marker.version))
-            sqlite3_step(stmt)
+            _ = try stepInbound(stmt)
         }
-        sqlite3_finalize(stmt)
-        markDirty(recordType: "CompactMarker", recordId: marker.id)
+        sqlite3_finalize(stmt); stmt = nil
     }
 
     /// Rewrite an existing compact marker in place (same id). Used by Phase 2.5
@@ -2684,45 +2731,52 @@ actor ChatStore {
     /// Merge a remote compact marker into local DB.
     /// Phase A: createdAt-based UPSERT — remote newer wins, otherwise keep local.
     /// This lets newer builds propagate upgraded boundary fields to older remote markers.
-    func mergeRemoteCompactMarker(_ marker: CompactMarker) {
-        // [T-icloud-record-delete-resurrection] A marker we just deleted
-        // locally (revertCompact) coming back via fetchRecentV2 before the
-        // cloud delete lands must not be re-inserted. Markers are immutable,
-        // so createdAt is their only clock.
-        if isRecentlyDeletedRecord(type: "CompactMarker", id: marker.id, remoteUpdatedAt: marker.createdAt) {
-            iCloudLogger.info("[iCloud] mergeRemoteCompactMarker SKIP (recently deleted locally): id=\(marker.id.prefix(8))")
-            return
-        }
-        // Only merge if the session exists locally
-        let checkSql = "SELECT id FROM sessions WHERE id = ?"
-        var checkStmt: OpaquePointer?
-        var sessionExists = false
-        if sqlite3_prepare_v2(db, checkSql, -1, &checkStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(checkStmt, 1, (marker.sessionId as NSString).utf8String, -1, nil)
-            sessionExists = sqlite3_step(checkStmt) == SQLITE_ROW
-        }
-        sqlite3_finalize(checkStmt)
-        guard sessionExists else { return }
-
-        // If local already has this marker id, only overwrite when remote is strictly newer.
-        if let existing = getCompactMarker(id: marker.id) {
-            guard marker.createdAt > existing.createdAt else {
-                iCloudLogger.info("[iCloud] mergeRemoteCompactMarker SKIP (local newer or equal): id=\(marker.id.prefix(8))")
+    func mergeRemoteCompactMarker(_ marker: CompactMarker) throws {
+        try withInboundMutation {
+            // [T-icloud-record-delete-resurrection] A marker we just deleted
+            // locally (revertCompact) coming back via fetchRecentV2 before the
+            // cloud delete lands must not be re-inserted. Markers are immutable,
+            // so createdAt is their only clock.
+            if isRecentlyDeletedRecord(type: "CompactMarker", id: marker.id, remoteUpdatedAt: marker.createdAt) {
+                iCloudLogger.info("[iCloud] mergeRemoteCompactMarker SKIP (recently deleted locally): id=\(marker.id.prefix(8))")
                 return
             }
-            // DELETE existing row so the subsequent insertCompactMarker can re-insert
-            // with all columns (including legacy migrations) in one place.
-            let delSql = "DELETE FROM compact_markers WHERE id = ?"
-            var delStmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, nil)
-                sqlite3_step(delStmt)
+            // Only merge if the session exists locally
+            let checkSql = "SELECT id FROM sessions WHERE id = ?"
+            var checkStmt: OpaquePointer?
+            defer { sqlite3_finalize(checkStmt) }
+            var sessionExists = false
+            if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
+                sqlite3_bind_text(checkStmt, 1, (marker.sessionId as NSString).utf8String, -1, nil)
+                sessionExists = try stepInbound(checkStmt) == SQLITE_ROW
             }
-            sqlite3_finalize(delStmt)
-            iCloudLogger.info("[iCloud] mergeRemoteCompactMarker UPDATE (remote newer): id=\(marker.id.prefix(8))")
-        }
+            sqlite3_finalize(checkStmt); checkStmt = nil
+            guard sessionExists else {
+                if isResurrectionOfDeleted(marker.sessionId, remoteUpdatedAt: marker.createdAt) { return }
+                throw CocoaError(.fileReadUnknown)
+            }
 
-        insertCompactMarker(marker)
+            // If local already has this marker id, only overwrite when remote is strictly newer.
+            if let existing = getCompactMarker(id: marker.id) {
+                guard marker.createdAt > existing.createdAt else {
+                    iCloudLogger.info("[iCloud] mergeRemoteCompactMarker SKIP (local newer or equal): id=\(marker.id.prefix(8))")
+                    return
+                }
+                // DELETE existing row so the subsequent insertCompactMarker can re-insert
+                // with all columns (including legacy migrations) in one place.
+                let delSql = "DELETE FROM compact_markers WHERE id = ?"
+                var delStmt: OpaquePointer?
+                defer { sqlite3_finalize(delStmt) }
+                if try prepareInbound(delSql, &delStmt) == SQLITE_OK {
+                    sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, nil)
+                    _ = try stepInbound(delStmt)
+                }
+                sqlite3_finalize(delStmt); delStmt = nil
+                iCloudLogger.info("[iCloud] mergeRemoteCompactMarker UPDATE (remote newer): id=\(marker.id.prefix(8))")
+            }
+
+            try insertCompactMarkerRow(marker)
+        }
     }
 
     func sessionProvenance(_ id: String) -> SessionProvenanceStore.Provenance {
@@ -2863,15 +2917,16 @@ actor ChatStore {
     // CompactMarker). Written automatically by markDirty(op=delete).
 
     /// Record that record `id` of `type` was just deleted locally.
-    func recordDeletedRecordTombstone(type: String, id: String, at: Date = Date()) {
-        let sql = "INSERT OR REPLACE INTO deleted_record_tombstones (record_type, record_id, deleted_at) VALUES (?, ?, ?)"
+    @discardableResult
+    func recordDeletedRecordTombstone(type: String, id: String, at: Date = Date()) -> Bool {
+        let sql = "INSERT INTO deleted_record_tombstones (record_type, record_id, deleted_at) VALUES (?, ?, ?) ON CONFLICT(record_type, record_id) DO UPDATE SET deleted_at = MAX(deleted_record_tombstones.deleted_at, excluded.deleted_at)"
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, nil)
         sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
         sqlite3_bind_double(stmt, 3, at.timeIntervalSince1970)
-        _ = sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     /// The timestamp record `id` of `type` was locally deleted, or nil.
@@ -2891,7 +2946,7 @@ actor ChatStore {
     /// rather than a genuine newer re-create. The merge should refuse it.
     func isRecentlyDeletedRecord(type: String, id: String, remoteUpdatedAt: Date) -> Bool {
         guard let deletedAt = deletedRecordTombstone(type: type, id: id) else { return false }
-        return remoteUpdatedAt.timeIntervalSince1970 <= deletedAt.timeIntervalSince1970 + 5
+        return remoteUpdatedAt.timeIntervalSince1970 <= deletedAt.timeIntervalSince1970 + (type == "SessionFile" ? 0 : 5)
     }
 
     /// Set or clear the v2 soft-delete tombstone on a session row. Pass
@@ -4282,7 +4337,8 @@ extension ChatStore {
         try SyncDeliveryLedger.purge(db, prefix: prefix, keeping: keeping)
     }
     func loadSyncDeliveryTickets(destination: String, limit: Int = 100) throws -> [SyncDeliveryTicket] {
-        try SyncDeliveryLedger.load(db, destination: destination, limit: limit)
+        try SyncDeliveryLedger.load(db, destination: destination, limit: limit,
+            excludingTypes: Set(UploadPolicy.Category.allCases.filter { !UploadPolicy.isEnabled($0) }.flatMap { $0.recordTypes }))
     }
     func acknowledgeSyncDelivery(_ ticket: SyncDeliveryTicket) throws {
         try SyncDeliveryLedger.acknowledge(db, ticket: ticket)
@@ -5335,25 +5391,56 @@ extension ChatStore {
         return count
     }
 
+    private func withInboundMutation(_ apply: () throws -> Void) throws {
+        guard let db, sqlite3_exec(db, "SAVEPOINT sync_inbound_apply", nil, nil, nil) == SQLITE_OK else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        do {
+            try apply()
+            guard sqlite3_exec(db, "RELEASE sync_inbound_apply", nil, nil, nil) == SQLITE_OK else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+        } catch {
+            sqlite3_exec(db, "ROLLBACK TO sync_inbound_apply", nil, nil, nil)
+            sqlite3_exec(db, "RELEASE sync_inbound_apply", nil, nil, nil)
+            throw error
+        }
+    }
+
+    private func prepareInbound(_ sql: String, _ statement: inout OpaquePointer?) throws -> Int32 {
+        let result = sqlite3_prepare_v2(db, sql, -1, &statement, nil)
+        guard result == SQLITE_OK else { throw CocoaError(.fileReadUnknown) }
+        return result
+    }
+
+    private func stepInbound(_ statement: OpaquePointer?) throws -> Int32 {
+        let result = sqlite3_step(statement)
+        guard result == SQLITE_ROW || result == SQLITE_DONE else { throw CocoaError(.fileWriteUnknown) }
+        return result
+    }
+
     // MARK: - Sync Device CRUD
 
-    func upsertSyncDevice(_ device: SyncDevice) {
-        iCloudLogger.info("[iCloud] upsertSyncDevice: id=\(device.id) name=\(device.deviceName) zone=\(device.zoneName) upload=\(device.uploadTypes)")
-        let sql = """
-            INSERT OR REPLACE INTO sync_devices (device_id, device_name, zone_name, last_seen, os_version, upload_types)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (device.id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (device.deviceName as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (device.zoneName as NSString).utf8String, -1, nil)
-            sqlite3_bind_double(stmt, 4, device.lastSeen.timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 5, (device.osVersion as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 6, (device.uploadTypes.joined(separator: ",") as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+    func upsertSyncDevice(_ device: SyncDevice) throws {
+        try withInboundMutation {
+            iCloudLogger.info("[iCloud] upsertSyncDevice: id=\(device.id) name=\(device.deviceName) zone=\(device.zoneName) upload=\(device.uploadTypes)")
+            let sql = """
+                INSERT OR REPLACE INTO sync_devices (device_id, device_name, zone_name, last_seen, os_version, upload_types)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            if try prepareInbound(sql, &stmt) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (device.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (device.deviceName as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (device.zoneName as NSString).utf8String, -1, nil)
+                sqlite3_bind_double(stmt, 4, device.lastSeen.timeIntervalSince1970)
+                sqlite3_bind_text(stmt, 5, (device.osVersion as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 6, (device.uploadTypes.joined(separator: ",") as NSString).utf8String, -1, nil)
+                _ = try stepInbound(stmt)
+            }
+            sqlite3_finalize(stmt); stmt = nil
         }
-        sqlite3_finalize(stmt)
     }
 
     func listSyncDevices() -> [SyncDevice] {
@@ -5439,172 +5526,179 @@ extension ChatStore {
     /// Merge a remote session into local sessions table.
     /// - `remotePinnedAtRaw`: The raw pinnedAt Date from CKRecord. nil = old device (field absent),
     ///   epoch 0 = explicitly unpinned, positive = pinned timestamp.
-    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) {
-        invalidateSessionListCache()
-        // Check if local session exists and its updated_at + pinned_at
-        var localUpdatedAt: Double?
-        var localPinnedAt: Double?
-        let checkSql = "SELECT updated_at, pinned_at FROM sessions WHERE id = ?"
-        var checkStmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, checkSql, -1, &checkStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(checkStmt, 1, (session.id as NSString).utf8String, -1, nil)
-            if sqlite3_step(checkStmt) == SQLITE_ROW {
-                localUpdatedAt = sqlite3_column_double(checkStmt, 0)
-                if sqlite3_column_type(checkStmt, 1) != SQLITE_NULL {
-                    localPinnedAt = sqlite3_column_double(checkStmt, 1)
-                }
-            }
-        }
-        sqlite3_finalize(checkStmt)
-
-        let remoteUpdated = session.updatedAt.timeIntervalSince1970
-
-        // Resolve pinned_at merge:
-        // - remotePinnedAtRaw == nil → old device, don't touch local pin state
-        // - remotePinnedAtRaw == epoch 0 → explicit unpin from remote
-        // - remotePinnedAtRaw > 0 → pin from remote
-        // Rule: most recent pin/unpin wins (by timestamp). If remote has no pin info, keep local.
-        let resolvedPinnedAt: Double? = {
-            guard let rawDate = remotePinnedAtRaw else {
-                // Old device didn't send pinnedAt — preserve local state
-                return localPinnedAt
-            }
-            let remoteTs = rawDate.timeIntervalSince1970
-            if remoteTs <= 0 {
-                // Remote explicitly unpinned
-                if let localTs = localPinnedAt {
-                    // Local is pinned — keep local pin (local action is more recent if user pinned locally)
-                    // We can't know which is newer without a dedicated pin_updated_at, so keep local pin
-                    // to avoid accidental unpin from stale remote state
-                    return localTs
-                }
-                return nil // both unpinned
-            } else {
-                // Remote is pinned
-                if let localTs = localPinnedAt {
-                    // Both pinned — keep the more recent pin timestamp
-                    return max(remoteTs, localTs)
-                }
-                // Local not pinned, remote is pinned — adopt remote pin
-                return remoteTs
-            }
-        }()
-
-        if let localTs = localUpdatedAt {
-            // Local exists — only update title/category/etc if remote is newer
-            if remoteUpdated > localTs {
-                iCloudLogger.info("[iCloud] mergeRemoteSession UPDATE (remote newer): id=\(session.id) remoteTs=\(remoteUpdated) localTs=\(localTs)")
-                let sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ? WHERE id = ?"
-                var stmt: OpaquePointer?
-                if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                    bindOptionalText(stmt, index: 1, value: session.title)
-                    bindOptionalText(stmt, index: 2, value: session.category)
-                    sqlite3_bind_double(stmt, 3, remoteUpdated)
-                    sqlite3_bind_int(stmt, 4, memoryEnabled ? 1 : 0)
-                    bindOptionalText(stmt, index: 5, value: modelBinding)
-                    if let pinTs = resolvedPinnedAt {
-                        sqlite3_bind_double(stmt, 6, pinTs)
-                    } else {
-                        sqlite3_bind_null(stmt, 6)
+    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) throws {
+        try withInboundMutation {
+            invalidateSessionListCache()
+            // Check if local session exists and its updated_at + pinned_at
+            var localUpdatedAt: Double?
+            var localPinnedAt: Double?
+            let checkSql = "SELECT updated_at, pinned_at FROM sessions WHERE id = ?"
+            var checkStmt: OpaquePointer?
+            defer { sqlite3_finalize(checkStmt) }
+            if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
+                sqlite3_bind_text(checkStmt, 1, (session.id as NSString).utf8String, -1, nil)
+                if try stepInbound(checkStmt) == SQLITE_ROW {
+                    localUpdatedAt = sqlite3_column_double(checkStmt, 0)
+                    if sqlite3_column_type(checkStmt, 1) != SQLITE_NULL {
+                        localPinnedAt = sqlite3_column_double(checkStmt, 1)
                     }
-                    sqlite3_bind_text(stmt, 7, (session.id as NSString).utf8String, -1, nil)
-                    sqlite3_step(stmt)
                 }
-                sqlite3_finalize(stmt)
-                // Wake the home list. ContentView observes
-                // .sessionDidUpdate (debounce 3s — fine for title/pin
-                // edits arriving from a peer). Without this post a
-                // remote-newer merge silently updated SQLite while the
-                // list kept showing the stale snapshot until the user
-                // backgrounded the app or pulled-to-refresh
-                // (T-inbound-session-no-refresh).
-                NotificationCenter.default.post(name: .sessionDidUpdate, object: session.id)
-            } else {
-                let delta = localTs - remoteUpdated
-                iCloudLogger.info("[iCloud] mergeRemoteSession SKIP (local newer): id=\(session.id) localTs=\(localTs) remoteTs=\(remoteUpdated) delta=\(String(format: "%+.3f", delta))s from=\(fromDeviceId)")
-                if remoteUpdated > localTs {
-                    iCloudLogger.warning("[iCloud] mergeRemoteSession SKIP despite remote-newer: id=\(session.id) localTs=\(localTs) remoteTs=\(remoteUpdated) — should not happen")
+            }
+            sqlite3_finalize(checkStmt); checkStmt = nil
+
+            let remoteUpdated = session.updatedAt.timeIntervalSince1970
+
+            // Resolve pinned_at merge:
+            // - remotePinnedAtRaw == nil → old device, don't touch local pin state
+            // - remotePinnedAtRaw == epoch 0 → explicit unpin from remote
+            // - remotePinnedAtRaw > 0 → pin from remote
+            // Rule: most recent pin/unpin wins (by timestamp). If remote has no pin info, keep local.
+            let resolvedPinnedAt: Double? = {
+                guard let rawDate = remotePinnedAtRaw else {
+                    // Old device didn't send pinnedAt — preserve local state
+                    return localPinnedAt
                 }
-                // Even if we skip the main update, still merge pin state if remote has pin info
-                // and the resolved pin differs from local
-                if remotePinnedAtRaw != nil, resolvedPinnedAt != localPinnedAt {
-                    let pinSql = "UPDATE sessions SET pinned_at = ? WHERE id = ?"
-                    var pinStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, pinSql, -1, &pinStmt, nil) == SQLITE_OK {
-                        if let pinTs = resolvedPinnedAt {
-                            sqlite3_bind_double(pinStmt, 1, pinTs)
-                        } else {
-                            sqlite3_bind_null(pinStmt, 1)
-                        }
-                        sqlite3_bind_text(pinStmt, 2, (session.id as NSString).utf8String, -1, nil)
-                        sqlite3_step(pinStmt)
+                let remoteTs = rawDate.timeIntervalSince1970
+                if remoteTs <= 0 {
+                    // Remote explicitly unpinned
+                    if let localTs = localPinnedAt {
+                        // Local is pinned — keep local pin (local action is more recent if user pinned locally)
+                        // We can't know which is newer without a dedicated pin_updated_at, so keep local pin
+                        // to avoid accidental unpin from stale remote state
+                        return localTs
                     }
-                    sqlite3_finalize(pinStmt)
-                }
-            }
-        } else {
-            // [T-icloud-deleted-session-resurrection] Refuse to resurrect a
-            // session the user just deleted locally. fetchRecentV2 can pull the
-            // still-present cloud record back before our delete tombstone lands;
-            // without this guard the session reappears (with a ☁️ remote-origin
-            // marker). Only block when the inbound record isn't newer than the
-            // deletion — a genuine newer re-create of the same id still applies.
-            if isResurrectionOfDeleted(session.id, remoteUpdatedAt: Date(timeIntervalSince1970: remoteUpdated)) {
-                iCloudLogger.info("[iCloud] mergeRemoteSession SKIP (recently deleted locally — resurrection blocked): id=\(session.id) remoteTs=\(remoteUpdated)")
-                return
-            }
-            // Local doesn't have this session — insert
-            iCloudLogger.info("[iCloud] mergeRemoteSession INSERT: id=\(session.id) title=\(session.title ?? "nil") from=\(fromDeviceId)")
-            let sql = "INSERT INTO sessions (id, title, category, model_id, created_at, updated_at, remote_origin_device_id, memory_enabled, model_binding, pinned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
-                bindOptionalText(stmt, index: 2, value: session.title)
-                bindOptionalText(stmt, index: 3, value: session.category)
-                sqlite3_bind_text(stmt, 4, (session.modelId as NSString).utf8String, -1, nil)
-                sqlite3_bind_double(stmt, 5, session.createdAt.timeIntervalSince1970)
-                sqlite3_bind_double(stmt, 6, remoteUpdated)
-                sqlite3_bind_text(stmt, 7, (fromDeviceId as NSString).utf8String, -1, nil)
-                sqlite3_bind_int(stmt, 8, memoryEnabled ? 1 : 0)
-                bindOptionalText(stmt, index: 9, value: modelBinding)
-                if let pinTs = resolvedPinnedAt {
-                    sqlite3_bind_double(stmt, 10, pinTs)
+                    return nil // both unpinned
                 } else {
-                    sqlite3_bind_null(stmt, 10)
+                    // Remote is pinned
+                    if let localTs = localPinnedAt {
+                        // Both pinned — keep the more recent pin timestamp
+                        return max(remoteTs, localTs)
+                    }
+                    // Local not pinned, remote is pinned — adopt remote pin
+                    return remoteTs
                 }
-                sqlite3_step(stmt)
+            }()
+
+            if let localTs = localUpdatedAt {
+                // Local exists — only update title/category/etc if remote is newer
+                if remoteUpdated > localTs {
+                    iCloudLogger.info("[iCloud] mergeRemoteSession UPDATE (remote newer): id=\(session.id) remoteTs=\(remoteUpdated) localTs=\(localTs)")
+                    let sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ? WHERE id = ?"
+                    var stmt: OpaquePointer?
+                    defer { sqlite3_finalize(stmt) }
+                    if try prepareInbound(sql, &stmt) == SQLITE_OK {
+                        bindOptionalText(stmt, index: 1, value: session.title)
+                        bindOptionalText(stmt, index: 2, value: session.category)
+                        sqlite3_bind_double(stmt, 3, remoteUpdated)
+                        sqlite3_bind_int(stmt, 4, memoryEnabled ? 1 : 0)
+                        bindOptionalText(stmt, index: 5, value: modelBinding)
+                        if let pinTs = resolvedPinnedAt {
+                            sqlite3_bind_double(stmt, 6, pinTs)
+                        } else {
+                            sqlite3_bind_null(stmt, 6)
+                        }
+                        sqlite3_bind_text(stmt, 7, (session.id as NSString).utf8String, -1, nil)
+                        _ = try stepInbound(stmt)
+                    }
+                    sqlite3_finalize(stmt); stmt = nil
+                    // Wake the home list. ContentView observes
+                    // .sessionDidUpdate (debounce 3s — fine for title/pin
+                    // edits arriving from a peer). Without this post a
+                    // remote-newer merge silently updated SQLite while the
+                    // list kept showing the stale snapshot until the user
+                    // backgrounded the app or pulled-to-refresh
+                    // (T-inbound-session-no-refresh).
+                    NotificationCenter.default.post(name: .sessionDidUpdate, object: session.id)
+                } else {
+                    let delta = localTs - remoteUpdated
+                    iCloudLogger.info("[iCloud] mergeRemoteSession SKIP (local newer): id=\(session.id) localTs=\(localTs) remoteTs=\(remoteUpdated) delta=\(String(format: "%+.3f", delta))s from=\(fromDeviceId)")
+                    if remoteUpdated > localTs {
+                        iCloudLogger.warning("[iCloud] mergeRemoteSession SKIP despite remote-newer: id=\(session.id) localTs=\(localTs) remoteTs=\(remoteUpdated) — should not happen")
+                    }
+                    // Even if we skip the main update, still merge pin state if remote has pin info
+                    // and the resolved pin differs from local
+                    if remotePinnedAtRaw != nil, resolvedPinnedAt != localPinnedAt {
+                        let pinSql = "UPDATE sessions SET pinned_at = ? WHERE id = ?"
+                        var pinStmt: OpaquePointer?
+                        defer { sqlite3_finalize(pinStmt) }
+                        if try prepareInbound(pinSql, &pinStmt) == SQLITE_OK {
+                            if let pinTs = resolvedPinnedAt {
+                                sqlite3_bind_double(pinStmt, 1, pinTs)
+                            } else {
+                                sqlite3_bind_null(pinStmt, 1)
+                            }
+                            sqlite3_bind_text(pinStmt, 2, (session.id as NSString).utf8String, -1, nil)
+                            _ = try stepInbound(pinStmt)
+                        }
+                        sqlite3_finalize(pinStmt); pinStmt = nil
+                    }
+                }
+            } else {
+                // [T-icloud-deleted-session-resurrection] Refuse to resurrect a
+                // session the user just deleted locally. fetchRecentV2 can pull the
+                // still-present cloud record back before our delete tombstone lands;
+                // without this guard the session reappears (with a ☁️ remote-origin
+                // marker). Only block when the inbound record isn't newer than the
+                // deletion — a genuine newer re-create of the same id still applies.
+                if isResurrectionOfDeleted(session.id, remoteUpdatedAt: Date(timeIntervalSince1970: remoteUpdated)) {
+                    iCloudLogger.info("[iCloud] mergeRemoteSession SKIP (recently deleted locally — resurrection blocked): id=\(session.id) remoteTs=\(remoteUpdated)")
+                    return
+                }
+                // Local doesn't have this session — insert
+                iCloudLogger.info("[iCloud] mergeRemoteSession INSERT: id=\(session.id) title=\(session.title ?? "nil") from=\(fromDeviceId)")
+                let sql = "INSERT INTO sessions (id, title, category, model_id, created_at, updated_at, remote_origin_device_id, memory_enabled, model_binding, pinned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                var stmt: OpaquePointer?
+                defer { sqlite3_finalize(stmt) }
+                if try prepareInbound(sql, &stmt) == SQLITE_OK {
+                    sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
+                    bindOptionalText(stmt, index: 2, value: session.title)
+                    bindOptionalText(stmt, index: 3, value: session.category)
+                    sqlite3_bind_text(stmt, 4, (session.modelId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_double(stmt, 5, session.createdAt.timeIntervalSince1970)
+                    sqlite3_bind_double(stmt, 6, remoteUpdated)
+                    sqlite3_bind_text(stmt, 7, (fromDeviceId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_int(stmt, 8, memoryEnabled ? 1 : 0)
+                    bindOptionalText(stmt, index: 9, value: modelBinding)
+                    if let pinTs = resolvedPinnedAt {
+                        sqlite3_bind_double(stmt, 10, pinTs)
+                    } else {
+                        sqlite3_bind_null(stmt, 10)
+                    }
+                    _ = try stepInbound(stmt)
+                }
+                sqlite3_finalize(stmt); stmt = nil
+                // Brand-new remote session — post `.sessionDidCreate` so the
+                // home list reloads immediately (no debounce on this name).
+                // Matches the local-create path at AIChatViewModel.swift:4266
+                // (T-inbound-session-no-refresh).
+                NotificationCenter.default.post(name: .sessionDidCreate, object: session.id)
             }
-            sqlite3_finalize(stmt)
-            // Brand-new remote session — post `.sessionDidCreate` so the
-            // home list reloads immediately (no debounce on this name).
-            // Matches the local-create path at AIChatViewModel.swift:4266
-            // (T-inbound-session-no-refresh).
-            NotificationCenter.default.post(name: .sessionDidCreate, object: session.id)
-        }
 
-        SessionProvenanceStore.merge(
-            db, id: session.id, origin: originDeviceId ?? (fromDeviceId.isEmpty ? nil : fromDeviceId),
-            writer: lastWriterDeviceId, acceptsWriter: localUpdatedAt.map { remoteUpdated > $0 } ?? true
-        )
+            guard SessionProvenanceStore.merge(
+                db, id: session.id, origin: originDeviceId ?? (fromDeviceId.isEmpty ? nil : fromDeviceId),
+                writer: lastWriterDeviceId, acceptsWriter: localUpdatedAt.map { remoteUpdated > $0 } ?? true
+            ) else { throw CocoaError(.fileWriteUnknown) }
 
-        // Backfill: messages may have arrived before this session was merged,
-        // or the session already existed locally and remote messages were stored
-        // only in remote_messages. Always try to backfill missing messages.
-        // [T-ios-listsessions-part-flags] inline bitmask (see backfillRemoteToLocal).
-        let backfillSql = """
-            INSERT OR IGNORE INTO messages (id, session_id, role, parts_json, created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count, updated_at, part_flags)
-            SELECT rm.id, rm.session_id, rm.role, rm.parts_json, rm.created_at, rm.token_usage, rm.sort_order, rm.reasoning_content, rm.stream_interrupt_count, rm.created_at, \(Self.partFlagsSQLExpr("rm.parts_json"))
-            FROM remote_messages rm WHERE rm.session_id = ? AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = rm.id)
-        """
-        var bfStmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, backfillSql, -1, &bfStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(bfStmt, 1, (session.id as NSString).utf8String, -1, nil)
-            sqlite3_step(bfStmt)
-        }
-        sqlite3_finalize(bfStmt)
-        let backfilled = sqlite3_changes(db)
-        if backfilled > 0 {
-            iCloudLogger.info("[iCloud] mergeRemoteSession backfilled \(backfilled) messages for \(session.id)")
+            // Backfill: messages may have arrived before this session was merged,
+            // or the session already existed locally and remote messages were stored
+            // only in remote_messages. Always try to backfill missing messages.
+            // [T-ios-listsessions-part-flags] inline bitmask (see backfillRemoteToLocal).
+            let backfillSql = """
+                INSERT OR IGNORE INTO messages (id, session_id, role, parts_json, created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count, updated_at, part_flags)
+                SELECT rm.id, rm.session_id, rm.role, rm.parts_json, rm.created_at, rm.token_usage, rm.sort_order, rm.reasoning_content, rm.stream_interrupt_count, rm.created_at, \(Self.partFlagsSQLExpr("rm.parts_json"))
+                FROM remote_messages rm WHERE rm.session_id = ? AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = rm.id)
+            """
+            var bfStmt: OpaquePointer?
+            defer { sqlite3_finalize(bfStmt) }
+            if try prepareInbound(backfillSql, &bfStmt) == SQLITE_OK {
+                sqlite3_bind_text(bfStmt, 1, (session.id as NSString).utf8String, -1, nil)
+                _ = try stepInbound(bfStmt)
+            }
+            sqlite3_finalize(bfStmt); bfStmt = nil
+            let backfilled = sqlite3_changes(db)
+            if backfilled > 0 {
+                iCloudLogger.info("[iCloud] mergeRemoteSession backfilled \(backfilled) messages for \(session.id)")
+            }
         }
     }
 
@@ -5640,217 +5734,229 @@ extension ChatStore {
         createdAt: Date, tokenUsageJson: String?, sortOrder: Int,
         reasoningContent: String?, streamInterruptCount: Int,
         updatedAt: Date? = nil
-    ) {
-        invalidateSessionListCache()
-        // Defer merging into a session that's actively running locally. While
-        // an agent loop is streaming / running tools, the message list is
-        // volatile and locally authoritative: appends bump sort_order and
-        // updated_at every tool round. A remote message arriving mid-run (often
-        // this device's own just-pushed rows echoed back by CloudKit) would
-        // win LWW or, worse, re-rank sort_order via the insert path's shift —
-        // scrambling the running session so listSessions can't resolve its
-        // preview ("No messages yet") and stale pre-retry content reappears.
-        // CloudKit re-delivers unmerged changes on the next fetch, so skipping
-        // here is safe: the session re-syncs once the run finishes and the
-        // tracker clears. [T-sync-clobbers-running-session]
-        if SessionActivityTracker.isActiveThreadSafe(sessionId) {
-            iCloudLogger.info("[iCloud] mergeRemoteMessage DEFER (session running locally): id=\(id.prefix(8)) sid=\(sessionId.prefix(8))")
-            return
-        }
-
-        // Only merge if the session exists in local sessions table
-        let checkSql = "SELECT id FROM sessions WHERE id = ?"
-        var checkStmt: OpaquePointer?
-        var sessionExists = false
-        if sqlite3_prepare_v2(db, checkSql, -1, &checkStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(checkStmt, 1, (sessionId as NSString).utf8String, -1, nil)
-            sessionExists = sqlite3_step(checkStmt) == SQLITE_ROW
-        }
-        sqlite3_finalize(checkStmt)
-        guard sessionExists else { return }
-
-        // [T-icloud-deleted-session-resurrection] Defence in depth: even if the
-        // parent session row somehow exists, refuse to re-insert a message whose
-        // session was just deleted locally and isn't newer than the deletion —
-        // so a stale inbound message can't resurrect content under a tombstoned
-        // session. (The session guard above normally already blocks this, since
-        // a deleted session has no row.)
-        let msgUpdatedAt = updatedAt ?? createdAt
-        if isResurrectionOfDeleted(sessionId, remoteUpdatedAt: msgUpdatedAt) {
-            iCloudLogger.info("[iCloud] mergeRemoteMessage SKIP (parent session recently deleted — resurrection blocked): id=\(id.prefix(8)) sid=\(sessionId.prefix(8))")
-            return
-        }
-
-        // Effective updated_at: use provided value, or fall back to created_at
-        // (old devices don't send updated_at)
-        let effectiveUpdatedAt = (updatedAt ?? createdAt).timeIntervalSince1970
-
-        // Check if message already exists locally and its updated_at
-        var localUpdatedAt: Double?
-        let existSql = "SELECT COALESCE(updated_at, created_at) FROM messages WHERE id = ?"
-        var existStmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, existSql, -1, &existStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(existStmt, 1, (id as NSString).utf8String, -1, nil)
-            if sqlite3_step(existStmt) == SQLITE_ROW {
-                localUpdatedAt = sqlite3_column_double(existStmt, 0)
+    ) throws {
+        try withInboundMutation {
+            invalidateSessionListCache()
+            // Defer merging into a session that's actively running locally. While
+            // an agent loop is streaming / running tools, the message list is
+            // volatile and locally authoritative: appends bump sort_order and
+            // updated_at every tool round. A remote message arriving mid-run (often
+            // this device's own just-pushed rows echoed back by CloudKit) would
+            // win LWW or, worse, re-rank sort_order via the insert path's shift —
+            // scrambling the running session so listSessions can't resolve its
+            // preview ("No messages yet") and stale pre-retry content reappears.
+            // CloudKit re-delivers unmerged changes on the next fetch, so skipping
+            // here is safe: the session re-syncs once the run finishes and the
+            // tracker clears. [T-sync-clobbers-running-session]
+            if SessionActivityTracker.isActiveThreadSafe(sessionId) {
+                iCloudLogger.info("[iCloud] mergeRemoteMessage DEFER (session running locally): id=\(id.prefix(8)) sid=\(sessionId.prefix(8))")
+                throw CocoaError(.fileWriteUnknown)
             }
-        }
-        sqlite3_finalize(existStmt)
 
-        if let localTs = localUpdatedAt {
-            // Message exists — only update if remote is strictly newer
-            guard effectiveUpdatedAt > localTs else {
-                let delta = localTs - effectiveUpdatedAt
-                // Even when LWW says skip, opportunistically heal a
-                // stale local sort_order if the remote value disagrees.
-                // Common case: a previous build pushed sortOrder=0 for
-                // every message and the receiver's collision-by-arrival
-                // path stamped them with arbitrary positions. New build
-                // pushes correct sortOrder but updatedAt is unchanged
-                // (force-sync just re-uploads the same content), so
-                // strict-newer LWW would otherwise stay forever wrong.
-                // Note: previous builds healed local sort_order from the remote integer
-                // here. That's now intentionally dropped — remote sortOrder is a
-                // best-effort hint; the receiver derives its own from (created_at, id)
-                // rank on insert, and `repairSession` fixes any rank inversions on
-                // session open. See sessionNeedsRepair / mergeRemoteMessage insert path.
-                iCloudLogger.info("[iCloud] mergeRemoteMessage SKIP (local newer): id=\(id) localTs=\(localTs) remoteTs=\(effectiveUpdatedAt) delta=\(String(format: "%+.3f", delta))s")
+            // Only merge if the session exists in local sessions table
+            let checkSql = "SELECT id FROM sessions WHERE id = ?"
+            var checkStmt: OpaquePointer?
+            defer { sqlite3_finalize(checkStmt) }
+            var sessionExists = false
+            if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
+                sqlite3_bind_text(checkStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                sessionExists = try stepInbound(checkStmt) == SQLITE_ROW
+            }
+            sqlite3_finalize(checkStmt); checkStmt = nil
+            guard sessionExists else {
+                if isResurrectionOfDeleted(sessionId, remoteUpdatedAt: updatedAt ?? createdAt) { return }
+                throw CocoaError(.fileReadUnknown)
+            }
+
+            // [T-icloud-deleted-session-resurrection] Defence in depth: even if the
+            // parent session row somehow exists, refuse to re-insert a message whose
+            // session was just deleted locally and isn't newer than the deletion —
+            // so a stale inbound message can't resurrect content under a tombstoned
+            // session. (The session guard above normally already blocks this, since
+            // a deleted session has no row.)
+            let msgUpdatedAt = updatedAt ?? createdAt
+            if isResurrectionOfDeleted(sessionId, remoteUpdatedAt: msgUpdatedAt) {
+                iCloudLogger.info("[iCloud] mergeRemoteMessage SKIP (parent session recently deleted — resurrection blocked): id=\(id.prefix(8)) sid=\(sessionId.prefix(8))")
                 return
             }
-            iCloudLogger.info("[iCloud] mergeRemoteMessage UPDATE (remote newer): id=\(id) remoteTs=\(effectiveUpdatedAt) localTs=\(localTs)")
-            // Don't overwrite local sort_order from remote — receivers own ordering
-            // (derived from created_at rank on insert; repaired by repairSession).
-            // [T-ios-listsessions-part-flags] recompute from the inbound JSON.
-            let partFlags = Self.partFlags(fromPartsJSON: partsJson)
-            let updateSql = """
-                UPDATE messages SET parts_json = ?, token_usage = ?, reasoning_content = ?,
-                    stream_interrupt_count = ?, updated_at = ?, part_flags = ?
-                WHERE id = ?
-            """
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, updateSql, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (partsJson as NSString).utf8String, -1, nil)
-                if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 2, (tu as NSString).utf8String, -1, nil) }
-                else { sqlite3_bind_null(stmt, 2) }
-                if let r = reasoningContent { sqlite3_bind_text(stmt, 3, (r as NSString).utf8String, -1, nil) }
-                else { sqlite3_bind_null(stmt, 3) }
-                sqlite3_bind_int(stmt, 4, Int32(streamInterruptCount))
-                sqlite3_bind_double(stmt, 5, effectiveUpdatedAt)
-                sqlite3_bind_int64(stmt, 6, Int64(partFlags))
-                sqlite3_bind_text(stmt, 7, (id as NSString).utf8String, -1, nil)
-                sqlite3_step(stmt)
-            }
-            sqlite3_finalize(stmt)
-        } else {
-            // Message doesn't exist — insert.
-            // Always derive finalSortOrder from (created_at, id) rank against
-            // existing local rows; never trust the wire integer. The remote
-            // sortOrder is a best-effort hint that's wrong whenever sender
-            // and receiver have differing message counts (sender's larger
-            // values would otherwise stick on the receiver and push synced
-            // messages past the local tail). Tiebreak by id lexicographic
-            // to match the canonical (created_at ASC, id ASC) order used by
-            // repairSession at line ~2408.
-            let createdAtTs = createdAt.timeIntervalSince1970
-            let earlierSql = """
-                SELECT COALESCE(MAX(sort_order), -1)
-                FROM messages
-                WHERE session_id = ?
-                  AND (created_at < ? OR (created_at = ? AND id < ?))
-            """
-            var earlierStmt: OpaquePointer?
-            var earlierMax: Int32 = -1
-            if sqlite3_prepare_v2(db, earlierSql, -1, &earlierStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(earlierStmt, 1, (sessionId as NSString).utf8String, -1, nil)
-                sqlite3_bind_double(earlierStmt, 2, createdAtTs)
-                sqlite3_bind_double(earlierStmt, 3, createdAtTs)
-                sqlite3_bind_text(earlierStmt, 4, (id as NSString).utf8String, -1, nil)
-                if sqlite3_step(earlierStmt) == SQLITE_ROW {
-                    earlierMax = sqlite3_column_int(earlierStmt, 0)
+
+            // Effective updated_at: use provided value, or fall back to created_at
+            // (old devices don't send updated_at)
+            let effectiveUpdatedAt = (updatedAt ?? createdAt).timeIntervalSince1970
+
+            // Check if message already exists locally and its updated_at
+            var localUpdatedAt: Double?
+            let existSql = "SELECT COALESCE(updated_at, created_at) FROM messages WHERE id = ?"
+            var existStmt: OpaquePointer?
+            defer { sqlite3_finalize(existStmt) }
+            if try prepareInbound(existSql, &existStmt) == SQLITE_OK {
+                sqlite3_bind_text(existStmt, 1, (id as NSString).utf8String, -1, nil)
+                if try stepInbound(existStmt) == SQLITE_ROW {
+                    localUpdatedAt = sqlite3_column_double(existStmt, 0)
                 }
             }
-            sqlite3_finalize(earlierStmt)
+            sqlite3_finalize(existStmt); existStmt = nil
 
-            let laterSql = """
-                SELECT MIN(sort_order)
-                FROM messages
-                WHERE session_id = ?
-                  AND (created_at > ? OR (created_at = ? AND id > ?))
-            """
-            var laterStmt: OpaquePointer?
-            var hasLater = false
-            var laterMin: Int32 = 0
-            if sqlite3_prepare_v2(db, laterSql, -1, &laterStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(laterStmt, 1, (sessionId as NSString).utf8String, -1, nil)
-                sqlite3_bind_double(laterStmt, 2, createdAtTs)
-                sqlite3_bind_double(laterStmt, 3, createdAtTs)
-                sqlite3_bind_text(laterStmt, 4, (id as NSString).utf8String, -1, nil)
-                if sqlite3_step(laterStmt) == SQLITE_ROW {
-                    if sqlite3_column_type(laterStmt, 0) != SQLITE_NULL {
-                        hasLater = true
-                        laterMin = sqlite3_column_int(laterStmt, 0)
+            if let localTs = localUpdatedAt {
+                // Message exists — only update if remote is strictly newer
+                guard effectiveUpdatedAt > localTs else {
+                    let delta = localTs - effectiveUpdatedAt
+                    // Even when LWW says skip, opportunistically heal a
+                    // stale local sort_order if the remote value disagrees.
+                    // Common case: a previous build pushed sortOrder=0 for
+                    // every message and the receiver's collision-by-arrival
+                    // path stamped them with arbitrary positions. New build
+                    // pushes correct sortOrder but updatedAt is unchanged
+                    // (force-sync just re-uploads the same content), so
+                    // strict-newer LWW would otherwise stay forever wrong.
+                    // Note: previous builds healed local sort_order from the remote integer
+                    // here. That's now intentionally dropped — remote sortOrder is a
+                    // best-effort hint; the receiver derives its own from (created_at, id)
+                    // rank on insert, and `repairSession` fixes any rank inversions on
+                    // session open. See sessionNeedsRepair / mergeRemoteMessage insert path.
+                    iCloudLogger.info("[iCloud] mergeRemoteMessage SKIP (local newer): id=\(id) localTs=\(localTs) remoteTs=\(effectiveUpdatedAt) delta=\(String(format: "%+.3f", delta))s")
+                    return
+                }
+                iCloudLogger.info("[iCloud] mergeRemoteMessage UPDATE (remote newer): id=\(id) remoteTs=\(effectiveUpdatedAt) localTs=\(localTs)")
+                // Don't overwrite local sort_order from remote — receivers own ordering
+                // (derived from created_at rank on insert; repaired by repairSession).
+                // [T-ios-listsessions-part-flags] recompute from the inbound JSON.
+                let partFlags = Self.partFlags(fromPartsJSON: partsJson)
+                let updateSql = """
+                    UPDATE messages SET parts_json = ?, token_usage = ?, reasoning_content = ?,
+                        stream_interrupt_count = ?, updated_at = ?, part_flags = ?
+                    WHERE id = ?
+                """
+                var stmt: OpaquePointer?
+                defer { sqlite3_finalize(stmt) }
+                if try prepareInbound(updateSql, &stmt) == SQLITE_OK {
+                    sqlite3_bind_text(stmt, 1, (partsJson as NSString).utf8String, -1, nil)
+                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 2, (tu as NSString).utf8String, -1, nil) }
+                    else { sqlite3_bind_null(stmt, 2) }
+                    if let r = reasoningContent { sqlite3_bind_text(stmt, 3, (r as NSString).utf8String, -1, nil) }
+                    else { sqlite3_bind_null(stmt, 3) }
+                    sqlite3_bind_int(stmt, 4, Int32(streamInterruptCount))
+                    sqlite3_bind_double(stmt, 5, effectiveUpdatedAt)
+                    sqlite3_bind_int64(stmt, 6, Int64(partFlags))
+                    sqlite3_bind_text(stmt, 7, (id as NSString).utf8String, -1, nil)
+                    _ = try stepInbound(stmt)
+                }
+                sqlite3_finalize(stmt); stmt = nil
+            } else {
+                // Message doesn't exist — insert.
+                // Always derive finalSortOrder from (created_at, id) rank against
+                // existing local rows; never trust the wire integer. The remote
+                // sortOrder is a best-effort hint that's wrong whenever sender
+                // and receiver have differing message counts (sender's larger
+                // values would otherwise stick on the receiver and push synced
+                // messages past the local tail). Tiebreak by id lexicographic
+                // to match the canonical (created_at ASC, id ASC) order used by
+                // repairSession at line ~2408.
+                let createdAtTs = createdAt.timeIntervalSince1970
+                let earlierSql = """
+                    SELECT COALESCE(MAX(sort_order), -1)
+                    FROM messages
+                    WHERE session_id = ?
+                      AND (created_at < ? OR (created_at = ? AND id < ?))
+                """
+                var earlierStmt: OpaquePointer?
+                defer { sqlite3_finalize(earlierStmt) }
+                var earlierMax: Int32 = -1
+                if try prepareInbound(earlierSql, &earlierStmt) == SQLITE_OK {
+                    sqlite3_bind_text(earlierStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_double(earlierStmt, 2, createdAtTs)
+                    sqlite3_bind_double(earlierStmt, 3, createdAtTs)
+                    sqlite3_bind_text(earlierStmt, 4, (id as NSString).utf8String, -1, nil)
+                    if try stepInbound(earlierStmt) == SQLITE_ROW {
+                        earlierMax = sqlite3_column_int(earlierStmt, 0)
                     }
                 }
-            }
-            sqlite3_finalize(laterStmt)
+                sqlite3_finalize(earlierStmt); earlierStmt = nil
 
-            let finalSortOrder: Int
-            if !hasLater {
-                // Append: nothing comes after.
-                finalSortOrder = Int(earlierMax) + 1
-            } else if earlierMax + 1 < laterMin {
-                // Gap available — slot in without shifting.
-                finalSortOrder = Int(earlierMax) + 1
-            } else {
-                // Shift all later rows up by 1 to make room.
-                let shiftSql = "UPDATE messages SET sort_order = sort_order + 1 WHERE session_id = ? AND sort_order >= ?"
-                var shiftStmt: OpaquePointer?
-                if sqlite3_prepare_v2(db, shiftSql, -1, &shiftStmt, nil) == SQLITE_OK {
-                    sqlite3_bind_text(shiftStmt, 1, (sessionId as NSString).utf8String, -1, nil)
-                    sqlite3_bind_int(shiftStmt, 2, laterMin)
-                    sqlite3_step(shiftStmt)
+                let laterSql = """
+                    SELECT MIN(sort_order)
+                    FROM messages
+                    WHERE session_id = ?
+                      AND (created_at > ? OR (created_at = ? AND id > ?))
+                """
+                var laterStmt: OpaquePointer?
+                defer { sqlite3_finalize(laterStmt) }
+                var hasLater = false
+                var laterMin: Int32 = 0
+                if try prepareInbound(laterSql, &laterStmt) == SQLITE_OK {
+                    sqlite3_bind_text(laterStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_double(laterStmt, 2, createdAtTs)
+                    sqlite3_bind_double(laterStmt, 3, createdAtTs)
+                    sqlite3_bind_text(laterStmt, 4, (id as NSString).utf8String, -1, nil)
+                    if try stepInbound(laterStmt) == SQLITE_ROW {
+                        if sqlite3_column_type(laterStmt, 0) != SQLITE_NULL {
+                            hasLater = true
+                            laterMin = sqlite3_column_int(laterStmt, 0)
+                        }
+                    }
                 }
-                sqlite3_finalize(shiftStmt)
-                finalSortOrder = Int(laterMin)
-            }
+                sqlite3_finalize(laterStmt); laterStmt = nil
 
-            iCloudLogger.info("[iCloud] mergeRemoteMessage INSERT: id=\(id) session=\(sessionId) sortOrder=\(finalSortOrder) (remoteHint=\(sortOrder))")
-            // [T-ios-listsessions-part-flags] recompute from the inbound JSON.
-            let partFlags = Self.partFlags(fromPartsJSON: partsJson)
-            let insertSql = """
-                INSERT INTO messages (id, session_id, role, parts_json, created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count, updated_at, part_flags)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
-            var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, insertSql, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (role as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 4, (partsJson as NSString).utf8String, -1, nil)
-                sqlite3_bind_double(stmt, 5, createdAt.timeIntervalSince1970)
-                if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 6, (tu as NSString).utf8String, -1, nil) }
-                else { sqlite3_bind_null(stmt, 6) }
-                sqlite3_bind_int(stmt, 7, Int32(finalSortOrder))
-                if let r = reasoningContent { sqlite3_bind_text(stmt, 8, (r as NSString).utf8String, -1, nil) }
-                else { sqlite3_bind_null(stmt, 8) }
-                sqlite3_bind_int(stmt, 9, Int32(streamInterruptCount))
-                sqlite3_bind_double(stmt, 10, effectiveUpdatedAt)
-                sqlite3_bind_int64(stmt, 11, Int64(partFlags))
-                sqlite3_step(stmt)
+                let finalSortOrder: Int
+                if !hasLater {
+                    // Append: nothing comes after.
+                    finalSortOrder = Int(earlierMax) + 1
+                } else if earlierMax + 1 < laterMin {
+                    // Gap available — slot in without shifting.
+                    finalSortOrder = Int(earlierMax) + 1
+                } else {
+                    // Shift all later rows up by 1 to make room.
+                    let shiftSql = "UPDATE messages SET sort_order = sort_order + 1 WHERE session_id = ? AND sort_order >= ?"
+                    var shiftStmt: OpaquePointer?
+                    defer { sqlite3_finalize(shiftStmt) }
+                    if try prepareInbound(shiftSql, &shiftStmt) == SQLITE_OK {
+                        sqlite3_bind_text(shiftStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                        sqlite3_bind_int(shiftStmt, 2, laterMin)
+                        _ = try stepInbound(shiftStmt)
+                    }
+                    sqlite3_finalize(shiftStmt); shiftStmt = nil
+                    finalSortOrder = Int(laterMin)
+                }
+
+                iCloudLogger.info("[iCloud] mergeRemoteMessage INSERT: id=\(id) session=\(sessionId) sortOrder=\(finalSortOrder) (remoteHint=\(sortOrder))")
+                // [T-ios-listsessions-part-flags] recompute from the inbound JSON.
+                let partFlags = Self.partFlags(fromPartsJSON: partsJson)
+                let insertSql = """
+                    INSERT INTO messages (id, session_id, role, parts_json, created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count, updated_at, part_flags)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                var stmt: OpaquePointer?
+                defer { sqlite3_finalize(stmt) }
+                if try prepareInbound(insertSql, &stmt) == SQLITE_OK {
+                    sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 3, (role as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 4, (partsJson as NSString).utf8String, -1, nil)
+                    sqlite3_bind_double(stmt, 5, createdAt.timeIntervalSince1970)
+                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 6, (tu as NSString).utf8String, -1, nil) }
+                    else { sqlite3_bind_null(stmt, 6) }
+                    sqlite3_bind_int(stmt, 7, Int32(finalSortOrder))
+                    if let r = reasoningContent { sqlite3_bind_text(stmt, 8, (r as NSString).utf8String, -1, nil) }
+                    else { sqlite3_bind_null(stmt, 8) }
+                    sqlite3_bind_int(stmt, 9, Int32(streamInterruptCount))
+                    sqlite3_bind_double(stmt, 10, effectiveUpdatedAt)
+                    sqlite3_bind_int64(stmt, 11, Int64(partFlags))
+                    _ = try stepInbound(stmt)
+                }
+                sqlite3_finalize(stmt); stmt = nil
             }
-            sqlite3_finalize(stmt)
-        }
-        // Notify the in-process ViewModel cache that this session's
-        // messages have changed via iCloud merge. The foreground-visible
-        // VM already reloads via `.cloudSyncDidFetchChanges` at the end
-        // of the batch (AIChatViewModel:666), but a cached background VM
-        // for a non-active session would otherwise render its stale
-        // messages snapshot the next time the user opens it. The flag
-        // is consumed on the next getOrCreate HIT
-        // (T-inbound-message-cached-vm-stale).
-        let sid = sessionId
-        Task { @MainActor in
-            ViewModelCache.shared.markStale(sessionId: sid)
+            // Notify the in-process ViewModel cache that this session's
+            // messages have changed via iCloud merge. The foreground-visible
+            // VM already reloads via `.cloudSyncDidFetchChanges` at the end
+            // of the batch (AIChatViewModel:666), but a cached background VM
+            // for a non-active session would otherwise render its stale
+            // messages snapshot the next time the user opens it. The flag
+            // is consumed on the next getOrCreate HIT
+            // (T-inbound-message-cached-vm-stale).
+            let sid = sessionId
+            Task { @MainActor in
+                ViewModelCache.shared.markStale(sessionId: sid)
+            }
         }
     }
 
@@ -5953,24 +6059,27 @@ extension ChatStore {
     /// Delete a single message from the local messages table by its message ID.
     /// Used when a remote device signals a message-level deletion (retry / manual delete)
     /// that should propagate across devices.
-    func deleteLocalMessage(messageId: String) {
-        invalidateSessionListCache()
-        let sql = "DELETE FROM messages WHERE id = ?"
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
-        }
-        let changes = Int(sqlite3_changes(db))
-        sqlite3_finalize(stmt)
-        if changes > 0 {
-            iCloudLogger.warning("[EditSync] [iCloud] deleteLocalMessage: removed '\(messageId.prefix(8))' from local messages (inbound tombstone applied)")
-        } else {
-            // [T-ios-log-noise-reduction] Downgraded WARN→DEBUG: a delete for a
-            // message that never landed locally (synced from another device that
-            // both created and deleted it while we were away) is the normal
-            // tombstone path, not a warning. Was ~6.4k WARN lines per batch sync.
-            iCloudLogger.debug("[EditSync] [iCloud] deleteLocalMessage: NO-OP '\(messageId.prefix(8))' — message not present locally (already gone or never arrived)")
+    func deleteLocalMessage(messageId: String) throws {
+        try withInboundMutation {
+            invalidateSessionListCache()
+            let sql = "DELETE FROM messages WHERE id = ?"
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            if try prepareInbound(sql, &stmt) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, nil)
+                _ = try stepInbound(stmt)
+            }
+            let changes = Int(sqlite3_changes(db))
+            sqlite3_finalize(stmt); stmt = nil
+            if changes > 0 {
+                iCloudLogger.warning("[EditSync] [iCloud] deleteLocalMessage: removed '\(messageId.prefix(8))' from local messages (inbound tombstone applied)")
+            } else {
+                // [T-ios-log-noise-reduction] Downgraded WARN→DEBUG: a delete for a
+                // message that never landed locally (synced from another device that
+                // both created and deleted it while we were away) is the normal
+                // tombstone path, not a warning. Was ~6.4k WARN lines per batch sync.
+                iCloudLogger.debug("[EditSync] [iCloud] deleteLocalMessage: NO-OP '\(messageId.prefix(8))' — message not present locally (already gone or never arrived)")
+            }
         }
     }
 

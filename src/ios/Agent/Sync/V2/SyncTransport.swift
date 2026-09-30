@@ -96,6 +96,9 @@ protocol SyncTransport: AnyObject {
     /// default CloudKit path keeps CKSyncEngine's existing token handling.
     func acknowledgeInbound(_ batch: SyncInboundBatch) async throws
 
+    /// Release an in-flight lease after failed domain apply, retaining the inbox.
+    func deferInbound(_ batch: SyncInboundBatch) async
+
     /// Hard delete a set of records by id. Returns one outcome per id.
     func delete(_ ids: [SyncRecordID]) async throws -> [SyncOutcome]
 }
@@ -106,4 +109,5 @@ extension SyncTransport {
     var health: SyncTransportHealth { SyncTransportHealth() }
     func checkConnection() async throws { throw SyncTransportError.notStarted }
     func acknowledgeInbound(_ batch: SyncInboundBatch) async throws { _ = batch }
+    func deferInbound(_ batch: SyncInboundBatch) async { _ = batch }
 }

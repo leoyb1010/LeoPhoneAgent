@@ -224,7 +224,7 @@ export class LocalTools {
       } else if (name === 'browser_use') {
         out.text = LocalTools.browser(toolArg(args, 'action'), toolArg(args, 'url'), toolArg(args, 'tab_id'));
       } else if (PhoneTools.NAMES.indexOf(name) >= 0) {
-        out.text = await PhoneTools.run(context, name, args);
+        out.text = await PhoneTools.run(context, name, args, unattended);
       } else if (name === 'mcp_tools' || name === 'mcp_call') {
         const server = mcpStore.find(toolArg(args, 'server'));
         if (!server) {

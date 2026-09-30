@@ -36,6 +36,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 import time
@@ -46,6 +47,7 @@ from urllib.parse import urlsplit
 from aiohttp import WSMsgType, web
 
 from .apns import build_pusher
+from .relay_identity import valid_registry
 
 VERSION = "0.2.0"
 DEFAULT_PORT = 8650
@@ -108,6 +110,7 @@ class Machine:
         self.pending: Dict[str, asyncio.Future] = {}
         # stream_id → queue(事件流)
         self.streams: Dict[str, asyncio.Queue] = {}
+        self.stream_callers: Dict[str, Caller] = {}
 
 
 
@@ -847,24 +850,24 @@ class Relay:
         try:
             with open(self.state_path, encoding="utf-8") as f:
                 saved = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            saved = {}
-        if isinstance(saved, dict):
-            revoked = saved.get("revoked_devices", [])
-            if isinstance(revoked, list):
-                self.revoked_devices = {value for value in revoked if isinstance(value, str)}
-            devices = saved.get("devices")
-            if isinstance(devices, dict):
-                self.devices = {str(k): v for k, v in devices.items()
-                                if isinstance(v, dict) and isinstance(v.get("key_hash"), str)}
-            pins = saved.get("pins")
-            if isinstance(pins, dict):
-                self.pins = {str(k): str(v) for k, v in pins.items() if isinstance(v, str)}
-            register = saved.get("register_key_hash")
-            self.register_key_hash = register if isinstance(register, str) and register else None
-            expires = saved.get("master_expires_at")
-            self.master_expires_at = float(expires) if isinstance(expires, (int, float)) else None
-        self._migrate_device_keys_v01()
+        except FileNotFoundError:
+            if os.path.lexists(self.state_path):
+                raise RuntimeError("Relay identity registry target missing; trusted local recovery required")
+            # 仅真正首次安装允许空注册表；不可读/损坏状态必须阻止启动，不能复活旧授权。
+            self._migrate_device_keys_v01()
+            self._reindex_devices()
+            if not self._save_state():
+                raise RuntimeError("Relay identity registry cannot be initialized durably")
+            return
+        except (OSError, ValueError) as cause:
+            raise RuntimeError("Relay identity registry unavailable; trusted local recovery required") from cause
+        if not valid_registry(saved):
+            raise RuntimeError("Invalid relay identity registry; trusted local recovery required")
+        self.revoked_devices = set(saved.get("revoked_devices", []))
+        self.devices = saved["devices"]
+        self.pins = saved["pins"]
+        self.register_key_hash = saved["register_key_hash"]
+        self.master_expires_at = saved["master_expires_at"]
         self._reindex_devices()
 
     def _migrate_device_keys_v01(self) -> None:
@@ -886,6 +889,9 @@ class Relay:
                 expires = float(exp)
             except (TypeError, ValueError):
                 continue
+            if not math.isfinite(expires):
+                # 不把 NaN/Infinity 写成下一次启动无法加载的 v2，更不能消耗唯一迁移源。
+                raise RuntimeError("Invalid legacy device expiry; trusted local recovery required")
             if not isinstance(key, str) or len(key) < 16 or expires <= now:
                 continue
             digest = self._hash_key(key)
@@ -899,7 +905,9 @@ class Relay:
                 "expires_at": max(expires, now + DEVICE_KEY_TTL_S), "push": None,
             }
             known.add(digest)
-        self._save_state()
+        if not self._save_state():
+            # 新注册表不耐久时保留旧文件，停止启动；不能先改名把唯一可恢复副本藏起来。
+            raise RuntimeError("Relay device migration persistence unavailable")
         try:
             migrated = path + ".migrated-0.2"
             os.replace(path, migrated)
@@ -911,26 +919,33 @@ class Relay:
         self.device_by_hash = {str(d["key_hash"]): device_id for device_id, d in self.devices.items()}
 
     def _save_state(self) -> bool:
+        saved = {
+            "version": 2,
+            "devices": self.devices,
+            "revoked_devices": sorted(self.revoked_devices),
+            "pins": self.pins,
+            "register_key_hash": self.register_key_hash,
+            "master_expires_at": self.master_expires_at,
+        }
+        # 与 loader 共用校验：成功确认的状态必须能在重启后重新读取。
+        if not valid_registry(saved):
+            return False
         directory = os.path.dirname(self.state_path)
         try:
             os.makedirs(directory, mode=0o700, exist_ok=True)
             tmp = self.state_path + ".tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({
-                    "version": 2,
-                    "devices": self.devices,
-                    "revoked_devices": sorted(self.revoked_devices),
-                    "pins": self.pins,
-                    "register_key_hash": self.register_key_hash,
-                    "master_expires_at": self.master_expires_at,
-                }, f)
+                # O_CREAT does not restrict an existing temporary file. Apply
+                # permissions before commit: a post-rename failure would leave
+                # a persisted pin whose plaintext key was never acknowledged.
+                os.fchmod(f.fileno(), 0o600)
+                json.dump(saved, f, allow_nan=False)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, self.state_path)
-            os.chmod(self.state_path, 0o600)
             return True
-        except OSError:
+        except (OSError, ValueError, TypeError):
             return False
 
     def _touch_device(self, device_id: str, now: float) -> None:
@@ -955,7 +970,10 @@ class Relay:
             "expires_at": now + DEVICE_KEY_TTL_S, "push": None,
         }
         self._reindex_devices()
-        self._save_state()
+        if not self._save_state():
+            self.devices.pop(device_id, None)
+            self._reindex_devices()
+            raise web.HTTPServiceUnavailable(text="device credential persistence unavailable")
         return key, device_id
 
     def _record_rejected(self, presented: str, path: str) -> None:
@@ -1167,13 +1185,20 @@ class Relay:
                 except Exception:  # noqa: BLE001
                     pass
         self._reindex_devices()
-        # 撤销必须先持久化；掉线的 Mac 下次注册从快照补齐，不能只靠一次通知。
-        if not self._save_state():
-            return web.json_response({"error": {"message": "revocation persistence unavailable"}}, status=503)
+        # 授权先在内存失效并关掉活跃订阅；落盘失败也不能继续泄露排队/合并中的内容。
+        for machine in list(self.machines.values()):
+            for stream_id, principal in list(machine.stream_callers.items()):
+                if principal.device_id == device_id and stream_id in machine.streams:
+                    _close_stream(machine.streams[stream_id], {
+                        "type": "stream_close", "reason": "authorization revoked"})
+        # 写失败仍通知在线 Mac 收口直连权限；成功回执仍必须等持久化。
+        persisted = self._save_state()
         await asyncio.gather(*(
             asyncio.wait_for(machine.ws.send_json({"type": "device_revoked", "device_id": device_id}), timeout=3)
             for machine in list(self.machines.values())
         ), return_exceptions=True)
+        if not persisted:
+            return web.json_response({"error": {"message": "revocation persistence unavailable"}}, status=503)
         return web.json_response({"ok": True})
 
     async def rotate_keys(self, request: web.Request) -> web.Response:
@@ -1184,12 +1209,17 @@ class Relay:
         body = await self._json_body(request)
         try:
             grace_days = max(0.0, float(body.get("grace_days", MASTER_GRACE_S / 86400)))
+            if not math.isfinite(grace_days):
+                return web.json_response({"error": {"message": "invalid grace_days"}}, status=400)
         except (TypeError, ValueError):
             grace_days = MASTER_GRACE_S / 86400
         register_key = secrets.token_urlsafe(32)
         self.register_key_hash = self._hash_key(register_key)
         self.master_expires_at = time.time() + grace_days * 86400
-        self._save_state()
+        if not math.isfinite(self.master_expires_at):
+            self.master_expires_at = time.time()
+        if not self._save_state():
+            return web.json_response({"error": {"message": "rotation persistence unavailable"}}, status=503)
         return web.json_response({"registerKey": register_key, "masterExpiresAt": self.master_expires_at})
 
     async def unpin_machine(self, request: web.Request) -> web.Response:
@@ -1198,8 +1228,11 @@ class Relay:
         name = request.match_info["name"]
         if caller is None or not (caller.kind == "master" or (caller.kind == "machine" and caller.machine == name)):
             return self._unauthorized()
-        self.pins.pop(name, None)
-        self._save_state()
+        previous = self.pins.pop(name, None)
+        if not self._save_state():
+            if previous is not None:
+                self.pins[name] = previous
+            return web.json_response({"error": {"message": "unpin persistence unavailable"}}, status=503)
         return web.json_response({"ok": True})
 
     async def queue_status(self, request: web.Request) -> web.Response:
@@ -1232,7 +1265,11 @@ class Relay:
                 kind = frame.get("type")
 
                 if kind == "register":
-                    name = str(frame.get("name") or "mac")
+                    raw_name = frame.get("name")
+                    if raw_name is not None and not isinstance(raw_name, str):
+                        await ws.close(code=1008, message=b"invalid machine name")
+                        break
+                    name = raw_name or "mac"
                     caller = self._caller_from_key(str(frame.get("key") or "").strip())
                     pinned = name in self.pins
                     if pinned:
@@ -1243,6 +1280,14 @@ class Relay:
                     elif caller is None or caller.kind not in ("master", "register", "legacy"):
                         await ws.close(code=4001, message=b"bad key")
                         break
+                    machine_key = None
+                    if not pinned and frame.get("pin") is True and caller.kind in ("master", "register"):
+                        machine_key = secrets.token_urlsafe(32)
+                        self.pins[name] = self._hash_key(machine_key)
+                        if not self._save_state():
+                            self.pins.pop(name, None)
+                            await ws.close(code=1013, message=b"pin persistence unavailable")
+                            break
                     # 同名重连顶掉旧连接(Mac 重启/网络切换后旧 ws 可能半死)
                     old = self.machines.pop(name, None)
                     if old is not None:
@@ -1255,10 +1300,7 @@ class Relay:
                     print(f"[relay] {name} online", flush=True)
                     ack: Dict[str, Any] = {"type": "registered", "version": VERSION,
                                             "revokedDeviceIds": sorted(self.revoked_devices)}
-                    if not pinned and frame.get("pin") is True and caller.kind in ("master", "register"):
-                        machine_key = secrets.token_urlsafe(32)
-                        self.pins[name] = self._hash_key(machine_key)
-                        self._save_state()
+                    if machine_key is not None:
                         ack["machine_key"] = machine_key
                     await ws.send_json(ack)
                     if self.offline_queue.get(name):
@@ -1743,11 +1785,25 @@ class Relay:
             return False
         return all(prev[k] == event[k] for k in event if k not in ("delta", "seq", "timestamp"))
 
+    def _stream_authorized(self, caller: Optional[Caller]) -> bool:
+        if caller is None:
+            return False
+        now = time.time()
+        if caller.kind == "master":
+            return self._master_valid(now)
+        if caller.device_id in self.revoked_devices:
+            return False
+        device = self.devices.get(caller.device_id or "")
+        return bool(device and device.get("kind") == caller.kind
+                    and float(device.get("expires_at") or 0) > now)
+
     async def _forward_stream(self, request: web.Request, machine: Machine,
                               tail: str, caller: Optional[Caller] = None) -> web.StreamResponse:
         stream_id = uuid.uuid4().hex
         queue: asyncio.Queue = asyncio.Queue(maxsize=1024)
         machine.streams[stream_id] = queue
+        if caller is not None:
+            machine.stream_callers[stream_id] = caller
         response = web.StreamResponse(headers={
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
@@ -1767,8 +1823,16 @@ class Relay:
         status: Optional[str] = None
         deadline = 0.0
 
+        async def write_authorized(data: bytes) -> None:
+            if not self._stream_authorized(caller):
+                raise ConnectionResetError("stream authorization ended")
+            await response.write(data)
+
         async def flush() -> None:
             nonlocal pending, status
+            if not self._stream_authorized(caller):
+                pending, status = None, None
+                raise ConnectionResetError("stream authorization ended")
             if pending is not None:
                 raw, last, parts = pending
                 pending = None
@@ -1777,13 +1841,16 @@ class Relay:
                     # 接在这截之后,不重不漏。ensure_ascii 保持默认:拼接处可能是被切开的
                     # 代理对,转义输出永远是合法 JSON,手机解析时自动拼回。
                     raw = json.dumps({**last, "delta": "".join(parts)})
-                await response.write(f"data: {raw}\n\n".encode("utf-8"))
+                await write_authorized(f"data: {raw}\n\n".encode("utf-8"))
             if status is not None:
                 raw, status = status, None
-                await response.write(f"data: {raw}\n\n".encode("utf-8"))
+                await write_authorized(f"data: {raw}\n\n".encode("utf-8"))
 
         try:
             while True:
+                if not self._stream_authorized(caller):
+                    pending, status = None, None
+                    break
                 if pending is not None and loop.time() >= deadline:
                     await flush()
                 # 队列里有就直接拿,一口气清完(一帧一个 wait_for 在 3.9 上每帧要转好几圈
@@ -1792,7 +1859,10 @@ class Relay:
                     frame = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     if pending is None:
-                        frame = await queue.get()
+                        try:
+                            frame = await asyncio.wait_for(queue.get(), 5.0)
+                        except asyncio.TimeoutError:
+                            continue
                     else:
                         try:
                             frame = await asyncio.wait_for(
@@ -1821,13 +1891,14 @@ class Relay:
                 elif kind == "stream_keepalive":
                     # SSE 注释帧:客户端(iOS / 中继 / 网页)都只认 `data:` 前缀,
                     # 会安全跳过它,但它足以让中间的代理和 NAT 知道这条连接还活着。
-                    await response.write(b": keep-alive\n\n")
+                    await write_authorized(b": keep-alive\n\n")
                 elif data:
-                    await response.write(f"data: {data}\n\n".encode("utf-8"))
+                    await write_authorized(f"data: {data}\n\n".encode("utf-8"))
         except (ConnectionResetError, asyncio.CancelledError):
             pass  # 手机走了;通知 Mac 停推
         finally:
             machine.streams.pop(stream_id, None)
+            machine.stream_callers.pop(stream_id, None)
             # 手机断开时 aiohttp 是**取消**这个 handler 任务的,于是这里的
             # await 会立刻抛 CancelledError —— 而 `except Exception` 接不住它
             # (CancelledError 在 3.8+ 直接继承 BaseException)。结果就是

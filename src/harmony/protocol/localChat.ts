@@ -121,7 +121,7 @@ export function openAiErrorFromJson(json: unknown): string {
   return ""
 }
 
-export function sessionArchiveFromJson(json: unknown): LocalSessionArchive | null {
+export function sessionArchiveFromJson(json: unknown, trustedPaths: boolean = false): LocalSessionArchive | null {
   const obj = asRecord(json)
   if (!obj || !Array.isArray(obj.messages) || obj.messages.length === 0) return null
   const messages: LocalChatMessage[] = []
@@ -136,7 +136,7 @@ export function sessionArchiveFromJson(json: unknown): LocalSessionArchive | nul
           ? item.content
           : ""
     const imageB64 = typeof item.imageB64 === "string" ? item.imageB64 : ""
-    const imagePath = typeof item.imagePath === "string" ? item.imagePath : ""
+    const imagePath = trustedPaths && typeof item.imagePath === "string" ? item.imagePath : ""
     if (!role || (!text.trim() && !imageB64 && !imagePath)) continue
     if (role !== "user" && role !== "assistant" && role !== "system") continue
     const imageMime = typeof item.imageMime === "string" ? item.imageMime : ""

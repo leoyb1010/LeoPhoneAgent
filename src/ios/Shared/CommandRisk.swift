@@ -1,8 +1,8 @@
 import Foundation
 
 /// How dangerous a shell command looks. Drives the risk badge on approval
-/// cards (phone and watch) and the "smart approve" mode, which lets `.low`
-/// through and always asks for `.high`.
+/// cards (phone and watch). SmartShellApproval applies a separate, narrower
+/// execution-bound policy; a `.low` badge alone never authorizes a command.
 ///
 /// Deterministic on purpose (OpenHands' pattern analyzer, OpenCode's
 /// defaults): the same command always gets the same answer, and a model can't
@@ -126,5 +126,66 @@ enum CommandRisk: String, Codable, Comparable, Sendable {
 
     private static func matches(_ text: String, _ patterns: [String]) -> Bool {
         patterns.contains { text.range(of: $0, options: .regularExpression) != nil }
+    }
+}
+
+/// 授权与风险徽章分离：正则风险标签不能证明 shell 没有副作用。
+/// 这里只自动批准很小的单命令语法；解释器、包装器、环境覆盖、重定向、
+/// shell 展开和不认识的参数都回到正常审批，不改变逐项/全自动模式。
+enum SmartShellApproval {
+    // Git 只自动批准下面明确列出的元数据查询。status/ls-files 等工作树检查
+    // 即使关闭 fsmonitor 仍可执行 clean/process filter，必须走正常审批。
+    // 前缀只是剩余查询的防御层，不能据此把任意 Git 检查当成只读。
+    private static let safeGitPrefix = "GIT_OPTIONAL_LOCKS=0 git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false "
+
+    static func preparedCommand(_ command: String) -> String? {
+        let candidate = command.hasPrefix("git ")
+            ? safeGitPrefix + command.dropFirst(4) : command
+        return isReadOnly(candidate) ? candidate : nil
+    }
+
+    static func isReadOnly(_ original: String) -> Bool {
+        let safeGit = original.hasPrefix(safeGitPrefix)
+        let command = safeGit ? "git " + original.dropFirst(safeGitPrefix.count) : original
+        guard CommandRisk.assess(command) == .low,
+              !command.isEmpty,
+              command.unicodeScalars.allSatisfy({
+                  CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./:-=+, @%").contains($0)
+              }) else { return false }
+        let words = command.split(separator: " ").map(String.init)
+        guard let executable = words.first else { return false }
+        let args = Array(words.dropFirst())
+        // 不接受 /tmp/ls、FOO=...、time/nice 等同名程序或前缀包装。
+        switch executable {
+        case "pwd", "whoami", "id", "uptime", "sw_vers":
+            return args.isEmpty
+        case "uname":
+            return args.isEmpty || args == ["-a"] || args == ["-s"] || args == ["-m"]
+        case "ls":
+            return safeArguments(args, flags: ["-a", "-l", "-h", "-la", "-al", "-lh", "-lah", "-alh", "-A", "-F", "-R", "-1", "-d", "--"])
+        case "cat":
+            return safeArguments(args, flags: ["-n", "-b", "-s", "-v", "-E", "-T", "-A", "--"])
+        case "wc":
+            return safeArguments(args, flags: ["-l", "-w", "-c", "-m", "-L", "--"])
+        case "head", "tail":
+            // 仅文件操作数与紧凑的行数参数；不接受 follow、PID 等长寿命选项。
+            return args.allSatisfy { arg in
+                !arg.hasPrefix("-") || arg == "--" || arg.range(of: #"^-[0-9]+$"#, options: .regularExpression) != nil
+            }
+        case "git":
+            // 不接受 -c/--config-env、别名、输出文件或可执行 diff/textconv 参数。
+            guard safeGit, let verb = args.first else { return false }
+            let options = Array(args.dropFirst())
+            switch verb {
+            case "rev-parse": return options == ["HEAD"] || options == ["--show-toplevel"] || options == ["--is-inside-work-tree"]
+            default: return false
+            }
+        default:
+            return false
+        }
+    }
+
+    private static func safeArguments(_ args: [String], flags: Set<String>) -> Bool {
+        args.allSatisfy { !$0.hasPrefix("-") || flags.contains($0) }
     }
 }

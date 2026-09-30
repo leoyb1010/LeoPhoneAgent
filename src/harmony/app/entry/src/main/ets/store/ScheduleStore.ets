@@ -1,3 +1,4 @@
+import { AtomicTextFile, atomicWriteText } from './AtomicFile';
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { dayKeyOf, scheduleDue } from '../local/AgentText';
@@ -21,6 +22,7 @@ class ScheduleFile {
 }
 
 export class ScheduleStore {
+  private readonly configFile: AtomicTextFile = new AtomicTextFile();
   rows: ScheduleTask[] = [];
   jsonLoadFailed: boolean = false;
   private loaded: boolean = false;
@@ -38,9 +40,10 @@ export class ScheduleStore {
       return;
     }
     const path = context.filesDir + '/schedule.json';
+    if (!fileIo.accessSync(path)) this.configFile.read(path);
     if (fileIo.accessSync(path)) {
       try {
-        const obj = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
+        const obj = JSON.parse(this.configFile.read(path)) as Record<string, Object>;
         this.rows = ScheduleStore.parse(obj['rows']);
       } catch (_err) {
         this.jsonLoadFailed = true;
@@ -57,13 +60,7 @@ export class ScheduleStore {
     const body = new ScheduleFile();
     body.rows = this.rows;
     const path = context.filesDir + '/schedule.json';
-    const file = fileIo.openSync(path,
-      fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-    try {
-      fileIo.writeSync(file.fd, JSON.stringify(body));
-    } finally {
-      fileIo.closeSync(file);
-    }
+    this.configFile.write(path, JSON.stringify(body));
   }
 
   async upsert(context: common.Context, title: string, prompt: string, hour: number,
@@ -138,6 +135,34 @@ export class ScheduleStore {
       }
     }
     await this.save(context);
+  }
+
+  /**
+   * 每日槽位是跨进程的持久 claim。先占位再做副作用；失败/崩溃后不自动重放。
+   * mkdir 是排他创建，不能用进程内 busy 或先检查文件再写来代替。
+   */
+  static claimSlot(context: common.Context, row: ScheduleTask): boolean {
+    const path = context.filesDir + '/schedule.json';
+    const disk = JSON.parse(fileIo.readTextSync(path)) as Record<string, Object>;
+    const current = ScheduleStore.parse(disk['rows']).find((item: ScheduleTask) => item.rowId === row.rowId);
+    if (!current || current.prompt !== row.prompt || current.hour !== row.hour || current.minute !== row.minute ||
+      !scheduleDue(current.hour, current.minute, current.on, current.lastDay, Date.now())) return false;
+    const root = context.filesDir + '/schedule-claims';
+    try { fileIo.mkdirSync(root); } catch (err) {
+      if (!fileIo.accessSync(root)) throw err;
+    }
+    const rootStat = fileIo.lstatSync(root);
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('任务执行记录目录不安全');
+    const slot = root + '/' + encodeURIComponent(row.rowId) + '-' + dayKeyOf(Date.now());
+    try { fileIo.mkdirSync(slot); } catch (err) {
+      if (fileIo.accessSync(slot)) return false;
+      throw err;
+    }
+    atomicWriteText(slot + '/claim.json', JSON.stringify({ rowId: row.rowId, attemptedAt: Date.now() }));
+    // 刷父目录保证 claim 在开始网络/手机动作之前落盘；不支持时保守停止。
+    const dir = fileIo.openSync(root, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.DIR);
+    try { fileIo.fsyncSync(dir.fd); } finally { fileIo.closeSync(dir); }
+    return true;
   }
 
   static sessionTitle(title: string): string {

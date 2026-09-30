@@ -2,8 +2,9 @@ name: Android
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/audit-hardening-*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,6 +27,10 @@ jobs:
           java-version: '17'
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          # Legacy `tools` was removed from Google's repository. Request only
+          # supported packages instead of setup-android's historical default.
+          packages: 'platform-tools'
       - name: Install Android toolchain
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
       - name: Prepare checksum-pinned sandbox assets

@@ -233,3 +233,70 @@ LeoPhoneAgent is **GPLv3** because it links iSH (GPLv3) and PRoot (GPLv2). If yo
 change how the native dependencies are built, keep FFmpeg on its LGPL
 configuration and preserve the vendored `LICENSE` files. See
 [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+## Current Mac desktop and source-only audit checks
+
+The active Mac 1.x workspace is `src/mac/leophone/` (version is owned by its
+`package.json`). `src/mac/leocodebox/` is the archived desktop generation;
+`src/mac/leoagent/relay.py` remains the active relay and has independent tests.
+Do not substitute the archived desktop's check result for the current app.
+
+Use Node 24.14.0 and pnpm 10.33.2 from `src/mac/leophone/mise.toml`:
+
+```sh
+cd src/mac/leophone
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm --dir apps/zcode-cli typecheck
+pnpm lint
+pnpm architecture:check
+pnpm leo:test:agent
+pnpm --dir apps/zcode-cli build
+pnpm build:bootstrap
+```
+
+From the repository root, the platform-independent authorization and endpoint
+trust tests run with Swift and XCTest (macOS or Linux):
+
+```sh
+./scripts/RunCoreSecurityTests.sh
+python3 scripts/RepositoryEntryPointAudit.py
+PYTHONPATH=src/mac python3 -m unittest discover -s src/mac/leoagent -t src/mac -p 'test_relay*.py' -v
+```
+
+Install the relay's `aiohttp` dependency before running network regressions;
+a skipped network suite is not a passing protocol verification. These checks
+also do not replace iOS/Watch App builds, Android Standard **and** Power builds,
+DevEco/Harmony compilation, or real-device permission, upgrade, background,
+and network-fault tests. The archived Mac check remains available through the
+Quality workflow's `include_legacy_mac` manual input.
+
+### SSH trust migration
+
+Existing independent SSH host entries remain configured, including their
+Keychain credentials, but execution now requires a verified public host key
+for the exact configured address and port. On the target computer's trusted
+console, read `/etc/ssh/ssh_host_ed25519_key.pub`; paste that public key in
+Settings → Remote Hosts and explicitly confirm the server identity. Never
+paste a private key. Changed keys require the same independent verification.
+Both a selected gateway and its final target require their own verified keys.
+Leo Link HTTPS/Tailscale device pairing is a separate authentication path.
+
+### Audit-branch rollback and delivery limits
+
+The new iCloud inbound journal may contain data whose CloudKit cursor has already
+advanced. Preserve pending journal pages and assets if changing builds; drain
+pending work first or use a verified full-fetch/recovery plan when reverting to
+an older app that does not understand this journal. Do not delete pending data
+to make a status indicator look clean.
+
+The Mac CI source-build chain deliberately omits distribution runtime assets,
+packaging, signing and notarization. Full `pnpm build` includes runtime resource
+preparation and remains a separate distribution-input check; a source build does
+not establish that all bundled platform binaries are present or usable.
+
+Pending iOS follow-up input is restored when reconnecting the same configured
+host and session. Device identity learned during authenticated discovery keeps
+that queue owner; explicitly changing the target/endpoint creates a separate
+owner and never silently transfers old input. Unknown outcomes remain visible
+for inspection rather than being automatically resubmitted.

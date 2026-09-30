@@ -119,14 +119,20 @@ export async function startDirectServer(args: {
           "cache-control": "no-store",
           connection: "keep-alive",
         });
-        const heartbeat = setInterval(() => {
-          if (args.grants.isRevoked(caller)) controller.abort();
-          else res.write(": keepalive\n\n");
-        }, 5_000);
+        // 长连接不能沿用入口的认证快照；每次写出前同时检查撤销和 token 到期。
+        const writeAuthorized = (data: string) => {
+          if (controller.signal.aborted) return;
+          if (!args.grants.hasScope(authorization.slice(7), String(target), "harness")) {
+            controller.abort();
+            return;
+          }
+          res.write(data);
+        };
+        const heartbeat = setInterval(() => writeAuthorized(": keepalive\n\n"), 5_000);
         try {
           await args.bridge.stream(
             request,
-            (data) => res.write(`data: ${data}\n\n`),
+            (data) => writeAuthorized(`data: ${data}\n\n`),
             controller.signal,
           );
         } finally {

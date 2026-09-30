@@ -262,8 +262,11 @@ final class SyncCore {
                 Task { @MainActor [weak self] in
                     if await self?.processInbound(batch, from: t.name) == true {
                         do { try await t.acknowledgeInbound(batch) }
-                        catch { logger.error("[SyncCore] inbound checkpoint failed: \(error)") }
-                    }
+                        catch {
+                            await t.deferInbound(batch)
+                            logger.error("[SyncCore] inbound checkpoint failed: \(error)")
+                        }
+                    } else { await t.deferInbound(batch) }
                 }
             }
         }
@@ -439,6 +442,9 @@ final class SyncCore {
                 var deletes: [SyncRecordID] = []
                 var snapshots: [String: SyncDeliveryTicket] = [:]
                 for ticket in tickets where selection.eligible.contains(ticket.recordName) {
+                    // Recheck at the last common send boundary, including frozen
+                    // payloads and tombstones queued before the user opted out.
+                    guard UploadPolicy.allowsRecordType(ticket.recordType) else { continue }
                     guard SyncableTypeRegistry.shared.metadata(for: ticket.recordType) != nil else {
                         try await ChatStore.shared.failSyncDelivery(ticket, reason: "unregistered record type")
                         continue
@@ -458,6 +464,12 @@ final class SyncCore {
                     }
                     snapshots[ticket.recordName] = ticket
                 }
+                // Hydration and asset freezing suspend. A preference may have
+                // changed during those awaits; drop newly-disabled types from
+                // this send without deleting their durable tickets.
+                snapshots = snapshots.filter { UploadPolicy.allowsRecordType($0.value.recordType) }
+                records = records.filter { snapshots[$0.id.description] != nil }
+                deletes = deletes.filter { snapshots[$0.description] != nil }
                 guard !snapshots.isEmpty else { continue }
                 let selectedBatch = SyncOutboundBatch(records: records, deletes: deletes, deliveryTickets: snapshots)
                 for name in snapshots.keys { recentlyPushedIds[name] = Date() }
@@ -499,7 +511,10 @@ final class SyncCore {
             // when 100k+ rows pending — the migration initial-push case).
             // Schedule another debounced send so the queue actually
             // drains. Skip when queue is empty.
-            let pending = (try? await ChatStore.shared.countSyncDeliveries()) ?? 0
+            var pending = 0
+            for transport in transports {
+                pending += (try? await ChatStore.shared.loadSyncDeliveryTickets(destination: transport.name, limit: 1).count) ?? 0
+            }
             if pending > 0 {
                 logger.info("[SyncCore] \(pending) enabled delivery tickets remain; chaining send")
                 scheduleSend(delay: currentSendDelay)
@@ -514,9 +529,6 @@ final class SyncCore {
             return try JSONDecoder().decode(PortableRecord.self, from: data)
         }
         guard let record = await SyncCoreHydrators.shared.buildPortable(recordType: ticket.recordType, id: ticket.recordId) else { return nil }
-        // A single destination has nobody to stay byte-identical with; skip the
-        // asset copies + BLOB round trip (the common iCloud-only case).
-        if transports.count <= 1 { return record }
         let copy = try await Task.detached(priority: .utility) {
             let manager = FileManager.default
             let root = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -660,8 +672,8 @@ final class SyncCore {
             for j in i..<end {
                 let record = allRecords[j]
                 guard let metadata = registry.metadata(for: record.id.type) else {
-                    logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=ignored")
-                    skipped += 1
+                    logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=retained")
+                    blocked += 1
                     continue
                 }
                 if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
@@ -695,11 +707,11 @@ final class SyncCore {
             // diff for whatever the user is doing in the foreground,
             // and so ARC has a chance to release the chunk's Codable
             // intermediaries before the next chunk allocates more.
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            if i < allRecords.count { try? await Task.sleep(nanoseconds: 50_000_000) }
         }
         for deleteId in allDeletes {
             guard registry.metadata(for: deleteId.type) != nil else {
-                skipped += 1
+                blocked += 1
                 if deleteId.type == "Message" {
                     logger.warning("[EditSync] inbound delete SKIPPED — no registry metadata for type=Message id=\(deleteId.id.prefix(8))")
                 }
@@ -708,7 +720,7 @@ final class SyncCore {
             if deleteId.type == "Message" {
                 logger.warning("[EditSync] applying inbound delete Message id=\(deleteId.id.prefix(8)) — calling hydrator.applyRemoteDeletion")
             }
-            if await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId) {
+            if await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId, updatedAt: batch.deletionUpdatedAt[deleteId]) {
                 applied += 1
                 if recentlyPushedIds[deleteId.description] == nil { visible += 1 }
             } else { blocked += 1 }
@@ -741,8 +753,9 @@ final class SyncCore {
             do {
                 let batch = try await t.fetchChanges(trigger: trigger)
                 if await processInbound(batch, from: t.name) {
-                    try await t.acknowledgeInbound(batch)
-                }
+                    do { try await t.acknowledgeInbound(batch) }
+                    catch { await t.deferInbound(batch); throw error }
+                } else { await t.deferInbound(batch) }
             } catch {
                 logger.error("[SyncCore] \(t.name) fetchChanges threw: \(error.localizedDescription)")
             }
@@ -768,8 +781,9 @@ final class SyncCore {
             do {
                 let batch = try await t.fullFetch(trigger: trigger)
                 if await processInbound(batch, from: t.name) {
-                    try await t.acknowledgeInbound(batch)
-                }
+                    do { try await t.acknowledgeInbound(batch) }
+                    catch { await t.deferInbound(batch); throw error }
+                } else { await t.deferInbound(batch) }
                 logger.info("[SyncCore] fullFetch via \(t.name): records=\(batch.records.count) deletes=\(batch.deletes.count) (reconcile skipped — see C2 in audit)")
             } catch {
                 logger.error("[SyncCore] \(t.name) fullFetch threw: \(error.localizedDescription)")

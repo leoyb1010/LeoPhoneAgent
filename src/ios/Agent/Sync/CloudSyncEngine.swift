@@ -1330,7 +1330,7 @@ final class CloudSyncEngine: ObservableObject {
                 uploadTypes: (record["uploadTypes"] as? String ?? "").components(separatedBy: ",").filter { !$0.isEmpty }
             )
             logger.info("[iCloud] processRemoteRecord SyncDevice: id=\(device.id) name=\(device.deviceName) zone=\(device.zoneName) upload=\(device.uploadTypes)")
-            await ChatStore.shared.upsertSyncDevice(device)
+            try? await ChatStore.shared.upsertSyncDevice(device)
             if let idx = knownDevices.firstIndex(where: { $0.id == device.id }) {
                 knownDevices[idx] = device
             } else if device.id != DeviceIdentity.deviceId {
@@ -1358,7 +1358,7 @@ final class CloudSyncEngine: ObservableObject {
             let remotePinnedAtRaw = record["pinnedAt"] as? Date
             logger.info("[iCloud] processRemoteRecord Session: id=\(session.id) hasTitle=\(session.title != nil) deviceId=\(deviceId)")
             // Merge into local sessions (last-write-wins by updated_at)
-            await ChatStore.shared.mergeRemoteSession(session, fromDeviceId: deviceId, memoryEnabled: memoryEnabled, modelBinding: modelBinding, remotePinnedAtRaw: remotePinnedAtRaw)
+            try? await ChatStore.shared.mergeRemoteSession(session, fromDeviceId: deviceId, memoryEnabled: memoryEnabled, modelBinding: modelBinding, remotePinnedAtRaw: remotePinnedAtRaw)
             // Also keep in remote_sessions for browsing/reference
             await ChatStore.shared.upsertRemoteSession(session, deviceId: deviceId)
 
@@ -1376,7 +1376,7 @@ final class CloudSyncEngine: ObservableObject {
                 lastCompactedMessageId: record["lastCompactedMessageId"] as? String
             )
             logger.info("[iCloud] processRemoteRecord CompactMarker: id=\(marker.id) session=\(marker.sessionId)")
-            await ChatStore.shared.mergeRemoteCompactMarker(marker)
+            try? await ChatStore.shared.mergeRemoteCompactMarker(marker)
 
         case "Message":
             let partsJson: String
@@ -1406,7 +1406,7 @@ final class CloudSyncEngine: ObservableObject {
                 reasoningContent: reasoningContent, streamInterruptCount: streamInterruptCount
             )
             // Merge into local messages if the session exists locally (was merged via mergeRemoteSession)
-            await ChatStore.shared.mergeRemoteMessage(
+            try? await ChatStore.shared.mergeRemoteMessage(
                 id: messageId, sessionId: sessionId, role: role, partsJson: partsJson,
                 createdAt: createdAt, tokenUsageJson: tokenUsageJson, sortOrder: sortOrder,
                 reasoningContent: reasoningContent, streamInterruptCount: streamInterruptCount,
@@ -1470,7 +1470,7 @@ final class CloudSyncEngine: ObservableObject {
                 if updatedAt > local.updatedAt {
                     logger.info("[SkillSync] RECV merge UPDATE: '\(name)' remote(\(updatedAt)) > local(\(local.updatedAt)) — applying")
                     await MainActor.run {
-                        SkillStore.shared.importSkillFromSyncWithAsset(
+                        try? SkillStore.shared.importSkillFromSyncWithAsset(
                             skillId: skillId, content: bodyText, zipData: zipData,
                             source: source,
                             isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt
@@ -1483,7 +1483,7 @@ final class CloudSyncEngine: ObservableObject {
             } else {
                 logger.info("[SkillSync] RECV merge INSERT: '\(name)' id=\(skillId) — new skill from remote")
                 await MainActor.run {
-                    SkillStore.shared.importSkillFromSyncWithAsset(
+                    try? SkillStore.shared.importSkillFromSyncWithAsset(
                         skillId: skillId, content: bodyText, zipData: zipData,
                         source: source,
                         isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt
@@ -1575,7 +1575,7 @@ final class CloudSyncEngine: ObservableObject {
                 logger.info("[iCloud] Skipping Message deletion (session also deleted): '\(messageId)' session=\(sessionId) device=\(deviceId)")
             } else {
                 // Individual message deletion — propagate to local DB to keep lists in sync.
-                await ChatStore.shared.deleteLocalMessage(messageId: messageId)
+                try? await ChatStore.shared.deleteLocalMessage(messageId: messageId)
                 logger.info("[iCloud] Propagated remote Message deletion: '\(messageId)' session=\(sessionId) device=\(deviceId)")
             }
         case "Session":
@@ -1761,15 +1761,16 @@ final class CloudSyncEngine: ObservableObject {
     ///     write only if local is empty (current behavior for pre-LWW data).
     ///   - Remote `updatedAt` > local `savedAt` → remote is newer, overwrite.
     ///   - Otherwise → skip (local is newer or equal).
-    static func importProviderSecrets(secretsJson: String) {
+    @discardableResult
+    static func importProviderSecrets(secretsJson: String) -> Bool {
         guard let data = secretsJson.data(using: .utf8),
-              let secrets = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+              let secrets = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return false }
         for entry in secrets {
             guard let instanceId = entry["instanceId"] as? String,
                   let b64Key = entry["apiKey"] as? String,
                   let keyData = Data(base64Encoded: b64Key),
                   let key = String(data: keyData, encoding: .utf8),
-                  !key.isEmpty else { continue }
+                  !key.isEmpty else { return false }
 
             let remoteUpdatedAt: Date? = {
                 if let n = entry["updatedAt"] as? Double { return Date(timeIntervalSince1970: n) }
@@ -1803,7 +1804,7 @@ final class CloudSyncEngine: ObservableObject {
             }
 
             if shouldWrite {
-                ProviderKeychainHelper.saveAPIKey(key, instanceId: instanceId)
+                guard ProviderKeychainHelper.saveAPIKey(key, instanceId: instanceId) else { return false }
                 // saveAPIKey stamps local savedAt to Date() via UserDefaults. But since
                 // this write was a sync-in, the correct stamp is the REMOTE timestamp
                 // (so subsequent merges on this device compare against the winning value
@@ -1816,6 +1817,7 @@ final class CloudSyncEngine: ObservableObject {
                 logger.info("[iCloud] Skipped API key for instance \(instanceId.prefix(8)) — \(reason)")
             }
         }
+        return true
     }
 
     /// Export env var values as base64 JSON: [{"key": "VAR_NAME", "value": "base64..."}]
@@ -1872,6 +1874,7 @@ final class CloudSyncEngine: ObservableObject {
         case skippedDecodeFailure
         case skippedOwnEcho
         case skippedLocalDirty
+        case storageFailure
     }
 
     @MainActor
@@ -2254,7 +2257,7 @@ final class CloudSyncEngine: ObservableObject {
         // Commit: push merged config into store (in-memory + disk) WITHOUT
         // triggering a markDirty upload. We control the re-upload decision
         // explicitly below via localHasUnique.
-        store.applyMergedConfigFromSync(local)
+        guard store.applyMergedConfigFromSync(local) else { return .storageFailure }
         logger.info("[iCloud] mergeProviderConfig: merged \(instanceMap.count) instances, \(local.modelEntries.count) entries, \(local.modelGroups.count) groups")
 
         // Re-upload merged result so other device gets our unique data too.

@@ -873,13 +873,14 @@ actor ProviderConfigDB {
         createdAt: Double, updatedAt: Double, extrasJson: String?,
         customUserAgent: String?,
         azureMode: Bool = false
-    ) -> Bool {
-        guard let db else { return false }
+    ) throws -> Bool {
+        guard let db else { throw CocoaError(.fileReadUnknown) }
         // LWW: skip if local row has updated_at >= incoming.
         var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, "SELECT updated_at FROM provider_instances WHERE id = ?", -1, &stmt, nil) == SQLITE_OK {
+        guard sqlite3_prepare_v2(db, "SELECT updated_at FROM provider_instances WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { throw CocoaError(.fileReadUnknown) }
+        do {
             sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) == SQLITE_ROW {
+            if try inboundStep(stmt) == SQLITE_ROW {
                 let localTs = sqlite3_column_double(stmt, 0)
                 sqlite3_finalize(stmt)
                 if localTs >= updatedAt {
@@ -889,7 +890,7 @@ actor ProviderConfigDB {
                 sqlite3_finalize(stmt)
             }
         }
-        upsertInstanceRow(
+        let saved = upsertInstanceRow(
             id: id, label: label, providerType: providerType,
             credentialType: credentialType, customBaseURL: customBaseURL,
             appendV1Suffix: appendV1Suffix,
@@ -900,6 +901,7 @@ actor ProviderConfigDB {
             customUserAgent: customUserAgent,
             azureMode: azureMode
         )
+        guard saved else { throw CocoaError(.fileWriteUnknown) }
         return true
     }
 
@@ -908,16 +910,17 @@ actor ProviderConfigDB {
         baseModelJson: String, overridesJson: String?,
         isCustom: Bool, isHidden: Bool, userModifiedAt: Double?,
         sortOrder: Int, updatedAt: Double, extrasJson: String?
-    ) -> Bool {
-        guard let db else { return false }
+    ) throws -> Bool {
+        guard let db else { throw CocoaError(.fileReadUnknown) }
         var localTs: Double?
         var localUserModifiedAt: Double?
         var localIsHidden = false
         var localOverridesJson: String?
         var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, "SELECT updated_at, user_modified_at, is_hidden, overrides_json FROM provider_model_entries WHERE id = ?", -1, &stmt, nil) == SQLITE_OK {
+        guard sqlite3_prepare_v2(db, "SELECT updated_at, user_modified_at, is_hidden, overrides_json FROM provider_model_entries WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { throw CocoaError(.fileReadUnknown) }
+        do {
             sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) == SQLITE_ROW {
+            if try inboundStep(stmt) == SQLITE_ROW {
                 localTs = sqlite3_column_double(stmt, 0)
                 if sqlite3_column_type(stmt, 1) != SQLITE_NULL {
                     localUserModifiedAt = sqlite3_column_double(stmt, 1)
@@ -957,13 +960,14 @@ actor ProviderConfigDB {
             effUserModifiedAt = localUM
         }
 
-        upsertEntryRow(
+        let saved = upsertEntryRow(
             id: id, providerInstanceId: providerInstanceId,
             baseModelJson: baseModelJson, overridesJson: effOverridesJson,
             isCustom: isCustom, isHidden: effIsHidden,
             userModifiedAt: effUserModifiedAt,
             sortOrder: sortOrder, updatedAt: updatedAt, extrasJson: extrasJson
         )
+        guard saved else { throw CocoaError(.fileWriteUnknown) }
         return true
     }
 
@@ -992,8 +996,8 @@ actor ProviderConfigDB {
         sortOrder: Int, updatedAt: Double, extrasJson: String?,
         inboundAddedMembers: [String: Date] = [:],
         inboundRemovedMembers: [String: Date] = [:]
-    ) -> Bool {
-        guard let db else { return false }
+    ) throws -> Bool {
+        guard let db else { throw CocoaError(.fileReadUnknown) }
 
         // Read local row (scalar ts + member state) if present.
         var localTs: Double? = nil
@@ -1001,9 +1005,10 @@ actor ProviderConfigDB {
         var localAdded: [String: Date] = [:]
         var localRemoved: [String: Date] = [:]
         var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, "SELECT updated_at, member_entry_ids_json, added_members_json, removed_members_json FROM provider_model_groups WHERE id = ?", -1, &stmt, nil) == SQLITE_OK {
+        guard sqlite3_prepare_v2(db, "SELECT updated_at, member_entry_ids_json, added_members_json, removed_members_json FROM provider_model_groups WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { throw CocoaError(.fileReadUnknown) }
+        do {
             sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) == SQLITE_ROW {
+            if try inboundStep(stmt) == SQLITE_ROW {
                 localTs = sqlite3_column_double(stmt, 0)
                 localMemberJSON = Self.text(stmt, 1)
                 localAdded = Self.decodeMemberTimestamps(Self.text(stmt, 2))
@@ -1102,9 +1107,10 @@ actor ProviderConfigDB {
         if !scalarIsNewer {
             // Local scalars win; re-read them.
             var s2: OpaquePointer?
-            if sqlite3_prepare_v2(db, "SELECT name, strategy, fallback_strategy, default_thinking_level, context_limit_tokens, context_limit_remembered, sort_order, updated_at, extras_json FROM provider_model_groups WHERE id = ?", -1, &s2, nil) == SQLITE_OK {
+            guard sqlite3_prepare_v2(db, "SELECT name, strategy, fallback_strategy, default_thinking_level, context_limit_tokens, context_limit_remembered, sort_order, updated_at, extras_json FROM provider_model_groups WHERE id = ?", -1, &s2, nil) == SQLITE_OK else { throw CocoaError(.fileReadUnknown) }
+        do {
                 sqlite3_bind_text(s2, 1, id, -1, Self.SQLITE_TRANSIENT)
-                if sqlite3_step(s2) == SQLITE_ROW {
+                if try inboundStep(s2) == SQLITE_ROW {
                     useName = Self.text(s2, 0)
                     useStrategy = Self.text(s2, 1)
                     useFallback = Self.text(s2, 2)
@@ -1120,7 +1126,7 @@ actor ProviderConfigDB {
         }
 
         let finalMemberJSON = (try? Self.jsonString(finalMembers)) ?? "[]"
-        upsertGroupRow(
+        let saved = upsertGroupRow(
             id: id, name: useName, strategy: useStrategy, fallbackStrategy: useFallback,
             defaultThinkingLevel: useThinking,
             contextLimitTokens: useCtx,
@@ -1130,41 +1136,52 @@ actor ProviderConfigDB {
             removedMembersJson: Self.encodeMemberTimestamps(finalRemoved),
             addedMembersJson: Self.encodeMemberTimestamps(finalAdded)
         )
+        guard saved else { throw CocoaError(.fileWriteUnknown) }
         return true
+    }
+
+    private func inboundStep(_ statement: OpaquePointer?) throws -> Int32 {
+        let result = sqlite3_step(statement)
+        guard result == SQLITE_ROW || result == SQLITE_DONE else { sqlite3_finalize(statement); throw CocoaError(.fileReadUnknown) }
+        return result
     }
 
     /// Delete a row by id. Used by V3 deletionApplier paths. Cascading FK
     /// on provider_model_entries.provider_instance_id removes dependent
     /// entries when an instance is deleted.
-    func deleteInstanceRow(id: String) {
-        guard let db else { return }
+    @discardableResult
+    func deleteInstanceRow(id: String) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "DELETE FROM provider_instances WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "DELETE FROM provider_instances WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    func deleteEntryRow(id: String) {
-        guard let db else { return }
+    @discardableResult
+    func deleteEntryRow(id: String) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "DELETE FROM provider_model_entries WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "DELETE FROM provider_model_entries WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    func deleteGroupRow(id: String) {
-        guard let db else { return }
+    @discardableResult
+    func deleteGroupRow(id: String) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "DELETE FROM provider_model_groups WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "DELETE FROM provider_model_groups WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     // MARK: - Per-table upsert helpers (private; used by bulkReplace + S3 mutates)
 
+    @discardableResult
     private func upsertInstanceRow(
         id: String, label: String, providerType: String,
         credentialType: String?, customBaseURL: String?, appendV1Suffix: Bool,
@@ -1174,8 +1191,8 @@ actor ProviderConfigDB {
         createdAt: Double, updatedAt: Double, extrasJson: String?,
         customUserAgent: String?,
         azureMode: Bool = false
-    ) {
-        guard let db else { return }
+    ) -> Bool {
+        guard let db else { return false }
         let sql = """
             INSERT OR REPLACE INTO provider_instances
             (id, label, provider_type, credential_type, custom_base_url,
@@ -1186,7 +1203,7 @@ actor ProviderConfigDB {
         """
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, label, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, providerType, -1, Self.SQLITE_TRANSIENT)
@@ -1205,16 +1222,17 @@ actor ProviderConfigDB {
         Self.bindOpt(stmt, 16, extrasJson)
         Self.bindOpt(stmt, 17, customUserAgent)
         sqlite3_bind_int(stmt, 18, azureMode ? 1 : 0)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
+    @discardableResult
     private func upsertEntryRow(
         id: String, providerInstanceId: String,
         baseModelJson: String, overridesJson: String?,
         isCustom: Bool, isHidden: Bool, userModifiedAt: Double?,
         sortOrder: Int, updatedAt: Double, extrasJson: String?
-    ) {
-        guard let db else { return }
+    ) -> Bool {
+        guard let db else { return false }
         let sql = """
             INSERT OR REPLACE INTO provider_model_entries
             (id, provider_instance_id, base_model_json, overrides_json,
@@ -1223,7 +1241,7 @@ actor ProviderConfigDB {
         """
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, providerInstanceId, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, baseModelJson, -1, Self.SQLITE_TRANSIENT)
@@ -1234,9 +1252,10 @@ actor ProviderConfigDB {
         sqlite3_bind_int(stmt, 8, Int32(sortOrder))
         sqlite3_bind_double(stmt, 9, updatedAt)
         Self.bindOpt(stmt, 10, extrasJson)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
+    @discardableResult
     private func upsertGroupRow(
         id: String, name: String, strategy: String, fallbackStrategy: String,
         defaultThinkingLevel: String?, contextLimitTokens: Int?,
@@ -1244,8 +1263,8 @@ actor ProviderConfigDB {
         sortOrder: Int, updatedAt: Double, extrasJson: String?,
         removedMembersJson: String = "{}",
         addedMembersJson: String = "{}"
-    ) {
-        guard let db else { return }
+    ) -> Bool {
+        guard let db else { return false }
         let sql = """
             INSERT OR REPLACE INTO provider_model_groups
             (id, name, strategy, fallback_strategy, default_thinking_level,
@@ -1255,7 +1274,7 @@ actor ProviderConfigDB {
         """
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, id, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, name, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, strategy, -1, Self.SQLITE_TRANSIENT)
@@ -1269,7 +1288,7 @@ actor ProviderConfigDB {
         Self.bindOpt(stmt, 11, extrasJson)
         sqlite3_bind_text(stmt, 12, removedMembersJson, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 13, addedMembersJson, -1, Self.SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     private func setLocalKVRow(_ key: String, value: String) {

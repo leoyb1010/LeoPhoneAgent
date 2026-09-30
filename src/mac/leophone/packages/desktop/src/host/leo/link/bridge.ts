@@ -235,8 +235,8 @@ export class LinkBridge {
     return null;
   }
 
-  async revokeCaller(deviceId: string): Promise<void> {
-    await this.deps.directGrants?.revoke(deviceId);
+  async revokeCallers(deviceIds: string[]): Promise<void> {
+    await this.deps.directGrants?.revokeMany(deviceIds);
   }
 
   /** `/harness/sessions/:id/events` 的 SSE 数据行(不含 `data: ` 前缀)。 */
@@ -246,6 +246,9 @@ export class LinkBridge {
     signal: AbortSignal,
   ): Promise<void> {
     if (this.deps.directGrants?.isRevoked(req.caller)) return;
+    const emit = (data: string) => {
+      if (!signal.aborted && !this.deps.directGrants?.isRevoked(req.caller)) write(data);
+    };
     const url = new URL(req.path, "http://link.invalid");
     const match = /^\/harness\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (!match) return;
@@ -253,18 +256,19 @@ export class LinkBridge {
     if (!validSessionId(sessionId)) return;
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) {
-      await this.leoagent.stream(url.pathname + url.search, write, signal);
+      await this.leoagent.stream(url.pathname + url.search, emit, signal);
       return;
     }
     const parsed = Number.parseInt(url.searchParams.get("after") ?? "0", 10);
     const after = Number.isNaN(parsed) ? 0 : parsed;
-    write(JSON.stringify(resumeEnvelope(after, 0)));
+    emit(JSON.stringify(resumeEnvelope(after, 0)));
     try {
       for await (const event of session.subscribe(after, {
         signal,
         journalStatus: url.searchParams.get("journal_status") === "1",
       })) {
-        write(JSON.stringify(event));
+        if (this.deps.directGrants?.isRevoked(req.caller)) break;
+        emit(JSON.stringify(event));
       }
     } catch {
       // 手机走了是常态;任务照跑,日志照长,下次按 seq 续传。

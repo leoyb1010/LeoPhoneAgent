@@ -24,49 +24,51 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "SessionV2",
             builder: { id in await buildSession(id: id) },
-            merger: { record in await mergeSession(record: record) },
-            deletionApplier: { id in await deleteSession(id: id) }
+            merger: { record in try await mergeSession(record: record) },
+            deletionApplier: { id in try await deleteSession(id: id) }
         )
 
         h.register(
             recordType: "MessageV2",
             builder: { id in await buildMessage(id: id) },
-            merger: { record in await mergeMessage(record: record) },
-            deletionApplier: { id in await deleteMessage(id: id) }
+            merger: { record in try await mergeMessage(record: record) },
+            deletionApplier: { id in try await deleteMessage(id: id) }
         )
 
         h.register(
             recordType: "CompactMarkerV2",
             builder: { id in await buildCompactMarker(id: id) },
-            merger: { record in await mergeCompactMarker(record: record) },
-            deletionApplier: { id in await deleteCompactMarker(id: id) }
+            merger: { record in try await mergeCompactMarker(record: record) },
+            deletionApplier: { id in try await deleteCompactMarker(id: id) }
         )
         h.register(
             recordType: "SessionFileV2",
             builder: { id in await buildSessionFile(id: id) },
-            merger: { record in await mergeSessionFile(record: record) }
+            merger: { record in try await mergeSessionFile(record: record) },
+            datedDeletionApplier: { id, updatedAt in try await deleteSessionFile(id: id, updatedAt: updatedAt) }
         )
         h.register(
             recordType: "ArtifactV2",
             builder: { id in await buildArtifact(id: id) },
-            merger: { record in await mergeArtifact(record: record) },
-            deletionApplier: { id in await deleteArtifact(id: id) }
+            merger: { record in try await mergeArtifact(record: record) },
+            deletionApplier: { id in try await deleteArtifact(id: id) }
         )
         h.register(
             recordType: "ArtifactVersionV2",
             builder: { id in await buildArtifactVersion(id: id) },
-            merger: { record in await mergeArtifactVersion(record: record) }
+            merger: { record in try await mergeArtifactVersion(record: record) },
+            deletionApplier: { id in try await ArtifactRepository.shared.purgeVersionFromRemote(id: id) }
         )
         h.register(
             recordType: "SkillV2",
             builder: { id in await buildSkill(id: id) },
-            merger: { record in await mergeSkill(record: record) },
-            deletionApplier: { id in await applySkillDeletion(id: id) }
+            merger: { record in try await mergeSkill(record: record) },
+            deletionApplier: { id in try await applySkillDeletion(id: id) }
         )
         h.register(
             recordType: "ProviderConfigV2",
             builder: { _ in await buildProviderConfig() },
-            merger: { record in await mergeProviderConfig(record: record) }
+            merger: { record in try await mergeProviderConfig(record: record) }
         )
         // [T-mcp-per-server-sync] Legacy whole-file servers.json record.
         // New devices NEVER emit it (builder returns nil — leftover upsert
@@ -79,13 +81,15 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "MCPServersV2",
             builder: { _ -> PortableRecord? in nil },
-            merger: { record in await mergeMCPServers(record: record) }
+            merger: { record in try await mergeMCPServers(record: record) },
+            // Retiring the legacy container does not delete migrated per-server state.
+            deletionApplier: { _ in }
         )
         h.register(
             recordType: "MCPServerItem",
             builder: { id in await buildMCPServerItem(id: id) },
-            merger: { record in await mergeMCPServerItem(record: record) },
-            deletionApplier: { id in await applyMCPServerItemDeletion(id: id) }
+            merger: { record in try await mergeMCPServerItem(record: record) },
+            deletionApplier: { id in try await applyMCPServerItemDeletion(id: id) }
         )
         // v3 per-record provider sync. Inbound applies via SQL UPSERT
         // and refreshes the ProviderConfigStore in-memory cache; op=delete
@@ -95,20 +99,20 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "ProviderInstanceV3",
             builder: { id in await buildProviderInstanceV3(id: id) },
-            merger: { record in await mergeProviderInstanceV3(record: record) },
-            deletionApplier: { id in await deleteProviderInstanceV3(id: id) }
+            merger: { record in try await mergeProviderInstanceV3(record: record) },
+            deletionApplier: { id in try await deleteProviderInstanceV3(id: id) }
         )
         h.register(
             recordType: "ProviderModelEntryV3",
             builder: { id in await buildProviderModelEntryV3(id: id) },
-            merger: { record in await mergeProviderModelEntryV3(record: record) },
-            deletionApplier: { id in await deleteProviderModelEntryV3(id: id) }
+            merger: { record in try await mergeProviderModelEntryV3(record: record) },
+            deletionApplier: { id in try await deleteProviderModelEntryV3(id: id) }
         )
         h.register(
             recordType: "ProviderModelGroupV3",
             builder: { id in await buildProviderModelGroupV3(id: id) },
-            merger: { record in await mergeProviderModelGroupV3(record: record) },
-            deletionApplier: { id in await deleteProviderModelGroupV3(id: id) }
+            merger: { record in try await mergeProviderModelGroupV3(record: record) },
+            deletionApplier: { id in try await deleteProviderModelGroupV3(id: id) }
         )
         // Legacy whole-file env-vars record. New devices NEVER emit it
         // (builder returns nil — caller treats nil as "this builder
@@ -120,18 +124,20 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "EnvVarV2",
             builder: { _ -> PortableRecord? in nil },
-            merger: { record in await mergeEnvVars(record: record) }
+            merger: { record in try await mergeEnvVars(record: record) },
+            // The sender deliberately deletes this legacy container after item migration.
+            deletionApplier: { _ in }
         )
         h.register(
             recordType: "EnvVarItem",
             builder: { id in await buildEnvVarItem(id: id) },
-            merger: { record in await mergeEnvVarItem(record: record) },
-            deletionApplier: { id in await applyEnvVarItemDeletion(id: id) }
+            merger: { record in try await mergeEnvVarItem(record: record) },
+            deletionApplier: { id in try await applyEnvVarItemDeletion(id: id) }
         )
         h.register(
             recordType: "SyncDeviceV2",
             builder: { id in await buildDevice(id: id) },
-            merger: { record in await mergeDevice(record: record) }
+            merger: { record in try await mergeDevice(record: record) }
         )
         // SyncCore loads dirty rows with v2Only: true, so the hydrator
         // must register under the V2-suffixed name; otherwise lookup
@@ -144,17 +150,17 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "SoulV2",
             builder: { _ in await buildSoul() },
-            merger: { record in await mergeSoul(record: record) }
+            merger: { record in try await mergeSoul(record: record) }
         )
         h.register(
             recordType: "MemoryGlobalV2",
             builder: { _ in await buildMemoryGlobal() },
-            merger: { record in await mergeMemoryGlobal(record: record) }
+            merger: { record in try await mergeMemoryGlobal(record: record) }
         )
         h.register(
             recordType: "MemoryDailyV2",
             builder: { id in await buildMemoryDaily(dateKey: id) },
-            merger: { record in await mergeMemoryDaily(record: record) }
+            merger: { record in try await mergeMemoryDaily(record: record) }
         )
 
         registerArtifactChangeObserverIfNeeded()
@@ -221,11 +227,11 @@ enum ChatStoreSyncHydrators {
             .buildPortable(synced)
     }
 
-    private static func mergeSession(record: PortableRecord) async {
+    private static func mergeSession(record: PortableRecord) async throws {
         // Reconstruct a SyncedSession from PortableRecord fields, then
         // pass through ChatStore.mergeRemoteSession (which already has
         // LWW-by-updatedAt logic for v1 — reused as-is).
-        guard let id = stringField(record, "sessionId") else { return }
+        guard let id = stringField(record, "sessionId") else { throw CocoaError(.fileReadCorruptFile) }
         let title = optionalStringField(record, "title")
         let modelId = stringField(record, "modelId") ?? "unknown"
         let createdAt = dateField(record, "createdAt") ?? Date()
@@ -242,7 +248,7 @@ enum ChatStoreSyncHydrators {
         session.pinnedAt = pinnedAt
         // Creator and last editor are independent; old peers omit both.
         let origin = optionalStringField(record, "originDeviceId")
-        await ChatStore.shared.mergeRemoteSession(
+        try await ChatStore.shared.mergeRemoteSession(
             session, fromDeviceId: origin ?? "",
             memoryEnabled: memoryEnabled,
             modelBinding: modelBinding,
@@ -252,10 +258,10 @@ enum ChatStoreSyncHydrators {
         )
     }
 
-    private static func deleteSession(id: String) async {
+    private static func deleteSession(id: String) async throws {
         // Per §3.3.2: SessionV2 deletions are NOT propagated as hard
         // deletes — they soft-tombstone instead.
-        _ = await TombstoneManager.shared.applyRemoteSessionDeletion(sessionId: id)
+        try await ChatStore.shared.deleteSessionFromSync(id)
     }
 
     // MARK: - Message
@@ -269,11 +275,11 @@ enum ChatStoreSyncHydrators {
             .buildPortable(synced)
     }
 
-    private static func mergeMessage(record: PortableRecord) async {
+    private static func mergeMessage(record: PortableRecord) async throws {
         guard let id = stringField(record, "messageId"),
               let sessionId = stringField(record, "sessionId"),
               let role = stringField(record, "role"),
-              let createdAt = dateField(record, "createdAt") else { return }
+              let createdAt = dateField(record, "createdAt") else { throw CocoaError(.fileReadCorruptFile) }
         let partsJson = stringField(record, "partsJson") ?? "[]"
         let tokenUsageJson = optionalStringField(record, "tokenUsageJson")
         let reasoningContent = optionalStringField(record, "reasoningContent")
@@ -281,7 +287,7 @@ enum ChatStoreSyncHydrators {
         let sortOrder = intField(record, "sortOrder") ?? 0
         let updatedAt = dateField(record, "updatedAt") ?? record.updatedAt
 
-        await ChatStore.shared.mergeRemoteMessage(
+        try await ChatStore.shared.mergeRemoteMessage(
             id: id, sessionId: sessionId, role: role,
             partsJson: partsJson, createdAt: createdAt,
             tokenUsageJson: tokenUsageJson, sortOrder: sortOrder,
@@ -291,12 +297,12 @@ enum ChatStoreSyncHydrators {
         )
     }
 
-    private static func deleteMessage(id: String) async {
+    private static func deleteMessage(id: String) async throws {
         // Per §3.3.1: single-message deletions are propagated. Use the
         // same ChatStore helper v1 uses; it already takes care of *not*
         // re-marking the row dirty (the deletion came from cloud, no
         // need to re-push).
-        await ChatStore.shared.deleteLocalMessage(messageId: id)
+        try await ChatStore.shared.deleteLocalMessage(messageId: id)
         // [T-ios-log-noise-reduction] INFO→DEBUG: per-record deletion trace,
         // ~6.4k lines per batch sync; not actionable in production.
         logger.debug("[SyncCore] applied MessageV2 deletion: id=\(id.prefix(8))")
@@ -340,9 +346,9 @@ enum ChatStoreSyncHydrators {
 
     // MARK: - CompactMarker merge
 
-    private static func mergeCompactMarker(record: PortableRecord) async {
+    private static func mergeCompactMarker(record: PortableRecord) async throws {
         guard let id = stringField(record, "markerId"),
-              let sessionId = stringField(record, "sessionId") else { return }
+              let sessionId = stringField(record, "sessionId") else { throw CocoaError(.fileReadCorruptFile) }
         let summary = stringField(record, "summary") ?? ""
         let firstKeptSortOrder = intField(record, "firstKeptSortOrder") ?? 0
         let compactedCount = intField(record, "compactedCount") ?? 0
@@ -363,7 +369,7 @@ enum ChatStoreSyncHydrators {
             lastCompactedMessageId: lastCompactedMessageId,
             version: markerVersion
         )
-        await ChatStore.shared.mergeRemoteCompactMarker(marker)
+        try await ChatStore.shared.mergeRemoteCompactMarker(marker)
     }
 
     /// Apply a remote tombstone for a compact marker. Mirrors deleteMessage:
@@ -371,9 +377,9 @@ enum ChatStoreSyncHydrators {
     /// to the cloud. Required for revertCompact to propagate across devices —
     /// without this, peer devices ignore the tombstone and re-push the marker
     /// on their next sync, resurrecting it.
-    private static func deleteCompactMarker(id: String) async {
-        let removed = await ChatStore.shared.deleteLocalCompactMarker(id: id)
-        logger.info("[SyncCore] applied CompactMarkerV2 deletion: id=\(id.prefix(8)) removed=\(removed)")
+    private static func deleteCompactMarker(id: String) async throws {
+        try await ChatStore.shared.deleteCompactMarkerFromSync(id)
+        logger.info("[SyncCore] applied CompactMarkerV2 deletion: id=\(id.prefix(8))")
     }
 
     // MARK: - SessionFile
@@ -385,7 +391,7 @@ enum ChatStoreSyncHydrators {
         let sessionId = String(parts[0])
         let relativePath = String(parts[1])
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        let fileURL = library.appendingPathComponent("MinisChat/minis/\(sessionId)/\(relativePath)")
+        guard let fileURL = try? sessionFileURL(sessionId: sessionId, relativePath: relativePath, library: library) else { return nil }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs?[.size] as? Int) ?? 0
@@ -421,17 +427,19 @@ enum ChatStoreSyncHydrators {
         return portable
     }
 
-    private static func mergeSessionFile(record: PortableRecord) async {
+    private static func mergeSessionFile(record: PortableRecord) async throws {
         guard let sessionId = stringField(record, "sessionId"),
               let relativePath = stringField(record, "relativePath"),
               let asset = record.assets["asset"] else {
             logger.warning("[SyncCore] mergeSessionFile: missing asset for id=\(record.id.id.prefix(16))")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        let destURL = library.appendingPathComponent("MinisChat/minis/\(sessionId)/\(relativePath)")
+        guard record.id.id == "\(sessionId):\(relativePath)" else { throw CocoaError(.fileReadCorruptFile) }
+        let destURL = try sessionFileURL(sessionId: sessionId, relativePath: relativePath, library: library)
         let fm = FileManager.default
         let remoteFileUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
+        if await ChatStore.shared.isRecentlyDeletedRecord(type: "SessionFile", id: record.id.id, remoteUpdatedAt: remoteFileUpdatedAt) { return }
         // [T-icloud-deleted-session-resurrection] Refuse to recreate a file
         // whose session was just deleted locally and isn't newer than the
         // deletion. fetchRecentV2 can pull the still-present cloud SessionFile
@@ -462,14 +470,42 @@ enum ChatStoreSyncHydrators {
             }
         }
         do {
-            try fm.createDirectory(at: destURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if fm.fileExists(atPath: destURL.path) { try? fm.removeItem(at: destURL) }
-            try fm.copyItem(at: asset.fileURL, to: destURL)
+            try SyncFileSafety.replaceFile(from: asset.fileURL, to: destURL, modifiedAt: remoteFileUpdatedAt)
             // [T-ios-log-noise-reduction] INFO→DEBUG: per-file apply trace,
             // high-volume during batch sync; not actionable in production.
             logger.debug("[SyncCore] applied SessionFileV2: \(sessionId.prefix(8))/\(relativePath) size=\(asset.size)")
         } catch {
             logger.error("[SyncCore] mergeSessionFile failed \(sessionId)/\(relativePath): \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    private static func sessionFileURL(sessionId: String, relativePath: String, library: URL) throws -> URL {
+        _ = try SyncFileSafety.component(sessionId)
+        let root = library.appendingPathComponent("MinisChat/minis", isDirectory: true)
+        // Validate the session component against the trusted root too; resolving
+        // the session directory as a new root would bless a malicious symlink.
+        return try SyncFileSafety.destination(root: root, relativePath: "\(sessionId)/\(relativePath)")
+    }
+
+    private static func deleteSessionFile(id: String, updatedAt: Date?) async throws {
+        let parts = id.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else { throw CocoaError(.fileReadInvalidFileName) }
+        let sessionId = String(parts[0]), relativePath = String(parts[1])
+        let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+        _ = try sessionFileURL(sessionId: sessionId, relativePath: relativePath, library: library)
+        let pending = await ChatStore.shared.loadDirtyRecords()
+        let hasBufferedEdit = await SessionFileChangeTracker.shared.hasPendingChange(sessionId: sessionId, relativePath: relativePath)
+        let hasPendingEdit = hasBufferedEdit || pending.contains(where: {
+            ["SessionFile", "SessionFileV2"].contains($0.recordType) && $0.recordId == id && $0.operation != "delete"
+        })
+        guard try SyncFileSafety.removeFile(root: library.appendingPathComponent("MinisChat/minis"),
+            relativePath: "\(sessionId)/\(relativePath)", remoteUpdatedAt: updatedAt,
+            hasPendingEdit: hasPendingEdit) else { return }
+        if let updatedAt {
+            guard await ChatStore.shared.recordDeletedRecordTombstone(type: "SessionFile", id: id, at: updatedAt) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
         }
     }
 
@@ -480,9 +516,9 @@ enum ChatStoreSyncHydrators {
         return SyncableTypeRegistry.shared.metadata(for: "ArtifactV2")?.buildPortable(SyncedArtifact.from(artifact))
     }
 
-    private static func mergeArtifact(record: PortableRecord) async {
+    private static func mergeArtifact(record: PortableRecord) async throws {
         guard let id = stringField(record, "artifactId"),
-              let sessionId = stringField(record, "sessionId") else { return }
+              let sessionId = stringField(record, "sessionId") else { throw CocoaError(.fileReadCorruptFile) }
         let remoteUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
         if await ChatStore.shared.isRecentlyDeletedRecord(
             type: "ArtifactV2",
@@ -508,6 +544,7 @@ enum ChatStoreSyncHydrators {
             try await ArtifactRepository.shared.mergeRemoteArtifact(remote)
         } catch {
             logger.warning("[SyncCore] ArtifactV2 merge skipped id=\(id.prefix(8)): \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -549,7 +586,7 @@ enum ChatStoreSyncHydrators {
         )
     }
 
-    private static func mergeArtifactVersion(record: PortableRecord) async {
+    private static func mergeArtifactVersion(record: PortableRecord) async throws {
         guard let id = stringField(record, "versionId"),
               let artifactId = stringField(record, "artifactId"),
               let sessionId = stringField(record, "sessionId"),
@@ -559,7 +596,7 @@ enum ChatStoreSyncHydrators {
               let sha256 = stringField(record, "sha256"),
               let asset = record.assets["asset"] else {
             logger.warning("[SyncCore] ArtifactVersionV2 merge missing metadata or asset")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         if await ChatStore.shared.isRecentlyDeletedRecord(
             type: "ArtifactV2",
@@ -587,16 +624,18 @@ enum ChatStoreSyncHydrators {
             )
         } catch {
             logger.warning("[SyncCore] ArtifactVersionV2 merge skipped id=\(id.prefix(8)): \(error.localizedDescription)")
+            throw error
         }
     }
 
-    private static func deleteArtifact(id: String) async {
-        try? await ArtifactRepository.shared.purgeFromRemote(id: id)
+    private static func deleteArtifact(id: String) async throws {
+        try await ArtifactRepository.shared.purgeFromRemote(id: id)
     }
 
     // MARK: - Skill
 
     private static func buildSkill(id: String) async -> PortableRecord? {
+        guard (try? SyncFileSafety.component(id)) != nil else { return nil }
         let snapshot = await MainActor.run { () -> SkillSnapshot? in
             guard let s = SkillStore.shared.skills.first(where: { $0.id == id }) else { return nil }
             let zipData = SkillStore.shared.buildSkillZipData(id)
@@ -639,8 +678,8 @@ enum ChatStoreSyncHydrators {
         return portable
     }
 
-    private static func mergeSkill(record: PortableRecord) async {
-        guard let id = stringField(record, "skillId") else { return }
+    private static func mergeSkill(record: PortableRecord) async throws {
+        guard let id = stringField(record, "skillId") else { throw CocoaError(.fileReadCorruptFile) }
         let bodyText = stringField(record, "bodyText") ?? ""
         let updatedAt = dateField(record, "updatedAt") ?? record.updatedAt
         // [T-icloud-record-delete-resurrection] A skill deleted locally moments
@@ -656,10 +695,10 @@ enum ChatStoreSyncHydrators {
         let importSource = stringField(record, "importSource") ?? "file"
         var zipData: Data? = nil
         if let asset = record.assets["bundleAsset"] {
-            zipData = try? Data(contentsOf: asset.fileURL)
+            zipData = try Data(contentsOf: asset.fileURL)
         }
-        await MainActor.run {
-            SkillStore.shared.importSkillFromSyncWithAsset(
+        try await MainActor.run {
+            try SkillStore.shared.importSkillFromSyncWithAsset(
                 skillId: id, content: bodyText, zipData: zipData,
                 source: SkillImportSource.fromDB(importSource),
                 isEnabled: isEnabled,
@@ -675,9 +714,9 @@ enum ChatStoreSyncHydrators {
     /// the tombstone; re-queueing would amplify into a delete-loop.
     /// SkillStore.applyRemoteDeletion is the local-only counterpart of
     /// deleteSkill that skips the markDirty step.
-    private static func applySkillDeletion(id: String) async {
-        await MainActor.run {
-            SkillStore.shared.applyRemoteDeletion(id: id)
+    private static func applySkillDeletion(id: String) async throws {
+        try await MainActor.run {
+            try SkillStore.shared.applyRemoteDeletion(id: id)
         }
         logger.info("[SyncCore] applied SkillV2 deletion: id=\(id.prefix(8))")
     }
@@ -713,7 +752,7 @@ enum ChatStoreSyncHydrators {
         return SyncableTypeRegistry.shared.metadata(for: "ProviderConfigV2")?.buildPortable(synced)
     }
 
-    private static func mergeProviderConfig(record: PortableRecord) async {
+    private static func mergeProviderConfig(record: PortableRecord) async throws {
         // [T-provider-sync-v3 S7] If v3 is the active sync surface for
         // ProviderConfig, silently drop inbound v2 records. New devices
         // emit BOTH v2 and v3 outbound during rollout so old peers can
@@ -724,7 +763,7 @@ enum ChatStoreSyncHydrators {
             logger.info("[v3] inbound ProviderConfigV2 dropped — v3 is the authoritative provider sync surface")
             return
         }
-        guard let json = stringField(record, "configJson") else { return }
+        guard let json = stringField(record, "configJson") else { throw CocoaError(.fileReadCorruptFile) }
         // [T-apikey fc9a35ec] Delegate to the v1 merger which:
         //   - skips own echo via lastUploadedProviderConfigHash
         //   - bails out if a local dirty ProviderConfig upload is pending
@@ -753,7 +792,7 @@ enum ChatStoreSyncHydrators {
             // remote updatedAt vs local Keychain savedAt — it will not
             // overwrite a locally-newer key.
             if let secretsJson = stringField(record, "secretsJson"), !secretsJson.isEmpty {
-                CloudSyncEngine.importProviderSecrets(secretsJson: secretsJson)
+                guard CloudSyncEngine.importProviderSecrets(secretsJson: secretsJson) else { throw CocoaError(.fileWriteUnknown) }
             }
             // Honest outcome log. The previous "applied via v1 merger" line
             // was printed unconditionally, even when the merger had bailed
@@ -764,11 +803,13 @@ enum ChatStoreSyncHydrators {
             case .applied:
                 logger.info("[SyncCore] applied ProviderConfigV2 via v1 merger (\(json.count) chars)")
             case .skippedDecodeFailure:
-                logger.warning("[SyncCore] ProviderConfigV2 merge skipped: remote JSON decode failed (\(json.count) chars)")
+                throw CocoaError(.fileReadCorruptFile)
+            case .storageFailure:
+                throw CocoaError(.fileWriteUnknown)
             case .skippedOwnEcho:
                 logger.info("[SyncCore] ProviderConfigV2 merge skipped: own echo (\(json.count) chars)")
             case .skippedLocalDirty:
-                logger.info("[SyncCore] ProviderConfigV2 merge skipped: local pending upload (\(json.count) chars)")
+                throw CocoaError(.fileWriteUnknown)
             }
         } else {
             logger.info("[SyncCore] ProviderConfigV2 merge skipped: pre-iOS-17 (\(json.count) chars)")
@@ -784,20 +825,20 @@ enum ChatStoreSyncHydrators {
     /// added locally or received as MCPServerItem records. Deletes are not
     /// expressible through this legacy path (acceptable: old-build peers
     /// couldn't sync at all — their whitelist never included the type).
-    private static func mergeMCPServers(record: PortableRecord) async {
+    private static func mergeMCPServers(record: PortableRecord) async throws {
         guard let json = stringField(record, "serversJson"),
               let data = json.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let rawServers = root["mcpServers"] as? [String: Any] else { return }
+              let rawServers = root["mcpServers"] as? [String: Any] else { throw CocoaError(.fileReadCorruptFile) }
         let remoteUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
         for (name, rawEntry) in rawServers {
             guard let obj = rawEntry as? [String: Any],
                   let entryData = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]),
-                  let entryJson = String(data: entryData, encoding: .utf8) else { continue }
+                  let entryJson = String(data: entryData, encoding: .utf8) else { throw CocoaError(.fileReadCorruptFile) }
             let entryUpdated = (obj["updatedAt"] as? Double).map { Date(timeIntervalSince1970: $0) } ?? remoteUpdatedAt
             let entryCreated = (obj["createdAt"] as? Double).map { Date(timeIntervalSince1970: $0) } ?? remoteUpdatedAt
-            await MainActor.run {
-                MCPStore.shared.applyRemoteServerItem(
+            try await MainActor.run {
+                try MCPStore.shared.applyRemoteServerItem(
                     name: name, entryJson: entryJson,
                     remoteCreatedAt: entryCreated, remoteUpdatedAt: entryUpdated
                 )
@@ -821,14 +862,14 @@ enum ChatStoreSyncHydrators {
         return SyncableTypeRegistry.shared.metadata(for: "MCPServerItem")?.buildPortable(synced)
     }
 
-    private static func mergeMCPServerItem(record: PortableRecord) async {
+    private static func mergeMCPServerItem(record: PortableRecord) async throws {
         guard let name = stringField(record, "serverName"), !name.isEmpty else {
             logger.warning("[SyncCore] mergeMCPServerItem: missing serverName field")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         guard let entryJson = stringField(record, "entryJson") else {
             logger.warning("[SyncCore] mergeMCPServerItem: missing entryJson for '\(name)'")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         let createdAt = dateField(record, "createdAt") ?? Date()
         let updatedAt = dateField(record, "updatedAt") ?? record.updatedAt
@@ -847,10 +888,10 @@ enum ChatStoreSyncHydrators {
         let pendingDirty = await ChatStore.shared.loadDirtyRecords()
         if pendingDirty.contains(where: { $0.recordType == "MCPServerItem" && $0.recordId == name && $0.operation != "delete" }) {
             logger.info("[SyncCore] mergeMCPServerItem SKIP (local upsert pending): '\(name)'")
-            return
+            throw CocoaError(.fileWriteUnknown)
         }
-        await MainActor.run {
-            MCPStore.shared.applyRemoteServerItem(
+        try await MainActor.run {
+            try MCPStore.shared.applyRemoteServerItem(
                 name: name, entryJson: entryJson,
                 remoteCreatedAt: createdAt, remoteUpdatedAt: updatedAt
             )
@@ -858,30 +899,38 @@ enum ChatStoreSyncHydrators {
     }
 
     /// Apply an inbound op=delete tombstone: hard-delete the server by name.
-    private static func applyMCPServerItemDeletion(id: String) async {
-        await MainActor.run {
-            MCPStore.shared.applyRemoteServerDeletion(name: id)
+    private static func applyMCPServerItemDeletion(id: String) async throws {
+        try await MainActor.run {
+            try MCPStore.shared.applyRemoteServerDeletion(name: id)
         }
         logger.info("[SyncCore] applied MCPServerItem deletion '\(id)'")
     }
 
     // MARK: - EnvVars
 
-    private static func mergeEnvVars(record: PortableRecord) async {
-        guard let json = stringField(record, "envVarsJson") else { return }
-        // [T-apikey fc9a35ec] Delegate to v1 merger (echo detection +
-        // per-id union with local-only preservation). Same reasoning as
-        // mergeProviderConfig above. The previous blind file write would
-        // wipe locally-added env vars whenever a stale snapshot arrived.
-        if #available(iOS 17.0, *) {
-            await MainActor.run {
-                CloudSyncEngine.mergeEnvVars(remoteJson: json)
-            }
-            if let secretsJson = stringField(record, "envSecretsJson"), !secretsJson.isEmpty {
-                CloudSyncEngine.importEnvVarSecrets(secretsJson: secretsJson)
+    private static func mergeEnvVars(record: PortableRecord) async throws {
+        guard let json = stringField(record, "envVarsJson") else { throw CocoaError(.fileReadCorruptFile) }
+        let entries = try JSONDecoder().decode([EnvVarEntry].self, from: Data(json.utf8))
+        var secrets: [String: String] = [:]
+        if let json = stringField(record, "envSecretsJson"), !json.isEmpty {
+            let rows = try JSONDecoder().decode([[String: String]].self, from: Data(json.utf8))
+            for row in rows {
+                guard let key = row["key"], let value = row["value"],
+                      let decoded = Data(base64Encoded: value), String(data: decoded, encoding: .utf8) != nil else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                secrets[key] = value
             }
         }
-        logger.info("[SyncCore] applied EnvVarV2 via v1 merger (\(json.count) chars)")
+        // Keep the documented per-ID union, while sharing current per-item
+        // dirty guards, validation and durable Keychain/JSON persistence.
+        for entry in entries {
+            let portable = PortableRecord(id: SyncRecordID(type: "EnvVarItem", id: entry.id),
+                fields: ["entryId": .string(entry.id), "key": .string(entry.key),
+                    "valueB64": .string(secrets[entry.key] ?? ""), "note": .string(entry.note),
+                    "createdAt": .date(entry.createdAt)], updatedAt: record.updatedAt)
+            try await mergeEnvVarItem(record: portable)
+        }
     }
 
     // MARK: - EnvVarItem (per-variable)
@@ -918,14 +967,14 @@ enum ChatStoreSyncHydrators {
     /// Apply an inbound per-variable record. Adds-or-replaces the entry
     /// in env-vars.json by id, decodes valueB64 → Keychain. LWW
     /// resolution by updatedAt happens in EnvVarStore.applyRemoteItem.
-    private static func mergeEnvVarItem(record: PortableRecord) async {
+    private static func mergeEnvVarItem(record: PortableRecord) async throws {
         guard let id = stringField(record, "entryId") else {
             logger.warning("[SyncCore] mergeEnvVarItem: missing entryId field")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         guard let key = stringField(record, "key") else {
             logger.warning("[SyncCore] mergeEnvVarItem: missing key for id=\(id.prefix(8))")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         let valueB64 = stringField(record, "valueB64") ?? ""
         let note = stringField(record, "note") ?? ""
@@ -950,16 +999,13 @@ enum ChatStoreSyncHydrators {
         let pendingDirty = await ChatStore.shared.loadDirtyRecords()
         if pendingDirty.contains(where: { $0.recordType == "EnvVarItem" && $0.recordId == id && $0.operation != "delete" }) {
             logger.info("[SyncCore] mergeEnvVarItem SKIP (local upsert pending): id=\(id.prefix(8))")
-            return
+            throw CocoaError(.fileWriteUnknown)
         }
-        let value: String = {
-            guard !valueB64.isEmpty,
-                  let data = Data(base64Encoded: valueB64),
-                  let s = String(data: data, encoding: .utf8) else { return "" }
-            return s
-        }()
-        await MainActor.run {
-            EnvVarStore.shared.applyRemoteItem(
+        guard let data = Data(base64Encoded: valueB64), let value = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        try await MainActor.run {
+            try EnvVarStore.shared.applyRemoteItem(
                 id: id, key: key, value: value, note: note,
                 createdAt: createdAt, updatedAt: updatedAt
             )
@@ -970,17 +1016,17 @@ enum ChatStoreSyncHydrators {
     /// Apply an inbound op=delete tombstone. Removes the entry by id
     /// (NOT by key) — receiver doesn't need to know the key, the CK
     /// record's recordName carries the entry UUID.
-    private static func applyEnvVarItemDeletion(id: String) async {
-        await MainActor.run {
-            EnvVarStore.shared.applyRemoteDeletion(id: id)
+    private static func applyEnvVarItemDeletion(id: String) async throws {
+        try await MainActor.run {
+            try EnvVarStore.shared.applyRemoteDeletion(id: id)
         }
         logger.info("[SyncCore] applied EnvVarItem deletion id=\(id.prefix(8))")
     }
 
     // MARK: - SyncDevice
 
-    private static func mergeDevice(record: PortableRecord) async {
-        guard let id = stringField(record, "deviceId") else { return }
+    private static func mergeDevice(record: PortableRecord) async throws {
+        guard let id = stringField(record, "deviceId") else { throw CocoaError(.fileReadCorruptFile) }
         let device = SyncDevice(
             id: id,
             deviceName: stringField(record, "deviceName") ?? "Unknown",
@@ -990,7 +1036,7 @@ enum ChatStoreSyncHydrators {
             uploadTypes: (stringField(record, "uploadTypes") ?? "")
                 .components(separatedBy: ",").filter { !$0.isEmpty }
         )
-        await ChatStore.shared.upsertSyncDevice(device)
+        try await ChatStore.shared.upsertSyncDevice(device)
     }
 
     // MARK: - Helper
@@ -1051,14 +1097,14 @@ enum ChatStoreSyncHydrators {
 
     /// Apply an inbound SoulV2 record. LWW-by-updatedAt against the local
     /// file mtime is implemented inside SoulStore.applyRemoteContent.
-    private static func mergeSoul(record: PortableRecord) async {
+    private static func mergeSoul(record: PortableRecord) async throws {
         guard let text = stringField(record, "contentMarkdown") else {
             logger.warning("[SyncCore] mergeSoul: missing contentMarkdown field")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         let updatedAt = dateField(record, "updatedAt") ?? record.updatedAt
-        await MainActor.run {
-            SoulStore.applyRemoteContent(text, remoteUpdatedAt: updatedAt)
+        try await MainActor.run {
+            try SoulStore.applyRemoteContent(text, remoteUpdatedAt: updatedAt)
         }
         logger.info("[SyncCore] applied SoulV2 (\(text.count) chars, updatedAt=\(updatedAt))")
     }
@@ -1085,10 +1131,10 @@ enum ChatStoreSyncHydrators {
         return SyncableTypeRegistry.shared.metadata(for: "MemoryGlobalV2")?.buildPortable(synced)
     }
 
-    private static func mergeMemoryGlobal(record: PortableRecord) async {
+    private static func mergeMemoryGlobal(record: PortableRecord) async throws {
         guard let text = stringField(record, "contentMarkdown") else {
             logger.warning("[SyncCore] mergeMemoryGlobal: missing contentMarkdown")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
         let remoteUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
 
@@ -1117,71 +1163,35 @@ enum ChatStoreSyncHydrators {
             return
         }
 
-        try? fm.createDirectory(at: url.deletingLastPathComponent(),
+        try fm.createDirectory(at: url.deletingLastPathComponent(),
                                  withIntermediateDirectories: true)
         do {
             try text.write(to: url, atomically: true, encoding: .utf8)
             // [T-icloud-local-edit-clobber] Backdate the applied file's mtime
             // to the record's updatedAt so the apply doesn't masquerade as a
             // fresh local edit (same fix as MCPServers / SOUL.md).
-            try? fm.setAttributes([.modificationDate: remoteUpdatedAt], ofItemAtPath: url.path)
+            try fm.setAttributes([.modificationDate: remoteUpdatedAt], ofItemAtPath: url.path)
             logger.info("[SyncCore] applied MemoryGlobalV2 (\(text.count) chars, remoteUpdatedAt=\(remoteUpdatedAt))")
             NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
         } catch {
             logger.error("[SyncCore] mergeMemoryGlobal write failed: \(error)")
+            throw error
         }
     }
 
     // MARK: - Memory Daily (per-day log, Set Union merge)
 
     /// Lightweight entry parsed from a daily log block delimited by <!-- timestamp -->.
-    private struct MemoryEntry: Codable, Equatable {
-        let timestamp: String   // "YYYY-MM-DD HH:mm:ss" — dedup key
-        let content: String     // block body (everything after the <!-- --> line)
-    }
+    private typealias MemoryEntry = SyncMemoryEntries.Entry
 
     /// Parse a daily log file into its constituent MemoryEntry blocks.
     /// Splits on "<!-- " prefix lines (used as block boundaries by executeMemoryWrite).
     private static func parseMemoryEntries(from text: String) -> [MemoryEntry] {
-        let lines = text.components(separatedBy: "\n")
-        var entries: [MemoryEntry] = []
-        var currentTimestamp: String? = nil
-        var currentLines: [String] = []
-
-        for line in lines {
-            if line.hasPrefix("<!-- "), line.hasSuffix(" -->") {
-                // Flush previous block
-                if let ts = currentTimestamp {
-                    let body = currentLines.joined(separator: "\n")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !body.isEmpty {
-                        entries.append(MemoryEntry(timestamp: ts, content: body))
-                    }
-                }
-                // Start new block — extract timestamp between "<!-- " and " -->"
-                let inner = String(line.dropFirst(5).dropLast(4))
-                currentTimestamp = inner
-                currentLines = []
-            } else {
-                currentLines.append(line)
-            }
-        }
-        // Flush last block
-        if let ts = currentTimestamp {
-            let body = currentLines.joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !body.isEmpty {
-                entries.append(MemoryEntry(timestamp: ts, content: body))
-            }
-        }
-        return entries
+        SyncMemoryEntries.parse(from: text)
     }
 
-    /// Serialise a list of MemoryEntry back into daily log file format (newest first).
     private static func serialiseMemoryEntries(_ entries: [MemoryEntry]) -> String {
-        let sorted = entries.sorted { $0.timestamp > $1.timestamp }
-        return sorted.map { "<!-- \($0.timestamp) -->\n\($0.content)\n" }
-                     .joined(separator: "\n")
+        SyncMemoryEntries.serialize(entries)
     }
 
     private static func buildMemoryDaily(dateKey: String) async -> PortableRecord? {
@@ -1192,8 +1202,8 @@ enum ChatStoreSyncHydrators {
             return nil  // Too old — skip
         }
 
-        let url = AIChatViewModel.minisMemoryPersistentDir
-                    .appendingPathComponent("\(dateKey).md")
+        guard let key = try? SyncFileSafety.dailyKey(dateKey),
+              let url = try? SyncFileSafety.destination(root: AIChatViewModel.minisMemoryPersistentDir, relativePath: "\(key).md") else { return nil }
         guard let text = try? String(contentsOf: url, encoding: .utf8),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
@@ -1214,71 +1224,32 @@ enum ChatStoreSyncHydrators {
         return SyncableTypeRegistry.shared.metadata(for: "MemoryDailyV2")?.buildPortable(synced)
     }
 
-    private static func mergeMemoryDaily(record: PortableRecord) async {
+    private static func mergeMemoryDaily(record: PortableRecord) async throws {
         guard let dateKey = stringField(record, "dateKey"),
               let entriesJson = stringField(record, "entriesJson"),
               let remoteEntries = try? JSONDecoder().decode(
                   [MemoryEntry].self, from: Data(entriesJson.utf8))
         else {
             logger.warning("[SyncCore] mergeMemoryDaily: missing or unparseable fields")
-            return
+            throw CocoaError(.fileReadCorruptFile)
         }
 
-        let url = AIChatViewModel.minisMemoryPersistentDir
-                    .appendingPathComponent("\(dateKey).md")
+        let url = try SyncFileSafety.destination(root: AIChatViewModel.minisMemoryPersistentDir,
+            relativePath: "\(SyncFileSafety.dailyKey(dateKey)).md")
         let fm = FileManager.default
 
         // Read existing local entries
         var localEntries: [MemoryEntry] = []
-        if fm.fileExists(atPath: url.path),
-           let localText = try? String(contentsOf: url, encoding: .utf8) {
-            localEntries = parseMemoryEntries(from: localText)
+        if fm.fileExists(atPath: url.path) {
+            localEntries = parseMemoryEntries(from: try String(contentsOf: url, encoding: .utf8))
         }
 
-        // Set Union by timestamp key.
-        // - Same timestamp + same content → idempotent (skip).
-        // - Same timestamp + different content → keep BOTH as independent
-        //   entries, with the remote one stored under a content-hashed
-        //   suffix key so it doesn't collide with the local one. The
-        //   serialised file will show both as separate `<!-- ts -->` blocks
-        //   sharing the same timestamp (effectively "append the conflicting
-        //   block to the end" once sorted). Hashing the content makes the
-        //   suffix deterministic — re-merging the same pair never produces
-        //   a third copy, so the file can't grow on each sync round.
-        var merged: [String: MemoryEntry] = [:]
-        for e in localEntries { merged[e.timestamp] = e }
-        for e in remoteEntries {
-            if let existing = merged[e.timestamp] {
-                if existing.content != e.content {
-                    // Conflict: deterministic suffix from content hash.
-                    let hashSuffix = String(abs(e.content.hashValue) % 100_000_000)
-                    let conflictKey = "\(e.timestamp)#\(hashSuffix)"
-                    if merged[conflictKey] == nil {
-                        merged[conflictKey] = e
-                        logger.warning("[SyncCore] mergeMemoryDaily: same-timestamp conflict at \(e.timestamp), kept both as separate entries")
-                    }
-                    // else: this exact remote variant already merged in
-                    // — idempotent, no-op (prevents file growth on re-sync)
-                }
-                // else: identical content, idempotent — no-op
-            } else {
-                merged[e.timestamp] = e   // new entry from remote
-            }
-        }
-
-        let newCount = merged.count - localEntries.count
-        // [T-icloud-local-edit-clobber] Union added nothing → don't rewrite.
-        // The rewrite would bump the file mtime, the dirty scanner would
-        // re-push the (unchanged) day, and every peer's apply would do the
-        // same — a perpetual cross-device echo of identical content. The
-        // union can only grow, so equal counts means no new entries.
-        if newCount == 0, fm.fileExists(atPath: url.path) {
-            return
-        }
-        let allEntries = Array(merged.values)
+        let allEntries = SyncMemoryEntries.union(localEntries, remoteEntries)
+        let newCount = Set(allEntries).subtracting(Set(localEntries)).count
+        if Set(allEntries) == Set(localEntries), fm.fileExists(atPath: url.path) { return }
         let newText = serialiseMemoryEntries(allEntries)
 
-        try? fm.createDirectory(at: url.deletingLastPathComponent(),
+        try fm.createDirectory(at: url.deletingLastPathComponent(),
                                  withIntermediateDirectories: true)
         do {
             try newText.write(to: url, atomically: true, encoding: .utf8)
@@ -1286,6 +1257,7 @@ enum ChatStoreSyncHydrators {
             NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
         } catch {
             logger.error("[SyncCore] mergeMemoryDaily write failed: \(error)")
+            throw error
         }
     }
 
@@ -1343,7 +1315,7 @@ enum ChatStoreSyncHydrators {
             .buildPortable(synced)
     }
 
-    private static func mergeProviderInstanceV3(record: PortableRecord) async {
+    private static func mergeProviderInstanceV3(record: PortableRecord) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             // [T-icloud-fresh-restore-provider-groups] Inbound dropped because the
             // provider SQLite store hasn't finished its async open yet (fresh
@@ -1351,7 +1323,7 @@ enum ChatStoreSyncHydrators {
             // is open, so the record is re-pulled next run — log it so the
             // recovery is visible in the field.
             logger.warning("[v3] mergeProviderInstanceV3 DROPPED (DB not open yet) id=\(record.id.id.prefix(8)) — will re-pull")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
         let id = record.id.id
         let label = stringField(record, "label") ?? ""
@@ -1384,7 +1356,7 @@ enum ChatStoreSyncHydrators {
             logger.info("[v3] mergeProviderInstanceV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
             return
         }
-        let applied = await db.upsertInstanceFromInbound(
+        let applied = try await db.upsertInstanceFromInbound(
             id: id, label: label, providerType: providerType,
             credentialType: credentialType, customBaseURL: customBaseURL,
             appendV1Suffix: appendV1Suffix,
@@ -1403,12 +1375,12 @@ enum ChatStoreSyncHydrators {
         }
     }
 
-    private static func deleteProviderInstanceV3(id: String) async {
+    private static func deleteProviderInstanceV3(id: String) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             logger.warning("[v3] deleteProviderInstanceV3 DROPPED (DB not open yet) id=\(id.prefix(8))")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
-        await db.deleteInstanceRow(id: id)
+        guard await db.deleteInstanceRow(id: id) else { throw CocoaError(.fileWriteUnknown) }
         // CASCADE FK on provider_model_entries.provider_instance_id
         // already removes the instance's entries server-side too — but
         // peers issue their own per-entry op=delete records, so the
@@ -1441,10 +1413,10 @@ enum ChatStoreSyncHydrators {
             .buildPortable(synced)
     }
 
-    private static func mergeProviderModelEntryV3(record: PortableRecord) async {
+    private static func mergeProviderModelEntryV3(record: PortableRecord) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             logger.warning("[v3] mergeProviderModelEntryV3 DROPPED (DB not open yet) id=\(record.id.id.prefix(8)) — will re-pull")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
         let rawId = record.id.id
         let entryUpdatedAt = dateField(record, "updatedAt") ?? Date()
@@ -1493,7 +1465,7 @@ enum ChatStoreSyncHydrators {
             logger.info("[v3] mergeProviderModelEntryV3 SKIP (recently deleted locally): id=\(id.prefix(16))")
             return
         }
-        let applied = await db.upsertEntryFromInbound(
+        let applied = try await db.upsertEntryFromInbound(
             id: id,
             providerInstanceId: stringField(record, "providerInstanceId") ?? "",
             baseModelJson: stringField(record, "baseModelJson") ?? "{}",
@@ -1530,10 +1502,10 @@ enum ChatStoreSyncHydrators {
         }
     }
 
-    private static func deleteProviderModelEntryV3(id: String) async {
+    private static func deleteProviderModelEntryV3(id: String) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             logger.warning("[v3] deleteProviderModelEntryV3 DROPPED (DB not open yet) id=\(id.prefix(8))")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
         // [T-provider-entry-id-canonicalize] The local DB keys entries by the
         // composite key, but the cloud can issue a delete for a pre-migration
@@ -1543,9 +1515,9 @@ enum ChatStoreSyncHydrators {
         // and delete the canonical row too. Delete both forms so an
         // un-normalized raw-uuid row (if any) is also cleared.
         let canonical = await MainActor.run { ProviderConfigStore.shared.canonicalEntryId(forLegacy: id) }
-        await db.deleteEntryRow(id: id)
+        guard await db.deleteEntryRow(id: id) else { throw CocoaError(.fileWriteUnknown) }
         if let canonical, canonical != id {
-            await db.deleteEntryRow(id: canonical)
+            guard await db.deleteEntryRow(id: canonical) else { throw CocoaError(.fileWriteUnknown) }
             logger.info("[v3] deleted ProviderModelEntryV3 \(id.prefix(8)) (+canonical \(canonical))")
         } else {
             logger.info("[v3] deleted ProviderModelEntryV3 \(id.prefix(16))")
@@ -1608,10 +1580,10 @@ enum ChatStoreSyncHydrators {
         return (mapOf("added"), mapOf("removed"))
     }
 
-    private static func mergeProviderModelGroupV3(record: PortableRecord) async {
+    private static func mergeProviderModelGroupV3(record: PortableRecord) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             logger.warning("[v3] mergeProviderModelGroupV3 DROPPED (DB not open yet) id=\(record.id.id.prefix(8)) — will re-pull")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
         let id = record.id.id
         // [T-icloud-record-delete-resurrection] Resurrection guard, as with the
@@ -1636,7 +1608,7 @@ enum ChatStoreSyncHydrators {
         let localCount = (await db.groupRow(id: id)?["member_entry_ids_json"] as? String)
             .flatMap { ((try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [Any])?.count } ?? -1
         let (inboundAdded, inboundRemoved) = decodeGroupMemberTombstones(optionalStringField(record, "removedMembersJson"))
-        let applied = await db.upsertGroupFromInbound(
+        let applied = try await db.upsertGroupFromInbound(
             id: id,
             name: stringField(record, "name") ?? "",
             strategy: stringField(record, "strategy") ?? "fallback",
@@ -1662,12 +1634,12 @@ enum ChatStoreSyncHydrators {
         }
     }
 
-    private static func deleteProviderModelGroupV3(id: String) async {
+    private static func deleteProviderModelGroupV3(id: String) async throws {
         guard let db = ProviderConfigStore.shared.db else {
             logger.warning("[v3] deleteProviderModelGroupV3 DROPPED (DB not open yet) id=\(id.prefix(8))")
-            return
+            throw CocoaError(.fileReadUnknown)
         }
-        await db.deleteGroupRow(id: id)
+        guard await db.deleteGroupRow(id: id) else { throw CocoaError(.fileWriteUnknown) }
         logger.info("[v3] deleted ProviderModelGroupV3 \(id.prefix(8))")
         await refreshStoreFromDB()
     }
