@@ -1,6 +1,6 @@
 import Foundation
-#if canImport(Compression)
-import Compression
+#if canImport(zlib)
+import zlib
 #endif
 
 /// Bounded ZIP32 reader shared by file import and sync. Parse and validate the
@@ -23,33 +23,33 @@ enum SafeSkillArchive {
     }
 
     static func decompress(_ data: Data, expectedSize: Int) -> Data? {
-        #if canImport(Compression)
-        guard expectedSize >= 0, expectedSize <= SafeSkillArchive.maxEntryBytes else { return nil }
+        #if canImport(zlib)
+        guard expectedSize >= 0, expectedSize <= maxEntryBytes,
+              !data.isEmpty, data.count <= maxArchiveBytes else { return nil }
         // One extra byte distinguishes exact output from truncated/bomb output.
         var output = Data(count: expectedSize + 1)
         let valid = output.withUnsafeMutableBytes { destination in
             data.withUnsafeBytes { source -> Bool in
-                guard let src = source.baseAddress, !data.isEmpty,
+                guard let src = source.baseAddress,
                       let dst = destination.baseAddress else { return false }
-                // Imported C pointers are nonoptional. Keep both buffers alive
-                // for initialization, processing, and destruction of the stream.
-                var stream = compression_stream(
-                    dst_ptr: dst.assumingMemoryBound(to: UInt8.self), dst_size: expectedSize + 1,
-                    src_ptr: src.assumingMemoryBound(to: UInt8.self), src_size: data.count, state: nil)
-                guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) != COMPRESSION_STATUS_ERROR else { return false }
-                defer { compression_stream_destroy(&stream) }
-                // Initialization may reset the input/output fields.
-                stream.src_ptr = src.assumingMemoryBound(to: UInt8.self)
-                stream.src_size = data.count
-                stream.dst_ptr = dst.assumingMemoryBound(to: UInt8.self)
-                stream.dst_size = expectedSize + 1
-                var status: compression_status
-                repeat {
-                    let oldSourceSize = stream.src_size, oldDestinationSize = stream.dst_size
-                    status = compression_stream_process(&stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
-                    if status == COMPRESSION_STATUS_OK && (stream.dst_size == 0 || (stream.src_size == oldSourceSize && stream.dst_size == oldDestinationSize)) { return false }
-                } while status == COMPRESSION_STATUS_OK
-                return status == COMPRESSION_STATUS_END && stream.src_size == 0 && stream.dst_size == 1
+                // ZIP method 8 contains one raw DEFLATE stream. Compression's
+                // decoder can consume trailing bytes, so use zlib's exact input
+                // counters to reject garbage or a second stream inside the entry.
+                var stream = z_stream()
+                guard inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION,
+                                    Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return false }
+                defer { inflateEnd(&stream) }
+                // zlib does not mutate input; its C API uses a mutable pointer.
+                stream.next_in = UnsafeMutablePointer(mutating: src.assumingMemoryBound(to: Bytef.self))
+                stream.avail_in = uInt(data.count)
+                stream.next_out = dst.assumingMemoryBound(to: Bytef.self)
+                stream.avail_out = uInt(expectedSize + 1)
+                // Both buffers are complete and bounded. Z_FINISH must reach the
+                // stream end in this call; incomplete input/output fails closed.
+                let status = zlib.inflate(&stream, Z_FINISH)
+                return status == Z_STREAM_END && stream.avail_in == 0
+                    && stream.total_in == uLong(data.count)
+                    && stream.total_out == uLong(expectedSize) && stream.avail_out == 1
             }
         }
         guard valid else { return nil }

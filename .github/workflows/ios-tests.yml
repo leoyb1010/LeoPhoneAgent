@@ -44,20 +44,36 @@ jobs:
       - name: Audit iOS release, motion and visible controls
         run: |
           set -euo pipefail
-          ./scripts/IOSReleaseReadinessAudit.sh
-          ./scripts/IOSAccessibilityMotionAudit.sh
-          ./scripts/IOSVisibleControlAudit.sh
-          python3 scripts/RepositoryEntryPointAudit.py
-          ./scripts/RunCoreSecurityTests.sh
-          python3 scripts/CoreExecutionSmoke.py -v
-          python3 scripts/CloudKitInboundDurabilityTests.py -v
-          bash scripts/CloudKitTransportSDKTypecheck.sh
-          python3 scripts/SyncBoundaryTests.py -v
-          bash scripts/SkillArchiveCompressionTests.sh
-          python3 scripts/SkillTreeTransactionTests.py
-          python3 scripts/CloudKitDependencyProgressTests.py
-          python3 scripts/SyncSQLiteDurabilityTests.py
+          # Independent fixtures must all run so one SDK failure cannot hide
+          # another. Keep the step red if any command fails.
+          failed=0
+          run_check() {
+            echo "::group::$*"
+            if "$@"; then
+              echo "Check passed: $*"
+            else
+              result=$?
+              echo "::error::Check failed (exit $result): $*"
+              failed=1
+            fi
+            echo "::endgroup::"
+          }
+          run_check ./scripts/IOSReleaseReadinessAudit.sh
+          run_check ./scripts/IOSAccessibilityMotionAudit.sh
+          run_check ./scripts/IOSVisibleControlAudit.sh
+          run_check python3 scripts/RepositoryEntryPointAudit.py
+          run_check ./scripts/RunCoreSecurityTests.sh
+          run_check python3 scripts/CoreExecutionSmoke.py -v
+          run_check python3 scripts/CloudKitInboundDurabilityTests.py -v
+          run_check bash scripts/CloudKitTransportSDKTypecheck.sh
+          run_check python3 scripts/SyncBoundaryTests.py -v
+          run_check bash scripts/SkillArchiveCompressionTests.sh
+          run_check python3 scripts/SkillTreeTransactionTests.py
+          run_check python3 scripts/CloudKitDependencyProgressTests.py
+          run_check python3 scripts/SyncSQLiteDurabilityTests.py
+          exit "$failed"
       - name: Run MinisTests
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail        # 管道里任一命令失败即失败,不被 tail 掩盖
           cd src/ios
