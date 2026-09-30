@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.49.1",
+            date: "2026-09-30",
+            title: "同步落盘与远控输入恢复加固",
+            highlights: [
+                "iCloud 收到的记录和附件先保存在本机，再确认同步进度；写入失败会保留并重试，会话与消息的依赖也能继续补齐。",
+                "发往 Mac 的后续输入先记入本机待确认记录；断线或收不到回执时保留原输入，避免误报发送成功或重复执行。",
+                "同步文件和技能导入增加路径、压缩包与中断恢复校验；智能批准收紧到明确的只读命令。",
+                "SSH 连接现在需要在主机设置中保存经过核实的服务器公钥；已有主机和凭据保留，未确认公钥时会提示配置。"
+            ]
+        ),
+        LeoRelease(
             version: "1.49.0",
             date: "2026-09-28",
             title: "iCloud 同步故障可诊断，Mac 设备直连与持久副本",

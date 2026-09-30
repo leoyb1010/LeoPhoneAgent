@@ -1460,8 +1460,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     /// detached decode task can call it without hopping back to the MainActor.
     /// Reads only the CKRecord + registry (no instance state), so this is safe.
     nonisolated private func toPortable(_ record: CKRecord, registry: SyncableTypeRegistry) -> PortableRecord? {
-        guard let metadata = registry.metadata(for: record.recordType) else { return nil }
-        let knownKeys = metadata.knownCloudKeys
+        // A newer peer's type is still a valid delivery. Preserve its fields
+        // and assets in the durable inbox; SyncCore withholds this entry's
+        // business ACK while other record identities continue to progress.
+        let knownKeys = registry.metadata(for: record.recordType)?.knownCloudKeys ?? []
         var fields: [String: PortableFieldValue] = [:]
         var unknown: [String: PortableFieldValue] = [:]
         var assets: [String: PortableAsset] = [:]

@@ -231,7 +231,7 @@ private struct RemoteHostEditSheet: View {
                 } header: {
                     Text("已核实的 SSH 服务器公钥")
                 } footer: {
-                    Text("在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接；不会自动信任网络返回的密钥。")
+                    Text("在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。直连目前仅支持 Ed25519：所用 SSH 库无法按公钥选择其他算法；网关 OpenSSH 仍可校验其他有效公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接；不会自动信任网络返回的密钥。")
                 }
                 Section {
                     SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)

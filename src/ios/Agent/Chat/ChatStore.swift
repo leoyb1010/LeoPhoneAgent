@@ -5055,6 +5055,23 @@ extension ChatStore {
         return result
     }
 
+    /// A deletion must inspect this identity across the entire queue, including
+    /// disabled uploads and edits beyond the bounded send/diagnostic page.
+    func hasPendingSessionFileEdit(id: String) throws -> Bool {
+        guard db != nil else { throw CocoaError(.fileReadUnknown) }
+        let sql = """
+            SELECT 1 FROM sync_dirty_records
+            WHERE record_type IN ('SessionFile', 'SessionFileV2')
+                AND record_id = ? AND operation != 'delete'
+        """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        _ = try prepareInbound(sql, &statement)
+        sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1,
+                         unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        return try stepInbound(statement) == SQLITE_ROW
+    }
+
     func loadDirtyRecords(v2Only: Bool = false) -> [DirtyRecord] {
         // Order Sessions first so receiving device creates sessions before messages arrive
         // Order:

@@ -70,6 +70,8 @@ jobs:
           run_check bash scripts/SkillArchiveCompressionTests.sh
           run_check python3 scripts/SkillTreeTransactionTests.py
           run_check python3 scripts/CloudKitDependencyProgressTests.py
+          run_check python3 scripts/SessionFileDeletionPendingTests.py
+          run_check python3 scripts/CloudKitUnknownRecordRetentionTests.py
           run_check python3 scripts/SyncSQLiteDurabilityTests.py
           exit "$failed"
       - name: Run MinisTests

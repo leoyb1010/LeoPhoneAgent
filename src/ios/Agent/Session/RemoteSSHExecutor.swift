@@ -42,6 +42,9 @@ actor RemoteSSHExecutor {
               let hostKey = try? NIOSSHPublicKey(openSSHPublicKey: keyLine) else {
             return ExecResult(output: "SSH host key is not trusted for this address and port. In Settings → Remote Hosts, paste the server public host key obtained from its trusted console before connecting.", succeeded: false)
         }
+        guard RemoteSSHTrust.directPublicKey(keyLine) != nil else {
+            return ExecResult(output: "Direct SSH currently requires a verified ssh-ed25519 server host key: the bundled SSH library cannot select another pinned host-key algorithm. From the server's trusted console, read /etc/ssh/ssh_host_ed25519_key.pub and verify that key in Settings → Remote Hosts. The existing pin has not been changed; gateway OpenSSH still supports it.", succeeded: false)
+        }
         // [T-ssh-key-auth] Password when stored, else the device Ed25519 key —
         // key-only hosts (the recommended setup) no longer require a password.
         let auth: SSHAuthenticationMethod

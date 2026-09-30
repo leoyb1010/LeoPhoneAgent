@@ -17,6 +17,15 @@ enum RemoteSSHTrust {
         return "\(fields[0]) \(fields[1])"
     }
 
+    /// Citadel 0.12 / NIOSSH 0.3 negotiate a fixed preference headed by
+    /// Ed25519; their public API cannot select a host-key algorithm from a pin.
+    /// Keep generic pins available to gateway OpenSSH, but direct connections
+    /// must use the algorithm the client will prefer on multi-key servers.
+    static func directPublicKey(_ value: String) -> String? {
+        guard let key = normalizedPublicKey(value), key.hasPrefix("ssh-ed25519 ") else { return nil }
+        return key
+    }
+
     static func pinnedKey(host: String, port: Int, key: String?, trustedEndpoint: String?) -> String? {
         guard (1...65535).contains(port), trustedEndpoint == endpoint(host: host, port: port),
               let key else { return nil }

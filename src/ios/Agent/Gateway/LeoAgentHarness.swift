@@ -386,14 +386,12 @@ final class HarnessSessionDriver: ObservableObject {
             }
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
             // 明确的拒绝才允许使用新编号降级重发，未知结果永不走此路径。
-            do { guard try finishOutbox(entry) else { return } }
-            catch { showUncertain(entry); return }
+            guard finishRejectedOutbox(entry) == true else { return }
             fullAutoRefused = true
             note(Self.fullAutoRefusedNote)
             await sendSteer(sessionId: sessionId, text: text)
         } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
-            do { try finishOutbox(entry) }
-            catch { showUncertain(entry); return }
+            guard finishRejectedOutbox(entry) != nil else { return }
             steerFailed(text, message ?? "HTTP \(status)")
         } catch {
             // timeout/5xx/409 都可能已经发生副作用；保留原编号，不放回可盲重发的输入框。
@@ -423,7 +421,11 @@ final class HarnessSessionDriver: ObservableObject {
     private func restoreOutbox() {
         guard let sessionId else { return }
         do {
-            relayQueued = try HarnessOutbox.shared.entries(scope: client.harnessOutboxScope, sessionId: sessionId)
+            let stored = try HarnessOutbox.shared.entries(scope: client.harnessOutboxScope, sessionId: sessionId)
+            relayQueued = stored.filter { $0.state != .rejected }
+            for entry in stored where entry.state == .rejected {
+                steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入；本机清理未完成，原文已恢复，请核对任务后重试。"))
+            }
             for entry in relayQueued { showUncertain(entry) }
             watchRelayQueue()
         } catch {
@@ -432,11 +434,25 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     @discardableResult
-    private func finishOutbox(_ entry: HarnessOutbox.Entry) throws -> Bool {
-        let claimed = try HarnessOutbox.shared.remove(entry)
+    private func finishOutbox(_ entry: HarnessOutbox.Entry, rejected: Bool = false) throws -> Bool {
+        let claimed = try HarnessOutbox.shared.remove(entry, rejected: rejected)
         relayQueued.removeAll { $0.id == entry.id }
         announcedUncertain.remove(entry.id)
         return claimed
+    }
+
+    /// Refusal is authoritative even when local cleanup fails. Keep the
+    /// refusal on disk before unlink, and recover the text without an automatic
+    /// downgrade or a claim that the deleted file is still saved.
+    private func finishRejectedOutbox(_ entry: HarnessOutbox.Entry) -> Bool? {
+        do {
+            return try finishOutbox(entry, rejected: true)
+        } catch {
+            relayQueued.removeAll { $0.id == entry.id }
+            announcedUncertain.remove(entry.id)
+            steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入；本机记录清理失败，原文已放回输入框，请核对任务后重试。"))
+            return nil
+        }
     }
 
     private func showUncertain(_ entry: HarnessOutbox.Entry) {
@@ -468,7 +484,7 @@ final class HarnessSessionDriver: ObservableObject {
                 let result = try await client.relayQueueResult(requestId: entry.id)
                 switch HarnessOutbox.relayResolution(result) {
                 case .completed(let http):
-                    let claimed = try finishOutbox(entry)
+                    guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry) else { continue }
                     if http == 403, entry.fullAuto == true, claimed {
                         fullAutoRefused = true
                         note(Self.fullAutoRefusedNote)
@@ -487,7 +503,7 @@ final class HarnessSessionDriver: ObservableObject {
                 let receipt = try await client.harnessOperationResult(requestId: entry.id)
                 guard case .completed(let http) = HarnessOutbox.receiptResolution(receipt, requestId: entry.id)
                 else { showUncertain(entry); continue }
-                let claimed = try finishOutbox(entry)
+                guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry) else { continue }
                 if http == 403, entry.fullAuto == true, claimed {
                     fullAutoRefused = true
                     note(Self.fullAutoRefusedNote)

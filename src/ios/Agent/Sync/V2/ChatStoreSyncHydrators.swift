@@ -494,11 +494,9 @@ enum ChatStoreSyncHydrators {
         let sessionId = String(parts[0]), relativePath = String(parts[1])
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
         _ = try sessionFileURL(sessionId: sessionId, relativePath: relativePath, library: library)
-        let pending = await ChatStore.shared.loadDirtyRecords()
+        let hasQueuedEdit = try await ChatStore.shared.hasPendingSessionFileEdit(id: id)
         let hasBufferedEdit = await SessionFileChangeTracker.shared.hasPendingChange(sessionId: sessionId, relativePath: relativePath)
-        let hasPendingEdit = hasBufferedEdit || pending.contains(where: {
-            ["SessionFile", "SessionFileV2"].contains($0.recordType) && $0.recordId == id && $0.operation != "delete"
-        })
+        let hasPendingEdit = hasBufferedEdit || hasQueuedEdit
         guard try SyncFileSafety.removeFile(root: library.appendingPathComponent("MinisChat/minis"),
             relativePath: "\(sessionId)/\(relativePath)", remoteUpdatedAt: updatedAt,
             hasPendingEdit: hasPendingEdit) else { return }

@@ -670,12 +670,13 @@ final class SyncCore {
         while i < allRecords.count {
             let end = min(i + chunkSize, allRecords.count)
             for j in i..<end {
-                let record = allRecords[j]
+                var record = allRecords[j]
                 guard let metadata = registry.metadata(for: record.id.type) else {
                     logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=retained")
                     blocked += 1
                     continue
                 }
+                record = record.reclassifyingKnownFields(metadata.knownCloudKeys)
                 if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
                     logger.warning("[SyncSchema] minimumCompatibleVersionBlocked: type=\(record.id.type) required=\(minimum) local=\(metadata.version)")
                     blocked += 1

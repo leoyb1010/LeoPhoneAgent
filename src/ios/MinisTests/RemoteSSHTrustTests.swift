@@ -4,6 +4,18 @@ import XCTest
 final class RemoteSSHTrustTests: XCTestCase {
     private let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJg7MhLhe4dZCFklpKuTkicrf/c98q5q7wT/+FkAoPB0"
 
+    func testDirectSetupRequiresEd25519WhileGatewayKeepsOtherPins() {
+        XCTAssertEqual(RemoteSSHTrust.directPublicKey(key + " trusted console"), key)
+        for algorithm in ["ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"] {
+            let pin = algorithm + " AQID"
+            XCTAssertNil(RemoteSSHTrust.directPublicKey(pin))
+            XCTAssertEqual(RemoteSSHTrust.normalizedPublicKey(pin), pin)
+            XCTAssertNotNil(RemoteSSHTrust.relayCommand(host: "example.com", port: 22,
+                username: "leo", publicKey: pin, command: "pwd"))
+        }
+        XCTAssertNil(RemoteSSHTrust.directPublicKey("ssh-ed25519 ???"))
+    }
+
     func testTrustRequiresExactEndpointAndExplicitKey() {
         let endpoint = RemoteSSHTrust.endpoint(host: " Example.COM ", port: 22)
         XCTAssertEqual(endpoint, "[example.com]:22")

@@ -136,6 +136,21 @@ struct PortableRecord: Codable, Equatable, Sendable {
         self.unknownFields = unknownFields
         self.updatedAt = updatedAt
     }
+
+    /// An inbox can outlive the schema that decoded it. Promote fields an
+    /// upgraded registry now knows before the domain merger reads the record.
+    func reclassifyingKnownFields(_ knownKeys: Set<String>) -> PortableRecord {
+        var fields = self.fields
+        var unknown = unknownFields
+        for key in knownKeys {
+            if let value = unknown.removeValue(forKey: key), fields[key] == nil {
+                fields[key] = value
+            }
+        }
+        return PortableRecord(id: id, fields: fields, assets: assets,
+            schemaVersion: schemaVersion, minimumCompatibleVersion: minimumCompatibleVersion,
+            unknownFields: unknown, updatedAt: updatedAt)
+    }
 }
 
 /// A batch of records to push (or that arrived from a remote). Used by

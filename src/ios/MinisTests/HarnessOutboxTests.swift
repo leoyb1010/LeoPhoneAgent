@@ -22,6 +22,40 @@ final class HarnessOutboxTests: XCTestCase {
         XCTAssertTrue(try restarted.entries(scope: entry.scope, sessionId: entry.sessionId).isEmpty)
     }
 
+    func testRemovalSyncFailureKeepsOriginalIntentForRestart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = HarnessOutbox(directory: root, directorySync: { directory in
+            // Fail the synchronization after unlink, while writes with the
+            // original entry still present can complete normally.
+            if try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty {
+                throw POSIXError(.EIO)
+            }
+        })
+        let entry = try store.record(id: UUID().uuidString, scope: "A", sessionId: "A", text: "rejected original", fullAuto: true)
+        XCTAssertThrowsError(try store.remove(entry))
+        XCTAssertEqual(try HarnessOutbox(directory: root).entries(scope: "A", sessionId: "A"), [entry])
+    }
+
+    func testRejectedRemovalSyncFailureRecoversTextWithoutReplayState() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = HarnessOutbox(directory: root, directorySync: { directory in
+            if try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty {
+                throw POSIXError(.EIO)
+            }
+        })
+        let entry = try store.record(id: UUID().uuidString, scope: "A", sessionId: "A", text: "definitely refused", fullAuto: true)
+        XCTAssertThrowsError(try store.remove(entry, rejected: true))
+        let recovered = try HarnessOutbox(directory: root).entries(scope: "A", sessionId: "A")
+        XCTAssertEqual(recovered.first?.text, entry.text)
+        XCTAssertEqual(recovered.first?.id, entry.id)
+        XCTAssertEqual(recovered.first?.state, .rejected)
+        XCTAssertTrue(recovered.filter { $0.state != .rejected }.isEmpty, "refused input must be returned manually, not polled or downgraded automatically")
+        XCTAssertTrue(try HarnessOutbox(directory: root).remove(entry, rejected: true))
+        XCTAssertFalse(try HarnessOutbox(directory: root).remove(entry, rejected: true), "a second console cannot claim the same refusal")
+    }
+
     func testUnknownAndExpiredResultsRequireReceiptAndNeverAuthorizeReplay() {
         for result: [String: Any] in [[:], ["status": "expired"], ["status": "failed"], ["status": "delivered"], ["status": "delivered", "http_status": 408], ["status": "delivered", "http_status": 409], ["status": "delivered", "http_status": 503]] {
             XCTAssertEqual(HarnessOutbox.relayResolution(result), .needsReceipt)

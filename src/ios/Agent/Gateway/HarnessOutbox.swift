@@ -9,7 +9,7 @@ import Glibc
 /// 每条记录独立原子保存、同步落盘，原始 payload 与请求编号不可改写。
 /// 不确定的操作只查询回执，不自动重新执行，避免把丢 ACK 变成重复副作用。
 final class HarnessOutbox: Sendable {
-    enum State: String, Codable, Sendable { case uncertain, queued }
+    enum State: String, Codable, Sendable { case uncertain, queued, rejected }
     struct Entry: Codable, Equatable, Sendable {
         let id: String
         let scope: String
@@ -53,8 +53,12 @@ final class HarnessOutbox: Sendable {
         .appendingPathComponent("HarnessOutbox", isDirectory: true))
     private let directory: URL
     private let lock = NSLock()
+    private let directorySync: @Sendable (URL) throws -> Void
 
-    init(directory: URL) { self.directory = directory }
+    init(directory: URL, directorySync: @escaping @Sendable (URL) throws -> Void = HarnessOutbox.synchronizeDirectory) {
+        self.directory = directory
+        self.directorySync = directorySync
+    }
 
     @discardableResult
     func record(id: String, scope: String, sessionId: String, text: String, fullAuto: Bool?) throws -> Entry {
@@ -81,15 +85,27 @@ final class HarnessOutbox: Sendable {
         try persist(queued, at: url)
     }
 
+    /// A definitive refusal is saved before cleanup under the same claim lock.
+    /// If cleanup fails, restart recovers the text without automatically replaying.
     @discardableResult
-    func remove(_ entry: Entry) throws -> Bool {
+    func remove(_ entry: Entry, rejected: Bool = false) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         let url = try file(entry.id)
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
-        let existing = try JSONDecoder().decode(Entry.self, from: Data(contentsOf: url))
+        var existing = try JSONDecoder().decode(Entry.self, from: Data(contentsOf: url))
         guard existing.hasSameIntent(as: entry) else { throw Failure.conflictingIntent }
+        if rejected {
+            existing.state = .rejected
+            try persist(existing, at: url)
+        }
         try FileManager.default.removeItem(at: url)
-        try synchronizeDirectory()
+        do { try directorySync(directory) }
+        catch {
+            // unlink already happened. Restore the exact persisted intent
+            // before reporting failed cleanup; do not pretend it still exists.
+            try? persist(existing, at: url)
+            throw error
+        }
         return true
     }
 
@@ -114,10 +130,10 @@ final class HarnessOutbox: Sendable {
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
         try handle.synchronize()
-        try synchronizeDirectory()
+        try directorySync(directory)
     }
 
-    private func synchronizeDirectory() throws {
+    private static func synchronizeDirectory(_ directory: URL) throws {
         let descriptor = open(directory.path, O_RDONLY)
         guard descriptor >= 0 else { throw POSIXError(.EIO) }
         defer { _ = close(descriptor) }
