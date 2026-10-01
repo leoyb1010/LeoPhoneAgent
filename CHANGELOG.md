@@ -23,6 +23,11 @@
 - 验证：link 测试 51 项、bridge 26 项通过；lint、architecture 门禁通过；Developer ID 签名。
 - 运维：三台 Mac 的 App 在重启/退出后都没有再拉起，手机因此控不了任何一台；安装时增加登录自动拉起的 LaunchAgent（`com.leoyuan.leophoneagent-app`）。
 
+### 装机与发布记录（2026-10-01）
+- iOS：经 `InstallIOSRelease.sh` 闸门，iPhone 18 Pro Max、iPad Pro 13（M4）、Apple Watch 均为 `1.49.2 (136)`，devicectl 已核对。
+- Mac：MacBook、Mac Studio、Mac mini 均为 1.3.5（ssh/ditto 直装，不经 Gatekeeper 隔离）；中继 0.2.1 显示 3 台在线；直连 8445 未授权请求 401；登录 LaunchAgent 已装。
+- 公证：Apple 返回 HTTP 403「A required agreement is missing or has expired」——需在 developer.apple.com 接受新协议后重跑 `scripts/leo-notarize-mac.sh`。因此 v1.3.5 **尚未**发布到 leocodebox-updates 热更新源；1.3.4 仍是公开 latest。
+
 ## iOS 1.49.1 (135) · 审计修复实机升级 - 2026-09-30
 
 - 基于远端 `fix/audit-hardening-20260930` / `ffe2b20d`，核验同步收件落盘、文件与技能恢复、远控输入 outbox、智能批准及 SSH 主机公钥约束。
