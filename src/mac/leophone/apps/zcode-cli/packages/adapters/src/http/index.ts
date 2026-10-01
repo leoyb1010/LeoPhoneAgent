@@ -66,8 +66,11 @@ export class NodeHttpClientAdapter implements HttpClientPort {
       httpProxy: this.options.proxyUrl,
       noProxy: this.options.noProxy,
     });
+    // 用户自己配置的代理(Clash 等)在代理侧解析域名;本地 DNS 预检既无法证明
+    // 最终 IP,在仅代理可出网的机器上还会把每次 WebFetch 卡到超时。走代理时只保留
+    // URL 字面量层面的私网/本机阻断(调用方已做),直连时才做公网 DNS 校验。
     const publicDnsLookup =
-      request.egressPolicy === "public"
+      request.egressPolicy === "public" && !proxy.proxyUrl
         ? (this.options.dnsLookup ?? defaultPublicDnsLookup())
         : undefined;
     const tlsCaCertificates = this.resolveTlsCaCertificates();
@@ -85,7 +88,6 @@ export class NodeHttpClientAdapter implements HttpClientPort {
 
     try {
       if (publicDnsLookup) {
-        assertPublicEgressProxyBoundary(url, proxy.proxyUrl);
         await assertPublicEgressDestination(url, publicDnsLookup, {
           signal: abortController.signal,
         });
@@ -256,17 +258,6 @@ function createRequestAgent(
   }
 
   return undefined;
-}
-
-function assertPublicEgressProxyBoundary(url: URL, proxyUrl: string | undefined): void {
-  if (!proxyUrl) return;
-  // 普通代理会在代理侧解析目标域名，本地 DNS 校验无法证明最终 IP 仍是公网地址。
-  throw createHttpClientError({
-    code: "egress_blocked",
-    url: url.toString(),
-    message:
-      "HTTP public egress cannot use a proxy because proxy-side DNS resolution cannot be verified",
-  });
 }
 
 function buildEgressInfo(

@@ -93,9 +93,14 @@ extension LeoAgentClient {
     }
 
     func routedData(for original: URLRequest) async throws -> (Data, URLResponse) {
+        // A direct POST that timed out may already have reached the Mac; if the
+        // relay fallback then fails for a local reason, the caller must treat the
+        // result as unknown rather than "never sent".
+        var directAttempted = false
         if let direct = await directRequest(for: original) {
             do {
                 let start = Date()
+                directAttempted = true
                 let result = try await directSession.data(for: direct)
                 if let response = result.1 as? HTTPURLResponse, [502, 503, 504].contains(response.statusCode) {
                     await directFailed()
@@ -108,11 +113,18 @@ extension LeoAgentClient {
                 await directFailed()
             }
         }
-        if directOnly { throw URLError(.cannotConnectToHost) }
+        let mutating = !["GET", "HEAD", nil].contains(original.httpMethod?.uppercased())
+        if directOnly {
+            throw directAttempted && mutating ? GatewayError.uncertainAfterDirectAttempt : URLError(.cannotConnectToHost)
+        }
         let start = Date()
-        let result = try await session.data(for: original)
-        await reportRoute(direct: false, start: start)
-        return result
+        do {
+            let result = try await session.data(for: original)
+            await reportRoute(direct: false, start: start)
+            return result
+        } catch let error as URLError where directAttempted && mutating {
+            throw error.code == .cancelled ? error : GatewayError.uncertainAfterDirectAttempt
+        }
     }
 
     func routedBytes(for original: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {

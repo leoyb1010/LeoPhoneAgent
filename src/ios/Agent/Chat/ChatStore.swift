@@ -4351,9 +4351,6 @@ extension ChatStore {
         try SyncDeliveryLedger.failures(db)
     }
     func retrySyncDeliveryFailures() throws { try SyncDeliveryLedger.retryFailures(db) }
-    func countSyncDeliveries(enabledOnly: Bool = true, includeBlocked: Bool = false) throws -> Int {
-        try SyncDeliveryLedger.count(db, enabledOnly: enabledOnly, includeBlocked: includeBlocked)
-    }
     func isSyncDeliveryCurrent(_ ticket: SyncDeliveryTicket) throws -> Bool {
         try SyncDeliveryLedger.isCurrent(db, ticket: ticket)
     }

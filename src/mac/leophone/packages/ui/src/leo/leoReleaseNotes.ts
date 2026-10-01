@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.3.5",
+    date: "2026-10-01",
+    items: [
+      "WebFetch 在开着系统代理（如 Clash）的 Mac 上恢复可用：走代理时不再做本机 DNS 公网预检，只保留对私网地址的字面拦截。",
+      "手机可直接从这台 Mac 读取 sshd 公钥来固定 SSH 服务器身份：公钥经已配对的加密远控通道提供，手机端一键填入、确认后保存。",
+      "撤销手机授权更稳：中继重连重发的撤销快照不再反复重写授权文件；落盘失败会在 30 秒后自动重试，而不是让手机一直收到 500。",
+    ],
+  },
+  {
     version: "1.3.4",
     date: "2026-09-28",
     items: [

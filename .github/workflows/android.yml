@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, 'fix/audit-hardening-*']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main, 'fix/audit-hardening-*']
+    branches: [main]
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:

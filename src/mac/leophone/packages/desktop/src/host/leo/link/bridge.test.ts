@@ -9,7 +9,7 @@ import test from "node:test";
 import type { IZCodeTaskService } from "@zcode/services";
 import type { LeoDeviceDescriptor } from "@zcode/shared/leo-device";
 
-import { LinkBridge, type LinkRequest } from "./bridge.js";
+import { LinkBridge, readSSHHostKeys, type LinkRequest } from "./bridge.js";
 import type { HarnessEvent } from "./journal.js";
 import type { Caller } from "./session.js";
 
@@ -102,6 +102,7 @@ async function withBridge(
     dir?: string;
     recentWorkspaces?: string[];
     device?: LeoDeviceDescriptor;
+    sshHostKeys?: () => Promise<string[]>;
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
@@ -121,6 +122,7 @@ async function withBridge(
     ...(options.recentWorkspaces
       ? { recentWorkspaces: async () => options.recentWorkspaces! }
       : {}),
+    sshHostKeys: options.sshHostKeys ?? (async () => []),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -1040,12 +1042,27 @@ test("capabilities publish the stable paired identity without replacing existing
       const body = response.body as {
         device: LeoDeviceDescriptor;
         features: { harness_sessions: boolean };
+        ssh_host_keys: string[];
       };
       assert.deepEqual(body.device, device);
       assert.equal(body.features.harness_sessions, true);
+      assert.deepEqual(body.ssh_host_keys, ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHostKeyForTest"]);
     },
-    { device },
+    { device, sshHostKeys: async () => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHostKeyForTest"] },
   );
+});
+
+test("readSSHHostKeys returns only well-formed public key lines", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "leo-sshd-"));
+  try {
+    await writeFile(path.join(dir, "ssh_host_ed25519_key.pub"), "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHostKeyForTest root@mac\n");
+    await writeFile(path.join(dir, "ssh_host_rsa_key.pub"), "garbage line\n");
+    await writeFile(path.join(dir, "ssh_host_ed25519_key"), "-----BEGIN OPENSSH PRIVATE KEY-----\n");
+    assert.deepEqual(await readSSHHostKeys(dir), ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHostKeyForTest"]);
+    assert.deepEqual(await readSSHHostKeys(path.join(dir, "missing")), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("completed mutation response replays after restart without creating or sending again", async () => {

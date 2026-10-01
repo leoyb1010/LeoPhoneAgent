@@ -80,7 +80,9 @@ final class HarnessOutboxTests: XCTestCase {
         let entry = try store.record(id: UUID().uuidString, scope: "A", sessionId: "A", text: "keep", fullAuto: nil)
         let file = root.appendingPathComponent(entry.id.lowercased() + ".json")
         try Data("broken JSON".utf8).write(to: file)
-        XCTAssertThrowsError(try store.entries(scope: "A", sessionId: "A"))
+        // One unreadable file is skipped (kept on disk), never hides the others.
+        let healthy = try store.record(id: UUID().uuidString, scope: "A", sessionId: "A", text: "still visible", fullAuto: nil)
+        XCTAssertEqual(try store.entries(scope: "A", sessionId: "A"), [healthy])
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertThrowsError(try store.record(id: entry.id, scope: "A", sessionId: "A", text: "replacement", fullAuto: nil))
     }

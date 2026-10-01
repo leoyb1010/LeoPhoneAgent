@@ -50,7 +50,26 @@ export type LinkBridgeDeps = {
   leoagent: { url: string; key: () => string | null };
   /** Mac 上最近打开的本机工作区(设置里的 lastWorkspaceSession);手机据此看到桌面上开的任务。 */
   recentWorkspaces?: () => Promise<string[]>;
+  /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
+  sshHostKeys?: () => Promise<string[]>;
 };
+
+/** 只返回看起来像 OpenSSH 公钥行的内容;私钥文件名不以 .pub 结尾,不会被读。 */
+export async function readSSHHostKeys(dir = "/etc/ssh"): Promise<string[]> {
+  const keys: string[] = [];
+  for (const name of ["ssh_host_ed25519_key.pub", "ssh_host_ecdsa_key.pub", "ssh_host_rsa_key.pub"]) {
+    try {
+      const line = (await fsp.readFile(path.join(dir, name), "utf8")).trim();
+      const fields = line.split(/\s+/);
+      if (fields.length >= 2 && /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521))$/.test(fields[0]) && /^[A-Za-z0-9+/=]+$/.test(fields[1])) {
+        keys.push(`${fields[0]} ${fields[1]}`);
+      }
+    } catch {
+      // 没有该算法的主机密钥很正常。
+    }
+  }
+  return keys;
+}
 
 const VERSION = "0.4.0";
 const ZCODE = "zcode";
@@ -399,6 +418,7 @@ export class LinkBridge {
         server: "leophoneagent",
         app_version: this.deps.appVersion,
         device: this.deps.device,
+        ssh_host_keys: await (this.deps.sshHostKeys ?? readSSHHostKeys)(),
         features: {
           harness_sessions: true,
           resumable_events: true,

@@ -122,6 +122,8 @@ struct GatewayCapabilities: Sendable {
     /// 承载 harness 协议的宿主("leocodebox" = leocodebox 1.63+ 接管;nil =
     /// 原版 leoagent Python 服务)。协议同构,仅用于展示与诊断。
     let server: String?
+    /// 这台 Mac sshd 的公钥(仅公钥),经已配对的加密通道取得;用于一键固定 SSH 服务器身份。
+    var sshHostKeys: [String] = []
 
     func has(_ feature: String) -> Bool { features[feature] == true }
 
@@ -136,9 +138,14 @@ enum GatewayError: LocalizedError {
     case http(status: Int, message: String?)
     case resumeGap(minAfter: Int)
     case malformedResponse(String)
+    /// The request was handed to a route (direct) that may have reached the Mac
+    /// before the fallback failed; the outcome is unknown, never "not sent".
+    case uncertainAfterDirectAttempt
 
     var errorDescription: String? {
         switch self {
+        case .uncertainAfterDirectAttempt:
+            return String(localized: "直连已发出但没有收到回应，中继也连不上；这条的结果未确认。")
         case .notConfigured:
             return String(localized: "No Mac is connected.")
         case .harnessNotConfigured:
@@ -382,7 +389,8 @@ actor LeoAgentClient {
             platform: obj["platform"] as? String ?? "",
             version: obj["version"] as? String,
             features: features,
-            server: obj["server"] as? String)
+            server: obj["server"] as? String,
+            sshHostKeys: (obj["ssh_host_keys"] as? [String] ?? []).compactMap(RemoteSSHTrust.normalizedPublicKey))
     }
 
     // MARK: Runs

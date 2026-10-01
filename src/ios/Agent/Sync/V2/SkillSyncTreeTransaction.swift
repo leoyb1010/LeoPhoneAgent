@@ -96,12 +96,15 @@ struct SkillSyncTreeTransaction {
                 if manifest.hadOriginal[index] {
                     let attrs = try fm.attributesOfItem(atPath: destinations[index].path)
                     guard attrs[.type] as? FileAttributeType == .typeDirectory else { throw CocoaError(.fileReadInvalidFileName) }
-                    try fm.copyItem(at: destinations[index], to: staged)
+                    // With a ZIP every nonhidden file is replaced anyway; copying
+                    // node_modules/venv/build only to prune it again is wasted I/O.
+                    // Stage exactly what copy+prune would have kept: hidden data.
+                    if entries != nil { try copyHiddenData(from: destinations[index], to: staged) }
+                    else { try fm.copyItem(at: destinations[index], to: staged) }
                 } else {
                     try fm.createDirectory(at: staged, withIntermediateDirectories: true)
                 }
                 if let entries {
-                    try pruneManagedFiles(in: staged)
                     for entry in entries where entry.name != "SKILL.md" && !entry.name.hasPrefix(".") {
                         let path = entry.isDirectory ? String(entry.name.dropLast()) : entry.name
                         let target = try SyncFileSafety.destination(root: staged, relativePath: path)
@@ -168,6 +171,26 @@ struct SkillSyncTreeTransaction {
         for root in roots.reversed() {
             let work = try directory(root, token: manifest.token)
             if try exists(work) { try fm.removeItem(at: work) }
+        }
+    }
+
+    /// Equivalent to `copyItem` followed by `pruneManagedFiles`, without ever
+    /// copying the nonhidden files that prune would delete. Hidden items are
+    /// copied wholesale (symlinks stay links); nonhidden directories are kept
+    /// only when a hidden descendant lives below them.
+    private func copyHiddenData(from source: URL, to target: URL) throws {
+        try fm.createDirectory(at: target, withIntermediateDirectories: true)
+        for child in try fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
+            let name = child.lastPathComponent
+            let destination = try SyncFileSafety.destination(root: target, relativePath: name)
+            if name.hasPrefix(".") {
+                try fm.copyItem(at: child, to: destination)
+                continue
+            }
+            let attributes = try fm.attributesOfItem(atPath: child.path)
+            guard attributes[.type] as? FileAttributeType == .typeDirectory else { continue }
+            try copyHiddenData(from: child, to: destination)
+            if try fm.contentsOfDirectory(atPath: destination.path).isEmpty { try fm.removeItem(at: destination) }
         }
     }
 

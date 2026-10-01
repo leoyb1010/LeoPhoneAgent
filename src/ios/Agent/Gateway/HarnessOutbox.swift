@@ -48,6 +48,7 @@ final class HarnessOutbox: Sendable {
         (200..<500).contains(status) && status != 408 && status != 409
     }
 
+    private static let logger = AppLogger(category: "HarnessOutbox")
     static let shared = HarnessOutbox(directory: FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("HarnessOutbox", isDirectory: true))
@@ -112,9 +113,17 @@ final class HarnessOutbox: Sendable {
     func entries(scope: String, sessionId: String) throws -> [Entry] {
         lock.lock(); defer { lock.unlock() }
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        // One unreadable file (older/newer build, truncated write) must not hide
+        // every other pending input; it is left on disk for a build that can read it.
         return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
-            .map { try JSONDecoder().decode(Entry.self, from: Data(contentsOf: $0)) }
+            .compactMap { url -> Entry? in
+                do { return try JSONDecoder().decode(Entry.self, from: Data(contentsOf: url)) }
+                catch {
+                    Self.logger.warning("outbox entry \(url.lastPathComponent) unreadable, left on disk: \(error.localizedDescription)")
+                    return nil
+                }
+            }
             .filter { $0.scope == scope && $0.sessionId == sessionId }
             .sorted { $0.createdAt < $1.createdAt }
     }

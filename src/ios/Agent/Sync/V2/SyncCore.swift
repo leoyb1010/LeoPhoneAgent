@@ -209,6 +209,10 @@ final class SyncCore {
     /// 60s fetch cycle to fire once and recognize itself.
     private var recentlyPushedIds: [String: Date] = [:]
     private let echoTTL: TimeInterval = 30
+    /// Records applied by a batch whose sibling record threw (e.g. a session
+    /// running locally). Transports re-issue the same page until it fully
+    /// applies; skip re-merging (and re-notifying) what already landed.
+    private var appliedInDeferredBatch: Set<String> = []
 
     // MARK: - Lifecycle
 
@@ -667,6 +671,7 @@ final class SyncCore {
         // doesn't grow unbounded over an idle session.
         let now = Date()
         recentlyPushedIds = recentlyPushedIds.filter { now.timeIntervalSince($0.value) < echoTTL }
+        var appliedThisBatch: Set<String> = []
         while i < allRecords.count {
             let end = min(i + chunkSize, allRecords.count)
             for j in i..<end {
@@ -698,8 +703,11 @@ final class SyncCore {
                         logger.debug("[SyncSchema] unknownFields (first-seen, further occurrences suppressed): type=\(record.id.type) keys=\(record.unknownFields.keys.sorted())")
                     }
                 }
+                let appliedKey = "\(record.id.description)@\(record.updatedAt.timeIntervalSince1970)"
+                if appliedInDeferredBatch.contains(appliedKey) { applied += 1; continue }
                 if await SyncCoreHydrators.shared.mergeRemote(record) {
                     applied += 1
+                    appliedThisBatch.insert(appliedKey)
                     if recentlyPushedIds[record.id.description] == nil { visible += 1 }
                 } else { blocked += 1 }
             }
@@ -729,10 +737,23 @@ final class SyncCore {
         logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked)")
         // Refresh after awaited domain callbacks; cursor checkpointing remains
         // the caller's responsibility and unsupported records withhold it.
-        if visible > 0 {
+        if visible > 0 { notifyFetchedChanges() }
+        let complete = skipped == 0 && blocked == 0 && !Task.isCancelled
+        if complete { appliedInDeferredBatch.removeAll() }
+        else if appliedInDeferredBatch.count < 10_000 { appliedInDeferredBatch.formUnion(appliedThisBatch) }
+        return complete
+    }
+
+    /// CloudKit now delivers one record per batch; posting per record made every
+    /// open chat reload hundreds of times during a sync. Coalesce to ~2 posts/s.
+    private var fetchNotifyTask: Task<Void, Never>?
+    private func notifyFetchedChanges() {
+        guard fetchNotifyTask == nil else { return }
+        fetchNotifyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            self?.fetchNotifyTask = nil
             NotificationCenter.default.post(name: .cloudSyncDidFetchChanges, object: nil)
         }
-        return skipped == 0 && blocked == 0 && !Task.isCancelled
     }
 
     // MARK: - Diagnostics

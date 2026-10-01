@@ -70,11 +70,20 @@ main = r'''
         let file = testLibrary.appendingPathComponent("MinisChat/minis/s/workspace/file.txt")
         try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         func writeFile() throws { try Data("unpublished local edit".utf8).write(to: file) }
+        // Clockless delete vs an unpublished local edit: local wins, the delete is
+        // consumed without throwing, the file keeps its bytes.
         func protected(_ label: String) async throws {
+            try writeFile()
+            try await HydratorProbe.deleteSessionFile(id: "s:workspace/file.txt", updatedAt: nil)
+            let content = try Data(contentsOf: file)
+            precondition(content == Data("unpublished local edit".utf8), "\(label): clockless delete consumed unpublished local edit")
+        }
+        // A failed pending-store query must retain the destination and withhold ACK.
+        func retained(_ label: String) async throws {
             try writeFile()
             do {
                 try await HydratorProbe.deleteSessionFile(id: "s:workspace/file.txt", updatedAt: nil)
-                fatalError("\(label): clockless delete consumed unpublished local edit")
+                fatalError("\(label): delete applied although pending state is unknown")
             } catch {}
             let content = try Data(contentsOf: file)
             precondition(content == Data("unpublished local edit".utf8), label)
@@ -101,7 +110,7 @@ main = r'''
         precondition(!fm.fileExists(atPath: file.path), "unrelated edits and pending local deletes must not block")
         // A failed query must retain the destination and withhold ACK.
         await store.sql("DROP TABLE sync_dirty_records")
-        try await protected("unavailable pending store")
+        try await retained("unavailable pending store")
         print("SessionFile pending-delete PASS: both aliases beyond 100 rows, buffered edit, unrelated/delete rows, failed SQL")
     }
 }

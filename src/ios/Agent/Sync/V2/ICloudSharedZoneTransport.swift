@@ -105,6 +105,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     private var inboundJournal: CloudKitInboundJournal?
     private var inboundPass = CloudKitInboundJournal.DeliveryPass()
     private var dependencyFetchAfter: [SyncRecordID: Date] = [:]
+    private var dependencyFetchMisses: [SyncRecordID: Int] = [:]
     private var dependencyFetchesThisPass = 0
     private var issuedInboundJournals: [String: CloudKitInboundJournal] = [:]
     private var inboundCheckpointBlocked = false
@@ -153,16 +154,35 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     /// instances. Negative completion releases it without deleting the inbox.
     private func deliverPendingInbound() {
         guard !isStopped, let handler = observeHandler else { return }
-        do { if let batch = try claimInboundBatch() { handler(batch) } }
+        do {
+            if let batch = try claimInboundBatch() { handler(batch) }
+            else if inboundPass.hitLimit, inboundPass.progressed, !inboundResumeScheduled, try inboundJournal?.peek() != nil {
+                // The pass cap exists to give the main actor air during a big
+                // first sync, not to park 5000 records until the next 2-minute
+                // timer. Resume after a short breath.
+                inboundResumeScheduled = true
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    guard let self else { return }
+                    self.inboundResumeScheduled = false
+                    guard !self.isStopped, !self.inboundCheckpointBlocked else { return }
+                    // New pass for the record budget only; the per-wake CloudKit
+                    // dependency-fetch cap stays until the next real fetch/timer.
+                    self.inboundPass.begin()
+                    self.deliverPendingInbound()
+                }
+            }
+        }
         catch { /* claimInboundBatch records the recoverable storage failure. */ }
     }
+    private var inboundResumeScheduled = false
 
     func acknowledgeInbound(_ batch: SyncInboundBatch) async throws {
         guard let id = batch.inboundDeliveryID else { return } // empty fetch
         guard let journal = issuedInboundJournals[id] ?? inboundJournal else { throw SyncTransportError.notStarted }
         do {
-            let removed = try journal.acknowledge(batch)
-            journal.release(id)
+            let removed = try journal.acknowledge(batch)   // releases the claim on success
+            if !removed { journal.release(id) }             // stale/duplicate ACK must not keep the lease
             issuedInboundJournals[id] = nil
             if removed, journal === inboundJournal {
                 inboundPass.acknowledged()
@@ -207,7 +227,11 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         } catch { blockInboundCheckpoint(error); return }
         dependencyFetchesThisPass += 1
         dependencyFetchAfter = dependencyFetchAfter.filter { $0.value > Date() }
-        dependencyFetchAfter[dependency] = Date().addingTimeInterval(120)
+        // A parent that stays missing (deleted on the peer before we ever saw it)
+        // must not cost a CloudKit round trip every pass forever: back off
+        // 2 min → 4 → 8 … up to 6 h per dependency.
+        let misses = dependencyFetchMisses[dependency, default: 0]
+        dependencyFetchAfter[dependency] = Date().addingTimeInterval(min(120 * pow(2, Double(misses)), 6 * 3600))
         let generation = lifecycleGeneration
         let ckID = CKRecord.ID(recordName: dependency.description, zoneID: CKRecordZone.ID(zoneName: zone))
         do {
@@ -219,11 +243,17 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             do { try stageInbound(records: [portable], deletes: []) }
             catch { blockInboundCheckpoint(error); return }
             health.succeeded("inbound:dependency")
+            dependencyFetchMisses[dependency] = nil
             deliverPendingInbound()
         } catch {
             guard generation == lifecycleGeneration, syncEngine === engine else { return }
             health.failed("inbound:dependency", error: error as NSError)
             if let after = (error as? CKError)?.retryAfterSeconds { observeServiceRetry(after) }
+            // Only a definite "not there" counts as a miss; offline/transient
+            // errors keep the flat 2-minute retry.
+            if let code = (error as? CKError)?.code, code == .unknownItem || code == .partialFailure {
+                dependencyFetchMisses[dependency, default: 0] += 1
+            }
             // Unknown item, transient network and local store failures all
             // leave the original child durable for a later external wake.
         }
@@ -632,7 +662,12 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             inboundCheckpointBlocked = false
             health.succeeded("inbound:account")
         } catch {
-            if generation == lifecycleGeneration { blockInboundCheckpoint(error) }
+            if generation == lifecycleGeneration {
+                blockInboundCheckpoint(error)
+                // No account yet / offline at launch: keep the 120 s poll alive so
+                // fetchRecentV2's blocked-path start() retries without a foreground.
+                scheduleRecentFetchTimer()
+            }
             throw error
         }
         // Restore etag cache before any send; without this, the first
@@ -1613,7 +1648,7 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
         var deletes: [SyncRecordID] = []
         var skippedV1 = 0
         var skippedOwnEcho = 0
-        var invalidRecord = false
+        var invalidRecord = 0
         // Filter + parse inside an autoreleasepool so the temporary
         // CKRecord/CKAsset objects from a 600-record fetch are released
         // promptly instead of piling up until the function returns.
@@ -1646,13 +1681,16 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 if let portable = toPortable(rec, registry: registry) {
                     records.append(portable)
                 } else {
-                    invalidRecord = true
+                    // A record name without "Type:id" can never become a
+                    // PortableRecord; halting the whole account on it would
+                    // replay the same batch forever. Skip just that record.
+                    logger.warning("[iCloudTrace] skipped record with unparsable name=\(rec.recordID.recordName.prefix(40)) zone=\(rec.recordID.zoneID.zoneName)")
+                    invalidRecord += 1
                 }
             }
         }
-        if invalidRecord {
-            blockInboundCheckpoint(URLError(.cannotParseResponse))
-            return
+        if invalidRecord > 0 {
+            logger.warning("[iCloudTrace] skipped \(invalidRecord) records with unparsable names")
         }
         if skippedV1 > 0 {
             logger.info("[iCloudTrace] skipped \(skippedV1) v1-zone records (handled by legacy CloudSyncEngine)")

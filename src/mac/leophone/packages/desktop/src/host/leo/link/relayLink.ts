@@ -133,6 +133,10 @@ export class RelayLink {
 
   stop(): void {
     this.stopped = true;
+    if (this.revocationRetry) {
+      clearTimeout(this.revocationRetry);
+      this.revocationRetry = null;
+    }
     try {
       this.activeWs?.terminate();
     } catch {
@@ -318,6 +322,8 @@ export class RelayLink {
     }
   }
 
+  private revocationRetry: NodeJS.Timeout | null = null;
+
   private applyRevocations(ids: unknown[]): void {
     for (const id of ids) {
       if (typeof id !== "string" || !id || id.length > 256) continue;
@@ -333,9 +339,15 @@ export class RelayLink {
       await this.bridge.revokeCallers(pending);
       for (const id of pending) this.pendingRevocations.delete(id);
     });
-    void this.revocations.catch(() =>
-      this.logger.warn("[leo/link] revocation persistence failed; remote admission blocked"),
-    );
+    void this.revocations.catch(() => {
+      this.logger.warn("[leo/link] revocation persistence failed; remote admission blocked");
+      // 磁盘瞬时错误不能让手机一直看到 500 直到下次重连:30 秒后重试落盘。
+      if (!this.stopped && !this.revocationRetry)
+        this.revocationRetry = setTimeout(() => {
+          this.revocationRetry = null;
+          if (!this.stopped && this.pendingRevocations.size) this.applyRevocations([]);
+        }, 30_000).unref();
+    });
   }
 
   private request(frame: Record<string, unknown>): LinkRequest {

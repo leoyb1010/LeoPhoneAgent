@@ -54,6 +54,10 @@ enum SyncFileSafety {
     /// Pending local edits are retryable, including clockless CloudKit deletes.
     static func removeFile(root: URL, relativePath: String, remoteUpdatedAt: Date?, hasPendingEdit: Bool) throws -> Bool {
         let url = try destination(root: root, relativePath: relativePath)
+        // A clockless (CloudKit) delete cannot be ordered against a local edit
+        // that is still queued for upload; the upload will re-create the record,
+        // so let local win now instead of deleting it after our own push lands.
+        if hasPendingEdit && remoteUpdatedAt == nil { return false }
         if hasPendingEdit { throw CocoaError(.fileWriteUnknown) }
         let manager = FileManager.default
         guard manager.fileExists(atPath: url.path) else { return true }

@@ -46,8 +46,13 @@ import Foundation
         try SyncFileSafety.replaceFile(from: source, to: old, modifiedAt: Date(timeIntervalSince1970: 100))
         let newBytes = try Data(contentsOf: old); precondition(newBytes == Data("new bytes".utf8))
         let clock = Date(timeIntervalSince1970: 100)
-        rejected { _ = try SyncFileSafety.removeFile(root: safe, relativePath: "old.txt", remoteUpdatedAt: nil, hasPendingEdit: true) }
-        precondition(fm.fileExists(atPath: old.path), "clockless delete must retain unpublished local edit")
+        // A clockless delete cannot be ordered against a queued local edit: local
+        // wins and the delete is consumed (retaining it would delete our own
+        // re-upload later). A dated delete still waits for the edit to publish.
+        let localWins = try SyncFileSafety.removeFile(root: safe, relativePath: "old.txt", remoteUpdatedAt: nil, hasPendingEdit: true)
+        precondition(!localWins && fm.fileExists(atPath: old.path), "clockless delete must keep unpublished local edit")
+        rejected { _ = try SyncFileSafety.removeFile(root: safe, relativePath: "old.txt", remoteUpdatedAt: clock, hasPendingEdit: true) }
+        precondition(fm.fileExists(atPath: old.path), "dated delete must retain unpublished local edit for retry")
         let kept = try SyncFileSafety.removeFile(root: safe, relativePath: "old.txt", remoteUpdatedAt: clock.addingTimeInterval(-1), hasPendingEdit: false)
         precondition(!kept && fm.fileExists(atPath: old.path), "older tombstone must preserve recreated/newer file")
         let deleted = try SyncFileSafety.removeFile(root: safe, relativePath: "old.txt", remoteUpdatedAt: clock.addingTimeInterval(1), hasPendingEdit: false)

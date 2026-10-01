@@ -144,7 +144,10 @@ actor RemoteSSHExecutor {
               Self.isValidHostKey(targetKey) else {
             return ExecResult(output: "The target SSH host key must be verified in Settings → Remote Hosts before direct or gateway execution.", succeeded: false)
         }
-        if await Self.tcpProbe(host: target.host, port: target.port, timeout: 4) {
+        // Direct needs an Ed25519 pin (library limit); any other pinned algorithm
+        // goes through a gateway's OpenSSH instead of failing here.
+        if RemoteSSHTrust.directPublicKey(targetKey) != nil,
+           await Self.tcpProbe(host: target.host, port: target.port, timeout: 4) {
             return await run(host: target, command: command, timeout: timeout)
         }
         var lastRelayFailure: String?
@@ -173,6 +176,9 @@ actor RemoteSSHExecutor {
         }
         if let lastRelayFailure {
             return ExecResult(output: lastRelayFailure, succeeded: false)
+        }
+        if RemoteSSHTrust.directPublicKey(targetKey) == nil {
+            return ExecResult(output: "Direct SSH needs a verified ssh-ed25519 host key for this target (the bundled SSH library cannot pin other algorithms), and no other verified, reachable host is available to relay through. Pin the ed25519 key from /etc/ssh/ssh_host_ed25519_key.pub, or verify a gateway host.", succeeded: false)
         }
         return ExecResult(
             output: "TCP \(target.host):\(target.port) unreachable, and no other configured host is reachable to relay through. Tip: while on the same Wi-Fi as one of your machines, add its LAN address (192.168.x) as a host — everything else is then reached through it automatically.",

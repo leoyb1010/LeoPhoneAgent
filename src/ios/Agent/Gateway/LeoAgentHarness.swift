@@ -367,23 +367,36 @@ final class HarnessSessionDriver: ObservableObject {
         let entry: HarnessOutbox.Entry
         do {
             // 必须在网络调用前落盘；中继重启、手机杀进程或丢 ACK 都不丢原文。
-            entry = try HarnessOutbox.shared.record(id: UUID().uuidString, scope: client.harnessOutboxScope,
-                sessionId: sessionId, text: text, fullAuto: fullAuto)
-            relayQueued.append(entry)
+            // 落盘带 fsync，放到后台线程，别让输入框卡一下。
+            let scope = client.harnessOutboxScope
+            let id = UUID().uuidString
+            entry = try await Task.detached(priority: .userInitiated) {
+                try HarnessOutbox.shared.record(id: id, scope: scope, sessionId: sessionId, text: text, fullAuto: fullAuto)
+            }.value
         } catch {
             steerFailed(text, String(localized: "无法保存待发送内容，本次没有发送；请检查本机存储空间。"))
             return
         }
+        // On disk but still in flight: a concurrent restoreOutbox must not
+        // announce it as uncertain or queue it twice.
+        inFlightOutbox.insert(entry.id)
+        defer { inFlightOutbox.remove(entry.id) }
         do {
             if try await client.steerHarness(sessionId: sessionId, text: entry.text,
                     fullAuto: entry.fullAuto, requestId: entry.id) {
-                try HarnessOutbox.shared.markQueued(entry)
-                if let index = relayQueued.firstIndex(where: { $0.id == entry.id }) { relayQueued[index].state = .queued }
+                try await Task.detached { try HarnessOutbox.shared.markQueued(entry) }.value
+                var queued = entry
+                queued.state = .queued
+                if !relayQueued.contains(where: { $0.id == entry.id }) { relayQueued.append(queued) }
                 note(Self.queuedWhileOfflineNote)
                 watchRelayQueue()
             } else {
                 try finishOutbox(entry)
             }
+        } catch let error where Self.neverLeftThisDevice(error) {
+            // 请求根本没发出去(没网、地址不对、没授权):明确告知没送到，原文放回输入框。
+            guard finishRejectedOutbox(entry) == true else { return }
+            steerFailed(text, Self.describe(error))
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
             // 明确的拒绝才允许使用新编号降级重发，未知结果永不走此路径。
             guard finishRejectedOutbox(entry) == true else { return }
@@ -391,13 +404,39 @@ final class HarnessSessionDriver: ObservableObject {
             note(Self.fullAutoRefusedNote)
             await sendSteer(sessionId: sessionId, text: text)
         } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
-            guard finishRejectedOutbox(entry) != nil else { return }
+            guard finishRejectedOutbox(entry) == true else { return }
             steerFailed(text, message ?? "HTTP \(status)")
         } catch {
             // timeout/5xx/409 都可能已经发生副作用；保留原编号，不放回可盲重发的输入框。
+            if !relayQueued.contains(where: { $0.id == entry.id }) { relayQueued.append(entry) }
             showUncertain(entry)
             watchRelayQueue()
         }
+    }
+
+    /// Entries written to disk whose POST has not returned yet.
+    private var inFlightOutbox = Set<String>()
+
+    /// 这些错误发生在请求离开手机之前，Mac 不可能收到：按"没送到"处理，不是"结果未知"。
+    private static func neverLeftThisDevice(_ error: Error) -> Bool {
+        switch error {
+        case GatewayError.unauthorized, GatewayError.harnessNotConfigured, GatewayError.notConfigured, GatewayError.badURL:
+            return true
+        case let urlError as URLError:
+            return [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+                    .badURL, .unsupportedURL, .secureConnectionFailed, .serverCertificateUntrusted,
+                    .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+                    .clientCertificateRejected, .internationalRoamingOff, .callIsActive, .dataNotAllowed,
+                    .appTransportSecurityRequiresSecureConnection].contains(urlError.code)
+        default:
+            return false
+        }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        if case GatewayError.unauthorized = error { return String(localized: "这台 Mac 拒绝了本机的访问密钥，请在设备页面重新配对。") }
+        if let urlError = error as? URLError, urlError.code == .notConnectedToInternet { return String(localized: "手机当前没有网络。") }
+        return error.localizedDescription
     }
 
     /// The Mac never got it: say so, stop claiming it's working, give the text back.
@@ -420,16 +459,37 @@ final class HarnessSessionDriver: ObservableObject {
 
     private func restoreOutbox() {
         guard let sessionId else { return }
-        do {
-            let stored = try HarnessOutbox.shared.entries(scope: client.harnessOutboxScope, sessionId: sessionId)
-            relayQueued = stored.filter { $0.state != .rejected }
-            for entry in stored where entry.state == .rejected {
-                steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入；本机清理未完成，原文已恢复，请核对任务后重试。"))
+        let scope = client.harnessOutboxScope
+        Task { @MainActor [weak self] in
+            let stored: [HarnessOutbox.Entry]
+            do {
+                stored = try await Task.detached(priority: .utility) {
+                    try HarnessOutbox.shared.entries(scope: scope, sessionId: sessionId)
+                }.value
+            } catch {
+                self?.note(String(localized: "未确认消息记录暂时无法读取；没有删除记录，也不会自动重新发送。"))
+                return
             }
-            for entry in relayQueued { showUncertain(entry) }
-            watchRelayQueue()
-        } catch {
-            note(String(localized: "未确认消息记录暂时无法读取；没有删除记录，也不会自动重新发送。"))
+            guard let self, self.sessionId == sessionId else { return }
+            let rejected = stored.filter { $0.state == .rejected }
+            if !rejected.isEmpty {
+                // 上次拒绝后清理失败留下的记录：后台再清一次；只在这个会话里报一次。
+                Task.detached(priority: .utility) { for entry in rejected { _ = try? HarnessOutbox.shared.remove(entry) } }
+                for entry in rejected where self.announcedUncertain.insert(entry.id).inserted {
+                    self.steerFailed(entry.text, String(localized: "Mac 已拒绝这条输入，原文已恢复，请核对任务后重试。"))
+                }
+            }
+            let pending = stored.filter { $0.state != .rejected && !self.inFlightOutbox.contains($0.id) }
+            for entry in pending where !self.relayQueued.contains(where: { $0.id == entry.id }) {
+                self.relayQueued.append(entry)
+                if entry.state == .queued {
+                    // 中继已收下、Mac 还没醒：这是正常排队，不是错误。
+                    if self.announcedUncertain.insert(entry.id).inserted { self.note(Self.queuedWhileOfflineNote) }
+                } else {
+                    self.showUncertain(entry)
+                }
+            }
+            self.watchRelayQueue()
         }
     }
 
@@ -477,15 +537,32 @@ final class HarnessSessionDriver: ObservableObject {
         }
     }
 
+    /// 每条未确认输入最多查这么多轮(15 秒一轮 ≈ 5 分钟)，之后把原文还给用户自己决定。
+    private static let receiptAttemptLimit = 20
+    private var receiptAttempts: [String: Int] = [:]
+
+    /// Mac 1.3.4+ 会按请求编号留回执；这种 Mac 回答 404 就说明它从没收到过。
+    private var hostKeepsReceipts: Bool {
+        guard let hostId = client.hostId else { return false }
+        return GatewayHostStore.shared.hosts.first { $0.id == hostId }?.device?.capabilities.contains("operation-receipts") == true
+    }
+
     /// True once nothing is left waiting. Missing relay entries do not imply non-execution.
     private func checkRelayQueue() async -> Bool {
         for entry in relayQueued {
+            receiptAttempts[entry.id, default: 0] += 1
             do {
                 let result = try await client.relayQueueResult(requestId: entry.id)
+                if result["status"] as? String == "expired" {
+                    // 中继排队超时、从未交给 Mac：明确没送到，原文放回输入框。
+                    guard finishRejectedOutbox(entry) == true else { continue }
+                    steerFailed(entry.text, String(localized: "Mac 一直不在线，中继排队已过期，这条没有送到。"))
+                    continue
+                }
                 switch HarnessOutbox.relayResolution(result) {
                 case .completed(let http):
-                    guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry) else { continue }
-                    if http == 403, entry.fullAuto == true, claimed {
+                    guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry), claimed else { continue }
+                    if http == 403, entry.fullAuto == true {
                         fullAutoRefused = true
                         note(Self.fullAutoRefusedNote)
                         await sendSteer(sessionId: entry.sessionId, text: entry.text)
@@ -502,9 +579,9 @@ final class HarnessSessionDriver: ObservableObject {
             do {
                 let receipt = try await client.harnessOperationResult(requestId: entry.id)
                 guard case .completed(let http) = HarnessOutbox.receiptResolution(receipt, requestId: entry.id)
-                else { showUncertain(entry); continue }
-                guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry) else { continue }
-                if http == 403, entry.fullAuto == true, claimed {
+                else { giveUpIfExhausted(entry); continue }
+                guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry), claimed else { continue }
+                if http == 403, entry.fullAuto == true {
                     fullAutoRefused = true
                     note(Self.fullAutoRefusedNote)
                     await sendSteer(sessionId: entry.sessionId, text: entry.text)
@@ -513,11 +590,23 @@ final class HarnessSessionDriver: ObservableObject {
                 } else {
                     note(String(localized: "Mac 回执已确认这条输入送达。"))
                 }
+            } catch GatewayError.http(let status, _) where status == 404 && hostKeepsReceipts && entry.state != .queued {
+                // 会留回执的 Mac 说没见过这个编号，中继也没在排队：它没收到。
+                guard finishRejectedOutbox(entry) == true else { continue }
+                steerFailed(entry.text, String(localized: "Mac 没有收到这条输入。"))
             } catch {
-                showUncertain(entry) // 旧 Mac 无回执接口，或已重新配对：保留本机记录供核对。
+                giveUpIfExhausted(entry) // 旧 Mac 无回执接口，或已重新配对：保留本机记录供核对。
             }
         }
         return relayQueued.isEmpty
+    }
+
+    /// 查不出结果不能永远转圈：到上限后把原文还给用户，并说清"可能已执行"。
+    private func giveUpIfExhausted(_ entry: HarnessOutbox.Entry) {
+        guard receiptAttempts[entry.id, default: 0] >= Self.receiptAttemptLimit else { showUncertain(entry); return }
+        receiptAttempts[entry.id] = nil
+        guard finishRejectedOutbox(entry) == true else { return }
+        steerFailed(entry.text, String(localized: "5 分钟内没拿到 Mac 的回执。这条可能已执行，也可能没送到；原文已放回输入框，请先看任务状态再决定是否重发。"))
     }
 
     private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，输入已保存在本机并交给中继排队；最终送达需要 Mac 回执确认。")

@@ -103,6 +103,13 @@ private final class HostEditModel: ObservableObject {
     @Published var deviceId: String
     @Published var password = ""
     @Published var trustedHostKey: String
+    /// 公钥来自已配对 Mac 的加密通道(而非手工粘贴)时,确认弹窗这样说明来源。
+    @Published private(set) var fetchedHostKey: String?
+    var hostKeyFromPairedMac: Bool {
+        fetchedHostKey != nil && RemoteSSHTrust.normalizedPublicKey(trustedHostKey) == fetchedHostKey
+    }
+    @Published var fetchingHostKey = false
+    @Published var hostKeyFetchResult: String?
     private let originalTrustedEndpoint: String?
     @Published var testResult: String?
     @Published var testing = false
@@ -141,7 +148,6 @@ private final class HostEditModel: ObservableObject {
     var canSave: Bool {
         guard let numericPort = Int(port), (1...65535).contains(numericPort) else { return false }
         return !draft.name.isEmpty && !draft.host.isEmpty && !draft.username.isEmpty
-            && (1...65535).contains(draft.port)
             && (trustedHostKey.isEmpty || RemoteSSHExecutor.isValidHostKey(trustedHostKey))
     }
 
@@ -167,6 +173,48 @@ private final class HostEditModel: ObservableObject {
                 self.testing = false
                 self.testResult = String(result.output.prefix(400))
                 if result.output.contains("LEO_OK") { self.okSweep += 1 } else { self.failShake += 1 }
+            }
+        }
+    }
+
+    /// 已配对的 Mac 在远控通道里公布自己的 sshd 公钥;这条通道已经过设备授权和 TLS 身份绑定,
+    /// 比手工抄 /etc/ssh 省事且不会抄错。仍需用户确认后才保存为固定身份。
+    var pairedGatewayHost: GatewayHost? {
+        guard !deviceId.isEmpty else { return nil }
+        return GatewayHostStore.shared.activeHosts.first { $0.device?.deviceId == deviceId }
+    }
+
+    func fetchHostKeyFromPairedMac() {
+        guard let host = pairedGatewayHost, let client = GatewayHostStore.shared.client(for: host) else {
+            hostKeyFetchResult = String(localized: "所属设备尚未配对或已停用，无法读取。")
+            return
+        }
+        fetchingHostKey = true
+        hostKeyFetchResult = nil
+        Task { @MainActor in
+            defer { fetchingHostKey = false }
+            do {
+                // The client session waits for connectivity for up to an hour; the
+                // user is watching a spinner here, so cap it.
+                let keys = try await withThrowingTaskGroup(of: [String].self) { group in
+                    group.addTask { try await client.capabilities().sshHostKeys }
+                    group.addTask { try await Task.sleep(for: .seconds(15)); throw URLError(.timedOut) }
+                    let first = try await group.next()!
+                    group.cancelAll()
+                    return first
+                }
+                guard let key = keys.first(where: { $0.hasPrefix("ssh-ed25519 ") }) ?? keys.first else {
+                    hostKeyFetchResult = String(localized: "这台 Mac 的 LeoPhoneAgent 版本还不提供 SSH 公钥，请升级到 1.3.5 或手工粘贴。")
+                    return
+                }
+                trustedHostKey = key
+                fetchedHostKey = key
+                hostKeyFetchResult = String(localized: "已从 \(host.name) 读取公钥，保存时确认即可。")
+            } catch {
+                let reason = (error as? URLError)?.code == .timedOut
+                    ? String(localized: "15 秒内没有回应：检查手机网络，或那台 Mac 是否在线。")
+                    : error.localizedDescription
+                hostKeyFetchResult = String(localized: "读取失败：\(reason)")
             }
         }
     }
@@ -221,6 +269,18 @@ private struct RemoteHostEditSheet: View {
                     Text("仅合并设备展示，SSH 和远控仍分别验证授权。")
                 }
                 Section {
+                    if model.pairedGatewayHost != nil {
+                        Button {
+                            model.fetchHostKeyFromPairedMac()
+                        } label: {
+                            if model.fetchingHostKey { ProgressView() }
+                            else { Label("从已配对的 Mac 读取公钥", systemImage: "key.radiowaves.forward") }
+                        }
+                        .disabled(model.fetchingHostKey)
+                        if let result = model.hostKeyFetchResult {
+                            Text(result).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     TextField("ssh-ed25519 AAAA…", text: $model.trustedHostKey, axis: .vertical)
                         .autocorrectionDisabled().textInputAutocapitalization(.never)
                         .font(.caption.monospaced())
@@ -231,7 +291,7 @@ private struct RemoteHostEditSheet: View {
                 } header: {
                     Text("已核实的 SSH 服务器公钥")
                 } footer: {
-                    Text("在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。直连目前仅支持 Ed25519：所用 SSH 库无法按公钥选择其他算法；网关 OpenSSH 仍可校验其他有效公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接；不会自动信任网络返回的密钥。")
+                    Text("上面选了所属设备时，可直接从那台 Mac 的已配对加密通道读取；否则在目标电脑的可信终端读取 /etc/ssh/ssh_host_ed25519_key.pub，核对后粘贴整行公钥。直连目前仅支持 Ed25519；网关 OpenSSH 仍可校验其他有效公钥。不要粘贴私钥。留空会保留主机配置，但禁止 SSH 连接。")
                 }
                 Section {
                     SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $model.password)
@@ -272,7 +332,7 @@ private struct RemoteHostEditSheet: View {
                     } label: {
                         if model.testing { ProgressView() } else { Label("Test connection", systemImage: "bolt.horizontal") }
                     }
-                    .disabled(!model.canSave || model.needsTrustConfirmation || model.trustedHostKey.isEmpty)
+                    .disabled(!model.canSave || model.trustedHostKey.isEmpty)
                     if let testResult = model.testResult {
                         Text(testResult)
                             .font(.caption.monospaced())
@@ -286,7 +346,11 @@ private struct RemoteHostEditSheet: View {
                 Button("已从可信渠道核对，保存") { model.save(); dismiss() }
                 Button("取消", role: .cancel) { }
             } message: {
-                Text("将此公钥固定到 \(model.draft.host):\(model.draft.port)。服务器密钥不匹配时会拒绝连接，包括经其他主机跳转。请确认已在目标电脑的可信控制台核对公钥。")
+                if model.hostKeyFromPairedMac {
+                    Text("将此公钥固定到 \(model.draft.host):\(model.draft.port)。公钥来自已配对 Mac 的加密远控通道（设备授权 + TLS 身份绑定），服务器密钥不匹配时会拒绝连接。")
+                } else {
+                    Text("将此公钥固定到 \(model.draft.host):\(model.draft.port)。服务器密钥不匹配时会拒绝连接，包括经其他主机跳转。请确认已在目标电脑的可信控制台核对公钥。")
+                }
             }
             .navigationTitle(Text(model.isEditing ? "Edit Host" : "Add Host"))
             .navigationBarTitleDisplayMode(.inline)

@@ -49,7 +49,7 @@ from aiohttp import WSMsgType, web
 from .apns import build_pusher
 from .relay_identity import valid_registry
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
 # 同一条事件流里的 message.delta 最多每 60 ms 合成一条发给手机:逐 token 转发的话,

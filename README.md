@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.49.1%20(135)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.49.2%20(136)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.3.4-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -160,7 +160,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.49.1 (135)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.49.2 (136)`;Bundle ID `com.leoyuan.leophoneagent`
 - 2026-09-30 本机验证：470 项 iOS 逻辑测试通过，Release 构建与签名通过；iPhone 18 Pro Max、iPad Pro 13（M4）已覆盖安装并启动 `1.49.1 (135)`。此版要求 SSH 主机公钥显式核实，直连使用 Ed25519；CloudKit 环境保持 Development。
 - 历史 1.47.0:接入 OpenCode Go;下线 Claude 订阅 / Antigravity / Gemini CLI 登录,订阅令牌只存本机;锁屏批准和 Siri 都要解锁、上锁会话不外露;对话终端链接只填不跑、草稿按对话保存、删符号链接不删目标。证据:Release 真机构建 + 发版门禁 + 新增单测;未装机
 - 1.45.0:设置 → Apple Watch:手表怎么回答(自动 / 总是手表直连 / 只经 iPhone)、手表直连单独选模型(任何 API Key 方式的 OpenAI 兼容或 Anthropic 模型)

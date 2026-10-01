@@ -126,6 +126,11 @@ export class DirectGrants {
       if (!this.loaded || deviceIds.some((id) => !id || id.length > 256))
         throw new Error("Invalid revocation");
       const revoked = new Set([...this.state.revokedDeviceIds, ...deviceIds]);
+      // 中继每次重连都会重发完整撤销快照;没有新设备且上次已落盘,就不重写 grants.json。
+      const unchanged =
+        revoked.size === this.state.revokedDeviceIds.length &&
+        !this.state.grants.some((item) => revoked.has(item.caller.deviceId ?? ""));
+      if (unchanged && !this.revocationUnsaved) return;
       const next: State = {
         ...this.state,
         targetDeviceId: this.targetDeviceId,
@@ -134,9 +139,14 @@ export class DirectGrants {
       };
       // 整批先拒绝再写盘；逐个 await 会在首个失败后漏掉其他设备的 direct 授权。
       this.state = next;
+      this.revocationUnsaved = true;
       await writeDurableJson(this.file, next);
+      this.revocationUnsaved = false;
     });
   }
+
+  /** 内存里已拒绝、但上次写盘失败:下一次撤销(哪怕是重复快照)必须补写。 */
+  private revocationUnsaved = false;
 
   /** 只能由本机受信管理入口调用，绝不开放在 direct listener。 */
   createPairingCode(): { join: string; exp: number; deviceId: string } {

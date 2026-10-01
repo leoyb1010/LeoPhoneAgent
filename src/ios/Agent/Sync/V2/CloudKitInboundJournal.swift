@@ -36,6 +36,10 @@ final class CloudKitInboundJournal {
             exhausted = false
         }
         mutating func acknowledged() { madeProgress = true }
+        /// The cap was reached with work possibly left; the owner should start a
+        /// new pass soon instead of waiting for the next external wake.
+        var hitLimit: Bool { attempts >= limit }
+        var progressed: Bool { madeProgress }
         mutating func claim(from journal: CloudKitInboundJournal) throws -> Page? {
             guard attempts < limit else { return nil }
             var page = try journal.claimFirst(excluding: attempted)
@@ -68,6 +72,9 @@ final class CloudKitInboundJournal {
     private let manifestURL: URL
     private let assetsURL: URL
     private var pageIDs: [String] = []
+    /// Pages are immutable once written; decoding one 50-record page several
+    /// times per ACK was most of the per-record cost on the main actor.
+    private var pageCache: [String: Page] = [:]
     private var cachedFirst: Page?
     private var completed: [String: Set<Int>] = [:]
     var pendingCount: Int { pageIDs.count }
@@ -270,6 +277,7 @@ final class CloudKitInboundJournal {
         cachedFirst = nextHead
         release(id)
         if finishedPage {
+            pageCache[pageID] = nil
             // A failed cleanup leaves unreachable copies, never another
             // delivery's assets. The manifest commit already owns the ACK.
             try? FileManager.default.removeItem(at: assetsURL.appendingPathComponent(pageID, isDirectory: true))
@@ -309,9 +317,13 @@ final class CloudKitInboundJournal {
     private func pageURL(_ id: String) -> URL { directory.appendingPathComponent(id + ".json") }
 
     private func loadPage(_ id: String) throws -> Page {
+        if let cached = pageCache[id] { return cached }
         let page = try JSONDecoder().decode(Page.self, from: Data(contentsOf: pageURL(id)))
         guard page.id == id else { throw JournalError.invalidManifest }
-        return try rebased(page)
+        let ready = try rebased(page)
+        if pageCache.count >= 8 { pageCache.removeAll() }
+        pageCache[id] = ready
+        return ready
     }
 
     /// Rebase only journal-generated UUID filenames. iOS container roots can

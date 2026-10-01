@@ -96,7 +96,7 @@ final class SkillStore: ObservableObject {
     private init() {
         openDatabase()
         createTables()
-        guard loadSkills() else { return }
+        loadSkills()
         installBundledSkills()
         migrateMarkBundledSkillsDirty()
     }
@@ -638,25 +638,6 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         }
 
         return skill
-    }
-
-    /// Import a skill from iCloud sync using the remote's exact ID and metadata.
-    /// Unlike `importSkill`, this preserves the remote `skillId` (no re-slugify)
-    /// and does NOT mark dirty (to avoid sync ping-pong).
-    /// Returns `true` if the remote skill was applied, `false` if it was
-    /// skipped because the local copy is newer (LWW). The same transaction
-    /// handles metadata-only sync and imports that include a bundled-file ZIP.
-    @discardableResult
-    func importSkillFromSync(
-        skillId: String, content: String, source: SkillImportSource,
-        isEnabled: Bool, installedAt: Date, updatedAt: Date
-    ) throws -> Bool {
-        _ = try SyncFileSafety.component(skillId)
-        if let local = skills.first(where: { $0.id == skillId }),
-           local.updatedAt.timeIntervalSince(updatedAt) > 5 { return false }
-        try importSkillFromSyncWithAsset(skillId: skillId, content: content, zipData: nil,
-            source: source, isEnabled: isEnabled, installedAt: installedAt, updatedAt: updatedAt)
-        return true
     }
 
     private func skillSyncCommitted(skillId: String, token: String) throws -> Bool {
@@ -1513,8 +1494,10 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         do {
             try SkillSyncTreeTransaction(roots: [skillsDir, rootfsSkillsDir]).recover(isCommitted: skillSyncCommitted)
         } catch {
+            // A stuck inbound transaction must not hide every installed skill
+            // (and skip bundled installs) on each launch; it is retried on the
+            // next inbound apply/deletion, which refuse until it recovers.
             AppLogger(category: "SkillSync").warning("Skill transaction recovery deferred: \(error.localizedDescription)")
-            return false
         }
         skills.removeAll()
 
@@ -2206,9 +2189,16 @@ extension SkillStore {
         for path in oldPaths.subtracting(newPaths) {
             removeFakefsPathIfPresent("/var/minis/skills/\(skillId)/\(path)")
         }
-        for path in newPaths.union(["SKILL.md"]) {
+        // Without a ZIP only SKILL.md was rewritten; existing file nodes keep
+        // their metadata. Each ensure* call opens its own SQLite connection, so
+        // walk every parent chain once instead of once per file.
+        let touched = entries == nil ? Set<String>() : newPaths
+        var ensuredParents = Set<String>()
+        for path in touched.union(["SKILL.md"]) {
             let linuxPath = "/var/minis/skills/\(skillId)/\(path)"
-            ensureParentDirsInMetaDB(for: linuxPath)
+            if ensuredParents.insert((linuxPath as NSString).deletingLastPathComponent).inserted {
+                ensureParentDirsInMetaDB(for: linuxPath)
+            }
             ensureFakefsMetadata(for: linuxPath, isDirectory: false)
         }
     }

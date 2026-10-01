@@ -695,6 +695,15 @@ enum ChatStoreSyncHydrators {
         if let asset = record.assets["bundleAsset"] {
             zipData = try Data(contentsOf: asset.fileURL)
         }
+        // Exact echo: fetchRecentV2 re-delivers our own push for ~5 min without
+        // changeTag dedupe. The ZIP writer is deterministic, so byte-equal
+        // body+ZIP means the tree transaction would be a no-op; skip the copy.
+        if let local = SkillStore.shared.skills.first(where: { $0.id == id }),
+           abs(local.updatedAt.timeIntervalSince(updatedAt)) <= 1,
+           SkillStore.shared.readSkillContent(id) == bodyText,
+           SkillStore.shared.buildSkillZipData(id) == zipData {
+            return
+        }
         try await MainActor.run {
             try SkillStore.shared.importSkillFromSyncWithAsset(
                 skillId: id, content: bodyText, zipData: zipData,

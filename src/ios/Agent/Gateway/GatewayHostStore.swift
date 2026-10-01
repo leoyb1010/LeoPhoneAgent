@@ -297,8 +297,12 @@ final class GatewayHostStore: ObservableObject {
         }
         let outboxIdentity = host.outboxIdentity ?? HarnessOutboxIdentity.initial(hostId: host.id, endpoint: host.harnessURL)
         if let index = hosts.firstIndex(where: { $0.id == host.id }), hosts[index].outboxIdentity == nil {
-            hosts[index].outboxIdentity = outboxIdentity
-            persist()
+            // Views call client(for:) from body; publish the backfill on the next turn.
+            Task { @MainActor [weak self] in
+                guard let self, let i = self.hosts.firstIndex(where: { $0.id == host.id }), self.hosts[i].outboxIdentity == nil else { return }
+                self.hosts[i].outboxIdentity = outboxIdentity
+                self.persist()
+            }
         }
         let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
                                    hostId: host.id, hostName: host.name, supportsDirectDiscovery: host.runsLeoPhoneAgent, expectedDeviceId: host.device?.deviceId, directOnly: host.directOnly == true, relayServices: services,
