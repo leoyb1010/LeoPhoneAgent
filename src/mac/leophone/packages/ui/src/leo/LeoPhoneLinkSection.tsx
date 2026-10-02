@@ -1,5 +1,6 @@
 import { DirectConnectionSettings } from "./DirectConnectionSettings.js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPhonePairingSession, type VisiblePairingCode } from "./phonePairingSession.js";
 import QRCode from "qrcode";
 import { RefreshCw, Smartphone } from "lucide-react";
 
@@ -72,21 +73,31 @@ function LeoPhoneLinkSectionBody({
 }) {
   const [status, setStatus] = useState<LinkStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [code, setCode] = useState<{ image: string; exp: number; machine: string; direct: boolean } | null>(null);
+  const [code, setCode] = useState<VisiblePairingCode | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let alive = true;
+    let loading = false;
     const load = async () => {
-      const result = await bridge.status();
-      if (!alive) return;
-      if (result.ok) {
-        setStatus(result.data);
-        setStatusError(null);
-      } else {
-        setStatusError(result.error);
+      // IPC 可以拒绝或超过轮询周期；串行读取避免旧响应覆盖新状态。
+      if (loading) return;
+      loading = true;
+      try {
+        const result = await bridge.status();
+        if (!alive) return;
+        if (result.ok) {
+          setStatus(result.data);
+          setStatusError(null);
+        } else {
+          setStatusError(result.error);
+        }
+      } catch {
+        if (alive) setStatusError("连接状态读取失败，正在重试");
+      } finally {
+        loading = false;
       }
     };
     void load();
@@ -103,52 +114,40 @@ function LeoPhoneLinkSectionBody({
     return () => window.clearInterval(timer);
   }, [code]);
 
-  // 码是凭据:换码、关弹层时把没用掉的那个在中继上作废,同一时间最多一个有效码。
-  const issuedPayload = useRef<string | null>(null);
-  const revokeIssued = useCallback(() => {
-    const payload = issuedPayload.current;
-    issuedPayload.current = null;
-    if (payload) void bridge.revoke?.(payload);
-  }, [bridge]);
-  useEffect(() => revokeIssued, [revokeIssued]);
-
-  const generate = useCallback(
-    async (direct = false) => {
-      setPending(true);
-      setError(null);
-      revokeIssued();
-      try {
-        const result = direct && bridge.direct ? await bridge.direct("pair") : await bridge.pair();
-        if (!result.ok) {
-          setError(result.error);
-          setCode(null);
-          return;
-        }
-        issuedPayload.current = result.data.payload;
-        const image = await QRCode.toDataURL(result.data.payload, {
+  const pairingSession = useRef<ReturnType<typeof createPhonePairingSession> | null>(null);
+  useEffect(() => {
+    const session = createPhonePairingSession({
+      issue: (direct) => (direct && bridge.direct ? bridge.direct("pair") : bridge.pair()),
+      revoke: bridge.revoke ? (payload) => bridge.revoke!(payload) : undefined,
+      render: (payload) =>
+        QRCode.toDataURL(payload, {
           margin: 1,
           width: 360,
           errorCorrectionLevel: "M",
           color: { dark: "#101413", light: "#ffffff" },
-        });
+        }),
+      onCode: (value) => {
         setNow(Date.now());
-        setCode({ image, exp: result.data.exp, machine: result.data.machine, direct });
-      } catch (cause) {
-        logger.warn("[leo/link] 生成配对码失败", { error: String(cause) });
-        setError("生成配对码失败");
-      } finally {
-        setPending(false);
-      }
-    },
-    [bridge, revokeIssued],
-  );
+        setCode(value);
+      },
+      onPending: setPending,
+      onError: setError,
+      // 不打印 payload 或错误对象，避免把一次性凭据写入诊断。
+      onCleanupError: () => logger.warn("[leo/link] 配对码清理失败，原码可能有效至到期"),
+    });
+    pairingSession.current = session;
+    return () => {
+      session.dispose();
+      if (pairingSession.current === session) pairingSession.current = null;
+    };
+  }, [bridge]);
+  const generate = (direct = false) => pairingSession.current?.generate(direct);
 
   const remaining = code ? Math.max(0, Math.round(code.exp - now / 1000)) : 0;
   const expired = code !== null && remaining === 0;
-  const ready = Boolean(status?.running && status.connected);
+  const ready = Boolean(!statusError && status?.running && status.connected);
   const relayTooOld = ready && status?.pairing === "unsupported";
-  const statusLine =
-    statusError && !status ? `读不到连接状态(${statusError})` : describeStatus(status);
+  const statusLine = statusError ? `读不到连接状态(${statusError})` : describeStatus(status);
 
   return (
     <section className={cn("rounded-xl border border-border bg-card p-4", className)}>
@@ -233,7 +232,11 @@ function LeoPhoneLinkSectionBody({
         />
       ) : null}
 
-      {error ? <p className="mt-3 text-ui-caption text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mt-3 text-ui-caption text-destructive">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }

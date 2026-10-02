@@ -135,3 +135,6 @@ __pycache__/
 /audit/
 # Local delivery bundles (APKs, mappings, reports, screenshots).
 /outputs/
+
+# Isolated phone-link audit browser artifacts
+src/mac/leophone/audit-phone-link-results/

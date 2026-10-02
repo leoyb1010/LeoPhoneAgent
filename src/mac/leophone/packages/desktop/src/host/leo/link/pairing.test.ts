@@ -14,6 +14,7 @@ import {
   PAIR_PREFIX_V2,
   probePairingSupport,
   relayHttpBase,
+  revokePairingCode,
   type relayRequest,
 } from "./pairing.js";
 
@@ -180,8 +181,87 @@ test("pairing against the real relay 0.2: one-time code -> own device key -> sin
       body: JSON.stringify({ token: pair.join }),
     });
     assert.equal(reused.status, 409);
+
+    // 关闭/换码复用已有 DELETE：未兑换的码确实不可再换取设备钥匙。
+    const unused = await createPairingCode({ relayUrl: base, machine: "mac-test", keys: [MASTER] });
+    const unusedToken = JSON.parse(unused.payload.slice(PAIR_PREFIX_V2.length)).join as string;
+    await revokePairingCode({ relayUrl: base, token: unusedToken, keys: [MASTER] });
+    await revokePairingCode({ relayUrl: base, token: unusedToken, keys: [MASTER] });
+    const afterRevoke = await fetch(`${pair.apiRoot}/join`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: unusedToken }),
+    });
+    assert.equal(afterRevoke.status, 409);
+
   } finally {
     relay.kill();
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+for (const status of [400, 500, 503]) {
+  test(`revokePairingCode rejects HTTP ${status} instead of claiming success`, async () => {
+    let calls = 0;
+    await assert.rejects(
+      revokePairingCode({
+        relayUrl: "https://r.example",
+        token: "synthetic",
+        keys: ["a", "b"],
+        request: async () => {
+          calls++;
+          return { status, body: {} };
+        },
+      }),
+      new RegExp(`HTTP ${status}`),
+    );
+    assert.equal(calls, 1);
+  });
+}
+
+test("revokePairingCode rejects exhausted or absent keys", async () => {
+  for (const keys of [[], [""], ["a", "b"]]) {
+    await assert.rejects(
+      revokePairingCode({
+        relayUrl: "https://r.example",
+        token: "synthetic",
+        keys,
+        request: async () => ({ status: 403, body: {} }),
+      }),
+    );
+  }
+});
+
+test("revokePairingCode supports fallback, 404, and idempotent success", async () => {
+  for (const status of [200, 204, 404]) {
+    const seen: string[] = [];
+    await revokePairingCode({
+      relayUrl: "https://r.example",
+      token: "synthetic/a",
+      keys: ["a", "b"],
+      request: async (_base, method, path, key) => {
+        seen.push(key);
+        assert.equal(method, "DELETE");
+        assert.equal(path, "/relay/api/join-tokens/synthetic%2Fa");
+        return { status: key === "a" ? 401 : status, body: {} };
+      },
+    });
+    assert.deepEqual(seen, ["a", "b"]);
+  }
+});
+
+test("revokePairingCode propagates network errors without trying unrelated credentials", async () => {
+  let calls = 0;
+  await assert.rejects(
+    revokePairingCode({
+      relayUrl: "https://r.example",
+      token: "synthetic",
+      keys: ["a", "b"],
+      request: async () => {
+        calls++;
+        throw new Error("offline");
+      },
+    }),
+    /offline/,
+  );
+  assert.equal(calls, 1);
 });

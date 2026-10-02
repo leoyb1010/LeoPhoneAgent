@@ -1,0 +1,30 @@
+✔ relayHttpBase normalizes relay.json urls to the relay's https root (1.137372ms)
+✔ encodePairPayload matches the phones' scan format (2.892337ms)
+✔ createPairingCode tries the machine key first and falls back on 401 only (0.356261ms)
+✔ createPairingCode reports relay errors instead of trying other keys (0.507149ms)
+✔ pairing support probe: 404 = old relay without join tokens, 401 = supported, errors = unknown (0.413681ms)
+✔ pairing against the real relay 0.2: one-time code -> own device key -> single use (264.303035ms)
+✔ revokePairingCode rejects HTTP 400 instead of claiming success (0.384573ms)
+✔ revokePairingCode rejects HTTP 500 instead of claiming success (0.103527ms)
+✔ revokePairingCode rejects HTTP 503 instead of claiming success (0.208564ms)
+✔ revokePairingCode rejects exhausted or absent keys (0.402693ms)
+✔ revokePairingCode supports fallback, 404, and idempotent success (0.385521ms)
+✔ revokePairingCode propagates network errors without trying unrelated credentials (0.23841ms)
+✔ closing while issuance is pending revokes the late code without publishing (8.005922ms)
+✔ closing during QR rendering revokes the issued code and ignores the late image (7.840834ms)
+✔ repeated clicks share one issuance before React can render disabled state (0.716206ms)
+✔ QR rendering failure revokes invisible credential and permits retry (0.258172ms)
+✔ replacement clears old image and stops issuance until failed revocation retries (2.260986ms)
+✔ closed owner cannot publish into a reopened panel (1.724362ms)
+✔ issuance errors clear pending and surface the existing IPC error (0.416343ms)
+✔ cleanup errors are contained after panel close (0.655826ms)
+✔ legacy bridges without revoke retain issuance and expiry compatibility (0.387526ms)
+✔ close while replacement revoke is pending prevents a second issuance (0.340595ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 766.447486

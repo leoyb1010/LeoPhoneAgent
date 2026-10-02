@@ -1,0 +1,22 @@
+platform,flow,current_run_evidence,status,limits
+iOS,Home sessions chat composer search and navigation,source inventory plus visible-control gate,STATIC,Native UI not run
+iOS,Settings discovery and grouped navigation,SettingsHomeView entries source review,STATIC,No screenshots or VoiceOver
+iOS,Provider/model/MCP add edit import and cancellation,source inventory and targeted form review,STATIC,No native credentials or live API
+iOS,SSH explicit host trust and gateway,latest-main preservation and source review,STATIC,No real SSH handshake
+iOS,CloudKit outbound/inbound durability and recovery,existing test/script inventory,HOSTED_PENDING,Swift and Apple SDK absent locally
+iOS,Native camera microphone location permissions,source inventory,NOT_RUN,Native permission header and runtime unavailable
+iOS,Watch Siri widgets Share FileProvider background,source inventory,NOT_RUN,Apple runtime and devices unavailable
+Mac,Phone pairing issuance and response errors,12 transport tests,PASS,Synthetic data and loopback relay
+Mac,Panel close repeat reopen QR failure and cleanup,10 session-lifetime tests,PASS,Actual-component screenshot suite pending
+Mac,Status rejection retry polling,source repair and planned component journey,HOSTED_PENDING,Electron IPC not run
+Mac,Direct form validation and save,planned actual-component fixture,HOSTED_PENDING,Native host persistence separately tested
+Mac,Direct grants persistence expiry and revoke,existing focused suite,PASS,No public HTTPS/tailnet
+Mac,Journal bounded replay and receipts,existing focused suite,PASS,Incomplete overall link suite until workspace install
+Mac,Full host/link contracts,33 tests pass 3 missing-dependency startup failures,BLOCKED,Full pnpm install incomplete
+Mac,Task/composer/settings/app shell,source inventory,STATIC,No full Electron launch/provider calls
+Relay,Pin caller request IDs streams reconnect revocation durable state,47 active relay tests,PASS,No production endpoints
+Relay and compatibility harness,All 57 Python tests,PASS,PASS,47 relay tests are included in 57
+Android,Navigation screens Standard/Power capability boundaries,source inventory and build/release contract review,STATIC,SDK/NDK/emulator unavailable both flavor builds unrun
+Harmony,Remote/local protocol and capability routing,protocol and actual ETS fixtures,PASS,Platform IO fixtures not native UI
+Harmony,Secret generation and atomic persistence failure recovery,69 generation scenarios plus 30 secret-query scenarios,PASS,No DevEco AssetStore/Keystore hardware
+All,Native installs signing deployment production state,explicitly excluded,NOT_RUN,User requested safe audit branch only

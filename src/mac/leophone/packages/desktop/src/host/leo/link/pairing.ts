@@ -171,6 +171,9 @@ export async function revokePairingCode(args: {
     if (!key) continue;
     const res = await send(base, "DELETE", `/relay/api/join-tokens/${encodeURIComponent(args.token)}`, key);
     if (res.status === 401 || res.status === 403) continue;
-    return;
+    // 撤销失败不能伪装成成功，否则换码会留下仍可兑换的旧凭据。
+    if (res.status === 404 || (res.status >= 200 && res.status < 300)) return;
+    throw new Error(`中继未撤销配对码(HTTP ${res.status})`);
   }
+  throw new Error("中继不认这台 Mac 的钥匙，未能撤销配对码");
 }

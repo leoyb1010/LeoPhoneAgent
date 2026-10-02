@@ -1,0 +1,20 @@
+✔ relayHttpBase normalizes relay.json urls to the relay's https root (2.099609ms)
+✔ encodePairPayload matches the phones' scan format (1.027386ms)
+✔ createPairingCode tries the machine key first and falls back on 401 only (0.389451ms)
+✔ createPairingCode reports relay errors instead of trying other keys (0.564712ms)
+✔ pairing support probe: 404 = old relay without join tokens, 401 = supported, errors = unknown (0.408353ms)
+✔ pairing against the real relay 0.2: one-time code -> own device key -> single use (390.015377ms)
+✔ revokePairingCode rejects HTTP 400 instead of claiming success (0.924283ms)
+✔ revokePairingCode rejects HTTP 500 instead of claiming success (0.185581ms)
+✔ revokePairingCode rejects HTTP 503 instead of claiming success (0.394826ms)
+✔ revokePairingCode rejects exhausted or absent keys (0.713005ms)
+✔ revokePairingCode supports fallback, 404, and idempotent success (0.677557ms)
+✔ revokePairingCode propagates network errors without trying unrelated credentials (0.363414ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1323.411598

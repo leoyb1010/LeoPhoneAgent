@@ -91,3 +91,35 @@ V4 `createSession` accepts a stable command ID; `sendPrompt.traceId` is the pers
 Mac → Connect Phone → Tailscale direct settings accepts the machine's HTTPS `*.ts.net` origin and a dedicated loopback port (default 38474). Saving starts the listener within 15 seconds; it does not run Tailscale commands. Preview/check existing Serve configuration first, then explicitly map an unused HTTPS listener to that loopback port. Keep the relay endpoint configured. Verify `/v1/capabilities` using the paired credential and `X-Leo-Device-ID`; unauthenticated access must be 401 and local `/api/leo/*` must never be exposed. A bound localhost port alone is not proof the public HTTPS endpoint is ready.
 
 `syncEnabled` and `treasuryEnabled` are independent explicit opt-ins. New grants receive only enabled scopes; existing grants remain limited until renewed. Replica storage uses `~/.leoagent/link/sync-replica`; Treasury uses the same Host TreasuryStore instance. Disabling direct stops the listener while preserving pairing identities, receipts and replica data. Individual revoke affects both relay and direct admission at this Mac; relay revocation snapshots and live notifications update the same local registry. A disconnected Mac learns relay-side revocation when the trusted connection returns; direct locally stored revocation is immediate.
+
+## Pairing panel lifecycle (2026-10-03 audit)
+
+The mounted pairing panel owns one pending issuance and at most one displayed
+one-time code. It does not own or change device grants, task queues or approval
+policy. A refresh clears the displayed image before revoking the previous code;
+a revocation failure is visible and prevents issuing another code until retry.
+Closing the panel invalidates its presentation lifetime: a code arriving after
+close, or a code whose QR rendering fails, is submitted to the existing revoke
+endpoint rather than silently retained. Cleanup failures are contained and
+reported without logging the credential. Remote revocation remains best effort
+on unmount/network failure; the existing five-minute server expiry is unchanged.
+Older bridges without revoke retain their existing expiry-only behavior.
+
+```
+panel → single pending issuance → credential → QR image → visible code
+close/render failure ─────────────────┘ → existing revoke endpoint
+```
+
+Repeated clicks during issuance are ignored synchronously. Reopening creates a
+new owner; late results from the closed owner cannot clear or overwrite its code.
+Status requests do not overlap, rejections produce a visible error, and a later
+successful poll recovers normally. Error display never represents stale status
+as a fresh successful connection.
+
+Relay DELETE reports success only for a successful response or 404 (already
+consumed/expired). Authentication rejections may try the existing fallback key;
+exhausted credentials and other HTTP failures propagate through the existing IPC
+error result. URL, token payload, pairing response, grant and disk formats remain
+unchanged. Tests cover late arrival, close during QR generation, retry, repeated
+clicks, replacement failure, malformed responses, and actual relay single-use and
+revocation semantics using isolated synthetic keys.
