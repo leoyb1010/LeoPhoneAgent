@@ -494,8 +494,9 @@ final class NativeModelJourneys: XCTestCase {
         let last = handles.element(boundBy: 1)
         XCTAssertTrue(first.isHittable)
         XCTAssertTrue(last.isHittable)
-        // Crossing the first row's upper edge requests insertion at zero. A
-        // first-to-second-center drag can resolve to the original boundary.
+        // Drop inside the first row's upper half. The recorded failed gesture
+        // lifted and displaced the row, but dropping above its bounds (in the
+        // section header) cancelled the native drop without invoking onMove.
         let firstRow = app.cells.containing(.button, identifier: "model-picker.entry.anthropic-direct/claude-sonnet-4").firstMatch
         XCTAssertTrue(firstRow.exists)
         let lastRow = app.cells.containing(.button, identifier: "model-picker.entry.openai-direct/gpt-5").firstMatch
@@ -514,10 +515,10 @@ final class NativeModelJourneys: XCTestCase {
         geometry.lifetime = .keepAlways
         add(geometry)
         let start = last.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        // Aim at the actual row's top rather than the much smaller handle's
-        // top. Complete the native drop gesture before checking its outcome.
+        // Stay above the insertion midpoint while remaining inside a real row.
+        // A row-external target can show a temporary insertion then snap back.
         let destination = app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY - 4))
+            .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY + firstRow.frame.height * 0.25))
         start.press(forDuration: 0.8, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.5)
         let afterGeometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
         afterGeometry.name = "favorite-native-after-drag-geometry"

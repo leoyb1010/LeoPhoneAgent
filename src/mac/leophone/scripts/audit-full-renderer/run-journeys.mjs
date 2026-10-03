@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { createServer } from "vite";
+import { preview } from "vite";
 import { chromium } from "playwright-core";
 
 // Actual Web entrypoint -> Root -> real local services over HTTP/WebSocket.
@@ -18,6 +18,9 @@ await writeFile(resolve(workspace, "README.md"), "# Synthetic audit workspace\nN
 const env = { ...process.env, HOME: home, ZCODE_ENV: "test", ZCODE_PRODUCT_IDENTITY: "leo",
   ZCODE_DATA_BASE_DIR: home, ZCODE_SERVER_WORKSPACE: workspace,
   ZCODE_SERVER_HOST: "127.0.0.1", PORT: "3038" };
+const taskSeed = execFileSync(process.execPath,
+  ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace], { env, encoding: "utf8" });
+await writeFile(resolve(output, "task-seed.log"), taskSeed);
 const logs = [], errors = [], blocked = [], steps = [];
 const backend = spawn(process.execPath, ["packages/server/dist/entry-http.js"],
   { env, stdio: ["ignore", "pipe", "pipe"] });
@@ -37,14 +40,15 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   assert.ok(ready, "Actual server must answer before browser journeys");
-  server = await createServer({ root: resolve("packages/web"), configFile: resolve("packages/web/vite.config.ts"),
-    server: { host: "127.0.0.1", port: 5178, strictPort: true, proxy: {
+  // Use the built bundle: dev dependency re-optimization previously reloaded
+  // the first-use transition midway and reopened Welcome without a provider.
+  server = await preview({ root: resolve("packages/web"), configFile: resolve("packages/web/vite.config.ts"),
+    preview: { host: "127.0.0.1", port: 5178, strictPort: true, proxy: {
       "/api/v1/oauth/token": { target: "http://127.0.0.1:3038" },
       "/api": { target: "http://127.0.0.1:3038" },
       "/ws": { target: "ws://127.0.0.1:3038", ws: true },
     } },
   });
-  await server.listen();
   browser = await chromium.launch();
   page = await browser.newPage({ viewport: { width: 1365, height: 960 } });
   page.on("pageerror", error => errors.push(error.message));
@@ -61,7 +65,17 @@ try {
     await capture("00-real-release-notes");
     await releaseNote.click();
   }
+  const subscriptionEntry = page.getByRole("button", { name: "用订阅账号登录(ChatGPT / Copilot / OpenCode Go)", exact: true });
+  const verifyActionLabel = async () => {
+    const box = await subscriptionEntry.evaluate(element => ({ width: element.clientWidth, content: element.scrollWidth }));
+    assert.ok(box.content <= box.width + 1, "The first-use action label must not clip horizontally");
+  };
+  await verifyActionLabel();
   await capture("01-real-welcome-offline");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await verifyActionLabel();
+  await capture("01a-real-welcome-narrow-readable-labels");
+  await page.setViewportSize({ width: 1365, height: 960 });
   await apiEntry.click();
   await page.getByTestId("settings-page").waitFor({ timeout: 30000 });
   await capture("02-real-settings-after-welcome");
@@ -94,6 +108,46 @@ try {
   }
   await page.getByTestId("settings-back-button").click();
   await page.getByTestId("task-settings-button").waitFor();
+  await page.getByTestId("conversation-new-task").click();
+  const failedHomeRow = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
+  await failedHomeRow.waitFor();
+  assert.ok((await failedHomeRow.innerText()).includes("出错待看"));
+  assert.ok(!(await failedHomeRow.innerText()).includes("做完待看"));
+  const sidebarTask = page.getByTestId("task-item-audit-failed-task");
+  await sidebarTask.locator('[data-error-indicator="true"]').waitFor();
+  await capture("03a-real-home-and-sidebar-failed-unread");
+  await failedHomeRow.click();
+  await page.getByText("Synthetic preserved history", { exact: true }).waitFor({ timeout: 30000 });
+  await capture("03b-real-task-open-preserved-history");
+  const readTask = () => {
+    const text = execFileSync(process.execPath,
+      ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace, "--read"], { env, encoding: "utf8" });
+    return JSON.parse(text.trim().split("\n").at(-1));
+  };
+  const observations = [];
+  const readDeadline = Date.now() + 10000;
+  let readback;
+  do {
+    readback = readTask();
+    observations.push(readback);
+    if (!readback.unreadAt) break;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  } while (Date.now() < readDeadline);
+  await writeFile(resolve(output, "task-after-open.json"), JSON.stringify({ observations, readback }, null, 2));
+  assert.ok(!readback.unreadAt, "Opening the actual task must clear the persisted unread marker");
+  assert.equal(readback.taskId, "audit-failed-task");
+  assert.equal(readback.matchingCount, 1);
+  assert.equal(readback.title, "Synthetic failed task");
+  assert.equal(readback.status, "error", "Reading a failed task must not turn its outcome into success");
+  await page.getByTestId("conversation-new-task").click();
+  await page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" }).waitFor({ state: "hidden" });
+  const afterReturn = readTask();
+  assert.equal(afterReturn.taskId, readback.taskId);
+  assert.equal(afterReturn.matchingCount, 1);
+  assert.ok(!afterReturn.unreadAt);
+  assert.equal(afterReturn.status, "error");
+  await writeFile(resolve(output, "task-after-return.json"), JSON.stringify(afterReturn, null, 2));
+  await capture("03c-real-home-after-reading-task");
   await page.setViewportSize({ width: 700, height: 900 });
   await capture("03-real-root-narrow-after-settings");
   await page.getByTestId("task-settings-button").click();

@@ -238,7 +238,11 @@ struct ModelPickerConfig {
 // Informational copy must not inherit a Button's accent tint. The native
 // light/dark contrast audit exposed faded blue metadata and light section text.
 private enum ModelPickerText {
-    static let secondary = Color.primary.opacity(0.70)
+    // Opaque adaptive text avoids applying transparency again inside system
+    // section-header/vibrancy styles. Keep the same readable light/dark tones.
+    static let secondary = Color(uiColor: UIColor { traits in
+        UIColor(white: traits.userInterfaceStyle == .dark ? 0.74 : 0.28, alpha: 1)
+    })
 }
 
 // MARK: - UnifiedModelPicker

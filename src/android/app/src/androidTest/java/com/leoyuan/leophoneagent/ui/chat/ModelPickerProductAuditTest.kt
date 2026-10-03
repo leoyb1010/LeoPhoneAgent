@@ -67,7 +67,11 @@ class ModelPickerProductAuditTest {
     private fun screenshot(name: String) {
         compose.waitForIdle()
         val profile = InstrumentationRegistry.getArguments().getString("auditProfile") ?: "unspecified"
-        val dir = File(context.getExternalFilesDir(null), "product-audit/$profile").apply { mkdirs() }
+        // AGP collects this directory before uninstalling the test application.
+        val outputBase = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.let(::File)
+            ?: File(requireNotNull(context.externalMediaDirs.firstOrNull()), "additional_test_output")
+        val dir = File(outputBase, profile).apply { check(mkdirs() || isDirectory) }
         val configuration = compose.activity.resources.configuration
         val expectedFontScale = if (profile.endsWith("-large")) 2f else 1f
         assertEquals("Actual Activity must receive the requested system font scale", expectedFontScale, configuration.fontScale, 0.01f)

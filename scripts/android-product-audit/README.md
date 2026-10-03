@@ -20,6 +20,14 @@ bounded part of one full repository audit round, never a replacement for five
 independent whole-product rounds.
 
 Run on a prepared emulator with `bash scripts/android-product-audit/run.sh`.
+CI compiles before starting the emulator and splits Standard/Power across
+independent jobs. Only the owned test process has an eight-minute per-profile
+limit; any timeout remains a failure. Device boot plus package/activity service
+health is checked before each profile, and a system failure or zero executed
+cases stops remaining profiles instead of repeating against a broken emulator.
+The screenshot output uses AGP's additional-test-output collection, before AGP
+uninstalls the test package. No post-uninstall access or new storage permission
+is required. `AUDIT_FLAVOR=Standard` or `Power` selects one CI shard.
 Each profile/flavor preserves Gradle/JUnit evidence, screenshots and provenance;
 any test or screenshot-collection failure makes the aggregate fail. Initial
 coverage is active fallback member versus defaults, cross-group selection,
@@ -31,3 +39,5 @@ References:
 - https://developer.android.com/develop/ui/compose/testing
 - https://github.com/ReactiveCircus/android-emulator-runner
 - https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+- https://kotlinlang.org/docs/compiler-execution-strategy.html
+- https://developer.android.com/topic/performance/benchmarking/benchmarking-in-ci
