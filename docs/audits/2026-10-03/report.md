@@ -79,15 +79,29 @@ found no blocking runtime issue and independently repeated all 21 focused tests.
 The generated inventory was normalized to LF after the reviewer caught its CRLF
 diff-check warnings. A further close-during-revocation test and actual-relay
 repeated-revoke/redemption check pass; the focused total is now **22 pass**.
-Exact-published-SHA hosted tests and screenshots are still pending. Do not treat
-this interim report as finished or release-ready.
+Hosted Quality run 37081051732 on `40420a68bf78aefd802e11d63900e4d6d0d655c7`
+passed all four active jobs. The initial run exposed an isolated Swift harness
+missing its existing logger shim and strict TypeScript indexing in SSH public-key
+parsing. Both narrow repairs were independently reviewed and the full CI passed.
+Mac app and CLI typechecks, lint (74 warnings, 0 errors), architecture, source
+builds, 73 agent regressions, 55 link tests (2 Python integration skips), and 10
+pairing-lifetime tests passed. The 2 skips require aiohttp on that Mac runner;
+the independent relay job and local synthetic pairing integration passed.
+iOS includes 20 Swift security tests, all 15 audit commands and simulator
+MinisLogicTests. This is not the full signed app or real-device acceptance.
+Artifact 11259112657 was retrieved and all seven screenshots visually inspected.
+QR, revocation errors, status recovery and form controls render without overlap;
+the dark 390px product panel fits. Inspection caught fixture-only white backdrop
+in dark mode and an initial animation frame in the ready capture; the fixture
+now uses the theme backdrop and Playwright finishes animations for screenshots.
+The final documentation/fixture-only commit will receive another exact-SHA CI
+run; its result is delivered with the final handoff.
 The read-only Quality workflow now covers the existing audit branch, source
 regressions, and an isolated actual-component browser fixture. The fixture uses
 production React components/styles with a synthetic bridge and blocks external
 network requests. Its seven screenshots cover ready, close-before-reply, visible
 code, revoke failure/retry, status failure/recovery, form validation/save, and
-narrow/dark layout. Screenshots count only after the CI artifact is successfully
-retrieved and visually inspected. Native Electron IPC is not replaced by this
+narrow/dark layout. The seven screenshots were successfully retrieved and visually inspected. Native Electron IPC is not replaced by this
 fixture; native iOS UI is not represented by a narrow browser viewport.
 
 ## Unrun, blocked, and remaining gates
@@ -99,7 +113,7 @@ fixture; native iOS UI is not represented by a narrow browser viewport.
 - Local iOS native-permission source audit cannot run: its pinned iSH submodule
   header is absent in the non-recursive checkout. No submodule pointer changed.
 - Full Mac dependency install was killed with exit 137. The constrained retry
-  is in progress. Local full typecheck then encountered incomplete workspace
+  remained incomplete. Local full typecheck encountered incomplete workspace
   resolution and was killed; it is **not a passing typecheck**. The preliminary
   link-wide run has 33 passes and 3 test-file startup failures from missing
   `@zcode/shared`; these are not three demonstrated product regressions and do

@@ -94,7 +94,7 @@ function Fixture() {
   return (
     <main
       className="mx-auto max-w-3xl space-y-4 p-6 text-ui-base text-foreground"
-      style={{ height: "100vh", overflow: "auto" }}
+      style={{ height: "100vh", overflow: "auto", background: "var(--color-background)" }}
     >
       <h1 className="text-ui-xl">LeoPhoneAgent 配对流程 · 隔离测试</h1>
       <p>真实产品组件；模拟本地桥接，不连接任何真实设备、账户或中继</p>

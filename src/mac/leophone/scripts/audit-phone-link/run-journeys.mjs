@@ -27,7 +27,7 @@ try {
   });
   const button = (name) => page.getByRole("button", { name, exact: true });
   const screenshot = async (name, detail) => {
-    await page.screenshot({ path: resolve(output, name + ".png"), fullPage: true });
+    await page.screenshot({ path: resolve(output, name + ".png"), fullPage: true, animations: "disabled" });
     steps.push({ name, detail });
   };
   const waitText = (text) => page.getByText(text, { exact: true }).waitFor();
