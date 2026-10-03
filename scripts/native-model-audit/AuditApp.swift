@@ -34,6 +34,9 @@ private struct AuditRoot: View {
             "audit.default": store.defaultPrimaryGroupId ?? "none",
             "audit.pins": pins.keys.joined(separator: "|"),
             "audit.count": String(store.modelEntries.count),
+            "audit.edited-name": store.entry(for: "relay-proxy/deepseek-reasoner")?.model.displayName ?? "none",
+            "audit.edited-thinking": store.entry(for: "relay-proxy/deepseek-reasoner")?.overrides.maxThinkingLevel?.rawValue ?? "none",
+            "audit.edited-id": store.entry(for: "relay-proxy/deepseek-reasoner")?.id ?? "none",
         ]
         return String(data: try! JSONEncoder().encode(values), encoding: .utf8)!
     }

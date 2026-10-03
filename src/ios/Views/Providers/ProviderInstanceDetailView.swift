@@ -870,7 +870,9 @@ struct ProviderInstanceDetailView: View {
             Button {
                 var updated = entry
                 updated.isHidden = !entry.isHidden
-                store.updateEntry(updated)
+                if !store.updateEntry(updated) {
+                    organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                }
             } label: {
                 Image(systemName: entry.isHidden ? "eye.slash" : "eye")
                     .font(.caption)
@@ -1322,8 +1324,10 @@ struct AddCustomModelSheet: View {
         let entry = ModelEntry(providerInstanceId: instance.id, model: model, isCustom: true)
         if store.addEntry(entry) {
             dismiss()
-        } else {
+        } else if store.entries(for: instance.id).contains(where: { $0.baseModel.id == trimmedId }) {
             duplicateError = String(localized: "Model ID \"\(trimmedId)\" already exists.")
+        } else {
+            duplicateError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
         }
     }
 }
@@ -1351,6 +1355,7 @@ struct ModelEntryDetailSheet: View {
     @State private var showQuickTest: Bool = false
     @State private var showForceThinkingAlert: Bool = false
     @State private var showResetAlert: Bool = false
+    @State private var saveFailed = false
 
     var body: some View {
         NavigationStack {
@@ -1383,6 +1388,7 @@ struct ModelEntryDetailSheet: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         TextField("Display name", text: $displayName)
+                            .accessibilityIdentifier("model-editor.name")
                             .multilineTextAlignment(.trailing)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -1506,6 +1512,7 @@ struct ModelEntryDetailSheet: View {
                                 Text(String(localized: "Reset to Default"))
                             }
                         }
+                        .accessibilityIdentifier("model-editor.reset")
                     } footer: {
                         Text(String(localized: "Clear your customizations and restore the values reported by the provider."))
                     }
@@ -1532,13 +1539,20 @@ struct ModelEntryDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("model-editor.cancel")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") { save() }
                         .font(.body.weight(.semibold))
+                        .accessibilityIdentifier("model-editor.save")
                 }
             }
             .onAppear { loadFromEntry() }
+            .alert("Model organization", isPresented: $saveFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Could not save model changes. Your previous configuration was kept. Try again.")
+            }
             .sheet(isPresented: $showQuickTest) {
                 // [T-quicktest-stale-session] Fresh identity per model — this
                 // detail view's entry is fixed, but keep the same pattern as
@@ -1655,7 +1669,7 @@ struct ModelEntryDetailSheet: View {
     private func resetToDefault() {
         var cleared = entry
         cleared.overrides = ModelOverrides()
-        store.updateEntry(cleared)
+        guard store.updateEntry(cleared) else { saveFailed = true; return }
 
         let base = entry.baseModel
         displayName = base.displayName
@@ -1718,6 +1732,9 @@ struct ModelEntryDetailSheet: View {
         // baseModel/API value, so future provider-side capability bumps can still flow
         // through for fields the user hasn't touched.
         var newOverrides = ModelOverrides()
+        // This editor has no ceiling control. Renaming must not clear an
+        // imported/synced ceiling; a successful Reset may already have cleared it.
+        newOverrides.maxThinkingLevel = (store.entry(for: entry.id) ?? entry).overrides.maxThinkingLevel
 
         let effectiveTypedName = trimmedName.isEmpty ? updatedBaseModel.displayName : trimmedName
         if effectiveTypedName != updatedBaseModel.displayName {
@@ -1749,7 +1766,7 @@ struct ModelEntryDetailSheet: View {
             isHidden: isHidden,
             userModifiedAt: newOverrides.isEmpty && !isHidden ? nil : Date()
         )
-        store.updateEntry(updatedEntry)
+        guard store.updateEntry(updatedEntry) else { saveFailed = true; return }
         dismiss()
     }
 }

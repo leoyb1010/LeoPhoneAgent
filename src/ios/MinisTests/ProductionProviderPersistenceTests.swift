@@ -459,5 +459,43 @@ final class ProductionProviderPersistenceTests: XCTestCase {
         XCTAssertEqual(restored, databaseExpected)
         XCTAssertEqual(try JSONDecoder().decode(ProviderConfig.self, from: Data(contentsOf: url)), store.config)
     }
+
+    func testSingleModelEditFailureRetainsAcceptedMetadataAndSameInputCanRetry() throws {
+        let directory = try directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("config.json")
+        let original = fixture()
+        let bytes = try JSONEncoder().encode(original)
+        try bytes.write(to: url)
+        let store = ProductionProviderPersistence(fileURL: url)
+        var edited = original.modelEntries[0]
+        edited.overrides.displayName = "Retry this name"
+        edited.overrides.contextWindow = 256000
+        edited.isHidden = false
+        let journal = ProviderSnapshotJournal.markerURL(for: url)
+        try FileManager.default.createDirectory(at: journal, withIntermediateDirectories: false)
+        XCTAssertFalse(store.updateEntry(edited))
+        XCTAssertEqual(store.config, original)
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+        XCTAssertEqual(store.configRevision, 0)
+
+        try FileManager.default.removeItem(at: journal)
+        XCTAssertTrue(store.updateEntry(edited))
+        let accepted = try XCTUnwrap(store.config.modelEntries.first { $0.id == edited.id })
+        XCTAssertEqual(accepted.uuid, edited.uuid)
+        XCTAssertEqual(accepted.baseModel, edited.baseModel)
+        XCTAssertEqual(accepted.overrides, edited.overrides)
+        XCTAssertEqual(accepted.isHidden, edited.isHidden)
+        XCTAssertNotNil(accepted.userModifiedAt)
+        XCTAssertEqual(store.config.modelGroups, original.modelGroups)
+        XCTAssertEqual(store.config.sessionBindings, original.sessionBindings)
+        XCTAssertEqual(store.config.defaultPrimaryGroupId, original.defaultPrimaryGroupId)
+        XCTAssertEqual(store.configRevision, 1)
+        XCTAssertEqual(try JSONDecoder().decode(ProviderConfig.self, from: Data(contentsOf: url)), store.config)
+        let missing = ModelEntry(providerInstanceId: edited.providerInstanceId,
+                                 model: LLMModel(id: "missing", displayName: "Missing", provider: "OpenAI", modalityOverride: .textOnly))
+        XCTAssertFalse(store.updateEntry(missing))
+        XCTAssertEqual(store.configRevision, 1)
+    }
 }
 #endif

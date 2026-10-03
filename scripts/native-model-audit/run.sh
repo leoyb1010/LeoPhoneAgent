@@ -78,13 +78,14 @@ if [[ "$LABEL" == "current" ]]; then
     "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test20FavoriteEditDragPersistsOrder"
     "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test21ReturningFromGroupManagementKeepsPickerOpen"
     "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test22RejectedGroupSaveKeepsSelectionAndAllowsRetry"
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test23ActualEditorRetainsAliasAfterRejectedSaveAndRetry"
   )
   if run_native_tests "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight/xcodebuild.log" "${PREFLIGHT[@]}"; then
     export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
   else
     status=$?
     export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
-    printf '%s\n' 'Current UI preflight FAILED (five selected regression journeys); full unit/UI suite was NOT RUN. Original preflight xcresult/log retained. No failing assertions were suppressed.' > "$OUTPUT/test-scope.txt"
+    printf '%s\n' 'Current UI preflight FAILED (six selected regression journeys); full unit/UI suite was NOT RUN. Original preflight xcresult/log retained. No failing assertions were suppressed.' > "$OUTPUT/test-scope.txt"
     if [[ -f "$OUTPUT/preflight/test-summary.json" ]]; then cp "$OUTPUT/preflight/test-summary.json" "$OUTPUT/test-summary.json"; fi
     if [[ -d "$OUTPUT/preflight/images" ]]; then cp -R "$OUTPUT/preflight/images" "$OUTPUT/images"; fi
     rm -rf "$OUTPUT/DerivedData"

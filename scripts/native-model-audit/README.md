@@ -25,7 +25,7 @@ results remain independent workflow artifacts, including any historical failures
 The runner never rewrites baseline production behavior or suppresses failing
 selected tests to make the old UI green.
 
-Current runs first execute five reproduced UI regression journeys using the same
+Current runs first execute six reproduced UI regression journeys using the same
 project and DerivedData. Their separate preflight xcresult/log is retained. A
 preflight failure stops early and labels the full suite as not run; a passing
 preflight is always followed by the complete unit and UI suites.
@@ -39,6 +39,11 @@ preflight is always followed by the complete unit and UI suites.
 - Actual `UnifiedModelPicker`, `QuickModelSwitchSheet`, `SessionModelPicker`,
   model-group screens, and onboarding model selection render in SwiftUI
 - The improved provider catalog is the complete actual `ProviderModelCatalogView`, including native search, filters, favorites, bulk visibility confirmation, and append-to-group flows
+- The entire actual `ModelEntryDetailSheet` struct is extracted unchanged with
+  provenance and opened from the native catalog. Its save-rejection journey
+  retains typed input, retries, reopens persisted aliases, and keeps model IDs,
+  reasoning ceilings, session bindings, defaults, and pins. Quick Test remains
+  an explicit no-network adapter
 - Baseline provider catalog uses the exact original private rendering method
   bodies in an explicit fixture wrapper. It is evidence for native catalog rows,
   not for the entire provider screen or authentication workflow

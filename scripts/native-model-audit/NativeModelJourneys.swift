@@ -18,11 +18,12 @@ final class NativeModelJourneys: XCTestCase {
         app.terminate()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false) {
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false) {
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
                                  "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount),
-                                 "AUDIT_FAIL_NEXT_GROUP_SAVE": failNextGroupSave ? "1" : "0"]
+                                 "AUDIT_FAIL_NEXT_GROUP_SAVE": failNextGroupSave ? "1" : "0",
+                                 "AUDIT_FAIL_NEXT_ENTRY_SAVE": failNextEntrySave ? "1" : "0"]
         app.launchArguments = ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", largeText ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"]
         app.launch()
@@ -504,6 +505,45 @@ final class NativeModelJourneys: XCTestCase {
         XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4|openai-direct/gpt-5-mini")
         XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")
         XCTAssertEqual(rootValue("audit.default"), "daily")
+    }
+
+    func test23ActualEditorRetainsAliasAfterRejectedSaveAndRetry() {
+        launch("catalog", large: false, failNextEntrySave: true)
+        search("DeepSeek")
+        let model = app.buttons["model-catalog.entry.relay-proxy/deepseek-reasoner"]
+        XCTAssertTrue(model.waitForExistence(timeout: 10))
+        model.tap()
+        let field = app.textFields["model-editor.name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText(" Audit Alias")
+        let typed = field.value as? String ?? ""
+        XCTAssertTrue(typed.contains("Audit Alias"))
+        let save = app.buttons["model-editor.save"]
+        save.tap()
+        let failure = app.alerts["Model organization"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        XCTAssertTrue(failure.staticTexts["Could not save model changes. Your previous configuration was kept. Try again."].exists)
+        capture("44-editor-rejected-save")
+        failure.buttons["OK"].tap()
+        XCTAssertTrue(app.navigationBars["Model Details"].exists, "Save rejection must keep the actual editor open")
+        XCTAssertEqual(field.value as? String, typed, "Typed alias must remain available for retry")
+        capture("45-editor-retained-alias-after-failure")
+        save.tap()
+        let dismissed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.navigationBars["Model Details"])
+        wait(for: [dismissed], timeout: 10)
+        app.terminate()
+        launch("", reset: false)
+        XCTAssertEqual(rootValue("audit.edited-name"), typed)
+        XCTAssertEqual(rootValue("audit.edited-thinking"), "high", "Alias edits must not erase an imported reasoning ceiling")
+        XCTAssertEqual(rootValue("audit.edited-id"), "relay-proxy/deepseek-reasoner")
+        XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        XCTAssertEqual(rootValue("audit.pins"), "anthropic-direct/claude-sonnet-4|openai-direct/gpt-5")
+        app.buttons["audit.open.catalog"].tap()
+        search("Audit Alias")
+        XCTAssertTrue(app.buttons["model-catalog.entry.relay-proxy/deepseek-reasoner"].waitForExistence(timeout: 10))
+        capture("46-edited-alias-after-relaunch")
     }
 
 }

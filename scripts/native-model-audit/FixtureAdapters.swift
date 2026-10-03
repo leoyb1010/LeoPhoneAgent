@@ -74,10 +74,6 @@ struct ModelQuickTestSheet: View {
     var body: some View { Text("Network execution is disabled in this native audit") }
 }
 
-struct ModelEntryDetailSheet: View {
-    let entry: ModelEntry
-    var body: some View { Text("Entry editor is outside this audit fixture") }
-}
 struct AddCustomModelSheet: View {
     let instanceId: String
     var body: some View { Text("Custom entry creation is outside this audit fixture") }

@@ -16,6 +16,7 @@ import SwiftUI
     var deletedInstanceIds: Set<String> = []
     private var ready = false
     private var failNextGroupSave = false
+    private var failNextEntrySave = false
     private let storageKey = "native-model-audit.fixture.v1"
 
     struct Snapshot: Codable {
@@ -34,6 +35,7 @@ import SwiftUI
     init() {
         let environment = ProcessInfo.processInfo.environment
         failNextGroupSave = environment["AUDIT_FAIL_NEXT_GROUP_SAVE"] == "1"
+        failNextEntrySave = environment["AUDIT_FAIL_NEXT_ENTRY_SAVE"] == "1"
         if environment["AUDIT_RESET"] == "1" {
             UserDefaults.standard.removeObject(forKey: storageKey)
             UserDefaults.standard.removeObject(forKey: "leo.model.pinned.v1")
@@ -91,6 +93,9 @@ import SwiftUI
             entry("missing-auth", "unavailable", "Unavailable fixture", "OpenAI"),
             entry("disabled-provider", "disabled", "Disabled fixture", "OpenAI"),
         ]
+        if failNextEntrySave, let index = modelEntries.firstIndex(where: { $0.id == "relay-proxy/deepseek-reasoner" }) {
+            modelEntries[index].overrides.maxThinkingLevel = .high
+        }
         if large {
             let count = Int(ProcessInfo.processInfo.environment["AUDIT_CATALOG_COUNT"] ?? "180") ?? 180
             for index in 1...max(1, count) {
@@ -194,7 +199,13 @@ import SwiftUI
         failNextGroupSave = false
         return false
     }
-    func updateEntry(_ entry: ModelEntry) { if let index = modelEntries.firstIndex(where: { $0.id == entry.id }) { modelEntries[index] = entry } }
+    @discardableResult
+    func updateEntry(_ entry: ModelEntry) -> Bool {
+        guard let index = modelEntries.firstIndex(where: { $0.id == entry.id }) else { return false }
+        if failNextEntrySave { failNextEntrySave = false; return false }
+        modelEntries[index] = entry
+        return true
+    }
     func addAgentLoopEntry(_ id: String) { if !agentLoopModelEntryIds.contains(id) { agentLoopModelEntryIds.append(id) } }
     func addAgentLoopGroup(_ id: String) { if !agentLoopGroupIds.contains(id) { agentLoopGroupIds.append(id) } }
 }

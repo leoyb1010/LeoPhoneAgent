@@ -140,7 +140,7 @@ def main():
         names = ['load', 'save', 'loadModelArchiveAliases', 'recoverPendingDatabaseSnapshot',
                  'persistLegacyUuidMap', 'setBinding', 'setEntriesHidden', 'replaceEntries',
                  'removeEntry', 'addGroup', 'updateGroup', 'removeGroup', 'reorderGroups', 'repointDefaults',
-                 'ensureVoiceTemplateModels', 'commitImportedMetadata', 'addEntry',
+                 'ensureVoiceTemplateModels', 'commitImportedMetadata', 'addEntry', 'updateEntry',
                  'recordTombstone', 'emitV3MarkDirty', 'dictByIdLastWins']
         methods = '\n\n'.join(extract_swift_method(source, name) for name in names)
         generated = template.read_text().replace('    // INSERT_PRODUCTION_METHODS', methods)
@@ -153,8 +153,10 @@ def main():
         (production / 'AuditProviderCatalog.swift').write_text('''import SwiftUI
 struct AuditProviderCatalog: View {
     let instanceId: String
+    @State private var editingEntry: ModelEntry?
     var body: some View {
-        ProviderModelCatalogView(instanceId: instanceId, onEdit: { _ in }, onAddCustom: {})
+        ProviderModelCatalogView(instanceId: instanceId, onEdit: { editingEntry = $0 }, onAddCustom: {})
+            .sheet(item: $editingEntry) { ModelEntryDetailSheet(entry: $0) }
     }
 }
 ''')
@@ -189,6 +191,17 @@ struct AuditProviderCatalog: View {
         (production / 'AuditProviderCatalog.swift').write_text(wrapper + methods + '\n}\n')
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
                                     'transformation': 'Extract unchanged modelListSection, modelEntryRow and modalityIcons methods into AuditProviderCatalog; omit sign-in/settings/network chrome.'})
+    # The entire production editor is dependency-light; only Quick Test's
+    # external execution remains an adapter. Keep the struct body unchanged.
+    path = 'src/ios/Views/Providers/ProviderInstanceDetailView.swift'
+    data = read_source(args.source_ref, path)
+    source = data.decode()
+    start = source.index('struct ModelEntryDetailSheet: View {')
+    end = source.index('// MARK: - Share Sheet', start)
+    (production / 'ModelEntryDetailSheet.swift').write_text('import SwiftUI\n\n' + source[start:end])
+    manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
+                                'generated_file': 'ModelEntryDetailSheet.swift',
+                                'transformation': 'Extract entire unchanged ModelEntryDetailSheet struct before Share Sheet marker; prepend SwiftUI import. Quick Test execution remains an explicit no-network adapter.'})
     resources = out / 'Resources'
     resources.mkdir(exist_ok=True)
     path = 'src/ios/Localizable.xcstrings'

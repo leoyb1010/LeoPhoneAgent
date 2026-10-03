@@ -1328,15 +1328,16 @@ final class ProviderConfigStore: ObservableObject {
         return save()
     }
 
-    func updateEntry(_ entry: ModelEntry) {
-        guard let idx = config.modelEntries.firstIndex(where: { $0.id == entry.id }) else { return }
+    @discardableResult
+    func updateEntry(_ entry: ModelEntry) -> Bool {
+        guard let idx = config.modelEntries.firstIndex(where: { $0.id == entry.id }) else { return false }
         // Stamp userModifiedAt on every UI-driven edit so iCloud merge can resolve
         // same-field conflicts by last-write-wins. This is the single funnel for
         // override edits from ProviderInstanceDetailView.
         var stamped = entry
         stamped.userModifiedAt = Date()
         config.modelEntries[idx] = stamped
-        save()
+        return save()
     }
 
     /// One user action, one save/sync snapshot even for a large selection.
