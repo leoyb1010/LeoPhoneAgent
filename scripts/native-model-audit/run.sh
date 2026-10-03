@@ -27,12 +27,14 @@ command -v xcodegen >/dev/null || { echo 'xcodegen is required'; exit 1; }
 xcodebuild -version | tee "$OUTPUT/xcode-version.txt"
 xcrun simctl list devices available | tee "$OUTPUT/simulators.txt"
 DESTINATION="${NATIVE_AUDIT_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5}"
-TEST_SCOPE=()
+# macOS ships Bash 3.2: expanding an empty array under nounset raises an error.
+# Explicit full targets preserve the current suite while avoiding that edge case.
+TEST_SCOPE=("-only-testing:NativeModelAuditTests" "-only-testing:NativeModelAuditUITests")
 if [[ "$LABEL" == "baseline" ]]; then
   # Baseline is immutable visual/codec evidence, not a claim that old behavior
   # satisfies newly introduced interaction contracts. Earlier full-run results
   # remain separate GitHub artifacts; failures here still propagate unchanged.
-  TEST_SCOPE+=("-only-testing:NativeModelAuditTests/AuditCodecTests")
+  TEST_SCOPE=("-only-testing:NativeModelAuditTests/AuditCodecTests")
   for test in \
     test01QuickPickerAndLargeCatalogSearch \
     test02FullPickerSearchAndEmptyResults \
