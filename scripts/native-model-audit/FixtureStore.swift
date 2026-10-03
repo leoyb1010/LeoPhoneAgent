@@ -103,7 +103,10 @@ import SwiftUI
         defaultPrimaryGroupId = "daily"
         defaultSubGroupId = "research"
         sessionBindings["audit-session"] = SessionModelBinding(sessionId: "audit-session", primarySource: .directEntry(modelEntryId: "anthropic-direct/claude-sonnet-4"))
-        UserDefaults.standard.set(["anthropic-direct/claude-sonnet-4", "openai-direct/gpt-5"], forKey: "leo.model.pinned.v1")
+        let initialPins = ProcessInfo.processInfo.environment["AUDIT_LEGACY_PINS"] == "1"
+            ? ["pruned-legacy-sonnet-uuid", "openai-direct/gpt-5"]
+            : ["anthropic-direct/claude-sonnet-4", "openai-direct/gpt-5"]
+        UserDefaults.standard.set(initialPins, forKey: "leo.model.pinned.v1")
     }
 
     func persist() {
@@ -114,6 +117,21 @@ import SwiftUI
                                 agentLoopModelEntryIds: agentLoopModelEntryIds, agentLoopGroupIds: agentLoopGroupIds,
                                 sessionBindings: sessionBindings)
         if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: storageKey) }
+    }
+    func setEntriesHidden(ids: Set<String>, hidden: Bool) {
+        for index in modelEntries.indices where ids.contains(modelEntries[index].id) {
+            modelEntries[index].isHidden = hidden
+            modelEntries[index].userModifiedAt = Date()
+        }
+    }
+    func normalizeEntryRef(_ id: String) -> String {
+        // Models an imported legacy alias retained after duplicate UUID pruning.
+        if id == "pruned-legacy-sonnet-uuid" { return "anthropic-direct/claude-sonnet-4" }
+        return entry(for: id)?.id ?? id
+    }
+    func removeEntry(_ id: String) {
+        modelEntries.removeAll { $0.id == id }
+        ModelSwitcher.forget(entryIds: [id])
     }
     func instance(for id: String) -> ProviderInstance? { instances.first { $0.id == id } }
     func entry(for id: String) -> ModelEntry? { modelEntries.first { $0.id == id || $0.uuid == id || $0.legacyColonCompositeKey == id } }

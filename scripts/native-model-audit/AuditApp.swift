@@ -12,7 +12,7 @@ import SwiftUI
 }
 
 private enum AuditRoute: String, Identifiable {
-    case quick, full, groups, catalog, onboarding
+    case quick, full, groups, catalog, onboarding, draft, voiceInput, voiceOutput
     var id: String { rawValue }
 }
 
@@ -21,6 +21,7 @@ private struct AuditRoot: View {
     @ObservedObject private var pins = ModelPinStore.shared
     @State private var route: AuditRoute?
     @State private var launched = false
+    @State private var draftKey: String?
     private var selection: String { ModelSwitcher.currentChoiceId(sessionId: "audit-session") ?? "none" }
     var body: some View {
         NavigationStack {
@@ -34,6 +35,11 @@ private struct AuditRoot: View {
                 }
                 Section("Fixture state") {
                     Text(selection).accessibilityIdentifier("audit.selection")
+                    Text(store.binding(for: "audit-session")?.primarySource.preferredReference ?? "none").accessibilityIdentifier("audit.reference")
+                    Text(draftKey ?? "none").accessibilityIdentifier("audit.draft")
+                    Text(String(store.sessionBindings.count)).accessibilityIdentifier("audit.binding-count")
+                    Text(store.modelEntries.filter(\.isHidden).map(\.id).joined(separator: "|")).accessibilityIdentifier("audit.hidden")
+                    Text(store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none").accessibilityIdentifier("audit.research-members")
                     Text(store.defaultPrimaryGroupId ?? "none").accessibilityIdentifier("audit.default")
                     Text(pins.keys.joined(separator: "|")).accessibilityIdentifier("audit.pins")
                     Text("\(store.modelEntries.count) models").accessibilityIdentifier("audit.count")
@@ -65,6 +71,12 @@ private struct AuditRoot: View {
                     }
                 case .onboarding:
                     NavigationStack { OnboardingModelSelectionView() }
+                case .draft:
+                    QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: draftKey, onPick: { key in draftKey = key; route = nil })
+                case .voiceInput:
+                    NavigationStack { UnifiedModelPicker(config: .voiceInput()) }
+                case .voiceOutput:
+                    NavigationStack { UnifiedModelPicker(config: .voiceOutput()) }
                 }
             }
         }

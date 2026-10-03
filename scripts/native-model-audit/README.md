@@ -26,6 +26,7 @@ No build, archive, signing, release, or deploy step for the product is involved.
   blobs even after the worktree implementation changes
 - Actual `UnifiedModelPicker`, `QuickModelSwitchSheet`, `SessionModelPicker`,
   model-group screens, and onboarding model selection render in SwiftUI
+- The improved provider catalog is the complete actual `ProviderModelCatalogView`, including native search, filters, favorites, bulk visibility confirmation, and append-to-group flows
 - Baseline provider catalog uses the exact original private rendering method
   bodies in an explicit fixture wrapper. It is evidence for native catalog rows,
   not for the entire provider screen or authentication workflow
@@ -48,7 +49,7 @@ Quick and full picker baselines, favorites, provider catalog, groups/defaults,
 190-entry catalog search, long names at accessibility3 text size, no-results and
 empty catalog, pin without switching, pin/selection persistence across process
 relaunch, direct-vs-group identity, unchanged default after session selection,
-and onboarding group creation. Codec tests preserve custom names, identifiers
+onboarding group creation, Home draft isolation, System voice rows, duplicate-name selection identity, unavailable groups, explicit member selection retaining its group, and catalog bulk hide/show/add-to-group preserving favorites and defaults. Codec tests preserve custom names, identifiers
 containing `/` and `:`, overrides, group order, unresolved references, and binding
 kind. The current app also runs production `ModelCatalogTests` when present.
 

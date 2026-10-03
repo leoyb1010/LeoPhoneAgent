@@ -57,36 +57,46 @@ def main():
             raise
         (production / pathlib.Path(relative).name).write_bytes(data)
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
-    # Provider detail contains sign-in/network actions unrelated to catalog rendering.
-    # Copy the production catalog method bodies verbatim into a fixture wrapper.
-    # This is a native rendering of these exact methods, not a rewritten mockup.
-    path = 'src/ios/Views/Providers/ProviderInstanceDetailView.swift'
-    data = read_source(args.source_ref, path)
-    source = data.decode()
-    start = source.index('    private func modelListSection(')
-    end = source.index('    // MARK: - Actions', start)
-    methods = source[start:end]
-    wrapper = '''import SwiftUI
+    if (production / 'ProviderModelCatalogView.swift').exists():
+        (production / 'AuditProviderCatalog.swift').write_text('''import SwiftUI
 struct AuditProviderCatalog: View {
     let instanceId: String
-    @ObservedObject private var store = ProviderConfigStore.shared
-    @State private var showAddCustomModel = false
-    @State private var pendingDeleteModelEntry: ModelEntry?
-    @State private var editingModelEntry: ModelEntry?
     var body: some View {
-        List {
-            if let instance = store.instance(for: instanceId) {
-                Section("Models") { modelListSection(instance) }
-            }
-        }
-        .navigationTitle(store.instance(for: instanceId)?.label ?? "Provider")
-        .navigationBarTitleDisplayMode(.inline)
+        ProviderModelCatalogView(instanceId: instanceId, onEdit: { _ in }, onAddCustom: {})
     }
-    @ViewBuilder
-'''
-    (production / 'AuditProviderCatalog.swift').write_text(wrapper + methods + '\n}\n')
-    manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
-                                'transformation': 'Extract unchanged modelListSection, modelEntryRow and modalityIcons methods into AuditProviderCatalog; omit sign-in/settings/network chrome.'})
+}
+''')
+    else:
+        # Provider detail contains sign-in/network actions unrelated to catalog rendering.
+        # Copy the production catalog method bodies verbatim into a fixture wrapper.
+        # This is a native rendering of these exact methods, not a rewritten mockup.
+        path = 'src/ios/Views/Providers/ProviderInstanceDetailView.swift'
+        data = read_source(args.source_ref, path)
+        source = data.decode()
+        start = source.index('    private func modelListSection(')
+        end = source.index('    // MARK: - Actions', start)
+        methods = source[start:end]
+        wrapper = '''import SwiftUI
+    struct AuditProviderCatalog: View {
+        let instanceId: String
+        @ObservedObject private var store = ProviderConfigStore.shared
+        @State private var showAddCustomModel = false
+        @State private var pendingDeleteModelEntry: ModelEntry?
+        @State private var editingModelEntry: ModelEntry?
+        var body: some View {
+            List {
+                if let instance = store.instance(for: instanceId) {
+                    Section("Models") { modelListSection(instance) }
+                }
+            }
+            .navigationTitle(store.instance(for: instanceId)?.label ?? "Provider")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        @ViewBuilder
+    '''
+        (production / 'AuditProviderCatalog.swift').write_text(wrapper + methods + '\n}\n')
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
+                                    'transformation': 'Extract unchanged modelListSection, modelEntryRow and modalityIcons methods into AuditProviderCatalog; omit sign-in/settings/network chrome.'})
     for name in ['AuditApp.swift', 'FixtureStore.swift', 'FixtureAdapters.swift']:
         shutil.copyfile(HERE / name, out / 'Sources' / name)
     (out / 'UnitTests').mkdir(exist_ok=True)

@@ -11,7 +11,6 @@ struct AppLogger {
 
 enum SharedContainerStore { static var sharedDefaults: UserDefaults? { .standard } }
 enum ModelsDevAPI { static func enrichModel(_ model: LLMModel) -> LLMModel { model } }
-enum CodexReasoningCeiling { static func level(for id: String) -> ThinkingLevel? { nil } }
 enum XAIModelsAPI { static var allModels: [LLMModel] { [] } }
 enum KimiModelsAPI { static var allModels: [LLMModel] { [] } }
 enum OpenCodeGo { static var fallbackModels: [LLMModel] { [] } }
@@ -69,4 +68,13 @@ enum VoiceProviderResolver {
 struct ModelQuickTestSheet: View {
     let entry: ModelEntry
     var body: some View { Text("Network execution is disabled in this native audit") }
+}
+
+struct ModelEntryDetailSheet: View {
+    let entry: ModelEntry
+    var body: some View { Text("Entry editor is outside this audit fixture") }
+}
+struct AddCustomModelSheet: View {
+    let instanceId: String
+    var body: some View { Text("Custom entry creation is outside this audit fixture") }
 }

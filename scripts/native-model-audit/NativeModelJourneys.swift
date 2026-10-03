@@ -11,10 +11,10 @@ final class NativeModelJourneys: XCTestCase {
         app = XCUIApplication()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false) {
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false) {
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
-                                 "AUDIT_EMPTY": empty ? "1" : "0"]
+                                 "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0"]
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
@@ -170,4 +170,163 @@ final class NativeModelJourneys: XCTestCase {
         _ = waitForText("Default Models")
         capture("17-imported-model-group-created")
     }
+    func test09UnavailableGroupsAndExplicitMemberKeepRoutingIdentity() throws {
+        launch("full", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately")
+        }
+        selectScope("Groups")
+        let empty = app.buttons["model-picker.group.empty-group"]
+        let unavailable = app.buttons["model-picker.group.unavailable-group"]
+        XCTAssertTrue(empty.exists)
+        XCTAssertFalse(empty.isEnabled)
+        XCTAssertTrue(unavailable.exists)
+        XCTAssertFalse(unavailable.isEnabled)
+        app.buttons["model-picker.expand-group.daily"].tap()
+        capture("18-group-members-and-unavailable-groups")
+        waitForText("GPT-5").tap()
+        XCTAssertEqual(rootValue("audit.selection"), "group:daily")
+        XCTAssertEqual(rootValue("audit.reference"), "openai-direct/gpt-5")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+    }
+
+    func test10DuplicateNamesSelectExactlyOneProviderIdentity() throws {
+        launch("full", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            throw XCTSkip("Stable row identity assertions apply to improved picker")
+        }
+        search("gpt-5")
+        let relay = app.buttons["model-picker.entry.relay-proxy/gpt-5"]
+        let official = app.buttons["model-picker.entry.openai-direct/gpt-5"]
+        XCTAssertTrue(relay.waitForExistence(timeout: 10))
+        relay.tap()
+        XCTAssertEqual(rootValue("audit.selection"), "relay-proxy/gpt-5")
+        app.buttons["audit.open.full"].tap()
+        search("gpt-5")
+        XCTAssertEqual(relay.value as? String, "Selected")
+        XCTAssertEqual(official.value as? String, "Not selected")
+        capture("19-duplicate-names-distinct-provider-selection")
+    }
+
+    func test11DraftSelectionDoesNotCreateConversationOrChangeDefault() {
+        launch("draft", large: false)
+        search("DeepSeek")
+        waitForText("DeepSeek Reasoner").tap()
+        XCTAssertEqual(rootValue("audit.draft"), "relay-proxy/deepseek-reasoner")
+        XCTAssertEqual(rootValue("audit.binding-count"), "1")
+        XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        capture("20-draft-selection-isolated")
+    }
+
+    func test12SystemVoicePickerRemainsNativeAndAvailable() {
+        launch("voiceInput", large: false)
+        _ = waitForText("System Recognition (Offline)")
+        capture("21-system-voice-input")
+        app.terminate()
+        launch("voiceOutput", large: false)
+        _ = waitForText("System Voice (Auto)")
+        capture("22-system-voice-output")
+    }
+
+    func test13CatalogBulkHideShowKeepsFavoritesGroupsAndDefault() throws {
+        launch("catalog", large: false)
+        guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
+            throw XCTSkip("Bulk organization is introduced by the improved production catalog")
+        }
+        search("DeepSeek")
+        let favorite = app.buttons["model-catalog.favorite.relay-proxy/deepseek-reasoner"]
+        XCTAssertTrue(favorite.waitForExistence(timeout: 10))
+        favorite.tap()
+        app.buttons["model-catalog.organize"].tap()
+        app.buttons["Select shown models"].tap()
+        app.buttons["Hide selected models"].tap()
+        XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 8))
+        capture("23-confirm-bulk-hide")
+        app.sheets.buttons["Hide selected models"].tap()
+        capture("24-catalog-model-hidden")
+        app.buttons["Close audit"].tap()
+        XCTAssertTrue(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
+        XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/deepseek-reasoner"))
+        XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        app.buttons["audit.open.catalog"].tap()
+        search("DeepSeek")
+        app.buttons["model-catalog.organize"].tap()
+        app.buttons["Select shown models"].tap()
+        app.buttons["Show selected models"].tap()
+        app.buttons["Close audit"].tap()
+        XCTAssertFalse(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
+        XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/deepseek-reasoner"))
+    }
+
+    func test14CatalogBulkAddsWithoutChangingExistingPriority() throws {
+        launch("catalog", large: false)
+        guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
+            throw XCTSkip("Bulk group organization is introduced by improved catalog")
+        }
+        search("gpt-5")
+        app.buttons["model-catalog.organize"].tap()
+        app.buttons["Select shown models"].tap()
+        app.buttons["Add to group"].tap()
+        XCTAssertTrue(app.buttons["Research Team"].waitForExistence(timeout: 10))
+        capture("25-add-models-to-existing-group")
+        app.buttons["Research Team"].tap()
+        XCTAssertTrue(app.alerts["Model organization"].waitForExistence(timeout: 8))
+        app.alerts.buttons["OK"].tap()
+        app.buttons["Close audit"].tap()
+        XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4|relay-proxy/gpt-5")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        app.terminate()
+        launch("", reset: false)
+        XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4|relay-proxy/gpt-5")
+    }
+
+    func test15NewGroupAfterCatalogSheetDismissal() throws {
+        launch("catalog", large: false)
+        guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
+            throw XCTSkip("New-group management journey is introduced by improved catalog")
+        }
+        search("DeepSeek")
+        app.buttons["model-catalog.organize"].tap()
+        app.buttons["Select shown models"].tap()
+        app.buttons["Add to group"].tap()
+        XCTAssertTrue(app.buttons["New Group"].waitForExistence(timeout: 8))
+        app.buttons["New Group"].tap()
+        XCTAssertTrue(app.alerts["New Group"].waitForExistence(timeout: 10), "Dismissing group sheet must present the name prompt")
+        capture("26-create-group-after-sheet-dismissal")
+        app.alerts.textFields.firstMatch.typeText("Catalog Favorites Team")
+        app.alerts.buttons["Create"].tap()
+        if app.alerts["Model organization"].waitForExistence(timeout: 8) { app.alerts.buttons["OK"].tap() }
+        app.buttons["Close audit"].tap()
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        app.buttons["audit.open.groups"].tap()
+        _ = waitForText("Catalog Favorites Team")
+    }
+
+    func test16PrunedLegacyFavoriteRemainsVisible() throws {
+        launch("quick", large: false, legacyPins: true)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            throw XCTSkip("Alias normalization regression applies to improved picker")
+        }
+        selectScope("Favorites")
+        let row = app.buttons["model-picker.entry.anthropic-direct/claude-sonnet-4"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Legacy UUID alias must survive in actual Favorites list")
+        capture("27-legacy-favorite-alias-visible")
+    }
+
+    func test17DraftUnavailableProviderCannotBeSelected() throws {
+        launch("draft", large: false)
+        search("Unavailable fixture")
+        let row = app.buttons["model-picker.entry.missing-auth/unavailable"]
+        guard row.waitForExistence(timeout: 8) else {
+            throw XCTSkip("Availability gate identifiers apply to improved picker")
+        }
+        XCTAssertFalse(row.isEnabled, "No-token provider must not be accepted as a draft choice")
+        capture("28-draft-unavailable-model-disabled")
+    }
+
 }
