@@ -49,3 +49,16 @@ jobs:
           :app:lintPowerRelease
           :app:assembleStandardRelease
           :app:assemblePowerRelease
+      - name: Preserve both-edition unit and lint evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-standard-power-test-reports
+          path: |
+            src/android/app/build/test-results/testStandardDebugUnitTest/*.xml
+            src/android/app/build/test-results/testPowerDebugUnitTest/*.xml
+            src/android/app/build/reports/tests/testStandardDebugUnitTest/**
+            src/android/app/build/reports/tests/testPowerDebugUnitTest/**
+            src/android/app/build/reports/lint-results-*.xml
+          if-no-files-found: error
+          retention-days: 14

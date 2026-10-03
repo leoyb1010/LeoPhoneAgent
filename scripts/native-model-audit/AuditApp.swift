@@ -34,6 +34,7 @@ private struct AuditRoot: View {
         values["audit.research-members"] = store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none"
         values["audit.default"] = store.defaultPrimaryGroupId ?? "none"
         values["audit.pins"] = pins.keys.joined(separator: "|")
+        values["audit.move"] = ModelPinStore.auditLastMove
         values["audit.count"] = String(store.modelEntries.count)
         values["audit.edited-name"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.model.displayName ?? "none"
         values["audit.edited-thinking"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.overrides.maxThinkingLevel?.rawValue ?? "none"

@@ -68,9 +68,10 @@ export_native_result() {
   fi
   python3 "$ROOT/scripts/native-model-audit/export_images.py" "$folder"
 }
+preflight_status=0
 if [[ "$LABEL" == "current" ]]; then
-  # Fail early on reproduced UI regressions, reusing the same project and build.
-  # A passing preflight never replaces the complete suite below.
+  # Keep reproduced UI regressions separate, reusing the same project and build.
+  # The complete suite runs after either outcome; a preflight failure stays red.
   mkdir -p "$OUTPUT/preflight"
   PREFLIGHT=(
     "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test01QuickPickerAndLargeCatalogSearch"
@@ -84,13 +85,9 @@ if [[ "$LABEL" == "current" ]]; then
   if run_native_tests "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight/xcodebuild.log" "${PREFLIGHT[@]}"; then
     export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
   else
-    status=$?
+    preflight_status=$?
     export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
-    printf '%s\n' 'Current UI preflight FAILED (seven selected regression journeys); full unit/UI suite was NOT RUN. Original preflight xcresult/log retained. No failing assertions were suppressed.' > "$OUTPUT/test-scope.txt"
-    if [[ -f "$OUTPUT/preflight/test-summary.json" ]]; then cp "$OUTPUT/preflight/test-summary.json" "$OUTPUT/test-summary.json"; fi
-    if [[ -d "$OUTPUT/preflight/images" ]]; then cp -R "$OUTPUT/preflight/images" "$OUTPUT/images"; fi
-    rm -rf "$OUTPUT/DerivedData"
-    exit "$status"
+    printf '%s\n' 'Preflight failed; original evidence is retained. The full current unit/UI suites still run for comprehensive coverage. Aggregate status remains failed even if the full suite passes.' > "$OUTPUT/test-scope.txt"
   fi
 fi
 set +e
@@ -101,4 +98,5 @@ export_native_result "$OUTPUT/NativeModelAudit.xcresult" "$OUTPUT"
 cp "$BUILD/source-manifest.json" "$OUTPUT/source-manifest.json"
 # Build intermediates are large and carry no review evidence.
 rm -rf "$OUTPUT/DerivedData"
+if [[ "$preflight_status" -ne 0 ]]; then exit "$preflight_status"; fi
 exit "$status"

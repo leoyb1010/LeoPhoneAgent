@@ -27,8 +27,9 @@ selected tests to make the old UI green.
 
 Current runs first execute seven reproduced UI regression journeys using the same
 project and DerivedData. Their separate preflight xcresult/log is retained. A
-preflight failure stops early and labels the full suite as not run; a passing
-preflight is always followed by the complete unit and UI suites.
+preflight failure remains a failure in the aggregate exit status, while the complete
+unit and UI suites still run to collect independent regression evidence. Separate
+xcresults retain both attempts; a later full-suite pass cannot erase preflight failure.
 
 ## Evidence and boundaries
 
@@ -57,6 +58,10 @@ preflight is always followed by the complete unit and UI suites.
 - A one-shot fixture group-save rejection verifies the real multi-select picker
   reports failure, retains selected rows and stays open for retry. Actual file
   and database rejection/rollback is tested separately by production-method tests
+- The generated ModelPinStore copy adds a non-observable static trace around its
+  unchanged move method. It records native callback indices, visible keys and
+  before/after stored pins, without calling move from the test or mutating routing.
+  Both original and generated hashes plus the transformation are in the manifest
 - The UI tests capture `XCUIScreenshot` PNG attachments and accessibility trees.
   `xcresulttool` exports them alongside test summaries and the complete log
 - The current AX3 journey asserts the long-name model has a visible 44-point tap

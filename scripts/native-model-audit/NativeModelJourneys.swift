@@ -312,7 +312,10 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["Hide selected models"].tap()
         XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 8))
         capture("23-confirm-bulk-hide")
-        app.sheets.buttons["Hide selected models"].tap()
+        let confirmation = app.buttons["model-catalog.confirm-hide"]
+        XCTAssertTrue(confirmation.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        confirmation.tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 10), "The destructive confirmation must actually finish before leaving the catalog")
         capture("24-catalog-model-hidden")
         closeAudit()
         XCTAssertTrue(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
@@ -480,7 +483,18 @@ final class NativeModelJourneys: XCTestCase {
         // first-to-second-center drag can resolve to the original boundary.
         let firstRow = app.cells.containing(.button, identifier: "model-picker.entry.anthropic-direct/claude-sonnet-4").firstMatch
         XCTAssertTrue(firstRow.exists)
-        let geometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame)")
+        let lastRow = app.cells.containing(.button, identifier: "model-picker.entry.openai-direct/gpt-5").firstMatch
+        XCTAssertTrue(lastRow.exists)
+        var previousFrames: [CGRect] = []
+        var stableSamples = 0
+        let stable = expectation(for: NSPredicate { _, _ in
+            let frames = [first.frame, last.frame, firstRow.frame, lastRow.frame]
+            stableSamples = frames == previousFrames ? stableSamples + 1 : 0
+            previousFrames = frames
+            return stableSamples >= 2 && first.isHittable && last.isHittable
+        }, evaluatedWith: app)
+        wait(for: [stable], timeout: 10)
+        let geometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
         geometry.name = "favorite-native-drag-geometry"
         geometry.lifetime = .keepAlways
         add(geometry)
@@ -490,9 +504,17 @@ final class NativeModelJourneys: XCTestCase {
         let destination = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY - 4))
         start.press(forDuration: 0.8, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.5)
+        let afterGeometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
+        afterGeometry.name = "favorite-native-after-drag-geometry"
+        afterGeometry.lifetime = .keepAlways
+        add(afterGeometry)
         capture("37-favorites-after-native-drag")
         app.buttons["model-picker.edit-favorites"].tap()
         app.buttons["Done"].tap()
+        let move = XCTAttachment(string: rootValue("audit.move"))
+        move.name = "native-onMove-observation"
+        move.lifetime = .keepAlways
+        add(move)
         XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4", "The live production pin store must reorder before process termination")
         app.terminate()
         launch("", reset: false)

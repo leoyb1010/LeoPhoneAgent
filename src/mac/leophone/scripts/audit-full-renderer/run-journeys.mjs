@@ -19,7 +19,7 @@ const env = { ...process.env, HOME: home, ZCODE_ENV: "test", ZCODE_PRODUCT_IDENT
   ZCODE_DATA_BASE_DIR: home, ZCODE_SERVER_WORKSPACE: workspace,
   ZCODE_SERVER_HOST: "127.0.0.1", PORT: "3038" };
 const logs = [], errors = [], blocked = [], steps = [];
-const backend = spawn(process.execPath, ["--import", "tsx", "packages/server/src/entry-http.ts"],
+const backend = spawn(process.execPath, ["packages/server/dist/entry-http.js"],
   { env, stdio: ["ignore", "pipe", "pipe"] });
 for (const stream of [backend.stdout, backend.stderr]) stream.on("data", chunk => logs.push(String(chunk)));
 let server, browser, page;
