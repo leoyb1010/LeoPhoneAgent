@@ -54,11 +54,35 @@ try {
     blocked.push(url.origin + url.pathname); return route.abort();
   });
   await page.goto("http://127.0.0.1:5178/", { waitUntil: "domcontentloaded" });
-  await page.getByTestId("task-settings-button").waitFor({ timeout: 90000 });
-  await capture("01-real-root-empty-workspace");
-  await page.getByTestId("task-settings-button").click();
-  await page.getByTestId("settings-page").waitFor();
-  await capture("02-real-settings");
+  const apiEntry = page.getByRole("button", { name: "用 API Key 添加模型供应商", exact: true });
+  await apiEntry.waitFor({ timeout: 90000 });
+  const releaseNote = page.getByRole("button", { name: "知道了", exact: true });
+  if (await releaseNote.isVisible()) {
+    await capture("00-real-release-notes");
+    await releaseNote.click();
+  }
+  await capture("01-real-welcome-offline");
+  await apiEntry.click();
+  await page.getByTestId("settings-page").waitFor({ timeout: 30000 });
+  await capture("02-real-settings-after-welcome");
+  await page.getByTestId("model-provider-add-provider-button").click();
+  await page.getByTestId("model-provider-template-item-custom").click();
+  const apiKey = page.getByTestId("model-provider-api-key-input");
+  await apiKey.waitFor();
+  assert.equal(await apiKey.getAttribute("aria-label"), "API key");
+  assert.equal(await apiKey.getAttribute("type"), "password");
+  const showKey = page.getByRole("button", { name: "Show API key", exact: true });
+  await showKey.focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await apiKey.getAttribute("type"), "text");
+  const hideKey = page.getByRole("button", { name: "Hide API key", exact: true });
+  assert.equal(await hideKey.getAttribute("aria-pressed"), "true");
+  await capture("02a-real-api-key-named-keyboard-control");
+  await hideKey.click();
+  assert.equal(await apiKey.getAttribute("type"), "password");
+  // No key is entered and no model request is sent. Only the synthetic local
+  // provider draft and actual keyboard/accessible-name semantics are exercised.
+  await capture("02b-real-api-key-hidden-again");
   const navigation = page.locator('[data-testid^="settings-section-nav"]');
   const ids = await navigation.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-testid")));
   await writeFile(resolve(output,"settings-navigation.json"), JSON.stringify(ids,null,2));

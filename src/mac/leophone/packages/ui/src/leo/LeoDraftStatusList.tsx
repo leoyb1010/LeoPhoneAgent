@@ -10,8 +10,8 @@ import { useLeoHome, type LeoHomeContextValue } from "./LeoHomeContext.js";
 import { classifyLeoStatusRows } from "./leoStatusRows.js";
 
 /**
- * [leo] 首页(新任务草稿页)输入框下方的「进行中」清单:先列等你确认 / 回答的,再列在跑的,
- * 最后是跑完还没看的。最多 4 行,什么都没有就不出现 —— 首页平时只有问候和输入框。
+ * [leo] 首页(新任务草稿页)输入框下方的「进行中」清单:先列等你确认 / 回答的,再列失败待看的、在跑的,
+ * 最后是其余结束但还没看的。最多 4 行,什么都没有就不出现 —— 首页平时只有问候和输入框。
  */
 const MAX_ROWS = 4;
 /** 只看最近更新的这些任务;更早的「待看」不值得挤上首页。 */
