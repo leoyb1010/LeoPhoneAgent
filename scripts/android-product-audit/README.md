@@ -21,10 +21,10 @@ independent whole-product rounds.
 
 Run on a prepared emulator with `bash scripts/android-product-audit/run.sh`.
 CI compiles before starting the emulator and splits Standard/Power across
-independent jobs. Only the owned test process has an eight-minute per-profile
+independent jobs. Only the owned test process has an fifteen-minute per-profile
 limit; any timeout remains a failure. Device boot plus package/activity service
-health is checked before each profile, and a system failure or zero executed
-cases stops remaining profiles instead of repeating against a broken emulator.
+health is checked before each profile, and a system failure or missing complete fresh
+JUnit result stops remaining profiles instead of repeating against a broken emulator.
 The screenshot output uses AGP's additional-test-output collection, before AGP
 uninstalls the test package. No post-uninstall access or new storage permission
 is required. `AUDIT_FLAVOR=Standard` or `Power` selects one CI shard.
@@ -41,3 +41,9 @@ References:
 - https://docs.github.com/en/actions/reference/runners/github-hosted-runners
 - https://kotlinlang.org/docs/compiler-execution-strategy.html
 - https://developer.android.com/topic/performance/benchmarking/benchmarking-in-ci
+
+The five exact Android cases include a deterministic immediate-dispatcher startup
+regression against the real Room and JSON mirror, for empty, existing, and reopened
+configuration. Shipping construction still uses Dispatchers.IO. The original four
+UI journeys and seven screenshots remain required. The connected-test JVM is
+limited to 1536 MiB to avoid competing with the emulator after precompilation.

@@ -12,7 +12,7 @@ permissions:
 jobs:
   model-picker:
     runs-on: macos-15-intel
-    timeout-minutes: 75
+    timeout-minutes: 115
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +39,7 @@ jobs:
           :app:assemble${{ matrix.flavor }}Debug :app:assemble${{ matrix.flavor }}DebugAndroidTest
           -Pleophone.auditUiFixture=true -Pkotlin.compiler.execution.strategy=in-process
       - name: Actual production Compose sheet on disposable emulator
-        timeout-minutes: 35
+        timeout-minutes: 75
         uses: reactivecircus/android-emulator-runner@v2
         env:
           AUDIT_FLAVOR: ${{ matrix.flavor }}

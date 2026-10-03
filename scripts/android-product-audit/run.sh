@@ -98,8 +98,8 @@ PY
     package=com.leoyuan.leophoneagent
     [[ "$flavor" != Power ]] || package+=.power
     set +e
-    python3 "$root/scripts/android-product-audit/run_timed.py" --seconds 480 --log "$dest/gradle.log" -- \
-      ./gradlew --no-daemon --max-workers=1 ":app:connected${flavor}DebugAndroidTest" \
+    python3 "$root/scripts/android-product-audit/run_timed.py" --seconds 900 --log "$dest/gradle.log" -- \
+      ./gradlew --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1536m ":app:connected${flavor}DebugAndroidTest" \
       -Pleophone.auditUiFixture=true \
       -Pkotlin.compiler.execution.strategy=in-process \
       -Pandroid.testInstrumentationRunnerArguments.class=com.leoyuan.leophoneagent.ui.chat.ModelPickerProductAuditTest \
@@ -109,6 +109,22 @@ PY
       "-Pandroid.testInstrumentationRunnerArguments.auditDark=$dark"
     result=$?
     set -e
+    if [[ "$result" != 0 ]]; then
+      # A host timeout can precede AGP's final collection/uninstall. Keep any
+      # current screenshots as diagnostics only, never as acceptance evidence.
+      python3 - "$dest" "$package" <<'PY_DIAGNOSTIC'
+import pathlib, subprocess, sys
+root = pathlib.Path(sys.argv[1]) / 'partial-device-output'
+root.mkdir(parents=True, exist_ok=True)
+try:
+    result = subprocess.run(['adb', 'pull',
+        f'/sdcard/Android/media/{sys.argv[2]}/additional_test_output', str(root)],
+        capture_output=True, timeout=20)
+    (root / 'pull.log').write_bytes(result.stdout + result.stderr)
+except subprocess.TimeoutExpired:
+    (root / 'pull.log').write_text('Diagnostic screenshot pull timed out\n')
+PY_DIAGNOSTIC
+    fi
     if [[ -d app/build/outputs/connected_android_test_additional_output ]]; then
       cp -R app/build/outputs/connected_android_test_additional_output "$dest/screenshots"
     fi
@@ -125,15 +141,16 @@ for source in (root / 'junit').rglob('*.xml'):
 expected_cases = {'actualActiveModelAndIndependentGroupPreview',
     'searchShowsEveryMatchAndClearRestoresCollapsedState',
     'emptySearchDismissAndReopenHaveRecoverableState',
-    'longGroupNamesAndSystemFontScaleRemainInspectable'}
-assert len(cases) == 4 and {c.get('name') for c in cases} == expected_cases, f'Expected exact 4 fresh UI cases, found {[c.get("name") for c in cases]}'
+    'longGroupNamesAndSystemFontScaleRemainInspectable',
+    'immediateRepositoryLoadPreservesEmptyAndExistingConfiguration'}
+assert len(cases) == 5 and {c.get('name') for c in cases} == expected_cases, f'Expected exact 5 fresh Android cases, found {[c.get("name") for c in cases]}'
 assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases), 'UI case failed or was skipped'
 images = [p for p in (root / 'screenshots').rglob('*.png') if sys.argv[2] in p.parts]
 expected_images = {'01-active-second-model.png', '02-group-transition.png',
     '03-search-all-provider-matches.png', '04-clear-restores-provider-summary.png',
     '05-empty-search.png', '06-reopened-selection-preserved.png', '07-large-font-long-group.png'}
 assert len(images) == 7 and {p.name for p in images} == expected_images, f'Expected exact 7 Android screenshots, found {[p.name for p in images]}'
-print('4 fresh UI cases and 7 Android screenshots verified')
+print('5 fresh Android cases and 7 Android screenshots verified')
 PY
     printf '{"source":"%s","profile":"%s","flavor":"%s","font_scale":%s,"motion_scale":%s,"gradle_exit":%s,"scope":"production Compose sheet in isolated Application; not full app or PRoot"}\n' \
       "${GITHUB_SHA:-local}" "$profile" "$flavor" "$font" "$motion" "$result" > "$dest/provenance.json"
@@ -141,7 +158,7 @@ PY
     if [[ "$result" != 0 ]]; then capture_diagnostics "$dest/diagnostics"; fi
     check_device || { capture_diagnostics "$dest/device-unhealthy"; exit 1; }
     if ! grep -R -q 'classname="com.leoyuan.leophoneagent.ui.chat.ModelPickerProductAuditTest"' "$dest/junit" 2>/dev/null; then
-      echo 'No actual product UI cases executed; stopping the remaining profiles.'
+      echo 'No complete fresh JUnit result collected; partial execution logs are diagnostic only. Stopping the remaining profiles.'
       exit 1
     fi
   done

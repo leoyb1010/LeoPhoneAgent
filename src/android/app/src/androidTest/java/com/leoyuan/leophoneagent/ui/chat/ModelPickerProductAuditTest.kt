@@ -11,6 +11,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.model.*
+import com.leoyuan.leophoneagent.data.db.ProviderDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import com.leoyuan.leophoneagent.ui.theme.MinisTheme
 import org.junit.Assert.*
@@ -85,6 +91,45 @@ class ModelPickerProductAuditTest {
         File(dir, "$name.semantics.txt").writeText(
             compose.onAllNodes(isRoot()).fetchSemanticsNodes().joinToString("\n") { it.config.toString() },
         )
+    }
+
+    @Test fun immediateRepositoryLoadPreservesEmptyAndExistingConfiguration() {
+        // This entire APK runs in a fresh disposable Application. Only this
+        // fixture's synthetic database/preferences are touched, never user data.
+        val database = ProviderDatabase.getInstance(context)
+        val prefs = context.getSharedPreferences("provider_config", android.content.Context.MODE_PRIVATE)
+        fun assertLoaded(repository: ProviderRepository) {
+            // Unconfined + loadConfig's runBlocking makes completion occur
+            // inside construction, before later field initializers could run.
+            assertTrue(repository.configLoaded.value)
+            runBlocking { withTimeout(5_000) { repository.awaitConfigLoaded() } }
+        }
+        database.clearAllTables()
+        assertTrue(prefs.edit().clear().commit())
+        try {
+            val empty = ProviderRepository(context, Dispatchers.Unconfined)
+            assertLoaded(empty)
+            assertTrue(empty.config.value.instances.isEmpty())
+            val persisted = ProviderConfig(
+                instances = mutableListOf(ProviderInstance("startup-provider", "Saved provider", ProviderType.openAI, ProviderCredential.apiKey)),
+                modelEntries = mutableListOf(ModelEntry("startup-provider", LLMModel("saved-model", "Saved model", "OpenAI"), uuid = "legacy-saved-entry")),
+                modelGroups = mutableListOf(ModelGroup("saved-group", "Saved group", mutableListOf("legacy-saved-entry"))),
+            )
+            assertTrue(prefs.edit().putString("config", Json.encodeToString(persisted)).commit())
+            val loaded = ProviderRepository(context, Dispatchers.Unconfined)
+            assertLoaded(loaded)
+            assertEquals("Saved provider", loaded.config.value.instances.single().label)
+            assertEquals("saved-model", loaded.config.value.modelEntries.single().baseModel.id)
+            assertEquals("startup-provider/saved-model", loaded.config.value.modelEntries.single().uuid)
+            assertEquals(listOf("startup-provider/saved-model"), loaded.config.value.modelGroups.single().memberEntryIds)
+            // Re-open the actual committed Room state, not a fake loader result.
+            val reopened = ProviderRepository(context, Dispatchers.Unconfined)
+            assertLoaded(reopened)
+            assertEquals(loaded.config.value, reopened.config.value)
+        } finally {
+            database.clearAllTables()
+            assertTrue(prefs.edit().clear().commit())
+        }
     }
 
     @Test fun actualActiveModelAndIndependentGroupPreview() {
