@@ -186,6 +186,7 @@ struct ProviderModelCatalogView: View {
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(entry.model.id).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         if entry.isHidden { Label("Hidden", systemImage: "eye.slash").font(.caption).foregroundStyle(.secondary) }

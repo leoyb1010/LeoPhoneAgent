@@ -420,7 +420,14 @@ struct UnifiedModelPicker: View {
             if isSearching {
                 // The keyboard leaves little room. Direct matches come first;
                 // never push them below selection cards, scope or explanation.
-                ForEach(filteredEntriesByInstance, id: \.instance.id) { item in instanceSection(item) }
+                // Search is a flat result list: provenance is in every row.
+                // Repeating a provider header above it consumes the entire
+                // keyboard viewport at accessibility text sizes.
+                if !filteredEntriesByInstance.isEmpty {
+                    Section {
+                        ForEach(filteredEntriesByInstance.flatMap { $0.entries }) { entry in entryRow(entry) }
+                    }
+                }
                 if supportsGroups && !visibleGroups.isEmpty { groupsSection }
                 if filteredEntriesByInstance.isEmpty && (!supportsGroups || visibleGroups.isEmpty) { emptySection }
             } else {
@@ -1053,12 +1060,14 @@ struct UnifiedModelPicker: View {
                         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         if let provider = store.instance(for: entry.providerInstanceId) {
                             Text(provider.label).font(.caption).foregroundStyle(.secondary)
                         }
-                        Text(traits.subtitle ?? entry.model.id).font(.caption).foregroundStyle(.secondary)
-                            .lineLimit(2).textSelection(.disabled)
+                        Text(traits.subtitle ?? entry.model.id)
+                            .font(isSearching ? .caption2 : .caption).foregroundStyle(.secondary)
+                            .lineLimit(isSearching ? 1 : 2).textSelection(.disabled)
                         if disabled { Text(unavailable ?? String(localized: "Unavailable for this purpose")).font(.caption).foregroundStyle(.orange) }
                     }
                     Spacer(minLength: 0)

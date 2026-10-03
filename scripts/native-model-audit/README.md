@@ -25,7 +25,7 @@ results remain independent workflow artifacts, including any historical failures
 The runner never rewrites baseline production behavior or suppresses failing
 selected tests to make the old UI green.
 
-Current runs first execute six reproduced UI regression journeys using the same
+Current runs first execute seven reproduced UI regression journeys using the same
 project and DerivedData. Their separate preflight xcresult/log is retained. A
 preflight failure stops early and labels the full suite as not run; a passing
 preflight is always followed by the complete unit and UI suites.
@@ -59,6 +59,12 @@ preflight is always followed by the complete unit and UI suites.
   and database rejection/rollback is tested separately by production-method tests
 - The UI tests capture `XCUIScreenshot` PNG attachments and accessibility trees.
   `xcresulttool` exports them alongside test summaries and the complete log
+- The current AX3 journey asserts the long-name model has a visible 44-point tap
+  region and center above the keyboard, and its full 44-point favorite target is
+  visible, then taps both and verifies selection/pin persistence. Long metadata
+  may still require scrolling; this is action reachability, not whole-row fit.
+  An explicit generated source-role flag keeps the immutable baseline's original
+  screenshot contract separate, rather than skipping when current UI is missing
 - Catalog selection after import is exercised; file-picker/import transport,
   production singleton/database startup integration, iSH, Watch, networking, and real-device behavior
   remain outside this isolated harness. Do not describe its green result as a

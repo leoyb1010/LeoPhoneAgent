@@ -46,6 +46,9 @@ final class NativeModelJourneys: XCTestCase {
         if !field.waitForExistence(timeout: 8) || !field.isHittable { app.swipeDown() }
         XCTAssertTrue(field.waitForExistence(timeout: 8))
         field.tap()
+        let keyboard = app.keyboards.firstMatch
+        if !keyboard.waitForExistence(timeout: 8) { field.tap() }
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
         if replacing { field.buttons["Clear text"].tap() }
         field.typeText(query)
     }
@@ -137,6 +140,35 @@ final class NativeModelJourneys: XCTestCase {
         search("long-context-model")
         _ = waitForText("Research Model With a Very Long Descriptive Name")
         capture("10-long-name-accessibility3")
+        if !AuditSourceKind.isBaseline {
+            let row = app.buttons["model-picker.entry.relay-proxy/long-context-model"]
+            let favorite = app.buttons["model-picker.favorite.relay-proxy/long-context-model"]
+            let keyboard = app.keyboards.firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 10))
+            XCTAssertTrue(favorite.waitForExistence(timeout: 10))
+            XCTAssertTrue(keyboard.exists)
+            XCTAssertTrue(row.isHittable, "AX3 model choice must be directly tappable without scrolling")
+            XCTAssertTrue(favorite.isHittable, "AX3 favorite action must be directly tappable")
+            let visibleTop = max(row.frame.minY, app.searchFields.firstMatch.frame.maxY)
+            let visibleBottom = min(row.frame.maxY, keyboard.frame.minY)
+            XCTAssertGreaterThanOrEqual(visibleBottom - visibleTop, 44, "AX3 model choice needs at least a 44-point visible tap region")
+            XCTAssertLessThan(row.frame.midY, keyboard.frame.minY, "Model tap center must remain above the keyboard")
+            XCTAssertGreaterThanOrEqual(favorite.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(favorite.frame.minY, app.searchFields.firstMatch.frame.maxY - 1)
+            XCTAssertLessThanOrEqual(favorite.frame.maxY, keyboard.frame.minY + 1, "Favorite target must not sit behind the keyboard")
+            favorite.tap()
+            XCTAssertTrue(row.isHittable, "Favoriting must keep the picker open")
+            capture("47-accessibility3-favorite-without-switch")
+            row.tap()
+            XCTAssertEqual(rootValue("audit.selection"), "relay-proxy/long-context-model")
+            XCTAssertEqual(rootValue("audit.default"), "daily")
+            XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/long-context-model"))
+            app.terminate()
+            launch("", reset: false, largeText: true)
+            XCTAssertEqual(rootValue("audit.selection"), "relay-proxy/long-context-model")
+            XCTAssertEqual(rootValue("audit.default"), "daily")
+            XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/long-context-model"))
+        }
         app.terminate()
         launch("quick", empty: true)
         XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 15))
@@ -397,6 +429,9 @@ final class NativeModelJourneys: XCTestCase {
             search("DeepSeek")
             XCTAssertTrue(organize.isHittable, "Organize must remain reachable during native search")
             organize.tap()
+            let selectShown = app.buttons["选择当前筛选结果"]
+            XCTAssertTrue(selectShown.waitForExistence(timeout: 10))
+            selectShown.tap()
             capture("43-zh-catalog-organize")
         }
     }

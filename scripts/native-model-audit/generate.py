@@ -222,6 +222,10 @@ struct AuditProviderCatalog: View {
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'Add testable import NativeModelAudit to target production app module'})
     (out / 'UITests').mkdir(exist_ok=True)
     shutil.copyfile(HERE / 'NativeModelJourneys.swift', out / 'UITests' / 'NativeModelJourneys.swift')
+    is_baseline = args.source_ref == '3c053a7c9b112667a04cea9b12c7c16a03c5ce39'
+    (out / 'UITests' / 'AuditSourceKind.swift').write_text(
+        '// Explicit source role: current assertions must never skip due to missing UI.\n'
+        'enum AuditSourceKind { static let isBaseline = ' + str(is_baseline).lower() + ' }\n')
     (out / 'source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (out / 'project.yml').write_text('''name: NativeModelAudit
 options:
