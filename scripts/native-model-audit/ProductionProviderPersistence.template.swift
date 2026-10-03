@@ -1,11 +1,13 @@
 // Test target only: exact production method bodies are inserted by generate.py.
 // This isolates file/SQLite persistence from app startup, network and keychain.
 import Foundation
+import Combine
 
 private let logger = AppLogger(category: "ProductionProviderPersistenceTests")
 
 @MainActor
 final class ProductionProviderPersistence {
+    let objectWillChange = ObservableObjectPublisher()
     var config: ProviderConfig
     let fileURL: URL
     var db: ProviderConfigDB?
@@ -59,6 +61,12 @@ final class ProductionProviderPersistence {
     // No external compact-slot preference changes in the isolated save tests.
     private enum AgentModelSlots {
         static func forget(entryIds: Set<String>) {}
+    }
+
+    // Bootstrap authority is unrelated to the JSON-only reload regression.
+    // Tests exercise reload with db == nil; keep the DB branch compilable.
+    private enum ProviderV3Bootstrap {
+        static let isEnabled = true
     }
 
     // INSERT_PRODUCTION_METHODS

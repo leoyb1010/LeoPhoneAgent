@@ -650,6 +650,7 @@ final class ProviderConfigStore: ObservableObject {
         logger.info("[GroupLoad] reloadFromDisk: V2 JSON path (no DB / v3 disabled / not migrated)")
         let loaded = Self.load(from: fileURL)
         config = loaded.config
+        lastSavedSnapshot = loaded.config
         jsonLoadFailed = loaded.failed
         objectWillChange.send()
     }

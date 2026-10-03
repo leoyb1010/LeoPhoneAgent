@@ -72,6 +72,36 @@ final class ProductionProviderPersistenceTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), bytes)
     }
 
+    func testJSONReloadBecomesRollbackBaselineAndSurvivesSaveRetry() async throws {
+        let directory = try directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("config.json")
+        let original = fixture()
+        try JSONEncoder().encode(original).write(to: url)
+        let store = ProductionProviderPersistence(fileURL: url)
+        var synced = original
+        synced.modelGroups[0].name = "Synced organization"
+        synced.modelGroups.append(ModelGroup(id: "synced-only", name: "Keep synced group", memberEntryIds: []))
+        let syncedBytes = try JSONEncoder().encode(synced)
+        try syncedBytes.write(to: url, options: .atomic)
+        await store.reloadFromDisk()
+        XCTAssertEqual(store.config, synced)
+
+        let journal = ProviderSnapshotJournal.markerURL(for: url)
+        try FileManager.default.createDirectory(at: journal, withIntermediateDirectories: false)
+        let binding = SessionModelBinding(sessionId: "retry", primarySource: .directEntry(modelEntryId: original.modelEntries[0].id))
+        XCTAssertFalse(store.setBinding(binding, for: "retry"))
+        XCTAssertEqual(store.config, synced)
+        XCTAssertEqual(try Data(contentsOf: url), syncedBytes)
+
+        try FileManager.default.removeItem(at: journal)
+        XCTAssertTrue(store.setBinding(binding, for: "retry"))
+        var expected = synced
+        expected.sessionBindings["retry"] = binding
+        XCTAssertEqual(store.config, expected)
+        XCTAssertEqual(try JSONDecoder().decode(ProviderConfig.self, from: Data(contentsOf: url)), expected)
+    }
+
     func testActualRefreshOmissionAndRestorePreserveSelectionGroupsAndHiddenOverlay() throws {
         let directory = try directory()
         defer { try? FileManager.default.removeItem(at: directory) }

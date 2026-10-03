@@ -137,7 +137,7 @@ def main():
                                 'transformation': 'Extract unchanged ProviderConfig and ProviderConfigTombstone value declarations between persisted-config/store markers; prepend Foundation import. Production singleton store remains replaced by fixture.'})
     template = HERE / 'ProductionProviderPersistence.template.swift'
     if template.exists() and 'func recoverPendingDatabaseSnapshot(' in source:
-        names = ['load', 'save', 'loadModelArchiveAliases', 'recoverPendingDatabaseSnapshot',
+        names = ['load', 'save', 'reloadFromDisk', 'loadModelArchiveAliases', 'recoverPendingDatabaseSnapshot',
                  'persistLegacyUuidMap', 'setBinding', 'setEntriesHidden', 'replaceEntries',
                  'removeEntry', 'addGroup', 'updateGroup', 'removeGroup', 'reorderGroups', 'repointDefaults',
                  'ensureVoiceTemplateModels', 'commitImportedMetadata', 'addEntry', 'updateEntry',
