@@ -85,6 +85,7 @@ export class LinkSession {
   private readonly mapper = new ZCodeEventMapper();
   private readonly journal: HarnessJournal;
   private subscription: { dispose(): void } | null = null;
+  private subscriptionEpoch = 0;
   private stopTimer: NodeJS.Timeout | null = null;
   /** 这一轮是手机发起的。Mac 桌面上自己发起的轮次:提问不代答,审批和完成不推手机。 */
   private phoneTurn = false;
@@ -121,7 +122,9 @@ export class LinkSession {
 
   /** 读回日志(重启后接着编号),再订阅这条任务的流。 */
   async open(): Promise<void> {
+    const epoch = this.subscriptionEpoch;
     await this.journal.initialize();
+    if (epoch !== this.subscriptionEpoch) return;
     this.seq = Math.max(this.seq, this.journal.health().latest_seq);
     // 最后活动时间以日志里最后一条事件为准(认回来的任务在 restore 里先置成创建时间)。
     this.updatedAt = Math.max(this.updatedAt, this.journal.lastEventAt());
@@ -131,6 +134,8 @@ export class LinkSession {
       // 与上游机器人同一种订阅:直连的实时流。续传由我们自己的日志负责,不要上游的快照回放。
       deliveryKind: "bot-channel-continuous",
     })((event: ZCodeStreamEvent) => {
+      // 退订不能撤销已排队的回调；关闭代次先退休，旧mode事件不得在索引drain后重排写入。
+      if (epoch !== this.subscriptionEpoch) return;
       try {
         this.onZCode(event);
       } catch (error) {
@@ -140,6 +145,7 @@ export class LinkSession {
   }
 
   async close(): Promise<void> {
+    this.subscriptionEpoch += 1;
     this.subscription?.dispose();
     this.subscription = null;
     if (this.stopTimer) clearTimeout(this.stopTimer);

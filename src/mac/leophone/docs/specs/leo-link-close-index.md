@@ -1,0 +1,7 @@
+# 手机连接桥退出前的索引写入
+
+真实Mac CI退出清理报ENOTEMPTY journals。LinkBridge.close原来只等待session日志，不等待自身串行saving索引链；mode_update能在close返回后继续创建/改写sessions.json。Bridge仍为sessions.json唯一所有者，关闭次序必须是停止session事件/排空journal → 等待已排队索引写入 → 清除内存session，不用文件删除重试掩盖晚到写入。已有调用方必须在关闭前停止请求准入；本修复不声称处理继续并发提交的新请求。
+
+测试用受控索引写入闸门验证close不能提前返回、落盘mode不丢、重复close稳定；不绕过真实生产writeIndex。
+
+追加确定性迟到回调复现：即使dispose已经移除监听器，测试保留旧传输回调再投mode_update会排第二次writer。LinkSession使用订阅代次在close同步退休、回调检查其所属代次，open初始化回执也检查；旧回调不改变mode/索引/日志。它不把底层退订当成回调已经取消。生产stop本来先停relay/directServer再closebridge（link/index.ts:406–417）；不扩展为接收新请求时的全系统事务。

@@ -16,11 +16,11 @@ const workspace = resolve(sandbox, "SyntheticWorkspace");
 const home = resolve(sandbox, "home");
 await mkdir(workspace); await mkdir(home);
 await writeFile(resolve(workspace, "README.md"), "# Synthetic audit workspace\nNo real projects, accounts or family data.\n");
-const env = { ...process.env, HOME: home, ZCODE_ENV: "test", ZCODE_PRODUCT_IDENTITY: "leo",
+const env = { ...process.env, HOME: home, ZCODE_HOME: home, LEOAGENT_HOME: home, ZCODE_ENV: "test", ZCODE_PRODUCT_IDENTITY: "leo",
   ZCODE_DATA_BASE_DIR: home, ZCODE_SERVER_WORKSPACE: workspace,
   ZCODE_SERVER_HOST: "127.0.0.1", PORT: "3038" };
 const taskSeed = execFileSync(process.execPath,
-  ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace], { env, encoding: "utf8" });
+  ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace], { env, encoding: "utf8", timeout: 15000 });
 await writeFile(resolve(output, "task-seed.log"), taskSeed);
 const logs = [], errors = [], blocked = [], steps = [];
 const backend = spawn(process.execPath, ["packages/server/dist/entry-http.js"],
@@ -119,16 +119,19 @@ try {
   await capture("home-missing-model-readable-recovery");
   // Known standalone-server integration failure remains an actual failing Home gate
   // below. Capture honest feedback/retry before that gate instead of accepting empty UI.
+  const failedHomeRow = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
   const loadState = page.getByTestId("home-task-list-load-state");
-  if (await loadState.isVisible()) {
-    const retry = loadState.getByRole("button", { name: "Retry loading tasks", exact: true });
-    await retry.waitFor();
+  const retry = loadState.getByRole("button", { name: "Retry loading tasks", exact: true });
+  const terminalDeadline = Date.now() + 30000;
+  while (Date.now() < terminalDeadline && !(await failedHomeRow.isVisible()) && !(await retry.isVisible())) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (await retry.isVisible()) {
     await capture("home-task-list-service-unavailable");
     await retry.click();
     await loadState.getByText("Could not load tasks.", { exact: true }).waitFor();
     await capture("home-task-list-retry-still-unavailable");
   }
-  const failedHomeRow = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
   await failedHomeRow.waitFor();
   assert.ok((await failedHomeRow.innerText()).includes("出错待看"));
   assert.ok(!(await failedHomeRow.innerText()).includes("做完待看"));
@@ -141,7 +144,7 @@ try {
   await capture("03b-real-task-open-preserved-history");
   const readTask = () => {
     const text = execFileSync(process.execPath,
-      ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace, "--read"], { env, encoding: "utf8" });
+      ["--import", "tsx", "scripts/audit-full-renderer/seed-task.ts", home, workspace, "--read"], { env, encoding: "utf8", timeout: 3000 });
     return JSON.parse(text.trim().split("\n").at(-1));
   };
   const observations = [];

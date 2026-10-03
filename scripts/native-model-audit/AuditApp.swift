@@ -131,18 +131,19 @@ private struct ContrastReferenceView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section { Text("System primary reference") } header: {
-                    Text("Current selection").foregroundStyle(Color.primary)
-                        .accessibilityIdentifier("audit.contrast.primary")
-                }
-                Section { Text("Opaque secondary reference") } header: {
-                    Text("Current selection").foregroundStyle(secondary)
-                        .accessibilityIdentifier("audit.contrast.secondary")
-                }
-                Section { Text("Same text with explicit system background") } header: {
-                    Text("Current selection").foregroundStyle(secondary)
+                // 先测显式背景；唯一文案避免审核器把同名节点映射到第一段。
+                Section { Text("Explicit background reference first") } header: {
+                    Text("Current selection · background").foregroundStyle(secondary)
                         .background(Color(UIColor.systemGroupedBackground))
                         .accessibilityIdentifier("audit.contrast.background")
+                }
+                Section { Text("Opaque secondary reference") } header: {
+                    Text("Current selection · secondary").foregroundStyle(secondary)
+                        .accessibilityIdentifier("audit.contrast.secondary")
+                }
+                Section { Text("System primary reference last") } header: {
+                    Text("Current selection · primary").foregroundStyle(Color.primary)
+                        .accessibilityIdentifier("audit.contrast.primary")
                 }
             }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search model, ID or provider")

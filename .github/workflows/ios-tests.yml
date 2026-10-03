@@ -231,7 +231,8 @@ jobs:
         run: |
           set -euo pipefail
           pnpm leo:test:agent
-          node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
+          node --import tsx --test $(find packages/desktop/src/host -name '*.test.ts' -print)
+          node --import tsx --test packages/server/test/localTaskListController.test.ts packages/server/test/localTaskListHttp.test.ts
           node --import tsx --test packages/ui/test/phonePairingSession.test.ts packages/ui/test/leoStatusRows.test.ts packages/ui/test/taskListLoadCoordinator.test.ts
       - name: Synthetic phone-pairing component journeys and screenshots
         run: |

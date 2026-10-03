@@ -49,7 +49,14 @@ final class NativeModelJourneys: XCTestCase {
         let keyboard = app.keyboards.firstMatch
         if !(keyboard.exists || keyboard.waitForExistence(timeout: 8)) { field.tap() }
         XCTAssertTrue(keyboard.exists || keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
-        if replacing { field.buttons["Clear text"].tap() }
+        if replacing {
+            field.buttons["Clear text"].tap()
+            capture("search-after-clear-before-refocus")
+            // iPad的系统Clear会退回未激活搜索状态；通过真实再点输入框继续输入，
+            // 不能把Clear之前的keyboard存在当作之后仍有焦点。
+            field.tap()
+            XCTAssertTrue(keyboard.exists || keyboard.waitForExistence(timeout: 8), "Cleared native search must regain keyboard focus")
+        }
         field.typeText(query)
     }
 
@@ -243,11 +250,18 @@ final class NativeModelJourneys: XCTestCase {
         selectScope("Groups")
         let empty = app.buttons["model-picker.group.empty-group"]
         let unavailable = app.buttons["model-picker.group.unavailable-group"]
+        // iPad原生sheet较矮，下面两组尚未物化；用户通过真实滚动才能读到它们。
+        for _ in 0..<6 where !empty.exists { app.swipeUp() }
         XCTAssertTrue(empty.exists)
         XCTAssertFalse(empty.isEnabled)
+        for _ in 0..<6 where !unavailable.exists { app.swipeUp() }
         XCTAssertTrue(unavailable.exists)
         XCTAssertFalse(unavailable.isEnabled)
-        app.buttons["model-picker.expand-group.daily"].tap()
+        capture("18a-unavailable-groups-after-real-scroll")
+        let daily = app.buttons["model-picker.expand-group.daily"]
+        for _ in 0..<6 where !daily.isHittable { app.swipeDown() }
+        XCTAssertTrue(daily.isHittable)
+        daily.tap()
         capture("18-group-members-and-unavailable-groups")
         let member = app.buttons["model-picker.member.daily.openai-direct/gpt-5"]
         if member.exists { member.tap() } else { waitForText("GPT-5").tap() }

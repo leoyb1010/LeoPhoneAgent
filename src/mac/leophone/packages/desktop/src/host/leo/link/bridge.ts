@@ -297,6 +297,9 @@ export class LinkBridge {
 
   async close(): Promise<void> {
     await Promise.allSettled([...this.sessions.values()].map((session) => session.close()));
+    // mode_update/接管会排队写sessions.json；先排空索引再释放session，
+    // 否则close返回后仍会创建文件，且晚到写入可能把已清空的Map保存成空索引。
+    await this.saving;
     this.sessions.clear();
   }
 

@@ -765,10 +765,11 @@ struct UnifiedModelPicker: View {
 
     @ViewBuilder
     private func groupSubtitle(_ group: ModelGroup) -> some View {
+        // 组内计数在Button内会继承浅蓝tertiary；实际iPad白底仅1.36:1，保持显式语义色。
         if group.memberEntryIds.isEmpty {
             Text(String(localized: "No models"))
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(ModelPickerText.secondary)
         } else if isGroupSelected(group),
                   let eid = config.currentEntryId?(),
                   let entry = store.entry(for: eid) {
@@ -781,7 +782,7 @@ struct UnifiedModelPicker: View {
             if available == total {
                 Text(String(localized: "\(total) models"))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ModelPickerText.secondary)
             } else if available == 0 {
                 Text(String(localized: "\(total) models · all unavailable"))
                     .font(.caption)
