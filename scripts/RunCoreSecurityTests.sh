@@ -23,6 +23,7 @@ SWIFT
 # A bare swiftc + Linux XCTMain runner cannot supply that Apple test context.
 # Compiling in Swift 6 retains the stricter MinisTests target's concurrency gate.
 for file in \
+    src/ios/MinisTests/TestSupport_AppLogger.swift \
     src/ios/Shared/CommandRisk.swift \
     src/ios/MinisTests/CommandRiskTests.swift \
     src/ios/Agent/Gateway/HarnessOutbox.swift \

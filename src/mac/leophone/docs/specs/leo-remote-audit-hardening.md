@@ -112,3 +112,11 @@ exactly-once external side effects.
   use the ordinary caller result/error contract
 - 256/257-character names and existing long-name pins round-trip; invalid
   migrated timestamps cannot create an unloadable registry or consume the source
+
+## CI closure, 2026-10-03
+
+SSH host-key discovery retains its existing public-file-only owner and accepted
+algorithms. Both parsed fields must exist before regex validation; malformed or
+missing files produce no key. No protocol, identity, or trust policy changes.
+The isolated Swift security harness includes the existing test-only logger shim
+so production outbox tests compile without the app crash-reporting dependency.

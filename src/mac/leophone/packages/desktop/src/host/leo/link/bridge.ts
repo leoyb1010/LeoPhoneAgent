@@ -60,9 +60,10 @@ export async function readSSHHostKeys(dir = "/etc/ssh"): Promise<string[]> {
   for (const name of ["ssh_host_ed25519_key.pub", "ssh_host_ecdsa_key.pub", "ssh_host_rsa_key.pub"]) {
     try {
       const line = (await fsp.readFile(path.join(dir, name), "utf8")).trim();
-      const fields = line.split(/\s+/);
-      if (fields.length >= 2 && /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521))$/.test(fields[0]) && /^[A-Za-z0-9+/=]+$/.test(fields[1])) {
-        keys.push(`${fields[0]} ${fields[1]}`);
+      const [algorithm, publicKey] = line.split(/\s+/);
+      // 显式检查字段存在，兼容严格索引类型检查并保留畸形公钥拒绝规则。
+      if (algorithm && publicKey && /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521))$/.test(algorithm) && /^[A-Za-z0-9+/=]+$/.test(publicKey)) {
+        keys.push(`${algorithm} ${publicKey}`);
       }
     } catch {
       // 没有该算法的主机密钥很正常。
