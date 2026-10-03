@@ -139,6 +139,7 @@ jobs:
             native-model-audit-results/${{ matrix.label }}/source-manifest.json
             native-model-audit-results/${{ matrix.label }}/test-summary.json
             native-model-audit-results/${{ matrix.label }}/test-scope.txt
+            native-model-audit-results/${{ matrix.label }}/**/attachments/*.txt
           if-no-files-found: warn
           retention-days: 14
 

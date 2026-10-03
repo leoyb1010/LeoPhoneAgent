@@ -474,11 +474,22 @@ final class NativeModelJourneys: XCTestCase {
         XCTAssertTrue(last.isHittable)
         // Crossing the first row's upper edge requests insertion at zero. A
         // first-to-second-center drag can resolve to the original boundary.
+        let firstRow = app.cells.containing(.button, identifier: "model-picker.entry.anthropic-direct/claude-sonnet-4").firstMatch
+        XCTAssertTrue(firstRow.exists)
+        let geometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame)")
+        geometry.name = "favorite-native-drag-geometry"
+        geometry.lifetime = .keepAlways
+        add(geometry)
         let start = last.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let destination = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
-            .withOffset(CGVector(dx: 0, dy: -12))
-        start.press(forDuration: 0.8, thenDragTo: destination)
+        // Aim at the actual row's top rather than the much smaller handle's
+        // top. Complete the native drop gesture before checking its outcome.
+        let destination = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY - 4))
+        start.press(forDuration: 0.8, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.5)
         capture("37-favorites-after-native-drag")
+        app.buttons["model-picker.edit-favorites"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4", "The live production pin store must reorder before process termination")
         app.terminate()
         launch("", reset: false)
         XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4")
