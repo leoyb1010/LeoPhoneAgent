@@ -238,6 +238,9 @@ html[data-leo-skin] [data-leo-approval] {
   background: var(--leo-brand, #2e8b8b);
   animation: leo-breathe 1.8s ease-in-out infinite;
 }
+.leo-status-dot[data-state="error"] {
+  background: var(--color-destructive);
+}
 .leo-status-dot[data-state="done"] {
   background: color-mix(in oklab, var(--leo-brand, #2e8b8b) 55%, transparent);
 }

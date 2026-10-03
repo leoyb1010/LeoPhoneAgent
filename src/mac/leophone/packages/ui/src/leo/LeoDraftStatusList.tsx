@@ -91,7 +91,7 @@ function LeoDraftStatusListBody({
                 <span
                   className={cn(
                     "shrink-0 text-ui-caption",
-                    state === "attention" ? "text-[var(--leo-attention)]" : "text-foreground-subtle",
+                    state === "attention" ? "text-[var(--leo-attention)]" : state === "error" ? "text-destructive" : "text-foreground-subtle",
                   )}
                 >
                   {label}

@@ -2774,6 +2774,8 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic messages",
   "settings.modelProvider.apiKey": "API key",
+  "settings.modelProvider.showApiKey": "Show API key",
+  "settings.modelProvider.hideApiKey": "Hide API key",
   "settings.modelProvider.apiKeyPlaceholder": "Enter API key",
   "settings.modelProvider.apiKeyDisabledHint": "Set an API key to enable this provider.",
   "settings.modelProvider.getApiKey": "Get API key",

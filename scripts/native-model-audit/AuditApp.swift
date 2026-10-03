@@ -7,6 +7,7 @@ import SwiftUI
             AuditRoot()
                 .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
                 .dynamicTypeSize(ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
+                .preferredColorScheme(ProcessInfo.processInfo.environment["AUDIT_DARK"] == "1" ? .dark : .light)
         }
     }
 }

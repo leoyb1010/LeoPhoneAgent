@@ -18,12 +18,12 @@ final class NativeModelJourneys: XCTestCase {
         app.terminate()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false) {
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false, dark: Bool = false) {
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
                                  "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount),
                                  "AUDIT_FAIL_NEXT_GROUP_SAVE": failNextGroupSave ? "1" : "0",
-                                 "AUDIT_FAIL_NEXT_ENTRY_SAVE": failNextEntrySave ? "1" : "0"]
+                                 "AUDIT_FAIL_NEXT_ENTRY_SAVE": failNextEntrySave ? "1" : "0", "AUDIT_DARK": dark ? "1" : "0"]
         app.launchArguments = ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", largeText ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"]
         app.launch()
@@ -43,12 +43,12 @@ final class NativeModelJourneys: XCTestCase {
 
     private func search(_ query: String, replacing: Bool = false) {
         let field = app.searchFields.firstMatch
-        if !field.waitForExistence(timeout: 8) || !field.isHittable { app.swipeDown() }
-        XCTAssertTrue(field.waitForExistence(timeout: 8))
+        if !(field.exists || field.waitForExistence(timeout: 8)) || !field.isHittable { app.swipeDown() }
+        XCTAssertTrue(field.exists || field.waitForExistence(timeout: 8))
         field.tap()
         let keyboard = app.keyboards.firstMatch
-        if !keyboard.waitForExistence(timeout: 8) { field.tap() }
-        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
+        if !(keyboard.exists || keyboard.waitForExistence(timeout: 8)) { field.tap() }
+        XCTAssertTrue(keyboard.exists || keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
         if replacing { field.buttons["Clear text"].tap() }
         field.typeText(query)
     }
@@ -61,7 +61,7 @@ final class NativeModelJourneys: XCTestCase {
 
     private func rootValue(_ identifier: String) -> String {
         let state = app.staticTexts["audit.state"]
-        XCTAssertTrue(state.waitForExistence(timeout: 10))
+        XCTAssertTrue(state.exists || state.waitForExistence(timeout: 10))
         guard let value = state.value as? String,
               let data = value.data(using: .utf8),
               let fields = try? JSONDecoder().decode([String: String].self, from: data),
@@ -295,6 +295,10 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test13CatalogBulkHideShowKeepsFavoritesGroupsAndDefault() throws {
+        // This two-stage hide/readback/reopen/show/readback journey reached its
+        // final assertions at 122s on a loaded hosted simulator. Preserve all
+        // checks within the runner's existing 180s maximum; never turn a timeout green.
+        executionTimeAllowance = 180
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
             throw XCTSkip("Bulk organization is introduced by the improved production catalog")
@@ -590,6 +594,20 @@ final class NativeModelJourneys: XCTestCase {
         search("Audit Alias")
         XCTAssertTrue(app.buttons["model-catalog.entry.relay-proxy/deepseek-reasoner"].waitForExistence(timeout: 10))
         capture("46-edited-alias-after-relaunch")
+    }
+
+    func test24ActualPickerLightContrastAudit() throws {
+        launch("quick", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        capture("48-picker-light-contrast")
+        try app.performAccessibilityAudit(for: .contrast)
+    }
+
+    func test25ActualPickerDarkContrastAudit() throws {
+        launch("quick", large: false, dark: true)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        capture("49-picker-dark-contrast")
+        try app.performAccessibilityAudit(for: .contrast)
     }
 
 }

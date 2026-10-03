@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { createServer } from "vite";
+import { chromium } from "playwright-core";
+
+// Actual Web entrypoint -> Root -> real local services over HTTP/WebSocket.
+// Synthetic empty HOME/workspace only. No account, provider calls or desktop IPC.
+Object.assign(process.env, { ZCODE_ENV: "test", ZCODE_PRODUCT_IDENTITY: "leo" });
+const output = resolve("audit-full-renderer-results");
+await mkdir(output, { recursive: true });
+const sandbox = await mkdtemp(resolve(output, "isolated-"));
+const workspace = resolve(sandbox, "SyntheticWorkspace");
+const home = resolve(sandbox, "home");
+await mkdir(workspace); await mkdir(home);
+await writeFile(resolve(workspace, "README.md"), "# Synthetic audit workspace\nNo real projects, accounts or family data.\n");
+const env = { ...process.env, HOME: home, ZCODE_ENV: "test", ZCODE_PRODUCT_IDENTITY: "leo",
+  ZCODE_DATA_BASE_DIR: home, ZCODE_SERVER_WORKSPACE: workspace,
+  ZCODE_SERVER_HOST: "127.0.0.1", PORT: "3038" };
+const logs = [], errors = [], blocked = [], steps = [];
+const backend = spawn(process.execPath, ["--import", "tsx", "packages/server/src/entry-http.ts"],
+  { env, stdio: ["ignore", "pipe", "pipe"] });
+for (const stream of [backend.stdout, backend.stderr]) stream.on("data", chunk => logs.push(String(chunk)));
+let server, browser, page;
+const capture = async (name) => {
+  await page.screenshot({ path: resolve(output, name + ".png"), fullPage: true, animations: "disabled" });
+  await writeFile(resolve(output, name + ".txt"), await page.locator("body").innerText());
+  await writeFile(resolve(output, name + "-aria.txt"), await page.locator("body").ariaSnapshot());
+  steps.push(name);
+};
+try {
+  let ready = false;
+  for (let n = 0; n < 90; n++) {
+    if (backend.exitCode !== null) throw new Error("Actual server exited " + backend.exitCode);
+    try { const response = await fetch("http://127.0.0.1:3038/api/server-info"); if (response.ok) { ready = true; break; } } catch {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  assert.ok(ready, "Actual server must answer before browser journeys");
+  server = await createServer({ root: resolve("packages/web"), configFile: resolve("packages/web/vite.config.ts"),
+    server: { host: "127.0.0.1", port: 5178, strictPort: true, proxy: {
+      "/api/v1/oauth/token": { target: "http://127.0.0.1:3038" },
+      "/api": { target: "http://127.0.0.1:3038" },
+      "/ws": { target: "ws://127.0.0.1:3038", ws: true },
+    } },
+  });
+  await server.listen();
+  browser = await chromium.launch();
+  page = await browser.newPage({ viewport: { width: 1365, height: 960 } });
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("**/*", route => {
+    const url = new URL(route.request().url());
+    if (["127.0.0.1", "localhost"].includes(url.hostname) || ["data:", "blob:"].includes(url.protocol)) return route.continue();
+    blocked.push(url.origin + url.pathname); return route.abort();
+  });
+  await page.goto("http://127.0.0.1:5178/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("task-settings-button").waitFor({ timeout: 90000 });
+  await capture("01-real-root-empty-workspace");
+  await page.getByTestId("task-settings-button").click();
+  await page.getByTestId("settings-page").waitFor();
+  await capture("02-real-settings");
+  const navigation = page.locator('[data-testid^="settings-section-nav"]');
+  const ids = await navigation.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-testid")));
+  await writeFile(resolve(output,"settings-navigation.json"), JSON.stringify(ids,null,2));
+  for (const [index,id] of ids.entries()) {
+    const item = page.getByTestId(id);
+    if (!(await item.isVisible())) continue;
+    await item.click();
+    await capture(`settings-${String(index).padStart(2,"0")}`);
+  }
+  await page.getByTestId("settings-back-button").click();
+  await page.getByTestId("task-settings-button").waitFor();
+  await page.setViewportSize({ width: 700, height: 900 });
+  await capture("03-real-root-narrow-after-settings");
+  await page.getByTestId("task-settings-button").click();
+  await capture("04-real-settings-narrow-reopen");
+  assert.deepEqual(errors, [], "Actual renderer must not raise unhandled page errors");
+} catch (error) {
+  errors.push(String(error));
+  if (page) { try { await capture("failure"); } catch {} }
+  throw error;
+} finally {
+  await writeFile(resolve(output,"server.log"), logs.join(""));
+  await writeFile(resolve(output,"journey-results.json"), JSON.stringify({steps, errors, blocked,
+    boundary: "Actual full Web renderer and local services on a synthetic workspace. Does not exercise native Electron IPC/filepickers, real provider execution or real remote machines."},null,2));
+  await browser?.close(); await server?.close(); backend.kill("SIGTERM");
+}
