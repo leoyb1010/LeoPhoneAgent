@@ -634,12 +634,28 @@ final class NativeModelJourneys: XCTestCase {
         capture("46-edited-alias-after-relaunch")
     }
 
+    private func auditContrastWithDiagnostics() throws {
+        try app.performAccessibilityAudit(for: .contrast) { issue in
+            let details = [issue.compactDescription, issue.detailedDescription,
+                           "type: \(issue.auditType)",
+                           "element: \(issue.element?.debugDescription ?? "none")",
+                           "frame: \(String(describing: issue.element?.frame))",
+                           "current tree: \(self.app.debugDescription)"].joined(separator: "\n")
+            let attachment = XCTAttachment(string: details)
+            attachment.name = "native-contrast-issue-details"
+            attachment.lifetime = .keepAlways
+            self.add(attachment)
+            // false reports the original failure; recording is never an exemption.
+            return false
+        }
+    }
+
     func test24ActualPickerLightContrastAudit() throws {
         continueAfterFailure = true
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("48-picker-light-contrast")
-        try app.performAccessibilityAudit(for: .contrast)
+        try auditContrastWithDiagnostics()
     }
 
     func test25ActualPickerDarkContrastAudit() throws {
@@ -647,7 +663,7 @@ final class NativeModelJourneys: XCTestCase {
         launch("quick", large: false, dark: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("49-picker-dark-contrast")
-        try app.performAccessibilityAudit(for: .contrast)
+        try auditContrastWithDiagnostics()
     }
 
 }

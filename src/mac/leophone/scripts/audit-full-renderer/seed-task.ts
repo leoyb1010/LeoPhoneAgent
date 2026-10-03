@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { createSettingService } from "../../packages/services/src/setting/settingService.js";
 import { ZCODE_AGENT_PROVIDER } from "../../packages/shared/src/index.js";
 import { setDataBaseDir, getLegacyTaskSessionSnapshotPath, getTasksIndexDatabasePath } from "../../packages/services/src/paths.js";
 import { TaskIndexRepo } from "../../packages/services/src/session/taskIndexRepo.js";
@@ -28,6 +29,14 @@ try {
     const matching = (await repo.listTaskMetas({ workspacePath: workspace })).filter(task => task.title === meta.title);
     console.log(JSON.stringify({ taskId: stored.taskId, status: stored.status, unreadAt: stored.unreadAt, title: stored.title, matchingCount: matching.length }));
   } else {
+    if (process.argv.includes("--desktop")) {
+      await createSettingService().update({
+        lastWorkspaceSession: [{ kind: "local", workspacePath: workspace, workspacePurpose: "project" }],
+        lastActiveTabIndex: 0, recentProjects: [workspace],
+        locale: "en-US", localePreference: "en-US",
+        settingsSyncFirstRunPromptHandled: true,
+      });
+    }
 // A real production task index plus legacy snapshot. The server and renderer
 // perform their usual list/resume/read lifecycle; no renderer store is patched.
 const snapshot = parseLegacyTaskSessionFile({ meta, messages: [

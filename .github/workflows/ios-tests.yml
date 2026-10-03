@@ -231,6 +231,10 @@ jobs:
       - name: Actual full Web renderer on isolated local services
         timeout-minutes: 8
         run: node scripts/audit-full-renderer/run-journeys.mjs
+      - name: Actual unpackaged Mac desktop and WindowController journeys
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: node scripts/audit-full-renderer/run-desktop.mjs
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
@@ -240,6 +244,10 @@ jobs:
             src/mac/leophone/audit-full-renderer-results/*.txt
             src/mac/leophone/audit-full-renderer-results/*.json
             src/mac/leophone/audit-full-renderer-results/*.log
+            src/mac/leophone/audit-full-renderer-results/desktop/*.png
+            src/mac/leophone/audit-full-renderer-results/desktop/*.txt
+            src/mac/leophone/audit-full-renderer-results/desktop/*.json
+            src/mac/leophone/audit-full-renderer-results/desktop/*.log
           if-no-files-found: error
           retention-days: 14
 
