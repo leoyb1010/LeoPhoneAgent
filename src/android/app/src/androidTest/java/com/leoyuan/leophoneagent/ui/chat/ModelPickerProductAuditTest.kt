@@ -4,8 +4,17 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -36,6 +45,7 @@ class ModelPickerProductAuditTest {
     private val open = mutableStateOf(true)
     private var selectedCallback: String? = null
     private var manageCount = 0
+    private lateinit var palette: ColorScheme
 
     private fun mount(longNames: Boolean = false) {
         val config = ProviderConfig(
@@ -54,6 +64,8 @@ class ModelPickerProductAuditTest {
         val dark = InstrumentationRegistry.getArguments().getString("auditDark") == "true"
         compose.setContent {
             MinisTheme(darkTheme = dark) {
+                val colors = MaterialTheme.colorScheme
+                SideEffect { palette = colors }
                 if (open.value) {
                     ModelPickerSheet(
                         groups = groups, selectedGroupId = selectedGroup.value,
@@ -70,8 +82,44 @@ class ModelPickerProductAuditTest {
         compose.waitForIdle()
     }
 
+    private fun assertTextContrast(text: String, background: Color) {
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(text, substring = false, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action ->
+                assertTrue(action(layouts))
+            }
+        assertEquals("Expected one actual text layout for $text", 1, layouts.size)
+        val foreground = layouts.single().layoutInput.style.color
+        assertTrue("Actual text foreground must be explicit for $text", foreground != Color.Unspecified)
+        val foregroundLuminance = foreground.compositeOver(background).luminance()
+        val backgroundLuminance = background.luminance()
+        val ratio = (maxOf(foregroundLuminance, backgroundLuminance) + 0.05f) /
+            (minOf(foregroundLuminance, backgroundLuminance) + 0.05f)
+        assertTrue("Actual text $text contrast $ratio must be at least4.5:1", ratio >= 4.5f)
+    }
+
+    private fun phase(name: String) {
+        android.util.Log.i("ModelPickerAudit", "$name elapsedRealtimeMs=${android.os.SystemClock.elapsedRealtime()}")
+    }
+
+    private fun assertFixtureForeground(stage: String) {
+        val root = requireNotNull(instrumentation.uiAutomation.rootInActiveWindow) {
+            "No real foreground window at $stage; Compose semantics alone cannot certify visible UI"
+        }
+        try {
+            val actualPackage = root.packageName?.toString()
+            phase("foreground:$stage:$actualPackage")
+            assertEquals("A system/other-app overlay invalidates product UI evidence at $stage", context.packageName, actualPackage)
+        } finally {
+            @Suppress("DEPRECATION")
+            root.recycle()
+        }
+    }
+
     private fun screenshot(name: String) {
+        phase("screenshot:$name:start")
         compose.waitForIdle()
+        assertFixtureForeground("before-$name")
         val profile = InstrumentationRegistry.getArguments().getString("auditProfile") ?: "unspecified"
         // AGP collects this directory before uninstalling the test application.
         val outputBase = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
@@ -81,16 +129,25 @@ class ModelPickerProductAuditTest {
         val configuration = compose.activity.resources.configuration
         val expectedFontScale = if (profile.endsWith("-large")) 2f else 1f
         assertEquals("Actual Activity must receive the requested system font scale", expectedFontScale, configuration.fontScale, 0.01f)
+        phase("screenshot:$name:capture")
         val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
         File(dir, "$name.png").outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        assertFixtureForeground("after-$name")
         File(dir, "$name.device.txt").writeText(
             "fontScale=${configuration.fontScale};densityDpi=${configuration.densityDpi};" +
                 "widthDp=${configuration.screenWidthDp};heightDp=${configuration.screenHeightDp};" +
                 "screenshot=${bitmap.width}x${bitmap.height}\n",
         )
+        fun describe(node: SemanticsNode, depth: Int = 0): String = buildString {
+            append("  ".repeat(depth))
+            append("id=${node.id}; bounds=${node.boundsInRoot}; touch=${node.touchBoundsInRoot}; ${node.config}\n")
+            node.children.forEach { append(describe(it, depth + 1)) }
+        }
         File(dir, "$name.semantics.txt").writeText(
-            compose.onAllNodes(isRoot()).fetchSemanticsNodes().joinToString("\n") { it.config.toString() },
+            compose.onAllNodes(isRoot()).fetchSemanticsNodes().joinToString("\n") { describe(it) },
         )
+        bitmap.recycle()
+        phase("screenshot:$name:complete")
     }
 
     @Test fun immediateRepositoryLoadPreservesEmptyAndExistingConfiguration() {
@@ -132,10 +189,43 @@ class ModelPickerProductAuditTest {
         }
     }
 
+    @Test fun expandCollapseControlsAreNamedAndUsable() {
+        mount()
+        fun control(expand: Boolean, label: String): SemanticsNodeInteraction {
+            val description = context.getString(
+                if (expand) R.string.model_picker_expand_section else R.string.model_picker_collapse_section,
+                label,
+            )
+            val node = compose.onNodeWithContentDescription(description)
+            node.assertIsDisplayed().assertHasClickAction()
+            val bounds = node.fetchSemanticsNode().touchBoundsInRoot
+            val density = compose.activity.resources.displayMetrics.density
+            assertTrue("Named control must have at least48dp touch width: $description", bounds.width / density >= 47.99f)
+            assertTrue("Named control must have at least48dp touch height: $description", bounds.height / density >= 47.99f)
+            return node
+        }
+        control(true, "Primary audit group").performClick()
+        compose.onNodeWithText("Matching Alpha", substring = false).assertIsDisplayed().performClick()
+        compose.runOnIdle {
+            assertEquals("primary", selectedGroup.value)
+            assertEquals("first", selectedEntry.value)
+        }
+        control(false, "Primary audit group").performClick()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Audit Provider"))
+        control(true, "Audit Provider").performClick()
+        compose.onNodeWithText("Matching Beta", substring = false).assertExists()
+        control(false, "Audit Provider").performClick()
+        compose.onNodeWithText("Matching Beta", substring = false).assertDoesNotExist()
+        screenshot("08-named-provider-control")
+    }
+
     @Test fun actualActiveModelAndIndependentGroupPreview() {
         mount()
         compose.onNodeWithText("→ Matching Beta").assertIsDisplayed()
         compose.onNodeWithText("→ Matching Alpha").assertIsDisplayed()
+        assertTextContrast("→ Matching Beta", palette.surfaceContainerHigh)
+        assertTextContrast(context.getString(R.string.model_picker_default_badge), palette.tertiaryContainer)
+        assertTextContrast(context.getString(R.string.model_picker_done), palette.surfaceContainerLow)
         screenshot("01-active-second-model")
         compose.onNodeWithText("Secondary audit group").performClick()
         compose.runOnIdle { assertEquals("secondary", selectedGroup.value) }
@@ -148,6 +238,8 @@ class ModelPickerProductAuditTest {
         compose.onNodeWithText("Matching Alpha", substring = false).assertExists()
         compose.onNodeWithText("Matching Beta", substring = false).assertExists()
         compose.onNodeWithText("Hidden Sentinel").assertDoesNotExist()
+        assertTextContrast("audit-first", palette.surfaceContainerHigh)
+        assertTextContrast(context.getString(R.string.model_picker_active_badge), palette.secondaryContainer)
         screenshot("03-search-all-provider-matches")
         compose.onNodeWithText("Matching Beta", substring = false).performClick()
         compose.runOnIdle { assertEquals("second", selectedCallback); assertNull(selectedGroup.value) }
@@ -159,15 +251,21 @@ class ModelPickerProductAuditTest {
     }
 
     @Test fun emptySearchDismissAndReopenHaveRecoverableState() {
+        phase("empty:start")
         mount()
+        phase("empty:mounted")
         compose.onNode(hasSetTextAction()).performTextInput("zzzz-no-synthetic-match")
+        phase("empty:typed")
         compose.onNodeWithText(context.getString(R.string.model_picker_no_results)).assertIsDisplayed()
         screenshot("05-empty-search")
         compose.onNodeWithText(context.getString(R.string.model_picker_done)).performClick()
+        phase("empty:dismiss-clicked")
         compose.onNodeWithText("Reopen audit picker").assertIsDisplayed().performClick()
+        phase("empty:reopen-clicked")
         compose.onNodeWithText("Primary audit group").assertIsDisplayed()
         compose.onNodeWithText("→ Matching Beta").assertIsDisplayed()
         screenshot("06-reopened-selection-preserved")
+        phase("empty:complete")
     }
 
     @Test fun longGroupNamesAndSystemFontScaleRemainInspectable() {

@@ -8,11 +8,10 @@ cd "$root/src/android"
 # Only Google-provided disposable emulator state is changed. No APK is released.
 # The fixture runner intentionally avoids MinisApp, sandbox startup and accounts.
 status=0
-flavors=(Standard Power)
-if [[ -n "${AUDIT_FLAVOR:-}" ]]; then
-  [[ "$AUDIT_FLAVOR" == Standard || "$AUDIT_FLAVOR" == Power ]] || exit 2
-  flavors=("$AUDIT_FLAVOR")
-fi
+case "${AUDIT_FLAVOR:-}" in
+  Standard|Power) flavors=("$AUDIT_FLAVOR");;
+  *) echo "AUDIT_FLAVOR must select Standard or Power on a fresh AVD" >&2; exit 2;;
+esac
 
 capture_diagnostics() {
   python3 - "$1" <<'PY'
@@ -20,7 +19,7 @@ import pathlib, subprocess, sys
 root = pathlib.Path(sys.argv[1]); root.mkdir(parents=True, exist_ok=True)
 commands = {'services.txt': ['shell', 'service', 'list'],
             'boot.txt': ['shell', 'getprop', 'sys.boot_completed'],
-            'logcat.txt': ['logcat', '-d', '-t', '2000']}
+            'logcat.txt': ['logcat', '-b', 'all', '-d', '-t', '5000']}
 for name, args in commands.items():
     try:
         result = subprocess.run(['adb', *args], capture_output=True, timeout=20)
@@ -54,8 +53,12 @@ except subprocess.TimeoutExpired:
 PY
 }
 
-check_device || { capture_diagnostics "$out/device-unhealthy"; exit 1; }
-for profile in phone-light-normal phone-dark-reduced-large tablet-light-reduced tablet-dark-normal-large; do
+case "${AUDIT_PROFILE:-}" in
+  phone-light-normal|phone-dark-reduced-large|tablet-light-reduced|tablet-dark-normal-large) profiles=("$AUDIT_PROFILE");;
+  *) echo "AUDIT_PROFILE must select one of the four documented fresh-AVD profiles" >&2; exit 2;;
+esac
+check_device || { capture_diagnostics "$out/${AUDIT_PROFILE:-all}/device-unhealthy"; exit 1; }
+for profile in "${profiles[@]}"; do
   if [[ "$profile" == phone-* ]]; then size=1080x1728; else size=1768x2208; fi
   audit_adb shell wm size "$size"
   audit_adb shell wm density 420
@@ -142,15 +145,16 @@ expected_cases = {'actualActiveModelAndIndependentGroupPreview',
     'searchShowsEveryMatchAndClearRestoresCollapsedState',
     'emptySearchDismissAndReopenHaveRecoverableState',
     'longGroupNamesAndSystemFontScaleRemainInspectable',
-    'immediateRepositoryLoadPreservesEmptyAndExistingConfiguration'}
-assert len(cases) == 5 and {c.get('name') for c in cases} == expected_cases, f'Expected exact 5 fresh Android cases, found {[c.get("name") for c in cases]}'
+    'immediateRepositoryLoadPreservesEmptyAndExistingConfiguration',
+    'expandCollapseControlsAreNamedAndUsable'}
+assert len(cases) == 6 and {c.get('name') for c in cases} == expected_cases, f'Expected exact 6 fresh Android cases, found {[c.get("name") for c in cases]}'
 assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases), 'UI case failed or was skipped'
 images = [p for p in (root / 'screenshots').rglob('*.png') if sys.argv[2] in p.parts]
 expected_images = {'01-active-second-model.png', '02-group-transition.png',
     '03-search-all-provider-matches.png', '04-clear-restores-provider-summary.png',
-    '05-empty-search.png', '06-reopened-selection-preserved.png', '07-large-font-long-group.png'}
-assert len(images) == 7 and {p.name for p in images} == expected_images, f'Expected exact 7 Android screenshots, found {[p.name for p in images]}'
-print('5 fresh Android cases and 7 Android screenshots verified')
+    '05-empty-search.png', '06-reopened-selection-preserved.png', '07-large-font-long-group.png', '08-named-provider-control.png'}
+assert len(images) == 8 and {p.name for p in images} == expected_images, f'Expected exact 8 Android screenshots, found {[p.name for p in images]}'
+print('6 fresh Android cases and 8 Android screenshots verified')
 PY
     printf '{"source":"%s","profile":"%s","flavor":"%s","font_scale":%s,"motion_scale":%s,"gradle_exit":%s,"scope":"production Compose sheet in isolated Application; not full app or PRoot"}\n' \
       "${GITHUB_SHA:-local}" "$profile" "$flavor" "$font" "$motion" "$result" > "$dest/provenance.json"

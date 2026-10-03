@@ -1810,4 +1810,6 @@
     <string name="newer_db_versions">目前版本支援資料庫版本 %1$d。</string>
     <string name="newer_db_exit">不修改資料並離開</string>
     <string name="secure_storage_temporarily_unavailable">安全儲存暫時無法使用。原有憑證已保留；新輸入的憑證只在本次執行有效。請重新啟動應用程式後重試。</string>
+    <string name="model_picker_expand_section">展開 %1$s</string>
+    <string name="model_picker_collapse_section">收合 %1$s</string>
 </resources>
