@@ -48,24 +48,55 @@ if [[ "$LABEL" == "baseline" ]]; then
 else
   printf '%s\n' 'Current production source: full native interaction, codec, catalog and SQLite test suites.' > "$OUTPUT/test-scope.txt"
 fi
-set +e
-xcodebuild test -project "$BUILD/NativeModelAudit.xcodeproj" -scheme NativeModelAudit \
-  -destination "$DESTINATION" -parallel-testing-enabled NO \
-  -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 \
-  "${TEST_SCOPE[@]}" \
-  -resultBundlePath "$OUTPUT/NativeModelAudit.xcresult" \
-  -derivedDataPath "$OUTPUT/DerivedData" CODE_SIGNING_ALLOWED=NO \
-  2>&1 | tee "$OUTPUT/xcodebuild.log"
-status=${PIPESTATUS[0]}
-set -e
-if [[ -d "$OUTPUT/NativeModelAudit.xcresult" ]]; then
-  xcrun xcresulttool export attachments --path "$OUTPUT/NativeModelAudit.xcresult" \
-    --output-path "$OUTPUT/attachments" || true
-  xcrun xcresulttool get test-results summary --path "$OUTPUT/NativeModelAudit.xcresult" \
-    --format json > "$OUTPUT/test-summary.json" || true
+run_native_tests() {
+  local bundle="$1" log="$2"
+  shift 2
+  xcodebuild test -project "$BUILD/NativeModelAudit.xcodeproj" -scheme NativeModelAudit \
+    -destination "$DESTINATION" -parallel-testing-enabled NO \
+    -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 \
+    "$@" -resultBundlePath "$bundle" \
+    -derivedDataPath "$OUTPUT/DerivedData" CODE_SIGNING_ALLOWED=NO \
+    2>&1 | tee "$log"
+  local result=${PIPESTATUS[0]}
+  return "$result"
+}
+export_native_result() {
+  local bundle="$1" folder="$2"
+  if [[ -d "$bundle" ]]; then
+    xcrun xcresulttool export attachments --path "$bundle" --output-path "$folder/attachments" || true
+    xcrun xcresulttool get test-results summary --path "$bundle" --format json > "$folder/test-summary.json" || true
+  fi
+  python3 "$ROOT/scripts/native-model-audit/export_images.py" "$folder"
+}
+if [[ "$LABEL" == "current" ]]; then
+  # Fail early on reproduced UI regressions, reusing the same project and build.
+  # A passing preflight never replaces the complete suite below.
+  mkdir -p "$OUTPUT/preflight"
+  PREFLIGHT=(
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test01QuickPickerAndLargeCatalogSearch"
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test13CatalogBulkHideShowKeepsFavoritesGroupsAndDefault"
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test20FavoriteEditDragPersistsOrder"
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test21ReturningFromGroupManagementKeepsPickerOpen"
+    "-only-testing:NativeModelAuditUITests/NativeModelJourneys/test22RejectedGroupSaveKeepsSelectionAndAllowsRetry"
+  )
+  if run_native_tests "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight/xcodebuild.log" "${PREFLIGHT[@]}"; then
+    export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
+  else
+    status=$?
+    export_native_result "$OUTPUT/preflight/NativeModelAudit.xcresult" "$OUTPUT/preflight"
+    printf '%s\n' 'Current UI preflight FAILED (five selected regression journeys); full unit/UI suite was NOT RUN. Original preflight xcresult/log retained. No failing assertions were suppressed.' > "$OUTPUT/test-scope.txt"
+    if [[ -f "$OUTPUT/preflight/test-summary.json" ]]; then cp "$OUTPUT/preflight/test-summary.json" "$OUTPUT/test-summary.json"; fi
+    if [[ -d "$OUTPUT/preflight/images" ]]; then cp -R "$OUTPUT/preflight/images" "$OUTPUT/images"; fi
+    rm -rf "$OUTPUT/DerivedData"
+    exit "$status"
+  fi
 fi
+set +e
+run_native_tests "$OUTPUT/NativeModelAudit.xcresult" "$OUTPUT/xcodebuild.log" "${TEST_SCOPE[@]}"
+status=$?
+set -e
+export_native_result "$OUTPUT/NativeModelAudit.xcresult" "$OUTPUT"
 cp "$BUILD/source-manifest.json" "$OUTPUT/source-manifest.json"
-python3 "$ROOT/scripts/native-model-audit/export_images.py" "$OUTPUT"
 # Build intermediates are large and carry no review evidence.
 rm -rf "$OUTPUT/DerivedData"
 exit "$status"

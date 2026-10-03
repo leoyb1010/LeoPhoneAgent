@@ -68,6 +68,20 @@ final class NativeModelJourneys: XCTestCase {
         return result
     }
 
+    private func closeAudit() {
+        let close = app.buttons["Close audit"]
+        if !close.isHittable {
+            // iOS 26 hides navigation chrome during active search. This is only
+            // the fixture exit, after production search actions were asserted.
+            let searchClose = app.buttons["close"].firstMatch
+            XCTAssertTrue(searchClose.isHittable)
+            searchClose.tap()
+        }
+        let visible = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: close)
+        wait(for: [visible], timeout: 10)
+        close.tap()
+    }
+
     private func selectScope(_ scope: String) {
         let identifier = "model-picker.scope.\(scope.lowercased())"
         if app.buttons[identifier].exists { app.buttons[identifier].tap() }
@@ -179,7 +193,7 @@ final class NativeModelJourneys: XCTestCase {
         capture("16-imported-catalog-selection")
         search("DeepSeek")
         waitForText("DeepSeek Reasoner").tap()
-        app.buttons["Next"].tap()
+        app.buttons["onboarding-models.next"].tap()
         XCTAssertEqual(rootValue("audit.default"), "daily")
         app.buttons["audit.open.groups"].tap()
         _ = waitForText("Default Models")
@@ -263,7 +277,7 @@ final class NativeModelJourneys: XCTestCase {
         capture("23-confirm-bulk-hide")
         app.sheets.buttons["Hide selected models"].tap()
         capture("24-catalog-model-hidden")
-        app.buttons["Close audit"].tap()
+        closeAudit()
         XCTAssertTrue(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
         XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/deepseek-reasoner"))
         XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4")
@@ -273,7 +287,7 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["model-catalog.organize"].tap()
         app.buttons["Select shown models"].tap()
         app.buttons["Show selected models"].tap()
-        app.buttons["Close audit"].tap()
+        closeAudit()
         XCTAssertFalse(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
         XCTAssertTrue(rootValue("audit.pins").contains("relay-proxy/deepseek-reasoner"))
     }
@@ -292,7 +306,7 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["Research Team"].tap()
         XCTAssertTrue(app.alerts["Model organization"].waitForExistence(timeout: 8))
         app.alerts.buttons["OK"].tap()
-        app.buttons["Close audit"].tap()
+        closeAudit()
         XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4|relay-proxy/gpt-5")
         XCTAssertEqual(rootValue("audit.default"), "daily")
         app.terminate()
@@ -316,7 +330,7 @@ final class NativeModelJourneys: XCTestCase {
         app.alerts.textFields.firstMatch.typeText("Catalog Favorites Team")
         app.alerts.buttons["Create"].tap()
         if app.alerts["Model organization"].waitForExistence(timeout: 8) { app.alerts.buttons["OK"].tap() }
-        app.buttons["Close audit"].tap()
+        closeAudit()
         XCTAssertEqual(rootValue("audit.default"), "daily")
         app.buttons["audit.open.groups"].tap()
         _ = waitForText("Catalog Favorites Team")
@@ -336,11 +350,13 @@ final class NativeModelJourneys: XCTestCase {
 
     func test17DraftUnavailableProviderCannotBeSelected() throws {
         launch("draft", large: false)
-        search("Unavailable fixture")
-        let row = app.buttons["model-picker.entry.missing-auth/unavailable"]
-        guard row.waitForExistence(timeout: 8) else {
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
             throw XCTSkip("Availability gate identifiers apply to improved picker")
         }
+        search("Unavailable fixture")
+        let row = app.buttons["model-picker.entry.missing-auth/unavailable"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Unavailable model must remain discoverable with its disabled reason")
         XCTAssertFalse(row.isEnabled, "No-token provider must not be accepted as a draft choice")
         capture("28-draft-unavailable-model-disabled")
     }
@@ -359,14 +375,29 @@ final class NativeModelJourneys: XCTestCase {
             XCTAssertTrue(provider.exists)
             provider.tap()
             capture("31-zh-provider-expanded")
-            app.swipeDown()
-            scopes.buttons.element(boundBy: 2).tap()
+            search("deepseek-reasoner")
+            let result = app.buttons["model-picker.entry.relay-proxy/deepseek-reasoner"]
+            XCTAssertTrue(result.waitForExistence(timeout: 10))
+            XCTAssertTrue(result.isHittable, "Search result must be visible above the keyboard")
+            capture("42-zh-provider-search")
+            app.terminate()
+            launch("full", large: false, language: "zh-Hans")
+            let groups = app.segmentedControls["model-picker.scope"].buttons.element(boundBy: 2)
+            XCTAssertTrue(groups.waitForExistence(timeout: 10))
+            groups.tap()
             capture("32-zh-routing-groups")
         }
         app.terminate()
         launch("catalog", large: false, language: "zh-Hans")
         XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 15))
         capture("33-zh-provider-catalog")
+        let organize = app.buttons["model-catalog.organize"]
+        if organize.exists {
+            search("DeepSeek")
+            XCTAssertTrue(organize.isHittable, "Organize must remain reachable during native search")
+            organize.tap()
+            capture("43-zh-catalog-organize")
+        }
     }
 
     func test19ThousandModelCatalogFindsLastEntryWithoutTruncation() {
@@ -399,10 +430,18 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["model-picker.edit-favorites"].tap()
         capture("36-favorites-native-edit-handles")
         let handles = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder"))
-        guard handles.firstMatch.waitForExistence(timeout: 5), handles.count >= 2 else {
-            throw XCTSkip("Simulator does not expose native reorder handles to XCTest; screenshot retained for review")
-        }
-        handles.element(boundBy: 0).press(forDuration: 0.6, thenDragTo: handles.element(boundBy: 1))
+        XCTAssertTrue(handles.firstMatch.waitForExistence(timeout: 10), "Native Edit must expose reorder handles")
+        XCTAssertGreaterThanOrEqual(handles.count, 2)
+        let first = handles.element(boundBy: 0)
+        let last = handles.element(boundBy: 1)
+        XCTAssertTrue(first.isHittable)
+        XCTAssertTrue(last.isHittable)
+        // Crossing the first row's upper edge requests insertion at zero. A
+        // first-to-second-center drag can resolve to the original boundary.
+        let start = last.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let destination = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: -12))
+        start.press(forDuration: 0.8, thenDragTo: destination)
         capture("37-favorites-after-native-drag")
         app.terminate()
         launch("", reset: false)
@@ -423,7 +462,10 @@ final class NativeModelJourneys: XCTestCase {
         manage.tap()
         XCTAssertTrue(app.navigationBars["Model Groups"].waitForExistence(timeout: 10))
         capture("38-manage-groups-above-picker")
-        app.navigationBars.buttons["Done"].firstMatch.tap()
+        let manager = app.navigationBars["Model Groups"]
+        app.buttons["model-picker.close-group-manager"].tap()
+        let dismissed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: manager)
+        wait(for: [dismissed], timeout: 10)
         let scope = app.segmentedControls["model-picker.scope"]
         XCTAssertTrue(scope.waitForExistence(timeout: 10))
         selectScope("Providers")
@@ -443,7 +485,7 @@ final class NativeModelJourneys: XCTestCase {
         let model = app.buttons["model-picker.entry.openai-direct/gpt-5-mini"]
         XCTAssertTrue(model.waitForExistence(timeout: 10))
         model.tap()
-        let add = app.buttons["Add (1)"]
+        let add = app.buttons["model-picker.add-selected"]
         XCTAssertTrue(add.isEnabled)
         add.tap()
         let failure = app.alerts["Model organization"]

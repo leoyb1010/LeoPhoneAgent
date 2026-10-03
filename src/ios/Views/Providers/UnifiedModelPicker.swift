@@ -401,37 +401,35 @@ struct UnifiedModelPicker: View {
 
     var body: some View {
         List {
-            if !isMulti { selectionSummary }
-            Section {
-                if dynamicTypeSize.isAccessibilitySize {
-                    Picker("Browse models", selection: $browseScope) {
-                        ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
-                    }.pickerStyle(.menu).accessibilityIdentifier("model-picker.scope")
-                } else {
-                    Picker("Browse models", selection: $browseScope) {
-                        ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
-                    }.pickerStyle(.segmented).accessibilityIdentifier("model-picker.scope")
+            if !isSearching && !editMode.isEditing {
+                if !isMulti { selectionSummary }
+                Section {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Picker("Browse models", selection: $browseScope) {
+                            ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
+                        }.pickerStyle(.menu).accessibilityIdentifier("model-picker.scope")
+                    } else {
+                        Picker("Browse models", selection: $browseScope) {
+                            ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
+                        }.pickerStyle(.segmented).accessibilityIdentifier("model-picker.scope")
+                    }
+                } footer: {
+                    if let note = config.headerNote { Text(note) }
                 }
-            }
-            if let note = config.headerNote {
-                Section { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
             }
             if isSearching {
-                Section {
-                    Text("Search covers all providers and groups.").font(.footnote).foregroundStyle(.secondary)
-                    Text("\(filteredEntriesByInstance.reduce(0) { $0 + $1.entries.count }) matching models")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            if !isSearching && browseScope == .favorites {
-                favoritesSection
-            }
-            if supportsGroups && (browseScope == .groups || isSearching) {
-                groupsSection
-            }
-            if browseScope == .providers || isSearching {
+                // The keyboard leaves little room. Direct matches come first;
+                // never push them below selection cards, scope or explanation.
                 ForEach(filteredEntriesByInstance, id: \.instance.id) { item in instanceSection(item) }
+                if supportsGroups && !visibleGroups.isEmpty { groupsSection }
                 if filteredEntriesByInstance.isEmpty && (!supportsGroups || visibleGroups.isEmpty) { emptySection }
+            } else {
+                if browseScope == .favorites { favoritesSection }
+                if supportsGroups && browseScope == .groups { groupsSection }
+                if browseScope == .providers {
+                    ForEach(filteredEntriesByInstance, id: \.instance.id) { item in instanceSection(item) }
+                    if filteredEntriesByInstance.isEmpty { emptySection }
+                }
             }
             if config.showCreateGroup {
                 Section {
@@ -452,6 +450,18 @@ struct UnifiedModelPicker: View {
         }
         .onChange(of: browseScope) { _, _ in editMode = .inactive }
         .onChange(of: searchText) { _, _ in editMode = .inactive }
+        .safeAreaInset(edge: .bottom) {
+            if isMulti {
+                Button { commitMultiSelection() } label: {
+                    Text("Add (\(validSelectedOrder.count))").frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(validSelectedOrder.isEmpty)
+                .accessibilityIdentifier("model-picker.add-selected")
+                .padding(.horizontal).padding(.vertical, 8)
+                .background(.regularMaterial)
+            }
+        }
         .toolbar { toolbarContent }
         .alert("Favorites are full", isPresented: $pinFailure) {
             Button("OK", role: .cancel) {}
@@ -475,6 +485,7 @@ struct UnifiedModelPicker: View {
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done") { showGroupsManager = false }
+                                .accessibilityIdentifier("model-picker.close-group-manager")
                         }
                     }
             }
@@ -497,20 +508,23 @@ struct UnifiedModelPicker: View {
     private var selectionSummary: some View {
         if let gid = config.currentGroupId?(), let group = store.group(for: gid) {
             Section("Current selection") {
-                Label(group.name, systemImage: "square.stack.3d.up")
-                    .font(.headline)
-                if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) {
-                    Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(.secondary)
-                    if let reason = memberUnavailableReason(entry.id) {
-                        Text(reason).font(.caption).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(group.name, systemImage: "square.stack.3d.up").font(.headline)
+                    if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) {
+                        Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(.secondary)
+                        if let reason = memberUnavailableReason(entry.id) {
+                            Text(reason).font(.caption).foregroundStyle(.orange)
+                        }
                     }
                 }
             }
         } else if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) ?? Self.systemEntry(for: eid) {
             Section("Current selection") {
-                Label(entry.model.displayName, systemImage: "checkmark.circle.fill").font(.headline)
-                if let provider = store.instance(for: entry.providerInstanceId) {
-                    Text(provider.label).font(.footnote).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(entry.model.displayName, systemImage: "checkmark.circle.fill").font(.headline)
+                    if let provider = store.instance(for: entry.providerInstanceId) {
+                        Text(provider.label).font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -643,6 +657,15 @@ struct UnifiedModelPicker: View {
         return "\(base) \(n)"
     }
 
+    private func commitMultiSelection() {
+        let ordered = validSelectedOrder
+        guard !ordered.isEmpty else { return }
+        if let onAddOrdered = config.onAddOrdered {
+            guard onAddOrdered(ordered) else { saveFailed = true; return }
+        } else { config.onAddMulti?(Set(ordered)) }
+        dismiss()
+    }
+
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
@@ -650,19 +673,6 @@ struct UnifiedModelPicker: View {
         if isMulti {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Cancel") { dismiss() }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Add (\(validSelectedOrder.count))") {
-                    let ordered = validSelectedOrder
-                    guard !ordered.isEmpty else { return }
-                    if let onAddOrdered = config.onAddOrdered {
-                        guard onAddOrdered(ordered) else { saveFailed = true; return }
-                    }
-                    else { config.onAddMulti?(Set(ordered)) }
-                    dismiss()
-                }
-                .font(.body.weight(.semibold))
-                .disabled(validSelectedOrder.isEmpty)
             }
         } else {
             if browseScope == .favorites && !isSearching && !favoriteEntries.isEmpty {
@@ -1055,7 +1065,7 @@ struct UnifiedModelPicker: View {
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .disabled(disabled || editMode.isEditing)
+            .disabled(disabled)
             .accessibilityIdentifier("model-picker.entry.\(entry.id)")
             .accessibilityValue(selected ? Text("Selected") : Text("Not selected"))
             if !VoiceProviderResolver.isSystemEntry(entry.providerInstanceId) { favoriteButton(entry) }

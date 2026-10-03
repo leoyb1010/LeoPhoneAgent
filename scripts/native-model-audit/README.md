@@ -25,6 +25,11 @@ results remain independent workflow artifacts, including any historical failures
 The runner never rewrites baseline production behavior or suppresses failing
 selected tests to make the old UI green.
 
+Current runs first execute five reproduced UI regression journeys using the same
+project and DerivedData. Their separate preflight xcresult/log is retained. A
+preflight failure stops early and labels the full suite as not run; a passing
+preflight is always followed by the complete unit and UI suites.
+
 ## Evidence and boundaries
 
 - `source-manifest.json` records exact git reference, source paths, SHA-256, and

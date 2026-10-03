@@ -71,13 +71,19 @@ struct OnboardingModelSelectionView: View {
         .searchable(text: $searchText, prompt: "Filter models")
         .navigationTitle("Select Models")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            Button { createGroupAndDismiss() } label: {
+                Text("Next").frame(maxWidth: .infinity, minHeight: 44)
+            }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedModelEntryIds.isEmpty)
+                .accessibilityIdentifier("onboarding-models.next")
+                .padding(.horizontal).padding(.vertical, 8)
+                .background(.regularMaterial)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Skip") { dismiss() }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Next") { createGroupAndDismiss() }
-                    .disabled(selectedModelEntryIds.isEmpty)
             }
         }
     }

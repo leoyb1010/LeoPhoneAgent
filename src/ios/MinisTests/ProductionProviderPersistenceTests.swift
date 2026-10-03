@@ -430,7 +430,8 @@ final class ProductionProviderPersistenceTests: XCTestCase {
         let db = try ProviderConfigDB(url: directory.appendingPathComponent("config.db"))
         let original = fixture()
         let store = ProductionProviderPersistence(fileURL: url, initial: original, db: db)
-        let incoming = ProviderInstance(id: "new-provider", label: "Imported", providerType: .openAI, credentialType: .apiKey)
+        let incoming = ProviderInstance(id: "new-provider", label: "Imported", providerType: .openAI,
+                                        credentialType: .apiKey, createdAt: Date(timeIntervalSince1970: 400))
         let imported = ModelEntry(uuid: "new-provider-model", providerInstanceId: incoming.id,
                                   model: original.modelEntries[0].baseModel,
                                   overrides: .init(displayName: "Imported override", maxThinkingLevel: .high), isHidden: true)
@@ -446,7 +447,16 @@ final class ProductionProviderPersistenceTests: XCTestCase {
         XCTAssertEqual(store.config.sessionBindings, original.sessionBindings)
         await store.drainWrites()
         let restored = await db.dumpProviderConfig()
-        XCTAssertEqual(restored, store.config)
+        let index = try XCTUnwrap(store.config.modelEntries.firstIndex { $0.uuid == imported.uuid })
+        let stamp = try XCTUnwrap(store.config.modelEntries[index].userModifiedAt)
+        let restoredStamp = try XCTUnwrap(restored.modelEntries.first { $0.uuid == imported.uuid }?.userModifiedAt)
+        // SQLite's established date representation is Unix-seconds Double;
+        // converting from Date's reference epoch can round below a microsecond.
+        // Normalize only that representation, keeping every metadata field exact.
+        XCTAssertEqual(restoredStamp.timeIntervalSinceReferenceDate, stamp.timeIntervalSinceReferenceDate, accuracy: 0.000001)
+        var databaseExpected = store.config
+        databaseExpected.modelEntries[index].userModifiedAt = Date(timeIntervalSince1970: stamp.timeIntervalSince1970)
+        XCTAssertEqual(restored, databaseExpected)
         XCTAssertEqual(try JSONDecoder().decode(ProviderConfig.self, from: Data(contentsOf: url)), store.config)
     }
 }

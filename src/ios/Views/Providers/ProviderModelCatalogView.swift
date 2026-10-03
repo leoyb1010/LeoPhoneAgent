@@ -9,6 +9,7 @@ struct ProviderModelCatalogView: View {
     @ObservedObject private var store = ProviderConfigStore.shared
     @ObservedObject private var pins = ModelPinStore.shared
     @State private var query = ""
+    @FocusState private var searchFocused: Bool
     @State private var filter: CatalogFilter = .all
     @State private var organizing = false
     @State private var selectedIds: Set<String> = []
@@ -16,6 +17,7 @@ struct ProviderModelCatalogView: View {
     @State private var showGroupPicker = false
     @State private var showNewGroup = false
     @State private var createAfterDismiss = false
+    @State private var pendingGroupMessage: String?
     @State private var newGroupName = ""
     @State private var message: String?
     @State private var pendingDelete: ModelEntry?
@@ -51,13 +53,27 @@ struct ProviderModelCatalogView: View {
     var body: some View {
         List {
             Section {
-                Text("Imported catalog: \(entries.count) models").font(.headline)
-                Text("Keep everyday models in Favorites. Use groups only when you want ordered fallback or load balancing.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                HStack(alignment: .center) {
+                    Text("Imported catalog: \(entries.count) models").font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Button(organizing ? "Done" : "Organize") {
+                        searchFocused = false
+                        organizing.toggle()
+                        if !organizing { selectedIds.removeAll() }
+                    }
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("model-catalog.organize")
+                }
                 Picker("Show", selection: $filter) {
                     ForEach(CatalogFilter.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .accessibilityIdentifier("model-catalog.filter")
+            } footer: {
+                if query.isEmpty && !organizing {
+                    Text("Keep everyday models in Favorites. Use groups only when you want ordered fallback or load balancing.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
             if organizing { organizationSection }
             Section {
@@ -69,16 +85,11 @@ struct ProviderModelCatalogView: View {
             } header: { Text("\(visibleEntries.count) models shown") }
         }
         .searchable(text: $query, prompt: "Search model, ID or provider")
+        .searchFocused($searchFocused)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(store.instance(for: instanceId)?.label ?? String(localized: "Models"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(organizing ? "Done" : "Organize") {
-                    organizing.toggle()
-                    if !organizing { selectedIds.removeAll() }
-                }.accessibilityIdentifier("model-catalog.organize")
-            }
             ToolbarItem(placement: .secondaryAction) {
                 Button(action: onAddCustom) { Label("Add Custom Model", systemImage: "plus") }
             }
@@ -107,7 +118,13 @@ struct ProviderModelCatalogView: View {
             Text("This removes the model and its saved group references. To temporarily remove it from selection, use Hide instead.")
         }
         .sheet(isPresented: $showGroupPicker, onDismiss: {
-            if createAfterDismiss { createAfterDismiss = false; showNewGroup = true }
+            if createAfterDismiss {
+                createAfterDismiss = false
+                showNewGroup = true
+            } else if let pending = pendingGroupMessage {
+                pendingGroupMessage = nil
+                message = pending
+            }
         }) {
             NavigationStack {
                 List {
@@ -202,11 +219,11 @@ struct ProviderModelCatalogView: View {
         guard var group = store.group(for: captured.id) else { return }
         for entry in selectedEntries where !group.memberEntryIds.contains(entry.id) { group.memberEntryIds.append(entry.id) }
         guard store.updateGroup(group) else {
-            message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            pendingGroupMessage = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
             return
         }
         selectedIds.removeAll()
-        message = String(localized: "Models added. Review their priority in Groups.")
+        pendingGroupMessage = String(localized: "Models added. Review their priority in Groups.")
     }
 
     private func createGroup() {
