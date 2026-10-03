@@ -1,3 +1,4 @@
+import { auditProviderSettings } from "./provider-settings-journey.mjs";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -97,6 +98,7 @@ try {
   // No key is entered and no model request is sent. Only the synthetic local
   // provider draft and actual keyboard/accessible-name semantics are exercised.
   await capture("02b-real-api-key-hidden-again");
+  await auditProviderSettings({ page, output, capture });
   const navigation = page.locator('[data-testid^="settings-section-nav"]');
   const ids = await navigation.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-testid")));
   await writeFile(resolve(output,"settings-navigation.json"), JSON.stringify(ids,null,2));
@@ -109,6 +111,12 @@ try {
   await page.getByTestId("settings-back-button").click();
   await page.getByTestId("task-settings-button").waitFor();
   await page.getByTestId("conversation-new-task").click();
+  const missingModel = page.getByTestId("chat-error-banner");
+  await missingModel.getByRole("button", { name: "Model settings", exact: true }).waitFor();
+  const instruction = missingModel.getByText("No model available. Sign in with a subscription or add a model provider in Settings.", { exact: true });
+  assert.ok(await instruction.evaluate(element => element.scrollWidth <= element.clientWidth + 1
+    && element.scrollHeight <= element.clientHeight + 1), "The missing-model recovery instruction must be fully readable");
+  await capture("home-missing-model-readable-recovery");
   const failedHomeRow = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
   await failedHomeRow.waitFor();
   assert.ok((await failedHomeRow.innerText()).includes("出错待看"));

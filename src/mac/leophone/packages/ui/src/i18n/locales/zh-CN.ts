@@ -5506,7 +5506,7 @@ const zhCN: Record<string, string> = {
   "chat.error.noAvailableModel": "当前没有可用模型。请用订阅账号登录，或在设置里添加模型供应商。",
   "chat.error.sendFailed": "发送失败，请稍后重试。",
   "chat.error.modelSettings": "模型设置",
-  "chat.error.setModels": "配置",
+  "chat.error.setModels": "模型设置",
 
   // Start Plan 单桶额度提醒
   "chat.quota.startPlan.bucketDailyLow": "{model} 今日额度剩余 {percent}（{remaining} tokens）。",

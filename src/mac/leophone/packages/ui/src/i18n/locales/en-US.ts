@@ -5756,7 +5756,7 @@ const enUS: Record<string, string> = {
   "chat.error.noAvailableModel": "No model available. Sign in with a subscription or add a model provider in Settings.",
   "chat.error.sendFailed": "Failed to send. Try again later.",
   "chat.error.modelSettings": "Model settings",
-  "chat.error.setModels": "Set",
+  "chat.error.setModels": "Model settings",
 
   // Start Plan per-bucket quota reminders
   "chat.quota.startPlan.bucketDailyLow":

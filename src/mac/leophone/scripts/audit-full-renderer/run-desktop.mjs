@@ -1,3 +1,4 @@
+import { auditProviderSettings } from "./provider-settings-journey.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -79,8 +80,15 @@ try {
   await page.getByRole("button", { name: "Hide API key", exact: true }).click();
   assert.equal(await key.getAttribute("type"), "password");
   await capture("02-native-desktop-api-key-controls");
+  await auditProviderSettings({ page, output, capture });
   await page.getByTestId("settings-back-button").click();
   await page.getByTestId("conversation-new-task").click();
+  const missingModel = page.getByTestId("chat-error-banner");
+  await missingModel.getByRole("button", { name: "Model settings", exact: true }).waitFor();
+  const instruction = missingModel.getByText("No model available. Sign in with a subscription or add a model provider in Settings.", { exact: true });
+  assert.ok(await instruction.evaluate(element => element.scrollWidth <= element.clientWidth + 1
+    && element.scrollHeight <= element.clientHeight + 1), "The missing-model recovery instruction must be fully readable");
+  await capture("home-missing-model-readable-recovery");
   const failed = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
   await failed.waitFor({ timeout: 30000 });
   assert.ok((await failed.innerText()).includes("出错待看"));
@@ -100,6 +108,8 @@ try {
   await writeFile(resolve(output, "task-readback.json"), JSON.stringify({ observations, state }, null, 2));
   assert.ok(!state.unreadAt); assert.equal(state.status, "error");
   assert.equal(state.matchingCount, 1); assert.equal(state.title, "Synthetic failed task");
+  assert.equal(state.cliSessionId, "audit-failed-task"); assert.equal(state.cliMessageCount, 2);
+  assert.ok(state.cliHistory.includes("Synthetic preserved history"));
   await page.getByTestId("conversation-new-task").click();
   await failed.waitFor({ state: "hidden" });
   const afterReturn = readTask();
