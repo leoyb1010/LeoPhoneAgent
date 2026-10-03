@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main, fix/audit-hardening-20260930]
+    branches: [main, fix/audit-hardening-20260930, fix/mobile-model-management-20261003]
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:
@@ -95,6 +95,38 @@ jobs:
           if grep -qE "Testing failed|\*\* TEST FAILED \*\*|\*\* BUILD FAILED \*\*" /tmp/xcodebuild.log; then
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
+
+  native-model-audit:
+    name: Native model UI (${{ matrix.label }})
+    # Test-only fixtures, no app signing, credentials, submodules, or releases.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/fix/mobile-model-management-20261003'
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: baseline
+            source_ref: 3c053a7c9b112667a04cea9b12c7c16a03c5ce39
+          - label: current
+            source_ref: WORKTREE
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install native harness project generator
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Test production SwiftUI model views on iPhone Simulator
+        run: bash scripts/native-model-audit/run.sh '${{ matrix.source_ref }}' '${{ matrix.label }}'
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: native-model-audit-${{ matrix.label }}
+          path: native-model-audit-results/${{ matrix.label }}/
+          if-no-files-found: error
+          retention-days: 14
 
   legacy-mac-quality:
     # Archived desktop remains independently checkable; it is not the current
