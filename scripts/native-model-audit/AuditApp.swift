@@ -24,20 +24,19 @@ private struct AuditRoot: View {
     @State private var draftKey: String?
     private var selection: String { ModelSwitcher.currentChoiceId(sessionId: "audit-session") ?? "none" }
     private var stateJSON: String {
-        let values = [
-            "audit.selection": selection,
-            "audit.reference": store.binding(for: "audit-session")?.primarySource.preferredReference ?? "none",
-            "audit.draft": draftKey ?? "none",
-            "audit.binding-count": String(store.sessionBindings.count),
-            "audit.hidden": store.modelEntries.filter(\.isHidden).map(\.id).joined(separator: "|"),
-            "audit.research-members": store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none",
-            "audit.default": store.defaultPrimaryGroupId ?? "none",
-            "audit.pins": pins.keys.joined(separator: "|"),
-            "audit.count": String(store.modelEntries.count),
-            "audit.edited-name": store.entry(for: "relay-proxy/deepseek-reasoner")?.model.displayName ?? "none",
-            "audit.edited-thinking": store.entry(for: "relay-proxy/deepseek-reasoner")?.overrides.maxThinkingLevel?.rawValue ?? "none",
-            "audit.edited-id": store.entry(for: "relay-proxy/deepseek-reasoner")?.id ?? "none",
-        ]
+        var values: [String: String] = [:]
+        values["audit.selection"] = selection
+        values["audit.reference"] = store.binding(for: "audit-session")?.primarySource.preferredReference ?? "none"
+        values["audit.draft"] = draftKey ?? "none"
+        values["audit.binding-count"] = String(store.sessionBindings.count)
+        values["audit.hidden"] = store.modelEntries.filter(\.isHidden).map(\.id).joined(separator: "|")
+        values["audit.research-members"] = store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none"
+        values["audit.default"] = store.defaultPrimaryGroupId ?? "none"
+        values["audit.pins"] = pins.keys.joined(separator: "|")
+        values["audit.count"] = String(store.modelEntries.count)
+        values["audit.edited-name"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.model.displayName ?? "none"
+        values["audit.edited-thinking"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.overrides.maxThinkingLevel?.rawValue ?? "none"
+        values["audit.edited-id"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.id ?? "none"
         return String(data: try! JSONEncoder().encode(values), encoding: .utf8)!
     }
     var body: some View {
