@@ -312,10 +312,25 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["Hide selected models"].tap()
         XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 8))
         capture("23-confirm-bulk-hide")
-        let confirmation = app.buttons["model-catalog.confirm-hide"]
-        XCTAssertTrue(confirmation.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        let confirmations = app.sheets.buttons.matching(identifier: "model-catalog.confirm-hide")
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            confirmations.allElementsBoundByIndex.contains { $0.isHittable }
+        }, object: app)
+        let readiness = XCTWaiter.wait(for: [ready], timeout: 10)
+        let nodes = confirmations.allElementsBoundByIndex
+        let candidates = XCTAttachment(string: nodes.enumerated().map { index, node in
+            "candidate=\(index) frame=\(node.frame) enabled=\(node.isEnabled) hittable=\(node.isHittable)"
+        }.joined(separator: "\n"))
+        candidates.name = "hide-confirmation-native-candidates"
+        candidates.lifetime = .keepAlways
+        add(candidates)
+        XCTAssertEqual(readiness, .completed, "A real confirmation node must be hittable")
+        // iOS 26 exposes a container Button and its actual leaf with the same
+        // identifier. Resolve an actually hittable leaf inside the visible sheet.
+        let confirmation = try XCTUnwrap(nodes.last(where: { $0.isHittable }))
         confirmation.tap()
-        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 10), "The destructive confirmation must actually finish before leaving the catalog")
+        let hidden = expectation(for: NSPredicate { _, _ in confirmations.count == 0 }, evaluatedWith: app)
+        wait(for: [hidden], timeout: 10)
         capture("24-catalog-model-hidden")
         closeAudit()
         XCTAssertTrue(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
@@ -619,6 +634,7 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test24ActualPickerLightContrastAudit() throws {
+        continueAfterFailure = true
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("48-picker-light-contrast")
@@ -626,6 +642,7 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test25ActualPickerDarkContrastAudit() throws {
+        continueAfterFailure = true
         launch("quick", large: false, dark: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("49-picker-dark-contrast")
