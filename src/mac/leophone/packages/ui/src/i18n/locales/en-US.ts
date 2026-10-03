@@ -1,5 +1,10 @@
 /** English translations */
 const enUS: Record<string, string> = {
+  "leoHome.tasksLoadFailed": "Could not load tasks.",
+  "leoHome.tasksLoading": "Loading tasks…",
+  "leoHome.tasksLastResults": "Showing the last available results.",
+  "leoHome.tasksRetry": "Retry loading tasks",
+
   "startPlan.recommendation.subagentDescription":
     "Your Start Plan has quota available for {model}. Switch this subagent’s model to the Start Plan?",
   "startPlan.recommendation.preferenceSaveFailed":

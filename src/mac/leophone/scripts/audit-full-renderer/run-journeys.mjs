@@ -117,12 +117,24 @@ try {
   assert.ok(await instruction.evaluate(element => element.scrollWidth <= element.clientWidth + 1
     && element.scrollHeight <= element.clientHeight + 1), "The missing-model recovery instruction must be fully readable");
   await capture("home-missing-model-readable-recovery");
+  // Known standalone-server integration failure remains an actual failing Home gate
+  // below. Capture honest feedback/retry before that gate instead of accepting empty UI.
+  const loadState = page.getByTestId("home-task-list-load-state");
+  if (await loadState.isVisible()) {
+    const retry = loadState.getByRole("button", { name: "Retry loading tasks", exact: true });
+    await retry.waitFor();
+    await capture("home-task-list-service-unavailable");
+    await retry.click();
+    await loadState.getByText("Could not load tasks.", { exact: true }).waitFor();
+    await capture("home-task-list-retry-still-unavailable");
+  }
   const failedHomeRow = page.locator('[data-leo-status-row="error"]').filter({ hasText: "Synthetic failed task" });
   await failedHomeRow.waitFor();
   assert.ok((await failedHomeRow.innerText()).includes("出错待看"));
   assert.ok(!(await failedHomeRow.innerText()).includes("做完待看"));
   const sidebarTask = page.getByTestId("task-item-audit-failed-task");
   await sidebarTask.locator('[data-error-indicator="true"]').waitFor();
+  await failedHomeRow.scrollIntoViewIfNeeded();
   await capture("03a-real-home-and-sidebar-failed-unread");
   await failedHomeRow.click();
   await page.getByText("Synthetic preserved history", { exact: true }).waitFor({ timeout: 30000 });

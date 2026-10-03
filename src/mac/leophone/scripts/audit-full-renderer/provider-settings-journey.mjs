@@ -39,6 +39,12 @@ export async function auditProviderSettings({ page, output, capture }) {
   await writeFile(resolve(output, "provider-computed-contrast.json"), JSON.stringify({ samples,
     scope: "Computed text and ancestor solid-background colors; gradients/backdrop imagery and complete accessibility compliance are not inferred." }, null, 2));
 
+  const navigationTitle = samples.find(sample => sample.label === "Custom providers");
+  assert.ok(navigationTitle.opacityAssumptionSatisfied, "Navigation contrast requires opaque ancestor layers");
+  assert.ok(navigationTitle.opaqueLayerContrast >= 4.5,
+    `Custom providers navigation label contrast is ${navigationTitle.opaqueLayerContrast}:1`);
+  await capture("provider-readable-navigation-label");
+
   const baseURL = page.getByTestId("model-provider-base-url-input");
   const syntheticURL = "https://models.example.invalid/v1";
   await baseURL.fill(syntheticURL); await baseURL.press("Tab");

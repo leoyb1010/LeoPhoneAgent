@@ -94,6 +94,7 @@ try {
   assert.ok((await failed.innerText()).includes("出错待看"));
   assert.ok(!(await failed.innerText()).includes("做完待看"));
   await page.getByTestId("task-item-audit-failed-task").locator('[data-error-indicator="true"]').waitFor();
+  await failed.scrollIntoViewIfNeeded();
   await capture("03-native-home-and-sidebar-failed-unread");
   await failed.click();
   await page.getByText("Synthetic preserved history", { exact: true }).waitFor({ timeout: 30000 });

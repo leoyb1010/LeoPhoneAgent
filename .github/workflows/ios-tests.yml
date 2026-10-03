@@ -232,7 +232,7 @@ jobs:
           set -euo pipefail
           pnpm leo:test:agent
           node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
-          node --import tsx --test packages/ui/test/phonePairingSession.test.ts packages/ui/test/leoStatusRows.test.ts
+          node --import tsx --test packages/ui/test/phonePairingSession.test.ts packages/ui/test/leoStatusRows.test.ts packages/ui/test/taskListLoadCoordinator.test.ts
       - name: Synthetic phone-pairing component journeys and screenshots
         run: |
           set -euo pipefail

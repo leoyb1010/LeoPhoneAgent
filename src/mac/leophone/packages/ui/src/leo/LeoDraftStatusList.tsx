@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useGlobalTaskList } from "@/hooks/useGlobalTaskList.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -31,7 +32,7 @@ function LeoDraftStatusListBody({
   className?: string;
 }) {
   const { intl } = useZCodeIntl();
-  const { items } = useGlobalTaskList({
+  const { items, loading, loadError, refresh } = useGlobalTaskList({
     kind: "active",
     workspaceTabs: home.workspaceTabs,
     sortBy: "updated",
@@ -40,7 +41,7 @@ function LeoDraftStatusListBody({
     collapsedLimit: SCAN_LIMIT,
   });
   const rows = useMemo(() => classifyLeoStatusRows(items), [items]);
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && !loading && !loadError) return null;
 
   const visible = rows.slice(0, MAX_ROWS);
   const hidden = rows.length - visible.length;
@@ -57,6 +58,19 @@ function LeoDraftStatusListBody({
           <span className="text-ui-caption text-foreground-subtlest">另有 {hidden} 个在侧栏</span>
         ) : null}
       </div>
+      {loading || loadError ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-surface px-3 py-2" data-testid="home-task-list-load-state">
+          <p role={loadError ? "alert" : "status"} className="min-w-0 flex-1 text-ui-caption text-foreground-subtle">
+            {intl.formatMessage({ id: loadError ? "leoHome.tasksLoadFailed" : "leoHome.tasksLoading" })}
+            {loadError && items.length > 0 ? ` ${intl.formatMessage({ id: "leoHome.tasksLastResults" })}` : ""}
+          </p>
+          {loadError ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
+              {intl.formatMessage({ id: "leoHome.tasksRetry" })}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <ul className="flex flex-col">
         {visible.map(({ task, state, label }) => {
           const title =

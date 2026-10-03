@@ -392,7 +392,8 @@ export function ModelProviderSectionNavigation({
           .map((group) => (
             <div key={group.id} className="flex flex-col gap-2 max-md:gap-1">
               <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
-                <h3 className="text-ui-sm font-semibold text-foreground-subtlest">{group.title}</h3>
+                {/* 导航分组标题也承担定位信息；本次实际主题subtlest仅2.4:1，使用可读次级文字。 */}
+                <h3 className="text-ui-sm font-semibold text-foreground-subtle">{group.title}</h3>
                 {shouldShowModelProviderGroupLoadingIndicator({
                   groupId: group.id,
                   presetLoading,

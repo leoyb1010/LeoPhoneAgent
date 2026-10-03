@@ -13,6 +13,8 @@ import { stabilizeTaskListItems } from "@/v4/taskListItemStabilization.js";
 import { getWindowControllerTaskListRegistry } from "@/v4/windowControllerTaskListRegistry.js";
 import type { WindowControllerTaskListVersion } from "@/v4/windowControllerTaskListRegistry.js";
 
+import { createTaskListLoadCoordinator } from "./taskListLoadCoordinator.js";
+
 type GlobalTaskListItem = WindowHostControllerTaskListItem;
 
 const subscribeToNothing = () => () => {};
@@ -107,7 +109,8 @@ export function useGlobalTaskList(params: {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(workspaceScopes.length > 0);
-  const requestSerialRef = useRef(0);
+  const [loadError, setLoadError] = useState<"unavailable" | "failed" | null>(null);
+  const loadCoordinator = useRef(createTaskListLoadCoordinator()).current;
   const manualRefreshSerialRef = useRef(0);
 
   const query = useMemo(
@@ -131,53 +134,53 @@ export function useGlobalTaskList(params: {
 
   const load = useCallback(
     async (version: WindowControllerTaskListVersion) => {
-      const requestSerial = ++requestSerialRef.current;
+      loadCoordinator.invalidate();
       if (workspaceScopes.length === 0) {
         setItems([]);
         itemsRef.current = [];
         setTotal(0);
         setHasMore(false);
         setLoading(false);
+        setLoadError(null);
         return;
       }
       if (!controllerRegistry) {
         // 原子切换后 base attachment 必须提供 Controller；缺失代表 Host/Renderer 版本不一致。
         logger.error("[useGlobalTaskList] window Host Controller channel unavailable");
         setLoading(false);
+        setLoadError("unavailable");
         return;
       }
-      setLoading(true);
-      try {
-        const result = await controllerRegistry.list(queryKey, version, query);
-        if (requestSerialRef.current !== requestSerial) {
-          return;
-        }
-        // Controller 的每个 activity 帧（运行中任务的 tool 调用等）都会让本 hook 重查，
-        // 而 attachTaskListRowActivity 与 tasks-index join 每次都产生全新对象。下游（grouped 视图）
-        // 只能按引用判等，于是整棵列表树换代重渲染并重测量虚拟器。这里与 sessions-index lane 同款
-        // 逐条引用稳定化：内容等价复用旧对象，整表等价复用旧数组。
-        const nextItems = stabilizeTaskListItems(
-          itemsRef.current,
-          result.items.map((item) =>
-            item.activity ? attachTaskListRowActivity(item, item.activity) : item,
-          ),
-        );
-        itemsRef.current = nextItems;
-        setItems(nextItems);
-        setTotal(result.total);
-        setHasMore(result.hasMore);
-      } catch (error) {
-        if (requestSerialRef.current === requestSerial) {
-          // Controller 查询失败时保留最后可信列表，避免单 source 异常清空其他 workspace。
+      await loadCoordinator.run({
+        load: () => controllerRegistry.list(queryKey, version, query),
+        onLoading: (value) => {
+          setLoading(value);
+          if (value) setLoadError(null);
+        },
+        onResult: (result) => {
+          // Controller 的每个 activity 帧（运行中任务的 tool 调用等）都会让本 hook 重查，
+          // 而 attachTaskListRowActivity 与 tasks-index join 每次都产生全新对象。下游（grouped 视图）
+          // 只能按引用判等，于是整棵列表树换代重渲染并重测量虚拟器。这里与 sessions-index lane 同款
+          // 逐条引用稳定化：内容等价复用旧对象，整表等价复用旧数组。
+          const nextItems = stabilizeTaskListItems(
+            itemsRef.current,
+            result.items.map((item) =>
+              item.activity ? attachTaskListRowActivity(item, item.activity) : item,
+            ),
+          );
+          itemsRef.current = nextItems;
+          setItems(nextItems);
+          setTotal(result.total);
+          setHasMore(result.hasMore);
+        },
+        onError: (error) => {
+          // 失败保留最后可信列表，并显式暴露错误，不能把服务缺失伪装成没有任务。
+          setLoadError("failed");
           logger.error(`[useGlobalTaskList] Controller 加载 ${params.kind} 列表失败`, error);
-        }
-      } finally {
-        if (requestSerialRef.current === requestSerial) {
-          setLoading(false);
-        }
-      }
+        },
+      });
     },
-    [controllerRegistry, params.kind, query, queryKey, workspaceScopes],
+    [controllerRegistry, loadCoordinator, params.kind, query, queryKey, workspaceScopes],
   );
 
   const refresh = useCallback(async () => {
@@ -191,6 +194,7 @@ export function useGlobalTaskList(params: {
   }, [controllerRevision, load, taskListVersionSignature, workspaceSourceGenerationSignature]);
 
   useEffect(() => {
+    loadCoordinator.activate();
     // 远程 workspace 从断开占位恢复为在线 session 时 identity/path 不变，
     // taskListVersion 也可能尚未变化，旧缓存因此永久保留连接前的空结果。remoteSessionId
     // 只作为 source 代际触发重查，不改变 workspaceIdentity 与 Controller 查询契约。
@@ -199,7 +203,8 @@ export function useGlobalTaskList(params: {
       taskListVersionSignature,
       workspaceSourceGenerationSignature,
     });
-  }, [controllerRevision, load, taskListVersionSignature, workspaceSourceGenerationSignature]);
+    return () => loadCoordinator.dispose();
+  }, [controllerRevision, load, loadCoordinator, taskListVersionSignature, workspaceSourceGenerationSignature]);
 
   const hasRemoteScope = params.workspaceTabs.some((tab) => Boolean(tab.workspaceIdentity));
   return {
@@ -207,6 +212,7 @@ export function useGlobalTaskList(params: {
     total,
     hasMore,
     loading,
+    loadError,
     syncingRemoteWorkspaces: loading && hasRemoteScope,
     refresh,
   };
