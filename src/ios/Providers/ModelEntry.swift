@@ -82,8 +82,8 @@ struct ModelOverrides: Codable, Hashable, Sendable {
 }
 
 /// A model available through a specific provider instance.
-/// Each entry has a stable UUID used as its Identifiable `id`.
-/// The legacy composite key "{providerInstanceId}:{model.id}" is available as `compositeKey`.
+/// Its canonical identity is the provider-instance UUID plus the exact model id.
+/// The original entry UUID remains stored for legacy references and downgrade.
 ///
 /// Storage model:
 /// - `baseModel` holds the API-reported metadata and is overwritten on every refresh.
@@ -217,6 +217,13 @@ struct ModelEntry: Identifiable, Codable, Hashable {
 }
 
 extension ModelEntry {
+    /// Refresh API metadata without replacing identity or user-owned settings.
+    func replacingBaseModel(_ model: LLMModel, isCustom: Bool? = nil) -> ModelEntry {
+        ModelEntry(uuid: uuid, providerInstanceId: providerInstanceId, model: model,
+                   overrides: overrides, isCustom: isCustom ?? self.isCustom,
+                   isHidden: isHidden, userModifiedAt: userModifiedAt)
+    }
+
     var effectiveMaxThinkingLevel: ThinkingLevel {
         overrides.maxThinkingLevel ?? model.catalogMaxThinkingLevel
     }

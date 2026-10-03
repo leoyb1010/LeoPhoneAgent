@@ -22,7 +22,8 @@ enum FallbackStrategy: String, Codable, Hashable, Sendable {
 struct ModelGroup: Identifiable, Codable, Hashable {
     let id: String
     var name: String
-    /// Ordered ModelEntry.id values (composite "{instanceId}:{modelId}").
+    /// Ordered ModelEntry.id values (composite "{instanceId}/{modelId}").
+    /// Legacy UUID and colon references remain readable during normalization.
     var memberEntryIds: [String]
     var strategy: RoutingStrategy
     /// Controls which errors trigger fallback. Only applies when `strategy == .fallback`.

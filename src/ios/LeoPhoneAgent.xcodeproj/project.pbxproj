@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EA1CATA20000000000000002 /* ProviderModelCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */; };
+		EA1CATA10000000000000002 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA10000000000000001 /* ModelCatalog.swift */; };
         E5HOUB001 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
         E5HOUB002 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
         E5SSHT001 /* RemoteSSHTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SSHT003 /* RemoteSSHTrust.swift */; };
@@ -723,6 +725,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Providers/ProviderModelCatalogView.swift"; sourceTree = SOURCE_ROOT; };
+		EA1CATA10000000000000001 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelCatalog.swift"; sourceTree = SOURCE_ROOT; };
         E5HOUB003 /* HarnessOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessOutbox.swift; sourceTree = SOURCE_ROOT; };
         E5SSHT003 /* RemoteSSHTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/RemoteSSHTrust.swift; sourceTree = SOURCE_ROOT; };
         E5CKIJ003 /* CloudKitInboundJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Sync/V2/CloudKitInboundJournal.swift; sourceTree = SOURCE_ROOT; };
@@ -2118,6 +2122,8 @@
 				E5PSH0002 /* PushRegistrar.swift */,
 				E5RLY0002 /* RelayEventCatchUp.swift */,
 				E5MDL0004 /* QuickModelSwitchSheet.swift */,
+				EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */,
+				EA1CATA10000000000000001 /* ModelCatalog.swift */,
 				E5MDL0002 /* ModelSwitcher.swift */,
 				E5COL0010 /* CollectionOpener.swift */,
 				E5COL0008 /* CollectionIntents.swift */,
@@ -3149,6 +3155,8 @@
 				E5PSH0001 /* PushRegistrar.swift in Sources */,
 				E5RLY0001 /* RelayEventCatchUp.swift in Sources */,
 				E5MDL0003 /* QuickModelSwitchSheet.swift in Sources */,
+				EA1CATA20000000000000002 /* ProviderModelCatalogView.swift in Sources */,
+				EA1CATA10000000000000002 /* ModelCatalog.swift in Sources */,
 				E5MDL0001 /* ModelSwitcher.swift in Sources */,
 				E5COL0009 /* CollectionOpener.swift in Sources */,
 				E5COL0007 /* CollectionIntents.swift in Sources */,

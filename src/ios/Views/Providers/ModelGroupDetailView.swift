@@ -348,9 +348,9 @@ struct ModelGroupDetailView: View {
             existingIds: { Set(store.group(for: gid)?.memberEntryIds ?? []) },
             headerNote: voiceNote,
             showGroups: false,
-            onAddMulti: { ids in
+            onAddOrdered: { ids in
                 guard var group = store.group(for: gid) else { return }
-                group.memberEntryIds.append(contentsOf: ids.sorted())
+                group.memberEntryIds.append(contentsOf: ids.filter { !group.memberEntryIds.contains($0) })
                 store.updateGroup(group)
             }
         )

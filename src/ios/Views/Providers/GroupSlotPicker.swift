@@ -17,7 +17,9 @@ struct GroupSlotPicker: View {
     @State private var showCreate = false
 
     private var selectedName: String {
-        if let id = selection, let g = store.group(for: id) { return g.name }
+        if let id = selection {
+            return store.group(for: id)?.name ?? String(localized: "Unavailable group")
+        }
         return String(localized: "None", comment: "No group selected")
     }
 
@@ -26,7 +28,7 @@ struct GroupSlotPicker: View {
             Picker(selection: $selection) {
                 Text("None", comment: "No group selected").tag(String?.none)
                 ForEach(store.modelGroups) { group in
-                    Text(group.name).tag(Optional(group.id))
+                    Text(group.name).tag(Optional(group.id)).disabled(!isEligible(group))
                 }
             } label: { EmptyView() }
 
@@ -55,6 +57,34 @@ struct GroupSlotPicker: View {
         }
     }
 
+    private func canAssign(_ entry: ModelEntry, direction: VoiceDirection?) -> Bool {
+        let system = VoiceProviderResolver.isSystemEntry(entry.providerInstanceId)
+        guard system || ModelSwitcher.isAvailable(entry, store: store) else { return false }
+        let modalities = entry.model.modalityOverride ?? entry.model.capabilities.supportedModalities
+        if let direction {
+            return direction.isVoiceModel(entry.model)
+                || modalities.contains(direction == .input ? .audioInput : .audioOutput)
+        }
+        return !system && !modalities.contains(.imageOutput)
+            && !modalities.contains(.audioOutput) && !modalities.contains(.videoOutput)
+    }
+
+    private func isEligible(_ group: ModelGroup) -> Bool {
+        let available = group.memberEntryIds.compactMap { id -> ModelEntry? in
+            guard let entry = store.entry(for: id) ?? UnifiedModelPicker.systemEntry(for: id) else { return nil }
+            if VoiceProviderResolver.isSystemEntry(entry.providerInstanceId) { return voiceDirection == nil ? nil : entry }
+            return ModelSwitcher.isAvailable(entry, store: store) ? entry : nil
+        }
+        guard !available.isEmpty else { return false }
+        if voiceDirection != nil {
+            // Voice resolution filters by direction before routing.
+            return available.contains { canAssign($0, direction: voiceDirection) }
+        }
+        // Every possible routed member must fit this purpose, including later
+        // fallback members. Existing incompatible assignments stay visible.
+        return available.allSatisfy { canAssign($0, direction: voiceDirection) }
+    }
+
     @MainActor
     private func createGroupConfig() -> ModelPickerConfig {
         let dir = voiceDirection
@@ -64,11 +94,12 @@ struct GroupSlotPicker: View {
             mode: .multi,
             explicitPreferModality: dir.map { $0 == .input ? [.audioInput] : [.audioOutput] },
             groupScope: .none,
+            candidateFilter: { entry in canAssign(entry, direction: dir) },
             headerNote: dir?.filterNote,
-            onAddMulti: { ids in
+            onAddOrdered: { ids in
                 guard !ids.isEmpty else { return }
                 let name = Self.suggestedName(for: dir, store: ProviderConfigStore.shared)
-                let group = ModelGroup(name: name, memberEntryIds: ids.sorted())
+                let group = ModelGroup(name: name, memberEntryIds: ids)
                 ProviderConfigStore.shared.addGroup(group)
                 assign(group.id)
             }

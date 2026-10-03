@@ -28,7 +28,11 @@ final class ModelPinStore: ObservableObject {
         keys = ModelSwitcher.pinnedKeys
     }
 
-    func isPinned(_ key: String) -> Bool { keys.contains(key) }
+    func isPinned(_ key: String) -> Bool {
+        // Reading keys keeps this observable; lookup also recognizes legacy ids.
+        ModelSwitcher.normalizedChoiceKeys(keys, store: .shared)
+            .contains(ProviderConfigStore.shared.normalizeEntryRef(key))
+    }
 
     /// 返回 false 表示已达上限、没钉上,调用方要如实提示。
     @discardableResult
@@ -52,7 +56,7 @@ final class ModelPinStore: ObservableObject {
     /// 当前可用的钉选条目(停用供应商下的会被跳过,但不从存储里摘)。
     func entries(store: ProviderConfigStore) -> [ModelEntry] {
         let enabled = Set(store.instances.filter(\.isEnabled).map(\.id))
-        return keys.compactMap { key in
+        return ModelSwitcher.normalizedChoiceKeys(keys, store: store).compactMap { key in
             guard let entry = store.entry(for: key), !entry.isHidden,
                   enabled.contains(entry.providerInstanceId) else { return nil }
             return entry

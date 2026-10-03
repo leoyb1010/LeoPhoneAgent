@@ -3552,7 +3552,7 @@ struct AIChatView: View {
             QuickModelSwitchSheet(sessionId: vm.sessionId) {
                 await vm.ensureSessionReturningId()
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch, object: vm)) { _ in
             showQuickModelSwitch = true
@@ -3665,7 +3665,7 @@ struct AIChatView: View {
     /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
     @ViewBuilder
     private var pinnedQuickMenu: some View {
-        let pinned = pinStore.entries(store: ProviderConfigStore.shared)
+        let pinned = Array(pinStore.entries(store: ProviderConfigStore.shared).prefix(6))
         let currentKey = ModelSwitcher.currentChoiceId(sessionId: vm.sessionId)
         if pinned.isEmpty {
             Button {

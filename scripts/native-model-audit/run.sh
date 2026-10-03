@@ -8,14 +8,49 @@ OUTPUT="${NATIVE_AUDIT_OUTPUT:-$ROOT/native-model-audit-results}/$LABEL"
 BUILD="$OUTPUT/project"
 mkdir -p "$OUTPUT"
 python3 "$ROOT/scripts/native-model-audit/generate.py" --source-ref "$REF" --output "$BUILD"
+cp "$BUILD/source-manifest.json" "$OUTPUT/source-manifest.json"
+if [[ "$REF" == "WORKTREE" ]]; then
+  # Parse the COMPLETE changed production source, including the real singleton
+  # store. This is syntax-only, explicitly not a full-app SDK typecheck/build.
+  echo 'Syntax-only Swift parse of actual production provider source; not a product build' | tee "$OUTPUT/source-syntax.log"
+  xcrun swiftc -frontend -parse -swift-version 5 \
+    "$ROOT/src/ios/Providers/ProviderConfigStore.swift" \
+    "$ROOT/src/ios/Providers/ProviderConfigDB.swift" \
+    "$ROOT/src/ios/Providers/ModelCatalog.swift" \
+    "$ROOT/src/ios/Providers/ModelEntry.swift" \
+    "$ROOT/src/ios/Providers/ModelSwitcher.swift" \
+    "$ROOT/src/ios/Providers/ModelPinStore.swift" \
+    2>&1 | tee -a "$OUTPUT/source-syntax.log"
+fi
 command -v xcodegen >/dev/null || { echo 'xcodegen is required'; exit 1; }
 (cd "$BUILD" && xcodegen generate)
 xcodebuild -version | tee "$OUTPUT/xcode-version.txt"
 xcrun simctl list devices available | tee "$OUTPUT/simulators.txt"
 DESTINATION="${NATIVE_AUDIT_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5}"
+TEST_SCOPE=()
+if [[ "$LABEL" == "baseline" ]]; then
+  # Baseline is immutable visual/codec evidence, not a claim that old behavior
+  # satisfies newly introduced interaction contracts. Earlier full-run results
+  # remain separate GitHub artifacts; failures here still propagate unchanged.
+  TEST_SCOPE+=("-only-testing:NativeModelAuditTests/AuditCodecTests")
+  for test in \
+    test01QuickPickerAndLargeCatalogSearch \
+    test02FullPickerSearchAndEmptyResults \
+    test03ModelGroupsAndGroupDetail \
+    test04ProviderCatalogNativeRows \
+    test05AccessibilityTextSizeAndEmptyCatalog \
+    test18ChineseNativeScreens; do
+    TEST_SCOPE+=("-only-testing:NativeModelAuditUITests/NativeModelJourneys/$test")
+  done
+  printf '%s\n' 'Immutable baseline: native screenshot journeys and codec tests only. Historical interaction failures are retained in earlier run artifacts, not repaired in baseline production source.' > "$OUTPUT/test-scope.txt"
+else
+  printf '%s\n' 'Current production source: full native interaction, codec, catalog and SQLite test suites.' > "$OUTPUT/test-scope.txt"
+fi
 set +e
 xcodebuild test -project "$BUILD/NativeModelAudit.xcodeproj" -scheme NativeModelAudit \
   -destination "$DESTINATION" -parallel-testing-enabled NO \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 \
+  "${TEST_SCOPE[@]}" \
   -resultBundlePath "$OUTPUT/NativeModelAudit.xcresult" \
   -derivedDataPath "$OUTPUT/DerivedData" CODE_SIGNING_ALLOWED=NO \
   2>&1 | tee "$OUTPUT/xcodebuild.log"
@@ -28,6 +63,7 @@ if [[ -d "$OUTPUT/NativeModelAudit.xcresult" ]]; then
     --format json > "$OUTPUT/test-summary.json" || true
 fi
 cp "$BUILD/source-manifest.json" "$OUTPUT/source-manifest.json"
+python3 "$ROOT/scripts/native-model-audit/export_images.py" "$OUTPUT"
 # Build intermediates are large and carry no review evidence.
 rm -rf "$OUTPUT/DerivedData"
 exit "$status"

@@ -5,7 +5,7 @@ import SwiftUI
     var body: some Scene {
         WindowGroup {
             AuditRoot()
-                .environment(\.locale, Locale(identifier: "en_US"))
+                .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
                 .dynamicTypeSize(ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
         }
     }
@@ -23,6 +23,20 @@ private struct AuditRoot: View {
     @State private var launched = false
     @State private var draftKey: String?
     private var selection: String { ModelSwitcher.currentChoiceId(sessionId: "audit-session") ?? "none" }
+    private var stateJSON: String {
+        let values = [
+            "audit.selection": selection,
+            "audit.reference": store.binding(for: "audit-session")?.primarySource.preferredReference ?? "none",
+            "audit.draft": draftKey ?? "none",
+            "audit.binding-count": String(store.sessionBindings.count),
+            "audit.hidden": store.modelEntries.filter(\.isHidden).map(\.id).joined(separator: "|"),
+            "audit.research-members": store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none",
+            "audit.default": store.defaultPrimaryGroupId ?? "none",
+            "audit.pins": pins.keys.joined(separator: "|"),
+            "audit.count": String(store.modelEntries.count),
+        ]
+        return String(data: try! JSONEncoder().encode(values), encoding: .utf8)!
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -47,6 +61,12 @@ private struct AuditRoot: View {
                 Text("Native production views · synthetic local data · no network")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            .safeAreaInset(edge: .bottom) {
+                Text("Synthetic audit state")
+                    .font(.caption)
+                    .accessibilityIdentifier("audit.state")
+                    .accessibilityValue(Text(stateJSON))
+            }
             .navigationTitle("Model audit")
             .onAppear {
                 guard !launched else { return }
@@ -54,6 +74,7 @@ private struct AuditRoot: View {
                 route = AuditRoute(rawValue: ProcessInfo.processInfo.environment["AUDIT_ROUTE"] ?? "")
             }
             .sheet(item: $route) { destination in
+                Group {
                 switch destination {
                 case .quick:
                     QuickModelSwitchSheet(sessionId: "audit-session", ensureSessionId: nil)
@@ -78,6 +99,9 @@ private struct AuditRoot: View {
                 case .voiceOutput:
                     NavigationStack { UnifiedModelPicker(config: .voiceOutput()) }
                 }
+                }
+                .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
+                .environment(\.dynamicTypeSize, ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
             }
         }
     }

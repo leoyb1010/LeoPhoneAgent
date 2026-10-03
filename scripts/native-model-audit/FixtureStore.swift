@@ -90,7 +90,8 @@ import SwiftUI
             entry("disabled-provider", "disabled", "Disabled fixture", "OpenAI"),
         ]
         if large {
-            for index in 1...180 {
+            let count = Int(ProcessInfo.processInfo.environment["AUDIT_CATALOG_COUNT"] ?? "180") ?? 180
+            for index in 1...max(1, count) {
                 modelEntries.append(entry("relay-proxy", String(format: "catalog-%03d", index), String(format: "Catalog Model %03d", index), index % 2 == 0 ? "OpenAI" : "Anthropic"))
             }
         }
@@ -118,20 +119,32 @@ import SwiftUI
                                 sessionBindings: sessionBindings)
         if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: storageKey) }
     }
-    func setEntriesHidden(ids: Set<String>, hidden: Bool) {
+    @discardableResult
+    func setEntriesHidden(ids: Set<String>, hidden: Bool) -> Bool {
         for index in modelEntries.indices where ids.contains(modelEntries[index].id) {
             modelEntries[index].isHidden = hidden
             modelEntries[index].userModifiedAt = Date()
         }
+        return true
     }
     func normalizeEntryRef(_ id: String) -> String {
         // Models an imported legacy alias retained after duplicate UUID pruning.
         if id == "pruned-legacy-sonnet-uuid" { return "anthropic-direct/claude-sonnet-4" }
         return entry(for: id)?.id ?? id
     }
-    func removeEntry(_ id: String) {
+    @discardableResult
+    func removeEntry(_ id: String) -> Bool {
         modelEntries.removeAll { $0.id == id }
         ModelSwitcher.forget(entryIds: [id])
+        return true
+    }
+    @discardableResult
+    func removeInstance(_ id: String) -> Bool {
+        instances.removeAll { $0.id == id }
+        modelEntries.removeAll { $0.providerInstanceId == id }
+        deletedInstanceIds.insert(id)
+        ModelSwitcher.forget(instanceIds: [id])
+        return true
     }
     func instance(for id: String) -> ProviderInstance? { instances.first { $0.id == id } }
     func entry(for id: String) -> ModelEntry? { modelEntries.first { $0.id == id || $0.uuid == id || $0.legacyColonCompositeKey == id } }
@@ -139,7 +152,8 @@ import SwiftUI
     func visibleEntries(for id: String) -> [ModelEntry] { entries(for: id).filter { !$0.isHidden } }
     func group(for id: String) -> ModelGroup? { modelGroups.first { $0.id == id } }
     func binding(for id: String) -> SessionModelBinding? { sessionBindings[id] }
-    func setBinding(_ value: SessionModelBinding, for id: String) { sessionBindings[id] = value }
+    @discardableResult
+    func setBinding(_ value: SessionModelBinding, for id: String) -> Bool { sessionBindings[id] = value; return true }
     func addGroup(_ group: ModelGroup) { modelGroups.append(group) }
     func updateGroup(_ group: ModelGroup) { if let index = modelGroups.firstIndex(where: { $0.id == group.id }) { modelGroups[index] = group } }
     func removeGroup(_ id: String) { modelGroups.removeAll { $0.id == id } }

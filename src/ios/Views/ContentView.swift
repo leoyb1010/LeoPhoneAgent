@@ -1775,7 +1775,7 @@ struct ContentView: View {
             NavigationStack { AddProviderView() }
         }
         .sheet(isPresented: $showSelectModels) {
-            NavigationStack { OnboardingModelSelectionView() }
+            NavigationStack { ModelLibraryView() }
         }
         .sheet(isPresented: $showHomeModelPicker) {
             QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
@@ -3246,7 +3246,7 @@ struct ContentView: View {
 
     /// 常用(钉住的)+ 最近用过的,最多 6 个;一个都没有就列前几个可用模型,首页也能一步选到。
     private var homeQuickModelEntries: [ModelEntry] {
-        var out = ModelSwitcher.pinnedEntries(store: providerStore)
+        var out = Array(ModelSwitcher.pinnedEntries(store: providerStore).prefix(6))
         for entry in ModelSwitcher.recentEntries(store: providerStore, limit: 3)
         where !out.contains(where: { $0.compositeKey == entry.compositeKey }) {
             out.append(entry)

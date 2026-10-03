@@ -104,6 +104,8 @@ struct ModelPickerConfig {
     /// `onSelect` when nil.
     var onSelectInGroup: (@MainActor (ModelEntry, ModelGroup) -> Void)?
     var onAddMulti: (@MainActor (Set<String>) -> Void)?
+    /// Ordered callback for routing groups: tap order becomes fallback priority.
+    var onAddOrdered: (@MainActor ([String]) -> Void)?
 
     enum Mode { case single, multi }
     enum GroupScope {
@@ -243,7 +245,34 @@ struct UnifiedModelPicker: View {
     @ObservedObject private var systemVoiceRoster = SystemVoiceRoster.shared
     @Environment(\.dismiss) private var dismiss
 
+    @ObservedObject private var pins = ModelPinStore.shared
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var browseScope: BrowseScope = .providers
+    @State private var editMode: EditMode = .inactive
+    @State private var pinFailure = false
+    @State private var selectionOrder: [String] = []
     @State private var searchText = ""
+
+    private enum BrowseScope: String, CaseIterable {
+        case favorites, providers, groups
+        var title: LocalizedStringKey {
+            switch self {
+            case .favorites: return "Favorites"
+            case .providers: return "Providers"
+            case .groups: return "Groups"
+            }
+        }
+    }
+    private var isSearching: Bool { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var supportsGroups: Bool { config.showGroups && !isMulti && config.onSelectGroup != nil }
+    private var scopes: [BrowseScope] { supportsGroups ? [.favorites, .providers, .groups] : [.favorites, .providers] }
+    private var favoriteEntries: [ModelEntry] {
+        ModelCatalog.orderedEntries(keys: ModelSwitcher.normalizedChoiceKeys(pins.keys, store: store), entries: candidateEntries)
+    }
+    private var filteredFavorites: [ModelEntry] { favoriteEntries.filter { matchesEntry($0) } }
+    private func matchesEntry(_ entry: ModelEntry) -> Bool {
+        ModelCatalog.matches(searchText, entry: entry, providerLabel: store.instance(for: entry.providerInstanceId)?.label ?? "")
+    }
     @State private var selectedEntryIds: Set<String> = []
     @State private var expandedGroupIds: Set<String> = []
     @State private var collapsedInstanceIds: Set<String> = []
@@ -260,6 +289,10 @@ struct UnifiedModelPicker: View {
     @State private var quickTestEntry: ModelEntry?
 
     private var isMulti: Bool { config.mode == .multi }
+    private var validSelectedOrder: [String] {
+        let valid = Set(candidateEntries.filter { !(config.isDisabled?($0) ?? false) }.map(\.id))
+        return selectionOrder.filter { selectedEntryIds.contains($0) && valid.contains($0) }
+    }
 
     // MARK: - Candidate Filtering
 
@@ -293,7 +326,7 @@ struct UnifiedModelPicker: View {
         }
         if let f = config.candidateFilter { pool = pool.filter(f) }
         if let existing = config.existingIds?() { pool = pool.filter { !existing.contains($0.id) } }
-        return pool
+        return ModelCatalog.entries(pool, providerOrder: store.instances.map(\.id))
     }
 
     private var systemEntries: [ModelEntry] {
@@ -327,24 +360,12 @@ struct UnifiedModelPicker: View {
     // MARK: - Search
 
     private func fuzzyMatch(_ text: String) -> Bool {
-        guard !searchText.isEmpty else { return true }
-        let query = searchText.lowercased()
-        let target = text.lowercased()
-        if target.contains(query) { return true }
-        var idx = target.startIndex
-        for ch in query {
-            guard let found = target[idx...].firstIndex(of: ch) else { return false }
-            idx = target.index(after: found)
-        }
-        return true
+        ModelCatalog.matches(searchText, text: text)
     }
 
     private var filteredEntriesByInstance: [(instance: ProviderInstance, entries: [ModelEntry])] {
-        guard !searchText.isEmpty else { return entriesByInstance }
-        return entriesByInstance.compactMap { item in
-            let filtered = item.entries.filter { entry in
-                fuzzyMatch(entry.model.displayName) || fuzzyMatch(entry.model.id)
-            }
+        entriesByInstance.compactMap { item in
+            let filtered = item.entries.filter { matchesEntry($0) }
             return filtered.isEmpty ? nil : (item.instance, filtered)
         }
     }
@@ -356,7 +377,11 @@ struct UnifiedModelPicker: View {
         case .all:
             let groups = store.modelGroups
             guard !searchText.isEmpty else { return groups }
-            return groups.filter { fuzzyMatch($0.name) }
+            return groups.filter { group in
+                fuzzyMatch(group.name) || group.memberEntryIds.contains { id in
+                    store.entry(for: id).map { matchesEntry($0) } ?? false
+                }
+            }
         case .single(let groupId):
             guard let gid = groupId, let g = store.group(for: gid) else { return [] }
             guard !searchText.isEmpty else { return [g] }
@@ -374,85 +399,63 @@ struct UnifiedModelPicker: View {
 
     var body: some View {
         List {
+            if !isMulti { selectionSummary }
+            Section {
+                if dynamicTypeSize.isAccessibilitySize {
+                    Picker("Browse models", selection: $browseScope) {
+                        ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
+                    }.pickerStyle(.menu).accessibilityIdentifier("model-picker.scope")
+                } else {
+                    Picker("Browse models", selection: $browseScope) {
+                        ForEach(scopes, id: \.self) { scope in Text(scope.title).tag(scope) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("model-picker.scope")
+                }
+            }
             if let note = config.headerNote {
+                Section { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
+            }
+            if isSearching {
                 Section {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Search covers all providers and groups.").font(.footnote).foregroundStyle(.secondary)
+                    Text("\(filteredEntriesByInstance.reduce(0) { $0 + $1.entries.count }) matching models")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
-
-            // System now renders through the generic instanceSection loop below
-            // (its synthetic instance leads entriesByInstance) — no parallel section.
-
-            if config.showGroups && !visibleGroups.isEmpty {
-                Section {
-                    ForEach(visibleGroups) { group in
-                        groupRow(group)
-                        if expandedGroupIds.contains(group.id) {
-                            groupMemberRows(group)
-                        }
-                    }
-                } header: {
-                    HStack {
-                        Text("Model Groups")
-                        Spacer()
-                        Button {
-                            showGroupsManager = true
-                        } label: {
-                            Text("Edit")
-                                .font(.caption)
-                                .textCase(nil)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.tint)
-                    }
-                } footer: {
-                    if searchText.isEmpty {
-                        switch config.groupScope {
-                        case .all:
-                            Text("Bind this session to a group for automatic fallback or load balancing.")
-                        case .single:
-                            Text("Pick a group whose audio-capable models drive this direction.")
-                        case .none:
-                            EmptyView()
-                        }
-                    }
-                }
+            if !isSearching && browseScope == .favorites {
+                favoritesSection
             }
-
-            ForEach(filteredEntriesByInstance, id: \.instance.id) { item in
-                instanceSection(item)
+            if supportsGroups && (browseScope == .groups || isSearching) {
+                groupsSection
             }
-
-            if visibleGroups.isEmpty && filteredEntriesByInstance.isEmpty {
-                emptySection
+            if browseScope == .providers || isSearching {
+                ForEach(filteredEntriesByInstance, id: \.instance.id) { item in instanceSection(item) }
+                if filteredEntriesByInstance.isEmpty && (!supportsGroups || visibleGroups.isEmpty) { emptySection }
             }
-
             if config.showCreateGroup {
                 Section {
-                    Button {
-                        showCreateGroupSheet = true
-                    } label: {
+                    Button { showCreateGroupSheet = true } label: {
                         Label("Create group from models…", systemImage: "plus.rectangle.on.folder")
-                            .font(.subheadline)
                     }
                 }
             }
         }
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search models")
+        .environment(\.editMode, $editMode)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search model, ID or provider")
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle(config.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             seedCollapse()
             SystemVoiceCatalog.startObservingVoiceChanges()
         }
+        .onChange(of: browseScope) { _, _ in editMode = .inactive }
+        .onChange(of: searchText) { _, _ in editMode = .inactive }
         .toolbar { toolbarContent }
+        .alert("Favorites are full", isPresented: $pinFailure) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You can save up to \(ModelSwitcher.maxPinned) favorites. Remove one before adding another.")
+        }
         .sheet(isPresented: $showCreateGroupSheet) {
             NavigationStack {
                 UnifiedModelPicker(config: createGroupConfig())
@@ -482,6 +485,75 @@ struct UnifiedModelPicker: View {
         }
     }
 
+    @ViewBuilder
+    private var selectionSummary: some View {
+        if let gid = config.currentGroupId?(), let group = store.group(for: gid) {
+            Section("Current selection") {
+                Label(group.name, systemImage: "square.stack.3d.up")
+                    .font(.headline)
+                if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) {
+                    Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(.secondary)
+                    if let reason = memberUnavailableReason(entry.id) {
+                        Text(reason).font(.caption).foregroundStyle(.orange)
+                    }
+                }
+            }
+        } else if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) ?? Self.systemEntry(for: eid) {
+            Section("Current selection") {
+                Label(entry.model.displayName, systemImage: "checkmark.circle.fill").font(.headline)
+                if let provider = store.instance(for: entry.providerInstanceId) {
+                    Text(provider.label).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var favoritesSection: some View {
+        Section {
+            if favoriteEntries.isEmpty {
+                Label("Star models in Providers to keep them here.", systemImage: "star")
+                    .foregroundStyle(.secondary)
+                Button("Browse providers") { browseScope = .providers }
+            } else {
+                ForEach(favoriteEntries) { entry in entryRow(entry) }
+                    .onMove { from, to in pins.move(visibleKeys: favoriteEntries.map(\.id), from: from, to: to) }
+            }
+        } header: { Text("Favorites") }
+        footer: { Text("Favorites are your shortlist. Reorder them with Edit; choosing a model does not change your default.") }
+    }
+
+    private var groupsSection: some View {
+        Section {
+            if visibleGroups.isEmpty {
+                Text("No model groups").foregroundStyle(.secondary)
+            }
+            ForEach(visibleGroups) { group in
+                groupRow(group)
+                if expandedGroupIds.contains(group.id) { groupMemberRows(group) }
+            }
+            Button { showGroupsManager = true } label: {
+                Label("Manage groups and defaults", systemImage: "slider.horizontal.3")
+            }
+            .accessibilityIdentifier("model-picker.manage-groups")
+        } header: { Text("Routing groups") }
+        footer: { Text("A group tries its models in order or balances sessions. Default applies to new chats; selecting here only changes this choice.") }
+    }
+
+    private func favoriteButton(_ entry: ModelEntry) -> some View {
+        Button {
+            if !pins.toggle(entry.id) { pinFailure = true }
+        } label: {
+            Image(systemName: pins.isPinned(entry.id) ? "star.fill" : "star")
+                .foregroundStyle(pins.isPinned(entry.id) ? Color.orange : Color.secondary)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(Text(pins.isPinned(entry.id) ? "Remove from favorites" : "Add to favorites"))
+        .accessibilityValue(entry.model.displayName)
+        .accessibilityIdentifier("model-picker.favorite.\(entry.id)")
+    }
+
     /// Compact per-row Quick Test button — opens the SAME ModelQuickTestSheet used
     /// by the provider model list, for a consistent experience everywhere (the
     /// sheet auto-plays audio results, so a voice test speaks on its own). Reused
@@ -493,7 +565,7 @@ struct UnifiedModelPicker: View {
             Image(systemName: "bolt.badge.checkmark")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.tint)
-                .frame(width: 32, height: 32)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
@@ -515,17 +587,17 @@ struct UnifiedModelPicker: View {
             explicitPreferModality: dir.map { $0 == .input ? [.audioInput] : [.audioOutput] },
             groupScope: .none,
             headerNote: dir?.filterNote,
-            onAddMulti: { ids in
+            onAddOrdered: { ids in
                 guard !ids.isEmpty else { return }
                 let store = ProviderConfigStore.shared
                 let name = Self.uniqueGroupName(for: dir, store: store)
-                let group = ModelGroup(name: name, memberEntryIds: ids.sorted())
+                let group = ModelGroup(name: name, memberEntryIds: ids)
                 store.addGroup(group)
                 if let dir {
                     if dir == .input { store.voiceInputGroupId = group.id }
                     else { store.voiceOutputGroupId = group.id }
                 }
-                if let firstId = ids.sorted().first {
+                if let firstId = ids.first {
                     if let entry = store.entry(for: firstId) {
                         parentConfig.onSelect?(entry)
                     } else if VoiceProviderResolver.isSystemEntry(firstId) {
@@ -560,17 +632,26 @@ struct UnifiedModelPicker: View {
                 Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Add (\(selectedEntryIds.count))") {
-                    config.onAddMulti?(selectedEntryIds)
+                Button("Add (\(validSelectedOrder.count))") {
+                    let ordered = validSelectedOrder
+                    guard !ordered.isEmpty else { return }
+                    if let onAddOrdered = config.onAddOrdered { onAddOrdered(ordered) }
+                    else { config.onAddMulti?(Set(ordered)) }
                     dismiss()
                 }
                 .font(.body.weight(.semibold))
-                .disabled(selectedEntryIds.isEmpty)
+                .disabled(validSelectedOrder.isEmpty)
             }
         } else {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { dismiss() }
+            if browseScope == .favorites && !isSearching && !favoriteEntries.isEmpty {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(editMode.isEditing ? "Done editing" : "Edit") {
+                        editMode = editMode.isEditing ? .inactive : .active
+                    }
+                    .accessibilityIdentifier("model-picker.edit-favorites")
+                }
             }
+            ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
         }
     }
 
@@ -587,70 +668,45 @@ struct UnifiedModelPicker: View {
 
     // MARK: - Group Row
 
-    @ViewBuilder
     private func groupRow(_ group: ModelGroup) -> some View {
         let isSelected = isGroupSelected(group)
-
-        HStack(spacing: 10) {
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20))
-                .foregroundStyle(isSelected ? Color.accentColor : Color(UIColor.tertiaryLabel))
-            Image(systemName: "square.stack.3d.up.fill")
-                .font(.caption).foregroundStyle(.blue)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(group.name)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color(UIColor.label))
-                    strategyBadge(group.strategy)
-                }
-                groupSubtitle(group)
-            }
-
-            Spacer()
-
-            if case .all = config.groupScope,
-               store.defaultPrimaryGroupId == group.id {
-                Text("Default")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.blue.opacity(0.1))
-                    .clipShape(Capsule())
-            }
-
+        let available = !availableMemberEntryIds(group).isEmpty
+        return HStack(spacing: 8) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if expandedGroupIds.contains(group.id) {
-                        _ = expandedGroupIds.remove(group.id)
-                    } else {
-                        expandedGroupIds.insert(group.id)
+                guard available else { return }
+                config.onSelectGroup?(group)
+                dismissIfNeeded()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "square.stack.3d.up")
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(group.name).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        groupSubtitle(group)
+                        Text(group.strategy == .fallback ? "Ordered fallback" : "Load balancing")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if store.defaultPrimaryGroupId == group.id {
+                            Text("Default for new chats").font(.caption).foregroundStyle(.tint)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .disabled(!available)
+            .accessibilityIdentifier("model-picker.group.\(group.id)")
+            .accessibilityValue(isSelected ? Text("Selected") : Text("Not selected"))
+            Button {
+                if expandedGroupIds.contains(group.id) { expandedGroupIds.remove(group.id) }
+                else { expandedGroupIds.insert(group.id) }
             } label: {
                 Image(systemName: expandedGroupIds.contains(group.id) ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Color(UIColor.tertiarySystemFill))
-                    .clipShape(Circle())
+                    .frame(minWidth: 44, minHeight: 44)
             }
-            .buttonStyle(.plain)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            config.onSelectGroup?(group)
-            dismissIfNeeded()
-        }
-        .contextMenu {
-            Button {
-                UIPasteboard.general.string = "group:\(group.id)"
-                MinisToast.show(String(localized: "Copied: \(group.name)"))
-            } label: {
-                Label(String(localized: "Copy Shortcut Model ID"), systemImage: "link")
-            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(Text("Show models in \(group.name)"))
+            .accessibilityIdentifier("model-picker.expand-group.\(group.id)")
         }
     }
 
@@ -714,6 +770,11 @@ struct UnifiedModelPicker: View {
         // This is property-driven: no "is this System?" branch here.
         guard let entry = store.entry(for: entryId) ?? Self.systemEntry(for: entryId) else {
             return String(localized: "Model not found")
+        }
+        if config.isDisabled?(entry) == true { return String(localized: "Unavailable for this purpose") }
+        if let filter = config.candidateFilter, !filter(entry) { return String(localized: "Unavailable for this purpose") }
+        if VoiceProviderResolver.isSystemEntry(entry.providerInstanceId), config.effectivePreferModality == nil {
+            return String(localized: "Unavailable for this purpose")
         }
         if !entry.displayTraits.requiresCredential { return nil }
         if entry.isHidden { return String(localized: "Hidden") }
@@ -817,78 +878,36 @@ struct UnifiedModelPicker: View {
         }
     }
 
-    @ViewBuilder
     private func expandedEntryRow(_ entry: ModelEntry, parentGroup: ModelGroup) -> some View {
         let isSystem = VoiceProviderResolver.isSystemEntry(entry.providerInstanceId)
         let isActive = (config.currentGroupId?() == parentGroup.id && config.currentEntryId?() == entry.id)
-            || (isSystem && VoiceProviderResolver.isSystemEntry(config.currentEntryId?()))
+            || (isSystem && Self.systemRowKey(config.currentEntryId?()) == Self.systemRowKey(entry.id)
+                && VoiceProviderResolver.isSystemEntry(config.currentEntryId?()))
         let disabled = config.isDisabled?(entry) ?? false
-
-        HStack(spacing: 10) {
-            Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 17))
-                .foregroundStyle(isActive ? Color.accentColor : Color(UIColor.quaternaryLabel))
-
-            providerDot(entry.model.provider)
-                .opacity(disabled ? 0.4 : 1)
-
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(entry.model.displayName)
-                        .font(.subheadline)
-                        .foregroundStyle(disabled ? Color(UIColor.tertiaryLabel) : Color(UIColor.label))
-                    if disabled {
-                        Text("unavailable", comment: "Modality-incompatible model tag")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.orange)
-                    }
-                }
-                HStack(spacing: 4) {
-                    if let instanceLabel = store.instance(for: entry.providerInstanceId)?.label {
-                        Text(instanceLabel)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Text("·")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    Text(entry.model.id)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Spacer()
-
-            if isActive {
-                Text("Active")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.green.opacity(0.1))
-                    .clipShape(Capsule())
-            }
-
-            quickTestButton(entry)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !disabled else { return }
-            if let inGroup = config.onSelectInGroup {
-                inGroup(entry, parentGroup)
-            } else {
-                config.onSelect?(entry)
-            }
-            dismissIfNeeded()
-        }
-        .contextMenu {
+        return HStack(spacing: 8) {
             Button {
-                UIPasteboard.general.string = "entry:\(entry.compositeKey)"
-                MinisToast.show(String(localized: "Copied: \(entry.model.displayName)"))
+                guard !disabled else { return }
+                if let inGroup = config.onSelectInGroup { inGroup(entry, parentGroup) }
+                else { config.onSelect?(entry) }
+                dismissIfNeeded()
             } label: {
-                Label(String(localized: "Copy Shortcut Model ID"), systemImage: "link")
+                HStack(spacing: 10) {
+                    Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                        Text(store.instance(for: entry.providerInstanceId)?.label ?? entry.model.provider)
+                            .font(.caption).foregroundStyle(.secondary)
+                        if isActive { Text("Active in this group").font(.caption).foregroundStyle(.tint) }
+                    }
+                    Spacer(minLength: 0)
+                }.frame(minHeight: 44).contentShape(Rectangle())
             }
+            .buttonStyle(.borderless)
+            .disabled(disabled)
+            .accessibilityIdentifier("model-picker.member.\(parentGroup.id).\(entry.id)")
+            .accessibilityValue(isActive ? Text("Selected") : Text("Not selected"))
+            if !isSystem { favoriteButton(entry) }
         }
     }
 
@@ -939,70 +958,40 @@ struct UnifiedModelPicker: View {
 
     // MARK: - Instance Section
 
-    @ViewBuilder
     private func instanceSection(_ item: (instance: ProviderInstance, entries: [ModelEntry])) -> some View {
-        let isCollapsed = searchText.isEmpty && collapsedInstanceIds.contains(item.instance.id)
-        // When collapsed, surface the currently-selected entry (if it lives in
-        // this section) rather than blindly the first — so the active model stays
-        // visible with its checkmark even while the section is folded.
-        let collapsedEntry: [ModelEntry] = {
-            if !isMulti, config.currentGroupId?() == nil, let eid = config.currentEntryId?() {
-                // System selection may be the bare sentinel — match by row key.
-                if VoiceProviderResolver.isSystemEntry(item.instance.id),
-                   let sel = item.entries.first(where: { Self.systemRowKey($0.id) == Self.systemRowKey(eid) }) {
-                    return [sel]
-                }
-                if let selected = item.entries.first(where: { $0.id == eid }) {
-                    return [selected]
-                }
-            }
-            return Array(item.entries.prefix(1))
-        }()
-        let visibleEntries = isCollapsed ? collapsedEntry : item.entries
-        Section {
-            ForEach(visibleEntries) { entry in
-                entryRow(entry)
-            }
-            if isCollapsed && item.entries.count > 1 {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        _ = collapsedInstanceIds.remove(item.instance.id)
+        let collapsed = !isSearching && collapsedInstanceIds.contains(item.instance.id)
+        return Section {
+            Button {
+                if collapsed { collapsedInstanceIds.remove(item.instance.id) }
+                else { collapsedInstanceIds.insert(item.instance.id) }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.instance.label).font(.headline).foregroundStyle(.primary)
+                        Text("\(item.entries.count) models").font(.caption).foregroundStyle(.secondary)
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .medium))
-                        Text(String(localized: "Show \(item.entries.count) models"))
-                            .font(.caption)
-                    }
-                    .foregroundStyle(.tint)
-                }
+                    Spacer()
+                    Image(systemName: collapsed ? "chevron.down" : "chevron.up").foregroundStyle(.secondary)
+                }.frame(minHeight: 44).contentShape(Rectangle())
             }
-        } header: {
-            HStack {
-                Text(item.instance.label)
-                Spacer()
-                if searchText.isEmpty && item.entries.count > 1 {
-                    let collapsed = collapsedInstanceIds.contains(item.instance.id)
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            if collapsed {
-                                _ = collapsedInstanceIds.remove(item.instance.id)
-                            } else {
-                                collapsedInstanceIds.insert(item.instance.id)
-                            }
+            .buttonStyle(.borderless)
+            .disabled(isSearching)
+            .accessibilityIdentifier("model-picker.provider.\(item.instance.id)")
+            .accessibilityValue(collapsed ? Text("Collapsed") : Text("Expanded"))
+            if !collapsed {
+                if isMulti {
+                    let selectable = item.entries.filter { !(config.isDisabled?($0) ?? false) }
+                    Button(selectedEntryIds.isSuperset(of: Set(selectable.map(\.id))) ? "Clear this provider" : "Select this provider") {
+                        let keys = selectable.map(\.id)
+                        if selectedEntryIds.isSuperset(of: Set(keys)) {
+                            selectedEntryIds.subtract(keys)
+                            selectionOrder.removeAll { keys.contains($0) }
+                        } else {
+                            for key in keys where !selectedEntryIds.contains(key) { toggleSelection(key) }
                         }
-                    } label: {
-                        Image(systemName: collapsed ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
-                            .background(Color(UIColor.tertiarySystemFill))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .textCase(nil)
+                    }.disabled(selectable.isEmpty)
                 }
+                ForEach(item.entries) { entry in entryRow(entry) }
             }
         }
     }
@@ -1010,100 +999,51 @@ struct UnifiedModelPicker: View {
     // MARK: - Entry Row
 
     private func entryRow(_ entry: ModelEntry) -> some View {
-        let disabled = config.isDisabled?(entry) ?? false
+        let unavailable = isMulti ? nil : memberUnavailableReason(entry.id)
+        let disabled = (config.isDisabled?(entry) ?? false) || unavailable != nil
         let traits = entry.displayTraits
-        let isSelected: Bool = {
+        let selected: Bool = {
             if isMulti { return selectedEntryIds.contains(entry.id) }
             guard config.currentGroupId?() == nil, let eid = config.currentEntryId?() else { return false }
-            // Built-in System entries select by their row key (voice / asr-online|
-            // offline / auto), since the stored selection may be the bare sentinel;
-            // regular entries match by exact id.
             if VoiceProviderResolver.isSystemEntry(entry.providerInstanceId) {
-                return VoiceProviderResolver.isSystemEntry(eid)
-                    && Self.systemRowKey(eid) == Self.systemRowKey(entry.id)
+                return VoiceProviderResolver.isSystemEntry(eid) && Self.systemRowKey(eid) == Self.systemRowKey(entry.id)
             }
-            return eid == entry.id
+            return store.entry(for: eid)?.id == entry.id
         }()
-
-        // Tap-gesture pattern (not a Button wrapper) so the trailing Quick Test
-        // Button nests correctly — a Button inside a Button's label doesn't route
-        // taps in SwiftUI.
-        return HStack(spacing: 10) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color(UIColor.tertiaryLabel))
-
-                Image(systemName: traits.iconSymbol)
-                    .font(.system(size: 11))
-                    .foregroundStyle(traits.tint)
-                    .frame(width: 14)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(entry.model.displayName)
-                        .font(.subheadline)
-                        .foregroundStyle(disabled ? Color(UIColor.tertiaryLabel) : Color(UIColor.label))
-                    HStack(spacing: 4) {
-                        // Subtitle from traits (e.g. "iOS built-in, works offline")
-                        // for built-ins; the raw model id for cloud models.
-                        Text(traits.subtitle ?? entry.model.id)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                        let badges = traits.subtitle == nil ? modalityBadges(entry.model) : []
-                        if !badges.isEmpty {
-                            Text("·")
-                                .font(.caption2)
-                                .foregroundStyle(.quaternary)
-                            ForEach(badges, id: \.self) { badge in
-                                Text(badge)
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Color(UIColor.tertiarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                            }
+        return HStack(spacing: 8) {
+            Button {
+                guard !disabled, !editMode.isEditing else { return }
+                if isMulti { toggleSelection(entry.id) }
+                else { config.onSelect?(entry); dismissIfNeeded() }
+            } label: {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let provider = store.instance(for: entry.providerInstanceId) {
+                            Text(provider.label).font(.caption).foregroundStyle(.secondary)
                         }
-                        if disabled {
-                            Text("unavailable", comment: "Modality-incompatible model tag")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(.orange)
-                        }
+                        Text(traits.subtitle ?? entry.model.id).font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(2).textSelection(.disabled)
+                        if disabled { Text(unavailable ?? String(localized: "Unavailable for this purpose")).font(.caption).foregroundStyle(.orange) }
                     }
-                }
-
-                Spacer()
-
-                if !isMulti, config.currentGroupId?() != nil,
-                   config.currentEntryId?() == entry.id {
-                    Text("Active")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.green.opacity(0.1))
-                        .clipShape(Capsule())
-                }
-
-                quickTestButton(entry)
-        }
-        .opacity(disabled ? 0.6 : 1)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !disabled else { return }
-            if isMulti {
-                toggleSelection(entry.id)
-            } else {
-                config.onSelect?(entry)
-                dismissIfNeeded()
+                    Spacer(minLength: 0)
+                }.frame(minHeight: 44).contentShape(Rectangle())
             }
+            .buttonStyle(.borderless)
+            .disabled(disabled || editMode.isEditing)
+            .accessibilityIdentifier("model-picker.entry.\(entry.id)")
+            .accessibilityValue(selected ? Text("Selected") : Text("Not selected"))
+            if !VoiceProviderResolver.isSystemEntry(entry.providerInstanceId) { favoriteButton(entry) }
         }
         .contextMenu {
+            Button { quickTestEntry = entry } label: { Label("Quick Test", systemImage: "bolt.badge.checkmark") }
             Button {
                 UIPasteboard.general.string = "entry:\(entry.compositeKey)"
                 MinisToast.show(String(localized: "Copied: \(entry.model.displayName)"))
-            } label: {
-                Label(String(localized: "Copy Shortcut Model ID"), systemImage: "link")
-            }
+            } label: { Label("Copy Shortcut Model ID", systemImage: "link") }
         }
     }
 
@@ -1163,14 +1103,17 @@ struct UnifiedModelPicker: View {
     private func toggleSelection(_ entryId: String) {
         if selectedEntryIds.contains(entryId) {
             selectedEntryIds.remove(entryId)
+            selectionOrder.removeAll { $0 == entryId }
         } else {
             selectedEntryIds.insert(entryId)
+            selectionOrder.append(entryId)
         }
     }
 
     private func seedCollapse() {
         guard !collapseSeeded else { return }
         collapseSeeded = true
+        if !isMulti && config.effectivePreferModality == nil && !favoriteEntries.isEmpty { browseScope = .favorites }
         // Voice pickers (Voice Input / Output group binding, or an explicit audio
         // modality preference) exist specifically to browse and add TTS/ASR voices.
         // Dedicated voice providers carry many rows (Azure TTS ~39 voices, Doubao

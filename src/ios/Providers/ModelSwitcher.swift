@@ -21,9 +21,9 @@ enum ModelSwitcher {
     private static let recentsKey = "leo.model.recents.v1"
     private static let maxRecents = 8
     private static let pinnedKey = "leo.model.pinned.v1"
-    /// 钉选上限。超过这个数,长按胶囊弹出的菜单就不再是"一眼扫完"了,
-    /// 而那正是这条路径存在的全部理由。
-    static let maxPinned = 6
+    /// Favorites are a library; compact menus choose their own small prefix.
+    /// Existing lists are never truncated on upgrade or refresh.
+    static let maxPinned = 50
 
     // MARK: - 常用(钉选)
     //
@@ -38,7 +38,13 @@ enum ModelSwitcher {
         set { (SharedContainerStore.sharedDefaults ?? .standard).set(newValue, forKey: pinnedKey) }
     }
 
-    static func isPinned(_ key: String) -> Bool { pinnedKeys.contains(key) }
+    static func normalizedChoiceKeys(_ keys: [String], store: ProviderConfigStore) -> [String] {
+        ModelCatalog.normalizedKeys(keys.map { store.normalizeEntryRef($0) }, aliases: [:])
+    }
+
+    static func isPinned(_ key: String, store: ProviderConfigStore = .shared) -> Bool {
+        normalizedChoiceKeys(pinnedKeys, store: store).contains(store.normalizeEntryRef(key))
+    }
 
     /// 钉/取消钉。已满时钉入失败,返回 false 让调用方能如实提示。
     ///
@@ -49,13 +55,15 @@ enum ModelSwitcher {
         guard !key.isEmpty else { return false }
         // 顺手清掉已删除供应商的遗留(实例 id 不会复用,删了就是永久的)。
         forget(instanceIds: store.deletedInstanceIds)
-        var list = pinnedKeys
+        let key = store.normalizeEntryRef(key)
+        var list = normalizedChoiceKeys(pinnedKeys, store: store)
         if let idx = list.firstIndex(of: key) {
             list.remove(at: idx)
             pinnedKeys = list
             return true
         }
-        guard pinnedEntries(store: store).count < maxPinned else { return false }
+        guard store.entry(for: key) != nil,
+              pinnedEntries(store: store).count < maxPinned else { return false }
         list.append(key)
         pinnedKeys = list
         return true
@@ -88,28 +96,18 @@ enum ModelSwitcher {
     /// 钉选(pinnedEntries 过滤掉了停用供应商下的条目),而 pinnedKeys 是
     /// 全集。有条目不可用时两者下标不对齐,直接 move 会移错行,越界还会崩。
     /// 所以先在"可见序列"上算出新顺序,再把不可见的按原相对位置缝回去。
-    static func movePinned(visibleKeys: [String], from source: IndexSet, to destination: Int) {
-        var visible = visibleKeys
-        guard !visible.isEmpty else { return }
-        visible.move(fromOffsets: source, toOffset: destination)
-        let visibleSet = Set(visibleKeys)
-        var result: [String] = []
-        var cursor = visible.makeIterator()
-        for key in pinnedKeys {
-            if visibleSet.contains(key) {
-                if let next = cursor.next() { result.append(next) }
-            } else {
-                result.append(key)   // 不可用的留在原位,别把它挤掉
-            }
-        }
-        pinnedKeys = result
+    static func movePinned(visibleKeys: [String], from source: IndexSet, to destination: Int,
+                           store: ProviderConfigStore = .shared) {
+        let keys = normalizedChoiceKeys(pinnedKeys, store: store)
+        let visible = normalizedChoiceKeys(visibleKeys, store: store)
+        pinnedKeys = ModelCatalog.reorderedKeys(keys, visibleKeys: visible, from: source, to: destination)
     }
 
     /// 钉选对应的可用条目。不可用的(供应商停用/条目删除)直接跳过 ——
     /// 但不从存储里摘,因为供应商可能只是临时停用,回头启用就该回来。
     static func pinnedEntries(store: ProviderConfigStore) -> [ModelEntry] {
         let enabled = Set(store.instances.filter(\.isEnabled).map(\.id))
-        return pinnedKeys.compactMap { key in
+        return normalizedChoiceKeys(pinnedKeys, store: store).compactMap { key in
             guard let entry = store.entry(for: key), !entry.isHidden,
                   enabled.contains(entry.providerInstanceId) else { return nil }
             return entry
@@ -124,9 +122,10 @@ enum ModelSwitcher {
         return store.stringArray(forKey: recentsKey) ?? []
     }
 
-    static func remember(_ key: String) {
+    static func remember(_ key: String, store: ProviderConfigStore = .shared) {
         guard !key.isEmpty else { return }
-        var list = recentKeys.filter { $0 != key }
+        let key = store.normalizeEntryRef(key)
+        var list = normalizedChoiceKeys(recentKeys, store: store).filter { $0 != key }
         list.insert(key, at: 0)
         if list.count > maxRecents { list = Array(list.prefix(maxRecents)) }
         (SharedContainerStore.sharedDefaults ?? .standard).set(list, forKey: recentsKey)
@@ -136,9 +135,10 @@ enum ModelSwitcher {
     static func recentEntries(store: ProviderConfigStore, limit: Int = 3) -> [ModelEntry] {
         // 供应商被停用后,它下面的模型不能再出现在"最近用过"里——
         // 点了会把会话绑到一个不可用的实例上,发送时才报错。
+        guard limit > 0 else { return [] }
         let enabled = Set(store.instances.filter(\.isEnabled).map(\.id))
         var out: [ModelEntry] = []
-        for key in recentKeys where !key.hasPrefix("group:") {
+        for key in normalizedChoiceKeys(recentKeys, store: store) where !key.hasPrefix("group:") {
             if let entry = store.entry(for: key), !entry.isHidden,
                enabled.contains(entry.providerInstanceId) {
                 out.append(entry)
@@ -149,8 +149,9 @@ enum ModelSwitcher {
     }
 
     static func recentGroups(store: ProviderConfigStore, limit: Int = 2) -> [ModelGroup] {
+        guard limit > 0 else { return [] }
         var out: [ModelGroup] = []
-        for key in recentKeys where key.hasPrefix("group:") {
+        for key in normalizedChoiceKeys(recentKeys, store: store) where key.hasPrefix("group:") {
             let gid = String(key.dropFirst("group:".count))
             if let g = store.modelGroups.first(where: { $0.id == gid }) {
                 out.append(g)
@@ -194,10 +195,10 @@ enum ModelSwitcher {
     /// 没被钉的其他模型。最近用过的排前面 —— 最近使用不再单独占一节,
     /// 降级成这里的排序信号。
     static func unpinnedChoices(store: ProviderConfigStore) -> [Choice] {
-        let pinned = Set(pinnedKeys)
+        let pinned = Set(normalizedChoiceKeys(pinnedKeys, store: store))
         // uniqueKeysWithValues 遇重复 key 直接 trap。recentKeys 来自持久化
         // 存储,脏一次就崩 —— 用 uniquingKeysWith 保守取最早那个名次。
-        let recentRank = Dictionary(recentKeys.enumerated().map { ($0.element, $0.offset) },
+        let recentRank = Dictionary(normalizedChoiceKeys(recentKeys, store: store).enumerated().map { ($0.element, $0.offset) },
                                     uniquingKeysWith: { first, _ in first })
         return allChoices(store: store, includeGroups: false)
             .filter { !pinned.contains($0.id) }
@@ -205,17 +206,30 @@ enum ModelSwitcher {
                 let ra = recentRank[a.id] ?? Int.max
                 let rb = recentRank[b.id] ?? Int.max
                 if ra != rb { return ra < rb }
-                return a.title.localizedStandardCompare(b.title) == .orderedAscending
+                let titleOrder = a.title.localizedStandardCompare(b.title)
+                if titleOrder != .orderedSame { return titleOrder == .orderedAscending }
+                let providerOrder = a.subtitle.localizedStandardCompare(b.subtitle)
+                if providerOrder != .orderedSame { return providerOrder == .orderedAscending }
+                return a.id < b.id
             }
     }
 
     /// 模糊匹配:"/model kimi" 这种只打几个字母就要命中。
     static func search(_ query: String, store: ProviderConfigStore) -> [Choice] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return allChoices(store: store) }
-        return allChoices(store: store).filter {
-            ($0.title + " " + $0.subtitle).lowercased().contains(q)
+        allChoices(store: store).filter { choice in
+            if choice.kind == .entry, let entry = store.entry(for: choice.id) {
+                return ModelCatalog.matches(query, entry: entry, providerLabel: choice.subtitle)
+            }
+            return ModelCatalog.matches(query, text: choice.title + " " + choice.subtitle)
         }
+    }
+
+    /// Validate again at commit time: a provider can be disabled or lose its
+    /// credential while a picker is open. Failed selection leaves binding and
+    /// recents untouched; it must never silently choose a different provider.
+    static func isAvailable(_ entry: ModelEntry, store: ProviderConfigStore = .shared) -> Bool {
+        guard !entry.isHidden, let instance = store.instance(for: entry.providerInstanceId) else { return false }
+        return instance.isEnabled && !instance.isRetiredSignIn && instance.hasAnyCredential
     }
 
     // MARK: - 提交(与 SessionModelPicker 同语义)
@@ -235,10 +249,10 @@ enum ModelSwitcher {
                 return false
             }
             let existing = store.binding(for: sessionId)
-            store.setBinding(SessionModelBinding(
+            guard store.setBinding(SessionModelBinding(
                 sessionId: sessionId,
                 primarySource: .group(groupId: group.id, resolvedEntryId: resolvedEntryId),
-                subModelSource: existing?.subModelSource), for: sessionId)
+                subModelSource: existing?.subModelSource), for: sessionId) else { return false }
             // Keep the user's preferred thinking level across model switches.
             // Group default only seeds a session that has never picked a level.
             NotificationCenter.default.post(name: .sessionModelBindingChanged, object: nil,
@@ -247,17 +261,17 @@ enum ModelSwitcher {
                 await ChatStore.shared.updateSessionModelId(sessionId, modelId: entry.model.id)
             }
         } else {
-            guard let entry = store.entry(for: choiceId) else { return false }
+            guard let entry = store.entry(for: choiceId), isAvailable(entry, store: store) else { return false }
             let existing = store.binding(for: sessionId)
-            store.setBinding(SessionModelBinding(
+            guard store.setBinding(SessionModelBinding(
                 sessionId: sessionId,
                 primarySource: .directEntry(modelEntryId: entry.id),
-                subModelSource: existing?.subModelSource), for: sessionId)
+                subModelSource: existing?.subModelSource), for: sessionId) else { return false }
             NotificationCenter.default.post(name: .sessionModelBindingChanged, object: nil,
                                             userInfo: ["sessionId": sessionId])
             await ChatStore.shared.updateSessionModelId(sessionId, modelId: entry.model.id)
         }
-        remember(choiceId)
+        remember(choiceId, store: store)
         return true
     }
 
@@ -273,7 +287,8 @@ enum ModelSwitcher {
             return "group:\(groupId)"
         case .directEntry(let entryId, let composite):
             let key = composite ?? entryId
-            return store.entry(for: key)?.compositeKey ?? key
+            return store.entry(for: key)?.compositeKey
+                ?? store.entry(for: entryId)?.compositeKey ?? key
         }
     }
 

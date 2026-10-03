@@ -531,18 +531,28 @@ actor ProviderConfigDB {
     /// leaves the prior contents intact. Per-row updated_at defaults to
     /// the legacy `userModifiedAt` if present, otherwise the per-row
     /// createdAt, otherwise `now`.
-    func bulkReplace(from config: ProviderConfig) {
-        guard let db else { return }
+    @discardableResult
+    func bulkReplace(from config: ProviderConfig) -> Bool {
+        guard let db, (try? JSONEncoder().encode(config)) != nil else { return false }
         let now = Date().timeIntervalSince1970
 
-        Self.exec(db: db, "BEGIN IMMEDIATE")
-        Self.exec(db: db, "DELETE FROM provider_model_groups")
-        Self.exec(db: db, "DELETE FROM provider_model_entries")
-        Self.exec(db: db, "DELETE FROM provider_instances")
-        Self.exec(db: db, "DELETE FROM provider_local_kv")
-        Self.exec(db: db, "DELETE FROM provider_session_bindings")
-        Self.exec(db: db, "DELETE FROM provider_session_inference_configs")
-        Self.exec(db: db, "DELETE FROM provider_agent_loop_ids")
+        guard Self.exec(db: db, "BEGIN IMMEDIATE") == SQLITE_OK else { return false }
+        var committed = false
+        defer {
+            if !committed {
+                Self.exec(db: db, "ROLLBACK")
+                logger.error("[v3] bulkReplace failed; previous provider configuration retained")
+            }
+        }
+        guard Self.exec(db: db, "DELETE FROM provider_model_groups") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_model_entries") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_instances") == SQLITE_OK else { return false }
+        // Only these selectors belong to the snapshot. The UUID alias map and
+        // unrelated/future local preferences must survive ordinary model edits.
+        guard Self.exec(db: db, "DELETE FROM provider_local_kv WHERE key IN ('defaultPrimaryGroupId', 'defaultSubGroupId', 'voiceInputGroupId', 'voiceOutputGroupId')") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_session_bindings") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_session_inference_configs") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_agent_loop_ids") == SQLITE_OK else { return false }
 
         // Instances (with inline secret_blob — actual secret material
         // still lives in Keychain; the blob is populated by S5 when
@@ -550,7 +560,7 @@ actor ProviderConfigDB {
         // only seeds the metadata; secret_blob is left NULL until a
         // mutate happens or the v3 builder runs once.).
         for (idx, inst) in config.instances.enumerated() {
-            upsertInstanceRow(
+            guard upsertInstanceRow(
                 id: inst.id,
                 label: inst.label,
                 // Preserve the original raw type for unsupported (newer-build)
@@ -571,7 +581,7 @@ actor ProviderConfigDB {
                 extrasJson: nil,
                 customUserAgent: inst.customUserAgent,
                 azureMode: inst.azureMode
-            )
+            ) else { return false }
         }
 
         // Entries. baseModel + overrides go in as JSON columns so the
@@ -585,7 +595,7 @@ actor ProviderConfigDB {
             } else {
                 overridesJSON = try? Self.jsonString(entry.overrides)
             }
-            upsertEntryRow(
+            guard upsertEntryRow(
                 // [T-provider-entry-composite-key] DB primary key stays the
                 // random uuid (NOT entry.id, which is now the composite key).
                 // Keeping the uuid in the id column means old group/binding
@@ -604,13 +614,13 @@ actor ProviderConfigDB {
                 sortOrder: idx,
                 updatedAt: entry.userModifiedAt?.timeIntervalSince1970 ?? now,
                 extrasJson: nil
-            )
+            ) else { return false }
         }
 
         // Groups. memberEntryIds → JSON array column.
         for (idx, group) in config.modelGroups.enumerated() {
             let memberJSON = (try? Self.jsonString(group.memberEntryIds)) ?? "[]"
-            upsertGroupRow(
+            guard upsertGroupRow(
                 id: group.id,
                 name: group.name,
                 strategy: group.strategy.rawValue,
@@ -624,43 +634,45 @@ actor ProviderConfigDB {
                 extrasJson: nil,
                 removedMembersJson: Self.encodeMemberTimestamps(group.removedMembers),
                 addedMembersJson: Self.encodeMemberTimestamps(group.addedMembers)
-            )
+            ) else { return false }
         }
 
         // Per-device fields — never synced.
         if let v = config.defaultPrimaryGroupId {
-            setLocalKVRow("defaultPrimaryGroupId", value: v)
+            guard setLocalKVRow("defaultPrimaryGroupId", value: v) else { return false }
         }
         if let v = config.defaultSubGroupId {
-            setLocalKVRow("defaultSubGroupId", value: v)
+            guard setLocalKVRow("defaultSubGroupId", value: v) else { return false }
         }
         // Voice group selectors — per-device, like the default group ids.
         if let v = config.voiceInputGroupId {
-            setLocalKVRow("voiceInputGroupId", value: v)
+            guard setLocalKVRow("voiceInputGroupId", value: v) else { return false }
         }
         if let v = config.voiceOutputGroupId {
-            setLocalKVRow("voiceOutputGroupId", value: v)
+            guard setLocalKVRow("voiceOutputGroupId", value: v) else { return false }
         }
         for (sid, binding) in config.sessionBindings {
             if let json = try? Self.jsonString(binding) {
-                upsertSessionBindingRow(sessionId: sid, bindingJson: json, updatedAt: now)
+                guard upsertSessionBindingRow(sessionId: sid, bindingJson: json, updatedAt: now) else { return false }
             }
         }
         for (sid, cfg) in config.sessionInferenceConfigs {
             if let json = try? Self.jsonString(cfg) {
-                upsertSessionInferenceConfigRow(sessionId: sid, configJson: json, updatedAt: now)
+                guard upsertSessionInferenceConfigRow(sessionId: sid, configJson: json, updatedAt: now) else { return false }
             }
         }
         for (idx, eid) in config.agentLoopModelEntryIds.enumerated() {
-            insertAgentLoopIdRow(kind: "entry", targetId: eid, sortOrder: idx)
+            guard insertAgentLoopIdRow(kind: "entry", targetId: eid, sortOrder: idx) else { return false }
         }
         for (idx, gid) in config.agentLoopGroupIds.enumerated() {
-            insertAgentLoopIdRow(kind: "group", targetId: gid, sortOrder: idx)
+            guard insertAgentLoopIdRow(kind: "group", targetId: gid, sortOrder: idx) else { return false }
         }
 
-        Self.exec(db: db, "COMMIT")
+        guard Self.exec(db: db, "COMMIT") == SQLITE_OK else { return false }
+        committed = true
         let c = counts()
         logger.info("[v3] bulkReplace done: instances=\(c.instances) entries=\(c.entries) groups=\(c.groups)")
+        return true
     }
 
     /// Build a `ProviderConfig` value from the current DB contents.
@@ -841,8 +853,7 @@ actor ProviderConfigDB {
             return false
         }
         logger.info("[v3] migrateFromLegacyJSON: ingesting \(config.instances.count) instances / \(config.modelEntries.count) entries / \(config.modelGroups.count) groups")
-        bulkReplace(from: config)
-        return true
+        return bulkReplace(from: config)
     }
 
     // MARK: - Per-record API (used by V3 hydrator inbound merges in S5)
@@ -1291,56 +1302,61 @@ actor ProviderConfigDB {
         return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    private func setLocalKVRow(_ key: String, value: String) {
-        guard let db else { return }
+    @discardableResult
+    private func setLocalKVRow(_ key: String, value: String) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO provider_local_kv (key, value) VALUES (?, ?)", -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO provider_local_kv (key, value) VALUES (?, ?)", -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, key, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, value, -1, Self.SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     /// [T-provider-entry-composite-key] Persist the legacyUuid→compositeKey map
     /// (JSON) into provider_local_kv so deferred normalization survives restarts.
-    func setLegacyUuidMapKV(_ json: String) {
+    @discardableResult
+    func setLegacyUuidMapKV(_ json: String) -> Bool {
         setLocalKVRow("legacyUuidMap", value: json)
     }
 
-    private func upsertSessionBindingRow(sessionId: String, bindingJson: String, updatedAt: Double) {
-        guard let db else { return }
+    @discardableResult
+    private func upsertSessionBindingRow(sessionId: String, bindingJson: String, updatedAt: Double) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         let sql = "INSERT OR REPLACE INTO provider_session_bindings (session_id, binding_json, updated_at) VALUES (?, ?, ?)"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, sessionId, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, bindingJson, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 3, updatedAt)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    private func upsertSessionInferenceConfigRow(sessionId: String, configJson: String, updatedAt: Double) {
-        guard let db else { return }
+    @discardableResult
+    private func upsertSessionInferenceConfigRow(sessionId: String, configJson: String, updatedAt: Double) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         let sql = "INSERT OR REPLACE INTO provider_session_inference_configs (session_id, config_json, updated_at) VALUES (?, ?, ?)"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, sessionId, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, configJson, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 3, updatedAt)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    private func insertAgentLoopIdRow(kind: String, targetId: String, sortOrder: Int) {
-        guard let db else { return }
+    @discardableResult
+    private func insertAgentLoopIdRow(kind: String, targetId: String, sortOrder: Int) -> Bool {
+        guard let db else { return false }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         let sql = "INSERT OR REPLACE INTO provider_agent_loop_ids (kind, target_id, sort_order) VALUES (?, ?, ?)"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_text(stmt, 1, kind, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, targetId, -1, Self.SQLITE_TRANSIENT)
         sqlite3_bind_int(stmt, 3, Int32(sortOrder))
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     private func loadAllSessionBindings() -> [String: SessionModelBinding] {

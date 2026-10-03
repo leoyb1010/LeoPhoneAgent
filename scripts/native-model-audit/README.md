@@ -19,11 +19,18 @@ bash scripts/native-model-audit/run.sh WORKTREE current
 uses iPhone 17 Pro / iOS 26.5 with Xcode 26.6 and saves both versions separately.
 No build, archive, signing, release, or deploy step for the product is involved.
 
+Baseline runs native screenshot/codec cases only; current runs the full interaction
+suite. This is explicit in each artifact's `test-scope.txt`. Earlier full-baseline
+results remain independent workflow artifacts, including any historical failures.
+The runner never rewrites baseline production behavior or suppresses failing
+selected tests to make the old UI green.
+
 ## Evidence and boundaries
 
 - `source-manifest.json` records exact git reference, source paths, SHA-256, and
   every extraction/transformation. Baseline view files come from immutable git
   blobs even after the worktree implementation changes
+- The picker fixtures present a full-height native sheet. Baseline production chat uses medium/large detents; these images must not be described as exact full-app presentation geometry
 - Actual `UnifiedModelPicker`, `QuickModelSwitchSheet`, `SessionModelPicker`,
   model-group screens, and onboarding model selection render in SwiftUI
 - The improved provider catalog is the complete actual `ProviderModelCatalogView`, including native search, filters, favorites, bulk visibility confirmation, and append-to-group flows
@@ -33,13 +40,14 @@ No build, archive, signing, release, or deploy step for the product is involved.
 - `FixtureStore.swift` supplies deterministic data and app-sandbox JSON
   persistence. Pin storage uses the real production `ModelSwitcher` through
   isolated standard defaults. Persistence assertions prove this fixture seam and
-  production model codecs, not production SQLite or iCloud migration
+  production model codecs, not production store initialization or iCloud migration. A separate unit suite uses the actual `ProviderConfigDB` actor and unchanged extracted `ProviderConfig` Codable declarations on temporary SQLite databases
+- Current preflight parses the full changed production provider/store sources with `swiftc -frontend -parse`; this is syntax-only. Extracted persistence-method tests separately execute actual save/load/refresh/journal/SQLite code in an isolated host, with startup/voice/dirty-notification adapters
 - Authentication availability is synthetic. A non-secret sentinel stands in for
   a credential in the test process. No live model calls or speech tests occur
 - The UI tests capture `XCUIScreenshot` PNG attachments and accessibility trees.
   `xcresulttool` exports them alongside test summaries and the complete log
 - Catalog selection after import is exercised; file-picker/import transport,
-  production database startup, iSH, Watch, networking, and real-device behavior
+  production singleton/database startup integration, iSH, Watch, networking, and real-device behavior
   remain outside this isolated harness. Do not describe its green result as a
   full product build or release validation
 

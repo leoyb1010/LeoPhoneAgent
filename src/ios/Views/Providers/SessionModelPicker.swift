@@ -5,9 +5,13 @@ import SwiftUI
 struct SessionModelPicker: View {
     let sessionId: String?
     var ensureSessionId: (() async -> String)?
+    var draftChoice: String? = nil
+    var onPick: ((String) -> Void)? = nil
     @ObservedObject private var store = ProviderConfigStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var pendingNonTextOutput: PendingSelection?
+    @State private var selectionFailure: String?
+    @State private var isCommitting = false
 
     private struct PendingSelection: Identifiable {
         let id = UUID()
@@ -17,21 +21,29 @@ struct SessionModelPicker: View {
         let isGroupBind: Bool
     }
 
-    init(sessionId: String?, ensureSessionId: (() async -> String)? = nil) {
+    init(sessionId: String?, ensureSessionId: (() async -> String)? = nil,
+         draftChoice: String? = nil, onPick: ((String) -> Void)? = nil) {
         self.sessionId = sessionId
         self.ensureSessionId = ensureSessionId
+        self.draftChoice = draftChoice
+        self.onPick = onPick
     }
 
     private var currentEntryId: String? {
+        if onPick != nil { return draftChoice.flatMap { store.entry(for: $0)?.id } }
         guard let sid = sessionId,
               let binding = store.binding(for: sid) else { return nil }
         switch binding.primarySource {
-        case .directEntry(let entryId, _): return entryId
-        case .group(_, let resolvedEntryId): return resolvedEntryId
+        case .directEntry(let entryId, let composite): return store.entry(for: composite ?? entryId)?.id ?? entryId
+        case .group(_, let resolvedEntryId): return store.entry(for: resolvedEntryId)?.id ?? resolvedEntryId
         }
     }
 
     private var currentGroupId: String? {
+        if onPick != nil {
+            guard let draftChoice else { return store.defaultPrimaryGroupId }
+            return draftChoice.hasPrefix("group:") ? String(draftChoice.dropFirst(6)) : nil
+        }
         guard let sid = sessionId else { return store.defaultPrimaryGroupId }
         guard let binding = store.binding(for: sid) else {
             return store.defaultPrimaryGroupId
@@ -47,6 +59,9 @@ struct SessionModelPicker: View {
             title: "Choose Model",
             mode: .single,
             groupScope: .all,
+            headerNote: onPick != nil
+                ? String(localized: "Choose for your next chat. Your saved default stays the same.")
+                : String(localized: "Changes this conversation only. Manage groups to change defaults for new chats."),
             dismissOnSelect: false,
             currentEntryId: { [self] in currentEntryId },
             currentGroupId: { [self] in currentGroupId },
@@ -54,6 +69,12 @@ struct SessionModelPicker: View {
             onSelectGroup: { group in handleGroupTap(group) },
             onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) }
         ))
+        .disabled(isCommitting)
+        .alert("Could not select model", isPresented: Binding(
+            get: { selectionFailure != nil }, set: { if !$0 { selectionFailure = nil } }
+        )) {
+            Button("OK", role: .cancel) { selectionFailure = nil }
+        } message: { Text(selectionFailure ?? "") }
         .alert(
             String(localized: "This model may not work as an Agent"),
             isPresented: Binding(
@@ -100,8 +121,8 @@ struct SessionModelPicker: View {
     }
 
     private func handleGroupTap(_ group: ModelGroup) {
-        guard let sid = sessionId,
-              let resolvedEntryId = ModelGroupRouter.resolve(group: group, sessionId: sid, store: store),
+        let sid = sessionId ?? "draft"
+        guard let resolvedEntryId = ModelGroupRouter.resolve(group: group, sessionId: sid, store: store),
               let resolvedEntry = store.entry(for: resolvedEntryId) else {
             bindToGroup(group)
             return
@@ -116,63 +137,88 @@ struct SessionModelPicker: View {
     // MARK: - Session Binding
 
     private func resolveSessionId() async -> String? {
-        if let sid = sessionId { return sid }
-        return await ensureSessionId?()
+        if let sid = sessionId, !sid.isEmpty { return sid }
+        let sid = await ensureSessionId?()
+        return sid?.isEmpty == false ? sid : nil
     }
 
     private func bindToGroup(_ group: ModelGroup) {
-        Task {
-            guard let sid = await resolveSessionId() else { return }
-            let resolvedEntryId = ModelGroupRouter.resolve(group: group, sessionId: sid, store: store) ?? ""
-            let source = SessionModelSource.group(groupId: group.id, resolvedEntryId: resolvedEntryId)
-            let existing = store.binding(for: sid)
-            let binding = SessionModelBinding(
-                sessionId: sid,
-                primarySource: source,
-                subModelSource: existing?.subModelSource
-            )
-            store.setBinding(binding, for: sid)
-            NotificationCenter.default.post(
-                name: .sessionModelBindingChanged,
-                object: nil,
-                userInfo: ["groupId": group.id, "sessionId": sid]
-            )
-            if let entry = store.entry(for: resolvedEntryId) {
-                await ChatStore.shared.updateSessionModelId(sid, modelId: entry.model.id)
+        if let onPick {
+            guard let live = store.group(for: group.id),
+                  ModelGroupRouter.resolve(group: live, sessionId: "draft", store: store, verbose: false) != nil else {
+                selectionFailure = String(localized: "This group has no available models. Check its members and provider sign-in.")
+                return
             }
-            ModelSwitcher.remember("group:\(group.id)")
+            onPick("group:\(live.id)")
+            dismiss()
+            return
+        }
+        guard !isCommitting else { return }
+        isCommitting = true
+        Task {
+            defer { isCommitting = false }
+            guard let sid = await resolveSessionId() else {
+                selectionFailure = String(localized: "The conversation is not ready. Try again.")
+                return
+            }
+            guard await ModelSwitcher.apply(choiceId: "group:\(group.id)", sessionId: sid, store: store) else {
+                selectionFailure = String(localized: "This group has no available models. Check its members and provider sign-in.")
+                return
+            }
             dismiss()
         }
     }
 
     private func bindToEntry(_ entry: ModelEntry, inGroup group: ModelGroup? = nil) {
-        Task {
-            guard let sid = await resolveSessionId() else { return }
-            let source: SessionModelSource
-            if let group {
-                source = .group(groupId: group.id, resolvedEntryId: entry.id)
-            } else {
-                source = .directEntry(modelEntryId: entry.id)
+        if let onPick {
+            guard let live = store.entry(for: entry.id), ModelSwitcher.isAvailable(live, store: store) else {
+                selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                return
             }
-            let existing = store.binding(for: sid)
-            let binding = SessionModelBinding(
-                sessionId: sid,
-                primarySource: source,
-                subModelSource: existing?.subModelSource
-            )
-            store.setBinding(binding, for: sid)
-            ModelSwitcher.remember(entry.compositeKey)
-            var info: [String: Any] = ["sessionId": sid]
-            if let group { info["groupId"] = group.id }
-            NotificationCenter.default.post(
-                name: .sessionModelBindingChanged,
-                object: nil,
-                userInfo: info
-            )
-            await ChatStore.shared.updateSessionModelId(sid, modelId: entry.model.id)
+            // The draft contract stores a choice, not a session or default.
+            onPick(live.id)
+            dismiss()
+            return
+        }
+        guard !isCommitting else { return }
+        isCommitting = true
+        Task {
+            defer { isCommitting = false }
+            guard let sid = await resolveSessionId() else {
+                selectionFailure = String(localized: "The conversation is not ready. Try again.")
+                return
+            }
+            if let group {
+                // Picking a member keeps the existing routing-group contract.
+                // Re-read admission after await: sync may have changed the model.
+                guard let liveGroup = store.group(for: group.id),
+                      liveGroup.memberEntryIds.contains(where: { store.normalizeEntryRef($0) == entry.id }),
+                      let liveEntry = store.entry(for: entry.id), !liveEntry.isHidden,
+                      let provider = store.instance(for: liveEntry.providerInstanceId),
+                      provider.isEnabled, provider.hasAnyCredential, !provider.isRetiredSignIn else {
+                    selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                    return
+                }
+                let existing = store.binding(for: sid)
+                guard store.setBinding(SessionModelBinding(
+                    sessionId: sid,
+                    primarySource: .group(groupId: liveGroup.id, resolvedEntryId: liveEntry.id),
+                    subModelSource: existing?.subModelSource), for: sid) else {
+                    selectionFailure = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                    return
+                }
+                NotificationCenter.default.post(name: .sessionModelBindingChanged, object: nil,
+                    userInfo: ["groupId": liveGroup.id, "sessionId": sid])
+                ModelSwitcher.remember("group:\(liveGroup.id)")
+                await ChatStore.shared.updateSessionModelId(sid, modelId: liveEntry.model.id)
+            } else if !(await ModelSwitcher.apply(choiceId: entry.id, sessionId: sid, store: store)) {
+                selectionFailure = String(localized: "This model is no longer available. Choose another model.")
+                return
+            }
             dismiss()
         }
     }
+
 }
 
 // MARK: - Compact Display Helper

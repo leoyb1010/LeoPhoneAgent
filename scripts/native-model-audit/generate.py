@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -17,7 +18,7 @@ SOURCES = [
     'Providers/LLMTypes.swift', 'Providers/ThinkingTypes.swift',
     'Providers/ThinkingLevelCatalog.swift', 'Providers/ProviderTypes.swift',
     'Providers/ProviderInstance.swift', 'Providers/ModelEntry.swift',
-    'Providers/ModelGroup.swift', 'Providers/ModelGroupRouter.swift',
+    'Providers/ModelGroup.swift', 'Providers/ModelGroupRouter.swift', 'Providers/ProviderConfigDB.swift',
     'Providers/ModelSwitcher.swift', 'Providers/ModelPinStore.swift',
     'Views/Providers/UnifiedModelPicker.swift', 'Views/Providers/SessionModelPicker.swift',
     'Views/Providers/ModelDisplayTraits.swift', 'Views/Providers/ModelGroupsView.swift',
@@ -36,6 +37,64 @@ def read_source(ref, path):
     return subprocess.check_output(['git', 'show', f'{ref}:{path}'], cwd=ROOT, stderr=subprocess.DEVNULL)
 
 
+def extract_swift_method(source, name):
+    """Copy one complete declaration, balancing Swift strings/comments/braces."""
+    match = re.search(r'^    (?:(?:private|fileprivate|static|nonisolated)\s+)*func ' + re.escape(name) + r'(?:[<(])', source, re.M)
+    if not match:
+        raise ValueError('Production method not found: ' + name)
+
+    def skip_string(index):
+        delimiter = '"""' if source.startswith('"""', index) else '"'
+        index += len(delimiter)
+        while index < len(source):
+            if source.startswith(delimiter, index):
+                return index + len(delimiter)
+            if source[index] == "\\":
+                if source.startswith("\\(", index):
+                    index = skip_balanced(index + 1, '(', ')')
+                else:
+                    index += 2
+            else:
+                index += 1
+        raise ValueError('Unterminated Swift string in ' + name)
+
+    def skip_balanced(index, opening, closing):
+        depth = 1
+        index += 1
+        while index < len(source):
+            if source.startswith('//', index):
+                end = source.find('\n', index)
+                index = len(source) if end < 0 else end + 1
+            elif source.startswith('/*', index):
+                comment_depth = 1
+                index += 2
+                while comment_depth:
+                    if source.startswith('/*', index):
+                        comment_depth += 1; index += 2
+                    elif source.startswith('*/', index):
+                        comment_depth -= 1; index += 2
+                    else:
+                        index += 1
+                    if index >= len(source):
+                        raise ValueError('Unterminated Swift comment in ' + name)
+            elif source[index] == '"':
+                index = skip_string(index)
+            else:
+                if source[index] == opening: depth += 1
+                elif source[index] == closing:
+                    depth -= 1
+                    if depth == 0: return index + 1
+                index += 1
+        raise ValueError('Unbalanced production method: ' + name)
+
+    start = match.start()
+    while start > 0:
+        prior = source.rfind('\n', 0, start - 1) + 1
+        if not source[prior:start].strip().startswith('@'): break
+        start = prior
+    return source[start:skip_balanced(source.index('{', match.end()), '{', '}')]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-ref', default='WORKTREE')
@@ -43,6 +102,17 @@ def main():
     args = parser.parse_args()
     out = pathlib.Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=True)
+    # Ref switching must never leave a current-only Swift file in the baseline.
+    # Remove only files enumerated by this generator's previous manifest.
+    previous_manifest = out / 'source-manifest.json'
+    if previous_manifest.exists():
+        previous = json.loads(previous_manifest.read_text())
+        for row in previous.get('sources', []):
+            name = pathlib.Path(row.get('generated_file', row['path'])).name
+            for directory in ['Sources/Production', 'UnitTests', 'Resources']:
+                candidate = out / directory / name
+                if candidate.is_file():
+                    candidate.unlink()
     production = out / 'Sources' / 'Production'
     production.mkdir(parents=True, exist_ok=True)
     manifest = {'source_ref': args.source_ref, 'sources': [], 'boundary':
@@ -57,6 +127,26 @@ def main():
             raise
         (production / pathlib.Path(relative).name).write_bytes(data)
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
+    path = 'src/ios/Providers/ProviderConfigStore.swift'
+    data = read_source(args.source_ref, path)
+    source = data.decode()
+    start = source.index('// MARK: - Persisted Config')
+    end = source.index('// MARK: - ProviderConfigStore', start)
+    (production / 'ProviderConfig.swift').write_text('import Foundation\n\n' + source[start:end])
+    manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
+                                'transformation': 'Extract unchanged ProviderConfig and ProviderConfigTombstone value declarations between persisted-config/store markers; prepend Foundation import. Production singleton store remains replaced by fixture.'})
+    template = HERE / 'ProductionProviderPersistence.template.swift'
+    if template.exists() and 'func recoverPendingDatabaseSnapshot(' in source:
+        names = ['load', 'save', 'loadModelArchiveAliases', 'recoverPendingDatabaseSnapshot',
+                 'persistLegacyUuidMap', 'setBinding', 'setEntriesHidden', 'replaceEntries',
+                 'removeEntry', 'recordTombstone', 'emitV3MarkDirty', 'dictByIdLastWins']
+        methods = '\n\n'.join(extract_swift_method(source, name) for name in names)
+        generated = template.read_text().replace('    // INSERT_PRODUCTION_METHODS', methods)
+        (production / 'ProductionProviderPersistence.swift').write_text(generated)
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
+                                    'generated_file': 'ProductionProviderPersistence.swift',
+                                    'methods': names,
+                                    'transformation': 'Extract listed unchanged production method declarations into dedicated persistence-test host. Only app startup, voice templates, and external dirty notifications use explicit adapters; real JSON/journal/archive/SQLite bodies execute.'})
     if (production / 'ProviderModelCatalogView.swift').exists():
         (production / 'AuditProviderCatalog.swift').write_text('''import SwiftUI
 struct AuditProviderCatalog: View {
@@ -97,11 +187,17 @@ struct AuditProviderCatalog: View {
         (production / 'AuditProviderCatalog.swift').write_text(wrapper + methods + '\n}\n')
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
                                     'transformation': 'Extract unchanged modelListSection, modelEntryRow and modalityIcons methods into AuditProviderCatalog; omit sign-in/settings/network chrome.'})
+    resources = out / 'Resources'
+    resources.mkdir(exist_ok=True)
+    path = 'src/ios/Localizable.xcstrings'
+    data = read_source(args.source_ref, path)
+    (resources / 'Localizable.xcstrings').write_bytes(data)
+    manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
     for name in ['AuditApp.swift', 'FixtureStore.swift', 'FixtureAdapters.swift']:
         shutil.copyfile(HERE / name, out / 'Sources' / name)
     (out / 'UnitTests').mkdir(exist_ok=True)
     shutil.copyfile(HERE / 'AuditCodecTests.swift', out / 'UnitTests' / 'AuditCodecTests.swift')
-    for test in ['ModelCatalogTests.swift']:
+    for test in ['ModelCatalogTests.swift', 'ProviderConfigDBTests.swift', 'ProductionProviderPersistenceTests.swift']:
         path = 'src/ios/MinisTests/' + test
         try:
             data = read_source(args.source_ref, path)
@@ -124,12 +220,14 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     SWIFT_STRICT_CONCURRENCY: minimal
+    STRING_CATALOG_GENERATE_SYMBOLS: NO
+    SWIFT_EMIT_LOC_STRINGS: NO
     TARGETED_DEVICE_FAMILY: "1"
 targets:
   NativeModelAudit:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources: [Sources, Resources]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.leophone.audit.native-models
@@ -145,6 +243,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.leophone.audit.native-models.unit-tests
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NATIVE_MODEL_AUDIT"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/NativeModelAudit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NativeModelAudit"
         BUNDLE_LOADER: "$(TEST_HOST)"
   NativeModelAuditUITests:

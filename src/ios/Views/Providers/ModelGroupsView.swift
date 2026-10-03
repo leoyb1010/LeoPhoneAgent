@@ -70,6 +70,12 @@ struct ModelGroupsView: View {
                             set: { store.defaultSubGroupId = $0 }
                         )
                     )
+                } header: {
+                    Text("Defaults for new chats")
+                } footer: {
+                    Text("Primary starts new chats. Sub handles lightweight tasks such as titles. Choosing a model in an existing chat does not change these defaults.")
+                }
+                Section {
                     GroupSlotPicker(
                         label: "Voice Input",
                         selection: Binding(
@@ -87,9 +93,9 @@ struct ModelGroupsView: View {
                         voiceDirection: .output
                     )
                 } header: {
-                    Text("Defaults")
+                    Text("Voice defaults")
                 } footer: {
-                    Text("Primary is used for main agent tasks. Sub is used for lightweight tasks like title generation. Voice Input/Output pick a group whose audio-capable models drive speech-to-text and text-to-speech; if none is set, the offline System voice is used.")
+                    Text("Voice Input and Output use the matching audio models in a group. None uses the offline System voice.")
                 }
             }
 
@@ -161,23 +167,19 @@ struct ModelGroupsView: View {
         guard !trimmed.isEmpty else { return }
         let group = ModelGroup(name: trimmed, memberEntryIds: [])
         store.addGroup(group)
-        // Auto-set as primary default if it's the first group
-        if store.modelGroups.count == 1 {
-            store.defaultPrimaryGroupId = group.id
-        }
     }
 
     private func deleteGroups(at offsets: IndexSet) {
         let groups = store.modelGroups
-        for index in offsets {
+        for index in offsets where groups.indices.contains(index) {
             store.removeGroup(groups[index].id)
         }
     }
 
     private func moveGroups(from source: IndexSet, to destination: Int) {
-        var ids = store.modelGroups.map(\.id)
-        ids.move(fromOffsets: source, toOffset: destination)
-        store.reorderGroups(ids)
+        let ids = store.modelGroups.map(\.id)
+        let ordered = ModelCatalog.reorderedKeys(ids, visibleKeys: ids, from: source, to: destination)
+        store.reorderGroups(ordered)
     }
 
     @available(iOS 17.0, *)
@@ -297,10 +299,10 @@ private struct GroupRow: View {
                 }
                 Spacer()
                 if isPrimaryDefault {
-                    badge("Primary", color: .blue)
+                    badge(String(localized: "New chats"), color: .blue)
                 }
                 if isSubDefault {
-                    badge("Sub", color: .orange)
+                    badge(String(localized: "Light tasks"), color: .orange)
                 }
             }
 
@@ -315,7 +317,7 @@ private struct GroupRow: View {
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(.quaternary)
-                    Text(group.fallbackStrategy == .always ? String(localized: "Always") : String(localized: "Default"))
+                    Text(group.fallbackStrategy == .always ? String(localized: "Any error") : String(localized: "Provider errors"))
                         .font(.caption)
                         .foregroundStyle(group.fallbackStrategy == .always ? .orange : .secondary)
                 }

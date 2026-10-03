@@ -32,6 +32,10 @@ enum ProviderKeychainHelper {
 @MainActor final class ChatStore {
     static let shared = ChatStore()
     func updateSessionModelId(_ sessionId: String, modelId: String) async {}
+    var dirtyCalls: [(recordType: String, recordId: String, operation: String)] = []
+    func markDirty(recordType: String, recordId: String, operation: String = "upsert") async {
+        dirtyCalls.append((recordType: recordType, recordId: recordId, operation: operation))
+    }
 }
 extension Notification.Name { static let sessionModelBindingChanged = Notification.Name("audit.sessionModelBindingChanged") }
 enum LeoHaptics { static func selection() {} }
@@ -77,4 +81,9 @@ struct ModelEntryDetailSheet: View {
 struct AddCustomModelSheet: View {
     let instanceId: String
     var body: some View { Text("Custom entry creation is outside this audit fixture") }
+}
+
+struct VoiceProviderTemplate {
+    var mockModels: [LLMModel] { [] }
+    static func template(forBaseURL: String?) -> VoiceProviderTemplate? { nil }
 }

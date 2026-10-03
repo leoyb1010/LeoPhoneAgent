@@ -11,11 +11,19 @@ final class NativeModelJourneys: XCTestCase {
         app = XCUIApplication()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false) {
+    override func tearDownWithError() throws {
+        if (testRun?.failureCount ?? 0) > 0, app.state == .runningForeground {
+            capture("failure-" + name)
+        }
+        app.terminate()
+    }
+
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180) {
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
-                                 "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0"]
-        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+                                 "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount)]
+        app.launchArguments = ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", largeText ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"]
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
     }
@@ -31,26 +39,32 @@ final class NativeModelJourneys: XCTestCase {
         add(tree)
     }
 
-    private func search(_ query: String) {
+    private func search(_ query: String, replacing: Bool = false) {
         let field = app.searchFields.firstMatch
         if !field.waitForExistence(timeout: 8) || !field.isHittable { app.swipeDown() }
         XCTAssertTrue(field.waitForExistence(timeout: 8))
         field.tap()
-        if !(field.value as? String ?? "").isEmpty,
-           field.buttons["Clear text"].exists { field.buttons["Clear text"].tap() }
+        if replacing { field.buttons["Clear text"].tap() }
         field.typeText(query)
     }
 
     private func waitForText(_ text: String) -> XCUIElement {
-        let element = app.staticTexts[text].firstMatch
+        let element = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", text)).firstMatch
         XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing visible text: \(text)")
         return element
     }
 
     private func rootValue(_ identifier: String) -> String {
-        let element = app.staticTexts[identifier]
-        XCTAssertTrue(element.waitForExistence(timeout: 10))
-        return element.label
+        let state = app.staticTexts["audit.state"]
+        XCTAssertTrue(state.waitForExistence(timeout: 10))
+        guard let value = state.value as? String,
+              let data = value.data(using: .utf8),
+              let fields = try? JSONDecoder().decode([String: String].self, from: data),
+              let result = fields[identifier] else {
+            XCTFail("Fixture state does not expose \(identifier)")
+            return ""
+        }
+        return result
     }
 
     private func selectScope(_ scope: String) {
@@ -79,7 +93,7 @@ final class NativeModelJourneys: XCTestCase {
         search("DeepSeek")
         _ = waitForText("DeepSeek Reasoner")
         capture("04-search-provider-catalog")
-        search("nonexistent-zzzz-9876")
+        search("nonexistent-zzzz-9876", replacing: true)
         capture("05-empty-search")
         XCTAssertFalse(app.staticTexts["DeepSeek Reasoner"].exists)
     }
@@ -185,7 +199,8 @@ final class NativeModelJourneys: XCTestCase {
         XCTAssertFalse(unavailable.isEnabled)
         app.buttons["model-picker.expand-group.daily"].tap()
         capture("18-group-members-and-unavailable-groups")
-        waitForText("GPT-5").tap()
+        let member = app.buttons["model-picker.member.daily.openai-direct/gpt-5"]
+        if member.exists { member.tap() } else { waitForText("GPT-5").tap() }
         XCTAssertEqual(rootValue("audit.selection"), "group:daily")
         XCTAssertEqual(rootValue("audit.reference"), "openai-direct/gpt-5")
         XCTAssertEqual(rootValue("audit.default"), "daily")
@@ -327,6 +342,93 @@ final class NativeModelJourneys: XCTestCase {
         }
         XCTAssertFalse(row.isEnabled, "No-token provider must not be accepted as a draft choice")
         capture("28-draft-unavailable-model-disabled")
+    }
+
+    func test18ChineseNativeScreens() throws {
+        launch("full", large: false, language: "zh-Hans")
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        capture("29-zh-full-picker")
+        let scopes = app.segmentedControls["model-picker.scope"]
+        if scopes.exists {
+            scopes.buttons.element(boundBy: 0).tap()
+            capture("30-zh-favorites")
+            scopes.buttons.element(boundBy: 1).tap()
+            let provider = app.buttons["model-picker.provider.relay-proxy"]
+            if !provider.isHittable { app.swipeUp() }
+            XCTAssertTrue(provider.exists)
+            provider.tap()
+            capture("31-zh-provider-expanded")
+            app.swipeDown()
+            scopes.buttons.element(boundBy: 2).tap()
+            capture("32-zh-routing-groups")
+        }
+        app.terminate()
+        launch("catalog", large: false, language: "zh-Hans")
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 15))
+        capture("33-zh-provider-catalog")
+    }
+
+    func test19ThousandModelCatalogFindsLastEntryWithoutTruncation() {
+        launch("full", catalogCount: 1200)
+        let started = Date()
+        search("catalog-1199")
+        _ = waitForText("Catalog Model 1199")
+        let duration = Date().timeIntervalSince(started)
+        let timing = XCTAttachment(string: "1200 imported fixture models; native exact ID search automation took \(duration) seconds. Hosted simulator sanity measurement, not a device benchmark.")
+        timing.name = "1200-model-search-timing"
+        timing.lifetime = .keepAlways
+        add(timing)
+        XCTAssertLessThan(duration, 60, "Native 1200-model search must remain responsive")
+        capture("34-thousand-model-id-search")
+        if app.segmentedControls["model-picker.scope"].exists {
+            search("Work Relay Catalog Model 1199", replacing: true)
+            let result = app.buttons["model-picker.entry.relay-proxy/catalog-1199"]
+            XCTAssertTrue(result.waitForExistence(timeout: 10))
+            capture("35-thousand-model-provider-search")
+        }
+    }
+
+    func test20FavoriteEditDragPersistsOrder() throws {
+        launch("quick", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            throw XCTSkip("Favorite edit identifiers apply to improved picker")
+        }
+        selectScope("Favorites")
+        app.buttons["model-picker.edit-favorites"].tap()
+        capture("36-favorites-native-edit-handles")
+        let handles = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder"))
+        guard handles.firstMatch.waitForExistence(timeout: 5), handles.count >= 2 else {
+            throw XCTSkip("Simulator does not expose native reorder handles to XCTest; screenshot retained for review")
+        }
+        handles.element(boundBy: 0).press(forDuration: 0.6, thenDragTo: handles.element(boundBy: 1))
+        capture("37-favorites-after-native-drag")
+        app.terminate()
+        launch("", reset: false)
+        XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4")
+        XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")
+    }
+
+    func test21ReturningFromGroupManagementKeepsPickerOpen() throws {
+        launch("full", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            throw XCTSkip("Shared-picker group-management regression applies to improved picker")
+        }
+        selectScope("Groups")
+        let manage = app.buttons["model-picker.manage-groups"]
+        if !manage.isHittable { app.swipeUp() }
+        XCTAssertTrue(manage.waitForExistence(timeout: 8))
+        manage.tap()
+        XCTAssertTrue(app.navigationBars["Model Groups"].waitForExistence(timeout: 10))
+        capture("38-manage-groups-above-picker")
+        app.navigationBars.buttons["Done"].firstMatch.tap()
+        let scope = app.segmentedControls["model-picker.scope"]
+        XCTAssertTrue(scope.waitForExistence(timeout: 10))
+        selectScope("Providers")
+        search("DeepSeek")
+        _ = waitForText("DeepSeek Reasoner")
+        capture("39-picker-still-interactive-after-management")
     }
 
 }

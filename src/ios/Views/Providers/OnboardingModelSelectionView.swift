@@ -22,8 +22,8 @@ struct OnboardingModelSelectionView: View {
                     HStack {
                         Spacer()
                         VStack(spacing: 8) {
-                            ProgressView()
-                            Text("Loading models...")
+                            Image(systemName: "cpu").font(.title)
+                            Text("No models available")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -33,14 +33,14 @@ struct OnboardingModelSelectionView: View {
                 } header: {
                     Text("Models")
                 } footer: {
-                    Text("Fetching model list from your provider…")
+                    Text("Configure providers in Settings to see models here.")
                 }
             } else {
                 // Group entries by provider instance
                 let instanceIds = store.instances.filter(\.isEnabled).map(\.id)
                 ForEach(instanceIds, id: \.self) { instanceId in
                     let entries = store.visibleEntries(for: instanceId).filter { entry in
-                        searchText.isEmpty || entry.model.displayName.localizedCaseInsensitiveContains(searchText)
+                        ModelCatalog.matches(searchText, entry: entry, providerLabel: store.instance(for: instanceId)?.label ?? "")
                     }
                     if !entries.isEmpty, let instance = store.instance(for: instanceId) {
                         Section {
@@ -101,9 +101,20 @@ struct OnboardingModelSelectionView: View {
     }
 
     private func createGroupAndDismiss() {
+        let validIds = selectedModelEntryIds.filter { id in allEntries.contains { $0.id == id } }
+        guard !validIds.isEmpty else { return }
+        if let existing = store.modelGroups.first(where: { $0.memberEntryIds == validIds && $0.strategy == .fallback }) {
+            if store.defaultPrimaryGroupId == nil { store.defaultPrimaryGroupId = existing.id }
+            dismiss()
+            return
+        }
+        let base = String(localized: "Default Models")
+        var name = base
+        var suffix = 2
+        while store.modelGroups.contains(where: { $0.name == name }) { name = "\(base) \(suffix)"; suffix += 1 }
         let group = ModelGroup(
-            name: "Default Models",
-            memberEntryIds: selectedModelEntryIds,
+            name: name,
+            memberEntryIds: validIds,
             strategy: .fallback
         )
         store.addGroup(group)

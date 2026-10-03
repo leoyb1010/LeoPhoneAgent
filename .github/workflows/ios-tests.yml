@@ -121,11 +121,25 @@ jobs:
       - name: Test production SwiftUI model views on iPhone Simulator
         run: bash scripts/native-model-audit/run.sh '${{ matrix.source_ref }}' '${{ matrix.label }}'
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         with:
           name: native-model-audit-${{ matrix.label }}
-          path: native-model-audit-results/${{ matrix.label }}/
+          path: |
+            native-model-audit-results/${{ matrix.label }}/
+            !native-model-audit-results/${{ matrix.label }}/DerivedData/**
           if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: native-model-audit-images-${{ matrix.label }}
+          path: |
+            native-model-audit-results/${{ matrix.label }}/images/
+            native-model-audit-results/${{ matrix.label }}/source-manifest.json
+            native-model-audit-results/${{ matrix.label }}/test-summary.json
+            native-model-audit-results/${{ matrix.label }}/test-scope.txt
+          if-no-files-found: warn
           retention-days: 14
 
   legacy-mac-quality:

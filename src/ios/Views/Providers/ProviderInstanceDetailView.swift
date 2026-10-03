@@ -12,6 +12,7 @@ struct ProviderInstanceDetailView: View {
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
     @State private var fetchError: String?
+    @State private var organizationError: String?
     @State private var fetchWarnings: [String] = []
     @State private var fetchSource: String?
     @State private var showDeleteConfirm = false
@@ -110,10 +111,13 @@ struct ProviderInstanceDetailView: View {
             }
             .presentationDetents([.medium])
         }
+        .alert("Model organization", isPresented: Binding(get: { organizationError != nil }, set: { if !$0 { organizationError = nil } })) {
+            Button("OK", role: .cancel) { organizationError = nil }
+        } message: { Text(organizationError ?? "") }
         .alert("Delete Provider", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
-                store.removeInstance(instanceId)
-                dismiss()
+                if store.removeInstance(instanceId) { dismiss() }
+                else { organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -128,7 +132,7 @@ struct ProviderInstanceDetailView: View {
             presenting: pendingDeleteModelEntry
         ) { entry in
             Button("Delete", role: .destructive) {
-                store.removeEntry(entry.id)
+                if !store.removeEntry(entry.id) { organizationError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
                 pendingDeleteModelEntry = nil
             }
             Button("Cancel", role: .cancel) {
@@ -259,7 +263,17 @@ struct ProviderInstanceDetailView: View {
 
             // MARK: Models
             Section {
-                modelListSection(instance)
+                NavigationLink {
+                    ProviderModelCatalogView(instanceId: instance.id,
+                        onEdit: { editingModelEntry = $0 },
+                        onAddCustom: { showAddCustomModel = true })
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Browse and organize models", systemImage: "square.grid.2x2")
+                        Text("\(store.entries(for: instance.id).count) models · search, favorites and groups")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             } header: {
                 HStack {
                     Text("Models")
@@ -970,7 +984,10 @@ struct ProviderInstanceDetailView: View {
             defer { isFetchingModels = false }
             do {
                 let result = try await ProviderConfigStore.fetchModelsWithFallback(freshInstance, forceRefresh: true)
-                store.replaceEntries(for: freshInstance.id, models: result.models)
+                guard store.replaceEntries(for: freshInstance.id, models: result.models) else {
+                    fetchError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+                    return
+                }
                 fetchWarnings = result.warnings
                 fetchSource = result.source
             } catch {
