@@ -1,6 +1,6 @@
 # Native iOS model-management audit
 
-This is a test-only iPhone Simulator app assembled from production SwiftUI
+This is a test-only iPhone/iPad Simulator app assembled from production SwiftUI
 files, production model Codable types, routing, pinning, and model-selection
 logic. It has no entitlements, signing, package dependencies, Watch target, iSH,
 network execution, real credentials, CloudKit, or user configuration.
@@ -86,3 +86,7 @@ containing `/` and `:`, overrides, group order, unresolved references, and bindi
 kind. The current app also runs production `ModelCatalogTests` when present.
 
 Generated projects/results are build artifacts and are not committed.
+
+## iPad scope
+
+The generated target declares both iPhone and iPad device families; iPad evidence is native tablet layout, not iPhone compatibility scaling. The current-ipad CI job selects an available iPad on the pinned iOS26.5 runtime and runs the same full unit/UI suite and seven strict preflight journeys. Normal/AX3 text, light/dark, search, select, dismiss, save rejection/retry and persistence assertions stay enabled. This adds tablet component evidence without implying whole-app startup, multi-scene, iSH, device or CloudKit integration.

@@ -69,7 +69,7 @@ export_native_result() {
   python3 "$ROOT/scripts/native-model-audit/export_images.py" "$folder"
 }
 preflight_status=0
-if [[ "$LABEL" == "current" ]]; then
+if [[ "$REF" == "WORKTREE" ]]; then
   # Keep reproduced UI regressions separate, reusing the same project and build.
   # The complete suite runs after either outcome; a preflight failure stays red.
   mkdir -p "$OUTPUT/preflight"

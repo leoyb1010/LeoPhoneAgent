@@ -1,6 +1,6 @@
 import XCTest
 
-/// Hosted iPhone Simulator UI tests against unchanged production SwiftUI source.
+/// Hosted iPhone/iPad Simulator UI tests against production SwiftUI source.
 /// Fixtures own only storage and external-service boundaries. Every image is an
 /// XCUIScreenshot attachment from the native simulator, never HTML or a mockup.
 final class NativeModelJourneys: XCTestCase {

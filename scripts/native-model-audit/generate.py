@@ -116,7 +116,7 @@ def main():
                     candidate.unlink()
     production = out / 'Sources' / 'Production'
     production.mkdir(parents=True, exist_ok=True)
-    manifest = {'source_ref': args.source_ref, 'sources': [], 'boundary':
+    manifest = {'source_ref': args.source_ref, 'device_families': [1, 2], 'sources': [], 'boundary':
                 'Real production SwiftUI views and model logic; synthetic local store, credentials, voice/network adapters. Not full-app/iSH/Watch integration.'}
     for relative in SOURCES + OPTIONAL:
         path = 'src/ios/' + relative
@@ -265,7 +265,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     STRING_CATALOG_GENERATE_SYMBOLS: NO
     SWIFT_EMIT_LOC_STRINGS: NO
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
 targets:
   NativeModelAudit:
     type: application
