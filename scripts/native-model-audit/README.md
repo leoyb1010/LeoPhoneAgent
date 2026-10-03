@@ -44,6 +44,9 @@ selected tests to make the old UI green.
 - Current preflight parses the full changed production provider/store sources with `swiftc -frontend -parse`; this is syntax-only. Extracted persistence-method tests separately execute actual save/load/refresh/journal/SQLite code in an isolated host, with startup/voice/dirty-notification adapters
 - Authentication availability is synthetic. A non-secret sentinel stands in for
   a credential in the test process. No live model calls or speech tests occur
+- A one-shot fixture group-save rejection verifies the real multi-select picker
+  reports failure, retains selected rows and stays open for retry. Actual file
+  and database rejection/rollback is tested separately by production-method tests
 - The UI tests capture `XCUIScreenshot` PNG attachments and accessibility trees.
   `xcresulttool` exports them alongside test summaries and the complete log
 - Catalog selection after import is exercised; file-picker/import transport,

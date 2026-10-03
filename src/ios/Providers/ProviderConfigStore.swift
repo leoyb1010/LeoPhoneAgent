@@ -182,6 +182,9 @@ final class ProviderConfigStore: ObservableObject {
     /// File existed but JSON decode failed. `save()` must not overwrite the
     /// on-disk file with an empty config.
     private var jsonLoadFailed = false
+    /// The first-frame JSON may be older than the authoritative SQLite store.
+    /// Reject edits until bootstrap has selected the durable source of truth.
+    private var persistenceReady = false
     private let databaseWrites = ModelCatalogWriteQueue()
 
     private var modelArchiveURL: URL { fileURL.appendingPathExtension("model-archive") }
@@ -236,12 +239,15 @@ final class ProviderConfigStore: ObservableObject {
         self.jsonLoadFailed = loaded.failed
         self.lastSavedSnapshot = self.config
         loadModelArchiveAliases()
-        ensureVoiceTemplateModels()
         Self.setupDBAndMigrate(jsonURL: fileURL) { [weak self] db in
             Task { @MainActor in
                 guard let self else { return }
                 self.db = db
-                guard let db else { return }
+                guard let db else {
+                    self.persistenceReady = true
+                    self.ensureVoiceTemplateModels()
+                    return
+                }
                 let bootstrapRevision = self.configRevision
                 guard await self.recoverPendingDatabaseSnapshot(db) else { return }
                 // [T-provider-entry-composite-key] Load the persisted
@@ -266,6 +272,8 @@ final class ProviderConfigStore: ObservableObject {
                 let migratedFlag = UserDefaults.standard.bool(forKey: "cloudSync.providerV3.migrationCompleted")
                 let dbNonEmpty = !(await db.isEmpty())
                 guard ProviderV3Bootstrap.isEnabled, (migratedFlag || dbNonEmpty) else {
+                    self.persistenceReady = true
+                    self.ensureVoiceTemplateModels()
                     logger.info("[GroupLoad] init: staying on V2 JSON config (v3Enabled=\(ProviderV3Bootstrap.isEnabled) migrated=\(migratedFlag) dbNonEmpty=\(dbNonEmpty))")
                     return
                 }
@@ -292,6 +300,7 @@ final class ProviderConfigStore: ObservableObject {
                 // JSON may have been corrupt; the DB is now authoritative, so
                 // later edits must be allowed to persist (and rewrite JSON).
                 self.jsonLoadFailed = false
+                self.persistenceReady = true
                 // [T-provider-entry-composite-key] Build the legacyUuid map from
                 // the local entries (each entry's random uuid → its composite
                 // key), then normalize any group/binding/agent-loop reference
@@ -362,6 +371,7 @@ final class ProviderConfigStore: ObservableObject {
         self.config = loaded.config
         self.jsonLoadFailed = loaded.failed
         self.lastSavedSnapshot = self.config
+        self.persistenceReady = true
         loadModelArchiveAliases()
         // Tests don't open the DB by default.
     }
@@ -429,6 +439,11 @@ final class ProviderConfigStore: ObservableObject {
 
     @discardableResult
     private func save() -> Bool {
+        guard persistenceReady else {
+            if let prior = lastSavedSnapshot { config = prior }
+            logger.warning("Provider config is still loading; edit rejected without changing durable data")
+            return false
+        }
         guard !jsonLoadFailed else {
             if let prior = lastSavedSnapshot { config = prior }
             logger.error("[B6] skip save — last JSON load failed; preserving original config file")
@@ -1026,6 +1041,7 @@ final class ProviderConfigStore: ObservableObject {
     /// - Also supports plain-text API key for backward compatibility
     @discardableResult
     func importInstanceJSON(_ json: String) -> String? {
+        guard persistenceReady else { return nil }
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let providerTypeRaw = dict["providerType"] as? String,
@@ -1068,61 +1084,9 @@ final class ProviderConfigStore: ObservableObject {
             azureMode: dict["azureMode"] as? Bool ?? false
         )
 
-        // Save credentials to Keychain BEFORE addInstance(), so that
-        // addInstance() can detect hasManualToken and skip built-in model population.
-
-        // Decode API key (base64 or plain text for backward compat)
-        if let keyValue = dict["apiKey"] as? String, !keyValue.isEmpty {
-            let apiKey: String
-            if let decoded = Data(base64Encoded: keyValue), let str = String(data: decoded, encoding: .utf8) {
-                apiKey = str
-            } else {
-                apiKey = keyValue // plain text fallback
-            }
-            ProviderKeychainHelper.saveAPIKey(apiKey, instanceId: instance.id)
-        }
-
-        // Decode manual OAuth token (base64 or plain text for backward compat)
-        if let tokenValue = dict["manualOAuthToken"] as? String, !tokenValue.isEmpty {
-            let token: String
-            if let decoded = Data(base64Encoded: tokenValue), let str = String(data: decoded, encoding: .utf8) {
-                token = str
-            } else {
-                token = tokenValue
-            }
-            ProviderKeychainHelper.saveOAuthString(token, instanceId: instance.id, account: "manual-oauth-token")
-        }
-
-        // [T-ios-provider-export-oauth-token] Restore the structured OAuth-login
-        // credential. Decode base64 → JSON → the provider-specific Codable token,
-        // then saveOAuthToken back to the keychain so the imported instance is
-        // authenticated. saveOAuthToken already calls notifyAuthChanged()
-        // (bumps authRevision), so the auth UI refreshes without extra work.
-        if let oauthB64 = dict["oauthToken"] as? String, !oauthB64.isEmpty,
-           let blob = Data(base64Encoded: oauthB64) {
-            switch providerType {
-            case .openAI:
-                if let t = (try? JSONDecoder().decode(CodexTokenStorage.self, from: blob))
-                    ?? Self.decodeCodexTokenFromRawOAuth(blob) {
-                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
-                }
-            case .xAI:
-                if let t = (try? JSONDecoder().decode(XAITokenStorage.self, from: blob))
-                    ?? Self.decodeXAITokenFromRawOAuth(blob) {
-                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
-                }
-            case .kimiCode:
-                if let t = try? JSONDecoder().decode(KimiTokenStorage.self, from: blob) {
-                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
-                }
-            default:
-                break
-            }
-        }
-        // Append instance directly (skip addInstance to avoid built-in model
-        // population and async refreshModels — we already have models from the JSON).
-        config.instances.append(instance)
-        save()
+        // Stage all metadata before one durable admission. Skip addInstance
+        // and addEntry here: those would publish partial per-model snapshots.
+        var importedEntries: [ModelEntry] = []
 
         // Import models
         if let models = dict["models"] as? [[String: Any]] {
@@ -1183,7 +1147,61 @@ final class ProviderConfigStore: ObservableObject {
                     isCustom: isCustom,
                     isHidden: isHidden
                 )
-                addEntry(entry)
+                importedEntries.append(entry)
+            }
+        }
+
+        guard commitImportedMetadata(instance, entries: importedEntries) else { return nil }
+
+        // Existing credential import runs only after metadata admission.
+        // Keychain writes are not part of the JSON/SQLite transaction.
+
+        // Decode API key (base64 or plain text for backward compat)
+        if let keyValue = dict["apiKey"] as? String, !keyValue.isEmpty {
+            let apiKey: String
+            if let decoded = Data(base64Encoded: keyValue), let str = String(data: decoded, encoding: .utf8) {
+                apiKey = str
+            } else {
+                apiKey = keyValue // plain text fallback
+            }
+            ProviderKeychainHelper.saveAPIKey(apiKey, instanceId: instance.id)
+        }
+
+        // Decode manual OAuth token (base64 or plain text for backward compat)
+        if let tokenValue = dict["manualOAuthToken"] as? String, !tokenValue.isEmpty {
+            let token: String
+            if let decoded = Data(base64Encoded: tokenValue), let str = String(data: decoded, encoding: .utf8) {
+                token = str
+            } else {
+                token = tokenValue
+            }
+            ProviderKeychainHelper.saveOAuthString(token, instanceId: instance.id, account: "manual-oauth-token")
+        }
+
+        // [T-ios-provider-export-oauth-token] Restore the structured OAuth-login
+        // credential. Decode base64 → JSON → the provider-specific Codable token,
+        // then saveOAuthToken back to the keychain so the imported instance is
+        // authenticated. saveOAuthToken already calls notifyAuthChanged()
+        // (bumps authRevision), so the auth UI refreshes without extra work.
+        if let oauthB64 = dict["oauthToken"] as? String, !oauthB64.isEmpty,
+           let blob = Data(base64Encoded: oauthB64) {
+            switch providerType {
+            case .openAI:
+                if let t = (try? JSONDecoder().decode(CodexTokenStorage.self, from: blob))
+                    ?? Self.decodeCodexTokenFromRawOAuth(blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .xAI:
+                if let t = (try? JSONDecoder().decode(XAITokenStorage.self, from: blob))
+                    ?? Self.decodeXAITokenFromRawOAuth(blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .kimiCode:
+                if let t = try? JSONDecoder().decode(KimiTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            default:
+                break
             }
         }
 
@@ -1198,6 +1216,21 @@ final class ProviderConfigStore: ObservableObject {
             Task { await refreshModels(for: instance) }
         }
         return resolvedLabel
+    }
+
+    /// Import metadata is admitted as one snapshot. Credential persistence is
+    /// deliberately left to the existing caller after this succeeds.
+    private func commitImportedMetadata(_ instance: ProviderInstance, entries: [ModelEntry]) -> Bool {
+        guard persistenceReady else { return false }
+        config.instances.append(instance)
+        var seen = Set(config.modelEntries.map(\.id))
+        let now = Date()
+        for entry in entries where entry.providerInstanceId == instance.id && seen.insert(entry.id).inserted {
+            var imported = entry.replacingBaseModel(entry.baseModel.withInferredModality())
+            imported.userModifiedAt = now
+            config.modelEntries.append(imported)
+        }
+        return save()
     }
 
     // MARK: - Model Entries
@@ -1292,8 +1325,7 @@ final class ProviderConfigStore: ObservableObject {
                            isCustom: entry.isCustom, isHidden: entry.isHidden,
                            userModifiedAt: Date())
         config.modelEntries.append(e)
-        save()
-        return true
+        return save()
     }
 
     func updateEntry(_ entry: ModelEntry) {
@@ -1399,13 +1431,15 @@ final class ProviderConfigStore: ObservableObject {
 
     var modelGroups: [ModelGroup] { config.modelGroups }
 
-    func addGroup(_ group: ModelGroup) {
+    @discardableResult
+    func addGroup(_ group: ModelGroup) -> Bool {
         config.modelGroups.append(group)
-        save()
+        return save()
     }
 
-    func updateGroup(_ group: ModelGroup) {
-        guard let idx = config.modelGroups.firstIndex(where: { $0.id == group.id }) else { return }
+    @discardableResult
+    func updateGroup(_ group: ModelGroup) -> Bool {
+        guard let idx = config.modelGroups.firstIndex(where: { $0.id == group.id }) else { return false }
         // [T-icloud-provider-sync-consistency] Stamp per-member add/remove
         // timestamps by diffing the prior member list against the new one, so
         // the inbound union-merge on other devices can arbitrate concurrent
@@ -1435,14 +1469,15 @@ final class ProviderConfigStore: ObservableObject {
         stamped.addedMembers = added.filter { newSet.contains($0.key) }
         stamped.removedMembers = removed.filter { !newSet.contains($0.key) }
         config.modelGroups[idx] = stamped
-        save()
+        return save()
     }
 
     /// Reorder model groups. This order drives the display order in the
     /// Model Groups list and SessionModelPicker. Unknown ids are dropped,
     /// and any groups missing from newOrder are appended in their existing
     /// relative order to keep state consistent.
-    func reorderGroups(_ newOrder: [String]) {
+    @discardableResult
+    func reorderGroups(_ newOrder: [String]) -> Bool {
         let existingById = Self.dictByIdLastWins(config.modelGroups.map { ($0.id, $0) })
         var seen = Set<String>()
         var reordered: [ModelGroup] = []
@@ -1455,18 +1490,20 @@ final class ProviderConfigStore: ObservableObject {
             reordered.append(group)
         }
         config.modelGroups = reordered
-        save()
+        return save()
     }
 
-    func removeGroup(_ groupId: String) {
+    @discardableResult
+    func removeGroup(_ groupId: String) -> Bool {
         config.modelGroups.removeAll { $0.id == groupId }
         Self.repointDefaults(in: &config, removedGroupIds: [groupId])
         Self.recordTombstone(in: &config.deletedModelGroups, ids: [groupId])
-        save()
+        guard save() else { return false }
         ModelSwitcher.forget(groupIds: [groupId])
         // [T-icloud-provider-sync-consistency] Explicit V3 delete tombstone —
         // emitV3MarkDirty no longer diff-infers group deletions.
         Task { await ChatStore.shared.markDirty(recordType: "ProviderModelGroupV3", recordId: groupId, operation: "delete") }
+        return true
     }
 
     func group(for id: String) -> ModelGroup? {
@@ -1480,17 +1517,21 @@ final class ProviderConfigStore: ObservableObject {
     }
 
     /// Point defaults and the agent-loop list away from groups that were just
-    /// removed. The primary default falls back to the first remaining group,
-    /// matching what load-time normalisation does (a nil default is restored
-    /// to the first group on the next launch anyway, but the UI read the
-    /// dangling id until then).
+    /// removed. Clearing the choice avoids implicitly routing future requests
+    /// to an arbitrary remaining group, which may be empty or voice-only.
     private static func repointDefaults(in config: inout ProviderConfig, removedGroupIds: Set<String>) {
         guard !removedGroupIds.isEmpty else { return }
         if let def = config.defaultPrimaryGroupId, removedGroupIds.contains(def) {
-            config.defaultPrimaryGroupId = config.modelGroups.first?.id
+            config.defaultPrimaryGroupId = nil
         }
         if let def = config.defaultSubGroupId, removedGroupIds.contains(def) {
             config.defaultSubGroupId = nil
+        }
+        if let def = config.voiceInputGroupId, removedGroupIds.contains(def) {
+            config.voiceInputGroupId = nil
+        }
+        if let def = config.voiceOutputGroupId, removedGroupIds.contains(def) {
+            config.voiceOutputGroupId = nil
         }
         config.agentLoopGroupIds.removeAll { removedGroupIds.contains($0) }
     }
@@ -1684,6 +1725,10 @@ final class ProviderConfigStore: ObservableObject {
     /// pushed back to iCloud (via the existing "localHasUnique" re-upload path).
     @discardableResult
     func applyMergedConfigFromSync(_ newConfig: ProviderConfig) -> Bool {
+        guard persistenceReady else {
+            logger.warning("Provider config is still loading; sync merge deferred without acknowledgement")
+            return false
+        }
         // Compute the set of instances that ended up with zero model
         // entries after the merge. The remote ProviderConfig snapshot
         // can be missing model rows when the peer hadn't refreshed yet

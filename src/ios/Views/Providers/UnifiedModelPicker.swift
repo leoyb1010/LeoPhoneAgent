@@ -105,7 +105,7 @@ struct ModelPickerConfig {
     var onSelectInGroup: (@MainActor (ModelEntry, ModelGroup) -> Void)?
     var onAddMulti: (@MainActor (Set<String>) -> Void)?
     /// Ordered callback for routing groups: tap order becomes fallback priority.
-    var onAddOrdered: (@MainActor ([String]) -> Void)?
+    var onAddOrdered: (@MainActor ([String]) -> Bool)?
 
     enum Mode { case single, multi }
     enum GroupScope {
@@ -250,6 +250,8 @@ struct UnifiedModelPicker: View {
     @State private var browseScope: BrowseScope = .providers
     @State private var editMode: EditMode = .inactive
     @State private var pinFailure = false
+    @State private var saveFailed = false
+    @State private var pendingCreatedGroupId: String?
     @State private var selectionOrder: [String] = []
     @State private var searchText = ""
 
@@ -456,6 +458,12 @@ struct UnifiedModelPicker: View {
         } message: {
             Text("You can save up to \(ModelSwitcher.maxPinned) favorites. Remove one before adding another.")
         }
+
+        .alert("Model organization", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Could not save model changes. Your previous configuration was kept. Try again.")
+        }
         .sheet(isPresented: $showCreateGroupSheet) {
             NavigationStack {
                 UnifiedModelPicker(config: createGroupConfig())
@@ -588,14 +596,24 @@ struct UnifiedModelPicker: View {
             groupScope: .none,
             headerNote: dir?.filterNote,
             onAddOrdered: { ids in
-                guard !ids.isEmpty else { return }
+                guard !ids.isEmpty else { return false }
                 let store = ProviderConfigStore.shared
-                let name = Self.uniqueGroupName(for: dir, store: store)
-                let group = ModelGroup(name: name, memberEntryIds: ids)
-                store.addGroup(group)
+                let group: ModelGroup
+                if let id = pendingCreatedGroupId, let saved = store.group(for: id), saved.memberEntryIds == ids {
+                    group = saved
+                } else {
+                    group = ModelGroup(name: Self.uniqueGroupName(for: dir, store: store), memberEntryIds: ids)
+                    guard store.addGroup(group) else { return false }
+                    pendingCreatedGroupId = group.id
+                }
                 if let dir {
-                    if dir == .input { store.voiceInputGroupId = group.id }
-                    else { store.voiceOutputGroupId = group.id }
+                    if dir == .input {
+                        store.voiceInputGroupId = group.id
+                        guard store.voiceInputGroupId == group.id else { return false }
+                    } else {
+                        store.voiceOutputGroupId = group.id
+                        guard store.voiceOutputGroupId == group.id else { return false }
+                    }
                 }
                 if let firstId = ids.first {
                     if let entry = store.entry(for: firstId) {
@@ -604,7 +622,9 @@ struct UnifiedModelPicker: View {
                         parentConfig.onSelect?(dir == .output ? .systemTTS : .systemASR)
                     }
                 }
+                pendingCreatedGroupId = nil
                 dismissPicker()
+                return true
             }
         )
     }
@@ -635,7 +655,9 @@ struct UnifiedModelPicker: View {
                 Button("Add (\(validSelectedOrder.count))") {
                     let ordered = validSelectedOrder
                     guard !ordered.isEmpty else { return }
-                    if let onAddOrdered = config.onAddOrdered { onAddOrdered(ordered) }
+                    if let onAddOrdered = config.onAddOrdered {
+                        guard onAddOrdered(ordered) else { saveFailed = true; return }
+                    }
                     else { config.onAddMulti?(Set(ordered)) }
                     dismiss()
                 }

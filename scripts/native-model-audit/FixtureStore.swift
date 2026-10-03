@@ -15,6 +15,7 @@ import SwiftUI
     @Published var sessionBindings: [String: SessionModelBinding] = [:] { didSet { persist() } }
     var deletedInstanceIds: Set<String> = []
     private var ready = false
+    private var failNextGroupSave = false
     private let storageKey = "native-model-audit.fixture.v1"
 
     struct Snapshot: Codable {
@@ -32,6 +33,7 @@ import SwiftUI
 
     init() {
         let environment = ProcessInfo.processInfo.environment
+        failNextGroupSave = environment["AUDIT_FAIL_NEXT_GROUP_SAVE"] == "1"
         if environment["AUDIT_RESET"] == "1" {
             UserDefaults.standard.removeObject(forKey: storageKey)
             UserDefaults.standard.removeObject(forKey: "leo.model.pinned.v1")
@@ -154,10 +156,44 @@ import SwiftUI
     func binding(for id: String) -> SessionModelBinding? { sessionBindings[id] }
     @discardableResult
     func setBinding(_ value: SessionModelBinding, for id: String) -> Bool { sessionBindings[id] = value; return true }
-    func addGroup(_ group: ModelGroup) { modelGroups.append(group) }
-    func updateGroup(_ group: ModelGroup) { if let index = modelGroups.firstIndex(where: { $0.id == group.id }) { modelGroups[index] = group } }
-    func removeGroup(_ id: String) { modelGroups.removeAll { $0.id == id } }
-    func reorderGroups(_ ids: [String]) { modelGroups = ids.compactMap { group(for: $0) } }
+    @discardableResult
+    func addGroup(_ group: ModelGroup) -> Bool {
+        guard admitGroupSave() else { return false }
+        modelGroups.append(group)
+        return true
+    }
+    @discardableResult
+    func updateGroup(_ group: ModelGroup) -> Bool {
+        guard let index = modelGroups.firstIndex(where: { $0.id == group.id }) else { return false }
+        guard admitGroupSave() else { return false }
+        modelGroups[index] = group
+        return true
+    }
+    @discardableResult
+    func removeGroup(_ id: String) -> Bool {
+        guard admitGroupSave() else { return false }
+        modelGroups.removeAll { $0.id == id }
+        if defaultPrimaryGroupId == id { defaultPrimaryGroupId = nil }
+        if defaultSubGroupId == id { defaultSubGroupId = nil }
+        if voiceInputGroupId == id { voiceInputGroupId = nil }
+        if voiceOutputGroupId == id { voiceOutputGroupId = nil }
+        agentLoopGroupIds.removeAll { $0 == id }
+        ModelSwitcher.forget(groupIds: [id])
+        return true
+    }
+    @discardableResult
+    func reorderGroups(_ ids: [String]) -> Bool {
+        guard admitGroupSave() else { return false }
+        modelGroups = ids.compactMap { group(for: $0) }
+        return true
+    }
+    // UI rejection injection only. Disk/DB failure behavior is exercised by
+    // ProductionProviderPersistenceTests against exact production method bodies.
+    private func admitGroupSave() -> Bool {
+        guard failNextGroupSave else { return true }
+        failNextGroupSave = false
+        return false
+    }
     func updateEntry(_ entry: ModelEntry) { if let index = modelEntries.firstIndex(where: { $0.id == entry.id }) { modelEntries[index] = entry } }
     func addAgentLoopEntry(_ id: String) { if !agentLoopModelEntryIds.contains(id) { agentLoopModelEntryIds.append(id) } }
     func addAgentLoopGroup(_ id: String) { if !agentLoopGroupIds.contains(id) { agentLoopGroupIds.append(id) } }

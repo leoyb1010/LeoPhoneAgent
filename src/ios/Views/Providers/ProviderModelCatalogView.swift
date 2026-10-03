@@ -201,7 +201,10 @@ struct ProviderModelCatalogView: View {
     private func addSelected(to captured: ModelGroup) {
         guard var group = store.group(for: captured.id) else { return }
         for entry in selectedEntries where !group.memberEntryIds.contains(entry.id) { group.memberEntryIds.append(entry.id) }
-        store.updateGroup(group)
+        guard store.updateGroup(group) else {
+            message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            return
+        }
         selectedIds.removeAll()
         message = String(localized: "Models added. Review their priority in Groups.")
     }
@@ -209,7 +212,10 @@ struct ProviderModelCatalogView: View {
     private func createGroup() {
         let name = newGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !selectedEntries.isEmpty else { return }
-        store.addGroup(ModelGroup(name: name, memberEntryIds: selectedEntries.map(\.id)))
+        guard store.addGroup(ModelGroup(name: name, memberEntryIds: selectedEntries.map(\.id))) else {
+            message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
+            return
+        }
         selectedIds.removeAll()
         newGroupName = ""
         message = String(localized: "Group created. Your default stays the same.")

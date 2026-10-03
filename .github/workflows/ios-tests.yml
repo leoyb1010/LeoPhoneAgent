@@ -108,10 +108,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: baseline
-            source_ref: 3c053a7c9b112667a04cea9b12c7c16a03c5ce39
           - label: current
             source_ref: WORKTREE
+          - label: baseline
+            source_ref: 3c053a7c9b112667a04cea9b12c7c16a03c5ce39
     steps:
       - uses: actions/checkout@v4
         with:

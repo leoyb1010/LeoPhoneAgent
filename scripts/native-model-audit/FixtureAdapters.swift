@@ -84,6 +84,10 @@ struct AddCustomModelSheet: View {
 }
 
 struct VoiceProviderTemplate {
-    var mockModels: [LLMModel] { [] }
-    static func template(forBaseURL: String?) -> VoiceProviderTemplate? { nil }
+    static var testModelsByBaseURL: [String: [LLMModel]] = [:]
+    var mockModels: [LLMModel]
+    static func template(forBaseURL: String?) -> VoiceProviderTemplate? {
+        guard let url = forBaseURL, let models = testModelsByBaseURL[url] else { return nil }
+        return VoiceProviderTemplate(mockModels: models)
+    }
 }

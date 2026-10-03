@@ -4,6 +4,7 @@ import SwiftUI
 struct ModelGroupsView: View {
     @ObservedObject private var store = ProviderConfigStore.shared
     @State private var showCreateGroup = false
+    @State private var saveFailed = false
     @State private var newGroupName = ""
     @State private var showAddAgentModels = false
     @State private var showAddAgentGroups = false
@@ -151,6 +152,12 @@ struct ModelGroupsView: View {
             }
         }
         .animation(.spring(response: 0.3), value: forceSyncToast)
+
+        .alert("Model organization", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Could not save model changes. Your previous configuration was kept. Try again.")
+        }
         .alert("New Group", isPresented: $showCreateGroup) {
             TextField("Group name", text: $newGroupName)
             Button("Create") { createGroup() }
@@ -166,20 +173,20 @@ struct ModelGroupsView: View {
         let trimmed = newGroupName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         let group = ModelGroup(name: trimmed, memberEntryIds: [])
-        store.addGroup(group)
+        if !store.addGroup(group) { saveFailed = true }
     }
 
     private func deleteGroups(at offsets: IndexSet) {
         let groups = store.modelGroups
         for index in offsets where groups.indices.contains(index) {
-            store.removeGroup(groups[index].id)
+            guard store.removeGroup(groups[index].id) else { saveFailed = true; break }
         }
     }
 
     private func moveGroups(from source: IndexSet, to destination: Int) {
         let ids = store.modelGroups.map(\.id)
         let ordered = ModelCatalog.reorderedKeys(ids, visibleKeys: ids, from: source, to: destination)
-        store.reorderGroups(ordered)
+        if !store.reorderGroups(ordered) { saveFailed = true }
     }
 
     @available(iOS 17.0, *)

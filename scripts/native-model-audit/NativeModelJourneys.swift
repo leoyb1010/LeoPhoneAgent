@@ -18,10 +18,11 @@ final class NativeModelJourneys: XCTestCase {
         app.terminate()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180) {
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false) {
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
-                                 "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount)]
+                                 "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount),
+                                 "AUDIT_FAIL_NEXT_GROUP_SAVE": failNextGroupSave ? "1" : "0"]
         app.launchArguments = ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", largeText ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"]
         app.launch()
@@ -429,6 +430,38 @@ final class NativeModelJourneys: XCTestCase {
         search("DeepSeek")
         _ = waitForText("DeepSeek Reasoner")
         capture("39-picker-still-interactive-after-management")
+    }
+
+    func test22RejectedGroupSaveKeepsSelectionAndAllowsRetry() {
+        launch("groups", large: false, failNextGroupSave: true)
+        waitForText("Research Team").tap()
+        let addModels = app.buttons["Add Models"]
+        for _ in 0..<5 where !addModels.isHittable { app.swipeUp() }
+        XCTAssertTrue(addModels.isHittable)
+        addModels.tap()
+        search("gpt-5-mini")
+        let model = app.buttons["model-picker.entry.openai-direct/gpt-5-mini"]
+        XCTAssertTrue(model.waitForExistence(timeout: 10))
+        model.tap()
+        let add = app.buttons["Add (1)"]
+        XCTAssertTrue(add.isEnabled)
+        add.tap()
+        let failure = app.alerts["Model organization"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 10), "Rejected save must be reported")
+        XCTAssertTrue(failure.staticTexts["Could not save model changes. Your previous configuration was kept. Try again."].exists)
+        capture("40-rejected-group-save-keeps-picker")
+        failure.buttons["OK"].tap()
+        XCTAssertTrue(app.navigationBars["Add Models"].exists, "Failed add must keep the picker open")
+        XCTAssertTrue(add.isEnabled, "Selected model must survive the failure for retry")
+        capture("41-selected-model-after-save-rejection")
+        add.tap()
+        let dismissed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.navigationBars["Add Models"])
+        wait(for: [dismissed], timeout: 10)
+        app.terminate()
+        launch("", reset: false)
+        XCTAssertEqual(rootValue("audit.research-members"), "relay-proxy/deepseek-reasoner|anthropic-direct/claude-opus-4|openai-direct/gpt-5-mini")
+        XCTAssertEqual(rootValue("audit.selection"), "anthropic-direct/claude-sonnet-4")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
     }
 
 }

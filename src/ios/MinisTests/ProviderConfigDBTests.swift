@@ -27,7 +27,10 @@ final class ProviderConfigDBTests: XCTestCase {
         return ProviderConfig(instances: [provider], modelEntries: [entry], modelGroups: [empty, group],
             defaultPrimaryGroupId: group.id, defaultSubGroupId: empty.id, sessionBindings: ["session": binding],
             agentLoopModelEntryIds: [entry.uuid, "pending/model"], agentLoopGroupIds: [group.id, empty.id],
-            voiceInputGroupId: empty.id, voiceOutputGroupId: group.id)
+            voiceInputGroupId: empty.id, voiceOutputGroupId: group.id,
+            deletedInstances: [.init(id: "deleted-provider", deletedAt: Date(timeIntervalSince1970: 300))],
+            deletedModelEntries: [.init(id: "deleted-provider/model", deletedAt: Date(timeIntervalSince1970: 300))],
+            deletedModelGroups: [.init(id: "deleted-group", deletedAt: Date(timeIntervalSince1970: 300))])
     }
 
     private func directory() throws -> URL {
@@ -152,6 +155,30 @@ final class ProviderConfigDBTests: XCTestCase {
         XCTAssertFalse(corrupt)
         let afterCorrupt = await db.dumpProviderConfig()
         XCTAssertEqual(afterCorrupt, original)
+    }
+
+    func testTombstoneWriteFailureRollsBackDeletionIntentAndAllOtherRows() async throws {
+        let directory = try directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("providers.db")
+        let db = try ProviderConfigDB(url: url)
+        let original = fixture()
+        let saved = await db.bulkReplace(from: original)
+        XCTAssertTrue(saved)
+        try execute("CREATE TRIGGER fail_tombstone_write BEFORE INSERT ON provider_local_kv WHEN NEW.key = 'deletedModelEntries' BEGIN SELECT RAISE(ABORT, 'synthetic tombstone failure'); END", at: url)
+        var replacement = original
+        replacement.modelGroups[0].name = "Must roll back"
+        replacement.deletedModelEntries.append(.init(id: "new-deletion", deletedAt: Date(timeIntervalSince1970: 400)))
+        let failed = await db.bulkReplace(from: replacement)
+        XCTAssertFalse(failed)
+        let restored = await db.dumpProviderConfig()
+        XCTAssertEqual(restored, original)
+        try execute("DROP TRIGGER fail_tombstone_write", at: url)
+        let retried = await db.bulkReplace(from: replacement)
+        XCTAssertTrue(retried)
+        let reopened = try ProviderConfigDB(url: url)
+        let coldStart = await reopened.dumpProviderConfig()
+        XCTAssertEqual(coldStart, replacement)
     }
 }
 

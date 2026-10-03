@@ -9,6 +9,7 @@ struct ModelGroupDetailView: View {
     @State private var editingName = ""
     @State private var showAddModels = false
     @State private var showDeleteConfirm = false
+    @State private var saveFailed = false
     /// Holding `EditMode` directly (rather than a `Bool` + a derived
     /// `editMode` binding) lets SwiftUI own the same value the
     /// ForEach internals read from the environment. The earlier
@@ -70,10 +71,16 @@ struct ModelGroupDetailView: View {
                 }
             }
         }
+
+        .alert("Model organization", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Could not save model changes. Your previous configuration was kept. Try again.")
+        }
         .alert("Delete Group", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
-                store.removeGroup(groupId)
-                dismiss()
+                if store.removeGroup(groupId) { dismiss() }
+                else { saveFailed = true }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -93,7 +100,7 @@ struct ModelGroupDetailView: View {
                         Button("Save") {
                             var updated = group
                             updated.name = editingName.trimmingCharacters(in: .whitespaces)
-                            store.updateGroup(updated)
+                            saveGroup(updated)
                         }
                         .font(.caption.weight(.semibold))
                     }
@@ -107,7 +114,7 @@ struct ModelGroupDetailView: View {
                     set: { newStrategy in
                         var updated = group
                         updated.strategy = newStrategy
-                        store.updateGroup(updated)
+                        saveGroup(updated)
                     }
                 )) {
                     HStack {
@@ -141,7 +148,7 @@ struct ModelGroupDetailView: View {
                         set: { newStrategy in
                             var updated = group
                             updated.fallbackStrategy = newStrategy
-                            store.updateGroup(updated)
+                            saveGroup(updated)
                         }
                     )) {
                         HStack {
@@ -226,7 +233,7 @@ struct ModelGroupDetailView: View {
                     set: { enabled in
                         var updated = group
                         updated.defaultThinkingLevel = enabled ? .medium : nil
-                        store.updateGroup(updated)
+                        saveGroup(updated)
                     }
                 )) {
                     HStack {
@@ -248,7 +255,7 @@ struct ModelGroupDetailView: View {
                         set: { level in
                             var updated = group
                             updated.defaultThinkingLevel = min(level, maxLevel)
-                            store.updateGroup(updated)
+                            saveGroup(updated)
                         }
                     )) {
                         ForEach(ThinkingLevel.allCases.filter { $0 != .off && $0 <= maxLevel }, id: \.self) { level in
@@ -277,7 +284,7 @@ struct ModelGroupDetailView: View {
                             }
                             updated.contextLimitTokens = nil
                         }
-                        store.updateGroup(updated)
+                        saveGroup(updated)
                     }
                 )) {
                     HStack {
@@ -296,7 +303,7 @@ struct ModelGroupDetailView: View {
                                 if let v = newVal {
                                     updated.lastContextLimitTokens = v
                                 }
-                                store.updateGroup(updated)
+                                saveGroup(updated)
                             }
                         )
                     )
@@ -349,11 +356,18 @@ struct ModelGroupDetailView: View {
             headerNote: voiceNote,
             showGroups: false,
             onAddOrdered: { ids in
-                guard var group = store.group(for: gid) else { return }
+                guard var group = store.group(for: gid) else { return false }
                 group.memberEntryIds.append(contentsOf: ids.filter { !group.memberEntryIds.contains($0) })
-                store.updateGroup(group)
+                return store.updateGroup(group)
             }
         )
+    }
+
+    @discardableResult
+    private func saveGroup(_ group: ModelGroup) -> Bool {
+        let saved = store.updateGroup(group)
+        if !saved { saveFailed = true }
+        return saved
     }
 
     // MARK: - Member Row
@@ -487,20 +501,20 @@ struct ModelGroupDetailView: View {
         var updated = group
         updated.memberEntryIds.removeAll { $0 == entryId }
         clampThinkingLevelIfNeeded(&updated)
-        store.updateGroup(updated)
+        saveGroup(updated)
     }
 
     private func moveMember(from source: IndexSet, to destination: Int, in group: ModelGroup) {
         var updated = group
         updated.memberEntryIds.move(fromOffsets: source, toOffset: destination)
-        store.updateGroup(updated)
+        saveGroup(updated)
     }
 
     private func deleteMember(at offsets: IndexSet, from group: ModelGroup) {
         var updated = group
         updated.memberEntryIds.remove(atOffsets: offsets)
         clampThinkingLevelIfNeeded(&updated)
-        store.updateGroup(updated)
+        saveGroup(updated)
     }
 
     private func clampThinkingLevelIfNeeded(_ group: inout ModelGroup) {

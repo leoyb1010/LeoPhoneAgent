@@ -15,6 +15,8 @@ struct GroupSlotPicker: View {
     var voiceDirection: VoiceDirection? = nil
 
     @State private var showCreate = false
+    @State private var saveFailed = false
+    @State private var pendingCreatedGroupId: String?
 
     private var selectedName: String {
         if let id = selection {
@@ -25,7 +27,10 @@ struct GroupSlotPicker: View {
 
     var body: some View {
         Menu {
-            Picker(selection: $selection) {
+            Picker(selection: Binding(get: { selection }, set: { value in
+                selection = value
+                if selection != value { saveFailed = true }
+            })) {
                 Text("None", comment: "No group selected").tag(String?.none)
                 ForEach(store.modelGroups) { group in
                     Text(group.name).tag(Optional(group.id)).disabled(!isEligible(group))
@@ -49,6 +54,12 @@ struct GroupSlotPicker: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
+        }
+
+        .alert("Model organization", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Could not save model changes. Your previous configuration was kept. Try again.")
         }
         .sheet(isPresented: $showCreate) {
             NavigationStack {
@@ -97,11 +108,20 @@ struct GroupSlotPicker: View {
             candidateFilter: { entry in canAssign(entry, direction: dir) },
             headerNote: dir?.filterNote,
             onAddOrdered: { ids in
-                guard !ids.isEmpty else { return }
-                let name = Self.suggestedName(for: dir, store: ProviderConfigStore.shared)
-                let group = ModelGroup(name: name, memberEntryIds: ids)
-                ProviderConfigStore.shared.addGroup(group)
+                guard !ids.isEmpty else { return false }
+                let store = ProviderConfigStore.shared
+                let group: ModelGroup
+                if let id = pendingCreatedGroupId, let saved = store.group(for: id), saved.memberEntryIds == ids {
+                    group = saved
+                } else {
+                    group = ModelGroup(name: Self.suggestedName(for: dir, store: store), memberEntryIds: ids)
+                    guard store.addGroup(group) else { return false }
+                    pendingCreatedGroupId = group.id
+                }
                 assign(group.id)
+                guard selection == group.id else { return false }
+                pendingCreatedGroupId = nil
+                return true
             }
         )
     }

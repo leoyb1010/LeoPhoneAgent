@@ -547,9 +547,9 @@ actor ProviderConfigDB {
         guard Self.exec(db: db, "DELETE FROM provider_model_groups") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_model_entries") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_instances") == SQLITE_OK else { return false }
-        // Only these selectors belong to the snapshot. The UUID alias map and
+        // Only these selectors/tombstones belong to the snapshot. The UUID alias map and
         // unrelated/future local preferences must survive ordinary model edits.
-        guard Self.exec(db: db, "DELETE FROM provider_local_kv WHERE key IN ('defaultPrimaryGroupId', 'defaultSubGroupId', 'voiceInputGroupId', 'voiceOutputGroupId')") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_local_kv WHERE key IN ('defaultPrimaryGroupId', 'defaultSubGroupId', 'voiceInputGroupId', 'voiceOutputGroupId', 'deletedInstances', 'deletedModelEntries', 'deletedModelGroups')") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_session_bindings") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_session_inference_configs") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_agent_loop_ids") == SQLITE_OK else { return false }
@@ -650,6 +650,15 @@ actor ProviderConfigDB {
         }
         if let v = config.voiceOutputGroupId {
             guard setLocalKVRow("voiceOutputGroupId", value: v) else { return false }
+        }
+        // Retain local deletion intent across authoritative DB reloads. In
+        // particular, a crash before dormant-archive cleanup must not permit
+        // deleted metadata to reappear when a provider model returns later.
+        for (key, tombstones) in [("deletedInstances", config.deletedInstances),
+                                  ("deletedModelEntries", config.deletedModelEntries),
+                                  ("deletedModelGroups", config.deletedModelGroups)] {
+            guard let json = try? Self.jsonString(tombstones),
+                  setLocalKVRow(key, value: json) else { return false }
         }
         for (sid, binding) in config.sessionBindings {
             if let json = try? Self.jsonString(binding) {
@@ -827,6 +836,11 @@ actor ProviderConfigDB {
         let agentLoopGroups = loadAgentLoopIds(kind: "group")
         let voiceInputGroup = localKV("voiceInputGroupId")
         let voiceOutputGroup = localKV("voiceOutputGroupId")
+        func tombstones(_ key: String) -> [ProviderConfigTombstone] {
+            guard let json = localKV(key), let data = json.data(using: .utf8),
+                  let values = try? decoder.decode([ProviderConfigTombstone].self, from: data) else { return [] }
+            return values
+        }
 
         return ProviderConfig(
             instances: instances,
@@ -839,7 +853,10 @@ actor ProviderConfigDB {
             agentLoopGroupIds: agentLoopGroups,
             voiceInputGroupId: voiceInputGroup,
             voiceOutputGroupId: voiceOutputGroup,
-            sessionInferenceConfigs: inferCfgs
+            sessionInferenceConfigs: inferCfgs,
+            deletedInstances: tombstones("deletedInstances"),
+            deletedModelEntries: tombstones("deletedModelEntries"),
+            deletedModelGroups: tombstones("deletedModelGroups")
         )
     }
 

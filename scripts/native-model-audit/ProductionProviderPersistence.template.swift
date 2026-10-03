@@ -11,14 +11,17 @@ final class ProductionProviderPersistence {
     var db: ProviderConfigDB?
     private var lastSavedSnapshot: ProviderConfig?
     private var jsonLoadFailed = false
+    private var persistenceReady: Bool
     private(set) var configRevision: UInt = 0
     private(set) var legacyUuidToCompositeKey: [String: String] = [:]
     private let databaseWrites = ModelCatalogWriteQueue()
     private var modelArchiveURL: URL { fileURL.appendingPathExtension("model-archive") }
 
-    init(fileURL: URL, initial: ProviderConfig? = nil, db: ProviderConfigDB? = nil) {
+    init(fileURL: URL, initial: ProviderConfig? = nil, db: ProviderConfigDB? = nil,
+         persistenceReady: Bool = true) {
         self.fileURL = fileURL
         self.db = db
+        self.persistenceReady = persistenceReady
         let loaded = Self.load(from: fileURL)
         self.config = initial ?? loaded.config
         self.jsonLoadFailed = loaded.failed
@@ -29,6 +32,11 @@ final class ProductionProviderPersistence {
     func stage(_ snapshot: ProviderConfig) -> Bool {
         config = snapshot
         return save()
+    }
+
+    // Test only the production metadata transaction, with no credential input.
+    func importMetadata(_ instance: ProviderInstance, entries: [ModelEntry]) -> Bool {
+        commitImportedMetadata(instance, entries: entries)
     }
 
     func drainWrites() async { await databaseWrites.drain() }

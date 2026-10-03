@@ -139,7 +139,9 @@ def main():
     if template.exists() and 'func recoverPendingDatabaseSnapshot(' in source:
         names = ['load', 'save', 'loadModelArchiveAliases', 'recoverPendingDatabaseSnapshot',
                  'persistLegacyUuidMap', 'setBinding', 'setEntriesHidden', 'replaceEntries',
-                 'removeEntry', 'recordTombstone', 'emitV3MarkDirty', 'dictByIdLastWins']
+                 'removeEntry', 'addGroup', 'updateGroup', 'removeGroup', 'reorderGroups', 'repointDefaults',
+                 'ensureVoiceTemplateModels', 'commitImportedMetadata', 'addEntry',
+                 'recordTombstone', 'emitV3MarkDirty', 'dictByIdLastWins']
         methods = '\n\n'.join(extract_swift_method(source, name) for name in names)
         generated = template.read_text().replace('    // INSERT_PRODUCTION_METHODS', methods)
         (production / 'ProductionProviderPersistence.swift').write_text(generated)
