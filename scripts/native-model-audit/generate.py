@@ -118,6 +118,12 @@ def main():
     production.mkdir(parents=True, exist_ok=True)
     manifest = {'source_ref': args.source_ref, 'device_families': [1, 2], 'sources': [], 'boundary':
                 'Real production SwiftUI views and model logic; synthetic local store, credentials, voice/network adapters. Not full-app/iSH/Watch integration.'}
+    manifest['harness_sources'] = [
+        {'path': 'scripts/native-model-audit/' + name,
+         'sha256': hashlib.sha256((HERE / name).read_bytes()).hexdigest()}
+        for name in ['AuditApp.swift', 'FixtureStore.swift', 'FixtureAdapters.swift',
+                     'NativeModelJourneys.swift', 'generate.py', 'run.sh']
+    ]
     for relative in SOURCES + OPTIONAL:
         path = 'src/ios/' + relative
         try:

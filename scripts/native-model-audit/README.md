@@ -90,3 +90,7 @@ Generated projects/results are build artifacts and are not committed.
 ## iPad scope
 
 The generated target declares both iPhone and iPad device families; iPad evidence is native tablet layout, not iPhone compatibility scaling. The current-ipad CI job selects an available iPad on the pinned iOS26.5 runtime and runs the same full unit/UI suite and seven strict preflight journeys. Normal/AX3 text, light/dark, search, select, dismiss, save rejection/retry and persistence assertions stay enabled. This adds tablet component evidence without implying whole-app startup, multi-scene, iSH, device or CloudKit integration.
+
+The reorder diagnostics preserve two distinct user paths: one real drag held in Edit until its observable onMove/pins result, and the same single real drag followed immediately by Done/close. Neither retries the gesture or invokes move directly. Both retain in-memory and process-relaunch order assertions. Frame and drop samples remain available even on bounded observation failure. Missing current production controls fail rather than becoming a baseline-only skip.
+
+Light/dark system-header reference cases are separate diagnostic controls with three identical labels: system primary, the same opaque secondary color, and that secondary color with explicit system grouped background. Every reported contrast issue remains a failure (`issueHandler` returns false). These reference screenshots are not production UI evidence and do not waive the original actual-picker audit. The manifest also hashes harness sources to identify their exact construction.

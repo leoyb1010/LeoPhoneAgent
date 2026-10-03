@@ -236,7 +236,9 @@ final class NativeModelJourneys: XCTestCase {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Groups")
         let empty = app.buttons["model-picker.group.empty-group"]
@@ -258,7 +260,9 @@ final class NativeModelJourneys: XCTestCase {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Stable row identity assertions apply to improved picker")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Stable row identity assertions apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("gpt-5")
         let relay = app.buttons["model-picker.entry.relay-proxy/gpt-5"]
@@ -301,7 +305,9 @@ final class NativeModelJourneys: XCTestCase {
         executionTimeAllowance = 180
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("Bulk organization is introduced by the improved production catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Bulk organization is introduced by the improved production catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("DeepSeek")
         let favorite = app.buttons["model-catalog.favorite.relay-proxy/deepseek-reasoner"]
@@ -350,7 +356,9 @@ final class NativeModelJourneys: XCTestCase {
     func test14CatalogBulkAddsWithoutChangingExistingPriority() throws {
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("Bulk group organization is introduced by improved catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Bulk group organization is introduced by improved catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("gpt-5")
         app.buttons["model-catalog.organize"].tap()
@@ -372,7 +380,9 @@ final class NativeModelJourneys: XCTestCase {
     func test15NewGroupAfterCatalogSheetDismissal() throws {
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("New-group management journey is introduced by improved catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("New-group management journey is introduced by improved catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("DeepSeek")
         app.buttons["model-catalog.organize"].tap()
@@ -395,7 +405,9 @@ final class NativeModelJourneys: XCTestCase {
         launch("quick", large: false, legacyPins: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Alias normalization regression applies to improved picker")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Alias normalization regression applies to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Favorites")
         let row = app.buttons["model-picker.entry.anthropic-direct/claude-sonnet-4"]
@@ -407,7 +419,9 @@ final class NativeModelJourneys: XCTestCase {
         launch("draft", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Availability gate identifiers apply to improved picker")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Availability gate identifiers apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("Unavailable fixture")
         let row = app.buttons["model-picker.entry.missing-auth/unavailable"]
@@ -479,10 +493,20 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test20FavoriteEditDragPersistsOrder() throws {
+        try favoriteReorderJourney(waitForDropCommit: true)
+    }
+
+    func test26FavoriteImmediateDoneAfterDragPreservesOrder() throws {
+        try favoriteReorderJourney(waitForDropCommit: false)
+    }
+
+    private func favoriteReorderJourney(waitForDropCommit: Bool) throws {
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Favorite edit identifiers apply to improved picker")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Favorite edit identifiers apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Favorites")
         app.buttons["model-picker.edit-favorites"].tap()
@@ -503,13 +527,21 @@ final class NativeModelJourneys: XCTestCase {
         XCTAssertTrue(lastRow.exists)
         var previousFrames: [CGRect] = []
         var stableSamples = 0
-        let stable = expectation(for: NSPredicate { _, _ in
+        var frameObservations: [String] = []
+        let frameStart = Date()
+        let stable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             let frames = [first.frame, last.frame, firstRow.frame, lastRow.frame]
             stableSamples = frames == previousFrames ? stableSamples + 1 : 0
             previousFrames = frames
+            frameObservations.append("t=\(Date().timeIntervalSince(frameStart)) frames=\(frames) stable=\(stableSamples)")
             return stableSamples >= 2 && first.isHittable && last.isHittable
-        }, evaluatedWith: app)
-        wait(for: [stable], timeout: 10)
+        }, object: app)
+        let stability = XCTWaiter.wait(for: [stable], timeout: 10)
+        let frameTrace = XCTAttachment(string: frameObservations.joined(separator: "\n"))
+        frameTrace.name = "favorite-frame-stability-samples"
+        frameTrace.lifetime = .keepAlways
+        add(frameTrace)
+        XCTAssertEqual(stability, .completed, "Native handle and row geometry must settle before the one drag")
         let geometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
         geometry.name = "favorite-native-drag-geometry"
         geometry.lifetime = .keepAlways
@@ -520,13 +552,37 @@ final class NativeModelJourneys: XCTestCase {
         let destination = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY + firstRow.frame.height * 0.25))
         start.press(forDuration: 0.8, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.5)
-        let afterGeometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
-        afterGeometry.name = "favorite-native-after-drag-geometry"
-        afterGeometry.lifetime = .keepAlways
-        add(afterGeometry)
-        capture("37-favorites-after-native-drag")
+        if waitForDropCommit {
+            let state = app.staticTexts["audit.state"]
+            var observations: [String] = []
+            let deadlineStart = Date()
+            let committed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard state.exists, let value = state.value as? String, let data = value.data(using: .utf8),
+                      let fields = try? JSONDecoder().decode([String: String].self, from: data) else {
+                    observations.append("t=\(Date().timeIntervalSince(deadlineStart)) audit.state unavailable")
+                    return false
+                }
+                observations.append("t=\(Date().timeIntervalSince(deadlineStart)) pins=\(fields["audit.pins"] ?? "missing") onMove=\(fields["audit.move"] ?? "missing")")
+                return fields["audit.pins"] == "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4"
+                    && fields["audit.move"]?.hasPrefix("from=") == true
+            }, object: app)
+            let result = XCTWaiter.wait(for: [committed], timeout: 10)
+            let trace = XCTAttachment(string: observations.joined(separator: "\n"))
+            trace.name = "favorite-editing-drop-observations"
+            trace.lifetime = .keepAlways
+            add(trace)
+            capture("37-favorites-after-native-drag")
+            XCTAssertEqual(result, .completed, "The one real drop must invoke onMove and commit while still editing; no retry or direct mutation")
+            let afterGeometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
+            afterGeometry.name = "favorite-native-after-drag-geometry"
+            afterGeometry.lifetime = .keepAlways
+            add(afterGeometry)
+        }
+        // The interruption variant intentionally closes immediately after the
+        // same single gesture, before screenshots or state queries can delay it.
         app.buttons["model-picker.edit-favorites"].tap()
         app.buttons["Done"].tap()
+        if !waitForDropCommit { capture("52-favorites-immediate-done-after-drag") }
         let move = XCTAttachment(string: rootValue("audit.move"))
         move.name = "native-onMove-observation"
         move.lifetime = .keepAlways
@@ -542,7 +598,9 @@ final class NativeModelJourneys: XCTestCase {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         guard app.segmentedControls["model-picker.scope"].exists else {
-            throw XCTSkip("Shared-picker group-management regression applies to improved picker")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Shared-picker group-management regression applies to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Groups")
         let manage = app.buttons["model-picker.manage-groups"]
@@ -663,6 +721,26 @@ final class NativeModelJourneys: XCTestCase {
         launch("quick", large: false, dark: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("49-picker-dark-contrast")
+        try auditContrastWithDiagnostics()
+    }
+
+    func test27SystemSectionHeaderLightContrastReferences() throws {
+        continueAfterFailure = true
+        launch("contrastReference", large: false)
+        XCTAssertTrue(app.staticTexts["audit.contrast.primary"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["audit.contrast.secondary"].exists)
+        XCTAssertTrue(app.staticTexts["audit.contrast.background"].exists)
+        capture("53-system-header-light-contrast-references")
+        try auditContrastWithDiagnostics()
+    }
+
+    func test28SystemSectionHeaderDarkContrastReferences() throws {
+        continueAfterFailure = true
+        launch("contrastReference", large: false, dark: true)
+        XCTAssertTrue(app.staticTexts["audit.contrast.primary"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["audit.contrast.secondary"].exists)
+        XCTAssertTrue(app.staticTexts["audit.contrast.background"].exists)
+        capture("54-system-header-dark-contrast-references")
         try auditContrastWithDiagnostics()
     }
 
