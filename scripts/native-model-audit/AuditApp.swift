@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main struct NativeModelAuditApp: App {
     init() { _ = ProviderConfigStore.shared }
@@ -15,12 +16,13 @@ import SwiftUI
             }
                 .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
                 .dynamicTypeSize(ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
+                .preferredColorScheme(ProcessInfo.processInfo.environment["AUDIT_DARK"] == "1" ? .dark : .light)
         }
     }
 }
 
 private enum AuditRoute: String, Identifiable {
-    case quick, full, groups, catalog, onboarding, draft, voiceInput, voiceOutput
+    case quick, full, groups, catalog, onboarding, draft, voiceInput, voiceOutput, contrastReference
     #if HOME_COMPOSER_AUDIT
     case home
     #endif
@@ -44,6 +46,7 @@ private struct AuditRoot: View {
         values["audit.research-members"] = store.group(for: "research")?.memberEntryIds.joined(separator: "|") ?? "none"
         values["audit.default"] = store.defaultPrimaryGroupId ?? "none"
         values["audit.pins"] = pins.keys.joined(separator: "|")
+        values["audit.move"] = ModelPinStore.auditLastMove
         values["audit.count"] = String(store.modelEntries.count)
         values["audit.edited-name"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.model.displayName ?? "none"
         values["audit.edited-thinking"] = store.entry(for: "relay-proxy/deepseek-reasoner")?.overrides.maxThinkingLevel?.rawValue ?? "none"
@@ -117,11 +120,52 @@ private struct AuditRoot: View {
                     NavigationStack { UnifiedModelPicker(config: .voiceInput()) }
                 case .voiceOutput:
                     NavigationStack { UnifiedModelPicker(config: .voiceOutput()) }
+                case .contrastReference:
+                    ContrastReferenceView()
                 }
                 }
                 .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
                 .environment(\.dynamicTypeSize, ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
             }
+        }
+    }
+}
+
+/// Diagnostic system controls only, never a substitute for a production audit.
+/// Same text, size class and sheet/search context; only foreground/background
+/// ownership differs so a failing analyzer result can be compared explicitly.
+private enum ContrastReferenceStyle {
+    // Keep the dynamic UIColor factory outside the View's actor context, exactly
+    // as the production ModelPickerText palette; AsyncRenderer may resolve it.
+    static let secondary = Color(uiColor: UIColor { traits in
+        UIColor(white: traits.userInterfaceStyle == .dark ? 0.74 : 0.28, alpha: 1)
+    })
+}
+
+private struct ContrastReferenceView: View {
+    @State private var search = ""
+    private let secondary = ContrastReferenceStyle.secondary
+    var body: some View {
+        NavigationStack {
+            List {
+                // 先测显式背景；唯一文案避免审核器把同名节点映射到第一段。
+                Section { Text("Explicit background reference first") } header: {
+                    Text("Current selection · background").foregroundStyle(secondary)
+                        .background(Color(UIColor.systemGroupedBackground))
+                        .accessibilityIdentifier("audit.contrast.background")
+                }
+                Section { Text("Opaque secondary reference") } header: {
+                    Text("Current selection · secondary").foregroundStyle(secondary)
+                        .accessibilityIdentifier("audit.contrast.secondary")
+                }
+                Section { Text("System primary reference last") } header: {
+                    Text("Current selection · primary").foregroundStyle(Color.primary)
+                        .accessibilityIdentifier("audit.contrast.primary")
+                }
+            }
+            .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search model, ID or provider")
+            .navigationTitle("System contrast references")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

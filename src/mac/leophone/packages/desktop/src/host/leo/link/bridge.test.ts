@@ -56,6 +56,7 @@ function fakeZCode() {
       service.desktopTasks = items;
     },
     subscriptionCount: () => service.subscriptions,
+    captureListener: (taskId: string) => listeners.get(taskId),
     calls,
     named: (name: string) => calls.filter(([n]) => n === name).map(([, p]) => p),
     fire: (taskId: string, event: Record<string, unknown>) =>
@@ -1169,4 +1170,46 @@ test("ready checkpoint resumes or replaces only an unsubmitted draft before firs
       assert.equal((result.body as { session_id: string }).session_id, "task-1");
     }, { dir });
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("close drains an already queued mode index write before releasing sessions", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir, {}, iphone);
+    const writer = bridge as unknown as { saving: Promise<void>; writeIndex(): Promise<void>; sessions: Map<string, { close(): Promise<void> }> };
+    await writer.saving;
+    const realWrite = writer.writeIndex.bind(bridge);
+    const retiredDelivery = zcode.captureListener(id)!;
+    let writes = 0;
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    // Only delay the existing production writer. The actual index encoding and IO run unchanged.
+    writer.writeIndex = async () => { writes += 1; started(); await gate; await realWrite(); };
+    zcode.fire(id, { type: "mode_update", currentModeId: "yolo" });
+    await entered;
+    let sessionDrained!: () => void;
+    const drained = new Promise<void>(resolve => { sessionDrained = resolve; });
+    const session = writer.sessions.get(id)!;
+    const realSessionClose = session.close.bind(session);
+    session.close = async () => { await realSessionClose(); sessionDrained(); };
+    let settled = false;
+    const closing = bridge.close().then(() => { settled = true; });
+    await drained;
+    // A callback captured before unsubscribe can arrive after disposal on a transport queue.
+    retiredDelivery({ type: "mode_update", currentModeId: "build" });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    const returnedBeforeWrite = settled;
+    release();
+    await closing;
+    await writer.saving;
+    assert.equal(returnedBeforeWrite, false, "close must await the accepted index write");
+    assert.equal(writes, 1, "Retired stream callbacks must not enqueue another index write during drain");
+    const saved = JSON.parse(await readFile(path.join(dir, "journals", "sessions.json"), "utf8"));
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].task_id, id);
+    assert.equal(saved[0].mode, "yolo");
+    await bridge.close();
+    assert.deepEqual(JSON.parse(await readFile(path.join(dir, "journals", "sessions.json"), "utf8")), saved);
+  });
 });

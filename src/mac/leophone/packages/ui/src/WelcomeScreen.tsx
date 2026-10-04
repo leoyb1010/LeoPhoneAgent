@@ -363,7 +363,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
             <Button
               variant="default"
               size="lg"
-              className="h-10 w-full text-ui-base"
+              className="h-auto min-h-10 w-full whitespace-normal break-words py-2 text-center text-ui-base"
               onClick={() => {
                 platform.openExternal(LEO_OAUTH_PAGE_URL);
                 resetApiKeyForm();
@@ -375,7 +375,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
             <Button
               variant="outline"
               size="lg"
-              className="h-10 w-full text-ui-base"
+              className="h-auto min-h-10 w-full whitespace-normal break-words py-2 text-center text-ui-base"
               onClick={() => {
                 requestModelSettingsAfterWelcome();
                 resetApiKeyForm();

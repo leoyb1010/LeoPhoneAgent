@@ -1969,4 +1969,6 @@
     <string name="newer_db_versions">This build supports database version %1$d.</string>
     <string name="newer_db_exit">Exit without changing data</string>
     <string name="secure_storage_temporarily_unavailable">Secure storage is temporarily unavailable. Existing credentials are preserved; new credentials will only last until this app closes. Restart the app to retry.</string>
+    <string name="model_picker_expand_section">Expand %1$s</string>
+    <string name="model_picker_collapse_section">Collapse %1$s</string>
 </resources>

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Build a dependency-isolated iOS project from actual production Swift sources.
 
-No production source is changed. --source-ref reads immutable git blobs; WORKTREE
-reads the current checkout. SHA256 provenance is emitted beside each generated app.
+Original repository production files are never changed. Generated copies may carry
+explicit test-only observation instrumentation recorded with both source and output
+SHA256. --source-ref reads immutable git blobs; WORKTREE reads the current checkout.
 """
 import argparse
 import hashlib
@@ -116,8 +117,14 @@ def main():
                     candidate.unlink()
     production = out / 'Sources' / 'Production'
     production.mkdir(parents=True, exist_ok=True)
-    manifest = {'source_ref': args.source_ref, 'sources': [], 'boundary':
+    manifest = {'source_ref': args.source_ref, 'device_families': [1, 2], 'sources': [], 'boundary':
                 'Real production SwiftUI views and model logic; synthetic local store, credentials, voice/network adapters. Not full-app/iSH/Watch integration.'}
+    manifest['harness_sources'] = [
+        {'path': 'scripts/native-model-audit/' + name,
+         'sha256': hashlib.sha256((HERE / name).read_bytes()).hexdigest()}
+        for name in ['AuditApp.swift', 'FixtureStore.swift', 'FixtureAdapters.swift',
+                     'NativeModelJourneys.swift', 'generate.py', 'run.sh']
+    ]
     for relative in SOURCES + OPTIONAL:
         path = 'src/ios/' + relative
         try:
@@ -126,8 +133,31 @@ def main():
             if relative in OPTIONAL:
                 continue
             raise
-        (production / pathlib.Path(relative).name).write_bytes(data)
-        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
+        transformation = 'none'
+        generated = data
+        if relative == 'Providers/ModelPinStore.swift':
+            # Test-only, non-observable callback trace. Never changes production
+            # callbacks or reorder mapping and never enters the product binary.
+            source = data.decode().replace('final class ModelPinStore: ObservableObject {',
+                'final class ModelPinStore: ObservableObject {\n    static var auditLastMove = "not invoked"')
+            method = """    func move(visibleKeys: [String], from source: IndexSet, to destination: Int) {
+        ModelSwitcher.movePinned(visibleKeys: visibleKeys, from: source, to: destination)
+        keys = ModelSwitcher.pinnedKeys
+    }"""
+            if 'func move(visibleKeys:' in source:
+                if method not in source:
+                    raise ValueError('ModelPinStore.move changed; review observation instrumentation')
+                traced = method.replace('        ModelSwitcher.movePinned',
+                    '        Self.auditLastMove = "from=\\(Array(source)) to=\\(destination) visible=\\(visibleKeys.joined(separator: "|")) before=\\(keys.joined(separator: "|"))"\n'
+                    '        ModelSwitcher.movePinned').replace('        keys = ModelSwitcher.pinnedKeys',
+                    '        keys = ModelSwitcher.pinnedKeys\n'
+                    '        Self.auditLastMove += " after=\\(keys.joined(separator: "|")) stored=\\(ModelSwitcher.pinnedKeys.joined(separator: "|"))"')
+                source = source.replace(method, traced)
+            generated = source.encode()
+            transformation = 'Add audit-only static non-observable onMove invocation trace; keep production mapping/storage/view behavior unchanged. No instrumentation is published in the product.'
+        (production / pathlib.Path(relative).name).write_bytes(generated)
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(),
+                                    'generated_sha256': hashlib.sha256(generated).hexdigest(), 'transformation': transformation})
     if args.home_composer:
         path = 'src/ios/Views/Home/HomeComposer.swift'
         data = read_source(args.source_ref, path)
@@ -279,7 +309,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     STRING_CATALOG_GENERATE_SYMBOLS: NO
     SWIFT_EMIT_LOC_STRINGS: NO
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
 targets:
   NativeModelAudit:
     type: application

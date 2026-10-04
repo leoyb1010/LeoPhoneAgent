@@ -241,6 +241,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.text.style.TextAlign
@@ -268,24 +269,6 @@ import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import com.leoyuan.leophoneagent.ui.browser.BrowserSheet
 import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import com.leoyuan.leophoneagent.ui.components.MinisTextButton
-
-/**
- * Fuzzy match: substring first, then all query chars appear in order.
- * Matches iOS SessionModelPicker.fuzzyMatch.
- */
-private fun fuzzyMatch(text: String, query: String): Boolean {
-    if (query.isEmpty()) return true
-    val q = query.lowercase()
-    val t = text.lowercase()
-    if (t.contains(q)) return true
-    var idx = 0
-    for (ch in q) {
-        val found = t.indexOf(ch, idx)
-        if (found < 0) return false
-        idx = found + 1
-    }
-    return true
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -321,6 +304,8 @@ internal fun ModelPickerSheet(
     }
 
     var searchText by remember { mutableStateOf("") }
+    val normalizedSearchText = searchText.trim()
+    val availableEntryIds = config.modelEntries.map { it.id }.toSet()
     var expandedGroupIds by remember { mutableStateOf(setOf<String>()) }
     // Note: the non-text-output "may not work as an Agent" confirmation lives
     // in ChatScreen's callback wrappers (ee828dba), NOT here — the sheet stays
@@ -333,11 +318,11 @@ internal fun ModelPickerSheet(
     }
 
     // Filtered groups
-    val filteredGroups = remember(groups, searchText) {
-        if (searchText.isEmpty()) groups
+    val filteredGroups = remember(groups, normalizedSearchText) {
+        if (normalizedSearchText.isEmpty()) groups
         else {
             val t0 = System.nanoTime()
-            val result = groups.filter { fuzzyMatch(it.name, searchText) }
+            val result = groups.filter { modelPickerMatches(it.name, normalizedSearchText) }
             val ms = (System.nanoTime() - t0) / 1_000_000.0
             AppLogger.info("ModelPicker", "[ModelPicker] filter groups: ${result.size}/${groups.size}, ${"%.1f".format(ms)}ms")
             result
@@ -345,7 +330,7 @@ internal fun ModelPickerSheet(
     }
 
     // Filtered entries by instance
-    val allInstancesWithEntries = remember(config, searchText) {
+    val allInstancesWithEntries = remember(config, normalizedSearchText) {
         val t0 = System.nanoTime()
         var totalCount = 0
         val result = config.instances
@@ -355,9 +340,9 @@ internal fun ModelPickerSheet(
                 val entries = config.modelEntries.filter {
                     it.providerInstanceId == instance.id && !it.isHidden
                 }
-                val filtered = if (searchText.isEmpty()) entries
+                val filtered = if (normalizedSearchText.isEmpty()) entries
                 else entries.filter {
-                    fuzzyMatch(it.model.displayName, searchText) || fuzzyMatch(it.model.id, searchText)
+                    modelPickerMatches(it.model.displayName, normalizedSearchText) || modelPickerMatches(it.model.id, normalizedSearchText)
                 }
                 val pms = (System.nanoTime() - pt) / 1_000_000.0
                 if (filtered.isNotEmpty()) {
@@ -371,11 +356,11 @@ internal fun ModelPickerSheet(
         AppLogger.info("ModelPicker", "[ModelPicker] all providers loaded: total $totalCount items, ${"%.1f".format(ms)}ms")
         result
     }
-    val filteredCliTools = remember(searchText) {
+    val filteredCliTools = remember(normalizedSearchText) {
         CliToolCatalog.tools.filter { spec ->
-            searchText.isEmpty() ||
-                fuzzyMatch(spec.displayName, searchText) ||
-                fuzzyMatch(spec.id.name, searchText)
+            normalizedSearchText.isEmpty() ||
+                modelPickerMatches(spec.displayName, normalizedSearchText) ||
+                modelPickerMatches(spec.id.name, normalizedSearchText)
         }
     }
 
@@ -426,7 +411,7 @@ internal fun ModelPickerSheet(
                 )
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                     MinisTextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.model_picker_done))
+                        Text(stringResource(R.string.model_picker_done), color = MaterialTheme.colorScheme.secondary)
                     }
                 }
             }
@@ -507,7 +492,7 @@ internal fun ModelPickerSheet(
                                         onClick = onEditGroups,
                                         modifier = Modifier.padding(end = 8.dp),
                                     ) {
-                                        Text(stringResource(R.string.model_picker_groups_edit))
+                                        Text(stringResource(R.string.model_picker_groups_edit), color = MaterialTheme.colorScheme.secondary)
                                     }
                                 }
                             }
@@ -519,10 +504,10 @@ internal fun ModelPickerSheet(
                                     RoutingStrategy.fallback -> "FB"
                                     RoutingStrategy.loadBalance -> "LB"
                                 }
-                                // Resolve entry: try memberEntryIds first, fallback to activeEntryId ONLY if this group is selected
-                                val resolvedEntry = group.memberEntryIds.firstNotNullOfOrNull { entryId ->
-                                    config.modelEntries.find { it.id == entryId }
-                                } ?: if (isSelected && activeEntryId != null) config.modelEntries.find { it.id == activeEntryId } else null
+                                val previewEntryId = modelGroupPreviewEntryId(
+                                    group.memberEntryIds, availableEntryIds, isSelected, activeEntryId,
+                                )
+                                val resolvedEntry = config.modelEntries.find { it.id == previewEntryId }
                                 // Count of resolved members for display
                                 val resolvedCount = group.memberEntryIds.count { entryId ->
                                     config.modelEntries.any { it.id == entryId }
@@ -547,8 +532,8 @@ internal fun ModelPickerSheet(
                                     Icon(
                                         if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF34C759)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                         modifier = Modifier.size(22.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
@@ -583,7 +568,7 @@ internal fun ModelPickerSheet(
                                                     strategyLabel,
                                                     fontSize = 9.sp,
                                                     fontWeight = FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
                                             }
                                         }
@@ -592,19 +577,19 @@ internal fun ModelPickerSheet(
                                             Text(
                                                 "→ ${resolvedEntry.model.displayName}",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         } else if (resolvedCount > 0) {
                                             Text(
                                                 pluralStringResource(R.plurals.model_picker_models_count, resolvedCount, resolvedCount),
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         } else {
                                             Text(
                                                 stringResource(R.string.model_picker_models_count_unlinked, group.memberEntryIds.size),
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }
@@ -615,10 +600,10 @@ internal fun ModelPickerSheet(
                                             stringResource(R.string.model_picker_default_badge),
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF007AFF),
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                                             modifier = Modifier
                                                 .background(
-                                                    Color(0xFF007AFF).copy(alpha = 0.1f),
+                                                    MaterialTheme.colorScheme.tertiaryContainer,
                                                     RoundedCornerShape(50),
                                                 )
                                                 .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -636,13 +621,9 @@ internal fun ModelPickerSheet(
                                     // icon. Same shape + size as before.
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.secondaryContainer,
-                                                CircleShape,
-                                            )
+                                            .size(48.dp)
                                             .clip(CircleShape)
-                                            .clickable {
+                                            .clickable(role = Role.Button) {
                                                 expandedGroupIds = if (isExpanded) {
                                                     expandedGroupIds - group.id
                                                 } else {
@@ -653,8 +634,13 @@ internal fun ModelPickerSheet(
                                     ) {
                                         Icon(
                                             if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
+                                            contentDescription = stringResource(
+                                                if (isExpanded) R.string.model_picker_collapse_section else R.string.model_picker_expand_section,
+                                                group.name,
+                                            ),
+                                            modifier = Modifier.size(28.dp)
+                                                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                                                .padding(6.dp),
                                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         )
                                     }
@@ -676,12 +662,12 @@ internal fun ModelPickerSheet(
                                         Text(
                                             stringResource(R.string.model_picker_no_linked_models),
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp),
                                         )
                                     }
                                     displayMembers.forEach { entry ->
-                                            val isActive = activeEntryId == entry.id
+                                            val isActive = isActiveModelGroupEntry(group.id, selectedGroupId, entry.id, activeEntryId)
                                             val instance = config.instances.find { it.id == entry.providerInstanceId }
                                             Row(
                                                 modifier = Modifier
@@ -694,7 +680,7 @@ internal fun ModelPickerSheet(
                                                     if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                                     contentDescription = null,
                                                     tint = if (isActive) Color(0xFF007AFF)
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                                     modifier = Modifier.size(17.dp),
                                                 )
                                                 Spacer(Modifier.width(10.dp))
@@ -712,18 +698,18 @@ internal fun ModelPickerSheet(
                                                                 instance.label.ifEmpty { instance.providerType.displayName },
                                                                 style = MaterialTheme.typography.labelSmall,
                                                                 fontWeight = FontWeight.Medium,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             )
                                                             Text(
                                                                 " · ",
                                                                 style = MaterialTheme.typography.labelSmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             )
                                                         }
                                                         Text(
                                                             entry.model.id,
                                                             style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         )
                                                     }
                                                 }
@@ -732,10 +718,10 @@ internal fun ModelPickerSheet(
                                                         stringResource(R.string.model_picker_active_badge),
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Medium,
-                                                        color = Color(0xFF34C759),
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                         modifier = Modifier
                                                             .background(
-                                                                Color(0xFF34C759).copy(alpha = 0.1f),
+                                                                MaterialTheme.colorScheme.secondaryContainer,
                                                                 RoundedCornerShape(8.dp),
                                                             )
                                                             .padding(horizontal = 5.dp, vertical = 1.dp),
@@ -757,12 +743,12 @@ internal fun ModelPickerSheet(
                         }
                     }
 
-                    if (searchText.isEmpty()) {
+                    if (normalizedSearchText.isEmpty()) {
                         item {
                             Text(
                                 stringResource(R.string.model_picker_groups_footer),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 // T236: hint sits between Model Groups card and
                                 // first Provider card — top 8 hugs the group
                                 // card, bottom 12 separates from the next card.
@@ -801,11 +787,11 @@ internal fun ModelPickerSheet(
                                     Text(
                                         stringResource(R.string.model_picker_local_cli_hint),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 MinisTextButton(onClick = onManageCli) {
-                                    Text(stringResource(R.string.model_picker_local_cli_manage))
+                                    Text(stringResource(R.string.model_picker_local_cli_manage), color = MaterialTheme.colorScheme.secondary)
                                 }
                             }
                             filteredCliTools.forEachIndexed { index, spec ->
@@ -852,7 +838,7 @@ internal fun ModelPickerSheet(
                                         Text(
                                             subtitle,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
@@ -889,7 +875,7 @@ internal fun ModelPickerSheet(
                 // providers is unmistakable even on the dark sheet background.
                 if (allInstancesWithEntries.isNotEmpty()) {
                     allInstancesWithEntries.forEach { (instance, entries) ->
-                        val isCollapsed = collapsedInstanceIds.contains(instance.id)
+                        val isCollapsed = isModelProviderCollapsed(instance.id, collapsedInstanceIds, normalizedSearchText)
                         item(key = "section_${instance.id}") {
                             Column(
                                 modifier = Modifier
@@ -923,13 +909,10 @@ internal fun ModelPickerSheet(
                                     // visible pill shape.
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.secondaryContainer,
-                                                CircleShape,
-                                            )
+                                            .size(48.dp)
                                             .clip(CircleShape)
-                                            .clickable {
+                                            .alpha(if (normalizedSearchText.isEmpty()) 1f else 0.4f)
+                                            .clickable(enabled = normalizedSearchText.isEmpty(), role = Role.Button) {
                                                 collapsedInstanceIds = if (isCollapsed) {
                                                     collapsedInstanceIds - instance.id
                                                 } else {
@@ -940,8 +923,13 @@ internal fun ModelPickerSheet(
                                     ) {
                                         Icon(
                                             if (isCollapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
+                                            contentDescription = stringResource(
+                                                if (!isCollapsed) R.string.model_picker_collapse_section else R.string.model_picker_expand_section,
+                                                instance.label.ifEmpty { instance.providerType.displayName },
+                                            ),
+                                            modifier = Modifier.size(28.dp)
+                                                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                                                .padding(6.dp),
                                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         )
                                     }
@@ -969,7 +957,7 @@ internal fun ModelPickerSheet(
                                                 if (selectedEntry != null) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                                 contentDescription = null,
                                                 tint = if (selectedEntry != null) Color(0xFF007AFF)
-                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                                 modifier = Modifier.size(20.dp),
                                             )
                                             Spacer(Modifier.width(10.dp))
@@ -1010,7 +998,7 @@ internal fun ModelPickerSheet(
                                             Text(
                                                 pluralStringResource(R.plurals.model_picker_models_count, entries.size, entries.size),
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }
@@ -1041,7 +1029,7 @@ internal fun ModelPickerSheet(
                                                 if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                                 contentDescription = null,
                                                 tint = if (isSelected) Color(0xFF007AFF)
-                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                                 modifier = Modifier.size(20.dp),
                                             )
                                             Spacer(Modifier.width(10.dp))
@@ -1060,7 +1048,7 @@ internal fun ModelPickerSheet(
                                                     Text(
                                                         entry.model.id,
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     )
                                                     // [T-android-provider-voice] Modality
                                                     // chips (iOS entryRow badges).
@@ -1085,10 +1073,10 @@ internal fun ModelPickerSheet(
                                                     stringResource(R.string.model_picker_active_badge),
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Medium,
-                                                    color = Color(0xFF34C759),
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                     modifier = Modifier
                                                         .background(
-                                                            Color(0xFF34C759).copy(alpha = 0.1f),
+                                                            MaterialTheme.colorScheme.secondaryContainer,
                                                             RoundedCornerShape(8.dp),
                                                         )
                                                         .padding(horizontal = 5.dp, vertical = 1.dp),
@@ -1120,23 +1108,23 @@ internal fun ModelPickerSheet(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Icon(
-                                if (searchText.isNotEmpty()) Icons.Default.Search else Icons.Default.Memory,
+                                if (normalizedSearchText.isNotEmpty()) Icons.Default.Search else Icons.Default.Memory,
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                stringResource(if (searchText.isNotEmpty()) R.string.model_picker_no_results else R.string.model_picker_no_models),
+                                stringResource(if (normalizedSearchText.isNotEmpty()) R.string.model_picker_no_results else R.string.model_picker_no_models),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (searchText.isEmpty()) {
+                            if (normalizedSearchText.isEmpty()) {
                                 Spacer(Modifier.height(4.dp))
                                 Text(
                                     stringResource(R.string.model_picker_configure_hint),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center,
                                 )
                             } else {
@@ -1144,7 +1132,7 @@ internal fun ModelPickerSheet(
                                 Text(
                                     stringResource(R.string.model_picker_try_different_search),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }

@@ -13,11 +13,14 @@ import {
   SocketProtocol,
   ChannelServer,
   LoggingChannelServer,
+  ProxyChannel,
   type ISocket,
 } from "@zcode/rpc";
 import {
   ServiceCollection,
   IZCodeAgentService,
+  IZCodeTaskService,
+  IWindowControllerService,
   createZCodeAgentConnectionScope,
   IFileService,
   IGitService,
@@ -39,6 +42,7 @@ import {
   type ServerRemoteWorkspaceInfo,
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
+import { createLocalTaskListController } from "./localTaskListController.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
@@ -87,6 +91,7 @@ function setupChannelServer(
   ws: WebSocket,
   services: ServiceCollection,
   clientMode: "desktop-continuous" | "web-remote-replayable",
+  taskStatus?: ReturnType<typeof createLocalTaskListController>,
 ) {
   const socket = wrapWebSocket(ws);
   const protocol = new SocketProtocol(socket);
@@ -118,7 +123,13 @@ function setupChannelServer(
     });
   }
   services.exposeOnChannelServer(server, overrides);
+  const taskStatusConnection = taskStatus?.createConnection();
+  if (taskStatusConnection) {
+    server.registerChannel(IWindowControllerService.channelName,
+      ProxyChannel.fromService(taskStatusConnection.service as unknown as Record<string, unknown>));
+  }
   socket.onClose(() => {
+    taskStatusConnection?.dispose();
     void connectionScope?.dispose();
     rawServer.dispose();
   });
@@ -303,6 +314,15 @@ export function createHttpServer(
   const app = new Hono();
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   const hostCapabilities = createHostCapabilityStore();
+  const declaredWorkspaces = resolveServerWorkspaces(options).map(workspace => ({
+    ...workspace, path: resolve(workspace.path),
+  }));
+  const taskService = services.getOptional(IZCodeTaskService);
+  // 仅给普通Web组装声明本地scope的只读投影；不注入Desktop Host/扩大认证或文件操作。
+  const taskStatus = taskService && !services.getOptional(IWindowControllerService)
+    ? createLocalTaskListController({ workspaces: declaredWorkspaces, taskService,
+        agentService: services.getOptional(IZCodeAgentService) })
+    : undefined;
 
   const authToken = options.authToken?.trim();
   if (authToken) {
@@ -317,7 +337,7 @@ export function createHttpServer(
     });
   }
 
-  app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
+  app.get("/api/server-info", (c) => c.json(createServerInfo({ ...options, workspaces: declaredWorkspaces })));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
@@ -326,7 +346,7 @@ export function createHttpServer(
     "/ws",
     upgradeWebSocket(() => ({
       onOpen(_event, ws) {
-        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
+        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable", taskStatus);
       },
     })),
   );
@@ -470,6 +490,7 @@ export function createHttpServer(
     log(`http://${listenHost}:${listenPort}`);
   });
 
+  server.once("close", () => taskStatus?.dispose());
   injectWebSocket(server);
 
   return server;

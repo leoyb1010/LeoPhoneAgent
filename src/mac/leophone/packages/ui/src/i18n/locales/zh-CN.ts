@@ -1,5 +1,10 @@
 /** 中文翻译 */
 const zhCN: Record<string, string> = {
+  "leoHome.tasksLoadFailed": "暂时无法加载任务。",
+  "leoHome.tasksLoading": "正在加载任务…",
+  "leoHome.tasksLastResults": "暂时显示上次获取的结果。",
+  "leoHome.tasksRetry": "重新加载任务",
+
   "startPlan.recommendation.subagentDescription":
     "你的体验套餐中，{model} 仍有可用额度，是否将此子智能体的模型切换到体验套餐？",
   "startPlan.recommendation.preferenceSaveFailed": "未能保存“不再提示”，本次仍按你的选择继续。",
@@ -2595,6 +2600,8 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic Messages",
   "settings.modelProvider.apiKey": "API Key",
+  "settings.modelProvider.showApiKey": "显示 API Key",
+  "settings.modelProvider.hideApiKey": "隐藏 API Key",
   "settings.modelProvider.apiKeyPlaceholder": "输入 API Key",
   "settings.modelProvider.apiKeyDisabledHint": "设置 API Key 后即可启用。",
   "settings.modelProvider.getApiKey": "获取 API Key",
@@ -5504,7 +5511,7 @@ const zhCN: Record<string, string> = {
   "chat.error.noAvailableModel": "当前没有可用模型。请用订阅账号登录，或在设置里添加模型供应商。",
   "chat.error.sendFailed": "发送失败，请稍后重试。",
   "chat.error.modelSettings": "模型设置",
-  "chat.error.setModels": "配置",
+  "chat.error.setModels": "模型设置",
 
   // Start Plan 单桶额度提醒
   "chat.quota.startPlan.bucketDailyLow": "{model} 今日额度剩余 {percent}（{remaining} tokens）。",

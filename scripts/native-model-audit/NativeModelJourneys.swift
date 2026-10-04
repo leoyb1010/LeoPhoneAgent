@@ -1,6 +1,6 @@
 import XCTest
 
-/// Hosted iPhone Simulator UI tests against unchanged production SwiftUI source.
+/// Hosted iPhone/iPad Simulator UI tests against production SwiftUI source.
 /// Fixtures own only storage and external-service boundaries. Every image is an
 /// XCUIScreenshot attachment from the native simulator, never HTML or a mockup.
 final class NativeModelJourneys: XCTestCase {
@@ -19,13 +19,13 @@ final class NativeModelJourneys: XCTestCase {
         app.terminate()
     }
 
-    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false) {
+    private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false, dark: Bool = false) {
         initialRoute = route
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
                                  "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount),
                                  "AUDIT_FAIL_NEXT_GROUP_SAVE": failNextGroupSave ? "1" : "0",
-                                 "AUDIT_FAIL_NEXT_ENTRY_SAVE": failNextEntrySave ? "1" : "0"]
+                                 "AUDIT_FAIL_NEXT_ENTRY_SAVE": failNextEntrySave ? "1" : "0", "AUDIT_DARK": dark ? "1" : "0"]
         app.launchArguments = ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", largeText ? "UICTContentSizeCategoryAccessibilityXL" : "UICTContentSizeCategoryL"]
         app.launch()
@@ -45,13 +45,20 @@ final class NativeModelJourneys: XCTestCase {
 
     private func search(_ query: String, replacing: Bool = false) {
         let field = app.searchFields.firstMatch
-        if !field.waitForExistence(timeout: 8) || !field.isHittable { app.swipeDown() }
-        XCTAssertTrue(field.waitForExistence(timeout: 8))
+        if !(field.exists || field.waitForExistence(timeout: 8)) || !field.isHittable { app.swipeDown() }
+        XCTAssertTrue(field.exists || field.waitForExistence(timeout: 8))
         field.tap()
         let keyboard = app.keyboards.firstMatch
-        if !keyboard.waitForExistence(timeout: 8) { field.tap() }
-        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
-        if replacing { field.buttons["Clear text"].tap() }
+        if !(keyboard.exists || keyboard.waitForExistence(timeout: 8)) { field.tap() }
+        XCTAssertTrue(keyboard.exists || keyboard.waitForExistence(timeout: 8), "Native search must acquire keyboard focus before typing")
+        if replacing {
+            field.buttons["Clear text"].tap()
+            capture("search-after-clear-before-refocus")
+            // iPad的系统Clear会退回未激活搜索状态；通过真实再点输入框继续输入，
+            // 不能把Clear之前的keyboard存在当作之后仍有焦点。
+            field.tap()
+            XCTAssertTrue(keyboard.exists || keyboard.waitForExistence(timeout: 8), "Cleared native search must regain keyboard focus")
+        }
         field.typeText(query)
     }
 
@@ -63,7 +70,7 @@ final class NativeModelJourneys: XCTestCase {
 
     private func rootValue(_ identifier: String) -> String {
         let state = app.staticTexts["audit.state"]
-        XCTAssertTrue(state.waitForExistence(timeout: 10))
+        XCTAssertTrue(state.exists || state.waitForExistence(timeout: 10))
         guard let value = state.value as? String,
               let data = value.data(using: .utf8),
               let fields = try? JSONDecoder().decode([String: String].self, from: data),
@@ -248,17 +255,26 @@ final class NativeModelJourneys: XCTestCase {
     func test09UnavailableGroupsAndExplicitMemberKeepRoutingIdentity() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Groups")
         let empty = app.buttons["model-picker.group.empty-group"]
         let unavailable = app.buttons["model-picker.group.unavailable-group"]
+        // iPad原生sheet较矮，下面两组尚未物化；用户通过真实滚动才能读到它们。
+        for _ in 0..<6 where !empty.exists { app.swipeUp() }
         XCTAssertTrue(empty.exists)
         XCTAssertFalse(empty.isEnabled)
+        for _ in 0..<6 where !unavailable.exists { app.swipeUp() }
         XCTAssertTrue(unavailable.exists)
         XCTAssertFalse(unavailable.isEnabled)
-        app.buttons["model-picker.expand-group.daily"].tap()
+        capture("18a-unavailable-groups-after-real-scroll")
+        let daily = app.buttons["model-picker.expand-group.daily"]
+        for _ in 0..<6 where !daily.isHittable { app.swipeDown() }
+        XCTAssertTrue(daily.isHittable)
+        daily.tap()
         capture("18-group-members-and-unavailable-groups")
         let member = app.buttons["model-picker.member.daily.openai-direct/gpt-5"]
         if member.exists {
@@ -274,8 +290,10 @@ final class NativeModelJourneys: XCTestCase {
     func test10DuplicateNamesSelectExactlyOneProviderIdentity() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Stable row identity assertions apply to improved picker")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Stable row identity assertions apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("gpt-5")
         let relay = app.buttons["model-picker.entry.relay-proxy/gpt-5"]
@@ -312,9 +330,15 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test13CatalogBulkHideShowKeepsFavoritesGroupsAndDefault() throws {
+        // This two-stage hide/readback/reopen/show/readback journey reached its
+        // final assertions at 122s on a loaded hosted simulator. Preserve all
+        // checks within the runner's existing 180s maximum; never turn a timeout green.
+        executionTimeAllowance = 180
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("Bulk organization is introduced by the improved production catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Bulk organization is introduced by the improved production catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("DeepSeek")
         let favorite = app.buttons["model-catalog.favorite.relay-proxy/deepseek-reasoner"]
@@ -325,7 +349,25 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["Hide selected models"].tap()
         XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 8))
         capture("23-confirm-bulk-hide")
-        app.sheets.buttons["Hide selected models"].tap()
+        let confirmations = app.sheets.buttons.matching(identifier: "model-catalog.confirm-hide")
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            confirmations.allElementsBoundByIndex.contains { $0.isHittable }
+        }, object: app)
+        let readiness = XCTWaiter.wait(for: [ready], timeout: 10)
+        let nodes = confirmations.allElementsBoundByIndex
+        let candidates = XCTAttachment(string: nodes.enumerated().map { index, node in
+            "candidate=\(index) frame=\(node.frame) enabled=\(node.isEnabled) hittable=\(node.isHittable)"
+        }.joined(separator: "\n"))
+        candidates.name = "hide-confirmation-native-candidates"
+        candidates.lifetime = .keepAlways
+        add(candidates)
+        XCTAssertEqual(readiness, .completed, "A real confirmation node must be hittable")
+        // iOS 26 exposes a container Button and its actual leaf with the same
+        // identifier. Resolve an actually hittable leaf inside the visible sheet.
+        let confirmation = try XCTUnwrap(nodes.last(where: { $0.isHittable }))
+        confirmation.tap()
+        let hidden = expectation(for: NSPredicate { _, _ in confirmations.count == 0 }, evaluatedWith: app)
+        wait(for: [hidden], timeout: 10)
         capture("24-catalog-model-hidden")
         closeAudit()
         XCTAssertTrue(rootValue("audit.hidden").contains("relay-proxy/deepseek-reasoner"))
@@ -345,7 +387,9 @@ final class NativeModelJourneys: XCTestCase {
     func test14CatalogBulkAddsWithoutChangingExistingPriority() throws {
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("Bulk group organization is introduced by improved catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("Bulk group organization is introduced by improved catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("gpt-5")
         app.buttons["model-catalog.organize"].tap()
@@ -367,7 +411,9 @@ final class NativeModelJourneys: XCTestCase {
     func test15NewGroupAfterCatalogSheetDismissal() throws {
         launch("catalog", large: false)
         guard app.buttons["model-catalog.organize"].waitForExistence(timeout: 8) else {
-            throw XCTSkip("New-group management journey is introduced by improved catalog")
+            if AuditSourceKind.isBaseline { throw XCTSkip("New-group management journey is introduced by improved catalog") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("DeepSeek")
         app.buttons["model-catalog.organize"].tap()
@@ -390,8 +436,10 @@ final class NativeModelJourneys: XCTestCase {
         launch("quick", large: false, legacyPins: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         openFullBrowser()
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Alias normalization regression applies to improved picker")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Alias normalization regression applies to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Favorites")
         let row = app.buttons["model-picker.entry.anthropic-direct/claude-sonnet-4"]
@@ -403,8 +451,10 @@ final class NativeModelJourneys: XCTestCase {
         launch("draft", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         openFullBrowser()
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Availability gate identifiers apply to improved picker")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Availability gate identifiers apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         search("Unavailable fixture")
         let row = app.buttons["model-picker.entry.missing-auth/unavailable"]
@@ -476,11 +526,21 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     func test20FavoriteEditDragPersistsOrder() throws {
+        try favoriteReorderJourney(waitForDropCommit: true)
+    }
+
+    func test26FavoriteImmediateDoneAfterDragPreservesOrder() throws {
+        try favoriteReorderJourney(waitForDropCommit: false)
+    }
+
+    private func favoriteReorderJourney(waitForDropCommit: Bool) throws {
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         openFullBrowser()
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Favorite edit identifiers apply to improved picker")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Favorite edit identifiers apply to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Favorites")
         app.buttons["model-picker.edit-favorites"].tap()
@@ -492,13 +552,76 @@ final class NativeModelJourneys: XCTestCase {
         let last = handles.element(boundBy: 1)
         XCTAssertTrue(first.isHittable)
         XCTAssertTrue(last.isHittable)
-        // Crossing the first row's upper edge requests insertion at zero. A
-        // first-to-second-center drag can resolve to the original boundary.
+        // Drop inside the first row's upper half. The recorded failed gesture
+        // lifted and displaced the row, but dropping above its bounds (in the
+        // section header) cancelled the native drop without invoking onMove.
+        let firstRow = app.cells.containing(.button, identifier: "model-picker.entry.anthropic-direct/claude-sonnet-4").firstMatch
+        XCTAssertTrue(firstRow.exists)
+        let lastRow = app.cells.containing(.button, identifier: "model-picker.entry.openai-direct/gpt-5").firstMatch
+        XCTAssertTrue(lastRow.exists)
+        var previousFrames: [CGRect] = []
+        var stableSamples = 0
+        var frameObservations: [String] = []
+        let frameStart = Date()
+        let stable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frames = [first.frame, last.frame, firstRow.frame, lastRow.frame]
+            stableSamples = frames == previousFrames ? stableSamples + 1 : 0
+            previousFrames = frames
+            frameObservations.append("t=\(Date().timeIntervalSince(frameStart)) frames=\(frames) stable=\(stableSamples)")
+            return stableSamples >= 2 && first.isHittable && last.isHittable
+        }, object: app)
+        let stability = XCTWaiter.wait(for: [stable], timeout: 10)
+        let frameTrace = XCTAttachment(string: frameObservations.joined(separator: "\n"))
+        frameTrace.name = "favorite-frame-stability-samples"
+        frameTrace.lifetime = .keepAlways
+        add(frameTrace)
+        XCTAssertEqual(stability, .completed, "Native handle and row geometry must settle before the one drag")
+        let geometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
+        geometry.name = "favorite-native-drag-geometry"
+        geometry.lifetime = .keepAlways
+        add(geometry)
         let start = last.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let destination = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
-            .withOffset(CGVector(dx: 0, dy: -12))
-        start.press(forDuration: 0.8, thenDragTo: destination)
-        capture("37-favorites-after-native-drag")
+        // Stay above the insertion midpoint while remaining inside a real row.
+        // A row-external target can show a temporary insertion then snap back.
+        let destination = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: first.frame.midX, dy: firstRow.frame.minY + firstRow.frame.height * 0.25))
+        start.press(forDuration: 0.8, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.5)
+        if waitForDropCommit {
+            let state = app.staticTexts["audit.state"]
+            var observations: [String] = []
+            let deadlineStart = Date()
+            let committed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard state.exists, let value = state.value as? String, let data = value.data(using: .utf8),
+                      let fields = try? JSONDecoder().decode([String: String].self, from: data) else {
+                    observations.append("t=\(Date().timeIntervalSince(deadlineStart)) audit.state unavailable")
+                    return false
+                }
+                observations.append("t=\(Date().timeIntervalSince(deadlineStart)) pins=\(fields["audit.pins"] ?? "missing") onMove=\(fields["audit.move"] ?? "missing")")
+                return fields["audit.pins"] == "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4"
+                    && fields["audit.move"]?.hasPrefix("from=") == true
+            }, object: app)
+            let result = XCTWaiter.wait(for: [committed], timeout: 10)
+            let trace = XCTAttachment(string: observations.joined(separator: "\n"))
+            trace.name = "favorite-editing-drop-observations"
+            trace.lifetime = .keepAlways
+            add(trace)
+            capture("37-favorites-after-native-drag")
+            XCTAssertEqual(result, .completed, "The one real drop must invoke onMove and commit while still editing; no retry or direct mutation")
+            let afterGeometry = XCTAttachment(string: "first handle=\(first.frame); last handle=\(last.frame); first row=\(firstRow.frame); last row=\(lastRow.frame); editing control=\(app.buttons["model-picker.edit-favorites"].label)")
+            afterGeometry.name = "favorite-native-after-drag-geometry"
+            afterGeometry.lifetime = .keepAlways
+            add(afterGeometry)
+        }
+        // The interruption variant intentionally closes immediately after the
+        // same single gesture, before screenshots or state queries can delay it.
+        app.buttons["model-picker.edit-favorites"].tap()
+        app.buttons["Done"].tap()
+        if !waitForDropCommit { capture("52-favorites-immediate-done-after-drag") }
+        let move = XCTAttachment(string: rootValue("audit.move"))
+        move.name = "native-onMove-observation"
+        move.lifetime = .keepAlways
+        add(move)
+        XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4", "The live production pin store must reorder before process termination")
         app.terminate()
         launch("", reset: false)
         XCTAssertEqual(rootValue("audit.pins"), "openai-direct/gpt-5|anthropic-direct/claude-sonnet-4")
@@ -508,8 +631,10 @@ final class NativeModelJourneys: XCTestCase {
     func test21ReturningFromGroupManagementKeepsPickerOpen() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
-            throw XCTSkip("Shared-picker group-management regression applies to improved picker")
+        guard app.segmentedControls["model-picker.scope"].exists else {
+            if AuditSourceKind.isBaseline { throw XCTSkip("Shared-picker group-management regression applies to improved picker") }
+            XCTFail("Required current production feature is missing")
+            return
         }
         selectScope("Groups")
         let manage = app.buttons["model-picker.manage-groups"]
@@ -643,6 +768,58 @@ final class NativeModelJourneys: XCTestCase {
         result.tap()
         XCTAssertEqual(rootValue("audit.selection"), "relay-proxy/deepseek-reasoner")
         XCTAssertEqual(rootValue("audit.default"), "daily")
+    }
+
+    private func auditContrastWithDiagnostics() throws {
+        try app.performAccessibilityAudit(for: .contrast) { issue in
+            let details = [issue.compactDescription, issue.detailedDescription,
+                           "type: \(issue.auditType)",
+                           "element: \(issue.element?.debugDescription ?? "none")",
+                           "frame: \(String(describing: issue.element?.frame))",
+                           "current tree: \(self.app.debugDescription)"].joined(separator: "\n")
+            let attachment = XCTAttachment(string: details)
+            attachment.name = "native-contrast-issue-details"
+            attachment.lifetime = .keepAlways
+            self.add(attachment)
+            // false reports the original failure; recording is never an exemption.
+            return false
+        }
+    }
+
+    func test24ActualPickerLightContrastAudit() throws {
+        continueAfterFailure = true
+        launch("quick", large: false)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        capture("48-picker-light-contrast")
+        try auditContrastWithDiagnostics()
+    }
+
+    func test25ActualPickerDarkContrastAudit() throws {
+        continueAfterFailure = true
+        launch("quick", large: false, dark: true)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
+        capture("49-picker-dark-contrast")
+        try auditContrastWithDiagnostics()
+    }
+
+    func test27SystemSectionHeaderLightContrastReferences() throws {
+        continueAfterFailure = true
+        launch("contrastReference", large: false)
+        XCTAssertTrue(app.staticTexts["audit.contrast.primary"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["audit.contrast.secondary"].exists)
+        XCTAssertTrue(app.staticTexts["audit.contrast.background"].exists)
+        capture("53-system-header-light-contrast-references")
+        try auditContrastWithDiagnostics()
+    }
+
+    func test28SystemSectionHeaderDarkContrastReferences() throws {
+        continueAfterFailure = true
+        launch("contrastReference", large: false, dark: true)
+        XCTAssertTrue(app.staticTexts["audit.contrast.primary"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["audit.contrast.secondary"].exists)
+        XCTAssertTrue(app.staticTexts["audit.contrast.background"].exists)
+        capture("54-system-header-dark-contrast-references")
+        try auditContrastWithDiagnostics()
     }
 
 }

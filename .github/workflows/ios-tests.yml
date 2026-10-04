@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main, fix/audit-hardening-20260930, fix/mobile-model-management-20261003, feat/paperclip-server-workspace]
+    branches: [main, audit/five-round-product-20261004, fix/audit-hardening-20260930, fix/mobile-model-management-20261003, feat/paperclip-server-workspace]
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:
@@ -124,11 +124,11 @@ jobs:
           retention-days: 14
 
   native-model-audit:
-    name: Native model UI (${{ matrix.label }})
+    name: Native model UI (${{ matrix.label }}, ${{ matrix.device }})
     # Test-only fixtures, no app signing, credentials, submodules, or releases.
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/fix/mobile-model-management-20261003'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/fix/mobile-model-management-20261003' || github.ref == 'refs/heads/audit/five-round-product-20261004'
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     strategy:
@@ -137,15 +137,38 @@ jobs:
         include:
           - label: current
             source_ref: WORKTREE
+            device: iPhone
+            timeout: 35
           - label: baseline
             source_ref: 3c053a7c9b112667a04cea9b12c7c16a03c5ce39
+            device: iPhone
+            timeout: 35
+          - label: current-ipad
+            source_ref: WORKTREE
+            device: iPad
+            timeout: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install native harness project generator
         run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
-      - name: Test production SwiftUI model views on iPhone Simulator
+      - name: Select actual simulator device family
+        env:
+          AUDIT_DEVICE_FAMILY: ${{ matrix.device }}
+        run: |
+          if [[ "$AUDIT_DEVICE_FAMILY" == "iPad" ]]; then
+            SIMULATOR=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          devices=[d for runtime,items in json.load(sys.stdin)["devices"].items() if "iOS-26-5" in runtime for d in items if d["name"].startswith("iPad")]
+          if not devices: raise SystemExit("No available native iPad on pinned iOS26.5 runtime")
+          print(sorted(devices,key=lambda d:d["name"])[0]["udid"])
+          ')
+            echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,id=$SIMULATOR" >> "$GITHUB_ENV"
+          else
+            echo "NATIVE_AUDIT_DESTINATION=platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5" >> "$GITHUB_ENV"
+          fi
+      - name: Test production SwiftUI model views on ${{ matrix.device }} Simulator
         run: bash scripts/native-model-audit/run.sh '${{ matrix.source_ref }}' '${{ matrix.label }}'
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
@@ -166,6 +189,7 @@ jobs:
             native-model-audit-results/${{ matrix.label }}/source-manifest.json
             native-model-audit-results/${{ matrix.label }}/test-summary.json
             native-model-audit-results/${{ matrix.label }}/test-scope.txt
+            native-model-audit-results/${{ matrix.label }}/**/attachments/*.txt
           if-no-files-found: warn
           retention-days: 14
 
@@ -237,8 +261,9 @@ jobs:
           node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
           node --import tsx --test packages/services/src/paperclip/adapters/*.test.ts
           pnpm leo:test:agent
-          node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
-          node --import tsx --test packages/ui/test/phonePairingSession.test.ts
+          node --import tsx --test $(find packages/desktop/src/host -name '*.test.ts' -print)
+          node --import tsx --test packages/server/test/localTaskListController.test.ts packages/server/test/localTaskListHttp.test.ts
+          node --import tsx --test packages/ui/test/phonePairingSession.test.ts packages/ui/test/leoStatusRows.test.ts packages/ui/test/taskListLoadCoordinator.test.ts
       - name: Synthetic phone-pairing component journeys and screenshots
         run: |
           set -euo pipefail
@@ -256,6 +281,29 @@ jobs:
           set -euo pipefail
           PATH="$PWD/node_modules/.bin:$PATH" pnpm --dir apps/zcode-cli build
           pnpm build:bootstrap
+
+      - name: Actual full Web renderer on isolated local services
+        timeout-minutes: 8
+        run: node scripts/audit-full-renderer/run-journeys.mjs
+      - name: Actual unpackaged Mac desktop and WindowController journeys
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: node scripts/audit-full-renderer/run-desktop.mjs
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: actual-full-renderer-synthetic-journeys
+          path: |
+            src/mac/leophone/audit-full-renderer-results/*.png
+            src/mac/leophone/audit-full-renderer-results/*.txt
+            src/mac/leophone/audit-full-renderer-results/*.json
+            src/mac/leophone/audit-full-renderer-results/*.log
+            src/mac/leophone/audit-full-renderer-results/desktop/*.png
+            src/mac/leophone/audit-full-renderer-results/desktop/*.txt
+            src/mac/leophone/audit-full-renderer-results/desktop/*.json
+            src/mac/leophone/audit-full-renderer-results/desktop/*.log
+          if-no-files-found: error
+          retention-days: 14
 
   relay-tests:
     name: Active relay protocol and security tests

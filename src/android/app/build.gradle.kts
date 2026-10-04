@@ -22,6 +22,13 @@ val appCustomization = Properties().apply {
 fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
+// Opt-in UI fixture only. Normal builds retain the shipping ARM64 ABI and
+// existing test runner; no fixture APK is a releasable distribution artifact.
+val auditUiFixture = providers.gradleProperty("leophone.auditUiFixture").orNull == "true"
+require(!auditUiFixture || gradle.startParameter.taskNames.none { it.contains("release", ignoreCase = true) }) {
+    "The isolated product UI fixture is debug-only and cannot build release tasks."
+}
+
 android {
     namespace = "com.leoyuan.leophoneagent"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
@@ -40,7 +47,9 @@ android {
         versionCode = 100027
         versionName = "1.0.0-alpha.27"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = if (auditUiFixture)
+            "com.leoyuan.leophoneagent.ui.audit.ProductAuditRunner"
+        else "androidx.test.runner.AndroidJUnitRunner"
 
         // System prompt prefix required by Anthropic for Claude Code OAuth
         // credentials. Empty in the public mirror (see provider-customization.properties).
@@ -51,7 +60,7 @@ android {
         )
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += if (auditUiFixture) listOf("x86_64") else listOf("arm64-v8a")
         }
 
         externalNativeBuild {
@@ -143,6 +152,14 @@ android {
         htmlReport = true
     }
 
+}
+
+// Also exclude release variants from aggregate tasks such as `assemble`/`build`.
+// Checking only a requested task's name would miss their transitive release tasks.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        if (auditUiFixture) variant.enable = false
+    }
 }
 
 // Cross-platform Treasury contract fixtures remain single-source under
@@ -325,6 +342,9 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 val verifyChineseResources by tasks.registering {

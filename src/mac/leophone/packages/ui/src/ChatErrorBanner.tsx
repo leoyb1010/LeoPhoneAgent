@@ -179,7 +179,10 @@ export function ChatErrorBanner({
           ) : (
             <InfoIcon aria-hidden="true" className="size-4 shrink-0" />
           )}
-          <div className="min-w-0 truncate font-medium">{localizedErrorMessage}</div>
+          {/* 无模型是首用的操作说明，不应像可展开的诊断摘要一样被截断。 */}
+          <div className={cn("min-w-0 font-medium", modelConfigMissing ? "whitespace-normal break-words" : "truncate")}>
+            {localizedErrorMessage}
+          </div>
         </div>
 
         {/* [leo] 无可用模型时上游还会给一个 Coding Plan「升级」按钮；LeoPhoneAgent 只引导去配置模型。 */}

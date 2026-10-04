@@ -11,7 +11,8 @@
     "./cua-permission-broker": "./src/cua-permission-broker/index.ts",
     "./process/processTreeTerminator": "./src/process/processTreeTerminator.ts",
     "./node": "./src/node.ts",
-    "./paperclip": "./src/paperclip/contract.ts"
+    "./paperclip": "./src/paperclip/contract.ts",
+    "./window-controller-runtime": "./src/window-controller/node.ts"
   },
   "scripts": {
     "lint": "oxlint",

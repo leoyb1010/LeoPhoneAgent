@@ -35,6 +35,7 @@ export function ApiKeyInput({
         type={visible && !readOnly ? "text" : "password"}
         size="lg"
         data-testid={TID_MODEL_PROVIDER_API_KEY_INPUT}
+        aria-label={intl.formatMessage({ id: "settings.modelProvider.apiKey" })}
         className="pr-10 h-9"
         placeholder={intl.formatMessage({
           id: "settings.modelProvider.apiKeyPlaceholder",
@@ -58,6 +59,10 @@ export function ApiKeyInput({
         size="icon-sm"
         disabled={readOnly}
         className="absolute top-1/2 right-1.5 -translate-y-1/2"
+        aria-label={intl.formatMessage({
+          id: visible && !readOnly ? "settings.modelProvider.hideApiKey" : "settings.modelProvider.showApiKey",
+        })}
+        aria-pressed={visible && !readOnly}
         onClick={onToggleVisibility}
       >
         {visible ? <EyeOffIcon className="size-3.5" /> : <EyeIcon className="size-3.5" />}

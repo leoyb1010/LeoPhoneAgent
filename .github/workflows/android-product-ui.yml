@@ -1,0 +1,121 @@
+name: Android product UI fixture
+on:
+  push:
+    branches: [audit/five-round-product-20261004]
+    paths:
+      - 'src/android/**'
+      - 'scripts/android-product-audit/**'
+      - '.github/workflows/android-product-ui.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  model-picker:
+    runs-on: macos-15-intel
+    timeout-minutes: 155
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [Standard, Power]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Install official Android toolchain
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
+      - name: Compile fixture before starting the emulator
+        id: compile
+        timeout-minutes: 35
+        working-directory: src/android
+        run: >-
+          python3 ../../scripts/android-product-audit/run_timed.py
+          --seconds 1980 --log ../../android-product-audit-results/build.log --
+          ./gradlew --no-daemon --max-workers=2
+          :app:assemble${{ matrix.flavor }}Debug :app:assemble${{ matrix.flavor }}DebugAndroidTest
+          -Pleophone.auditUiFixture=true -Pkotlin.compiler.execution.strategy=in-process
+      - name: Actual Compose sheet — phone-light-normal on a fresh AVD
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AUDIT_FLAVOR: ${{ matrix.flavor }}
+          AUDIT_PROFILE: phone-light-normal
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          avd-name: audit-phone-light-normal
+          force-avd-creation: true
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          script: bash scripts/android-product-audit/run.sh
+      - name: Actual Compose sheet — phone-dark-reduced-large on a fresh AVD
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AUDIT_FLAVOR: ${{ matrix.flavor }}
+          AUDIT_PROFILE: phone-dark-reduced-large
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          avd-name: audit-phone-dark-reduced-large
+          force-avd-creation: true
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          script: bash scripts/android-product-audit/run.sh
+      - name: Actual Compose sheet — tablet-light-reduced on a fresh AVD
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AUDIT_FLAVOR: ${{ matrix.flavor }}
+          AUDIT_PROFILE: tablet-light-reduced
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          avd-name: audit-tablet-light-reduced
+          force-avd-creation: true
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          script: bash scripts/android-product-audit/run.sh
+      - name: Actual Compose sheet — tablet-dark-normal-large on a fresh AVD
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        timeout-minutes: 28
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AUDIT_FLAVOR: ${{ matrix.flavor }}
+          AUDIT_PROFILE: tablet-dark-normal-large
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          avd-name: audit-tablet-dark-normal-large
+          force-avd-creation: true
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
+          script: bash scripts/android-product-audit/run.sh
+      - name: Preserve screenshots and test evidence, never APKs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-product-ui-fixture-${{ matrix.flavor }}
+          path: android-product-audit-results/**
+          if-no-files-found: error
+          retention-days: 14

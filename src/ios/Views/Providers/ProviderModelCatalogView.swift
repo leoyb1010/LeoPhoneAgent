@@ -99,6 +99,7 @@ struct ProviderModelCatalogView: View {
                 if store.setEntriesHidden(ids: selectedIds, hidden: true) { selectedIds.removeAll() }
                 else { message = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.") }
             }
+            .accessibilityIdentifier("model-catalog.confirm-hide")
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Hidden models disappear from model selection and chat-group fallback. Saved direct-chat and voice bindings remain. Favorites and group membership are preserved; show the models again to restore availability.")

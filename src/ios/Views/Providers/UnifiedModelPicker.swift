@@ -238,6 +238,16 @@ struct ModelPickerConfig {
     }
 }
 
+// Informational copy must not inherit a Button's accent tint. The native
+// light/dark contrast audit exposed faded blue metadata and light section text.
+private enum ModelPickerText {
+    // Opaque adaptive text avoids applying transparency again inside system
+    // section-header/vibrancy styles. Keep the same readable light/dark tones.
+    static let secondary = Color(uiColor: UIColor { traits in
+        UIColor(white: traits.userInterfaceStyle == .dark ? 0.74 : 0.28, alpha: 1)
+    })
+}
+
 // MARK: - UnifiedModelPicker
 
 struct UnifiedModelPicker: View {
@@ -430,7 +440,7 @@ struct UnifiedModelPicker: View {
                         }.pickerStyle(.segmented).accessibilityIdentifier("model-picker.scope")
                     }
                 } footer: {
-                    if let note = config.headerNote { Text(note) }
+                    if let note = config.headerNote { Text(note).foregroundStyle(ModelPickerText.secondary) }
                 }
             }
             if isSearching {
@@ -597,26 +607,26 @@ struct UnifiedModelPicker: View {
     @ViewBuilder
     private var selectionSummary: some View {
         if let gid = config.currentGroupId?(), let group = store.group(for: gid) {
-            Section("Current selection") {
+            Section {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(group.name, systemImage: "square.stack.3d.up").font(.headline)
                     if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) {
-                        Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(.secondary)
+                        Text("Selected member: \(entry.model.displayName)").font(.footnote).foregroundStyle(ModelPickerText.secondary)
                         if let reason = memberUnavailableReason(entry.id) {
                             Text(reason).font(.caption).foregroundStyle(.orange)
                         }
                     }
                 }
-            }
+            } header: { Text("Current selection").foregroundStyle(ModelPickerText.secondary) }
         } else if let eid = config.currentEntryId?(), let entry = store.entry(for: eid) ?? Self.systemEntry(for: eid) {
-            Section("Current selection") {
+            Section {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(entry.model.displayName, systemImage: "checkmark.circle.fill").font(.headline)
                     if let provider = store.instance(for: entry.providerInstanceId) {
-                        Text(provider.label).font(.footnote).foregroundStyle(.secondary)
+                        Text(provider.label).font(.footnote).foregroundStyle(ModelPickerText.secondary)
                     }
                 }
-            }
+            } header: { Text("Current selection").foregroundStyle(ModelPickerText.secondary) }
         }
     }
 
@@ -624,20 +634,20 @@ struct UnifiedModelPicker: View {
         Section {
             if favoriteEntries.isEmpty {
                 Label("Star models in Providers to keep them here.", systemImage: "star")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ModelPickerText.secondary)
                 Button("Browse providers") { browseScope = .providers }
             } else {
                 ForEach(favoriteEntries) { entry in entryRow(entry) }
                     .onMove { from, to in pins.move(visibleKeys: favoriteEntries.map(\.id), from: from, to: to) }
             }
-        } header: { Text("Favorites") }
-        footer: { Text("Favorites are your shortlist. Reorder them with Edit; choosing a model does not change your default.") }
+        } header: { Text("Favorites").foregroundStyle(ModelPickerText.secondary) }
+        footer: { Text("Favorites are your shortlist. Reorder them with Edit; choosing a model does not change your default.").foregroundStyle(ModelPickerText.secondary) }
     }
 
     private var groupsSection: some View {
         Section {
             if visibleGroups.isEmpty {
-                Text("No model groups").foregroundStyle(.secondary)
+                Text("No model groups").foregroundStyle(ModelPickerText.secondary)
             }
             ForEach(visibleGroups) { group in
                 groupRow(group)
@@ -647,8 +657,8 @@ struct UnifiedModelPicker: View {
                 Label("Manage groups and defaults", systemImage: "slider.horizontal.3")
             }
             .accessibilityIdentifier("model-picker.manage-groups")
-        } header: { Text("Routing groups") }
-        footer: { Text("A group tries its models in order or balances sessions. Default applies to new chats; selecting here only changes this choice.") }
+        } header: { Text("Routing groups").foregroundStyle(ModelPickerText.secondary) }
+        footer: { Text("A group tries its models in order or balances sessions. Default applies to new chats; selecting here only changes this choice.").foregroundStyle(ModelPickerText.secondary) }
     }
 
     private func favoriteButton(_ entry: ModelEntry) -> some View {
@@ -811,10 +821,10 @@ struct UnifiedModelPicker: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "square.stack.3d.up")
                         .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(group.name).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        Text(group.name).font(.body.weight(.medium)).foregroundStyle(Color.primary)
                         groupSubtitle(group)
                         Text(group.strategy == .fallback ? "Ordered fallback" : "Load balancing")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).foregroundStyle(ModelPickerText.secondary)
                         if store.defaultPrimaryGroupId == group.id {
                             Text("Default for new chats").font(.caption).foregroundStyle(.tint)
                         }
@@ -846,23 +856,24 @@ struct UnifiedModelPicker: View {
 
     @ViewBuilder
     private func groupSubtitle(_ group: ModelGroup) -> some View {
+        // 组内计数在Button内会继承浅蓝tertiary；实际iPad白底仅1.36:1，保持显式语义色。
         if group.memberEntryIds.isEmpty {
             Text(String(localized: "No models"))
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(ModelPickerText.secondary)
         } else if isGroupSelected(group),
                   let eid = config.currentEntryId?(),
                   let entry = store.entry(for: eid) {
             Text("→ \(entry.model.displayName)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ModelPickerText.secondary)
         } else {
             let available = availableMemberEntryIds(group).count
             let total = group.memberEntryIds.count
             if available == total {
                 Text(String(localized: "\(total) models"))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ModelPickerText.secondary)
             } else if available == 0 {
                 Text(String(localized: "\(total) models · all unavailable"))
                     .font(.caption)
@@ -882,7 +893,7 @@ struct UnifiedModelPicker: View {
             Text(strategy == .fallback ? "FB" : "LB")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(ModelPickerText.secondary)
         .padding(.horizontal, 4)
         .padding(.vertical, 1)
         .background(Color(UIColor.quaternarySystemFill))
@@ -983,7 +994,7 @@ struct UnifiedModelPicker: View {
         if group.memberEntryIds.isEmpty {
             Text("No models in this group")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ModelPickerText.secondary)
                 .padding(.leading, 30)
                 .padding(.vertical, 4)
         } else {
@@ -1025,9 +1036,9 @@ struct UnifiedModelPicker: View {
                     Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                        Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                         Text(store.instance(for: entry.providerInstanceId)?.label ?? entry.model.provider)
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).foregroundStyle(ModelPickerText.secondary)
                         if isActive { Text("Active in this group").font(.caption).foregroundStyle(.tint) }
                     }
                     Spacer(minLength: 0)
@@ -1097,11 +1108,11 @@ struct UnifiedModelPicker: View {
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(item.instance.label).font(.headline).foregroundStyle(.primary)
-                        Text("\(item.entries.count) models").font(.caption).foregroundStyle(.secondary)
+                        Text(item.instance.label).font(.headline).foregroundStyle(Color.primary)
+                        Text("\(item.entries.count) models").font(.caption).foregroundStyle(ModelPickerText.secondary)
                     }
                     Spacer()
-                    Image(systemName: collapsed ? "chevron.down" : "chevron.up").foregroundStyle(.secondary)
+                    Image(systemName: collapsed ? "chevron.down" : "chevron.up").foregroundStyle(ModelPickerText.secondary)
                 }.frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
@@ -1150,15 +1161,15 @@ struct UnifiedModelPicker: View {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.model.displayName).font(.body).foregroundStyle(.primary)
+                        Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                         if let provider = store.instance(for: entry.providerInstanceId) {
-                            Text(provider.label).font(.caption).foregroundStyle(.secondary)
+                            Text(provider.label).font(.caption).foregroundStyle(ModelPickerText.secondary)
                         }
                         if !isQuickBrowse || isSearching {
                             Text(traits.subtitle ?? entry.model.id)
-                                .font(isSearching ? .caption2 : .caption).foregroundStyle(.secondary)
+                                .font(isSearching ? .caption2 : .caption).foregroundStyle(ModelPickerText.secondary)
                                 .lineLimit(isSearching ? 1 : 2).textSelection(.disabled)
                         }
                         if disabled { Text(unavailable ?? String(localized: "Unavailable for this purpose")).font(.caption).foregroundStyle(.orange) }
@@ -1193,7 +1204,7 @@ struct UnifiedModelPicker: View {
                     .foregroundStyle(.quaternary)
                 Text(searchText.isEmpty ? "No models available" : "No results")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ModelPickerText.secondary)
                 Text(searchText.isEmpty
                      ? "Configure providers in Settings to see models here."
                      : "Try a different search term.")

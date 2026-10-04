@@ -55,7 +55,15 @@ private const val MODALITY_BIT_IMG_OUT = 1 shl 6
 private const val MODALITY_BIT_AUD_OUT = 1 shl 7
 private const val MODALITY_BIT_VID_OUT = 1 shl 8
 
-class ProviderRepository(private val context: Context) {
+class ProviderRepository internal constructor(
+    private val context: Context,
+    initialLoadDispatcher: kotlinx.coroutines.CoroutineDispatcher,
+) {
+    // Shipping callers keep the original constructor and off-main startup.
+    // The internal dispatcher seam lets instrumentation exercise immediate
+    // completion deterministically, using the real Room/JSON loading path.
+    constructor(context: Context) : this(context, kotlinx.coroutines.Dispatchers.IO)
+
 
     // [T-android-thinking-level-arch] coerceInputValues makes kotlinx.serialization
     // fall back to a property's DEFAULT when it can't decode the wire value —
@@ -183,7 +191,7 @@ class ProviderRepository(private val context: Context) {
 
     /** Internal scope for the one-shot async config load. */
     private val loadScope = kotlinx.coroutines.CoroutineScope(
-        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+        kotlinx.coroutines.SupervisorJob() + initialLoadDispatcher,
     )
 
     /**
@@ -195,6 +203,23 @@ class ProviderRepository(private val context: Context) {
     private val configLoadComplete = kotlinx.coroutines.CompletableDeferred<Unit>()
 
     suspend fun awaitConfigLoaded() = configLoadComplete.await()
+
+    /**
+     * Lock guarding all mutate-and-save sequences against concurrent writers
+     * (notably the `for instance in enabled { scope.launch { autoRefreshModels(...) } }`
+     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]).
+     *
+     * Without this lock, two parallel `replaceEntries(instanceA, …)` and
+     * `replaceEntries(instanceB, …)` calls share the same `_config.value`
+     * reference (its inner ArrayLists are the same objects across reads),
+     * so one's `removeAll` / `addAll` runs while the other's `saveConfig`
+     * is mid-`Json.encodeToString` — that's the
+     * `ConcurrentModificationException → ArrayList.next` crash captured on
+     * Pixel 6 / 4a.
+     */
+    // Must be initialized before launch: a fast initial load can finish
+    // before this constructor returns and immediately enter the lock.
+    private val configLock = Any()
 
     init {
         loadScope.launch {
@@ -221,21 +246,6 @@ class ProviderRepository(private val context: Context) {
             }
         }
     }
-
-    /**
-     * Lock guarding all mutate-and-save sequences against concurrent writers
-     * (notably the `for instance in enabled { scope.launch { autoRefreshModels(...) } }`
-     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]).
-     *
-     * Without this lock, two parallel `replaceEntries(instanceA, …)` and
-     * `replaceEntries(instanceB, …)` calls share the same `_config.value`
-     * reference (its inner ArrayLists are the same objects across reads),
-     * so one's `removeAll` / `addAll` runs while the other's `saveConfig`
-     * is mid-`Json.encodeToString` — that's the
-     * `ConcurrentModificationException → ArrayList.next` crash captured on
-     * Pixel 6 / 4a.
-     */
-    private val configLock = Any()
 
     private fun loadConfig(): ProviderConfig = runBlocking { loadConfigSuspending() }
 
