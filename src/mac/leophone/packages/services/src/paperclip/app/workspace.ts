@@ -1,4 +1,8 @@
-import type { NativePaperclipPort, PaperclipPreferences } from "@zcode/shared";
+import type {
+  NativePaperclipPort,
+  PaperclipPreferences,
+  PaperclipStoredReceipt,
+} from "@zcode/shared";
 import { createUuid } from "@zcode/shared";
 import type {
   IPaperclipWorkspace,
@@ -9,24 +13,22 @@ import type {
 import {
   creationRetryPermitted,
   normalizePaperclipOrigin,
-  paperclipId,
   paperclipIdentityKey,
 } from "../domain/identity.js";
+import { emptyPaperclipSnapshot, companySchema, healthSchema, sessionSchema } from "./responses.js";
 import {
-  emptyPaperclipSnapshot,
-  agentSchema,
-  approvalSchema,
-  attachmentSchema,
-  commentSchema,
-  companySchema,
-  healthSchema,
-  issueSchema,
-  logSchema,
-  runSchema,
-  sessionSchema,
-} from "./responses.js";
-
-import { buildPaperclipMutation, verifyPaperclipMutation } from "./mutations.js";
+  buildPaperclipMutation,
+  verifyPaperclipMutation,
+  verifyPaperclipCommandRelation,
+  verifyLatestApproval,
+} from "./mutations.js";
+import {
+  readBoundWorkspace,
+  readBoundDetail,
+  readBoundLog,
+  downloadBoundAttachment,
+} from "./reads.js";
+import { receiptsFor, updateReceipt, pendingReceipt } from "./receipts.js";
 
 class OperationError extends Error {
   constructor(
@@ -153,7 +155,12 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     const preferred = this.preferences.companies[paperclipIdentityKey(origin, user.id)];
     const companyId =
       companies.find((company) => company.id === preferred)?.id ?? companies[0]?.id ?? "";
-    this.publish(generation, { user, companies, companyId });
+    this.publish(generation, {
+      user,
+      companies,
+      companyId,
+      receipts: receiptsFor(this.preferences, paperclipIdentityKey(origin, user.id, companyId)),
+    });
     if (generation === this.state.generation && companyId) await this.readWorkspace(generation);
   }
   async signIn(): Promise<void> {
@@ -187,7 +194,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
       detail: null,
       selectedIssueId: null,
       log: null,
-      receipts: {},
+      receipts: receiptsFor(this.preferences, paperclipIdentityKey(origin, user.id, companyId)),
     };
     this.publish(generation, {});
     await this.action(generation, async () => {
@@ -198,42 +205,26 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   }
   private async readWorkspace(generation: number, loadMore = false): Promise<void> {
     const { companyId, user, origin } = this.context();
-    const root = `/api/companies/${paperclipId(companyId)}`;
-    const offset = loadMore ? this.loadedCount : 0;
-    let consumed = offset;
-    const rows = [];
-    let hasMore = false;
-    do {
-      const page = issueSchema
-        .array()
-        .parse(
-          await this.api(
-            `${root}/issues?limit=100&offset=${consumed}`,
-            "GET",
-            undefined,
-            user.id,
-            origin,
-          ),
-        );
-      rows.push(...page);
-      consumed += page.length;
-      hasMore = page.length === 100;
-      if (!hasMore || loadMore) break;
-    } while (consumed < this.loadedCount);
-    const agents = agentSchema
-      .array()
-      .parse(await this.api(`${root}/agents`, "GET", undefined, user.id, origin));
-    if (
-      rows.some((row) => row.companyId !== companyId) ||
-      agents.some((row) => row.companyId !== companyId)
-    )
-      throw new OperationError("服务器返回了其他公司的数据，已阻止。");
+    const { rows, agents, consumed, hasMore } = await readBoundWorkspace(
+      (path) => this.api(path, "GET", undefined, user.id, origin),
+      companyId,
+      this.loadedCount,
+      loadMore,
+    );
     if (generation !== this.state.generation) return;
     const unique = new Map(
       (loadMore ? [...this.state.issues, ...rows] : rows).map((row) => [row.id, row]),
     );
     this.loadedCount = consumed;
-    this.publish(generation, { issues: [...unique.values()], agents, hasMore });
+    this.publish(generation, {
+      issues: [...unique.values()],
+      agents,
+      hasMore,
+      receipts: {
+        ...this.state.receipts,
+        ...receiptsFor(this.preferences, paperclipIdentityKey(origin, user.id, companyId)),
+      },
+    });
     if (this.state.selectedIssueId) {
       const detail = await this.readDetail(this.state.selectedIssueId);
       this.publish(generation, { detail });
@@ -245,32 +236,11 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   }
   private async readDetail(issueId: string): Promise<PaperclipDetail> {
     const { origin, user, companyId } = this.context();
-    const path = `/api/issues/${paperclipId(issueId)}`;
-    const read = (suffix = "") => this.api(path + suffix, "GET", undefined, user.id, origin);
-    const [rawIssue, rawComments, rawRuns, rawApprovals, rawAttachments] = await Promise.all([
-      read(),
-      read("/comments?order=asc"),
-      read("/runs"),
-      read("/approvals"),
-      read("/attachments"),
-    ]);
-    const detail = {
-      issue: issueSchema.parse(rawIssue),
-      comments: commentSchema.array().parse(rawComments),
-      runs: runSchema.array().parse(rawRuns),
-      approvals: approvalSchema.array().parse(rawApprovals),
-      attachments: attachmentSchema.array().parse(rawAttachments),
-    };
-    if (
-      detail.issue.id !== issueId ||
-      detail.issue.companyId !== companyId ||
-      [...detail.comments, ...detail.attachments].some(
-        (item) => item.companyId !== companyId || item.issueId !== issueId,
-      ) ||
-      detail.approvals.some((item) => item.companyId !== companyId)
-    )
-      throw new OperationError("任务归属与当前公司不一致，已阻止。");
-    return detail;
+    return readBoundDetail(
+      (path) => this.api(path, "GET", undefined, user.id, origin),
+      companyId,
+      issueId,
+    );
   }
   async selectIssue(issueId: string): Promise<void> {
     this.context();
@@ -289,14 +259,31 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     });
   }
   async command(command: PaperclipCommand): Promise<void> {
+    if (command.kind === "archive") return this.archiveReceipt(command.receiptId);
     const { origin, user, companyId, generation } = this.context();
     const id = "requestId" in command ? command.requestId : createUuid();
-    if ("retry" in command && !command.retry && this.state.receipts[id]?.state === "unknown")
+    const identity = paperclipIdentityKey(origin, user.id, companyId);
+    const receipts = { ...this.state.receipts, ...receiptsFor(this.preferences, identity) };
+    const previous = receipts[id];
+    if (
+      Object.values(receipts).some((row) => row.state === "unknown") &&
+      !(
+        previous?.state === "unknown" &&
+        previous.kind === command.kind &&
+        "retry" in command &&
+        command.retry &&
+        (command.kind === "create" || previous.targetId === command.issueId)
+      )
+    )
       throw new OperationError("原提交结果未知，需核对后手动重试。");
-    if (command.kind === "create" && !creationRetryPermitted(command.firstSubmittedAt))
+    if (
+      command.kind === "create" &&
+      !creationRetryPermitted(previous?.submittedAt ?? command.firstSubmittedAt)
+    )
       throw new OperationError(
         "创建提交已超出 7 天去重窗口或缺少可信时间，请先核对任务列表。草稿已保留。",
       );
+    const receipt = pendingReceipt(command, identity, id, previous?.submittedAt);
     await this.action(generation, async () => {
       let sent = false;
       try {
@@ -306,31 +293,37 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
           const detail = await this.readDetail(command.issueId);
           if (generation !== this.state.generation)
             throw new OperationError("当前工作区已改变，操作未发送。");
-          if (
-            command.kind === "approval" &&
-            !detail.approvals.some(
-              (item) => item.id === command.approvalId && item.status === "pending",
-            )
-          )
-            throw new OperationError("审批已改变，请刷新后核对。");
-          if (
-            command.kind === "cancel" &&
-            !detail.runs.some(
-              (run) => run.runId === command.runId && ["running", "queued"].includes(run.status),
-            )
-          )
-            throw new OperationError("此任务运行已结束或不属于当前任务。");
+          verifyPaperclipCommandRelation(command, detail);
         }
+        await this.persistReceipt(identity, id, receipt);
+        if (command.kind === "approval") {
+          await verifyLatestApproval(
+            (path) => this.api(path, "GET", undefined, user.id, origin),
+            command,
+          );
+        }
+        if (generation !== this.state.generation)
+          throw new OperationError("当前工作区已改变，操作未发送。");
         const mutation = buildPaperclipMutation(command, companyId, id);
         sent = true;
         const raw = await this.api(mutation.path, mutation.method, mutation.body, user.id, origin);
         const createdIssueId = verifyPaperclipMutation(command, raw, companyId, id);
+        await this.persistReceipt(identity, id);
         if (createdIssueId) this.publish(generation, { selectedIssueId: createdIssueId });
         this.publish(generation, {
           receipts: { ...this.state.receipts, [id]: { id, state: "confirmed" } },
         });
       } catch (error) {
-        const unknown = sent && !(error instanceof OperationError && error.kind !== "unknown");
+        const unknown =
+          previous?.state === "unknown" ||
+          (sent && !(error instanceof OperationError && error.kind !== "unknown"));
+        if (!unknown) {
+          try {
+            await this.persistReceipt(identity, id);
+          } catch {
+            /* 未发送或明确拒绝不创建重放路径。 */
+          }
+        }
         const message = unknown
           ? "提交结果待确认，请刷新核对。不会自动重发。"
           : error instanceof Error
@@ -339,7 +332,11 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
         this.publish(generation, {
           receipts: {
             ...this.state.receipts,
-            [id]: { id, state: unknown ? "unknown" : "rejected", message },
+            [id]: {
+              ...receipt,
+              state: unknown ? "unknown" : "rejected",
+              message,
+            },
           },
         });
         throw new OperationError(
@@ -350,24 +347,41 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     });
     if (generation === this.state.generation) await this.refresh();
   }
+  private async persistReceipt(
+    identity: string,
+    id: string,
+    receipt?: PaperclipStoredReceipt,
+  ): Promise<void> {
+    const preferences = updateReceipt(this.preferences, identity, id, receipt);
+    await this.port.setPreferences(preferences);
+    this.preferences = { ...this.preferences, receipts: preferences.receipts };
+  }
+  private async archiveReceipt(id: string): Promise<void> {
+    const { origin, user, companyId, generation } = this.context();
+    const identity = paperclipIdentityKey(origin, user.id, companyId);
+    const receipt = this.preferences.receipts?.find(
+      (row) => row.identity === identity && row.id === id && row.state === "unknown",
+    );
+    if (!receipt) throw new OperationError("当前身份没有此待核对操作。");
+    await this.action(generation, async () => {
+      await this.persistReceipt(identity, id, { ...receipt, state: "archived" });
+      this.publish(generation, {
+        receipts: { ...this.state.receipts, [id]: { ...receipt, state: "archived" } },
+      });
+    });
+  }
   async readLog(runId: string): Promise<void> {
     const { generation, origin, user } = this.context();
     const issueId = this.state.selectedIssueId;
     if (!issueId) throw new OperationError("请先选择任务。");
     await this.action(generation, async () => {
       const detail = await this.readDetail(issueId);
-      if (!detail.runs.some((run) => run.runId === runId))
-        throw new OperationError("运行不属于当前任务。");
-      const log = logSchema.parse(
-        await this.api(
-          `/api/heartbeat-runs/${paperclipId(runId)}/log?offset=0&limitBytes=64000`,
-          "GET",
-          undefined,
-          user.id,
-          origin,
-        ),
+      const log = await readBoundLog(
+        (path) => this.api(path, "GET", undefined, user.id, origin),
+        detail,
+        runId,
+        this.state.log,
       );
-      if (log.runId !== runId) throw new OperationError("日志归属不兼容。");
       this.publish(generation, { log });
     });
   }
@@ -377,21 +391,9 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     if (!issueId) throw new OperationError("请先选择任务。");
     await this.action(generation, async () => {
       const detail = await this.readDetail(issueId);
-      const attachment = detail.attachments.find((item) => item.id === attachmentId);
-      if (!attachment || generation !== this.state.generation)
+      if (generation !== this.state.generation)
         throw new OperationError("附件不属于当前任务，或工作区已改变。");
-      const permitted = [
-        `/api/attachments/${paperclipId(attachment.id)}/content`,
-        `/api/assets/${paperclipId(attachment.assetId)}/content`,
-      ];
-      if (!permitted.includes(attachment.contentPath))
-        throw new OperationError("附件下载路径不兼容，已阻止。");
-      await this.port.download({
-        serverUrl: origin,
-        path: attachment.contentPath,
-        filename: attachment.originalFilename ?? "Paperclip-附件",
-        expectedUserId: user.id,
-      });
+      await downloadBoundAttachment(this.port, detail, attachmentId, origin, user.id);
     });
   }
 }

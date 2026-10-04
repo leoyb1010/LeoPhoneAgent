@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { NativePaperclipPort } from "@zcode/shared";
 import { createPaperclipWorkspace } from "./createWorkspace.js";
+import { paperclipApprovalFingerprint } from "../domain/approval.js";
 
 type Reply = { status: number; data: unknown };
 const issue = (companyId: string, id = `${companyId}-issue`) => ({
@@ -232,6 +233,7 @@ test("human operator commands compose into a task, decision, run and attachment 
       return { status: 200, data: input.method === "POST" ? comments[0] : comments };
     }
     if (path === "/api/issues/a-issue/approvals") return { status: 200, data: [approval()] };
+    if (path === "/api/approvals/approval") return { status: 200, data: approval() };
     if (path === "/api/approvals/approval/approve") {
       approved = true;
       return { status: 200, data: approval() };
@@ -242,7 +244,7 @@ test("human operator commands compose into a task, decision, run and attachment 
         data: [{ runId: "run", agentId: "agent", status: cancelled ? "cancelled" : "running" }],
       };
     if (path === "/api/heartbeat-runs/run/log")
-      return { status: 200, data: { runId: "run", content: "fixture log" } };
+      return { status: 200, data: { runId: "run", content: "fixture log", nextOffset: 11 } };
     if (path === "/api/heartbeat-runs/run/cancel") {
       cancelled = true;
       return { status: 200, data: { id: "run", status: "cancelled" } };
@@ -287,6 +289,7 @@ test("human operator commands compose into a task, decision, run and attachment 
     approvalId: "approval",
     approve: true,
     note: "已核对",
+    expectedApproval: paperclipApprovalFingerprint(approval()),
   });
   await item.workspace.readLog("run");
   await item.workspace.command({ kind: "cancel", issueId: "a-issue", runId: "run" });

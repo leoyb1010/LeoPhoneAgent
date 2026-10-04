@@ -145,11 +145,13 @@ final class PaperclipClient {
         return row
     }
 
-    func resolve(_ ref: PaperclipTaskReference, approvalID: String, approve: Bool, note: String) async throws -> PaperclipApproval {
+    func resolve(_ ref: PaperclipTaskReference, approval: PaperclipApproval, approve: Bool, note: String) async throws -> PaperclipApproval {
         // 在提交前重新验证此审批确实属于当前任务，不能拿公司级列表误审批其他任务。
         _ = try await issue(ref)
         let current = try await approvals(ref)
-        guard current.contains(where: { $0.id == approvalID && $0.status == "pending" }) else { throw PaperclipError.http(409) }
+        guard approval.companyId == ref.companyID, approval.status == "pending",
+              current.contains(where: { $0 == approval }) else { throw PaperclipError.http(409) }
+        let approvalID = approval.id
         let id = try PaperclipProfile.component(approvalID)
         let action = approve ? "approve" : "reject"
         let row: PaperclipApproval = try await authenticated("/api/approvals/\(id)/\(action)", method: "POST",
@@ -159,15 +161,14 @@ final class PaperclipClient {
         return row
     }
 
-    func runLog(_ ref: PaperclipTaskReference, runID: String) async throws -> String {
+    func runLog(_ ref: PaperclipTaskReference, runID: String, offset: Int = 0) async throws -> PaperclipRunLogChunk {
         _ = try await issue(ref)
         let linked = try await runs(ref)
         guard linked.contains(where: { $0.runId == runID }) else { throw PaperclipError.identityChanged }
         let id = try PaperclipProfile.component(runID)
-        struct Log: Decodable { let runId: String; let content: String }
-        let log: Log = try await authenticated("/api/heartbeat-runs/\(id)/log?offset=0&limitBytes=64000", userID: ref.userID)
+        let log: PaperclipRunLogChunk = try await authenticated("/api/heartbeat-runs/\(id)/log?offset=\(max(0, offset))&limitBytes=64000", userID: ref.userID)
         guard log.runId == runID else { throw PaperclipError.identityChanged }
-        return log.content
+        return log
     }
 
     private func issuePath(_ ref: PaperclipTaskReference) throws -> String {

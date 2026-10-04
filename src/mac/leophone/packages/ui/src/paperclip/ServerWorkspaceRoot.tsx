@@ -213,6 +213,36 @@ export function ServerWorkspaceRoot({
                   className="border-b border-border p-3 text-ui-caption text-warning"
                 >
                   有提交结果待核对，请刷新查看服务器状态。未知提交不会自动重发。
+                  {Object.values(snapshot.receipts)
+                    .filter((receipt) => receipt.state === "unknown")
+                    .map((receipt) => (
+                      <div key={receipt.id} className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 flex-1 break-all">
+                          {receipt.kind === "create"
+                            ? "创建任务"
+                            : receipt.kind === "comment"
+                              ? "回复"
+                              : receipt.kind === "approval"
+                                ? "审批决定"
+                                : receipt.kind === "cancel"
+                                  ? "取消运行"
+                                  : "状态变更"}
+                          {receipt.targetId && ` · ${receipt.targetId}`}
+                        </span>
+                        <Button
+                          variant="outline"
+                          disabled={snapshot.busy}
+                          onClick={() =>
+                            void invoke(() =>
+                              service.command({ kind: "archive", receiptId: receipt.id }),
+                            )
+                          }
+                        >
+                          已人工核对，归档此操作
+                        </Button>
+                      </div>
+                    ))}
+                  <p className="mt-2">归档仅保留核对记录并解除新提交阻塞，不会重发原操作。</p>
                 </div>
               )}
               <div className="min-h-0 flex-1 overflow-y-auto">

@@ -43,6 +43,8 @@ export interface PaperclipApproval {
   status: string;
   payload: Record<string, unknown>;
   decisionNote?: string | null;
+  requestedByAgentId?: string | null;
+  requestedByUserId?: string | null;
 }
 export interface PaperclipAttachment {
   id: string;
@@ -62,8 +64,11 @@ export interface PaperclipDetail {
 }
 export interface PaperclipReceipt {
   id: string;
-  state: "confirmed" | "unknown" | "rejected";
+  state: "confirmed" | "unknown" | "rejected" | "archived";
   message?: string;
+  kind?: PaperclipMutationCommand["kind"];
+  submittedAt?: number;
+  targetId?: string;
 }
 export interface PaperclipSnapshot {
   generation: number;
@@ -78,10 +83,11 @@ export interface PaperclipSnapshot {
   selectedIssueId: string | null;
   busy: boolean;
   error: string | null;
-  log: { runId: string; content: string } | null;
+  log: { runId: string; content: string; nextOffset: number } | null;
   receipts: Record<string, PaperclipReceipt>;
 }
-export type PaperclipCommand =
+export type PaperclipCommand = PaperclipMutationCommand | { kind: "archive"; receiptId: string };
+export type PaperclipMutationCommand =
   | {
       kind: "create";
       requestId: string;
@@ -93,7 +99,14 @@ export type PaperclipCommand =
     }
   | { kind: "comment"; requestId: string; retry: boolean; issueId: string; body: string }
   | { kind: "status"; issueId: string; status: string }
-  | { kind: "approval"; issueId: string; approvalId: string; approve: boolean; note: string }
+  | {
+      kind: "approval";
+      issueId: string;
+      approvalId: string;
+      approve: boolean;
+      note: string;
+      expectedApproval: string;
+    }
   | { kind: "cancel"; issueId: string; runId: string };
 export interface IPaperclipWorkspace {
   getSnapshot(): PaperclipSnapshot;

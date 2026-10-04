@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { IPaperclipWorkspace, PaperclipCommand, PaperclipSnapshot } from "@zcode/services";
+import {
+  paperclipApprovalFingerprint,
+  type IPaperclipWorkspace,
+  type PaperclipCommand,
+  type PaperclipSnapshot,
+} from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { Textarea } from "@/components/ui/textarea.js";
@@ -18,9 +23,11 @@ export function PaperclipIssueDetail({
 }) {
   const detail = snapshot.detail!;
   const { draft, update, submit, rejected, clear } = usePaperclipDraft(snapshot, detail.issue.id);
-  const [decision, setDecision] = useState<{ title: string; command: PaperclipCommand } | null>(
-    null,
-  );
+  const [decision, setDecision] = useState<{
+    title: string;
+    command: PaperclipCommand;
+    preview?: string;
+  } | null>(null);
   const [note, setNote] = useState("");
   const reply = async () => {
     const pending = submit();
@@ -95,7 +102,17 @@ export function PaperclipIssueDetail({
             {draft.submitted ? "重试同一回复" : "发送回复"}
           </Button>
           {draft.submitted && (
-            <Button variant="outline" disabled={snapshot.busy} onClick={clear}>
+            <Button
+              variant="outline"
+              disabled={snapshot.busy}
+              onClick={() =>
+                void invoke(async () => {
+                  if (snapshot.receipts[draft.id]?.state === "unknown")
+                    await service.command({ kind: "archive", receiptId: draft.id });
+                  clear();
+                })
+              }
+            >
               已核对，放弃草稿
             </Button>
           )}
@@ -113,6 +130,9 @@ export function PaperclipIssueDetail({
             <pre className="my-3 whitespace-pre-wrap break-words text-ui-caption">
               {JSON.stringify(approval.payload, null, 2)}
             </pre>
+            <p className="mb-3 text-ui-caption">
+              申请者：{approval.requestedByUserId ?? approval.requestedByAgentId ?? "服务器未提供"}
+            </p>
             {approval.decisionNote && <p className="mb-3">决定说明：{approval.decisionNote}</p>}
             {approval.status === "pending" && (
               <div className="flex flex-col gap-2">
@@ -132,12 +152,14 @@ export function PaperclipIssueDetail({
                       onClick={() =>
                         setDecision({
                           title: approve ? "确认批准此请求？" : "确认拒绝此请求？",
+                          preview: JSON.stringify(approval, null, 2),
                           command: {
                             kind: "approval",
                             issueId: detail.issue.id,
                             approvalId: approval.id,
                             approve,
                             note,
+                            expectedApproval: paperclipApprovalFingerprint(approval),
                           },
                         })
                       }
@@ -169,7 +191,7 @@ export function PaperclipIssueDetail({
               disabled={snapshot.busy}
               onClick={() => void invoke(() => service.readLog(run.runId))}
             >
-              读取日志
+              {snapshot.log?.runId === run.runId ? "继续读取日志" : "读取日志"}
             </Button>
             {["queued", "running"].includes(run.status) && (
               <Button
@@ -190,7 +212,7 @@ export function PaperclipIssueDetail({
         {snapshot.log && (
           <div>
             <p className="mb-2 text-ui-caption text-foreground-subtle">
-              日志开头最多 64 KB，原始输出可能包含英文。
+              每次继续读取最多 64 KB，保留最近 1 MB。原始输出可能包含英文。
             </p>
             <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface p-3 text-ui-caption">
               {snapshot.log.content || "暂无日志内容"}
@@ -233,6 +255,11 @@ export function PaperclipIssueDetail({
           <DialogDescription>
             这会更改绑定服务器的真实状态，请先核对任务和审批内容。
           </DialogDescription>
+          {decision?.preview && (
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-ui-caption">
+              {decision.preview}
+            </pre>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDecision(null)}>
               取消

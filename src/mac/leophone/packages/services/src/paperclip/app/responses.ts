@@ -34,6 +34,8 @@ export const approvalSchema = z.object({
   status: z.string(),
   payload: z.record(z.string(), z.unknown()),
   decisionNote: z.string().nullable().optional(),
+  requestedByAgentId: z.string().nullable().optional(),
+  requestedByUserId: z.string().nullable().optional(),
 });
 export const attachmentSchema = z.object({
   id,
@@ -49,7 +51,11 @@ export const healthSchema = z.object({
   deploymentMode: z.literal("authenticated"),
 });
 export const sessionSchema = z.object({ user: userSchema });
-export const logSchema = z.object({ runId: id, content: z.string() });
+export const logSchema = z.object({
+  runId: id,
+  content: z.string(),
+  nextOffset: z.number().int().nonnegative().safe(),
+});
 export const cancelledRunSchema = z.object({ id, status: z.literal("cancelled") });
 
 export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({

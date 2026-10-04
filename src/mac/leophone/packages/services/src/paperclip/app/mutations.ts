@@ -1,9 +1,44 @@
-import type { PaperclipCommand } from "../contract.js";
+import type { PaperclipMutationCommand, PaperclipDetail } from "../contract.js";
+import { paperclipApprovalFingerprint } from "../domain/approval.js";
 import { paperclipId } from "../domain/identity.js";
 import { approvalSchema, cancelledRunSchema, commentSchema, issueSchema } from "./responses.js";
 
+export function verifyPaperclipCommandRelation(
+  command: PaperclipMutationCommand,
+  detail: PaperclipDetail,
+): void {
+  if (
+    command.kind === "approval" &&
+    !detail.approvals.some(
+      (row) =>
+        row.id === command.approvalId &&
+        row.status === "pending" &&
+        paperclipApprovalFingerprint(row) === command.expectedApproval,
+    )
+  )
+    throw new Error("审批内容或申请者已改变，请刷新后重新核对完整请求。");
+  if (
+    command.kind === "cancel" &&
+    !detail.runs.some(
+      (row) => row.runId === command.runId && ["running", "queued"].includes(row.status),
+    )
+  )
+    throw new Error("此任务运行已结束或不属于当前任务。");
+}
+
+export async function verifyLatestApproval(
+  api: (path: string) => Promise<unknown>,
+  command: Extract<PaperclipMutationCommand, { kind: "approval" }>,
+): Promise<void> {
+  const latest = approvalSchema.parse(
+    await api(`/api/approvals/${paperclipId(command.approvalId)}`),
+  );
+  if (paperclipApprovalFingerprint(latest) !== command.expectedApproval)
+    throw new Error("审批内容或申请者已改变，请重新核对完整请求。");
+}
+
 export function buildPaperclipMutation(
-  command: PaperclipCommand,
+  command: PaperclipMutationCommand,
   companyId: string,
   requestId: string,
 ) {
@@ -37,7 +72,7 @@ export function buildPaperclipMutation(
 
 /** 无 IO 的回执校验；返回创建后的任务 ID，其余命令仍由同一协调者发布读取投影。 */
 export function verifyPaperclipMutation(
-  command: PaperclipCommand,
+  command: PaperclipMutationCommand,
   raw: unknown,
   companyId: string,
   requestId: string,

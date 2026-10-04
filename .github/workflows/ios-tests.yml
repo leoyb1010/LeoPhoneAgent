@@ -235,6 +235,7 @@ jobs:
           set -euo pipefail
           node scripts/paperclip/typecheck-transport.mjs
           node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
+          node --import tsx --test packages/services/src/paperclip/adapters/*.test.ts
           pnpm leo:test:agent
           node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
           node --import tsx --test packages/ui/test/phonePairingSession.test.ts

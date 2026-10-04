@@ -6,7 +6,9 @@ struct IOSWorkspaceRootView<LocalContent: View>: View {
     @ViewBuilder let localContent: () -> LocalContent
     var body: some View {
         Group {
-            if selected == IOSExecutionBackend.paperclip.rawValue { PaperclipWorkspaceView() }
+            if selected == IOSExecutionBackend.paperclip.rawValue {
+                PaperclipWorkspaceView().environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+            }
             else { localContent() }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -203,6 +205,7 @@ private struct PaperclipCreateIssueView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var discard = false
+    @State private var lastChecked: PaperclipDraft?
     private let draftKey: String
 
     init(client: PaperclipClient, companyID: String, userID: String, agents: [PaperclipAgent]) {
@@ -210,6 +213,7 @@ private struct PaperclipCreateIssueView: View {
         let key = PaperclipDraft.key(profile: client.profile, companyID: companyID, userID: userID)
         draftKey = key
         _draft = State(initialValue: PaperclipDraft.load(key: key))
+        _lastChecked = State(initialValue: PaperclipDraft.lastChecked(key: key))
     }
     var body: some View {
         NavigationStack {
@@ -231,15 +235,16 @@ private struct PaperclipCreateIssueView: View {
                 }
                 if draft.submitted {
                     Section("待核对提交") {
-                        Text(draft.canRetryCreation()
-                            ? "这份草稿已经提交过，请先核对任务列表。服务器的创建去重键保留 7 天，期限内重试沿用原请求编号。"
-                            : "这份提交已超出 7 天去重窗口，或缺少可信提交时间，不能再次发送。正文已保留，请先核对服务器任务列表。")
+                        Text(draft.canRetryCreate()
+                            ? "这份草稿已经提交过，请先核对任务列表。服务器的创建去重键保留 7 天；客户端仅允许 6 天内重试，沿用原请求编号。"
+                            : "这份提交已超出 6 天安全重试窗口，或缺少可信提交时间，不能再次发送。正文已保留，请先核对服务器任务列表。")
                         Button("放弃本机草稿", role: .destructive) { discard = true }.disabled(busy)
                     }
                 }
+                if let lastChecked { PaperclipCheckedDraftView(draft: lastChecked) }
                 if let error { Text(error).foregroundStyle(.red) }
                 Button(busy ? "正在提交…" : (draft.submitted ? "重试同一提交" : "创建服务器任务")) { Task { await submit() } }
-                    .disabled(busy || !draft.canRetryCreation() || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(busy || !draft.canRetryCreate() || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("paperclip.submitTask")
             }
             .navigationTitle("新建服务器任务")
@@ -247,13 +252,18 @@ private struct PaperclipCreateIssueView: View {
             .interactiveDismissDisabled(busy)
             .onDisappear { if !draft.title.isEmpty { draft.save(key: draftKey) } }
             .confirmationDialog("放弃草稿不会撤销服务器可能已接收的任务", isPresented: $discard, titleVisibility: .visible) {
-                Button("已核对，放弃草稿", role: .destructive) { PaperclipDraft.clear(key: draftKey); draft = PaperclipDraft() }
+                Button("已核对，解除待提交状态", role: .destructive) {
+                    draft.archive(key: draftKey)
+                    lastChecked = draft
+                    draft = PaperclipDraft()
+                    error = nil
+                }
                 Button("取消", role: .cancel) {}
-            }
+            } message: { Text("操作可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送；新任务需要你再次明确提交。") }
         }
     }
     private func submit() async {
-        guard !busy, draft.canRetryCreation() else { return }
+        guard !busy, draft.canRetryCreate() else { return }
         busy = true
         let wasPreviouslySubmitted = draft.submitted
         draft.markSubmitted()
@@ -270,5 +280,21 @@ private struct PaperclipCreateIssueView: View {
             self.error = PaperclipLabels.error(error)
         }
         busy = false
+    }
+}
+
+
+struct PaperclipCheckedDraftView: View {
+    let draft: PaperclipDraft
+    var body: some View {
+        DisclosureGroup("上次人工核对的草稿记录") {
+            Text("请求编号：\(draft.requestID.uuidString)").font(.caption).textSelection(.enabled)
+            if let time = draft.firstSubmittedAt { Text("首次提交：\(time.formatted())").font(.caption) }
+            else { Text("首次提交时间未记录").font(.caption) }
+            if !draft.title.isEmpty { Text(draft.title).textSelection(.enabled) }
+            Text(draft.body).textSelection(.enabled)
+            Text("这里只保留本机诊断内容，不会发送。服务器是否已生效以服务器记录为准。")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
     }
 }

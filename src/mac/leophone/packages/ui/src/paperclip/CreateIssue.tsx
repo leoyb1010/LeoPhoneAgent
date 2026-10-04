@@ -96,7 +96,17 @@ export function PaperclipCreateIssue({
           关闭并保留草稿
         </Button>
         {draft.submitted && (
-          <Button variant="outline" onClick={clear} disabled={snapshot.busy}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              void invoke(async () => {
+                if (snapshot.receipts[draft.id]?.state === "unknown")
+                  await service.command({ kind: "archive", receiptId: draft.id });
+                clear();
+              })
+            }
+            disabled={snapshot.busy}
+          >
             已核对，放弃草稿
           </Button>
         )}

@@ -37,6 +37,14 @@ private final class PaperclipTestProtocol: URLProtocol, @unchecked Sendable {
     }
 }
 
+
+private final class PaperclipRequestLedger: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String] = []
+    func append(_ value: String) { lock.lock(); entries.append(value); lock.unlock() }
+    var values: [String] { lock.lock(); defer { lock.unlock() }; return entries }
+}
+
 @MainActor
 final class PaperclipClientTests: XCTestCase {
     private static let session = #"{"session":{"id":"s","userId":"human"},"user":{"id":"human"}}"#
@@ -78,14 +86,17 @@ final class PaperclipClientTests: XCTestCase {
     }
     func testCreateTimeoutIsUncertainAndIsNotRetried() async throws {
         let session = Self.session
+        let ledger = PaperclipRequestLedger()
         PaperclipTestProtocol.install { request in
             if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
+            ledger.append(request.httpMethod ?? "")
             throw URLError(.timedOut)
         }
         do {
             _ = try await client().create(companyID: "company", userID: "human", title: "任务", description: "", agentID: nil, requestID: UUID())
             XCTFail("超时不能报告成功")
         } catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+        XCTAssertEqual(ledger.values, ["POST"])
     }
     func testHealthRejectsHTMLAndLocalTrustedServer() async throws {
         for result in [(200, "<html>登录</html>", "text/html"), (200, #"{"status":"ok","deploymentMode":"local_trusted"}"#, "application/json")] {
@@ -103,6 +114,84 @@ final class PaperclipClientTests: XCTestCase {
             } catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
         }
     }
+    func testExplicitReplyRetryKeepsClientRequestIDAndNeverFallsBack() async throws {
+        let session = Self.session; let issue = Self.issue
+        let ledger = PaperclipRequestLedger()
+        let requestID = UUID()
+        PaperclipTestProtocol.install { request in
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/comments":
+                let body = try PaperclipTestProtocol.body(request)
+                ledger.append(try XCTUnwrap(body["clientRequestId"] as? String))
+                XCTAssertEqual(body["body"] as? String, "继续处理")
+                throw URLError(.networkConnectionLost)
+            default: XCTFail("不得走其他后端或接口"); return (404, "{}", "application/json")
+            }
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        for _ in 0..<2 {
+            do { _ = try await client.reply(ref, body: "继续处理", requestID: requestID); XCTFail("断网回执不确定") }
+            catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+        }
+        XCTAssertEqual(ledger.values, [requestID.uuidString, requestID.uuidString])
+    }
+
+    func testUnrelatedApprovalCannotBeResolved() async throws {
+        let session = Self.session; let issue = Self.issue
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append(request.httpMethod ?? "")
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/approvals": return (200, "[]", "application/json")
+            default: XCTFail("未关联审批不得提交"); return (404, "{}", "application/json")
+            }
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        let approval = try JSONDecoder().decode(PaperclipApproval.self, from: Data(#"{"id":"foreign","companyId":"company","type":"hire_agent","status":"pending","payload":{}}"#.utf8))
+        do { _ = try await client.resolve(ref, approval: approval, approve: true, note: ""); XCTFail("不得审批其他任务") }
+        catch { XCTAssertEqual(error as? PaperclipError, .http(409)) }
+        XCTAssertFalse(ledger.values.contains("POST"))
+    }
+
+    func testApprovalPayloadChangeAfterConfirmationStopsBeforePost() async throws {
+        let session = Self.session; let issue = Self.issue
+        let approvedSnapshot = #"{"id":"approval","companyId":"company","type":"hire_agent","status":"pending","payload":{"budget":100}}"#
+        let changedSnapshot = approvedSnapshot.replacingOccurrences(of: "100", with: "10000")
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append(request.httpMethod ?? "")
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/approvals": return (200, "[\(changedSnapshot)]", "application/json")
+            default: XCTFail("审批内容改变后不得提交"); return (404, "{}", "application/json")
+            }
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        let approval = try JSONDecoder().decode(PaperclipApproval.self, from: Data(approvedSnapshot.utf8))
+        do { _ = try await client.resolve(ref, approval: approval, approve: true, note: ""); XCTFail("不得批准未展示的变更") }
+        catch { XCTAssertEqual(error as? PaperclipError, .http(409)) }
+        XCTAssertFalse(ledger.values.contains("POST"))
+    }
+
+    func testInvalidatedClientDoesNotSendRequests() async throws {
+        PaperclipTestProtocol.install { _ in XCTFail("退出后不得重用会话"); return (500, "{}", "application/json") }
+        let client = try client()
+        client.invalidate()
+        do { _ = try await client.humanSession(); XCTFail("退出后不得验证成功") }
+        catch { XCTAssertEqual(error as? PaperclipError, .signedOut) }
+    }
+
     func testCookieFilterRejectsParentDomainSiblingPathInsecureAndExpired() throws {
         let target = URL(string: "https://api.example.com/api/issues")!
         func cookie(_ domain: String, path: String = "/", secure: Bool = true, expires: Date = .distantFuture) -> HTTPCookie {
@@ -117,6 +206,9 @@ final class PaperclipClientTests: XCTestCase {
         // 只更改字段值；替换 company 全文会误改 companyId，使测试只触发 JSON 解码失败。
         let session = Self.session
         let issue = Self.issue.replacingOccurrences(of: #""companyId":"company""#, with: #""companyId":"other""#)
+        let fixture = try JSONDecoder().decode(PaperclipIssue.self, from: Data(issue.utf8))
+        XCTAssertEqual(fixture.companyId, "other")
+        XCTAssertEqual(fixture.id, "issue")
         PaperclipTestProtocol.install { request in request.url!.path == "/api/auth/get-session" ? (200, session, "application/json") : (200, "[\(issue)]", "application/json") }
         do { _ = try await client().issues(companyID: "company", userID: "human"); XCTFail("不得混入其他公司数据") }
         catch { XCTAssertEqual(error as? PaperclipError, .identityChanged) }

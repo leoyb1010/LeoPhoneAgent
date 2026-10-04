@@ -43,6 +43,36 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(PaperclipLabels.status("future_status"), "未知状态")
         for status in PaperclipIssueStatus.allCases { XCTAssertNotEqual(status.title, status.rawValue) }
     }
+    func testCreateRetryStopsBeforeServerSevenDayKeyExpiry() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var draft = PaperclipDraft()
+        XCTAssertTrue(draft.canRetryCreate(now: now))
+        draft.submitted = true
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(-60)
+        XCTAssertTrue(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(-6 * 24 * 60 * 60)
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(1)
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+    }
+
+    func testManualDraftReleaseKeepsDiagnosticRecordWithoutResending() throws {
+        let suite = "paperclip.archive-test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var draft = PaperclipDraft()
+        draft.title = "已核对任务"; draft.body = "原始内容"; draft.submitted = true
+        draft.firstSubmittedAt = Date(timeIntervalSince1970: 1_000)
+        draft.save(key: "fixture", defaults: defaults)
+        draft.archive(key: "fixture", defaults: defaults)
+        let archived = try XCTUnwrap(PaperclipDraft.lastChecked(key: "fixture", defaults: defaults))
+        XCTAssertEqual(archived.requestID, draft.requestID)
+        XCTAssertEqual(archived.body, draft.body)
+        XCTAssertEqual(archived.firstSubmittedAt, draft.firstSubmittedAt)
+        XCTAssertFalse(PaperclipDraft.load(key: "fixture", defaults: defaults).submitted)
+    }
+
     func testPendingDraftRetainsIdAcrossRestartAndIsIdentityScoped() throws {
         let suite = "paperclip.test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -63,27 +93,27 @@ final class PaperclipContractTests: XCTestCase {
     func testCreationRetryExpiresWithServerIdempotencyWindowAndRejectsLegacyTime() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         var draft = PaperclipDraft()
-        XCTAssertTrue(draft.canRetryCreation(now: now))
+        XCTAssertTrue(draft.canRetryCreate(now: now))
         let firstSubmission = now.addingTimeInterval(-6 * 24 * 60 * 60)
         draft.markSubmitted(now: firstSubmission)
         draft.markSubmitted(now: now)
-        XCTAssertEqual(draft.submittedAt, firstSubmission, "重试不能延长服务器的去重期限")
-        draft.submittedAt = nil
+        XCTAssertEqual(draft.firstSubmittedAt, firstSubmission, "重试不能延长服务器的去重期限")
+        draft.firstSubmittedAt = nil
         draft.submitted = true
-        XCTAssertFalse(draft.canRetryCreation(now: now), "旧草稿没有可信提交时间，不能重发创建")
-        draft.submittedAt = now.addingTimeInterval(-6 * 24 * 60 * 60)
-        XCTAssertTrue(draft.canRetryCreation(now: now))
-        draft.submittedAt = now.addingTimeInterval(-7 * 24 * 60 * 60)
-        XCTAssertFalse(draft.canRetryCreation(now: now))
-        draft.submittedAt = now.addingTimeInterval(60)
-        XCTAssertFalse(draft.canRetryCreation(now: now), "时钟倒退不能扩大去重窗口")
+        XCTAssertFalse(draft.canRetryCreate(now: now), "旧草稿没有可信提交时间，不能重发创建")
+        draft.firstSubmittedAt = now.addingTimeInterval(-5 * 24 * 60 * 60)
+        XCTAssertTrue(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(-7 * 24 * 60 * 60)
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(60)
+        XCTAssertFalse(draft.canRetryCreate(now: now), "时钟倒退不能扩大去重窗口")
         let legacy = #"{"requestID":"11111111-1111-1111-1111-111111111111","title":"待核对任务","body":"保留正文","agentID":"","submitted":true}"#
         let restored = try JSONDecoder().decode(PaperclipDraft.self, from: Data(legacy.utf8))
-        XCTAssertFalse(restored.canRetryCreation(now: now))
+        XCTAssertFalse(restored.canRetryCreate(now: now))
         XCTAssertEqual(restored.body, "保留正文")
-        draft.submittedAt = now
+        draft.firstSubmittedAt = now
         let roundTrip = try JSONDecoder().decode(PaperclipDraft.self, from: JSONEncoder().encode(draft))
-        XCTAssertEqual(roundTrip.submittedAt, now)
+        XCTAssertEqual(roundTrip.firstSubmittedAt, now)
     }
 
     func testLoginNavigationPinsHTTPSHostAndPort() throws {
@@ -94,22 +124,34 @@ final class PaperclipContractTests: XCTestCase {
         }
     }
 
+    func testDraftTimeMigrationKeepsOneCanonicalEarliestTimestamp() throws {
+        let legacy = #"{"requestID":"11111111-1111-1111-1111-111111111111","title":"待核对","body":"保留正文","agentID":"","submitted":true,"submittedAt":100}"#
+        let migrated = try JSONDecoder().decode(PaperclipDraft.self, from: Data(legacy.utf8))
+        XCTAssertEqual(migrated.firstSubmittedAt, Date(timeIntervalSinceReferenceDate: 100))
+        let encoded = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(migrated)) as? [String: Any])
+        XCTAssertNotNil(encoded["firstSubmittedAt"])
+        XCTAssertNil(encoded["submittedAt"], "旧键只能用于迁移读取，不能成为第二份持久状态")
+        let both = legacy.replacingOccurrences(of: #""submittedAt":100"#, with: #""submittedAt":100,"firstSubmittedAt":200"#)
+        let conservative = try JSONDecoder().decode(PaperclipDraft.self, from: Data(both.utf8))
+        XCTAssertEqual(conservative.firstSubmittedAt, migrated.firstSubmittedAt)
+    }
+
     func testDefiniteMutationRejectionRestoresEditableDraftWithoutDiscardingText() {
         var draft = PaperclipDraft()
         draft.body = "需要修改的正文"
         draft.submitted = true
-        draft.submittedAt = Date()
+        draft.firstSubmittedAt = Date()
         draft.recordFailure(PaperclipError.http(422), wasPreviouslySubmitted: false)
         XCTAssertFalse(draft.submitted)
-        XCTAssertNil(draft.submittedAt)
+        XCTAssertNil(draft.firstSubmittedAt)
         XCTAssertEqual(draft.body, "需要修改的正文")
         draft.submitted = true
         draft.recordFailure(PaperclipError.uncertain, wasPreviouslySubmitted: false)
         XCTAssertTrue(draft.submitted)
         let originalTime = Date(timeIntervalSince1970: 1_800_000_000)
-        draft.submittedAt = originalTime
+        draft.firstSubmittedAt = originalTime
         draft.recordFailure(PaperclipError.signedOut, wasPreviouslySubmitted: true)
         XCTAssertTrue(draft.submitted, "重试时登录失效不能证明原提交未被接收")
-        XCTAssertEqual(draft.submittedAt, originalTime)
+        XCTAssertEqual(draft.firstSubmittedAt, originalTime)
     }
 }
