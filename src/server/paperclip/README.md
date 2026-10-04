@@ -28,6 +28,8 @@ node scripts/apply-test-storage.mjs apply /path/to/paperclip
 node scripts/apply-test-storage.mjs verify /path/to/paperclip
 ```
 
+发行层 1.1.0 新增独立、默认关闭的 Mac 原生 CLI 状态与网页授权叠层，受实例管理员和公司权限限制，复用原有会话、AI 连接存储及清理机制，不开启公网 MCP 信任。
+
 macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；浏览器配置页的运行测试验证实际服务环境。
 
 详细部署、登录、备份和回滚步骤见 [中文部署手册](docs/DEPLOYMENT.zh-CN.md)。维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。

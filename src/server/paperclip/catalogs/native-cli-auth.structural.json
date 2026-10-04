@@ -1,0 +1,284 @@
+[
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "to": "import { healthApi } from \"@/api/health\";\nimport { AgentCharacter }",
+    "expected": 1,
+    "from": "import { AgentCharacter }"
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "to": "  const loginHealth = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get });\n  const caps = useQuery({",
+    "expected": 1,
+    "from": "  const caps = useQuery({"
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "to": "  const canLogin =\n    (environment?.driver === \"local\" && loginHealth.data?.nativeAdapterLoginSupported === true) ||\n    (environment?.driver === \"sandbox\" &&\n      caps.data?.sandboxProviders?.[sandboxProvider]?.supportsLoginPty === true);",
+    "expected": 1,
+    "from": "  const canLogin =\n    environment?.driver === \"sandbox\" &&\n    caps.data?.sandboxProviders?.[sandboxProvider]?.supportsLoginPty === true;"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "import { Button } from \"../ui/button\";\nimport { healthApi }",
+    "expected": 1,
+    "from": "import { healthApi }"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "  const canUseNativeLogin = localEnvironment && canLogin && health.data?.nativeAdapterLoginSupported === true;\n  const canUseLocalLogin = localEnvironment && !canUseNativeLogin && (health.data?.localAiLoginSupported ?? health.data?.deploymentMode === \"local_trusted\");\n  const [nativeReauthRequested, setNativeReauthRequested] = useState(false);\n  const [nativeLoginResult, setNativeLoginResult] = useState<{ connectionId: string; grantId: string } | null>(null);",
+    "expected": 1,
+    "from": "  const canUseLocalLogin = localEnvironment && (health.data?.localAiLoginSupported ?? health.data?.deploymentMode === \"local_trusted\");"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "    setBusy(false);\n    setNativeReauthRequested(false);\n    setNativeLoginResult(null);\n    setOpened(false);",
+    "expected": 1,
+    "from": "    setBusy(false);\n    setOpened(false);"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "    canLogin &&\n    !nativeLoginResult &&\n    auth.data?.installed !== false &&\n    environmentId &&",
+    "expected": 1,
+    "from": "    canLogin &&\n    environmentId &&"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "    (Boolean(managedAccount) || nativeReauthRequested || auth.data?.status !== \"present\" || subscriptionId === \"\");",
+    "expected": 1,
+    "from": "    (Boolean(managedAccount) || auth.data?.status !== \"present\" || subscriptionId === \"\");"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "                onStored={() => { void auth.refetch(); }}",
+    "expected": 1,
+    "from": "                onStored={() => {}}"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "                  const run = epoch.current;\n                  const finish = async () => {\n                    if (canUseNativeLogin) {\n                      if (!sessionId) throw new Error(\"登录未返回授权会话，请重试。\");\n                      const result = await aiConnectionsApi.loginResult(companyId, sessionId);\n                      if (run !== epoch.current) return;\n                      setNativeLoginResult(result);\n                      setNativeReauthRequested(false);\n                      return;\n                    }\n                    const connection: ProviderConnection = { env: {}, aiConnection: { provider: aiProvider, method: \"subscription\", mode: \"responsible_user\" } };\n                    if (run !== epoch.current) return;\n                    setStoredConnection(connection);\n                    onConnected(connection);\n                  };\n                  void finish().catch((cause) => { if (run === epoch.current) setError(cause instanceof Error ? cause.message : \"无法使用新授权，请重试。\"); });",
+    "expected": 1,
+    "from": "                  const connection: ProviderConnection = { env: {}, aiConnection: { provider: aiProvider, method: \"subscription\", mode: \"responsible_user\" } };\n                  setStoredConnection(connection);\n                  onConnected(connection);"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "            ) : savedSubscription ? null : canUseNativeLogin && !managedAccount ? (\n              <div className=\"space-y-3\">\n                <p role=\"status\" className=\"text-sm text-muted-foreground\">\n                  {nativeLoginResult\n                    ? \"新授权已就绪。点击使用新授权，将其设为你的个人默认账号。\"\n                    : auth.data?.installed === false\n                    ? auth.data.message ?? \"服务器上未找到对应 CLI。请先安装，再刷新状态。\"\n                    : auth.data?.status === \"present\"\n                      ? \"已读取服务器 CLI 登录。连接将使用服务器现有授权。\"\n                      : auth.data?.message ?? \"正在读取服务器 CLI 登录状态…\"}\n                </p>\n                <div className=\"flex flex-wrap gap-2\">\n                  <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={busy || auth.isFetching} onClick={() => void auth.refetch()}>刷新 CLI 状态</Button>\n                  <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={busy || auth.data?.installed === false} onClick={() => { setNativeReauthRequested(true); setLoginPhase(\"preparing\"); setAuthorizationUrl(null); }}>重新授权服务器 CLI</Button>\n                </div>\n              </div>\n            ) : canUseLocalLogin && !storedLogin.data ? (",
+    "expected": 1,
+    "from": "            ) : savedSubscription ? null : canUseLocalLogin && !storedLogin.data ? ("
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "      {!managedAccount && auth.isError && method === \"subscription\" && (\n        <p role=\"alert\" className=\"mt-4 text-sm text-destructive\">服务器 CLI 状态读取失败，请刷新后重试。</p>\n      )}\n      {error && (",
+    "expected": 1,
+    "from": "      {error && ("
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "to": "          (localEnvironment && (health.isPending || health.isError)) || localLogin.preparing || Boolean(localLogin.error) ||\n          (!managedAccount && method === \"subscription\" && (auth.isError || (canUseNativeLogin && auth.data?.installed === false))) ||",
+    "expected": 1,
+    "from": "          (localEnvironment && health.isPending) || localLogin.preparing || Boolean(localLogin.error) ||"
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "to": "import { healthApi } from \"@/api/health\";\nimport { useState }",
+    "expected": 1,
+    "from": "import { useState }"
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "to": "  const loginHealth = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get });\n  const caps = useQuery({",
+    "expected": 1,
+    "from": "  const caps = useQuery({"
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "to": "env.status === \"active\" && ((env.driver === \"local\" && (loginHealth.data?.nativeAdapterLoginSupported === true || (loginHealth.data?.localAiLoginSupported ?? loginHealth.data?.deploymentMode === \"local_trusted\"))) || (env.driver === \"sandbox\" &&",
+    "expected": 1,
+    "from": "env.status === \"active\" && (env.driver === \"local\" || (env.driver === \"sandbox\" &&"
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "to": "  const canLogin = (environment?.driver === \"local\" && loginHealth.data?.nativeAdapterLoginSupported === true) ||\n    (environment?.driver === \"sandbox\" && caps.data?.sandboxProviders?.[sandboxProvider]?.supportsLoginPty === true);",
+    "expected": 1,
+    "from": "  const canLogin = environment?.driver === \"sandbox\" && caps.data?.sandboxProviders?.[sandboxProvider]?.supportsLoginPty === true;"
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "to": "[envs, caps, settings, experimental, general, loginHealth]",
+    "expected": 2,
+    "from": "[envs, caps, settings, experimental, general]"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "  const canUseNativeLogin = resolvedLoginEnvironment?.driver === \"local\" && localLoginHealth.data?.nativeAdapterLoginSupported === true;\n  const [nativeReauthRequested, setNativeReauthRequested] = useState(false);\n  const [nativeLoginResult, setNativeLoginResult] = useState<{ connectionId: string; grantId: string } | null>(null);\n  const canUseLocalLogin = resolvedLoginEnvironment?.driver === \"local\" && !canUseNativeLogin && (localLoginHealth.data?.localAiLoginSupported ?? localLoginHealth.data?.deploymentMode === \"local_trusted\");",
+    "expected": 1,
+    "from": "  const canUseLocalLogin = resolvedLoginEnvironment?.driver === \"local\" && (localLoginHealth.data?.localAiLoginSupported ?? localLoginHealth.data?.deploymentMode === \"local_trusted\");"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "    autoConnectStartedRef.current = false;\n    setNativeReauthRequested(false);\n    setNativeLoginResult(null);\n    hiringAgentRef.current = null;",
+    "expected": 1,
+    "from": "    autoConnectStartedRef.current = false;\n    hiringAgentRef.current = null;"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "      ((resolvedLoginEnvironment?.driver === \"sandbox\" && loginProviderSupportsPty) || canUseNativeLogin) &&\n      resolvedLoginEnvironmentId &&\n      createdCompanyId,",
+    "expected": 1,
+    "from": "      resolvedLoginEnvironment?.driver === \"sandbox\" &&\n      resolvedLoginEnvironmentId &&\n      createdCompanyId &&\n      loginProviderSupportsPty,"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "    canShowAdapterLogin && !nativeLoginResult && authSignalQuery.data?.installed !== false &&\n    (nativeReauthRequested || authSignalStatus === \"absent\" || authSignalStatus === \"unknown\");",
+    "expected": 1,
+    "from": "    canShowAdapterLogin && (authSignalStatus === \"absent\" || authSignalStatus === \"unknown\");"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "  const hasSavedSubscription = Boolean((canUseNativeLogin && authSignalStatus === \"present\" && !nativeReauthRequested) || savedSubscription || savedKeys.storedLogin.data ||",
+    "expected": 1,
+    "from": "  const hasSavedSubscription = Boolean(savedSubscription || savedKeys.storedLogin.data ||"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "                        {credentialMode === \"subscription\" && authSignalStatus === \"present\" && <p className=\"px-3 text-sm text-muted-foreground\">{nativeLoginResult ? \"新授权已就绪。点击连接将其设为你的个人默认账号。\" : canUseNativeLogin ? \"已读取服务器 CLI 登录，可使用现有授权。\" : \"An existing provider connection is available.\"}</p>}\n                        {credentialMode === \"subscription\" && canUseNativeLogin && !connectStepNeedsLogin && <div className=\"flex flex-wrap gap-2 px-3 pt-2\">\n                          <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={authSignalQuery.isFetching || loading} onClick={() => void authSignalQuery.refetch()}>刷新 CLI 状态</Button>\n                          <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={loading || authSignalQuery.data?.installed === false} onClick={() => { setNativeReauthRequested(true); setConnectPhase(\"loading\"); }}>重新授权服务器 CLI</Button>\n                        </div>}\n                        {credentialMode === \"subscription\" && canUseNativeLogin && (authSignalQuery.isError || authSignalQuery.data?.installed === false) && <p role=\"alert\" className=\"px-3 pt-2 text-sm text-destructive\">{authSignalQuery.data?.message ?? \"无法读取服务器 CLI，请确认已安装后刷新。\"}</p>}",
+    "expected": 1,
+    "from": "                        {credentialMode === \"subscription\" && authSignalStatus === \"present\" && <p className=\"px-3 text-sm text-muted-foreground\">An existing provider connection is available.</p>}"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "to": "                        onConnected={async (sessionId) => {\n                          const nativeAttempt = connectAttemptRef.current;\n                          if (canUseNativeLogin) {\n                            if (!sessionId) { setError(\"登录未返回授权会话，请重试。\"); return; }\n                            try {\n                              const result = await aiConnectionsApi.loginResult(createdCompanyId, sessionId);\n                              if (nativeAttempt !== connectAttemptRef.current) return;\n                              setNativeLoginResult(result);\n                              setNativeReauthRequested(false);\n                              setConnectAuthUrl(null);\n                              setConnectCredentialStored(false);\n                              setConnectPhase(\"ready\");\n                              return;\n                            } catch (cause) { setError(cause instanceof Error ? cause.message : \"无法使用新授权，请重试。\"); return; }\n                          }\n                          if (managedProvider)",
+    "expected": 1,
+    "from": "                        onConnected={() => {\n                          if (managedProvider)"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "import { healthApi } from \"@/api/health\";\nimport { aiConnectionsApi } from \"@/api/ai-connections\";\nimport { AGENT_DEFAULT_MAX_CONCURRENT_RUNS",
+    "expected": 1,
+    "from": "import { AGENT_DEFAULT_MAX_CONCURRENT_RUNS"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "  const adapterSupportsSandboxLogin = adapterCaps.login != null;\n  const [nativeReauthRequested, setNativeReauthRequested] = useState(false);\n  const [nativeLoginResult, setNativeLoginResult] = useState<{ connectionId: string; grantId: string } | null>(null);\n  const [nativeLoginNotice, setNativeLoginNotice] = useState<string | null>(null);\n  const supportsNativeLogin = !isCreate && adapterCaps.login != null &&\n    effectiveLoginEnvironment?.driver === \"local\" && loginHealth.data?.nativeAdapterLoginSupported === true &&\n    !((overlay.runtime.runtimeConfig as Record<string, unknown> | undefined)?.aiConnection ?? runtimeConfig.aiConnection);\n  useEffect(() => { setNativeReauthRequested(false); setNativeLoginResult(null); setNativeLoginNotice(null); }, [adapterType, effectiveLoginEnvironmentId]);",
+    "expected": 1,
+    "from": "  const adapterSupportsSandboxLogin = adapterCaps.login != null;"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "    ((effectiveLoginEnvironment?.driver === \"sandbox\" && (!loginNeedsPty || providerSupportsLoginPty)) || supportsNativeLogin) &&\n    Boolean(effectiveLoginEnvironmentId) &&\n    Boolean(selectedCompanyId) &&\n    (Boolean(authMissingCheck) || (supportsNativeLogin && nativeReauthRequested));",
+    "expected": 1,
+    "from": "    effectiveLoginEnvironment?.driver === \"sandbox\" &&\n    Boolean(effectiveLoginEnvironmentId) &&\n    Boolean(selectedCompanyId) &&\n    Boolean(authMissingCheck) &&\n    (!loginNeedsPty || providerSupportsLoginPty);"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "          {supportsNativeLogin && selectedCompanyId && <div className=\"space-y-2 rounded-md border border-border px-3 py-2\">\n            <p className=\"text-xs text-muted-foreground\">此智能体使用服务器本地 CLI。授权在服务器执行，可在远端浏览器完成登录。</p>\n            {nativeLoginNotice && <p role=\"status\" className=\"text-xs text-muted-foreground\">{nativeLoginNotice}</p>}\n            <div className=\"flex flex-wrap gap-2\">\n              <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={testActionPending} onClick={() => { setNativeLoginResult(null); setNativeLoginNotice(null); setNativeReauthRequested(true); }}>登录／重新授权服务器 CLI</Button>\n              {nativeLoginResult && <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={async () => {\n                if (!selectedCompanyId || isCreate) return;\n                try {\n                  await aiConnectionsApi.setDefault(selectedCompanyId, nativeLoginResult.grantId);\n                  const binding = { provider: adapterType === \"claude_local\" ? \"anthropic\" as const : adapterType === \"grok_local\" ? \"xai\" as const : \"openai\" as const, method: \"subscription\" as const, mode: \"responsible_user\" as const };\n                  mark(\"runtime\", \"runtimeConfig\", { ...runtimeConfig, aiConnection: binding });\n                  setNativeLoginResult(null);\n                  setNativeLoginNotice(\"新授权已设为个人默认账号。请保存配置以应用到此智能体。\");\n                } catch (cause) { setTestActionError(cause instanceof Error ? cause.message : \"无法使用新授权，请重试。\"); }\n              }}>使用新授权</Button>}\n            </div>\n          </div>}\n\n          {(showInlineAdapterTestEnvironmentFeedback || supportsNativeLogin) && showAdapterLogin && (",
+    "expected": 1,
+    "from": "          {showInlineAdapterTestEnvironmentFeedback && showAdapterLogin && ("
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "  codex_local: \"OpenAI\",\n  grok_local: \"Grok\",\n};",
+    "expected": 1,
+    "from": "  codex_local: \"OpenAI\",\n};"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "              aiConnection={supportsNativeLogin ? { provider: adapterType === \"claude_local\" ? \"anthropic\" : adapterType === \"grok_local\" ? \"xai\" : \"openai\", method: \"subscription\", name: \"服务器 CLI 授权\", ownership: \"personal\", agentIds: isCreate ? [] : [props.agent.id], allAgents: isCreate } : undefined}\n              onConnected={supportsNativeLogin ? async (sessionId) => {\n                if (!sessionId || !selectedCompanyId) { setTestActionError(\"登录未返回授权会话，请重试。\"); return; }\n                try {\n                  const result = await aiConnectionsApi.loginResult(selectedCompanyId, sessionId);\n                  setNativeLoginResult(result);\n                  setNativeReauthRequested(false);\n                  setNativeLoginNotice(\"新授权已就绪，尚未替换现有登录。使用后将改变你的个人默认账号；保存配置后此智能体才会采用它。\");\n                } catch (cause) { setTestActionError(cause instanceof Error ? cause.message : \"无法使用新授权，请重试。\"); }\n              } : undefined}\n              onStored={supportsNativeLogin ? () => {} : isCreate ? handleClaudeLoginStored : handleClaudeLoginStoredEdit}",
+    "expected": 1,
+    "from": "              onStored={isCreate ? handleClaudeLoginStored : handleClaudeLoginStoredEdit}"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "                supportsNativeLogin ? undefined : isCreate ? handleApplyStoredClaudeLogin : handleApplyStoredClaudeLoginEdit",
+    "expected": 1,
+    "from": "                isCreate ? handleApplyStoredClaudeLogin : handleApplyStoredClaudeLoginEdit"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "to": "              onAccountBinding={supportsNativeLogin || isCreate ? undefined : handleCodexAccountBindingEdit}",
+    "expected": 1,
+    "from": "              onAccountBinding={isCreate ? undefined : handleCodexAccountBindingEdit}"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "expected": 1,
+    "from": "      if (method === \"subscription\" && canUseLocalLogin && !savedSubscription && !storedLogin.data) {",
+    "to": "      if (method === \"subscription\" && nativeLoginResult) {\n        await aiConnectionsApi.setDefault(companyId, nativeLoginResult.grantId);\n        connection = { env: {}, aiConnection: { provider: aiProvider, method: \"subscription\", mode: \"responsible_user\" } };\n      }\n      if (method === \"subscription\" && canUseLocalLogin && !savedSubscription && !storedLogin.data) {"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "expected": 1,
+    "from": "          opened && needsLogin",
+    "to": "          nativeLoginResult && method === \"subscription\"\n            ? \"使用新授权\"\n            : opened && needsLogin"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "expected": 1,
+    "from": "      if (credentialMode !== \"api\" && canUseLocalLogin && managedProvider && !managedBindingForStep() && !savedSubscription && !savedKeys.storedLogin.data) {",
+    "to": "      if (credentialMode !== \"api\" && nativeLoginResult && managedProvider) {\n        await aiConnectionsApi.setDefault(createdCompanyId, nativeLoginResult.grantId);\n        if (!isCurrent()) return;\n        managedSubscriptionRef.current = { companyId: createdCompanyId, binding: { provider: managedProvider, method: \"subscription\", mode: \"responsible_user\" } };\n      }\n      if (credentialMode !== \"api\" && canUseLocalLogin && managedProvider && !managedBindingForStep() && !savedSubscription && !savedKeys.storedLogin.data) {"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "expected": 1,
+    "from": "        !connectStepReady || connectStepNeedsLogin || connectCredentialStored ||",
+    "to": "        !connectStepReady || connectStepNeedsLogin || connectCredentialStored || nativeLoginResult ||"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "expected": 1,
+    "from": "    connectCredentialStored, credentialMode, adapterType, hasSavedSubscription, localLogin.status, loading]);",
+    "to": "    connectCredentialStored, credentialMode, adapterType, hasSavedSubscription, localLogin.status, loading, nativeLoginResult]);"
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "        showAdapterLogin && selectedCompanyId && effectiveLoginEnvironmentId",
+    "to": "        showAdapterLogin && !supportsNativeLogin && selectedCompanyId && effectiveLoginEnvironmentId",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "    showAdapterLogin,\n    selectedCompanyId,",
+    "to": "    showAdapterLogin,\n    supportsNativeLogin,\n    selectedCompanyId,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "from": "  const connectStepReady = sourceSelected && !adapterEnvLoading && !savedKeys.loading;",
+    "to": "  const connectStepReady = sourceSelected && !adapterEnvLoading && !savedKeys.loading &&\n    !(canUseNativeLogin && credentialMode !== \"api\" && (authSignalQuery.isError || authSignalQuery.data?.installed === false || localLoginHealth.isError));",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "  const environmentsEnabled = experimentalSettings?.enableEnvironments === true;",
+    "to": "  const loginHealth = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get });\n  const environmentsEnabled = experimentalSettings?.enableEnvironments === true;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "      (environmentsEnabled || generalSettings?.executionMode === \"kubernetes\"),",
+    "to": "      (environmentsEnabled || generalSettings?.executionMode === \"kubernetes\" || loginHealth.data?.nativeAdapterLoginSupported === true),",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "  if (chrome === \"onboarding\") {\n    const failed = isTerminal && status && status !== \"authenticated\";",
+    "to": "  const restartLogin = useMutation({\n    mutationFn: async () => {\n      if (!isTerminal || status === \"authenticated\" || startDisabled || cancelLogin.isPending) return;\n      if (sessionId) {\n        try { await cancelLogin.mutateAsync(); }\n        catch (error) { if (error instanceof ApiError && error.status === 404) clearActiveSession(); else throw error; }\n      }\n      connectedRef.current = false;\n      await startLogin.mutateAsync();\n    },\n    onError: () => setStartError(\"无法重新开始授权，请重试。\"),\n  });\n\n  if (chrome === \"onboarding\") {\n    const failed = isTerminal && status && status !== \"authenticated\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "  if (chrome === \"onboarding\") {\n    const failedNow = isFailure || timedOut;",
+    "to": "  const restartLogin = useMutation({\n    mutationFn: async () => {\n      if ((!isFailure && !timedOut) || startDisabled || cancelLogin.isPending) return;\n      if (sessionId) await cancelLogin.mutateAsync();\n      connectedRef.current = false;\n      await startLogin.mutateAsync();\n    },\n    onError: () => setStartError(\"无法重新开始授权，请重试。\"),\n  });\n\n  if (chrome === \"onboarding\") {\n    const failedNow = isFailure || timedOut;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "          <OnboardingLoginCodeRow code={prompt?.code ?? \"\"} autoCopy />\n        )}\n      </ProviderSubscriptionCard>",
+    "to": "          <OnboardingLoginCodeRow code={prompt?.code ?? \"\"} autoCopy />\n        )}\n        {failed && <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={restartLogin.isPending || startDisabled || cancelLogin.isPending}\n          onClick={() => restartLogin.mutate()}>重新开始授权</Button>}\n      </ProviderSubscriptionCard>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "            disabled={submitCode.isPending || isCompleting || codeSubmitted}\n          />\n        )}\n      </ProviderSubscriptionCard>",
+    "to": "            disabled={submitCode.isPending || isCompleting || codeSubmitted}\n          />\n        )}\n        {failedNow && <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={restartLogin.isPending || startDisabled || cancelLogin.isPending}\n          onClick={() => restartLogin.mutate()}>重新开始授权</Button>}\n      </ProviderSubscriptionCard>",
+    "expected": 1
+  }
+]

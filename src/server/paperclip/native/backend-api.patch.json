@@ -1,0 +1,20 @@
+[
+  {
+    "file": "server/src/routes/health.ts",
+    "from": "import { supportsLocalAiLogin } from \"../services/local-ai-login-policy.js\";",
+    "to": "import { supportsLocalAiLogin } from \"../services/local-ai-login-policy.js\";\nimport { nativeAdapterLoginSupported } from \"../services/native-cli-login-policy.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/health.ts",
+    "from": "        localAiLoginSupported: supportsLocalAiLogin(opts),",
+    "to": "        localAiLoginSupported: supportsLocalAiLogin(opts),\n        nativeAdapterLoginSupported: nativeAdapterLoginSupported(),",
+    "expected": 2
+  },
+  {
+    "file": "packages/shared/src/types/agent.ts",
+    "from": "export interface AdapterAuthSignalResponse {\n  status: AdapterAuthSignal;\n}",
+    "to": "export interface AdapterAuthSignalResponse {\n  status: AdapterAuthSignal;\n  installed?: boolean;\n  message?: string;\n}",
+    "expected": 1
+  }
+]

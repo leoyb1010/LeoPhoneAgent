@@ -1,0 +1,182 @@
+[
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "import { runAdapterLoginStartSpine } from \"./adapter-login-route-spine.js\";",
+    "to": "import { runAdapterLoginStartSpine } from \"./adapter-login-route-spine.js\";\nimport { getHostCliAuthStatus, HOST_CLI_AUTH_PROFILES } from \"../services/host-cli-auth-status.js\";\nimport type { createNativeLoginController } from \"../services/native-login-controller.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "    onSetupTokenLoginService?: (service: SetupTokenSessionService) => void;",
+    "to": "    onSetupTokenLoginService?: (service: SetupTokenSessionService) => void;\n    nativeProviderLogin?: ReturnType<typeof createNativeLoginController>;\n    onDeviceLoginShutdown?: (shutdown: () => Promise<void>) => void;",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "      await assertSandboxLoginEnvironment(input.scope.companyId, input.scope.environmentId, {\n        requireSetupTokenLoginProvider: true,\n      });",
+    "to": "      const environment = await environmentsSvc.getById(input.scope.environmentId);\n      if (environment?.driver === \"local\") {\n        if (!options.nativeProviderLogin) throw forbidden(\"Native provider sign-in is disabled.\");\n        await options.nativeProviderLogin.assertScope({ companyId: input.scope.companyId, environmentId: input.scope.environmentId, adapterType: input.scope.adapterType, startedByUserId: input.scope.ownerUserId });\n      } else {\n        await assertSandboxLoginEnvironment(input.scope.companyId, input.scope.environmentId, { requireSetupTokenLoginProvider: true });\n      }",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "    runtime: createProductionLoginSessionRuntime({",
+    "to": "    runtime: (() => {\n      const sandbox = createProductionLoginSessionRuntime({",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "    }),\n    // The mandatory credential promotion, keyed by adapter type.",
+    "to": "      });\n      return options.nativeProviderLogin?.deviceRuntime(sandbox) ?? sandbox;\n    })(),\n    // The mandatory credential promotion, keyed by adapter type.",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "  const adapterLoginAbortControllers = new Map<string, AbortController>();",
+    "to": "  const adapterLoginAbortControllers = new Map<string, AbortController>();\n  const adapterLoginCompletions = new Map<string, Promise<unknown>>();\n  options.onDeviceLoginShutdown?.(async () => {\n    for (const controller of adapterLoginAbortControllers.values()) controller.abort();\n    await Promise.allSettled(adapterLoginCompletions.values());\n  });",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "      const body: AdapterAuthSignalResponse = { status };\n      res.json(body);",
+    "to": "      const environment = environmentId ? await environmentsSvc.getById(environmentId) : null;\n      if ((!environmentId || environment?.driver === \"local\") && Object.hasOwn(HOST_CLI_AUTH_PROFILES, type)) {\n        const native = await getHostCliAuthStatus({ adapterType: type, driver: \"local\" });\n        // Stored Claude/user bindings remain authoritative when host state is absent.\n        const nativeStatus = native.authStatus === \"unsupported\" ? \"unknown\" : native.authStatus;\n        const body: AdapterAuthSignalResponse = { status: status === \"present\" || !native.installed ? status : nativeStatus, installed: native.installed, message: native.message };\n        res.json(body);\n        return;\n      }\n      const body: AdapterAuthSignalResponse = { status };\n      res.json(body);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "          await assertSandboxLoginEnvironment(companyId, data.environmentId);\n          await assertCodexLoginProviderCapability(data.environmentId);",
+    "to": "          const environment = await environmentsSvc.getById(data.environmentId);\n          if (environment?.driver === \"local\") {\n            if (!options.nativeProviderLogin) throw forbidden(\"Native provider sign-in is disabled.\");\n            await options.nativeProviderLogin.assertRequest(req, companyId, data.environmentId, type, data.aiConnection);\n          } else {\n            await assertSandboxLoginEnvironment(companyId, data.environmentId);\n            await assertCodexLoginProviderCapability(data.environmentId);\n          }",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "      adapterLoginAbortControllers.set(startedSessionId, controller);",
+    "to": "      adapterLoginAbortControllers.set(startedSessionId, controller);\n      adapterLoginCompletions.set(startedSessionId, result.completed);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "          adapterLoginAbortControllers.delete(startedSessionId);",
+    "to": "          adapterLoginAbortControllers.delete(startedSessionId);\n          adapterLoginCompletions.delete(startedSessionId);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/agents.ts",
+    "from": "      assertSandbox: (data) =>\n        assertSandboxLoginEnvironment(companyId, data.environmentId, {\n          requireSetupTokenLoginProvider: true,\n        }),",
+    "to": "      assertSandbox: async (data) => {\n        const environment = await environmentsSvc.getById(data.environmentId);\n        if (environment?.driver === \"local\") {\n          if (!options.nativeProviderLogin) throw forbidden(\"Native provider sign-in is disabled.\");\n          await options.nativeProviderLogin.assertRequest(req, companyId, data.environmentId, data.adapterType, data.aiConnection);\n        } else {\n          await assertSandboxLoginEnvironment(companyId, data.environmentId, { requireSetupTokenLoginProvider: true });\n        }\n      },",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "import { agentRoutes } from \"./routes/agents.js\";",
+    "to": "import { agentRoutes } from \"./routes/agents.js\";\nimport { createNativeLoginController } from \"./services/native-login-controller.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "  let setupTokenLoginService: SetupTokenSessionService | null = null;",
+    "to": "  let setupTokenLoginService: SetupTokenSessionService | null = null;\n  let deviceLoginShutdown: (() => Promise<void>) | null = null;\n  const nativeProviderLogin = createNativeLoginController(db);\n  nativeProviderLogin.startReaper(() => logger.warn(\"Native provider login cleanup failed; it will retry.\"));",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "    sandbox: createProductionSetupTokenSandboxProvider({",
+    "to": "    sandbox: nativeProviderLogin.setupTokenProvider(createProductionSetupTokenSandboxProvider({",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "      log: (line) => logger.info(line),\n    }),\n    store: createProductionSetupTokenCleanupStore(db),",
+    "to": "      log: (line) => logger.info(line),\n    })),\n    store: createProductionSetupTokenCleanupStore(db),",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "      setupTokenLogin: setupTokenLoginTransport,",
+    "to": "      setupTokenLogin: setupTokenLoginTransport,\n      nativeProviderLogin,\n      onDeviceLoginShutdown: (shutdown) => { deviceLoginShutdown = shutdown; },",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "      await setupTokenLoginService?.shutdown();",
+    "to": "      await setupTokenLoginService?.shutdown();\n      await deviceLoginShutdown?.();\n      await nativeProviderLogin.shutdown();",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/device-login-reaper.ts",
+    "from": "import { environmentService } from \"./environments.js\";",
+    "to": "import { environmentService } from \"./environments.js\";\nimport { createNativeLoginController } from \"./native-login-controller.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/device-login-reaper.ts",
+    "from": "    async deleteSandbox(ref) {\n      const environment = await environmentsSvc.getById(ref.environmentId);",
+    "to": "    async deleteSandbox(ref) {\n      // A local provider ref is a private PTY resource, not a sandbox lease.\n      if (await createNativeLoginController(deps.db).releaseNativeLease(ref.providerLeaseId)) return { outcome: \"deleted\" };\n      const environment = await environmentsSvc.getById(ref.environmentId);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/setup-token-reaper.ts",
+    "from": "import { environmentService } from \"./environments.js\";",
+    "to": "import { environmentService } from \"./environments.js\";\nimport { createNativeLoginController } from \"./native-login-controller.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/setup-token-reaper.ts",
+    "from": "  const sandbox = createProductionSetupTokenSandboxProvider({",
+    "to": "  const sandbox = createNativeLoginController(deps.db).setupTokenProvider(createProductionSetupTokenSandboxProvider({",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/setup-token-reaper.ts",
+    "from": "    log: deps.log,\n  });\n  const store = createProductionSetupTokenCleanupStore(deps.db);",
+    "to": "    log: deps.log,\n  }));\n  const store = createProductionSetupTokenCleanupStore(deps.db);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "const mockAgentService = vi.hoisted(() => ({",
+    "to": "const mockHostCliStatus = vi.hoisted(() => vi.fn(async () => ({ installed: false, authStatus: \"unknown\" as \"present\" | \"absent\" | \"unknown\" | \"unsupported\", message: \"CLI 状态暂不可用。\" })));\nvi.mock(\"../services/host-cli-auth-status.js\", async importOriginal => ({ ...(await importOriginal<typeof import(\"../services/host-cli-auth-status.js\")>()), getHostCliAuthStatus: mockHostCliStatus }));\n\nconst mockAgentService = vi.hoisted(() => ({",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "    vi.clearAllMocks();\n    currentActor = boardActor(OWNER_A);",
+    "to": "    vi.clearAllMocks();\n    mockHostCliStatus.mockResolvedValue({ installed: false, authStatus: \"unknown\", message: \"CLI 状态暂不可用。\" });\n    currentActor = boardActor(OWNER_A);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "expect(res.body).toEqual({ status: \"present\" });",
+    "to": "expect(res.body).toMatchObject({ status: \"present\" });",
+    "expected": 5
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "expect(res.body).toEqual({ status: \"absent\" });",
+    "to": "expect(res.body).toMatchObject({ status: \"absent\" });",
+    "expected": 2
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "expect(res.body).toEqual({ status: \"unknown\" });",
+    "to": "expect(res.body).toMatchObject({ status: \"unknown\" });",
+    "expected": 3
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "it(\"returns a response body that holds only the status field\"",
+    "to": "it(\"returns only status and fixed host CLI metadata\"",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "expect(Object.keys(res.body)).toEqual([\"status\"]);",
+    "to": "expect(Object.keys(res.body)).toEqual([\"status\", \"installed\", \"message\"]);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-auth-signal-routes.test.ts",
+    "from": "  it(\"takes no sandbox lease and starts no model process\", async () => {",
+    "to": "  it(\"recognizes native Claude CLI login and returns safe installed metadata\", async () => {\n    mockHostCliStatus.mockResolvedValue({ installed: true, authStatus: \"present\", message: \"Claude CLI 已识别现有登录。\" });\n    const app = await createApp();\n    const res = await request(app).get(authSignalPath(COMPANY_1, \"claude_local\"));\n    expect(res.status).toBe(200);\n    expect(res.body).toEqual({ status: \"present\", installed: true, message: \"Claude CLI 已识别现有登录。\" });\n    expect(mockHostCliStatus).toHaveBeenCalledWith({ adapterType: \"claude_local\", driver: \"local\" });\n  });\n\n  it(\"maps unsupported native state to the existing unknown enum\", async () => {\n    mockHostCliStatus.mockResolvedValue({ installed: true, authStatus: \"unsupported\", message: \"仅支持本机状态检查。\" });\n    const app = await createApp();\n    const res = await request(app).get(authSignalPath(COMPANY_1, \"grok_local\"));\n    expect(res.status).toBe(200); expect(res.body.status).toBe(\"unknown\");\n  });\n\n  it(\"takes no sandbox lease and starts no model process\", async () => {",
+    "expected": 1
+  }
+]
