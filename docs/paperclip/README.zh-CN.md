@@ -62,6 +62,8 @@ pnpm architecture:check
 node scripts/paperclip/typecheck-transport.mjs
 node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
 node --import tsx --test packages/services/test/paperclipWorkspace.test.ts
+node --import tsx --test packages/ui/test/paperclipReplyDraft.test.ts
+TSX_TSCONFIG_PATH=packages/ui/tsconfig.json node --import tsx --test scripts/paperclip-ui/render.test.tsx
 node node_modules/playwright-core/cli.js install chromium
 node scripts/paperclip-ui/run.mjs
 ```

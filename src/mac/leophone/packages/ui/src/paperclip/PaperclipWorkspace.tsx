@@ -188,10 +188,11 @@ export function PaperclipWorkspace({
       {state.user && (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <aside
-            className="flex max-h-64 w-full shrink-0 flex-col border-b border-border bg-sidebar md:max-h-none md:w-72 md:border-r md:border-b-0"
+            className="flex h-64 w-full shrink-0 flex-col border-b border-border bg-sidebar md:h-auto md:w-72 md:border-r md:border-b-0"
             aria-label="任务列表"
           >
-            <div className="space-y-3 border-b border-border p-3">
+            {/* 窄屏控件并排，避免挤空任务列表；桌面仍沿用纵向侧栏。 */}
+            <div className="grid shrink-0 grid-cols-2 items-end gap-2 border-b border-border p-3 md:block md:shrink md:space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate">{state.user.name}</span>
                 <Button
@@ -274,7 +275,7 @@ export function PaperclipWorkspace({
               ))}
             </div>
             {state.updatedAt && (
-              <p className="border-t border-border p-3 text-ui-xs text-foreground-subtle">
+              <p className="shrink-0 border-t border-border p-3 text-ui-xs text-foreground-subtle md:shrink">
                 上次同步：{new Date(state.updatedAt).toLocaleTimeString("zh-CN")}
               </p>
             )}

@@ -112,6 +112,34 @@ try {
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: join(output, "workspace.png"), fullPage: true });
   await page.setViewportSize({ width: 700, height: 1000 });
+  const narrowTask = page.getByRole("button", { name: /验证原生任务工作区/ });
+  // IntersectionObserver 计算祖先滚动区裁剪；仅 boundingBox 或 isVisible 抓不到被挤空的列表。
+  const intersection = async (locator) =>
+    locator.evaluate(
+      (element) =>
+        new Promise((resolve) => {
+          const observer = new IntersectionObserver(([entry]) => {
+            observer.disconnect();
+            resolve({ ratio: entry.intersectionRatio, height: entry.intersectionRect.height });
+          });
+          observer.observe(element);
+        }),
+    );
+  const taskVisibility = await intersection(narrowTask);
+  const titleVisibility = await intersection(narrowTask.locator("div").first());
+  assert.ok(taskVisibility.ratio >= 0.99, "窄屏任务行应完整可见，不能只露圆角");
+  assert.ok(taskVisibility.height >= 44, "窄屏任务行应有可点击高度");
+  assert.ok(titleVisibility.ratio >= 0.99, "窄屏任务标题应完整可读");
+  await page.getByRole("button", { name: "新建任务", exact: true }).click();
+  await page.getByRole("heading", { name: "新建服务器任务", exact: true }).waitFor();
+  // 从不同视图点击列表行，验证切换生效，而不是对已选任务进行无效点击。
+  await narrowTask.click();
+  await page.getByRole("heading", { name: "验证原生任务工作区", exact: true }).waitFor();
+  assert.equal(await page.getByRole("heading", { name: "新建服务器任务", exact: true }).count(), 0);
+  const detailVisibility = await intersection(
+    page.getByRole("heading", { name: "验证原生任务工作区", exact: true }),
+  );
+  assert.ok(detailVisibility.ratio >= 0.99, "窄屏侧栏不能挤掉任务主体");
   await page.screenshot({
     path: join(output, "workspace-narrow.png"),
     fullPage: true,
@@ -137,7 +165,7 @@ try {
           "恢复未知操作回执",
           "填写解除受阻行动并更新状态",
           "显式本地恢复模式",
-          "窄屏布局",
+          "窄屏任务行与标题完整可见、点击返回任务详情",
         ],
         consoleErrors: errors,
       },
