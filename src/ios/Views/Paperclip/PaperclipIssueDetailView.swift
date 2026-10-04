@@ -28,6 +28,17 @@ final class PaperclipIssueDetailModel: ObservableObject {
         } catch { record(error) }
         busy = false
     }
+    func changeStatus(_ status: PaperclipIssueStatus) async -> Bool {
+        guard !busy else { return false }
+        busy = true
+        do {
+            issue = try await client.setStatus(reference, status: status)
+            error = nil
+        } catch { record(error); busy = false; return false }
+        busy = false
+        await refresh()
+        return true
+    }
     func record(_ error: Error) {
         self.error = PaperclipLabels.error(error)
         if error as? PaperclipError == .signedOut || error as? PaperclipError == .identityChanged {
@@ -42,15 +53,15 @@ struct PaperclipIssueDetailView: View {
     @State private var decisionNote = ""
     @State private var pendingDecision: Decision?
     @State private var discardReply = false
+    @State private var showStatusPicker = false
     @State private var lastChecked: PaperclipDraft?
     @Environment(\.scenePhase) private var scenePhase
     private let draftKey: String
     private struct Decision: Identifiable {
         let id = UUID()
-        let status: PaperclipIssueStatus?
-        let approval: PaperclipApproval?
+        let approval: PaperclipApproval
         let approve: Bool
-        var title: String { if let status { return "将任务设为「\(status.title)」？" }; return approve ? "确认批准此请求？" : "确认拒绝此请求？" }
+        var title: String { approve ? "确认批准此请求？" : "确认拒绝此请求？" }
     }
 
     init(client: PaperclipClient, reference: PaperclipTaskReference) {
@@ -62,13 +73,6 @@ struct PaperclipIssueDetailView: View {
     }
     var body: some View {
         List {
-            Section("任务归属") {
-                Text(model.client.profile.name).font(.headline)
-                Text(model.reference.origin.absoluteString).font(.caption).textSelection(.enabled)
-                Text("公司编号：\(model.reference.companyID)").font(.caption)
-                Text("用户编号：\(model.reference.userID)").font(.caption)
-                if let date = model.lastRefreshed { Text("最近同步：\(date.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary) }
-            }
             if let error = model.error {
                 Section("操作提示") { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             }
@@ -77,20 +81,27 @@ struct PaperclipIssueDetailView: View {
                     Text(issue.title).font(.title3.weight(.semibold)).textSelection(.enabled)
                     if let identifier = issue.identifier { Text(identifier).font(.caption).foregroundStyle(.secondary) }
                     Text("状态：\(PaperclipLabels.status(issue.status))")
-                    Text("优先级：\(PaperclipLabels.priority(issue.priority))")
+                    Text("优先级：\(PaperclipLabels.priority(issue.priority))").foregroundStyle(.secondary)
                     if let description = issue.description, !description.isEmpty { Text(description).textSelection(.enabled) }
-                    Menu("更改任务状态") {
-                        ForEach(PaperclipIssueStatus.allCases) { status in
-                            Button(status.title) { pendingDecision = Decision(status: status, approval: nil, approve: false) }
-                                .disabled(status.rawValue == issue.status)
-                        }
-                    }.disabled(model.busy).accessibilityIdentifier("paperclip.changeStatus")
+                    Button {
+                        showStatusPicker = true
+                    } label: {
+                        Text("更改任务状态").frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .disabled(model.busy)
+                    .accessibilityIdentifier("paperclip.changeStatus")
                 }
+                attributionSection
                 commentsSection
                 replySection
                 runsSection
                 approvalsSection
-            } else if model.busy { ProgressView("正在加载任务…") }
+            } else {
+                if model.busy { ProgressView("正在加载任务…") }
+                attributionSection
+            }
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("服务器任务详情")
@@ -106,10 +117,9 @@ struct PaperclipIssueDetailView: View {
             }
         }
         .onDisappear { if !draft.body.isEmpty { draft.save(key: draftKey) } }
+        .sheet(isPresented: $showStatusPicker) { PaperclipStatusPickerView(model: model) }
         .alert(item: $pendingDecision) { decision in
-            Alert(title: Text(decision.title), message: Text(decision.approval == nil
-                ? "这会修改服务器上的任务状态，并可能影响服务器调度。"
-                : "请先阅读完整审批内容。此决定将以当前人类用户身份发送到绑定的服务器。"),
+            Alert(title: Text(decision.title), message: Text("请先阅读完整审批内容。此决定将以当前人类用户身份发送到绑定的服务器。"),
                 primaryButton: .default(Text("确认")) { Task { await apply(decision) } }, secondaryButton: .cancel(Text("取消")))
         }
         .confirmationDialog("放弃草稿不会撤销服务器可能已接收的回复", isPresented: $discardReply, titleVisibility: .visible) {
@@ -122,12 +132,30 @@ struct PaperclipIssueDetailView: View {
             Button("取消", role: .cancel) {}
         } message: { Text("回复可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送。") }
     }
+    private var attributionSection: some View {
+        Section {
+            DisclosureGroup {
+                Text(model.reference.origin.absoluteString).font(.caption).textSelection(.enabled)
+                Text("组织编号：\(model.reference.companyID)").font(.caption).textSelection(.enabled)
+                Text("用户编号：\(model.reference.userID)").font(.caption).textSelection(.enabled)
+                if let date = model.lastRefreshed {
+                    Text("最近同步：\(date.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary)
+                }
+                Text("本任务固定在此服务器、组织和用户身份下执行，不会自动迁移到其他后端。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } label: {
+                Label("归属：\(model.client.profile.name)", systemImage: "server.rack")
+                    .font(.subheadline).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.accessibilityIdentifier("paperclip.attribution")
+        }
+    }
+
     private var commentsSection: some View {
         Section("任务对话") {
             if model.comments.isEmpty { Text("暂无回复").foregroundStyle(.secondary) }
             ForEach(model.comments) { comment in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(comment.authorUserId == nil ? "代理回复" : "用户回复").font(.caption).foregroundStyle(.secondary)
+                    Text(comment.authorUserId == nil ? "智能体回复" : "用户回复").font(.caption).foregroundStyle(.secondary)
                     Text(comment.body).textSelection(.enabled)
                     if let time = comment.createdAt { Text(time).font(.caption2).foregroundStyle(.secondary) }
                 }.padding(.vertical, 4)
@@ -151,7 +179,7 @@ struct PaperclipIssueDetailView: View {
     }
     private var runsSection: some View {
         Section("运行记录") {
-            if model.runs.isEmpty { Text("尚无运行记录。任务已创建不代表代理已经开始执行。") .foregroundStyle(.secondary) }
+            if model.runs.isEmpty { Text("尚无运行记录。任务已创建不代表智能体已经开始执行。") .foregroundStyle(.secondary) }
             ForEach(model.runs) { run in
                 NavigationLink {
                     PaperclipRunLogView(client: model.client, reference: model.reference, run: run)
@@ -178,9 +206,9 @@ struct PaperclipIssueDetailView: View {
                     if let note = approval.decisionNote { Text("决定说明：\(note)") }
                     if approval.status == "pending" {
                         TextField("决定说明（可选）", text: $decisionNote, axis: .vertical).disabled(model.busy)
-                        Button("批准") { pendingDecision = Decision(status: nil, approval: approval, approve: true) }.disabled(model.busy)
+                        Button("批准") { pendingDecision = Decision(approval: approval, approve: true) }.disabled(model.busy)
                             .accessibilityIdentifier("paperclip.approve.\(approval.id)")
-                        Button("拒绝", role: .destructive) { pendingDecision = Decision(status: nil, approval: approval, approve: false) }.disabled(model.busy)
+                        Button("拒绝", role: .destructive) { pendingDecision = Decision(approval: approval, approve: false) }.disabled(model.busy)
                             .accessibilityIdentifier("paperclip.reject.\(approval.id)")
                     }
                 }.accessibilityIdentifier("paperclip.approval.\(approval.id)")
@@ -206,15 +234,57 @@ struct PaperclipIssueDetailView: View {
         guard !model.busy else { return }
         model.busy = true
         do {
-            if let status = decision.status { _ = try await model.client.setStatus(model.reference, status: status) }
-            if let approval = decision.approval {
-                _ = try await model.client.resolve(model.reference, approval: approval, approve: decision.approve, note: decisionNote)
-                decisionNote = ""
-            }
+            _ = try await model.client.resolve(model.reference, approval: decision.approval, approve: decision.approve, note: decisionNote)
+            decisionNote = ""
             model.error = nil
         } catch { model.record(error); model.busy = false; return }
         model.busy = false
         await model.refresh()
+    }
+}
+
+/// 避免 Menu 在 List 中出现整行可访问节点与小范围实际触点不一致。
+/// 选择页的每一行都能点击，并在最终确认前展示服务端修改后果。
+private struct PaperclipStatusPickerView: View {
+    @ObservedObject var model: PaperclipIssueDetailModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: PaperclipIssueStatus
+    init(model: PaperclipIssueDetailModel) {
+        self.model = model
+        _selected = State(initialValue: PaperclipIssueStatus(rawValue: model.issue?.status ?? "") ?? .backlog)
+    }
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("选择新状态") {
+                    ForEach(PaperclipIssueStatus.allCases) { status in
+                        Button { selected = status } label: {
+                            HStack {
+                                Text(status.title)
+                                Spacer()
+                                if selected == status { Image(systemName: "checkmark").accessibilityLabel("已选择") }
+                            }.frame(maxWidth: .infinity).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("paperclip.status.\(status.rawValue)")
+                        .disabled(model.busy)
+                    }
+                }
+                Section("确认服务器操作") {
+                    Text("将任务改为「\(selected.title)」。这会修改服务器记录，并可能影响服务器调度。")
+                    if let error = model.error { Text(error).foregroundStyle(.red) }
+                    Button(model.busy ? "正在更新…" : "确认更改状态") {
+                        Task { if await model.changeStatus(selected) { dismiss() } }
+                    }
+                    .disabled(model.busy || selected.rawValue == model.issue?.status)
+                    .accessibilityIdentifier("paperclip.confirmStatus")
+                }
+            }
+            .navigationTitle("更改任务状态")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(model.busy) } }
+            .interactiveDismissDisabled(model.busy)
+        }
     }
 }
 

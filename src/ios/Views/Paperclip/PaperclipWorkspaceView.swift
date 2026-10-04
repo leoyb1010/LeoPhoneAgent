@@ -31,7 +31,7 @@ struct PaperclipBackendSettingsView: View {
                 Picker("工作区", selection: $selected) {
                     ForEach(IOSExecutionBackend.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 }
-                Text("本机是默认选项。切换工作区不会移动已有会话、记忆或工具；每项服务器任务始终绑定创建它的服务器、公司和用户。")
+                Text("本机是默认选项。切换工作区不会移动已有会话、记忆或工具；每项服务器任务始终绑定创建它的服务器、组织和用户。")
                 Text("Paperclip 在你独立部署的服务器上执行。连接超时或登录过期时会停止并提示，不会回退到本机。")
             }
         }.navigationTitle("执行后端")
@@ -68,15 +68,11 @@ struct PaperclipWorkspaceView: View {
                     }
                 }
                 if let user = store.user, let client = store.client {
-                    Section {
-                        if store.companies.isEmpty {
-                            Text("当前账号没有可访问的公司。请在服务器网页中完成公司设置或联系管理员。")
-                        } else {
-                            Picker("公司", selection: Binding(get: { store.companyID }, set: { id in Task { await store.selectCompany(id) } })) {
-                                ForEach(store.companies) { Text($0.name).tag($0.id) }
-                            }.disabled(store.busy)
+                    if store.companies.isEmpty {
+                        Section("组织") {
+                            Text("当前账号没有可访问的组织。请在服务器网页中完成组织设置或联系管理员。")
                         }
-                    } header: { Text("当前用户：\(user.label)") }
+                    }
                     if !store.companyID.isEmpty {
                         Section("服务器任务") {
                             if filtered.isEmpty {
@@ -150,22 +146,88 @@ struct PaperclipWorkspaceView: View {
         }
     }
 
-    private var connectionSection: some View {
+    @ViewBuilder private var connectionSection: some View {
+        if let profile = store.selectedProfile, store.user != nil {
+            Section {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.name).font(.headline)
+                        Text(store.companies.first(where: { $0.id == store.companyID })?.name ?? "未选择组织")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    Text(store.error == nil ? (store.busy ? "同步中" : "已连接") : "连接异常")
+                        .font(.caption).foregroundStyle(store.error == nil ? Color.green : Color.orange)
+                }.accessibilityIdentifier("paperclip.connectedSummary")
+                NavigationLink {
+                    PaperclipServerSettingsView(store: store)
+                } label: { Label("服务器设置", systemImage: "gearshape") }
+                    .accessibilityIdentifier("paperclip.serverSettings")
+            }
+        } else {
+            PaperclipConnectionSection(store: store, onLogin: { login = true },
+                onAdd: { addProfile = true }, onClear: { clearLogin = true })
+        }
+    }
+}
+
+private struct PaperclipConnectionSection: View {
+    @ObservedObject var store: PaperclipWorkspaceStore
+    let onLogin: () -> Void
+    let onAdd: () -> Void
+    let onClear: () -> Void
+    var body: some View {
         Section("独立服务器") {
             if let profile = store.selectedProfile {
                 Picker("服务器配置", selection: Binding(get: { profile.id }, set: { store.select($0) })) {
                     ForEach(store.profiles) { Text($0.name).tag($0.id) }
                 }.disabled(store.busy)
                 Text(profile.origin.absoluteString).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                Button(store.user == nil ? "网页登录" : "重新登录") { login = true }.disabled(store.busy)
+                Button(store.user == nil ? "网页登录" : "重新登录", action: onLogin).disabled(store.busy)
                     .accessibilityIdentifier("paperclip.login")
-                if store.user != nil { Button("清除本机登录", role: .destructive) { clearLogin = true }.disabled(store.busy) }
+                if store.user != nil { Button("清除本机登录", role: .destructive, action: onClear).disabled(store.busy) }
             } else {
                 Text("先添加已独立部署的 Paperclip HTTPS 服务器，再用网页账号登录。")
             }
-            Button("添加服务器配置") { addProfile = true }.disabled(store.busy)
+            Button("添加服务器配置", action: onAdd).disabled(store.busy)
                 .accessibilityIdentifier("paperclip.addProfile")
         }
+    }
+}
+
+private struct PaperclipServerSettingsView: View {
+    @ObservedObject var store: PaperclipWorkspaceStore
+    @State private var login = false
+    @State private var addProfile = false
+    @State private var clearLogin = false
+    var body: some View {
+        Form {
+            PaperclipConnectionSection(store: store, onLogin: { login = true },
+                onAdd: { addProfile = true }, onClear: { clearLogin = true })
+            if let user = store.user {
+                Section("当前身份与组织") {
+                    Text("当前用户：\(user.label)")
+                    if !store.companies.isEmpty {
+                        Picker("组织", selection: Binding(get: { store.companyID }, set: { id in Task { await store.selectCompany(id) } })) {
+                            ForEach(store.companies) { Text($0.name).tag($0.id) }
+                        }.disabled(store.busy)
+                    }
+                    Text("切换服务器或组织会回到任务列表。已有任务继续绑定原服务器、组织和用户，不会迁移。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            if let error = store.error { Section("连接提示") { Text(error).foregroundStyle(.red) } }
+        }
+        .navigationTitle("服务器设置")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $addProfile) { PaperclipAddProfileView(store: store) }
+        .sheet(isPresented: $login) {
+            if let profile = store.selectedProfile { PaperclipLoginView(profile: profile) { await store.connect() } }
+        }
+        .confirmationDialog("清除这台设备上此服务器配置的登录？", isPresented: $clearLogin, titleVisibility: .visible) {
+            Button("清除本机登录", role: .destructive) { Task { await store.clearLogin() } }
+            Button("取消", role: .cancel) {}
+        } message: { Text("这会清除此配置的浏览器登录数据，服务器上的任务和本机会话不会删除。") }
     }
 }
 
@@ -225,7 +287,7 @@ private struct PaperclipCreateIssueView: View {
                 Section("任务内容") {
                     TextField("任务标题", text: $draft.title).accessibilityIdentifier("paperclip.taskTitle")
                     TextField("说明、目标和验收条件", text: $draft.body, axis: .vertical).lineLimit(5...12)
-                    Picker("执行代理", selection: $draft.agentID) {
+                    Picker("执行智能体", selection: $draft.agentID) {
                         Text("暂不分配（待规划）").tag("")
                         ForEach(agents.filter { $0.status != "terminated" }) { Text($0.name).tag($0.id) }
                     }
@@ -233,8 +295,8 @@ private struct PaperclipCreateIssueView: View {
                 Section("提交目标") {
                     Text(client.profile.name)
                     Text(client.profile.origin.absoluteString).font(.caption)
-                    Text("公司编号：\(companyID)").font(.caption)
-                    Text("指定代理后将创建待处理任务，服务器按自己的调度和审批规则执行。")
+                    Text("组织编号：\(companyID)").font(.caption)
+                    Text("指定智能体后将创建待处理任务，服务器按自己的调度和审批规则执行。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if draft.submitted {

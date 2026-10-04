@@ -184,6 +184,18 @@ final class PaperclipClientTests: XCTestCase {
         XCTAssertFalse(ledger.values.contains("POST"))
     }
 
+    func testStatusUpdateRequiresRequestedStateInReceipt() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            request.url!.path == "/api/auth/get-session" ? (200, session, "application/json") : (200, issue, "application/json")
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        do { _ = try await client.setStatus(ref, status: .done); XCTFail("返回旧状态不得报告修改成功") }
+        catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+    }
+
     func testInvalidatedClientDoesNotSendRequests() async throws {
         PaperclipTestProtocol.install { _ in XCTFail("退出后不得重用会话"); return (500, "{}", "application/json") }
         let client = try client()

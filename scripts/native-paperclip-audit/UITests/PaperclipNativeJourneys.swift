@@ -47,6 +47,9 @@ extension PaperclipNativeJourneys {
         app.launch()
         let task = app.descendants(matching: .any).matching(identifier: "paperclip.issue.issue-1").firstMatch
         XCTAssertTrue(task.waitForExistence(timeout: 20))
+        XCTAssertTrue(task.isHittable, "连接后任务应直接可见，不应被配置表单挤到屏幕下方")
+        XCTAssertFalse(app.buttons["paperclip.login"].exists)
+        XCTAssertTrue(app.buttons["paperclip.serverSettings"].exists)
         screenshot("真实生产任务列表_模拟接口", app)
         app.buttons["paperclip.create"].tap()
         let title = app.textFields["paperclip.taskTitle"]
@@ -62,10 +65,18 @@ extension PaperclipNativeJourneys {
         task.tap()
         XCTAssertTrue(app.navigationBars["服务器任务详情"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["状态：进行中"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["修复登录流程"].isHittable)
+        XCTAssertFalse(app.staticTexts["用户编号：human"].exists, "技术归属应默认收起，并保留展开入口")
+        XCTAssertTrue(app.buttons["paperclip.attribution"].exists)
         screenshot("真实生产任务详情_模拟接口", app)
         app.buttons["paperclip.changeStatus"].tap()
-        app.buttons["已完成"].tap()
-        app.alerts.buttons["确认"].tap()
+        let done = app.buttons["paperclip.status.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        screenshot("真实生产状态确认_模拟接口", app)
+        let confirmStatus = app.buttons["paperclip.confirmStatus"]
+        scrollTo(confirmStatus, app)
+        confirmStatus.tap()
         XCTAssertTrue(app.staticTexts["状态：已完成"].waitForExistence(timeout: 10))
         let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
         scrollTo(reply, app)
@@ -75,14 +86,14 @@ extension PaperclipNativeJourneys {
         send.tap()
         XCTAssertTrue(app.staticTexts["请补充验证结果"].waitForExistence(timeout: 10))
         screenshot("真实生产回复回执_模拟接口", app)
-        let approval = app.buttons["聘用代理 · 待审批"]
+        let approval = app.buttons["聘用智能体 · 待审批"]
         scrollTo(approval, app)
         approval.tap()
         let approve = app.buttons["paperclip.approve.approval-1"]
         scrollTo(approve, app)
         approve.tap()
         app.alerts.buttons["确认"].tap()
-        XCTAssertTrue(app.buttons["聘用代理 · 已批准"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["聘用智能体 · 已批准"].waitForExistence(timeout: 10))
         screenshot("真实生产审批回执_模拟接口", app)
     }
     @MainActor

@@ -131,6 +131,7 @@ final class PaperclipClient {
         _ = try await issue(ref)
         let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: ["status": status.rawValue], userID: ref.userID)
         try verify(row, ref)
+        guard row.status == status.rawValue else { throw PaperclipError.uncertain }
         return row
     }
 

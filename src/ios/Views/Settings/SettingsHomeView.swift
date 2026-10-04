@@ -70,7 +70,7 @@ struct SettingsHomeView: View {
     static var groups: [SettingsGroup] {
         [
             SettingsGroup(id: "device", title: "我的设备", entries: [
-                SettingsEntry("执行后端", keywords: "paperclip 服务器 本机 工作区 登录 公司",
+                SettingsEntry("执行后端", keywords: "paperclip 服务器 本机 工作区 登录 组织",
                               icon: "server.rack", color: .blue,
                               hint: "iOS 可选本机或独立 Paperclip 服务器") { PaperclipBackendSettingsView() },
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",

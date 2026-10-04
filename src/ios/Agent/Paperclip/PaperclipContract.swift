@@ -156,7 +156,7 @@ struct PaperclipApproval: Decodable, Identifiable, Sendable, Equatable {
     }
     var title: String {
         switch type {
-        case "hire_agent": return "聘用代理"
+        case "hire_agent": return "聘用智能体"
         case "approve_ceo_strategy": return "批准负责人策略"
         default: return "服务器审批"
         }
@@ -221,7 +221,7 @@ enum PaperclipError: LocalizedError, Equatable {
         case .invalidAddress: return "请输入独立服务器的 HTTPS 根地址，不包含账号、密码、路径、查询参数或片段。"
         case .signedOut: return "登录已过期或尚未登录，请打开服务器登录页，用你的人类用户账号登录。"
         case .forbidden: return "当前用户没有执行此操作的权限，请联系服务器管理员。"
-        case .identityChanged: return "任务绑定的服务器、公司或用户与当前身份不一致。请回到原配置和账号，不会自动迁移任务。"
+        case .identityChanged: return "任务绑定的服务器、组织或用户与当前身份不一致。请回到原配置和账号，不会自动迁移任务。"
         case .invalidResponse: return "服务器响应格式不兼容，请确认部署版本与客户端契约一致。"
         case .unavailable: return "服务器尚未就绪或无法连接，请稍后重试。不会改用本机执行。"
         case .cancelled: return "请求已取消。"

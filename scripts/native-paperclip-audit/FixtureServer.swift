@@ -61,14 +61,14 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
     }
     private static func approval() -> [String: Any] {
         ["id": "approval-1", "companyId": "company", "type": "hire_agent", "status": approvalStatus,
-         "requestedByAgentId": "agent", "payload": ["名称": "验证代理", "职责": "执行界面回归"]]
+         "requestedByAgentId": "agent", "payload": ["名称": "验证智能体", "职责": "执行界面回归"]]
     }
     private static func respond(path: String, method: String, body: [String: Any], query: String) -> Any {
         switch path {
         case "/api/health": return ["status": "ok", "deploymentMode": "authenticated"]
         case "/api/auth/get-session": return ["session": ["id": "session", "userId": "human"], "user": ["id": "human", "name": "验证用户"]]
-        case "/api/companies": return [["id": "company", "name": "中文验证公司"]]
-        case "/api/companies/company/agents": return [["id": "agent", "companyId": "company", "name": "验证代理", "status": "idle"]]
+        case "/api/companies": return [["id": "company", "name": "中文验证组织"]]
+        case "/api/companies/company/agents": return [["id": "agent", "companyId": "company", "name": "验证智能体", "status": "idle"]]
         case "/api/companies/company/issues":
             if method == "POST" {
                 var new = issue(); new["id"] = "issue-2"; new["title"] = body["title"] ?? "新任务"; new["status"] = "backlog"

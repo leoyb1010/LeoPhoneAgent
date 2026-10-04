@@ -12,7 +12,7 @@ struct PaperclipLoginView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Text("请在下面的服务器网页登录。完成后验证人类用户身份；不支持代理或管理员 API 密钥。")
+                Text("请在下面的服务器网页登录。完成后验证人类用户身份；不支持智能体或管理员 API 密钥。")
                     .font(.footnote).foregroundStyle(.secondary).padding()
                 Text(profile.origin.absoluteString).font(.caption).textSelection(.enabled).padding(.bottom, 8)
                 if let error { Text(error).foregroundStyle(.red).font(.footnote).padding() }
