@@ -2,6 +2,7 @@
 import "@zcode/shared/leo-network-guard";
 import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
+import { registerPaperclipIpc, registerPaperclipWindow } from "./paperclip/transport.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
@@ -51,6 +52,7 @@ import {
 import type { UtilityProcess as ElectronUtilityProcess } from "electron";
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { homedir, hostname } from "node:os";
 import {
   createCredentialService,
@@ -1861,6 +1863,12 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
       await mainSettingService.update({ desktopWindowSize: state });
     },
   });
+  registerPaperclipWindow(
+    win,
+    !app.isPackaged && process.env["ELECTRON_RENDERER_URL"]
+      ? process.env["ELECTRON_RENDERER_URL"]
+      : pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+  );
   registerStabilityMainWindow(win);
   return win;
 }
@@ -1933,6 +1941,7 @@ app.whenReady().then(async () => {
   installLeoSessionGuard();
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
   registerLeoLinkIpc();
+  registerPaperclipIpc();
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,

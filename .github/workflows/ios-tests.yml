@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main, fix/audit-hardening-20260930, fix/mobile-model-management-20261003]
+    branches: [main, fix/audit-hardening-20260930, fix/mobile-model-management-20261003, feat/paperclip-server-workspace]
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:
@@ -206,6 +206,8 @@ jobs:
       - name: Current Mac regression tests
         run: |
           set -euo pipefail
+          node scripts/paperclip/typecheck-transport.mjs
+          node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
           pnpm leo:test:agent
           node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
           node --import tsx --test packages/ui/test/phonePairingSession.test.ts
