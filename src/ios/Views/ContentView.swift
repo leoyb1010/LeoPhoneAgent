@@ -374,6 +374,10 @@ struct ContentView: View {
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
     @AppStorage("leo.ios.executionBackend.v1") private var executionBackend = IOSExecutionBackend.local.rawValue
+    // SceneStorage keeps this window's return route separate from another iPad window.
+    // Empty means home; a nonempty value is the session that opened Paperclip.
+    @SceneStorage("leo.paperclip.localReturnSession.v1") private var paperclipReturnSession = ""
+    @SceneStorage("leo.paperclip.localReturnPending.v1") private var paperclipReturnPending = false
     @AppStorage("leo.torchOn") private var torchOn = false
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
@@ -997,6 +1001,12 @@ struct ContentView: View {
     private func withLifecycleHandlers<V: View>(_ content: V) -> some View {
         content
             .task {
+                // A tab becoming visible is not a new app launch. Reapplying the
+                // launch-screen preference here replaced the preserved route/draft.
+                guard !didInitialLoad else {
+                    if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
+                    return
+                }
                 LeoPerf.coldStep("firstFrame")
                 sessions = await ChatStore.shared.listSessions()
                 LeoPerf.coldStep("listLoaded")
@@ -1060,6 +1070,16 @@ struct ContentView: View {
                     var tx = Transaction()
                     tx.disablesAnimations = true
                     withTransaction(tx) { openSession(Self.makeNewSessionId()) }
+                } else if paperclipReturnPending {
+                    // Returning after a cold start honors the originating window,
+                    // before any launch-screen default. A deleted session returns home.
+                    let target = paperclipReturnSession
+                    if !target.isEmpty,
+                       Self.isNewSessionId(target) || sessions.contains(where: { $0.id == target }) {
+                        var tx = Transaction()
+                        tx.disablesAnimations = true
+                        withTransaction(tx) { openSession(target) }
+                    }
                 } else {
                     // No share — normal launch screen behavior
                     // [T-restore-last-screen] 退后台时记的那一页(MinisApp .background 写入)。
@@ -1103,8 +1123,17 @@ struct ContentView: View {
                     }
                 }
                 didInitialLoad = true
+                if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
                 fetchAlarmsIfNeeded()
                 await refreshRemoteDeviceSessions()
+            }
+            .onChange(of: executionBackend) { old, new in
+                if old == IOSExecutionBackend.local.rawValue,
+                   new == IOSExecutionBackend.paperclip.rawValue, didInitialLoad {
+                    rememberPaperclipReturnLocation()
+                } else if new == IOSExecutionBackend.local.rawValue, didInitialLoad {
+                    paperclipReturnPending = false
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidFetchChanges)) { _ in
                 // [T-ios-state-publish-offmain-crash] cloud-sync fetch fires off-main;
@@ -2432,6 +2461,7 @@ struct ContentView: View {
             if !isSelecting {
                 Button {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    rememberPaperclipReturnLocation()
                     executionBackend = IOSExecutionBackend.paperclip.rawValue
                 } label: {
                     Image(systemName: "network")
@@ -2694,6 +2724,17 @@ struct ContentView: View {
             currentStackSessionId = newId
         }
         QuickActionWorkflow.shared.attachTargetSession(newId)
+    }
+
+    private func rememberPaperclipReturnLocation() {
+        if let id = onScreenSessionId {
+            paperclipReturnSession = Self.isNewSessionId(id)
+                ? (newSessionRealId ?? ViewModelCache.shared.get(for: id)?.sessionId ?? id)
+                : id
+        } else {
+            paperclipReturnSession = ""
+        }
+        paperclipReturnPending = true
     }
 
     /// Opens a session in the appropriate layout mode.
