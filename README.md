@@ -33,6 +33,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 
 Paperclip 发行层 1.1.0 接入 Mac 原生 CLI 状态与隔离网页授权：已有登录、重新授权与个人连接分别处理，管理员可通过现有 HTTPS 域名配置，无需切换端口地址。 实际提供商验收边界见 [原生 CLI 授权交付记录](docs/paperclip/NATIVE_CLI_AUTH_20261004.md)。
 
+Paperclip 发行层 1.1.1 修复 OpenCode 新建配置自动绑定 OpenRouter 的问题：CLI 与模型提供商独立选择，OpenRouter 连接管理需明确选择。Mini 已补齐九种 CLI 的可执行入口；Gemini 网页 OAuth 成功后仍收到 Google 服务资格拒绝，不能视为模型连接成功。验证范围见 [CLI 安装与提供商选择交付记录](docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。
+
 Mac mini 原生服务的 CLI 与登录状态属于服务器用户；远端浏览器可配置智能体并运行连接测试。部署路径与代理继承见 [服务器部署手册](src/server/paperclip/docs/DEPLOYMENT.zh-CN.md)。 本次 CLI 运行、中文菜单与外接盘迁移验证范围见 [服务器修复交付记录](docs/paperclip/AGENT_RUNTIME_FIX_20261004.md)。
 
 ## 开发 Agent 先读

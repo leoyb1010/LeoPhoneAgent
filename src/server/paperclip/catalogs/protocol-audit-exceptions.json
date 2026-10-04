@@ -4,5 +4,11 @@
     "literal": "comparison:All secrets",
     "requiredReplacement": "{parentFolderPath ? (",
     "reason": "Folder breadcrumb identity uses the existing stable parent path rather than translated display text; names are no longer mistaken for root identity."
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "literal": "data:method:api_key",
+    "requiredReplacement": "const [runtimeAiBinding, setRuntimeAiBinding] = useState<AiConnectionBinding | undefined>();",
+    "reason": "Remove the automatically synthesized OpenRouter personal API account from OpenCode setup. The OpenCode CLI adapter and existing provider environment keys remain unchanged; managed account bindings retain their original wire format and require explicit user selection through AiConnectionField. The source and rendered regression tests verify the unbound default and existing explicit managed selection."
   }
 ]
