@@ -1,0 +1,140 @@
+[
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionAuth.tsx",
+    "from": "`Connect ${info.name}`",
+    "to": "`连接 ${info.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionIdentity.tsx",
+    "from": "`Personal · ${connection.ownerName ?? \"Account owner\"}`",
+    "to": "`个人 · ${connection.ownerName ?? \"账号所有者\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "`${appName} connected`",
+    "to": "`${appName} 已连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "`Found ${result.discoveredCount} ${result.discoveredCount === 1 ? \"action\" : \"actions\"}`",
+    "to": "`发现 ${result.discoveredCount} 个操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "`${connectedCount} connected`",
+    "to": "`已连接 ${connectedCount} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/ReviewQueueCard.tsx",
+    "from": "`${actionLabel(item)} won’t run.`",
+    "to": "`${actionLabel(item)} 不会执行。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`Result ${index + 1}`",
+    "to": "`结果 ${index + 1}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`Waiting · ${relTime(requestedAt)}`",
+    "to": "`等待中 · ${relTime(requestedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`All ${readOnly.length + canChange.length}`",
+    "to": "`全部 ${readOnly.length + canChange.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Read ${readOnly.length}`",
+    "to": "`读取 ${readOnly.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Write ${canChange.length}`",
+    "to": "`写入 ${canChange.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Read (${visibleRead.length})`",
+    "to": "`读取（${visibleRead.length}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Write (${visibleWrite.length})`",
+    "to": "`写入（${visibleWrite.length}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`${title} permission`",
+    "to": "`${title}权限`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "`${label} allowed`",
+    "to": "`已允许 ${label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewaysList.tsx",
+    "from": "`Turn ${gateway.name} ${isGatewayOn(gateway) ? \"off\" : \"on\"}`",
+    "to": "`${isGatewayOn(gateway) ? \"关闭\" : \"开启\"} ${gateway.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewaysList.tsx",
+    "from": "` · ${expiring} expiring`",
+    "to": "` · ${expiring} 个即将过期`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/OverviewPanel.tsx",
+    "from": "` · ${expiring} expiring`",
+    "to": "` · ${expiring} 个即将过期`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Select ${candidate.remoteName}`",
+    "to": "`选择 ${candidate.remoteName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "`${formatAllowedTools(profile)} via ${profile.name}`",
+    "to": "`${formatAllowedTools(profile)}，通过 ${profile.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "`Profile ${shortId(gateway.profileId)}`",
+    "to": "`访问配置 ${shortId(gateway.profileId)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "` · ${explicitCount} explicit`",
+    "to": "` · ${explicitCount} 项显式规则`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "` Replaces “${defaultProfileName}”.`",
+    "to": "` 将替换“${defaultProfileName}”。`",
+    "expected": 1
+  }
+]

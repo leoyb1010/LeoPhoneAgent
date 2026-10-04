@@ -1,0 +1,2612 @@
+[
+  {
+    "file": "ui/src/components/AppConnectionSidebar.production.tsx",
+    "from": "              badgeLabel=\"needing review\"",
+    "to": "              badgeLabel=\"待审查\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AppConnectionSidebar.tsx",
+    "from": "              badgeLabel=\"needing review\"",
+    "to": "              badgeLabel=\"待审查\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AppsSidebar.production.tsx",
+    "from": "            badgeLabel=\"waiting for your OK\"",
+    "to": "            badgeLabel=\"等待你确认\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AppsSidebar.tsx",
+    "from": "            badgeLabel=\"waiting for your OK\"",
+    "to": "            badgeLabel=\"等待你确认\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "    gets: \"View-only organization membership.\",",
+    "to": "    gets: \"仅可查看组织内容。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "    gets: \"Can assign tasks.\",",
+    "to": "    gets: \"可分配任务。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "    gets: \"Can create agents, invite users, assign tasks, and approve join requests.\",",
+    "to": "    gets: \"可创建智能体、邀请用户、分配任务和批准加入请求。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "    gets: \"Everything in Admin, plus managing members.\",",
+    "to": "    gets: \"包含管理员的全部权限，并可管理成员。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "    return copyText(url, \"The invite URL is selected. Copy it manually from the field.\", selectLatestInviteUrl);",
+    "to": "    return copyText(url, \"邀请 URL 已选中，请从字段中手动复制。\", selectLatestInviteUrl);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "      const copied = await copyText(invite.inviteUrl, \"Copy the invite URL manually from the field below.\");",
+    "to": "      const copied = await copyText(invite.inviteUrl, \"请从下方字段手动复制邀请 URL。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "        ? \"You do not have permission to manage organization invites.\"",
+    "to": "        ? \"你无权管理组织邀请。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "          : \"Failed to load invites.\";",
+    "to": "          : \"加载邀请失败。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "  if (invite.allowedJoinTypes === \"both\") return invite.humanRole ? `Human or agent · ${invite.humanRole}` : \"Human or agent\";",
+    "to": "  if (invite.allowedJoinTypes === \"both\") return invite.humanRole ? `Human or agent · ${invite.humanRole}` : \"人员或智能体\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionAccountControls.tsx",
+    "from": "        onCancel={() => setRevoking(false)} onConfirm={async () => { setRevokePending(true); setRevokeError(undefined); try { await onRevoke(); setRevoking(false); } catch (error) { setRevokeError(error instanceof Error ? error.message : \"Could not revoke this account. Retry.\"); } finally { setRevokePending(false); } }}>{revokeError && <p role=\"alert\" className=\"text-sm text-destructive\">{revokeError}</p>}{revocationDetails}</RevokeGrantDialog>}",
+    "to": "        onCancel={() => setRevoking(false)} onConfirm={async () => { setRevokePending(true); setRevokeError(undefined); try { await onRevoke(); setRevoking(false); } catch (error) { setRevokeError(error instanceof Error ? error.message : \"无法撤销此账号，请重试。\"); } finally { setRevokePending(false); } }}>{revokeError && <p role=\"alert\" className=\"text-sm text-destructive\">{revokeError}</p>}{revocationDetails}</RevokeGrantDialog>}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionCredentialStep.tsx",
+    "from": "  } catch (error) { environmentError = error instanceof Error ? error.message : \"Could not resolve the sign-in environment.\"; }",
+    "to": "  } catch (error) { environmentError = error instanceof Error ? error.message : \"无法确定登录环境。\"; }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionPicker.tsx",
+    "from": "              { id: \"responsible_user\", name: \"Responsible user’s connection\", description: <>",
+    "to": "              { id: \"responsible_user\", name: \"责任用户的连接\", description: <>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "  return \"Not reported\";",
+    "to": "  return \"未提供数据\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "  else if (window.limitReached === true) details.push(\"Limit reached\");",
+    "to": "  else if (window.limitReached === true) details.push(\"已达到限额\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "  if (window.allowed === true && (window.limitReached === true || window.usedPercent == null)) details.push(\"Usage allowed\");",
+    "to": "  if (window.allowed === true && (window.limitReached === true || window.usedPercent == null)) details.push(\"允许使用\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"authentication_required\": return \"Sign in again to check usage.\";",
+    "to": "    case \"authentication_required\": return \"请重新登录以检查用量。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"permission_denied\": return \"Usage access denied.\";",
+    "to": "    case \"permission_denied\": return \"用量访问被拒绝。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"rate_limited\": return \"Too many checks. Try again later.\";",
+    "to": "    case \"rate_limited\": return \"检查过于频繁，请稍后重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"provider_unavailable\": return \"Provider unavailable. Try again.\";",
+    "to": "    case \"provider_unavailable\": return \"服务商暂不可用，请重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"invalid_response\": return \"Couldn’t read usage. Try again.\";",
+    "to": "    case \"invalid_response\": return \"无法读取用量，请重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"connection_unavailable\": return \"Reconnect to check usage.\";",
+    "to": "    case \"connection_unavailable\": return \"请重新连接以检查用量。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "    case \"unsupported\": return \"Usage unavailable.\";",
+    "to": "    case \"unsupported\": return \"用量数据不可用。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/useLocalAiLogin.ts",
+    "from": "      if (!companyId) throw new Error(\"Choose a company before connecting.\");",
+    "to": "      if (!companyId) throw new Error(\"请先选择组织，再建立连接。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/useLocalAiLogin.ts",
+    "from": "      if (isolated && !attempt) throw new Error(\"Prepare local sign-in before connecting.\");",
+    "to": "      if (isolated && !attempt) throw new Error(\"请先准备本地登录，再建立连接。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/AgentChannelsPanel.tsx",
+    "from": "  github: \"GitHub Code Review Bot\",",
+    "to": "  github: \"GitHub 代码审查机器人\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"The recipient must accept the file card in Microsoft Teams. The file is not delivered yet; this send identity is kept while Paperclip waits.\",",
+    "to": "    body: \"接收者必须在 Microsoft Teams 中接受文件卡片。文件尚未送达；Paperclip 等待期间会保留此次发送标识。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"The board update was published to the connected conversation.\",",
+    "to": "    body: \"管理面板更新已发布到关联对话。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"Delivery is still pending. Your draft is kept until Paperclip confirms publication.\",",
+    "to": "    body: \"投递仍在等待中。在 Paperclip 确认发布之前，草稿会保留。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"Delivery is still in progress. Your draft is kept until Paperclip confirms publication.\",",
+    "to": "    body: \"投递仍在进行中。在 Paperclip 确认发布之前，草稿会保留。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"Paperclip will retry this publication. Your draft and retry identity are kept.\",",
+    "to": "    body: \"Paperclip 将重试此次发布，草稿和重试标识已保留。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"The provider may have accepted this update. Resolve it in Activity before trying again to avoid a duplicate.\",",
+    "to": "    body: \"服务商可能已接受此更新。为避免重复，请先在“活动”中确认结果，再重试。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"Your draft is kept. Open Activity to retry this same publication safely.\",",
+    "to": "    body: \"草稿已保留。打开“活动”即可安全重试同一次发布。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "    body: \"Your draft is kept. Some parts may already have been published; check Activity before starting a new send.\",",
+    "to": "    body: \"草稿已保留。部分内容可能已发布；请先检查“活动”，再发起新发送。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "        \"Saved delivery identity could not be read. Check Activity and restore browser storage before starting another send.\",",
+    "to": "        \"无法读取已保存的投递标识。请先检查“活动”并恢复浏览器存储，再发起其他发送。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "            \"The rejected send could not be saved. Restore browser storage, then retry this same request to recover its receipt.\",",
+    "to": "            \"无法保存被拒绝的发送内容。请恢复浏览器存储，再重试同一请求以恢复回执。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "          \"Selected task file (details unavailable)\",",
+    "to": "          \"已选任务文件（详情不可用）\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "        body: \"Not every part was confirmed delivered. Review the outcomes below; dismissing this receipt does not resend anything.\",",
+    "to": "        body: \"部分内容尚未确认送达。请查看下方结果；关闭此回执不会重新发送任何内容。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "          body: \"Some parts have settled. The remaining file cards still need the recipient's response; this send stays locked until the whole batch is resolved.\",",
+    "to": "          body: \"部分内容已完成投递。其余文件卡片仍需接收者回应；整批结果确定之前，此次发送会保持锁定。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                    attachment.originalFilename ?? \"Unnamed attachment\";",
+    "to": "                    attachment.originalFilename ?? \"未命名附件\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                      \"Saved rejection could not be cleared. Restore browser storage before editing this send.\",",
+    "to": "                      \"无法清除已保存的拒绝记录。请先恢复浏览器存储，再编辑此次发送。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                          \"Saved delivery identity could not be cleared. Restore browser storage before starting another send.\",",
+    "to": "                          \"无法清除已保存的投递标识。请先恢复浏览器存储，再发起其他发送。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                        ?.originalFilename ?? \"Unnamed attachment\",",
+    "to": "                        ?.originalFilename ?? \"未命名附件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                  if (!storageKey) throw new Error(\"Missing delivery scope\");",
+    "to": "                  if (!storageKey) throw new Error(\"缺少投递范围\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "                    \"Browser storage could not preserve this delivery identity. No update was sent. Restore browser storage, then reload to try again.\",",
+    "to": "                    \"浏览器存储无法保留此次投递标识，未发送任何更新。请恢复浏览器存储，再重新加载并重试。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+    "from": "    if (!trimmedName) return touched ? \"Name is required\" : null;",
+    "to": "    if (!trimmedName) return touched ? \"请填写名称\" : null;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+    "from": "    if (!SECRET_NAME_RE.test(trimmedName)) return \"Use lowercase letters, digits and _\";",
+    "to": "    if (!SECRET_NAME_RE.test(trimmedName)) return \"请使用小写字母、数字和下划线\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+    "from": "      return \"A secret with this name already exists\";",
+    "to": "      return \"已存在同名密钥\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+    "from": "  const valueError = value.length === 0 ? (touched ? \"Value is required\" : null) : null;",
+    "to": "  const valueError = value.length === 0 ? (touched ? \"请填写值\" : null) : null;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+    "from": "  const heading = mode === \"create\" ? \"Create secret\" : \"Store value as secret\";",
+    "to": "  const heading = mode === \"create\" ? \"Create secret\" : \"将值保存为密钥\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/index.tsx",
+    "from": "  \"Set the KEY to the env var name the process expects, for example GH_TOKEN. Choose a secret to resolve a stored value at run start. PAPERCLIP_* variables are injected automatically.\";",
+    "to": "  \"将 KEY 设为进程所需的环境变量名称，例如 GH_TOKEN。选择密钥后，会在运行开始时解析已保存的值。PAPERCLIP_* 变量会自动注入。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "  const companyDisplayName = companyName || \"this Paperclip company\";",
+    "to": "  const companyDisplayName = companyName || \"此 Paperclip 组织\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "      if (!invite) throw new Error(\"Invite not found\");",
+    "to": "      if (!invite) throw new Error(\"未找到邀请\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "        throw new Error(\"Checking your organization access. Try again in a moment.\");",
+    "to": "        throw new Error(\"正在检查你的组织访问权限，请稍后重试。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "        throw new Error(\"This account already belongs to the organization.\");",
+    "to": "        throw new Error(\"此账号已属于该组织。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "    if (isCurrentMember) return \"Open organization\";",
+    "to": "    if (isCurrentMember) return \"打开组织\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "    if (invite.inviteType === \"bootstrap_ceo\") return \"Accept invite\";",
+    "to": "    if (invite.inviteType === \"bootstrap_ceo\") return \"接受邀请\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "    if (showsAgentForm) return \"Submit request\";",
+    "to": "    if (showsAgentForm) return \"提交请求\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "    return sessionQuery.data ? \"Accept invite\" : \"Continue\";",
+    "to": "    return sessionQuery.data ? \"接受邀请\" : \"继续\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/JoinRequestQueue.tsx",
+    "from": "        ? \"You do not have permission to review join requests for this organization.\"",
+    "to": "        ? \"你无权审查此组织的加入请求。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/JoinRequestQueue.tsx",
+    "from": "          : \"Failed to load join requests.\";",
+    "to": "          : \"加载加入请求失败。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "    ? \"Checking who can reconnect this identity…\"",
+    "to": "    ? \"正在检查谁有权重新连接此身份…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "      ? \"We couldn't verify who can reconnect this identity. Reload the page to try again.\"",
+    "to": "      ? \"无法验证谁有权重新连接此身份。请重新加载页面后重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "        ? \"The person this connection belongs to must reconnect it.\"",
+    "to": "        ? \"必须由此连接的所有者重新连接。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "        : \"You don't have permission to reconnect this identity.\";",
+    "to": "        : \"你无权重新连接此身份。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "      if (!subjectUserId) throw new Error(\"Sign in again to connect your own account.\");",
+    "to": "      if (!subjectUserId) throw new Error(\"请重新登录以连接你自己的账号。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "      setAudienceError(error instanceof Error ? error.message : \"We couldn't save that audience.\"),",
+    "to": "      setAudienceError(error instanceof Error ? error.message : \"无法保存适用成员。\"),",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "                    ? \"Shell Git and gh use this account for the run and are not constrained by per-tool Ask-first controls.\"",
+    "to": "                    ? \"Shell 中的 Git 和 gh 会在此次运行中使用此账号，不受各工具“先询问”控制的限制。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "    ? \"Checking who can reconnect this identity…\"",
+    "to": "    ? \"正在检查谁有权重新连接此身份…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "      ? \"We couldn't verify who can reconnect this identity. Reload the page to try again.\"",
+    "to": "      ? \"无法验证谁有权重新连接此身份。请重新加载页面后重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "        ? \"The person this connection belongs to must reconnect it.\"",
+    "to": "        ? \"必须由此连接的所有者重新连接。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "        : \"You don't have permission to reconnect this identity.\";",
+    "to": "        : \"你无权重新连接此身份。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "            body=\"Review requests will appear here after this app is connected.\"",
+    "to": "            body=\"连接此应用后，审查请求将显示在此处。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "        name: \"GitHub Code Review Bot\",",
+    "to": "        name: \"GitHub 代码审查机器人\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "                        ? \"Reconnect required — sign in again to restore access.\"",
+    "to": "                        ? \"需要重新连接，请重新登录以恢复访问权限。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "                        : \"The key stopped working — reconnect to fix.\"",
+    "to": "                        : \"密钥已失效，请重新连接以修复。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "                        ? \"Paused — agents can’t use it right now.\"",
+    "to": "                        ? \"已暂停，智能体目前无法使用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "                          ? \"Connect it so agents can use it.\"",
+    "to": "                          ? \"建立连接后，智能体即可使用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/ReviewQueueCard.tsx",
+    "from": "  if (!item.toolTitle && !item.toolName) return \"This action\";",
+    "to": "  if (!item.toolTitle && !item.toolName) return \"此操作\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "          advancedLabel=\"More options\"",
+    "to": "          advancedLabel=\"更多选项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "  const verb = entry.isReadOnly ? \"Reading from\" : entry.isWrite ? \"Writing to\" : \"Calling\";",
+    "to": "  const verb = entry.isReadOnly ? \"正在读取\" : entry.isWrite ? \"正在写入\" : \"正在调用\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "    || \"The app returned an error result.\";",
+    "to": "    || \"应用返回了错误结果。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      items.push({ label: content.type === \"image\" ? \"Image\" : \"Audio\", value: typeof content.mimeType === \"string\" ? content.mimeType : \"Media attachment\" });",
+    "to": "      items.push({ label: content.type === \"image\" ? \"Image\" : \"Audio\", value: typeof content.mimeType === \"string\" ? content.mimeType : \"媒体附件\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      items.push({ label: \"Resource\", value: content.title ?? content.name ?? content.uri ?? \"Resource link\" });",
+    "to": "      items.push({ label: \"Resource\", value: content.title ?? content.name ?? content.uri ?? \"资源链接\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      items.push({ label: \"Resource\", value: typeof resource.text === \"string\" ? parseText(resource.text) : resource.uri ?? \"Embedded resource\" });",
+    "to": "      items.push({ label: \"Resource\", value: typeof resource.text === \"string\" ? parseText(resource.text) : resource.uri ?? \"嵌入资源\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "  if (isEmptyResult(value)) return \"Worked. No data to show.\";",
+    "to": "  if (isEmptyResult(value)) return \"执行成功，没有可显示的数据。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "    ? \"This action is new and hasn't been turned on yet.\"",
+    "to": "    ? \"此操作是新增的，尚未开启。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "    return [\"Ask the connection owner to reconnect it from Connectors with a fresh key or server URL.\"];",
+    "to": "    return [\"请连接所有者在“连接器”中使用新密钥或服务器 URL 重新连接。\"];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "    return [\"Reconnect the app and allow the permissions required for this action.\"];",
+    "to": "    return [\"请重新连接应用，并授予此操作所需的权限。\"];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"Double-check the ID or name you entered — pick it from a dropdown if one is offered.\",",
+    "to": "      \"请仔细检查输入的 ID 或名称；如有下拉列表，请从中选择。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"Make sure this agent has access to that resource in the connected account.\",",
+    "to": "      \"请确认此智能体有权访问所连接账号中的该资源。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"The connected account may not have permission for this action.\",",
+    "to": "      \"所连接的账号可能没有执行此操作的权限。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"Reconnect the app from Setup if its access was recently changed.\",",
+    "to": "      \"如果最近更改过访问权限，请从“设置”中重新连接应用。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"Check the field formats above — a value may be the wrong type or shape.\",",
+    "to": "      \"请检查上方字段格式，某个值的类型或结构可能不正确。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "      \"Open “More options” to confirm any advanced fields are filled in correctly.\",",
+    "to": "      \"打开“更多选项”，确认高级字段填写正确。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "    return [\"The app is rate-limiting calls right now — wait a moment and run it again.\"];",
+    "to": "    return [\"应用目前正在限制调用频率，请稍等片刻后重新运行。\"];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "  return [\"Check the inputs above and try again.\"];",
+    "to": "  return [\"请检查上方输入后重试。\"];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "  return event.type === \"actions_quarantined\" ? \"Review permissions\" : \"View permissions\";",
+    "to": "  return event.type === \"actions_quarantined\" ? \"审查权限\" : \"查看权限\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "  canReplaceCredential = true,\n  credentialUnavailableMessage = \"You don't have permission to replace this identity's credential.\",\n  appToggleDisabled,",
+    "to": "  canReplaceCredential = true,\n  credentialUnavailableMessage = \"你无权替换此身份的凭据。\",\n  appToggleDisabled,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "  canReplaceCredential = true,\n  credentialUnavailableMessage = \"You don't have permission to replace this identity's credential.\",\n  toggleDisabled = false,",
+    "to": "  canReplaceCredential = true,\n  credentialUnavailableMessage = \"你无权替换此身份的凭据。\",\n  toggleDisabled = false,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "  if (connection.transport === \"local_stdio\") return \"Local command\";",
+    "to": "  if (connection.transport === \"local_stdio\") return \"本地命令\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "  if (transport === \"mcp_remote\") return \"Remote HTTP\";",
+    "to": "  if (transport === \"mcp_remote\") return \"远程 HTTP\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "  if (transport === \"local_stdio\") return \"Local command\";",
+    "to": "  if (transport === \"local_stdio\") return \"本地命令\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "          ) : \"Dedicated to one agent\"}",
+    "to": "          ) : \"专供一个智能体使用\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "              detail=\"Personal identity\"",
+    "to": "              detail=\"个人身份\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "              detail=\"Organization identity\"",
+    "to": "              detail=\"组织身份\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "    ? \"All current and future repositories\"",
+    "to": "    ? \"所有现有及未来仓库\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "      ? \"Mixed access; scope varies by installation\"",
+    "to": "      ? \"混合访问权限，范围因安装而异\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "    ? \"No repositories selected\"",
+    "to": "    ? \"未选择仓库\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "        ariaLabel=\"Which humans can use this credential\"",
+    "to": "        ariaLabel=\"哪些成员可以使用此凭据\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "            ariaLabel=\"Who can use this identity\"",
+    "to": "            ariaLabel=\"谁可以使用此身份\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "                ? \"Choose people\"",
+    "to": "                ? \"选择成员\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "    : \"Revoke the organization identity?\";",
+    "to": "    : \"撤销组织身份？\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "      ? \"Agents will stop acting as you. Work that needs this identity can ask you to connect again.\"",
+    "to": "      ? \"智能体将停止以你的身份执行操作。需要此身份的工作可以要求你重新连接。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "      : \"Agents will stop acting as this person. They can connect again themselves; no one else can do it for them.\"",
+    "to": "      : \"智能体将停止以此人的身份执行操作。只能由此人自行重新连接，其他人无法代为操作。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "      ? \"Installed agents lose this shared identity immediately.\"",
+    "to": "      ? \"已安装此连接的智能体会立即失去此共享身份。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "      : \"Eligible members and installed agents will lose this shared identity immediately.\";",
+    "to": "      : \"有资格使用此身份的成员和已安装此连接的智能体会立即失去此共享身份。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "            ariaLabel=\"Which agents can use this connection\"",
+    "to": "            ariaLabel=\"哪些智能体可以使用此连接\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "                ? \"Choose agents\"",
+    "to": "                ? \"选择智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "              getDescription={(agent) => requiredAgentIds.has(agent.id) ? \"Required by this connection's install setting\" : agent.title}",
+    "to": "              getDescription={(agent) => requiredAgentIds.has(agent.id) ? \"此连接的安装设置要求如此\" : agent.title}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "  const method = connection.config?.connectionMethodKey === \"mcp-oauth\" ? \"PostHog sign-in\" : \"Personal API key\";",
+    "to": "  const method = connection.config?.connectionMethodKey === \"mcp-oauth\" ? \"PostHog 登录\" : \"个人 API 密钥\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Connection method\", method],",
+    "to": "    [\"连接方式\", method],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Project pin\", typeof config.projectId === \"string\" ? config.projectId : \"Use active project\"],",
+    "to": "    [\"固定项目\", typeof config.projectId === \"string\" ? config.projectId : \"使用当前项目\"],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Read-only mode\", config.readOnly === true ? \"On\" : \"Off\"],",
+    "to": "    [\"只读模式\", config.readOnly === true ? \"开启\" : \"关闭\"],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Feature groups\", features],",
+    "to": "    [\"功能组\", features],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Individual tools\", tools],",
+    "to": "    [\"单独工具\", tools],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "    [\"Response mode\", typeof config.mode === \"string\" ? config.mode : \"tools\"],",
+    "to": "    [\"响应模式\", typeof config.mode === \"string\" ? config.mode : \"tools\"],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/ConnectClientDialog.tsx",
+    "from": "              renderValue={(option) => option ? `${option.label} · ${maskedTokenLabel(option.token)}` : \"Issue a token\"}",
+    "to": "              renderValue={(option) => option ? `${option.label} · ${maskedTokenLabel(option.token)}` : \"签发令牌\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/ConnectClientDialog.tsx",
+    "from": "              onClick={() => void copyText(`Authorization: Bearer ${selectedToken.token}`, \"Authorization header\")}",
+    "to": "              onClick={() => void copyText(`Authorization: Bearer ${selectedToken.token}`, \"Authorization 请求头\")}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/ConnectClientDialog.tsx",
+    "from": "                    <Button variant=\"outline\" size=\"sm\" onClick={() => void copyText(endpoint, \"Endpoint URL\")}>",
+    "to": "                    <Button variant=\"outline\" size=\"sm\" onClick={() => void copyText(endpoint, \"端点 URL\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayAdvancedPanel.tsx",
+    "from": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(endpoint, \"Endpoint URL\")}>",
+    "to": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(endpoint, \"端点 URL\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayAdvancedPanel.tsx",
+    "from": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(rawConfig, \"Gateway config JSON\")}>",
+    "to": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(rawConfig, \"网关配置 JSON\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/OverviewPanel.tsx",
+    "from": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(snippet, \"Client config\")}>",
+    "to": "          <Button variant=\"outline\" size=\"sm\" onClick={() => void copy(snippet, \"客户端配置\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "  if (!draft.name.trim()) return \"Name is required.\";",
+    "to": "  if (!draft.name.trim()) return \"请填写名称。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "  if (draft.name.length > 160) return \"Name must be 160 characters or fewer.\";",
+    "to": "  if (draft.name.length > 160) return \"名称不得超过 160 个字符。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "  if (!draft.key.trim()) return \"Key is required.\";",
+    "to": "  if (!draft.key.trim()) return \"请填写键。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "    return \"Key may only contain lowercase letters, numbers, dot, underscore, or hyphen.\";",
+    "to": "    return \"键只能包含小写字母、数字、点、下划线或连字符。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "  if (draft.key.length > 120) return \"Key must be 120 characters or fewer.\";",
+    "to": "  if (draft.key.length > 120) return \"键不得超过 120 个字符。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "  if (draft.description.length > 500) return \"Description must be 500 characters or fewer.\";",
+    "to": "  if (draft.description.length > 500) return \"说明不得超过 500 个字符。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "      return \"A Paperclip secret already uses this name.\";",
+    "to": "      return \"已有 Paperclip 密钥使用此名称。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "      return \"A Paperclip secret already uses this key.\";",
+    "to": "      return \"已有 Paperclip 密钥使用此键。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "      return \"Another row in this batch already uses this name.\";",
+    "to": "      return \"此批次中已有其他条目使用此名称。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "      return \"Another row in this batch already uses this key.\";",
+    "to": "      return \"此批次中已有其他条目使用此键。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "          action={onManageVaults ? \"Manage vaults\" : undefined}",
+    "to": "          action={onManageVaults ? \"管理密钥库\" : undefined}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/SetMyUserSecretDialog.tsx",
+    "from": "      if (!definition) throw new Error(\"No definition selected\");",
+    "to": "      if (!definition) throw new Error(\"未选择定义\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/UserSecretDefinitionsTab.tsx",
+    "from": "            action=\"New user secret\"",
+    "to": "            action=\"新建用户密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "  const digest = fingerprint ? `sha256:${fingerprint.slice(0, 10)}…` : \"no fingerprint\";",
+    "to": "  const digest = fingerprint ? `sha256:${fingerprint.slice(0, 10)}…` : \"无指纹\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "    return { name: proposal.secretProposalName ?? \"proposed secret\", pending: true };",
+    "to": "    return { name: proposal.secretProposalName ?? \"提议的密钥\", pending: true };",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "  return \"Something went wrong. Try again.\";",
+    "to": "  return \"发生错误，请重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "  if (event.lifecycleType) return \"This connection change was recorded in the app's activity history.\";",
+    "to": "  if (event.lifecycleType) return \"此连接变更已记录在应用的活动历史中。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "    return \"Permitted connections were not installed, so their tools were not added to this run.\";",
+    "to": "    return \"获准的连接尚未安装，因此未将其工具添加到此次运行中。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"Allowed by your rules.\";",
+    "to": "      return \"已根据你的规则允许。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      if (code === \"rate_limited\") return \"Blocked because it ran too many times in a short window.\";",
+    "to": "      if (code === \"rate_limited\") return \"由于短时间内运行次数过多而被阻止。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      if (code?.includes(\"secret\")) return \"Blocked to keep a sensitive value from leaving.\";",
+    "to": "      if (code?.includes(\"secret\")) return \"为防止敏感值泄露而被阻止。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"Blocked by a rule.\";",
+    "to": "      return \"已被规则阻止。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"Held for someone to approve before it could run.\";",
+    "to": "      return \"等待批准后才能运行。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"Waiting — the app it needs wasn't ready yet.\";",
+    "to": "      return \"正在等待，所需应用尚未就绪。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"The app was allowed to run it, but returned an error.\";",
+    "to": "      return \"应用已获准执行，但返回了错误。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "      return \"Recorded by Paperclip.\";",
+    "to": "      return \"已由 Paperclip 记录。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "                      const connectionName = detailString(connection, \"name\") ?? \"Unnamed connection\";",
+    "to": "                      const connectionName = detailString(connection, \"name\") ?? \"未命名连接\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "          agents={[{ id: ALL, name: \"All agents\" }, ...(agents.data ?? [])]}",
+    "to": "          agents={[{ id: ALL, name: \"全部智能体\" }, ...(agents.data ?? [])]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "  if (!profile) return \"Profile unavailable\";",
+    "to": "  if (!profile) return \"访问配置不可用\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "  return allowed === 0 ? \"No tools allowed\" : `${pluralize(allowed, \"tool\")} allowed`;",
+    "to": "  return allowed === 0 ? \"未允许任何工具\" : `${pluralize(allowed, \"tool\")} allowed`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "                    <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => void copyText(endpoint, \"Gateway endpoint\")}>",
+    "to": "                    <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => void copyText(endpoint, \"网关端点\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "                      <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => void copyText(createdToken.token, \"Gateway bearer token\")}>",
+    "to": "                      <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => void copyText(createdToken.token, \"网关持有者令牌\")}>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "  const where = draft.transport === \"local_stdio\" ? \"Runs in your workspace\" : \"Connects over the web\";",
+    "to": "  const where = draft.transport === \"local_stdio\" ? \"在你的工作区中运行\" : \"通过网络连接\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "      setOAuthError(error instanceof Error ? error.message : \"Paperclip couldn’t start secure sign-in. Try again.\");",
+    "to": "      setOAuthError(error instanceof Error ? error.message : \"Paperclip 无法开始安全登录，请重试。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "          : \"Paperclip couldn’t start secure sign-in. Try again.\",",
+    "to": "          : \"Paperclip 无法开始安全登录，请重试。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "      if (!url) throw new Error(\"Only remote HTTP drafts can be checked and activated from pasted config.\");",
+    "to": "      if (!url) throw new Error(\"从粘贴的配置中只能检查并启用远程 HTTP 连接草稿。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "            \"This server requires OAuth client details from its provider settings. Continue in setup to add them.\",",
+    "to": "            \"此服务器需要服务商设置中的 OAuth 客户端详细信息。请继续设置以添加这些信息。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "      return \"That doesn't look like valid JSON yet — paste the whole snippet, including the outer braces.\";",
+    "to": "      return \"这似乎不是有效的 JSON。请粘贴完整片段，包括最外层的大括号。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "  if (entry.selectorType === \"catalog_entry\") return entry.catalogEntryId ?? \"catalog entry\";",
+    "to": "  if (entry.selectorType === \"catalog_entry\") return entry.catalogEntryId ?? \"目录条目\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "  if (entry.selectorType === \"risk_level\") return entry.riskLevel ?? \"risk level\";",
+    "to": "  if (entry.selectorType === \"risk_level\") return entry.riskLevel ?? \"风险级别\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "          action=\"New profile\"",
+    "to": "          action=\"新建访问配置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/connection-dialogs.tsx",
+    "from": "  mcp_remote: \"remote http\",",
+    "to": "  mcp_remote: \"远程 HTTP\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/connection-dialogs.tsx",
+    "from": "  local_stdio: \"local stdio\",",
+    "to": "  local_stdio: \"本地 stdio\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "      body: \"This profile will be active again and can be assigned to agents.\",",
+    "to": "      body: \"此访问配置将重新启用，并可分配给智能体。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "        ? \"This profile is the organization default. Reassign the organization default to another profile before deleting it.\"",
+    "to": "        ? \"此访问配置是组织默认配置。删除前，请先将其他配置设为组织默认配置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "    { value: \"deny\", title: \"Stay blocked until reviewed\", body: \"New tools do not become available automatically.\" },",
+    "to": "    { value: \"deny\", title: \"Stay blocked until reviewed\", body: \"新工具不会自动开放。\" },",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "    { value: \"allow\", title: \"Allowed automatically\", body: \"New tools from selected apps become available right away.\" },",
+    "to": "    { value: \"allow\", title: \"Allowed automatically\", body: \"所选应用中的新工具会立即可用。\" },",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "      const app = appNames.get(tool.applicationId ?? \"\") ?? connectionNames.get(tool.connectionId) ?? \"Unknown app\";",
+    "to": "      const app = appNames.get(tool.applicationId ?? \"\") ?? connectionNames.get(tool.connectionId) ?? \"未知应用\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "  if (binding.targetType === \"agent\") return maps.agentsById.get(binding.targetId) ?? \"Unknown agent\";",
+    "to": "  if (binding.targetType === \"agent\") return maps.agentsById.get(binding.targetId) ?? \"未知智能体\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "  if (binding.targetType === \"project\") return maps.projectsById.get(binding.targetId) ?? \"Unknown project\";",
+    "to": "  if (binding.targetType === \"project\") return maps.projectsById.get(binding.targetId) ?? \"未知项目\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "  if (binding.targetType === \"routine\") return maps.routinesById.get(binding.targetId) ?? \"Unknown routine\";",
+    "to": "  if (binding.targetType === \"routine\") return maps.routinesById.get(binding.targetId) ?? \"未知例行任务\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "  return \"Scoped assignment\";",
+    "to": "  return \"限定范围的分配\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "      if (!draftId) throw new Error(\"No draft to finish\");",
+    "to": "      if (!draftId) throw new Error(\"没有待完成的草稿\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "            if (defaultProfileName) bits.push(\"organization default\");",
+    "to": "            if (defaultProfileName) bits.push(\"组织默认配置\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "            return bits.length > 0 ? `already has: ${bits.join(\" · \")}` : \"no profiles yet\";",
+    "to": "            return bits.length > 0 ? `already has: ${bits.join(\" · \")}` : \"暂无访问配置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/WizardToolsStep.tsx",
+    "from": "                : \"includes tools \" + group.name + \" adds later\"}",
+    "to": "                : \"包含此后由\" + group.name + \"新增的工具\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/shared.tsx",
+    "from": "      message = \"You do not have permission to view this. Tools & Access requires board/admin access.\";",
+    "to": "      message = \"你无权查看此内容。“工具与访问权限”需要管理面板或管理员权限。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/shared.tsx",
+    "from": "      message = \"Tools & Access isn't available on this server yet — try refreshing after the next deployment.\";",
+    "to": "      message = \"此服务器尚不支持“工具与访问权限”，请在下次部署后刷新重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/shared.tsx",
+    "from": "    message = \"Something went wrong.\";",
+    "to": "    message = \"发生错误。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "`Human or agent · ${invite.humanRole}`",
+    "to": "`人员或智能体 · ${invite.humanRole}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionField.tsx",
+    "from": "`Responsible user’s default. For you: ${accounts.data?.connections.find((account) => account.isDefault && account.provider === provider)?.name ?? \"Not connected\"}. Other users use their own default.`",
+    "to": "`责任用户的默认账号。你的账号：${accounts.data?.connections.find((account) => account.isDefault && account.provider === provider)?.name ?? \"未连接\"}。其他用户使用各自的默认账号。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "`${error.message} Your draft is kept; retrying here reuses the same request identity.`",
+    "to": "`${error.message} 草稿已保留，在此重试会复用同一请求标识。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "`${error instanceof Error ? error.message : \"Upload could not be confirmed.\"} No channel message was sent. Check task files before retrying the upload.`",
+    "to": "`${error instanceof Error ? error.message : \"无法确认上传结果。\"} 未发送频道消息。请先检查任务文件，再重试上传。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "`${batch.awaitingConsent} awaiting consent`",
+    "to": "`${batch.awaitingConsent} 项等待同意`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
+    "from": "`${batch.published} of ${batch.total} parts published.`",
+    "to": "`${batch.published} / ${batch.total} 部分已发布。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/Row.tsx",
+    "from": "`Secret ${created.name} created`",
+    "to": "`密钥 ${created.name} 已创建`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/Row.tsx",
+    "from": "`Remove ${row.name.trim() || \"variable\"}`",
+    "to": "`移除 ${row.name.trim() || \"变量\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/SecretPicker.tsx",
+    "from": "`Missing secret (${secretId.slice(0, 8)}…)`",
+    "to": "`缺失的密钥（${secretId.slice(0, 8)}…）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/SecretPicker.tsx",
+    "from": "`Missing secret (${secretId})`",
+    "to": "`缺失的密钥（${secretId}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/index.tsx",
+    "from": "`Imported ${pairs.length} variable${pairs.length === 1 ? \"\" : \"s\"}`",
+    "to": "`已导入 ${pairs.length} 个变量${pairs.length === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`An account already exists for ${emailLabel}. Sign in below to continue with this invite.`",
+    "to": "`以下邮箱已有账号：${emailLabel}。请在下方登录以继续接受此邀请。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`An account may already exist for ${emailLabel}. Try signing in instead.`",
+    "to": "`以下邮箱可能已有账号：${emailLabel}。请尝试改为登录。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`Start with a Paperclip account. After that, you'll come right back here to accept the invite for ${companyDisplayName}.`",
+    "to": "`请先创建 Paperclip 账号，然后会返回此处，接受以下组织的邀请：${companyDisplayName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`Granting your access to ${companyDisplayName}.`",
+    "to": "`正在授予你对以下组织的访问权限：${companyDisplayName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`This account already belongs to ${companyDisplayName}.`",
+    "to": "`此账号已属于 ${companyDisplayName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`This will ${\n                          invite.inviteType === \"bootstrap_ceo\" ? \"finish setting up Paperclip\" : `grant or complete your access to ${companyDisplayName}`\n                        }.`",
+    "to": "`此操作将${\n                          invite.inviteType === \"bootstrap_ceo\" ? \"完成 Paperclip 设置\" : `授予或完善你对以下组织的访问权限：${companyDisplayName}`\n                        }。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/JoinRequestQueue.tsx",
+    "from": "`${request.invite.allowedJoinTypes} join invite${request.invite.humanRole ? ` • default role ${request.invite.humanRole}` : \"\"}`",
+    "to": "`${request.invite.allowedJoinTypes} 加入邀请${request.invite.humanRole ? ` • 默认角色：${request.invite.humanRole}` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "`${grant.members?.length} ${grant.members?.length === 1 ? \"member\" : \"members\"} can use this identity.`",
+    "to": "`${grant.members?.length} ${grant.members?.length === 1 ? \"位成员\" : \"位成员\"}可以使用此身份。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "`${result.quarantinedCount} new ${result.quarantinedCount === 1 ? \"action needs\" : \"actions need\"} your OK.`",
+    "to": "`${result.quarantinedCount} 项新增${result.quarantinedCount === 1 ? \"操作需要\" : \"操作需要\"}你确认。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "`Sign in to ${applicationName} again to restore access.`",
+    "to": "`请重新登录 ${applicationName} 以恢复访问权限。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "`Add a working ${applicationName} key to restore access.`",
+    "to": "`请添加有效的 ${applicationName} 密钥以恢复访问权限。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "`Connect ${applicationName} so agents can use it.`",
+    "to": "`连接 ${applicationName}，智能体即可使用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`${target.providerName} is disconnected. Existing Paperclip tasks remain available.`",
+    "to": "`${target.providerName}已断开连接，现有 Paperclip 任务仍可使用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`${target.providerName} still has ${target.remainingConnectionCount} active ${target.remainingConnectionCount === 1 ? \"connection\" : \"connections\"} available to agents.`",
+    "to": "`${target.providerName}仍有 ${target.remainingConnectionCount} 个有效${target.remainingConnectionCount === 1 ? \"连接\" : \"连接\"}可供智能体使用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`${target.providerName} is no longer available to agents through this connection. Its saved credentials were deleted.`",
+    "to": "`${target.providerName}已无法通过此连接供智能体使用，保存的凭据已删除。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`Chat with agents through ${names[endpoint.provider]}.`",
+    "to": "`通过以下服务与智能体聊天：${names[endpoint.provider]}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`This connection will stop receiving new work from ${connectionToRemove.providerName}. Existing Paperclip tasks and conversation history remain available. This does not delete the app, bot, or account in ${connectionToRemove.providerName}.`",
+    "to": "`此连接将停止接收来自以下服务的新工作：${connectionToRemove.providerName}。现有 Paperclip 任务和对话历史仍可使用。不会删除以下服务中的应用、机器人或账号：${connectionToRemove.providerName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`This connection's saved credentials are deleted and agents lose access through it immediately. They can still use ${connectionToRemove.providerName} through ${connectionToRemove.remainingConnectionCount} other active ${connectionToRemove.remainingConnectionCount === 1 ? \"connection\" : \"connections\"}.`",
+    "to": "`此连接保存的凭据将被删除，智能体会立即失去通过此连接访问的权限，但仍可使用 ${connectionToRemove.providerName}，通过其他 ${connectionToRemove.remainingConnectionCount} 个有效${connectionToRemove.remainingConnectionCount === 1 ? \"连接\" : \"连接\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`Manage ${endpoint.assignedAgentName} ${row.name} connection`",
+    "to": "`管理 ${endpoint.assignedAgentName} 的 ${row.name} 连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`Open ${accountName} permissions`",
+    "to": "`打开 ${accountName} 的权限设置`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "from": "`Manage ${accountName} connection`",
+    "to": "`管理 ${accountName} 的连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/ConnectionProvenanceChip.tsx",
+    "from": "`Credentials managed by Vercel Connect (${connectorUid})`",
+    "to": "`凭据由 Vercel Connect 管理（${connectorUid}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "`${target.appName} still has ${target.remainingConnectionCount} active ${target.remainingConnectionCount === 1 ? \"connection\" : \"connections\"} available to agents.`",
+    "to": "`${target.appName}仍有 ${target.remainingConnectionCount} 个有效${target.remainingConnectionCount === 1 ? \"连接\" : \"连接\"}可供智能体使用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "`${target.appName} is no longer available to agents and its credentials are deleted. Connecting it again needs a new sign-in or key.`",
+    "to": "`${target.appName}已无法供智能体使用，凭据已删除。重新连接需要再次登录或提供密钥。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "`Delete ${row.displayName} connection`",
+    "to": "`删除 ${row.displayName} 连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "`This connection's saved credentials are deleted and agents lose access through it immediately. Agents can still use ${connectionToDelete.appName} through ${connectionToDelete.remainingConnectionCount} other active ${connectionToDelete.remainingConnectionCount === 1 ? \"connection\" : \"connections\"}.`",
+    "to": "`此连接保存的凭据将被删除，智能体会立即失去通过此连接访问的权限，但仍可使用 ${connectionToDelete.appName}，通过其他 ${connectionToDelete.remainingConnectionCount} 个有效${connectionToDelete.remainingConnectionCount === 1 ? \"连接\" : \"连接\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "`${names.slice(0, 2).join(\", \")} and ${names.length - 2} more`",
+    "to": "`${names.slice(0, 2).join(\", \")}，另有 ${names.length - 2} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/ReviewQueueCard.tsx",
+    "from": "`${actionLabel(item)} can run this time.`",
+    "to": "`${actionLabel(item)}本次可执行。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/ReviewQueueCard.tsx",
+    "from": "`${actionLabel(item)} won’t ask again.`",
+    "to": "`${actionLabel(item)}以后无需再次确认。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`We couldn't load ${selectedAgentBase?.name ?? \"this agent\"}'s permissions.`",
+    "to": "`无法加载 ${selectedAgentBase?.name ?? \"此智能体\"} 的权限。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`This runs a real call against ${app} as ${agent}.`",
+    "to": "`此操作将向 ${app} 发起真实调用，执行身份为 ${agent}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`No call will be made — this action is off for ${agent}.`",
+    "to": "`不会发起调用，此操作已对以下智能体关闭：${agent}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`After approval, test the ${pending.resumeTool} action with this execution ID. Do not start the original action again.`",
+    "to": "`批准后，请使用此执行 ID 测试 ${pending.resumeTool} 操作。请勿重新启动原始操作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`Worked. ${rows.length} ${rows.length === 1 ? \"row\" : \"rows\"} came back.`",
+    "to": "`执行成功，返回 ${rows.length} ${rows.length === 1 ? \"行\" : \"行\"}数据。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`Worked. ${appName} sent back the result.`",
+    "to": "`执行成功，${appName} 已返回结果。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`${agent.name}'s access profile sets this action to Off.`",
+    "to": "`${agent.name}的访问配置将此操作设为关闭。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "`Last changed${lastChangedByName ? ` by ${lastChangedByName}` : \"\"} · ${relTime(new Date(lastChangedAt))}`",
+    "to": "`上次更改${lastChangedByName ? `，更改者：${lastChangedByName}` : \"\"} · ${relTime(new Date(lastChangedAt))}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${testRunnerLabel} tested as ${agentName ?? \"an agent\"}`",
+    "to": "`${testRunnerLabel}以以下智能体身份测试：${agentName ?? \"一个智能体\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} ran ${action}, but it didn't finish`",
+    "to": "`${who}运行了 ${action}，但未完成`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${action} didn't work for ${lower(who)}`",
+    "to": "`${lower(who)} 的 ${action} 操作未成功`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} - ${action} is turned off`",
+    "to": "`${who}：${action} 已关闭`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`Blocked ${action} - it isn't turned on`",
+    "to": "`已阻止 ${action}，此操作尚未开启`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} asked before running ${action}`",
+    "to": "`${who}在运行前请求确认：${action}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${resolver} said no to ${action}`",
+    "to": "`${resolver}拒绝了 ${action}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} paused this app`",
+    "to": "`${who}暂停了此应用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} resumed this app`",
+    "to": "`${who}恢复了此应用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${count} new ${count === 1 ? \"action\" : \"actions\"} need review`",
+    "to": "`${count} 项新增${count === 1 ? \"操作\" : \"操作\"}需要审查`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} updated this app`",
+    "to": "`${who}更新了此应用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} added ${added} ${added === 1 ? \"sheet\" : \"sheets\"} to the allowlist`",
+    "to": "`${who}向允许列表添加了 ${added} ${added === 1 ? \"个表格\" : \"个表格\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} removed ${removed} ${removed === 1 ? \"sheet\" : \"sheets\"} from the allowlist`",
+    "to": "`${who}从允许列表移除了 ${removed} ${removed === 1 ? \"个表格\" : \"个表格\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} updated the allowlist (added ${added}, removed ${removed})`",
+    "to": "`${who}更新了允许列表（添加 ${added}，移除 ${removed}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "`${who} updated the allowlist`",
+    "to": "`${who}更新了允许列表`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "`${humanizeConnectionDisplayName(connection)} is back online.`",
+    "to": "`${humanizeConnectionDisplayName(connection)}已恢复在线。`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "`Sign in to ${identityProviderName} again.`",
+    "to": "`重新登录 ${identityProviderName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "`Deletes credentials for ${appName} and removes agent access. Reconnecting requires a new sign-in or key.`",
+    "to": "`删除以下应用的凭据：${appName}，并移除智能体访问权限。重新连接需要再次登录或提供密钥。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "`${github.repositoryCount} selected ${github.repositoryCount === 1 ? \"repository\" : \"repositories\"}`",
+    "to": "`${github.repositoryCount} 个已选${github.repositoryCount === 1 ? \"仓库\" : \"仓库\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "`${selected.size} ${selected.size === 1 ? \"person\" : \"people\"} selected`",
+    "to": "`${selected.size} ${selected.size === 1 ? \"位成员\" : \"位成员\"} 已选择`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "`Revoke your ${providerName} identity?`",
+    "to": "`撤销你的 ${providerName} 身份？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+    "from": "`Revoke this ${providerName} identity?`",
+    "to": "`撤销此 ${providerName} 身份？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`${access.agentIds.size} ${access.agentIds.size === 1 ? \"agent\" : \"agents\"} selected`",
+    "to": "`${access.agentIds.size} ${access.agentIds.size === 1 ? \"个智能体\" : \"个智能体\"} 已选择`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Set every action in ${title}`",
+    "to": "`设置以下分组中的全部操作：${title}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Set all: ${option.label}`",
+    "to": "`全部设为：${option.label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "from": "`Paperclip classified this action as ${action.riskLevel}`",
+    "to": "`Paperclip 将此操作归类为 ${action.riskLevel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/CopyableGatewayUrl.tsx",
+    "from": "`${url} — click to copy`",
+    "to": "`${url}，点击复制`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewayDetail.tsx",
+    "from": "`${updated.name} is exposing its tools again.`",
+    "to": "`${updated.name}已重新开放工具。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewayDetail.tsx",
+    "from": "`${updated.name} is off — every client goes silent.`",
+    "to": "`${updated.name}已关闭，所有客户端都将失去访问权限。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewaysList.tsx",
+    "from": "`${gateway.name} is exposing its tools again.`",
+    "to": "`${gateway.name}已重新开放工具。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/GatewaysList.tsx",
+    "from": "`${gateway.name} is off — every client goes silent.`",
+    "to": "`${gateway.name}已关闭，所有客户端都将失去访问权限。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayAdvancedPanel.tsx",
+    "from": "`${gateway.name} is no longer reachable.`",
+    "to": "`${gateway.name}已无法访问。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/OverviewPanel.tsx",
+    "from": "`${needsAttention.length} needs attention`",
+    "to": "`${needsAttention.length} 项需要处理`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/TokensPanel.tsx",
+    "from": "`${token.name} can no longer connect.`",
+    "to": "`${token.name}已无法连接。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`${seconds}s ago`",
+    "to": "`${seconds} 秒前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`${minutes}m ago`",
+    "to": "`${minutes} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`${hours}h ago`",
+    "to": "`${hours} 小时前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`${days}d ago`",
+    "to": "`${days} 天前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Request failed: ${error.status}`",
+    "to": "`请求失败：${error.status}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`No secrets were imported from ${vaultName}.`",
+    "to": "`未从以下密钥库导入任何密钥：${vaultName}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Discard ${selection.size} pending import${selection.size === 1 ? \"\" : \"s\"}?`",
+    "to": "`放弃 ${selection.size} 项待导入内容${selection.size === 1 ? \"\" : \"\"}？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Import ${draftList.length}`",
+    "to": "`导入 ${draftList.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Select all loaded (${selectableInLoaded.length})`",
+    "to": "`选择全部已加载项（${selectableInLoaded.length}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Load ${PAGE_SIZE} more`",
+    "to": "`再加载 ${PAGE_SIZE} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`No remote secrets match \"${query}\".`",
+    "to": "`没有远程密钥匹配“${query}”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`Remove ${draft.candidate.remoteName}`",
+    "to": "`移除 ${draft.candidate.remoteName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`All ${result.importedCount} secrets imported`",
+    "to": "`全部 ${result.importedCount} 个密钥已导入`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "`${totalSelected} selected`",
+    "to": "`${totalSelected} 个已选择`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ProposalsTab.tsx",
+    "from": "`expires in ${hours}h`",
+    "to": "`${hours} 小时后过期`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ProposalsTab.tsx",
+    "from": "`expires in ${days}d`",
+    "to": "`${days} 天后过期`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "`Copy full digest — ${full}`",
+    "to": "`复制完整摘要：${full}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "`Request failed: ${error.status}`",
+    "to": "`请求失败：${error.status}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/user-secret-presentation.tsx",
+    "from": "`${summary.configuredCount} of ${total} set`",
+    "to": "`${summary.configuredCount} / ${total} 已设置`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "`${who} added ${added} allowed ${added === 1 ? \"item\" : \"items\"} in ${app}`",
+    "to": "`${who}添加了 ${added} 个允许的${added === 1 ? \"项目\" : \"项目\"}（应用：${app}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "`${who} removed ${removed} allowed ${removed === 1 ? \"item\" : \"items\"} in ${app}`",
+    "to": "`${who}移除了 ${removed} 个允许的${removed === 1 ? \"项目\" : \"项目\"}（应用：${app}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "`${who} updated the allowlist for ${app}`",
+    "to": "`${who}更新了以下应用的允许列表：${app}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "`${count} new ${count === 1 ? \"action needs\" : \"actions need\"} review in ${app}`",
+    "to": "`${count} 项新增${count === 1 ? \"操作需要\" : \"操作需要\"}审查（应用：${app}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "`Board user ${shortId(gateway.createdByUserId)}`",
+    "to": "`管理面板用户 ${shortId(gateway.createdByUserId)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "`${token.name} was created. Copy it now; it will not be shown again.`",
+    "to": "`${token.name}已创建。请立即复制，之后不会再次显示。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "`Revoke ${token.name}`",
+    "to": "`撤销 ${token.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "`${where}  ·  no keys needed`",
+    "to": "`${where}  ·  无需密钥`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "`bound to ${agents} agent${agents === 1 ? \"\" : \"s\"}`",
+    "to": "`已绑定 ${agents} 个智能体${agents === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "`${bindings.length} binding${bindings.length === 1 ? \"\" : \"s\"}`",
+    "to": "`${bindings.length} binding${bindings.length === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "` · ${patternCount} via pattern`",
+    "to": "` · ${patternCount} 个通过模式匹配`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "` · ${defaultCount} via default`",
+    "to": "` · ${defaultCount} 个来自默认规则`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "`Remove ${binding.targetType} binding`",
+    "to": "`移除 ${binding.targetType} 绑定`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "`Delete ${entry.selectorType} entry`",
+    "to": "`删除 ${entry.selectorType} 条目`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/connection-dialogs.tsx",
+    "from": "`Remove credential reference for ${secretName(c.secretId)}`",
+    "to": "`移除以下密钥的凭据引用：${secretName(c.secretId)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "`This profile stops applying to ${profile.summary.appliesToAgentCount} ${profile.summary.appliesToAgentCount === 1 ? \"agent\" : \"agents\"}. You can restore it later.`",
+    "to": "`此访问配置将不再适用于 ${profile.summary.appliesToAgentCount} ${profile.summary.appliesToAgentCount === 1 ? \"个智能体\" : \"个智能体\"}。之后可以恢复。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "`This permanently deletes the profile and removes ${profile.summary.assignmentCount} ${profile.summary.assignmentCount === 1 ? \"assignment\" : \"assignments\"}.`",
+    "to": "`此操作将永久删除访问配置，并移除 ${profile.summary.assignmentCount} ${profile.summary.assignmentCount === 1 ? \"项分配\" : \"项分配\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "`${appLabel} added ${count} new ${count === 1 ? \"tool\" : \"tools\"} since your last review`",
+    "to": "`${appLabel} 自上次审查以来新增了 ${count} ${count === 1 ? \"个工具\" : \"个工具\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "`Remove this profile from ${label}.`",
+    "to": "`从 ${label} 移除此访问配置。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "`${names[0]} and ${names.length - 1} more apps`",
+    "to": "`${names[0]}，另有 ${names.length - 1} 个应用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "`; ${rollbackFailures} rollback operation(s) also failed`",
+    "to": "`；另有 ${rollbackFailures} 项回退操作失败`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "`Could not update assignment ${operation.key}${suffix}`",
+    "to": "`无法更新分配 ${operation.key}${suffix}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "`already has: ${bits.join(\" · \")}`",
+    "to": "`已有：${bits.join(\" · \")}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/WizardToolsStep.tsx",
+    "from": "`All ${group.name} tools`",
+    "to": "`${group.name} 的全部工具`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/WizardToolsStep.tsx",
+    "from": "`${verb} tools matching ${rule.value}`",
+    "to": "`${verb}匹配 ${rule.value} 的工具`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/shared.tsx",
+    "from": "`${value} ago`",
+    "to": "`${value}前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "{status.label}",
+    "to": "{({ Healthy: \"正常\", \"Needs attention\": \"需要处理\", Paused: \"已暂停\", \"Not connected\": \"未连接\", Retired: \"已停止支持\" } as const)[status.label]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "{row.actionCount} on",
+    "to": "{row.actionCount} 项已开启",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/MissingUserSecretsBanner.tsx",
+    "from": "            {missing.length} user secret{missing.length === 1 ? \"\" : \"s\"} you are responsible for\n            {missing.length === 1 ? \" has\" : \" have\"} no value yet. Runs that require\n            {missing.length === 1 ? \" it\" : \" them\"} will fail until you set your value.",
+    "to": "            你负责的 {missing.length} {missing.length === 1 ? \"项用户密钥\" : \"项用户密钥\"}\n            {missing.length === 1 ? \"尚未设置值\" : \"尚未设置值\"}。设置前，依赖\n            {missing.length === 1 ? \"该密钥\" : \"这些密钥\"}的运行将会失败。",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/MyUserSecretsTab.tsx",
+    "from": "              {missingCount} required secret{missingCount === 1 ? \" still needs\" : \"s still need\"} your\n              value.",
+    "to": "              仍有 {missingCount} {missingCount === 1 ? \"项必需密钥\" : \"项必需密钥\"}需要你\n              提供值。",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "from": "What {appName} said",
+    "to": "{appName} 返回的信息",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "{row.source}",
+    "to": "{row.source === \"added directly\" ? \"直接添加\" : row.source.replace(/^added by rule: all /, \"按规则添加：全部 \").replace(/^added by rule: /, \"按规则添加：\").replace(/ tools$/, \" 工具\")}",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "{row.capabilities}",
+    "to": "{({ Read: \"只读\", Write: \"写入\", Destructive: \"破坏性\" } as Record<string, string>)[row.capabilities] ?? row.capabilities}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Connect\"",
+    "to": "label: \"连接\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Discover catalog\"",
+    "to": "label: \"发现工具目录\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Allowed read\"",
+    "to": "label: \"允许读取\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Ask-first write\"",
+    "to": "label: \"先确认再写入\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Denied call\"",
+    "to": "label: \"拒绝调用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Schema-change quarantine\"",
+    "to": "label: \"架构变更隔离\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Revoke\"",
+    "to": "label: \"撤销\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/smoke-lab-matrix.ts",
+    "from": "label: \"Audit evidence\"",
+    "to": "label: \"审计证据\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "          {rows.length} tool{rows.length === 1 ? \"\" : \"s\"}",
+    "to": "          {rows.length} tool{rows.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "                          {toolCount} tool{toolCount === 1 ? \"\" : \"s\"} · {bindingsSubtitle(profile.bindings)}",
+    "to": "                          {toolCount} tool{toolCount === 1 ? \"\" : \"\"} · {bindingsSubtitle(profile.bindings)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/model.ts",
+    "from": "AI_CONNECTION_STATUS: Record<AiConnectionStatus, string> = {\n  connected: \"Connected\",\n  needs_attention: \"Needs attention\",\n  expired: \"Expired\",\n  revoked: \"Revoked\",\n}",
+    "to": "AI_CONNECTION_STATUS: Record<AiConnectionStatus, string> = {\n  connected: \"已连接\",\n  needs_attention: \"需要处理\",\n  expired: \"已过期\",\n  revoked: \"已撤销\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/model.ts",
+    "from": "export function aiConnectionProblem(connection?: AiConnectionSummary) {\n  if (!connection)\n    return \"No connection selected. Connect an account to continue.\";\n  return (\n    connection.unavailableReason ??\n    (connection.status === \"connected\"\n      ? null\n      : `${AI_CONNECTION_STATUS[connection.status]}. Reconnect this account to continue.`)\n  );\n}",
+    "to": "export function aiConnectionProblem(connection?: AiConnectionSummary) {\n  if (!connection)\n    return \"未选择连接。请连接账号以继续。\";\n  return (\n    connection.unavailableReason ??\n    (connection.status === \"connected\"\n      ? null\n      : `${AI_CONNECTION_STATUS[connection.status]}。请重新连接此账号以继续。`)\n  );\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/model.ts",
+    "from": "export function bindingProblem(\n  binding: AiConnectionBinding,\n  requirement: AiConnectionRequirement,\n  connections: AiConnectionSummary[],\n  userId: string,\n  _agentId: string,\n) {\n  if (\n    binding.provider !== requirement.provider ||\n    (binding.mode !== \"responsible_user\" && requirement.method !== undefined && binding.method !== requirement.method)\n  )\n    return \"Choose a connection compatible with this provider and sign-in method.\";\n  if (binding.mode === \"responsible_user\")\n    return aiConnectionProblem(\n      personalAiDefault(connections, requirement, userId),\n    );\n  const connection = connections.find(\n    (item) =>\n      item.id === binding.connectionId &&\n      item.grantId === binding.grantId &&\n      item.method === binding.method &&\n      matchesAiRequirement(item, requirement),\n  );\n  if (!connection)\n    return \"This connection is no longer available for this agent. Choose another connection.\";\n  if (binding.mode === \"shared\" && connection.ownership !== \"shared\")\n    return \"Choose a company-shared connection.\";\n  if (\n    binding.mode === \"delegated\" &&\n    (connection.ownership !== \"personal\" ||\n      connection.ownerUserId !== userId)\n  )\n    return \"This credential is not shared with you. Choose a connection you can use.\";\n  return aiConnectionProblem(connection);\n}",
+    "to": "export function bindingProblem(\n  binding: AiConnectionBinding,\n  requirement: AiConnectionRequirement,\n  connections: AiConnectionSummary[],\n  userId: string,\n  _agentId: string,\n) {\n  if (\n    binding.provider !== requirement.provider ||\n    (binding.mode !== \"responsible_user\" && requirement.method !== undefined && binding.method !== requirement.method)\n  )\n    return \"请选择与此服务商和登录方式兼容的连接。\";\n  if (binding.mode === \"responsible_user\")\n    return aiConnectionProblem(\n      personalAiDefault(connections, requirement, userId),\n    );\n  const connection = connections.find(\n    (item) =>\n      item.id === binding.connectionId &&\n      item.grantId === binding.grantId &&\n      item.method === binding.method &&\n      matchesAiRequirement(item, requirement),\n  );\n  if (!connection)\n    return \"此智能体已无法使用此连接，请选择其他连接。\";\n  if (binding.mode === \"shared\" && connection.ownership !== \"shared\")\n    return \"请选择组织共享连接。\";\n  if (\n    binding.mode === \"delegated\" &&\n    (connection.ownership !== \"personal\" ||\n      connection.ownerUserId !== userId)\n  )\n    return \"此凭据未与你共享，请选择你有权使用的连接。\";\n  return aiConnectionProblem(connection);\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/model.ts",
+    "from": "export function validateName(\n  name: string,\n  duplicateNames: ReadonlySet<string>,\n  reservedPrefixes: readonly string[],\n): NameIssue | null {\n  const trimmed = name.trim();\n  if (!trimmed) return null;\n  if (!ENV_NAME_RE.test(trimmed)) {\n    return { level: \"error\", message: \"Invalid name — use letters, digits and _\" };\n  }\n  if (duplicateNames.has(trimmed)) {\n    return { level: \"error\", message: \"Duplicate name\" };\n  }\n  for (const prefix of reservedPrefixes) {\n    if (prefix && trimmed.startsWith(prefix)) {\n      return { level: \"warn\", message: \"Reserved prefix — provided automatically and may be overridden\" };\n    }\n  }\n  return null;\n}",
+    "to": "export function validateName(\n  name: string,\n  duplicateNames: ReadonlySet<string>,\n  reservedPrefixes: readonly string[],\n): NameIssue | null {\n  const trimmed = name.trim();\n  if (!trimmed) return null;\n  if (!ENV_NAME_RE.test(trimmed)) {\n    return { level: \"error\", message: \"名称无效，请使用字母、数字和下划线\" };\n  }\n  if (duplicateNames.has(trimmed)) {\n    return { level: \"error\", message: \"名称重复\" };\n  }\n  for (const prefix of reservedPrefixes) {\n    if (prefix && trimmed.startsWith(prefix)) {\n      return { level: \"warn\", message: \"保留前缀，由系统自动提供，可能被覆盖\" };\n    }\n  }\n  return null;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/model.ts",
+    "from": "export function computeRowHealth(row: EnvRow, secrets: readonly CompanySecret[]): SecretHealth | null {\n  if (row.source !== \"secret\" || !row.secretId) return null;\n  const secret = secrets.find((candidate) => candidate.id === row.secretId);\n  if (!secret) {\n    return {\n      level: \"error\",\n      kind: \"missing\",\n      message: \"This secret no longer exists — runs will fail until you rebind.\",\n    };\n  }\n  if (secret.status !== \"active\") {\n    return {\n      level: \"warn\",\n      kind: \"disabled\",\n      message: \"Runs will fail until re-enabled or rebound.\",\n    };\n  }\n  return null;\n}",
+    "to": "export function computeRowHealth(row: EnvRow, secrets: readonly CompanySecret[]): SecretHealth | null {\n  if (row.source !== \"secret\" || !row.secretId) return null;\n  const secret = secrets.find((candidate) => candidate.id === row.secretId);\n  if (!secret) {\n    return {\n      level: \"error\",\n      kind: \"missing\",\n      message: \"此密钥已不存在。重新绑定之前，运行会失败。\",\n    };\n  }\n  if (secret.status !== \"active\") {\n    return {\n      level: \"warn\",\n      kind: \"disabled\",\n      message: \"重新启用或重新绑定之前，运行会失败。\",\n    };\n  }\n  return null;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/environment-variables-editor/model.ts",
+    "from": "export function computeUserSecretRowHealth(\n  row: EnvRow,\n  definitions: readonly UserSecretDefinition[] | undefined,\n): SecretHealth | null {\n  if (row.source !== \"user_secret\" || !row.userSecretKey || !definitions?.length) return null;\n  const definition = definitions.find((candidate) => candidate.key === row.userSecretKey);\n  if (!definition) {\n    return {\n      level: \"error\",\n      kind: \"missing\",\n      message: \"This user secret definition no longer exists — runs will fail until you rebind.\",\n    };\n  }\n  if (definition.status !== \"active\") {\n    return {\n      level: \"warn\",\n      kind: \"disabled\",\n      message: \"Runs will fail until this user secret definition is re-enabled or rebound.\",\n    };\n  }\n  return null;\n}",
+    "to": "export function computeUserSecretRowHealth(\n  row: EnvRow,\n  definitions: readonly UserSecretDefinition[] | undefined,\n): SecretHealth | null {\n  if (row.source !== \"user_secret\" || !row.userSecretKey || !definitions?.length) return null;\n  const definition = definitions.find((candidate) => candidate.key === row.userSecretKey);\n  if (!definition) {\n    return {\n      level: \"error\",\n      kind: \"missing\",\n      message: \"此用户密钥定义已不存在。重新绑定之前，运行会失败。\",\n    };\n  }\n  if (definition.status !== \"active\") {\n    return {\n      level: \"warn\",\n      kind: \"disabled\",\n      message: \"重新启用或重新绑定此用户密钥定义之前，运行会失败。\",\n    };\n  }\n  return null;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-identity.ts",
+    "from": "export function grantStatusLabel(status: ConnectionGrantStatus | null): string {\n  switch (status) {\n    case \"active\":\n      return \"Connected\";\n    case \"needs_reauthorization\":\n      return \"Needs attention\";\n    case \"expired\":\n      return \"Expired\";\n    case \"revoked\":\n      return \"Revoked\";\n    default:\n      return \"Not connected\";\n  }\n}",
+    "to": "export function grantStatusLabel(status: ConnectionGrantStatus | null): string {\n  switch (status) {\n    case \"active\":\n      return \"已连接\";\n    case \"needs_reauthorization\":\n      return \"需要处理\";\n    case \"expired\":\n      return \"已过期\";\n    case \"revoked\":\n      return \"已撤销\";\n    default:\n      return \"未连接\";\n  }\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-identity.ts",
+    "from": "export function grantAccountLabel(\n  grant: Pick<ConnectionGrant, \"kind\" | \"providerTenant\"> | null,\n  options: { subjectLabel?: string | null } = {},\n): string {\n  const tenantName = grant?.providerTenant?.name?.trim();\n  if (tenantName) return tenantName;\n  if (grant?.kind === \"user\") return options.subjectLabel?.trim() || \"Connected account\";\n  if (grant?.kind === \"agent\") return options.subjectLabel?.trim() || \"Dedicated account\";\n  return \"Shared credential\";\n}",
+    "to": "export function grantAccountLabel(\n  grant: Pick<ConnectionGrant, \"kind\" | \"providerTenant\"> | null,\n  options: { subjectLabel?: string | null } = {},\n): string {\n  const tenantName = grant?.providerTenant?.name?.trim();\n  if (tenantName) return tenantName;\n  if (grant?.kind === \"user\") return options.subjectLabel?.trim() || \"已连接账号\";\n  if (grant?.kind === \"agent\") return options.subjectLabel?.trim() || \"专用账号\";\n  return \"共享凭据\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-identity.ts",
+    "from": "export function audienceSummary(grant: Pick<ConnectionGrant, \"members\"> | null): string {\n  const count = grant?.members?.length ?? 0;\n  if (count === 0) return \"All organization members\";\n  return `${count} selected ${count === 1 ? \"member\" : \"members\"}`;\n}",
+    "to": "export function audienceSummary(grant: Pick<ConnectionGrant, \"members\"> | null): string {\n  const count = grant?.members?.length ?? 0;\n  if (count === 0) return \"全部组织成员\";\n  return `${count} 个已选${count === 1 ? \"成员\" : \"成员\"}`;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/gateway-helpers.ts",
+    "from": "TOKEN_STATUS_LABEL: Record<TokenStatus, string> = {\n  active: \"Active\",\n  expiring: \"Expiring\",\n  expired: \"Expired\",\n  revoked: \"Revoked\",\n}",
+    "to": "TOKEN_STATUS_LABEL: Record<TokenStatus, string> = {\n  active: \"活跃\",\n  expiring: \"即将到期\",\n  expired: \"已过期\",\n  revoked: \"已撤销\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/gateway-helpers.ts",
+    "from": "export function formatScope(\n  gateway: ToolMcpGatewayWithTokens,\n  projectNames: Map<string, string>,\n  agentNames: Map<string, string>,\n): string {\n  if (gateway.contextScopeType !== \"none\" && gateway.contextScopeId) {\n    if (gateway.contextScopeType === \"project\") {\n      return `Project · ${projectNames.get(gateway.contextScopeId) ?? shortId(gateway.contextScopeId)}`;\n    }\n    if (gateway.contextScopeType === \"agent\") {\n      return `Agent · ${agentNames.get(gateway.contextScopeId) ?? shortId(gateway.contextScopeId)}`;\n    }\n    return `${gateway.contextScopeType} · ${shortId(gateway.contextScopeId)}`;\n  }\n  if (gateway.projectId) return `Project · ${projectNames.get(gateway.projectId) ?? shortId(gateway.projectId)}`;\n  if (gateway.agentId) return `Agent · ${agentNames.get(gateway.agentId) ?? shortId(gateway.agentId)}`;\n  return \"Organization\";\n}",
+    "to": "export function formatScope(\n  gateway: ToolMcpGatewayWithTokens,\n  projectNames: Map<string, string>,\n  agentNames: Map<string, string>,\n): string {\n  if (gateway.contextScopeType !== \"none\" && gateway.contextScopeId) {\n    if (gateway.contextScopeType === \"project\") {\n      return `项目 · ${projectNames.get(gateway.contextScopeId) ?? shortId(gateway.contextScopeId)}`;\n    }\n    if (gateway.contextScopeType === \"agent\") {\n      return `智能体 · ${agentNames.get(gateway.contextScopeId) ?? shortId(gateway.contextScopeId)}`;\n    }\n    return `${gateway.contextScopeType} · ${shortId(gateway.contextScopeId)}`;\n  }\n  if (gateway.projectId) return `项目 · ${projectNames.get(gateway.projectId) ?? shortId(gateway.projectId)}`;\n  if (gateway.agentId) return `智能体 · ${agentNames.get(gateway.agentId) ?? shortId(gateway.agentId)}`;\n  return \"组织\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/gateway-helpers.ts",
+    "from": "export function formatOwner(gateway: ToolMcpGatewayWithTokens, agentNames: Map<string, string>): string {\n  if (gateway.createdByAgentId) {\n    return agentNames.get(gateway.createdByAgentId) ?? `Agent ${shortId(gateway.createdByAgentId)}`;\n  }\n  return \"Board\";\n}",
+    "to": "export function formatOwner(gateway: ToolMcpGatewayWithTokens, agentNames: Map<string, string>): string {\n  if (gateway.createdByAgentId) {\n    return agentNames.get(gateway.createdByAgentId) ?? `智能体 ${shortId(gateway.createdByAgentId)}`;\n  }\n  return \"管理者\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/gateway-helpers.ts",
+    "from": "export function allowedToolsLabel(profile: ToolProfileWithDetails | undefined): string {\n  if (!profile) return \"Profile unavailable\";\n  const { accessMode, allowedToolCount, totalToolCount, excludedToolCount } = profile.summary;\n  const count =\n    accessMode === \"all_except\"\n      ? Math.max(totalToolCount - excludedToolCount, 0)\n      : allowedToolCount;\n  if (count === 0) return \"No tools allowed\";\n  return `${count} ${count === 1 ? \"tool\" : \"tools\"}`;\n}",
+    "to": "export function allowedToolsLabel(profile: ToolProfileWithDetails | undefined): string {\n  if (!profile) return \"访问配置不可用\";\n  const { accessMode, allowedToolCount, totalToolCount, excludedToolCount } = profile.summary;\n  const count =\n    accessMode === \"all_except\"\n      ? Math.max(totalToolCount - excludedToolCount, 0)\n      : allowedToolCount;\n  if (count === 0) return \"未允许任何工具\";\n  return `${count} ${count === 1 ? \"个工具\" : \"个工具\"}`;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/action-permission-summary.ts",
+    "from": "function summaryCount(label: string, count: number): string {\n  return `${label} ${count}${count === 1 ? \" action\" : \"\"}`;\n}",
+    "to": "function summaryCount(label: string, count: number): string {\n  return `${label} ${count}${count === 1 ? \" 项操作\" : \" 项操作\"}`;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/action-permission-summary.ts",
+    "from": "export function formatActionPermissionSummary(summary: ActionPermissionSummary): string {\n  return [\n    summaryCount(\"Allowed for\", summary.allowedCount),\n    summaryCount(\"Ask first for\", summary.askFirstCount),\n    summaryCount(\"Off for\", summary.offCount),\n  ].join(\" · \");\n}",
+    "to": "export function formatActionPermissionSummary(summary: ActionPermissionSummary): string {\n  return [\n    summaryCount(\"允许\", summary.allowedCount),\n    summaryCount(\"先询问\", summary.askFirstCount),\n    summaryCount(\"关闭\", summary.offCount),\n  ].join(\" · \");\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-summary.ts",
+    "from": "export function allowsLabel(summary: ToolProfileSummary): string {\n  if (summary.accessMode === \"all_except\") {\n    return summary.excludedToolCount === 0\n      ? \"All tools\"\n      : `All except ${plural(summary.excludedToolCount, \"tool\")}`;\n  }\n  const parts = [plural(summary.allowedToolCount, \"tool\")];\n  if (summary.allowedApplicationCount > 0) {\n    parts.push(plural(summary.allowedApplicationCount, \"app\"));\n  }\n  return parts.join(\" · \");\n}",
+    "to": "export function allowsLabel(summary: ToolProfileSummary): string {\n  if (summary.accessMode === \"all_except\") {\n    return summary.excludedToolCount === 0\n      ? \"全部工具\"\n      : `除 ${plural(summary.excludedToolCount, \"tool\")} 外全部允许`;\n  }\n  const parts = [plural(summary.allowedToolCount, \"tool\")];\n  if (summary.allowedApplicationCount > 0) {\n    parts.push(plural(summary.allowedApplicationCount, \"app\"));\n  }\n  return parts.join(\" · \");\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-summary.ts",
+    "from": "export function assignedLabel(summary: ToolProfileSummary): AssignedLabel {\n  if (summary.isCompanyDefault) return { text: \"Organization default\", unassigned: false };\n  if (summary.appliesToAgentCount > 0) {\n    return { text: plural(summary.appliesToAgentCount, \"agent\"), unassigned: false };\n  }\n  if (summary.assignmentCount > 0) {\n    return { text: plural(summary.assignmentCount, \"assignment\"), unassigned: false };\n  }\n  return { text: \"Not assigned yet\", unassigned: true };\n}",
+    "to": "export function assignedLabel(summary: ToolProfileSummary): AssignedLabel {\n  if (summary.isCompanyDefault) return { text: \"组织默认设置\", unassigned: false };\n  if (summary.appliesToAgentCount > 0) {\n    return { text: plural(summary.appliesToAgentCount, \"agent\"), unassigned: false };\n  }\n  if (summary.assignmentCount > 0) {\n    return { text: plural(summary.assignmentCount, \"assignment\"), unassigned: false };\n  }\n  return { text: \"尚未分配\", unassigned: true };\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-summary.ts",
+    "from": "STATUS_LABEL: Record<ToolProfileStatus, string> = {\n  draft: \"Draft\",\n  active: \"Active\",\n  disabled: \"Off\",\n  archived: \"Archived\",\n}",
+    "to": "STATUS_LABEL: Record<ToolProfileStatus, string> = {\n  draft: \"草稿\",\n  active: \"活跃\",\n  disabled: \"关闭\",\n  archived: \"已归档\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-tabs.ts",
+    "from": "APP_TABS = [\n  { key: \"permissions\", label: \"Permissions\", icon: ShieldCheck },\n  { key: \"review\", label: \"Review\", icon: Inbox },\n] as const",
+    "to": "APP_TABS = [\n  { key: \"permissions\", label: \"权限\", icon: ShieldCheck },\n  { key: \"review\", label: \"审查\", icon: Inbox },\n] as const",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/gateway-tabs.ts",
+    "from": "GATEWAY_TABS = [\n  { key: \"overview\", label: \"Overview\", icon: LayoutGrid },\n  { key: \"apps\", label: \"Apps & tools\", icon: Boxes },\n  { key: \"tokens\", label: \"Tokens\", icon: KeyRound },\n  { key: \"activity\", label: \"Activity\", icon: Activity },\n  { key: \"advanced\", label: \"Advanced\", icon: Wrench },\n] as const",
+    "to": "GATEWAY_TABS = [\n  { key: \"overview\", label: \"概览\", icon: LayoutGrid },\n  { key: \"apps\", label: \"应用与工具\", icon: Boxes },\n  { key: \"tokens\", label: \"Token 数\", icon: KeyRound },\n  { key: \"activity\", label: \"活动记录\", icon: Activity },\n  { key: \"advanced\", label: \"高级\", icon: Wrench },\n] as const",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/tool-tabs.ts",
+    "from": "ADVANCED_TABS = [\n  { key: \"paste-config\", label: \"Paste a config\", icon: ClipboardPaste },\n] as const",
+    "to": "ADVANCED_TABS = [\n  { key: \"paste-config\", label: \"粘贴配置\", icon: ClipboardPaste },\n] as const",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/tool-tabs.ts",
+    "from": "DEVELOPER_TABS = [\n  { key: \"gateways\", label: \"Gateways\", icon: Network },\n  { key: \"profiles\", label: \"Profiles\", icon: Layers },\n  { key: \"smoke-lab\", label: \"Smoke Lab\", icon: FlaskConical },\n] as const",
+    "to": "DEVELOPER_TABS = [\n  { key: \"gateways\", label: \"网关\", icon: Network },\n  { key: \"profiles\", label: \"访问配置\", icon: Layers },\n  { key: \"smoke-lab\", label: \"冒烟测试实验室\", icon: FlaskConical },\n] as const",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-summary.ts",
+    "from": "return `${n} ${n === 1 ? one : many}`;",
+    "to": "return `${n} ${({ tool: \"个工具\", app: \"个应用\", agent: \"个智能体\", assignment: \"项分配\" } as Record<string, string>)[one] ?? (n === 1 ? one : many)}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/model.ts",
+    "from": "return method === \"subscription\"\n    ? (AI_PROVIDERS[provider].subscriptionName ?? \"Subscription unavailable\")\n    : \"API key\";",
+    "to": "return method === \"subscription\"\n    ? (AI_PROVIDERS[provider].subscriptionName?.replace(/ subscription$/, \" 订阅\") ?? \"订阅不可用\")\n    : \"API 密钥\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "{connection ? connectionTypeLabel(connection.credentialPolicy) : \"—\"}",
+    "to": "{connection ? ({ Personal: \"个人\", \"Dedicated agent\": \"专用智能体\", Organization: \"组织\" } as const)[connectionTypeLabel(connection.credentialPolicy)] : \"—\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AppConnectionSidebar.production.tsx",
+    "from": "application?.name ?? \"App\"",
+    "to": "application?.name ?? \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AppConnectionSidebar.tsx",
+    "from": "application?.name ?? \"App\"",
+    "to": "application?.name ?? \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "return \"Agent\";",
+    "to": "return \"智能体\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/InvitesSection.tsx",
+    "from": "invite.humanRole ?? \"Human\"",
+    "to": "invite.humanRole ?? \"人员\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "details.push(\"Blocked\")",
+    "to": "details.push(\"受阻\")",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "return \"Continue\";",
+    "to": "return \"继续\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "connection\n    ? logoEntry ? appDefinitionName(logoEntry) : humanizeConnectionDisplayName(connection)\n    : \"App\"",
+    "to": "connection\n    ? logoEntry ? appDefinitionName(logoEntry) : humanizeConnectionDisplayName(connection)\n    : \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "connection\n    ? connectionDisplayNameForOwner(connection, baseAppName, owner)\n    : \"App\"",
+    "to": "connection\n    ? connectionDisplayNameForOwner(connection, baseAppName, owner)\n    : \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppNotConnected.tsx",
+    "from": "application?.name ?? \"App\"",
+    "to": "application?.name ?? \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "return \"Board\";",
+    "to": "return \"管理者\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "return \"Someone\";",
+    "to": "return \"某位用户\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "agentName ?? \"An agent\"",
+    "to": "agentName ?? \"一个智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "actionRequest?.resolverDisplayName ?? \"Someone\"",
+    "to": "actionRequest?.resolverDisplayName ?? \"某位用户\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActivityPanel.tsx",
+    "from": "event.actorDisplayName ?? agentName ?? \"Someone\"",
+    "to": "event.actorDisplayName ?? agentName ?? \"某位用户\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "return \"Not set\";",
+    "to": "return \"未设置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/AdvancedPanel.tsx",
+    "from": "return \"Unknown\";",
+    "to": "return \"未知\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "typeof config.features === \"string\" ? config.features : \"None\"",
+    "to": "typeof config.features === \"string\" ? config.features : \"无\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "typeof config.tools === \"string\" && config.tools ? config.tools : \"None\"",
+    "to": "typeof config.tools === \"string\" && config.tools ? config.tools : \"无\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-owner.tsx",
+    "from": "connection.createdByUserId === \"local-board\" ? \"Board\" : \"Board member\"",
+    "to": "connection.createdByUserId === \"local-board\" ? \"管理者\" : \"Board member\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-owner.tsx",
+    "from": "return \"Board\";",
+    "to": "return \"管理者\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-owner.tsx",
+    "from": "first.split(\"@\")[0] || \"Board\"",
+    "to": "first.split(\"@\")[0] || \"管理者\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayActivityPanel.tsx",
+    "from": "event.agentDisplayName ?? \"Client\"",
+    "to": "event.agentDisplayName ?? \"客户端\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayActivityPanel.tsx",
+    "from": "event.appDisplayName ?? event.connectionDisplayName ?? event.applicationDisplayName ?? \"App\"",
+    "to": "event.appDisplayName ?? event.connectionDisplayName ?? event.applicationDisplayName ?? \"应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/gateways/panels/GatewayActivityPanel.tsx",
+    "from": "event.toolDisplayName ?? event.invocation?.toolName ?? \"Tool call\"",
+    "to": "event.toolDisplayName ?? event.invocation?.toolName ?? \"工具调用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "return \"Imported\";",
+    "to": "return \"已导入\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "return \"Conflict\";",
+    "to": "return \"冲突\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/ImportFromVaultDialog.tsx",
+    "from": "return \"Ready\";",
+    "to": "return \"就绪\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/proposal-review.tsx",
+    "from": "result.target?.name ?? \"Agent\"",
+    "to": "result.target?.name ?? \"智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/user-secret-presentation.tsx",
+    "from": "return \"Value set\";",
+    "to": "return \"已设置值\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/user-secret-presentation.tsx",
+    "from": "return \"Not set\";",
+    "to": "return \"未设置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/secrets/user-secret-presentation.tsx",
+    "from": "return \"Disabled\";",
+    "to": "return \"已禁用\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "event.actorDisplayName ?? event.agentDisplayName ?? \"Someone\"",
+    "to": "event.actorDisplayName ?? event.agentDisplayName ?? \"某位用户\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "event.agentDisplayName ?? \"An agent\"",
+    "to": "event.agentDisplayName ?? \"一个智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "request.dispatched === true ? \"Yes\" : \"No\"",
+    "to": "request.dispatched === true ? \"是\" : \"否\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "return \"Board\";",
+    "to": "return \"管理者\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/GatewaysTab.tsx",
+    "from": "return \"Company\";",
+    "to": "return \"组织\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "return \"Key\";",
+    "to": "return \"键\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "connectResult?.application.name ?? \"Imported app\"",
+    "to": "connectResult?.application.name ?? \"导入的应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "label: \"Company\"",
+    "to": "label: \"组织\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "from": "targetId === labels.companyId ? \"Company\" : targetId",
+    "to": "targetId === labels.companyId ? \"组织\" : targetId",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "confirm: \"Archive\"",
+    "to": "confirm: \"归档\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "confirm: \"Restore\"",
+    "to": "confirm: \"恢复\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileActionDialog.tsx",
+    "from": "confirm: \"Delete\"",
+    "to": "confirm: \"删除\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "return \"An app\";",
+    "to": "return \"一个应用\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "names[0] ?? \"An app\"",
+    "to": "names[0] ?? \"一个应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "return \"Organization\";",
+    "to": "return \"组织\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "return \"Agent\";",
+    "to": "return \"智能体\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "return \"Project\";",
+    "to": "return \"项目\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileDetail.tsx",
+    "from": "return \"Routine\";",
+    "to": "return \"例行任务\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/WizardToolsStep.tsx",
+    "from": "rule.effect === \"include\" ? \"Allow\" : \"Block\"",
+    "to": "rule.effect === \"include\" ? \"允许\" : \"阻止\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${amount(window.limit, window.unit)} cap`",
+    "to": "`${amount(window.limit, window.unit)} 上限`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${amount(window.used, window.unit)} / ${amount(window.limit, window.unit)} used`",
+    "to": "`${amount(window.used, window.unit)} / ${amount(window.limit, window.unit)} 已用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${usageNumber(window.usedPercent)}% used`",
+    "to": "`${usageNumber(window.usedPercent)}% 已用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${amount(window.used, window.unit)} used`",
+    "to": "`${amount(window.used, window.unit)} 已用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${usageNumber(window.remainingPercent)}% left`",
+    "to": "`${usageNumber(window.remainingPercent)}% 剩余`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`${amount(window.remaining, window.unit)} left`",
+    "to": "`${amount(window.remaining, window.unit)} 剩余`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`Resets ${formatDateTime(window.resetsAt, { includeYear: false })}`",
+    "to": "`重置时间：${formatDateTime(window.resetsAt, { includeYear: false })}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "`Resets ${window.resetInterval}`",
+    "to": "`重置时间：${window.resetInterval}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ai-connections/AiConnectionUsagePanel.tsx",
+    "from": "function overageSummary(usage: AiConnectionUsage) {\n  const overage = usage.overage!;\n  const details = [overage.available === true ? \"Available\"\n    : overage.enabled === false ? \"Off\"\n    : overage.available === false ? (overage.enabled === true ? \"On · Unavailable\" : \"Unavailable\")\n    : overage.enabled === true ? \"On · Availability unknown\" : \"Not reported\"];\n  if (overage.unlimited === true) details.push(\"Unlimited\");\n  else if (overage.balance != null && (overage.balance !== 0 || overage.enabled !== false)) details.push(amount(overage.balance, overage.unit));\n  if (overage.remaining != null && (overage.remaining !== 0 || overage.enabled !== false)\n    && !usage.limits.some((window) => window.scope === \"overage\" && window.remaining === overage.remaining && window.unit === overage.unit)) {\n    details.push(`${amount(overage.remaining, overage.unit)} left`);\n  }\n  return details.join(\" · \");\n}",
+    "to": "function overageSummary(usage: AiConnectionUsage) {\n  const overage = usage.overage!;\n  const details = [overage.available === true ? \"可用\"\n    : overage.enabled === false ? \"关闭\"\n    : overage.available === false ? (overage.enabled === true ? \"已开启 · 不可用\" : \"不可用\")\n    : overage.enabled === true ? \"已开启 · 可用性未知\" : \"未提供数据\"];\n  if (overage.unlimited === true) details.push(\"无限制\");\n  else if (overage.balance != null && (overage.balance !== 0 || overage.enabled !== false)) details.push(amount(overage.balance, overage.unit));\n  if (overage.remaining != null && (overage.remaining !== 0 || overage.enabled !== false)\n    && !usage.limits.some((window) => window.scope === \"overage\" && window.remaining === overage.remaining && window.unit === overage.unit)) {\n    details.push(`${amount(overage.remaining, overage.unit)} left`);\n  }\n  return details.join(\" · \");\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/chat/board-send-draft.ts",
+    "from": "\"Saved channel delivery identity could not be read. Check Activity before starting another send.\"",
+    "to": "\"无法读取已保存的频道投递标识。请先检查活动记录，再发起其他发送。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/generic-mcp-connect.ts",
+    "from": "`Add a value for \"${name}\", or remove the row.`",
+    "to": "`请为“${name}”填写值，或移除此行。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/generic-mcp-connect.ts",
+    "from": "`\"${name}\" is listed twice.`",
+    "to": "`“${name}”重复列出。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-model.ts",
+    "from": "return \"None selected\";",
+    "to": "return \"未选择任何项\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-model.ts",
+    "from": "`All ${group.name} tools (${total})`",
+    "to": "`${group.name} 的全部工具（${total} 个）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-model.ts",
+    "from": "`All ${group.name} except ${n}`",
+    "to": "`${group.name} 的全部工具，排除 ${n} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/profile-model.ts",
+    "from": "`${n} of ${total} ${group.name} tools`",
+    "to": "`${group.name} 工具：${n} / ${total} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "{t.title}",
+    "to": "{({\"read_only\": \"只读\", \"everyday\": \"日常工作\", \"full_access\": \"完整访问\", \"scratch\": \"从零开始\", \"copy\": \"复制现有访问配置\"} as const)[t.key]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfileWizard.tsx",
+    "from": "{t.description}",
+    "to": "{({\"read_only\": \"只查看和获取内容，不进行任何更改。\", \"everyday\": \"允许读取和常规更改，不包含破坏性工具。\", \"full_access\": \"允许所有已连接应用提供的全部工具。\", \"scratch\": \"从空配置开始，逐个添加工具。\", \"copy\": \"以现有访问配置为起点。\"} as const)[t.key]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfilesIndex.tsx",
+    "from": "{template.title}",
+    "to": "{({\"read_only\": \"只读\", \"everyday\": \"日常工作\", \"full_access\": \"完整访问\", \"scratch\": \"从零开始\", \"copy\": \"复制现有访问配置\"} as const)[template.key]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/profiles/ProfilesIndex.tsx",
+    "from": "{template.description}",
+    "to": "{({\"read_only\": \"只查看和获取内容，不进行任何更改。\", \"everyday\": \"允许读取和常规更改，不包含破坏性工具。\", \"full_access\": \"允许所有已连接应用提供的全部工具。\", \"scratch\": \"从空配置开始，逐个添加工具。\", \"copy\": \"以现有访问配置为起点。\"} as const)[template.key]}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/connection-owner.tsx",
+    "from": "return label.toLowerCase().endsWith(\"s\") ? `${label}’` : `${label}’s`;",
+    "to": "return label.toLowerCase().endsWith(\"s\") ? `${label}的` : `${label}的`;",
+    "expected": 1
+  }
+]

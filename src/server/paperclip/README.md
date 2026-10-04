@@ -4,7 +4,7 @@
 
 - 上游：`paperclipai/paperclip`
 - 固定提交：`994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`
-- 授权：MIT，完整保留于 `LICENSE.paperclip`
+- 授权：MIT，完整保留于 `LICENSE.paperclip`；编辑器翻译 hook 的依赖归属于 `LICENSE.mdxeditor`
 - 未在本次工作中部署服务器、建立真实账号、配置真实密钥、连接模型服务或运行收费智能体
 
 ## 使用

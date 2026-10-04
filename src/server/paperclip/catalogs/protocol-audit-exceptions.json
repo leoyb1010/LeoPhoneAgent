@@ -1,0 +1,8 @@
+[
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "literal": "comparison:All secrets",
+    "requiredReplacement": "{parentFolderPath ? (",
+    "reason": "Folder breadcrumb identity uses the existing stable parent path rather than translated display text; names are no longer mistaken for root identity."
+  }
+]

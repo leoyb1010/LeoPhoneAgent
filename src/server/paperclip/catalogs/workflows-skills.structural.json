@@ -1,0 +1,3128 @@
+[
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<p className=\"mt-1 text-sm text-muted-foreground\">\n            {formatNumber(pipelines.length)} pipeline{pipelines.length === 1 ? \"\" : \"s\"}. Connected ones are grouped from upstream work into downstream work.\n          </p>",
+    "to": "<p className=\"mt-1 text-sm text-muted-foreground\">\n            {formatNumber(pipelines.length)} pipeline{pipelines.length === 1 ? \"\" : \"\"}. Connected ones are grouped from upstream work into downstream work.\n          </p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<span>{cases.length} item{cases.length === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span>{cases.length} item{cases.length === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<span className=\"inline-flex items-center gap-1 text-amber-700 dark:text-amber-300\">\n              <AlertTriangle className=\"h-3.5 w-3.5\" />\n              {warningCount} warning{warningCount === 1 ? \"\" : \"s\"}\n            </span>",
+    "to": "<span className=\"inline-flex items-center gap-1 text-amber-700 dark:text-amber-300\">\n              <AlertTriangle className=\"h-3.5 w-3.5\" />\n              {warningCount} warning{warningCount === 1 ? \"\" : \"\"}\n            </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<span className=\"shrink-0\">{group.cases.length} item{group.cases.length === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"shrink-0\">{group.cases.length} item{group.cases.length === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<p className=\"mt-1 text-xs text-muted-foreground\">{cases.length} total item{cases.length === 1 ? \"\" : \"s\"}</p>",
+    "to": "<p className=\"mt-1 text-xs text-muted-foreground\">{cases.length} total item{cases.length === 1 ? \"\" : \"\"}</p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<span className=\"text-xs text-muted-foreground\">{formatNumber(rows.length)} item{rows.length === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"text-xs text-muted-foreground\">{formatNumber(rows.length)} item{rows.length === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "<Button\n          type=\"button\"\n          disabled={selectedCount === 0 || bulkApprove.isPending}\n          onClick={() => bulkApprove.mutate(selectedRows)}\n        >\n          {bulkApprove.isPending ? <Loader2 className=\"h-4 w-4 animate-spin\" /> : <Check className=\"h-4 w-4\" />}\n          Approve {formatNumber(selectedCount)} item{selectedCount === 1 ? \"\" : \"s\"}\n        </Button>",
+    "to": "<Button\n          type=\"button\"\n          disabled={selectedCount === 0 || bulkApprove.isPending}\n          onClick={() => bulkApprove.mutate(selectedRows)}\n        >\n          {bulkApprove.isPending ? <Loader2 className=\"h-4 w-4 animate-spin\" /> : <Check className=\"h-4 w-4\" />}\n          Approve {formatNumber(selectedCount)} item{selectedCount === 1 ? \"\" : \"\"}\n        </Button>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Projects.tsx",
+    "from": "<span className=\"text-xs text-muted-foreground\">\n                    {sectionProjects.length} project{sectionProjects.length === 1 ? \"\" : \"s\"}\n                  </span>",
+    "to": "<span className=\"text-xs text-muted-foreground\">\n                    {sectionProjects.length} project{sectionProjects.length === 1 ? \"\" : \"\"}\n                  </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Projects.tsx",
+    "from": "<span\n                              className=\"hidden text-xs text-muted-foreground tabular-nums sm:inline\"\n                              title={`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? \"\" : \"s\"}`}\n                            >\n                              {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? \"\" : \"s\"}\n                            </span>",
+    "to": "<span\n                              className=\"hidden text-xs text-muted-foreground tabular-nums sm:inline\"\n                              title={`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? \"\" : \"s\"}`}\n                            >\n                              {formatNumber(project.taskCount ?? 0)} task{(project.taskCount ?? 0) === 1 ? \"\" : \"\"}\n                            </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "<p className=\"text-sm text-muted-foreground\">\n              {visibleRoutines.length} routine{visibleRoutines.length === 1 ? \"\" : \"s\"}\n            </p>",
+    "to": "<p className=\"text-sm text-muted-foreground\">\n              {visibleRoutines.length} routine{visibleRoutines.length === 1 ? \"\" : \"\"}\n            </p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "<span className=\"text-muted-foreground\">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"text-muted-foreground\">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "<span className=\"text-muted-foreground\">{count} routine{count === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"text-muted-foreground\">{count} routine{count === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "<p className=\"text-sm text-muted-foreground\">\n            {visibleRoutines.length} routine{visibleRoutines.length === 1 ? \"\" : \"s\"}\n          </p>",
+    "to": "<p className=\"text-sm text-muted-foreground\">\n            {visibleRoutines.length} routine{visibleRoutines.length === 1 ? \"\" : \"\"}\n          </p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "<span className=\"text-muted-foreground\">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"text-muted-foreground\">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "<span className=\"text-muted-foreground\">{count} routine{count === 1 ? \"\" : \"s\"}</span>",
+    "to": "<span className=\"text-muted-foreground\">{count} routine{count === 1 ? \"\" : \"\"}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "<div className=\"flex items-center gap-2 text-sm font-medium\">\n        <AlertTriangle className=\"h-4 w-4\" />\n        This team references {unsafe.length} external source\n        {unsafe.length === 1 ? \"\" : \"s\"}\n      </div>",
+    "to": "<div className=\"flex items-center gap-2 text-sm font-medium\">\n        <AlertTriangle className=\"h-4 w-4\" />\n        This team references {unsafe.length} external source\n        {unsafe.length === 1 ? \"\" : \"\"}\n      </div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "<span className=\"text-xs text-rose-600 dark:text-rose-300\">\n              Install blocked: {blockedCount} error{blockedCount === 1 ? \"\" : \"s\"}\n            </span>",
+    "to": "<span className=\"text-xs text-rose-600 dark:text-rose-300\">\n              Install blocked: {blockedCount} error{blockedCount === 1 ? \"\" : \"\"}\n            </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "<div role=\"alert\" className=\"rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300\">\n        This team references {external.length} external source{external.length === 1 ? \"\" : \"s\"}.\n        Review each one and decide what to allow before continuing.\n      </div>",
+    "to": "<div role=\"alert\" className=\"rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-300\">\n        This team references {external.length} external source{external.length === 1 ? \"\" : \"\"}.\n        Review each one and decide what to allow before continuing.\n      </div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "<p className=\"text-xs text-muted-foreground\">\n          {team.counts.agents} agent{team.counts.agents === 1 ? \"\" : \"s\"} ·{\" \"}\n          {team.counts.projects} project{team.counts.projects === 1 ? \"\" : \"s\"} ·{\" \"}\n          {team.counts.routines} routine{team.counts.routines === 1 ? \"\" : \"s\"}\n        </p>",
+    "to": "<p className=\"text-xs text-muted-foreground\">\n          {team.counts.agents} agent{team.counts.agents === 1 ? \"\" : \"\"} ·{\" \"}\n          {team.counts.projects} project{team.counts.projects === 1 ? \"\" : \"\"} ·{\" \"}\n          {team.counts.routines} routine{team.counts.routines === 1 ? \"\" : \"\"}\n        </p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Workspaces.tsx",
+    "from": "<span className=\"text-xs text-muted-foreground\">\n                  {group.summaries.length} workspace{group.summaries.length === 1 ? \"\" : \"s\"}\n                </span>",
+    "to": "<span className=\"text-xs text-muted-foreground\">\n                  {group.summaries.length} workspace{group.summaries.length === 1 ? \"\" : \"\"}\n                </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "<div className=\"mt-0.5 text-xs text-muted-foreground\">\n                        {project.workspaces.length} workspace\n                        {project.workspaces.length === 1 ? \"\" : \"s\"}\n                        {kinds ? ` · ${kinds}` : \"\"}\n                      </div>",
+    "to": "<div className=\"mt-0.5 text-xs text-muted-foreground\">\n                        {project.workspaces.length} workspace\n                        {project.workspaces.length === 1 ? \"\" : \"\"}\n                        {kinds ? ` · ${kinds}` : \"\"}\n                      </div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "const HOURS = Array.from({ length: 24 }, (_, i) => ({\n  value: String(i),\n  label: i === 0 ? \"12 AM\" : i < 12 ? `${i} AM` : i === 12 ? \"12 PM\" : `${i - 12} PM`,\n}));",
+    "to": "const HOURS = Array.from({ length: 24 }, (_, i) => ({\n  value: String(i),\n  rawLabel: i === 0 ? \"12 AM\" : i < 12 ? `${i} AM` : i === 12 ? \"12 PM\" : `${i - 12} PM`,\n}));\n\nfunction displayScheduleTime(value: string): string {\n  return value\n    .replace(/^12(:\\d{2})? AM$/, \"凌晨 12$1\")\n    .replace(/^12(:\\d{2})? PM$/, \"中午 12$1\")\n    .replace(/^(.*) AM$/, \"上午 $1\")\n    .replace(/^(.*) PM$/, \"下午 $1\");\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "HOURS.find((h) => h.value === hour)?.label",
+    "to": "HOURS.find((h) => h.value === hour)?.rawLabel",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "const timeStr = `${hourLabel.replace(/ (AM|PM)$/, \"\")}:${minute.padStart(2, \"0\")} ${hourLabel.match(/(AM|PM)$/)?.[0] ?? \"\"}`;",
+    "to": "const timeStr = displayScheduleTime(`${hourLabel.replace(/ (AM|PM)$/, \"\")}:${minute.padStart(2, \"0\")} ${hourLabel.match(/(AM|PM)$/)?.[0] ?? \"\"}`);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "{h.label}",
+    "to": "{displayScheduleTime(h.rawLabel)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "const s = [\"th\", \"st\", \"nd\", \"rd\"];",
+    "to": "const s = [\"日\", \"日\", \"日\", \"日\"];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "return \"Every minute\";",
+    "to": "return \"每分钟\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "return cron || \"No schedule set\";",
+    "to": "return cron || \"未设置计划\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "export function describeSchedule(draft: TriggerDraft) {",
+    "to": "function displayRoutineWeekday(day: string): string {\n  const labels: Record<string, string> = { Monday: \"周一\", Tuesday: \"周二\", Wednesday: \"周三\", Thursday: \"周四\", Friday: \"周五\", Saturday: \"周六\", Sunday: \"周日\" };\n  return labels[day] ?? day;\n}\nexport function describeSchedule(draft: TriggerDraft) {",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "<option key={day}>{day}</option>",
+    "to": "<option key={day} value={day}>{displayRoutineWeekday(day)}</option>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerCard.tsx",
+    "from": "export function RoutineTriggerCard({",
+    "to": "function displayTriggerKind(kind: \"schedule\" | \"webhook\" | \"api\"): string {\n  return kind === \"schedule\" ? \"计划\" : kind === \"api\" ? \"API\" : \"Webhook\";\n}\n\nexport function RoutineTriggerCard({",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "import { AgentAvatar } from \"@/components/AgentAvatar\";",
+    "to": "import { displayStatus as localizedRoutineStatus } from \"@/i18n/zh-CN\";\nimport { AgentAvatar } from \"@/components/AgentAvatar\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "import { AgentAvatar } from \"@/components/AgentAvatar\";",
+    "to": "import { displayStatus as localizedRoutineStatus } from \"@/i18n/zh-CN\";\nimport { AgentAvatar } from \"@/components/AgentAvatar\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/OrgChart.tsx",
+    "from": "const roleLabels: Record<string, string> = AGENT_ROLE_LABELS;",
+    "to": "const roleLabels: Record<string, string> = { ...AGENT_ROLE_LABELS, ceo: \"首席执行官\", cto: \"首席技术官\", cmo: \"首席营销官\", cfo: \"首席财务官\", security: \"安全专家\", engineer: \"工程师\", designer: \"设计师\", pm: \"产品经理\", qa: \"质量保障工程师\", devops: \"开发运维工程师\", researcher: \"研究员\", general: \"通用智能体\" };",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/OrgChart.production.tsx",
+    "from": "const roleLabels: Record<string, string> = AGENT_ROLE_LABELS;",
+    "to": "const roleLabels: Record<string, string> = { ...AGENT_ROLE_LABELS, ceo: \"首席执行官\", cto: \"首席技术官\", cmo: \"首席营销官\", cfo: \"首席财务官\", security: \"安全专家\", engineer: \"工程师\", designer: \"设计师\", pm: \"产品经理\", qa: \"质量保障工程师\", devops: \"开发运维工程师\", researcher: \"研究员\", general: \"通用智能体\" };",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "return `${count} ${count === 1 ? \"item\" : \"items\"}`;",
+    "to": "return `${count} 个${count === 1 ? \"事项\" : \"事项\"}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "function getActorLabel(revision: RoutineRevision): string {\n  if (revision.createdByUserId) return \"board\";\n  if (revision.createdByAgentId) return \"agent\";\n  return \"system\";\n}",
+    "to": "function getActorLabel(revision: RoutineRevision): string {\n  if (revision.createdByUserId) return \"管理者\";\n  if (revision.createdByAgentId) return \"智能体\";\n  return \"系统\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Restored revision ${restoredFromNumber} as revision ${newNumber}`",
+    "to": "`已将版本 ${restoredFromNumber} 恢复为版本 ${newNumber}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Restore as revision ${newRevisionNumber}`",
+    "to": "`恢复为版本 ${newRevisionNumber}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`replay ${trigger.replayWindowSec}s`",
+    "to": "`重放窗口 ${trigger.replayWindowSec} 秒`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${labels[0]} and ${labels[1]}`",
+    "to": "`${labels[0]}和${labels[1]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${labels.slice(0, -1).join(\", \")}, and ${labels[labels.length - 1]}`",
+    "to": "`${labels.slice(0, -1).join(\", \")}，以及${labels[labels.length - 1]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${entries.length} ${keyLabel} (${secretCount} secret ${secretCount === 1 ? \"ref\" : \"refs\"})`",
+    "to": "`${entries.length} 个${keyLabel}（${secretCount} 个密钥${secretCount === 1 ? \"引用\" : \"引用\"}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${counts.added} ${counts.added === 1 ? \"key\" : \"keys\"} added`",
+    "to": "`新增 ${counts.added} 个${counts.added === 1 ? \"字段\" : \"字段\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${counts.removed} ${counts.removed === 1 ? \"key\" : \"keys\"} removed`",
+    "to": "`移除 ${counts.removed} 个${counts.removed === 1 ? \"字段\" : \"字段\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`${counts.changed} ${counts.changed === 1 ? \"key\" : \"keys\"} changed`",
+    "to": "`更改 ${counts.changed} 个${counts.changed === 1 ? \"字段\" : \"字段\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env added (${key})`",
+    "to": "`新增环境变量（${key}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env removed (${key})`",
+    "to": "`移除环境变量（${key}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env ${key} binding kind`",
+    "to": "`环境变量 ${key} 的绑定类型`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env ${key} secret`",
+    "to": "`环境变量 ${key} 的密钥`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env ${key} version`",
+    "to": "`环境变量 ${key} 的版本`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Env ${key} value`",
+    "to": "`环境变量 ${key} 的值`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Trigger removed (${pair.old.label ?? pair.old.kind})`",
+    "to": "`已移除触发器（${pair.old.label ?? pair.old.kind}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Trigger added (${pair.next.label ?? pair.next.kind})`",
+    "to": "`已添加触发器（${pair.next.label ?? pair.next.kind}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "`Trigger ${pair.next.label ?? pair.next.kind}`",
+    "to": "`触发器 ${pair.next.label ?? pair.next.kind}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineList.tsx",
+    "from": "`Select ${routine.title}`",
+    "to": "`选择 ${routine.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineList.tsx",
+    "from": "`Disable ${routine.title}`",
+    "to": "`禁用 ${routine.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineList.tsx",
+    "from": "`Enable ${routine.title}`",
+    "to": "`启用 ${routine.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineList.tsx",
+    "from": "`More actions for ${routine.title}`",
+    "to": "`${routine.title} 的更多操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "`${webhooks.length} active webhook${webhooks.length === 1 ? \"\" : \"s\"}`",
+    "to": "`${webhooks.length} 个活跃 webhook${webhooks.length === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "`${schedules.length} active schedules`",
+    "to": "`${schedules.length} 个有效计划`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineTriggerCard.tsx",
+    "from": "`Trigger: ${trigger.label ?? trigger.kind}`",
+    "to": "`触发器：${trigger.label ?? trigger.kind}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineTriggerCard.tsx",
+    "from": "`Next: ${new Date(trigger.nextRunAt).toLocaleString()}`",
+    "to": "`下次：${new Date(trigger.nextRunAt).toLocaleString()}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Every hour at :${minute.padStart(2, \"0\")}`",
+    "to": "`每小时第 ${minute.padStart(2, \"0\")} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Every day at ${timeStr}`",
+    "to": "`每天 ${timeStr}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Weekdays at ${timeStr}`",
+    "to": "`工作日 ${timeStr}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Every ${day} at ${timeStr}`",
+    "to": "`每${day} ${timeStr}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Monthly on the ${dayOfMonth}${ordinalSuffix(Number(dayOfMonth))} at ${timeStr}`",
+    "to": "`每月 ${dayOfMonth}${ordinalSuffix(Number(dayOfMonth))} ${timeStr}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "`Use exactly 5 fields; this has ${fields.length}.`",
+    "to": "`必须使用 5 个字段，当前有 ${fields.length} 个。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ScheduleEditor.tsx",
+    "from": "` Next: ${customValidation.nextFires.map((fire) => fire.toLocaleString()).join(\", \")}.`",
+    "to": "`下次：${customValidation.nextFires.map((fire) => fire.toLocaleString()).join(\", \")}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillBinaryFile.tsx",
+    "from": "`Download ${file.path.split('/').at(-1)}`",
+    "to": "`下载 ${file.path.split('/').at(-1)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "`Download ${name}`",
+    "to": "`下载 ${name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "`${items.length} item${items.length === 1 ? \"\" : \"s\"} found.`",
+    "to": "`找到 ${items.length} 个项目${items.length === 1 ? \"\" : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "`No files match “${q}”`",
+    "to": "`没有与“${q}”匹配的文件`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "`Service failed${runtimeService?.stoppedAt ? ` · ${timeAgo(runtimeService.stoppedAt)}` : \"\"}`",
+    "to": "`服务失败${runtimeService?.stoppedAt ? ` · ${timeAgo(runtimeService.stoppedAt)}` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "`${runningCount} services running`",
+    "to": "`${runningCount} 个服务正在运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "`${resolvedSections.jobs.length} job${resolvedSections.jobs.length === 1 ? \"\" : \"s\"} available to run on demand.`",
+    "to": "`${resolvedSections.jobs.length} 个作业${resolvedSections.jobs.length === 1 ? \"\" : \"\"}可按需运行。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceServiceControlBar.tsx",
+    "from": "`starting on :${entry.port}…`",
+    "to": "`正在端口 ${entry.port} 上启动…`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceServiceControlBar.tsx",
+    "from": "`${runningCount} of ${services.length} services running — show services`",
+    "to": "`${runningCount} / ${services.length} 个服务正在运行，显示服务`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/folders/FolderControls.tsx",
+    "from": "`${itemLabelPlural} folders`",
+    "to": "`${itemLabelPlural}文件夹`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/folders/FolderControls.tsx",
+    "from": "`Folder actions for ${folder.name}`",
+    "to": "`文件夹 ${folder.name} 的操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/folders/FolderControls.tsx",
+    "from": "`Use folder color ${swatch}`",
+    "to": "`使用文件夹颜色 ${swatch}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/folders/SkillFolderTree.tsx",
+    "from": "`New ${label.toLowerCase()} folder`",
+    "to": "`新建${label.toLowerCase()}文件夹`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/folders/SkillFolderTree.tsx",
+    "from": "`Folder actions for ${label}`",
+    "to": "`文件夹 ${label} 的操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`${activeTriggers} active`",
+    "to": "`${activeTriggers} 个活跃`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`Next fire ${nextFire}`",
+    "to": "`下次触发：${nextFire}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`${activeTriggers} triggers. Open triggers.`",
+    "to": "`${activeTriggers} 个触发器，打开触发器。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`${boundSecrets} bound`",
+    "to": "`${boundSecrets} 个已绑定`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`${boundSecrets} secrets bound. Open secrets.`",
+    "to": "`已绑定 ${boundSecrets} 个密钥，打开密钥。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`Last run ${lastRun.status}. Open runs.`",
+    "to": "`上次运行状态：${localizedRoutineStatus(lastRun.status)}。打开运行记录。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "`${routine.triggers.length} trigger${routine.triggers.length === 1 ? \"\" : \"s\"}`",
+    "to": "`${routine.triggers.length} 个触发器${routine.triggers.length === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "`${activeTriggers} active`",
+    "to": "`${activeTriggers} 个活跃`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "`Next fire ${nextFire}`",
+    "to": "`下次触发：${nextFire}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "`${activeTriggers} triggers. Open triggers.`",
+    "to": "`${activeTriggers} 个触发器，打开触发器。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "`Last run ${lastRun.status}. Open runs.`",
+    "to": "`上次运行状态：${localizedRoutineStatus(lastRun.status)}。打开运行记录。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerCard.tsx",
+    "from": "`${kind === \"schedule\" ? \"Schedule\" : kind === \"api\" ? \"API\" : \"Webhook\"} trigger`",
+    "to": "`${kind === \"schedule\" ? \"计划\" : kind === \"api\" ? \"API\" : \"Webhook\"}触发器`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerCard.tsx",
+    "from": "`Edit ${kind}`",
+    "to": "`编辑${displayTriggerKind(kind)}触发器`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerCard.tsx",
+    "from": "`Remove ${kind}`",
+    "to": "`移除${displayTriggerKind(kind)}触发器`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Connect the sending app to the Paperclip routine ${JSON.stringify(routineTitle)}.`",
+    "to": "`将发送端应用连接到 Paperclip 例行任务 ${JSON.stringify(routineTitle)}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Webhook URL: ${webhookUrl}`",
+    "to": "`Webhook 网址：${webhookUrl}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Secret: ${webhookSecret}`",
+    "to": "`密钥：${webhookSecret}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Secret key: ${webhookSecret}`",
+    "to": "`密钥：${webhookSecret}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`If the app asks for a signing secret, paste the secret key above. Paperclip accepts HMAC-SHA256 over the exact request body in ${signingMode === \"fireflies_hmac\" ? \"X-Hub-Signature\" : \"X-Hub-Signature or X-Hub-Signature-256\"}, formatted sha256=<hex digest>.`",
+    "to": "`如果应用要求填写签名密钥，请粘贴上方密钥。Paperclip 接受对原始请求正文计算的 HMAC-SHA256 签名，放在 ${signingMode === \"fireflies_hmac\" ? \"X-Hub-Signature\" : \"X-Hub-Signature or X-Hub-Signature-256\"} 标头中，格式为 sha256=<hex digest>。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`For apps with custom headers, use Authorization: Bearer ${webhookSecret}`",
+    "to": "`对于支持自定义标头的应用，请使用 Authorization: Bearer ${webhookSecret}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`${draft.frequency === \"daily\" ? \"Every day\" : draft.frequency === \"weekly\" ? `Every ${draft.weekday}` : \"Every weekday\"} at ${draft.time}`",
+    "to": "`${draft.frequency === \"daily\" ? \"每天\" : draft.frequency === \"weekly\" ? `每${displayRoutineWeekday(draft.weekday)}` : \"每个工作日\"} ${draft.time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Connect ${github ? \"GitHub\" : \"your app\"}`",
+    "to": "`连接${github ? \"GitHub\" : \"你的应用\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "`Choose how to start “${routineTitle}”. You can add another trigger later.`",
+    "to": "`选择如何启动“${routineTitle}”。稍后可以添加其他触发器。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/WebhookFields.tsx",
+    "from": "`Copy ${label}`",
+    "to": "`复制${label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/WebhookFields.tsx",
+    "from": "`${label} text`",
+    "to": "`${label}文本`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.discovered} found`",
+    "to": "`找到 ${result.discovered} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.imported.length} imported`",
+    "to": "`导入 ${result.imported.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.updated.length} updated`",
+    "to": "`更新 ${result.updated.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.conflicts.length} conflicts`",
+    "to": "`${result.conflicts.length} 个冲突`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.skipped.length} skipped`",
+    "to": "`跳过 ${result.skipped.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${parts.join(\", \")} across ${result.scannedWorkspaces} workspace${result.scannedWorkspaces === 1 ? \"\" : \"s\"}.`",
+    "to": "`${parts.join(\", \")}，共扫描 ${result.scannedWorkspaces} 个工作区${result.scannedWorkspaces === 1 ? \"\" : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Filters: ${activeFilterCount}`",
+    "to": "`筛选条件：${activeFilterCount}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Categories: ${skill.categories.join(\", \")}`",
+    "to": "`类别：${skill.categories.join(\", \")}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Select ${card.name}`",
+    "to": "`选择 ${card.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`From ${meta.label}`",
+    "to": "`来自 ${meta.label}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`More actions for ${card.name}`",
+    "to": "`${card.name} 的更多操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Refresh ${activeProjectFolder.name} project skills`",
+    "to": "`刷新项目 ${activeProjectFolder.name} 的技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Refresh skills from ${activeProjectFolder.name}`",
+    "to": "`从 ${activeProjectFolder.name} 刷新技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Use ${color}`",
+    "to": "`使用 ${color}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Collapse ${skill.name}`",
+    "to": "`收起 ${skill.name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Expand ${skill.name}`",
+    "to": "`展开 ${skill.name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Remove tag ${tag}`",
+    "to": "`移除标签 ${tag}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Installed from ${source.label}`",
+    "to": "`安装来源：${source.label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.imported.length} skill${result.imported.length === 1 ? \"\" : \"s\"} added.`",
+    "to": "`已添加 ${result.imported.length} 个技能${result.imported.length === 1 ? \"\" : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${skill.name} is now editable in the Paperclip workspace.`",
+    "to": "`现在可以在 Paperclip 工作区中编辑 ${skill.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Pinned to ${shortRef(skill.sourceRef)}`",
+    "to": "`已固定到 ${shortRef(skill.sourceRef)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.skill.name} — enabled for ${enabledCount} agent${enabledCount === 1 ? \"\" : \"s\"}.`",
+    "to": "`${result.skill.name}：已为 ${enabledCount} 个智能体${enabledCount === 1 ? \"\" : \"\"}启用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${result.skill.name} is in the library but not enabled for any agent yet. Use \"Add to agent\" to enable it.`",
+    "to": "`${result.skill.name} 已加入技能库，但尚未为任何智能体启用。请使用“添加到智能体”启用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Could not enable ${result.skill.name} for ${enableFailures} agent${enableFailures === 1 ? \"\" : \"s\"}. Use \"Add to agent\" on the skill page.`",
+    "to": "`无法为 ${enableFailures} 个智能体${enableFailures === 1 ? \"\" : \"\"}启用 ${result.skill.name}。请在技能页面使用“添加到智能体”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${ids.length} skill${ids.length === 1 ? \"\" : \"s\"} filed.`",
+    "to": "`已将 ${ids.length} 个技能${ids.length === 1 ? \"\" : \"\"}归入文件夹。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Filed under ${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已归入${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${nextAgentIds.length} agent(s) attached.`",
+    "to": "`已关联 ${nextAgentIds.length} 个智能体。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`${skill.name} was removed from the company skill library.`",
+    "to": "`已从公司技能库中移除 ${skill.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`You are about to remove ${deleteTargetDetail.name}.`",
+    "to": "`即将移除 ${deleteTargetDetail.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Move \"${card.name}\"`",
+    "to": "`移动“${card.name}”`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Moved \"${card.name}\" to ${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已将“${card.name}”移至${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Moved \"${card.name}\" to Unfiled.`",
+    "to": "`已将“${card.name}”移至“未分类”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "`Move \"${activeDetail.name}\"`",
+    "to": "`移动“${activeDetail.name}”`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.discovered} found`",
+    "to": "`找到 ${result.discovered} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.imported.length} imported`",
+    "to": "`导入 ${result.imported.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.updated.length} updated`",
+    "to": "`更新 ${result.updated.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.conflicts.length} conflicts`",
+    "to": "`${result.conflicts.length} 个冲突`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.skipped.length} skipped`",
+    "to": "`跳过 ${result.skipped.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${parts.join(\", \")} across ${result.scannedWorkspaces} workspace${result.scannedWorkspaces === 1 ? \"\" : \"s\"}.`",
+    "to": "`${parts.join(\", \")}，共扫描 ${result.scannedWorkspaces} 个工作区${result.scannedWorkspaces === 1 ? \"\" : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Filters: ${activeFilterCount}`",
+    "to": "`筛选条件：${activeFilterCount}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Categories: ${skill.categories.join(\", \")}`",
+    "to": "`类别：${skill.categories.join(\", \")}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Select ${card.name}`",
+    "to": "`选择 ${card.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`More actions for ${card.name}`",
+    "to": "`${card.name} 的更多操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Enabled for ${card.agentCount} ${card.agentCount === 1 ? \"agent\" : \"agents\"}`",
+    "to": "`已为 ${card.agentCount} 个${card.agentCount === 1 ? \"智能体\" : \"智能体\"}启用`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Refresh ${activeProjectFolder.name} project skills`",
+    "to": "`刷新项目 ${activeProjectFolder.name} 的技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Refresh skills from ${activeProjectFolder.name}`",
+    "to": "`从 ${activeProjectFolder.name} 刷新技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Use ${color}`",
+    "to": "`使用 ${color}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Collapse ${skill.name}`",
+    "to": "`收起 ${skill.name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Expand ${skill.name}`",
+    "to": "`展开 ${skill.name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Remove tag ${tag}`",
+    "to": "`移除标签 ${tag}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Installed from ${source.label}`",
+    "to": "`安装来源：${source.label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.imported.length} skill${result.imported.length === 1 ? \"\" : \"s\"} added.`",
+    "to": "`已添加 ${result.imported.length} 个技能${result.imported.length === 1 ? \"\" : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${skill.name} is now editable in the Paperclip workspace.`",
+    "to": "`现在可以在 Paperclip 工作区中编辑 ${skill.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Pinned to ${shortRef(skill.sourceRef)}`",
+    "to": "`已固定到 ${shortRef(skill.sourceRef)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.skill.name} — enabled for ${enabledCount} agent${enabledCount === 1 ? \"\" : \"s\"}.`",
+    "to": "`${result.skill.name}：已为 ${enabledCount} 个智能体${enabledCount === 1 ? \"\" : \"\"}启用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${result.skill.name} is in the library but not enabled for any agent yet. Use \"Add to agent\" to enable it.`",
+    "to": "`${result.skill.name} 已加入技能库，但尚未为任何智能体启用。请使用“添加到智能体”启用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Could not enable ${result.skill.name} for ${enableFailures} agent${enableFailures === 1 ? \"\" : \"s\"}. Use \"Add to agent\" on the skill page.`",
+    "to": "`无法为 ${enableFailures} 个智能体${enableFailures === 1 ? \"\" : \"\"}启用 ${result.skill.name}。请在技能页面使用“添加到智能体”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${ids.length} skill${ids.length === 1 ? \"\" : \"s\"} filed.`",
+    "to": "`已将 ${ids.length} 个技能${ids.length === 1 ? \"\" : \"\"}归入文件夹。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Filed under ${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已归入${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${nextAgentIds.length} agent(s) attached.`",
+    "to": "`已关联 ${nextAgentIds.length} 个智能体。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`${skill.name} was removed from the organization skill library.`",
+    "to": "`已从组织技能库中移除 ${skill.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`You are about to remove ${deleteTargetDetail.name}.`",
+    "to": "`即将移除 ${deleteTargetDetail.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Move \"${card.name}\"`",
+    "to": "`移动“${card.name}”`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Moved \"${card.name}\" to ${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已将“${card.name}”移至${skillFolderResult?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Moved \"${card.name}\" to Unfiled.`",
+    "to": "`已将“${card.name}”移至“未分类”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "`Move \"${activeDetail.name}\"`",
+    "to": "`移动“${activeDetail.name}”`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "`Port ${port} is assigned to multiple services: ${servicesForPort.map((service) => service.name).join(\", \")}.`",
+    "to": "`端口 ${port} 被分配给了多个服务：${servicesForPort.map((service) => service.name).join(\", \")}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "`${invalidPort.name} has an invalid fixed port.`",
+    "to": "`${invalidPort.name} 的固定端口无效。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Parent: ${pipelineName}`",
+    "to": "`上级：${pipelineName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Grandparent: ${pipelineName}`",
+    "to": "`上两级：${pipelineName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Ancestor ${depth}: ${pipelineName}`",
+    "to": "`第 ${depth} 层上级：${pipelineName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`${variable.example.length} chars`",
+    "to": "`${variable.example.length} 个字符`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`${preview.length} chars`",
+    "to": "`${preview.length} 个字符`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Example: ${automationVariableKind(variable.example)}, ${size}`",
+    "to": "`示例：${automationVariableKind(variable.example)}，${size}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`From ${variable.exampleSource}`",
+    "to": "`来自 ${variable.exampleSource}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Insert {{${field.key}}}`",
+    "to": "`插入 {{${field.key}}}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Insert {{${variable.key}}}`",
+    "to": "`插入 {{${variable.key}}}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "` by ${event.actorAgent.name}`",
+    "to": "`，操作者：${event.actorAgent.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Open ${breakdownTargetPipeline?.name ?? \"selected\"} pipeline`",
+    "to": "`打开${breakdownTargetPipeline?.name ?? \"所选\"}工作流`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Insert stage after ${stage.name}`",
+    "to": "`在 ${stage.name} 之后插入阶段`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "`Delete ${selectedStage.name}`",
+    "to": "`删除 ${selectedStage.name}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${field.label} is required.`",
+    "to": "`${field.label}不能为空。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${details.label} is required.`",
+    "to": "`${details.label}不能为空。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${details.label} needs one of the available choices.`",
+    "to": "`${details.label}必须选择一个可用选项。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Retry and retire ${formatNumber(retiredOutputCount)} ${retiredOutputCount === 1 ? \"item\" : \"items\"}`",
+    "to": "`重试并停用 ${formatNumber(retiredOutputCount)} 个${retiredOutputCount === 1 ? \"事项\" : \"事项\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${formatNumber(count)} live downstream`",
+    "to": "`${formatNumber(count)} 个活跃下游事项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${formatNumber(count)} open`",
+    "to": "`${formatNumber(count)} 个未关闭`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${diffMinutes} min ago`",
+    "to": "`${diffMinutes} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${diffHours} hr ago`",
+    "to": "`${diffHours} 小时前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${diffDays} days ago`",
+    "to": "`${diffDays} 天前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${Math.round(diffDays / 7)} weeks ago`",
+    "to": "`${Math.round(diffDays / 7)} 周前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Collapse ${row.pipeline.name}`",
+    "to": "`收起 ${row.pipeline.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Expand ${row.pipeline.name}`",
+    "to": "`展开 ${row.pipeline.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${stage.name} column`",
+    "to": "`${stage.name}列`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Edit ${stage.name} stage`",
+    "to": "`编辑 ${stage.name} 阶段`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Edit ${stage.name} automation`",
+    "to": "`编辑 ${stage.name} 的自动化`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Breaks into ${breakdownTarget.name}`",
+    "to": "`拆分至 ${breakdownTarget.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Fed by ${source.name}`",
+    "to": "`输入来源：${source.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Agent ${automationAssigneeAgentId.slice(0, 8)}`",
+    "to": "`智能体 ${automationAssigneeAgentId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Move ${pendingMove.itemTitle}?`",
+    "to": "`要移动 ${pendingMove.itemTitle} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Move ${pendingMove.itemTitle} to ${pendingMove.targetName} yourself? Usually the agent suggests this when it is ready.`",
+    "to": "`要手动将 ${pendingMove.itemTitle} 移至 ${pendingMove.targetName} 吗？通常应由智能体在准备好后提出此建议。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${pendingMove.itemTitle} would jump from ${pendingMove.sourceName} to ${pendingMove.targetName}. Add a reason before overriding.`",
+    "to": "`${pendingMove.itemTitle} 将从 ${pendingMove.sourceName} 跳转到 ${pendingMove.targetName}。覆盖规则前请填写原因。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`: ${detail.builtFromAutomation.stage.name} automation`",
+    "to": "`：${detail.builtFromAutomation.stage.name}自动化`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Move to ${selectedMoveStage?.name ?? \"stage\"}`",
+    "to": "`移至${selectedMoveStage?.name ?? \"阶段\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Waiting on ${waitingChildren.length} of ${pieceCountTotal} ${pieceLabel(pieceCountTotal)} · ${pieceCountDone} finished`",
+    "to": "`等待 ${waitingChildren.length} / ${pieceCountTotal} 个${pieceLabel(pieceCountTotal)} · ${pieceCountDone} 个已完成`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Waiting on ${waitingChildren.length} of ${pieceCountTotal} child ${pieceCountTotal === 1 ? \"item\" : \"items\"}`",
+    "to": "`等待 ${waitingChildren.length} / ${pieceCountTotal} 个子${pieceCountTotal === 1 ? \"事项\" : \"事项\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Built from ${pieceCountTotal} ${pieceLabel(pieceCountTotal)}`",
+    "to": "`来源：${pieceCountTotal} 个${pieceLabel(pieceCountTotal)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`No ${pieceNounPluralLabel} needed`",
+    "to": "`无需${pieceNounPluralLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Built from ${pieceCountTotal} ${pieceCountTotal === 1 ? \"item\" : \"items\"}`",
+    "to": "`来源：${pieceCountTotal} 个${pieceCountTotal === 1 ? \"事项\" : \"事项\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Started ${relativeTime(activeWork.startedAt)}`",
+    "to": "`开始于 ${relativeTime(activeWork.startedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${prefix}; moved to the next review`",
+    "to": "`${prefix}；已移至下一项审查`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${action.label} and move to ${action.targetStageName}`",
+    "to": "`${action.label}并移至 ${action.targetStageName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Open ${item.title}`",
+    "to": "`打开 ${item.title}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Open ${filename}`",
+    "to": "`打开 ${filename}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Download ${filename}`",
+    "to": "`下载 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${itemCountLabel(rows.length)} submitted`",
+    "to": "`已提交${itemCountLabel(rows.length)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Submit ${itemCountLabel(rows.length)}`",
+    "to": "`提交${itemCountLabel(rows.length)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Item ${index + 1}`",
+    "to": "`事项 ${index + 1}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${entry.case.pipeline.name} thinks ${entry.case.title} is ready to move forward.`",
+    "to": "`${entry.case.pipeline.name}认为 ${entry.case.title} 已准备好继续。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Decide whether ${entry.case.title} is ready to move forward.`",
+    "to": "`请判断 ${entry.case.title} 是否已准备好继续。`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${upstreamTitle} changed upstream. Take a quick look before work continues.`",
+    "to": "`上游的 ${upstreamTitle} 已更改。继续工作前请快速检查。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${entry.case.title} needs a quick look before work continues.`",
+    "to": "`继续工作前，请快速检查 ${entry.case.title}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`${row.pipelineName} is waiting for your decision.`",
+    "to": "`${row.pipelineName} 正在等待你的决定。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "`Select ${row.title}`",
+    "to": "`选择 ${row.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectDetail.tsx",
+    "from": "`Select color ${swatch}`",
+    "to": "`选择颜色 ${swatch}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectDetail.tsx",
+    "from": "`\"${name}\" has been archived`",
+    "to": "`“${name}”已归档`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectDetail.tsx",
+    "from": "`\"${name}\" has been unarchived`",
+    "to": "`“${name}”已取消归档`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Projects.tsx",
+    "from": "`${formatNumber(project.taskCount ?? 0)} task${(project.taskCount ?? 0) === 1 ? \"\" : \"s\"}`",
+    "to": "`${formatNumber(project.taskCount ?? 0)} 个任务${(project.taskCount ?? 0) === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.production.tsx",
+    "from": "`${label} copied`",
+    "to": "`${label}已复制`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.production.tsx",
+    "from": "`Failed to copy ${label.toLowerCase()}`",
+    "to": "`无法复制${label.toLowerCase()}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.production.tsx",
+    "from": "`${response.secretMaterials.length} webhook triggers restored`",
+    "to": "`已恢复 ${response.secretMaterials.length} 个 webhook 触发器`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "from": "`${label} copied`",
+    "to": "`${label}已复制`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "from": "`Failed to copy ${label.toLowerCase()}`",
+    "to": "`无法复制${label.toLowerCase()}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "from": "`${response.secretMaterials.length} webhook triggers restored`",
+    "to": "`已恢复 ${response.secretMaterials.length} 个 webhook 触发器`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "`${ids.length} routine${ids.length === 1 ? \"\" : \"s\"} filed.`",
+    "to": "`已将 ${ids.length} 个例行任务${ids.length === 1 ? \"\" : \"\"}归入文件夹。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "`Moved \"${routine.title}\" to ${routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已将“${routine.title}”移至${routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.production.tsx",
+    "from": "`Moved \"${routine.title}\" to Unfiled.`",
+    "to": "`已将“${routine.title}”移至“未分类”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "`${ids.length} routine${ids.length === 1 ? \"\" : \"s\"} filed.`",
+    "to": "`已将 ${ids.length} 个例行任务${ids.length === 1 ? \"\" : \"\"}归入文件夹。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "`Moved \"${routine.title}\" to ${routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? \"folder\"}.`",
+    "to": "`已将“${routine.title}”移至${routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? \"文件夹\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Routines.tsx",
+    "from": "`Moved \"${routine.title}\" to Unfiled.`",
+    "to": "`已将“${routine.title}”移至“未分类”。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillSources.tsx",
+    "from": "`More actions for ${source.fullName}`",
+    "to": "`${source.fullName} 的更多操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillSources.tsx",
+    "from": "`Installed skills from ${source.fullName}`",
+    "to": "`来自 ${source.fullName} 的已安装技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillSources.tsx",
+    "from": "`Import ${eligibleCount} ${eligibleCount === 1 ? \"skill\" : \"skills\"}`",
+    "to": "`导入 ${eligibleCount} 个${eligibleCount === 1 ? \"技能\" : \"技能\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`${skill.name} is now editable in the Paperclip workspace.`",
+    "to": "`现在可以在 Paperclip 工作区中编辑 ${skill.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`Use ${color}`",
+    "to": "`使用 ${color}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`Delete ${selectedFile}?`",
+    "to": "`要删除 ${selectedFile} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`${label} is required.`",
+    "to": "`${label}不能为空。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`Input actions for ${node.name}`",
+    "to": "`输入 ${node.name} 的操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`${template.name} is ready for Skills Studio runs.`",
+    "to": "`${template.name} 已可用于技能工作室运行。`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`${template.name} was removed from Skills Studio runs.`",
+    "to": "`${template.name} 已从技能工作室运行中移除。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`Delete run template \"${template.name}\"?`",
+    "to": "`要删除运行模板“${template.name}”吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`${name} (removed)`",
+    "to": "`${name}（已移除）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "`Version ${v.revisionNumber}`",
+    "to": "`版本 ${v.revisionNumber}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Agents · ${plan.agentPlans.length}`",
+    "to": "`智能体 · ${plan.agentPlans.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Projects · ${plan.projectPlans.length}`",
+    "to": "`项目 · ${plan.projectPlans.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Starter tasks · ${plan.issuePlans.length}`",
+    "to": "`初始任务 · ${plan.issuePlans.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Adapter selection · ${manifestAgents.length}`",
+    "to": "`适配器选择 · ${manifestAgents.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Secrets & env inputs · ${envInputs.length}`",
+    "to": "`密钥与环境变量输入 · ${envInputs.length}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`${input.key} value`",
+    "to": "`${input.key}的值`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Hide ${input.key}`",
+    "to": "`隐藏 ${input.key}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Show ${input.key}`",
+    "to": "`显示 ${input.key}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`Category · ${titleCase(categoryFilter)}`",
+    "to": "`类别 · ${titleCase(categoryFilter)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "`${selectedTeam.name} was imported.`",
+    "to": "`已导入 ${selectedTeam.name}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillReleasePicker.tsx",
+    "from": "`${name} · released ${date}`",
+    "to": "`${name} · 发布于 ${date}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`Request failed: ${error.status}`",
+    "to": "`请求失败：${error.status}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`${importedCount} skill${importedCount === 1 ? \"\" : \"s\"} imported as references from ${selectedProject?.name ?? \"the project\"}.`",
+    "to": "`已从${selectedProject?.name ?? \"项目\"}将 ${importedCount} 个技能${importedCount === 1 ? \"\" : \"\"}作为引用导入。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`Import ${selectedCount} skill${selectedCount === 1 ? \"\" : \"s\"}`",
+    "to": "`导入 ${selectedCount} 个技能${selectedCount === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`No projects match \"${filter}\".`",
+    "to": "`没有与“${filter}”匹配的项目。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`Select ${candidate.name}`",
+    "to": "`选择 ${candidate.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "`Rename ${candidate.name}`",
+    "to": "`重命名 ${candidate.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "`Importing ${count} ${count === 1 ? 'skill' : 'skills'}`",
+    "to": "`正在导入 ${count} 个${count === 1 ? '技能' : '技能'}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "`${total} ${total === 1 ? 'skill' : 'skills'} found`",
+    "to": "`找到 ${total} 个${total === 1 ? '技能' : '技能'}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "`${progress?.checkedSkills ?? 0} of ${total} checked`",
+    "to": "`已检查 ${progress?.checkedSkills ?? 0} / ${total} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "`${count} selected`",
+    "to": "`已选择 ${count} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "`${progress?.checkedSkills ?? found.length} checked`",
+    "to": "`已检查 ${progress?.checkedSkills ?? found.length} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillSourceTree.tsx",
+    "from": "`Import ${node.path}`",
+    "to": "`导入 ${node.path}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillSourceTree.tsx",
+    "from": "`Import folder ${node.path}`",
+    "to": "`导入文件夹 ${node.path}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillSourceTree.tsx",
+    "from": "`Inspect ${skill.name}`",
+    "to": "`检查 ${skill.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProjectProperties.tsx",
+    "from": "\"Clear local folder from this workspace?\"",
+    "to": "\"要清除此工作区的本地文件夹设置吗？\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProjectProperties.tsx",
+    "from": "\"Delete this workspace local folder?\"",
+    "to": "\"要删除此工作区的本地文件夹吗？\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineActivityRow.tsx",
+    "from": "\"Connection working · No run or task created\"",
+    "to": "\"连接正常 · 未创建运行或任务\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineActivityRow.tsx",
+    "from": "\"Update the key in your app and resend\"",
+    "to": "\"请更新应用中的密钥并重新发送\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineActivityRow.tsx",
+    "from": "\"Authentication passed\"",
+    "to": "\"认证通过\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineActivityRow.tsx",
+    "from": "\"Check the key in your sending app\"",
+    "to": "\"检查发送端应用中的密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "\"the routine\"",
+    "to": "\"例行任务\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "\"plain (set)\"",
+    "to": "\"普通值（已设置）\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "\"plain (changed)\"",
+    "to": "\"普通值（已更改）\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineHistoryTab.tsx",
+    "from": "\"(none)\"",
+    "to": "\"（无）\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineList.tsx",
+    "from": "\"Never\"",
+    "to": "\"从未\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Runs on incoming requests\"",
+    "to": "\"收到请求时运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Manual runs only\"",
+    "to": "\"仅手动运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Scheduled trigger\"",
+    "to": "\"计划触发器\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"A run is active now\"",
+    "to": "\"当前有运行正在进行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"No active run\"",
+    "to": "\"无活跃运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"On webhook delivery\"",
+    "to": "\"收到 webhook 时\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Waiting for an incoming request\"",
+    "to": "\"等待传入请求\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Add or enable a schedule\"",
+    "to": "\"添加或启用计划\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"No runs yet\"",
+    "to": "\"暂无运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "from": "\"Run manually or wait for a trigger\"",
+    "to": "\"手动运行或等待触发\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineVariablesEditor.tsx",
+    "from": "\"April 28, 2026 at 12:17 PM UTC\"",
+    "to": "\"2026 年 4 月 28 日 12:17（UTC）\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillSourceProvenance.tsx",
+    "from": "'Refresh this source to sync all files'",
+    "to": "\"刷新此来源以同步所有文件\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillSourceProvenance.tsx",
+    "from": "'Removed from source · last installed version retained'",
+    "to": "\"已从来源移除 · 保留上次安装的版本\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillSourceProvenance.tsx",
+    "from": "'Not syncing · installed copy retained'",
+    "to": "\"不同步 · 保留已安装副本\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillSourceProvenance.tsx",
+    "from": "'Update failed · last installed version retained'",
+    "to": "\"更新失败 · 保留上次安装的版本\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SkillSourceProvenance.tsx",
+    "from": "'Synced from GitHub'",
+    "to": "\"从 GitHub 同步\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"This workspace is hosted remotely and is not available for inline preview yet.\"",
+    "to": "\"此工作区托管于远程，暂不支持内嵌预览。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"This issue does not have a workspace to browse. Files appear here once a run creates one.\"",
+    "to": "\"此任务尚无可浏览的工作区。运行创建工作区后，文件会显示在这里。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"The isolated worktree for this issue has been cleaned up, so files cannot be previewed.\"",
+    "to": "\"此任务的隔离工作树已清理，无法预览文件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"These workspace files can't be browsed right now.\"",
+    "to": "\"暂时无法浏览这些工作区文件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"Loading workspace files…\"",
+    "to": "\"正在加载工作区文件…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"Unable to load workspace files.\"",
+    "to": "\"无法加载工作区文件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"No matching files.\"",
+    "to": "\"没有匹配的文件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"Paperclip is limiting workspace scans to keep the server responsive. Try again in a moment.\"",
+    "to": "\"Paperclip 正在限制工作区扫描，以保持服务器响应。请稍后重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"Workspace browsing isn't available for this issue.\"",
+    "to": "\"此任务暂不支持浏览工作区。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "\"Something went wrong loading workspace files.\"",
+    "to": "\"加载工作区文件时出现错误。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"run once\"",
+    "to": "\"运行一次\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"This job is missing a command.\"",
+    "to": "\"此作业缺少命令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"This runtime service no longer matches a configured workspace command.\"",
+    "to": "\"此运行服务已不再对应已配置的工作区命令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"Check the Tailscale broker and node HTTPS configuration.\"",
+    "to": "\"请检查 Tailscale 代理和节点的 HTTPS 配置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"Restart the host broker before reusing this port.\"",
+    "to": "\"复用此端口前，请先重启主机代理。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"Provisioning HTTPS…\"",
+    "to": "\"正在配置 HTTPS…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"HTTPS ready\"",
+    "to": "\"HTTPS 已就绪\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"No services are configured for this workspace.\"",
+    "to": "\"此工作区尚未配置服务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceRuntimeControls.tsx",
+    "from": "\"No one-shot jobs are configured for this workspace.\"",
+    "to": "\"此工作区尚未配置一次性作业。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceServiceControlBar.tsx",
+    "from": "\"All services\"",
+    "to": "\"全部服务\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "from": "\"No runs. Open runs.\"",
+    "to": "\"暂无运行，打开运行记录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.tsx",
+    "from": "\"No runs. Open runs.\"",
+    "to": "\"暂无运行，打开运行记录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+    "from": "\"Couldn’t save your draft in this browser. Keep this page open and try again.\"",
+    "to": "\"无法在此浏览器中保存草稿。请保持页面打开并重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+    "from": "\"Create the webhook before finishing setup.\"",
+    "to": "\"请先创建 webhook，再完成设置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Send an HTTP POST request with a JSON object as the body (not an array or string).\"",
+    "to": "\"发送 HTTP POST 请求，正文必须为 JSON 对象，不能是数组或字符串。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"In GitHub, open your repository → Settings → Webhooks → Add webhook.\"",
+    "to": "\"在 GitHub 中，打开仓库 → Settings → Webhooks → Add webhook。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Use the webhook URL above as Payload URL and select application/json as Content type.\"",
+    "to": "\"将上方 webhook 网址填入 Payload URL，并将 Content type 设为 application/json。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Paste this value into GitHub’s Secret field. GitHub signs requests with X-Hub-Signature-256; do not use Bearer authentication.\"",
+    "to": "\"将此值粘贴到 GitHub 的 Secret 字段。GitHub 使用 X-Hub-Signature-256 对请求签名，请勿使用 Bearer 认证。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Select the events that should start this routine, enable the webhook, and save.\"",
+    "to": "\"选择需要启动此例行任务的事件，启用 webhook 并保存。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"To check the connection, open Recent Deliveries and redeliver an event.\"",
+    "to": "\"要检查连接，请打开 Recent Deliveries，并重新投递一个事件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Subscribe only to the events that should start this routine. Public services need a publicly reachable HTTPS URL.\"",
+    "to": "\"仅订阅应启动此例行任务的事件。公共服务需要可从公网访问的 HTTPS 网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"In the sending app, add a webhook using this URL, POST method, JSON body, and headers, then save it.\"",
+    "to": "\"在发送端应用中添加 webhook，使用此网址、POST 方法、JSON 正文和标头，然后保存。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Send a unique Idempotency-Key header for each event and reuse it on retries, so retrying a setup test after activation cannot start the routine.\"",
+    "to": "\"每个事件应发送唯一的 Idempotency-Key 标头，重试时复用相同值，避免启用后重试设置测试而意外启动例行任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "'Example JSON body: {\"event\":\"deployment.completed\",\"environment\":\"production\"}'",
+    "to": "\"JSON 正文示例：{\\\"event\\\":\\\"deployment.completed\\\",\\\"environment\\\":\\\"production\\\"}\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"To check the connection, send a test event from the app or perform the action that triggers a delivery.\"",
+    "to": "\"要检查连接，请从应用发送测试事件，或执行会触发投递的操作。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Open Check connection in Paperclip to see whether the event arrived and authentication passed.\"",
+    "to": "\"在 Paperclip 中打开“检查连接”，查看事件是否到达及认证是否通过。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"During setup, deliveries only test the connection. They do not start the routine or create a task.\"",
+    "to": "\"设置期间的投递仅测试连接，不会启动例行任务或创建任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Finish setup in Paperclip to enable this webhook for future events. Test events are not replayed.\"",
+    "to": "\"在 Paperclip 中完成设置后，此 webhook 将对后续事件启用。测试事件不会重放。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"This webhook is enabled. Deliveries can start the routine and create tasks.\"",
+    "to": "\"此 webhook 已启用，投递的事件可以启动例行任务并创建任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Store the key securely; do not put it in source control or logs.\"",
+    "to": "\"请安全保存密钥，不要放入源代码仓库或日志。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Choose trigger\"",
+    "to": "\"选择触发器\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Set schedule\"",
+    "to": "\"设置计划\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Connect your app\"",
+    "to": "\"连接应用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"When should this routine run?\"",
+    "to": "\"何时运行此例行任务？\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Set a schedule\"",
+    "to": "\"设置计划\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Review your schedule\"",
+    "to": "\"检查计划\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Check your connection\"",
+    "to": "\"检查连接\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Choose when Paperclip should start this routine automatically.\"",
+    "to": "\"选择 Paperclip 自动启动此例行任务的时间。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"This schedule starts the routine automatically. You can pause or change it later.\"",
+    "to": "\"此计划会自动启动例行任务，你可以稍后暂停或修改。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Copy these details into the sending app, then save its webhook settings.\"",
+    "to": "\"将这些信息复制到发送端应用，然后保存 webhook 设置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Test that events arrive and authentication works. This won’t start the routine.\"",
+    "to": "\"测试事件是否到达及认证是否有效，不会启动例行任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"Every day, on weekdays, or once a week.\"",
+    "to": "\"每天、工作日或每周一次。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/routine-triggers/TriggerWizard.tsx",
+    "from": "\"When something happens in GitHub, another app, or a script.\"",
+    "to": "\"GitHub、其他应用或脚本中发生事件时。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"skills.sh managed\"",
+    "to": "\"由 skills.sh 管理\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"GitHub managed\"",
+    "to": "\"由 GitHub 管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"URL managed\"",
+    "to": "\"由网址来源管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Folder managed\"",
+    "to": "\"由文件夹管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Paperclip managed\"",
+    "to": "\"由 Paperclip 管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Catalog managed\"",
+    "to": "\"由目录管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Sharing: private\"",
+    "to": "\"共享：私有\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Sharing: company\"",
+    "to": "\"共享：公司\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Categories: none\"",
+    "to": "\"类别：无\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\" · skills not supported\"",
+    "to": "\"· 不支持技能\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Refreshing project skills...\"",
+    "to": "\"正在刷新项目技能…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Scanning project workspaces for skills...\"",
+    "to": "\"正在扫描项目工作区中的技能…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Failed to create skill.\"",
+    "to": "\"无法创建技能。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Select a skill first.\"",
+    "to": "\"请先选择一个技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Failed to install catalog skill.\"",
+    "to": "\"无法安装目录技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Review the fork metadata and create an editable company copy.\"",
+    "to": "\"检查副本信息，并创建可编辑的公司副本。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "\"Create an editable company skill in the Paperclip workspace.\"",
+    "to": "\"在 Paperclip 工作区中创建可编辑的公司技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"skills.sh managed\"",
+    "to": "\"由 skills.sh 管理\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"GitHub managed\"",
+    "to": "\"由 GitHub 管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"URL managed\"",
+    "to": "\"由网址来源管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Folder managed\"",
+    "to": "\"由文件夹管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Paperclip managed\"",
+    "to": "\"由 Paperclip 管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Catalog managed\"",
+    "to": "\"由目录管理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Sharing: private\"",
+    "to": "\"共享：私有\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Sharing: organization\"",
+    "to": "\"共享：组织\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Categories: none\"",
+    "to": "\"类别：无\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Skills available to this organization.\"",
+    "to": "\"此组织可用的技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Browse skills from every available source.\"",
+    "to": "\"浏览所有可用来源中的技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\" · skills not supported\"",
+    "to": "\"· 不支持技能\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Refreshing project skills...\"",
+    "to": "\"正在刷新项目技能…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Scanning project workspaces for skills...\"",
+    "to": "\"正在扫描项目工作区中的技能…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Failed to create skill.\"",
+    "to": "\"无法创建技能。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Select a skill first.\"",
+    "to": "\"请先选择一个技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Failed to install catalog skill.\"",
+    "to": "\"无法安装目录技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Review the fork metadata and create an editable organization copy.\"",
+    "to": "\"检查副本信息，并创建可编辑的组织副本。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "\"Create an editable organization skill in the Paperclip workspace.\"",
+    "to": "\"在 Paperclip 工作区中创建可编辑的组织技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Workspace commands JSON must be a JSON object.\"",
+    "to": "\"工作区命令 JSON 必须是 JSON 对象。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Invalid JSON.\"",
+    "to": "\"JSON 无效。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Repo URL must be a valid URL.\"",
+    "to": "\"仓库网址必须是有效网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Provision\"",
+    "to": "\"预配置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Database seed\"",
+    "to": "\"数据库初始化\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Runtime provision\"",
+    "to": "\"运行环境预配置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Teardown\"",
+    "to": "\"销毁清理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Finalize\"",
+    "to": "\"收尾\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Failed to save execution workspace.\"",
+    "to": "\"无法保存执行工作区。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Workspace job completed.\"",
+    "to": "\"工作区作业已完成。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Workspace service stopped.\"",
+    "to": "\"工作区服务已停止。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Workspace service restarted.\"",
+    "to": "\"工作区服务已重启。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Workspace service started.\"",
+    "to": "\"工作区服务已启动。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Failed to control workspace commands.\"",
+    "to": "\"无法控制工作区命令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Failed to build workspace update.\"",
+    "to": "\"无法生成工作区更新。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"No services have been started for this execution workspace yet.\"",
+    "to": "\"此执行工作区尚未启动任何服务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"No workspace command config is defined for this execution workspace yet.\"",
+    "to": "\"此执行工作区尚未定义工作区命令配置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+    "from": "\"Execution workspaces need a working directory before local commands can run, and services also need runtime config.\"",
+    "to": "\"执行工作区必须先设置工作目录，才能运行本地命令；服务还需要运行配置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"This item\"",
+    "to": "\"此事项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"Choose an existing workspace before saving this stage.\"",
+    "to": "\"保存此阶段前，请选择现有工作区。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"Approved items move to\"",
+    "to": "\"批准的事项移至\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"Declined items move to\"",
+    "to": "\"拒绝的事项移至\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"Items needing changes move to\"",
+    "to": "\"需要修改的事项移至\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PipelineSettings.tsx",
+    "from": "\"Stay in review\"",
+    "to": "\"留在审查阶段\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"This item duplicates another row.\"",
+    "to": "\"此事项与另一行重复。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"This item waits on another row that also waits on it.\"",
+    "to": "\"此事项与另一行相互等待，形成循环依赖。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"This item needs attention before it can be submitted.\"",
+    "to": "\"提交前需要先处理此事项的问题。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Most to review\"",
+    "to": "\"待审查最多\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Most in motion\"",
+    "to": "\"进行中最多\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Most open items\"",
+    "to": "\"未关闭事项最多\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"No activity\"",
+    "to": "\"无活动\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"1 hr ago\"",
+    "to": "\"1 小时前\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"yesterday\"",
+    "to": "\"昨天\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"last week\"",
+    "to": "\"上周\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Could not create the pipeline. Try a different name.\"",
+    "to": "\"无法创建工作流，请尝试其他名称。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Untitled item\"",
+    "to": "\"未命名事项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"another pipeline\"",
+    "to": "\"其他工作流\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Unassigned items\"",
+    "to": "\"未分配事项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Drop items here\"",
+    "to": "\"将事项拖到此处\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"No active conversation issue is available for image uploads.\"",
+    "to": "\"没有可用于上传图片的活跃对话任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"No active conversation issue is available for image attachments.\"",
+    "to": "\"没有可用于添加图片附件的活跃对话任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Could not re-run this step.\"",
+    "to": "\"无法重新运行此步骤。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Could not retry this automation.\"",
+    "to": "\"无法重试此自动化。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Could not retry. Please try again.\"",
+    "to": "\"无法重试，请再试一次。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Missing target stage\"",
+    "to": "\"缺少目标阶段\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Missing removal stage\"",
+    "to": "\"缺少移除阶段\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Missing item version\"",
+    "to": "\"缺少事项版本\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Automation is running\"",
+    "to": "\"自动化正在运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Linked work is running\"",
+    "to": "\"关联工作正在运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Item approved\"",
+    "to": "\"事项已批准\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Item rejected\"",
+    "to": "\"事项已拒绝\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"the automation\"",
+    "to": "\"此自动化\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"first stage\"",
+    "to": "\"首个阶段\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"This item is not ready for a decision.\"",
+    "to": "\"此事项尚未准备好接受决定。\"",
+    "expected": 3
+  },
+  {
+    "file": "ui/src/pages/Pipelines.tsx",
+    "from": "\"Some items could not be approved.\"",
+    "to": "\"部分事项无法批准。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace commands JSON must be a JSON object.\"",
+    "to": "\"工作区命令 JSON 必须是 JSON 对象。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Invalid JSON.\"",
+    "to": "\"JSON 无效。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Remote-managed workspaces require a remote workspace ref or repo URL.\"",
+    "to": "\"远程托管工作区需要远程工作区引用或仓库网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace requires at least one local path or repo URL.\"",
+    "to": "\"工作区至少需要本地路径或仓库网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Local workspace path must be absolute.\"",
+    "to": "\"本地工作区路径必须为绝对路径。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Repo URL must be a valid URL.\"",
+    "to": "\"仓库网址必须是有效网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace job completed.\"",
+    "to": "\"工作区作业已完成。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace service stopped. Task execution is not paused.\"",
+    "to": "\"工作区服务已停止，任务执行未暂停。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace service restarted. Task execution is not paused.\"",
+    "to": "\"工作区服务已重启，任务执行未暂停。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Workspace service started.\"",
+    "to": "\"工作区服务已启动。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"Failed to control workspace commands.\"",
+    "to": "\"无法控制工作区命令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"No services have been started for this workspace yet.\"",
+    "to": "\"此工作区尚未启动任何服务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProjectWorkspaceDetail.tsx",
+    "from": "\"No workspace command config is defined for this workspace yet.\"",
+    "to": "\"此工作区尚未定义工作区命令配置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Projects.tsx",
+    "from": "\"My Projects\"",
+    "to": "\"我的项目\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Projects.tsx",
+    "from": "\"Other Projects\"",
+    "to": "\"其他项目\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.production.tsx",
+    "from": "\"Select a company to create secrets\"",
+    "to": "\"请选择公司以创建密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillSources.tsx",
+    "from": "'Removed from source · installed copy retained'",
+    "to": "\"已从来源移除 · 保留已安装副本\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Failed to create skill.\"",
+    "to": "\"无法创建技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Skill Studio link copied to clipboard.\"",
+    "to": "\"技能工作室链接已复制到剪贴板。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Could not copy the link.\"",
+    "to": "\"无法复制链接。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Select skill\"",
+    "to": "\"选择技能\"",
+    "expected": 3
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"File path\"",
+    "to": "\"文件路径\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"The saved run template is no longer available. Default test template is selected.\"",
+    "to": "\"已保存的运行模板已不可用，已选择默认测试模板。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Loading run templates\"",
+    "to": "\"正在加载运行模板\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Run templates couldn't load\"",
+    "to": "\"无法加载运行模板\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Default test template\"",
+    "to": "\"默认测试模板\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Run templates are not ready.\"",
+    "to": "\"运行模板尚未就绪。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Selected run template is no longer available. The selection was reset.\"",
+    "to": "\"所选运行模板已不可用，选择已重置。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"built in\"",
+    "to": "\"内置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Update the custom run instructions used by Skills Studio.\"",
+    "to": "\"更新技能工作室使用的自定义运行指令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Save reusable run instructions for Skills Studio.\"",
+    "to": "\"保存可复用的技能工作室运行指令。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"Run details are still loading.\"",
+    "to": "\"运行详情仍在加载。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"saved input\"",
+    "to": "\"已保存输入\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\"ad-hoc paste\"",
+    "to": "\"临时粘贴\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "\" (executable)\"",
+    "to": "\"（可执行）\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Contains only markdown and references. No executable content.\"",
+    "to": "\"仅包含 Markdown 和引用，不含可执行内容。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Includes static assets (images, fixtures). No executable content.\"",
+    "to": "\"包含静态资源（图片、测试样本），不含可执行内容。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Includes executable scripts that were security-reviewed before bundling.\"",
+    "to": "\"包含在打包前已通过安全审查的可执行脚本。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"References external sources resolved at install time.\"",
+    "to": "\"引用安装时解析的外部来源。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Failed to load install preview.\"",
+    "to": "\"无法加载安装预览。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Install failed.\"",
+    "to": "\"安装失败。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "\"Enable a legacy adapter before installing this team.\"",
+    "to": "\"安装此团队前，请先启用旧版适配器。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillReleasePicker.tsx",
+    "from": "\"Default — current (recommended)\"",
+    "to": "\"默认：当前版本（推荐）\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Enabled skills are materialized into the stable Paperclip-managed prompt bundle on the agent's next run.\"",
+    "to": "\"已启用的技能会在智能体下次运行时写入由 Paperclip 管理的稳定指令包。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Kept in workspace\"",
+    "to": "\"保留在工作区中\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Applied on next run\"",
+    "to": "\"下次运行时生效\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Tracked only\"",
+    "to": "\"仅跟踪\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Paperclip cannot manage skills for custom ACP commands yet.\"",
+    "to": "\"Paperclip 暂不支持管理自定义 ACP 命令的技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Paperclip cannot manage OpenClaw skills here. Visit your OpenClaw instance to manage this agent's skills.\"",
+    "to": "\"Paperclip 无法在此管理 OpenClaw 技能。请前往你的 OpenClaw 实例管理此智能体的技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Paperclip cannot manage skills for this adapter yet. Manage them in the adapter directly.\"",
+    "to": "\"Paperclip 暂不支持管理此适配器的技能，请直接在适配器中管理。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "from": "\"Paperclip Runner uses native semantic coordination and cannot attach the legacy Paperclip operational skill.\"",
+    "to": "\"Paperclip Runner 使用原生语义协调，不能关联旧版 Paperclip 操作技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "\"No project selected.\"",
+    "to": "\"未选择项目。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "\"No skills were imported.\"",
+    "to": "\"未导入任何技能。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/ImportSkillsFromProjectDialog.tsx",
+    "from": "\"The selected folder does not contain a valid SKILL.md file.\"",
+    "to": "\"所选文件夹不包含有效的 SKILL.md 文件。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Downloading repository'",
+    "to": "\"正在下载仓库\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Finding skills'",
+    "to": "\"正在查找技能\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Opening repository'",
+    "to": "\"正在打开仓库\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Checking package files and saving local copies…'",
+    "to": "\"正在检查软件包文件并保存本地副本…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Receiving the repository from GitHub…'",
+    "to": "\"正在从 GitHub 接收仓库…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Searching every folder for SKILL.md…'",
+    "to": "\"正在各文件夹中查找 SKILL.md…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Connecting to GitHub and resolving the branch…'",
+    "to": "\"正在连接 GitHub 并解析分支…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillImportProgress.tsx",
+    "from": "'Check files'",
+    "to": "\"检查文件\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/TeamCatalog.tsx",
+    "from": "{team.counts.agents}a · {team.counts.projects}p · {team.counts.routines}r · {skillCount(team)}s",
+    "to": "{team.counts.agents} 个智能体 · {team.counts.projects} 个项目 · {team.counts.routines} 个例行任务 · {skillCount(team)} 个技能",
+    "expected": 1
+  }
+]

@@ -428,7 +428,7 @@
   {
     "file": "ui/src/components/IssueMonitorBanner.tsx",
     "from": "`Agent retry ${eta}`",
-    "to": "`智能体将于 ${eta} 重试`",
+    "to": "`智能体重试：${eta}`",
     "expected": 1
   },
   {

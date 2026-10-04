@@ -560,7 +560,7 @@
   {
     "file": "ui/src/pages/Secrets.tsx",
     "from": "              {parentLabel !== \"All secrets\" ? (",
-    "to": "              {parentLabel !== \"全部密钥\" ? (",
+    "to": "              {parentFolderPath ? (",
     "expected": 1
   },
   {

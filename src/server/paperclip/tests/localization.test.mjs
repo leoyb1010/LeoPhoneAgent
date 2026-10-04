@@ -73,3 +73,45 @@ test('catalogs have consistent duplicates and translated strings cannot add exec
     }
   }
 });
+
+
+test('labels in non-TSX data objects are preserved for protocol consumers', () => {
+  const source = 'export const event = {label: "Pending", title: "Name", body: "Failed to save"};';
+  assert.equal(transform(source, 'events.ts', catalog).output, source);
+});
+test('styles and implicit option submission values cannot be translated', () => {
+  assert.equal(transform('const statusLabels = {className: "Pending", value: "Pending"};', 'A.tsx', catalog).output, 'const statusLabels = {className: "Pending", value: "Pending"};');
+  assert.throws(() => transform('<option>Pending</option>', 'A.tsx', catalog), /Unsafe implicit option/);
+  const safe = transform('<option value="pending">Pending</option>', 'A.tsx', catalog).output;
+  assert.ok(safe.includes('value="pending"')); assert.ok(safe.includes('待处理'));
+});
+
+const { localizeDisplayFormats } = await import('../scripts/display-locales.mjs');
+test('visible date and number formats use Chinese without changing timezone or parser locales', () => {
+  const source = 'new Date(ts).toLocaleString(); value.toLocaleString("en-US"); date.toLocaleDateString(undefined, {timeZone:"UTC"}); Intl.DateTimeFormat().resolvedOptions().timeZone;';
+  const result = localizeDisplayFormats(source, 'ui/src/pages/Timeline.tsx');
+  assert.equal(result.count, 3);
+  assert.ok(result.output.includes('toLocaleString("zh-CN")'));
+  assert.ok(result.output.includes('timeZone:"UTC"'));
+  assert.ok(result.output.includes('Intl.DateTimeFormat().resolvedOptions().timeZone'));
+  const machine = 'new Intl.DateTimeFormat("en-US", options).formatToParts(date)';
+  assert.equal(localizeDisplayFormats(machine, 'ui/src/lib/cron-fires.ts').output, machine);
+  assert.ok(localizeDisplayFormats('new Intl.DateTimeFormat(options.locale, {})', 'ui/src/lib/issue-monitor.ts').output.includes('options.locale ?? "zh-CN"'));
+});
+
+const editorSource = fs.readFileSync(new URL('../overlays/editor.zh-CN.ts', import.meta.url), 'utf8');
+const editorJs = ts.transpileModule(editorSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }}).outputText;
+const editor = await import('data:text/javascript;base64,' + Buffer.from(editorJs).toString('base64'));
+test('MDXEditor UI translation covers the pinned contract without rewriting user content', () => {
+  const contract = JSON.parse(fs.readFileSync(new URL('../catalogs/editor-contract.json', import.meta.url)));
+  assert.deepEqual(editor.EDITOR_TRANSLATION_KEYS.sort(), Object.keys(contract.messages).sort());
+  assert.equal(editor.editorTranslation('toolbar.bold', 'Bold'), '加粗');
+  assert.equal(editor.editorTranslation('toolbar.blockTypes.heading', 'Heading {{level}}', { level: 2 }), '2 级标题');
+  assert.equal(editor.editorTranslation('toolbar.undo', 'Undo {{shortcut}}', { shortcut: 'Ctrl+Z' }), '撤销 Ctrl+Z');
+  assert.equal(editor.editorTranslation('unknown.external', 'User content stays unchanged'), 'User content stays unchanged');
+  for (const [key, value] of Object.entries(contract.messages)) {
+    const en = [...value.matchAll(/{{\s*([A-Za-z0-9_.-]+)\s*}}/g)].map(m=>m[1]).sort();
+    const zh = [...editor.editorTranslation(key, value).matchAll(/{{\s*([A-Za-z0-9_.-]+)\s*}}/g)].map(m=>m[1]).sort();
+    assert.deepEqual(zh, en, key);
+  }
+});

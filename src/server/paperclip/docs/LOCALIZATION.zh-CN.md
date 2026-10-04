@@ -5,7 +5,7 @@
 输入固定为 `upstream.lock.json` 的 Git commit。所有自动转换都从 `git show HEAD:<path>` 的固定源文件读取，不把已汉化源码当成下一次转换输入。输出写入独立上游工作目录，不把完整 Paperclip 复制进 LeoPhoneAgent 仓库。
 
 顺序：
-1. 校验 Git SHA 与已存源码 SHA-256
+1. 校验 Git SHA 与全部 609 个扫描源文件的 SHA-256（清单缺项或新增项也失败）
 2. 应用 `catalogs/*.structural.json`：每项包含完整原始上下文、替换文本、预期出现次数；不匹配立即失败
 3. TypeScript AST 提取静态显示节点，对照扁平英文→中文词库
 4. 使用 `contexts.json` 按文件、必要时按 `行号:源文本` 消除相同英文的歧义
@@ -38,6 +38,8 @@ node scripts/localize.mjs extract /path/to/paperclip
 node scripts/localize.mjs apply /path/to/paperclip
 node scripts/localize.mjs verify /path/to/paperclip
 node scripts/coverage-contract.mjs reports/coverage.json
+node scripts/check-protocol-invariants.mjs /path/to/paperclip
+PAPERCLIP_SOURCE=/path/to/paperclip npm test
 ./scripts/check-upstream.sh /path/to/paperclip
 ```
 
@@ -46,3 +48,11 @@ node scripts/coverage-contract.mjs reports/coverage.json
 ## 升级
 
 新建上游工作目录并更新锁定 SHA；先运行提取，不允许把补丁失败改为静默跳过。逐一审核结构上下文和剩余文案，再更新指纹/覆盖基线，运行协议保留测试、UI 构建和冒烟。升级记录必须区分“已翻译静态候选”“已渲染验证”“未覆盖内容”，不得只依据词条数量宣称全量中文或生产可用。
+
+## 全站剩余门禁与第三方 UI
+
+`coverage-contract.json` 要求静态未审阅项为 0。`dynamic-preserve.json` 对仍含拉丁字母的动态模板逐文件、完整源码、分类和原因进行精确登记；新项与失效旧项都使 CI 失败，不以数量上限放行。`source-contract.json` 是完整扫描清单，不允许只核验已有 key。
+
+Markdown 编辑器使用 MDXEditor 的官方 `translation` 回调，93 个键和插值契约在 `editor-contract.json`，保留 MIT 归属。翻译回调不接收也不改写用户 Markdown。第三方插件自己的界面不在宿主静态词库内。
+
+日期转换只作用于经过审阅的显示文件。`cron-fires.ts` 中用于机器解析的 en-US formatToParts 保留。调度控件的内部 rawLabel 和 weekday value 保留，显示层再本地化；便携测试必须在 CI 设置 PAPERCLIP_SOURCE，避免跳过上游回归。

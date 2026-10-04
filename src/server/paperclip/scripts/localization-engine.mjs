@@ -5,6 +5,7 @@ export const normalize = value => value.replace(/\s+/g, ' ').trim();
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 const displayFields = new Set(['label', 'title', 'description', 'placeholder', 'aria-label', 'aria-description', 'alt', 'message', 'tooltip', 'help', 'subtitle', 'emptyMessage', 'emptyText', 'loadingText', 'errorMessage', 'confirmLabel', 'cancelLabel', 'buttonText', 'heading', 'summary', 'displayName', 'hint', 'helperText', 'chooseLabel', 'defaultLabel', 'detectModelLabel', 'emptyDetectHint', 'mobileTitle', 'noneLabel', 'searchPlaceholder', 'primaryLabel', 'instruction']);
 const displayCalls = /^(?:set(?:Action|Submit|Form|Auth|Upload|Save|Inline)?Error|alert|confirm)$/;
+const nonDisplayFields = new Set(["className", "class", "style", "icon", "variant", "tone", "type", "value", "id", "key", "href", "to", "route", "action", "status", "command", "code", "scope", "model", "provider", "endpoint"]);
 const displayVariables = /(?:LABELS|Labels|Label|LabelsByType|Descriptions|Tooltips|Hints|Messages|Copy|DisplayNames|statusConfig|priorityConfig|PRESET_LABELS|typeLabel)$/;
 function keyName(n) { return n && (ts.isIdentifier(n) || ts.isStringLiteral(n)) ? n.text : ''; }
 function inToast(n) {
@@ -21,12 +22,12 @@ function inDisplayMap(n) {
 function visiblePosition(n) {
   if (ts.isJsxText(n)) {
     const opening = n.parent.openingElement;
-    return !opening || !['code', 'pre', 'script', 'style'].includes(opening.tagName.getText());
+    return !opening || (!['code', 'pre', 'script', 'style'].includes(opening.tagName.getText()) && !(opening.tagName.getText() === 'option' && !opening.attributes.properties.some(p => keyName(p.name) === 'value')));
   }
   let child = n;
   for (let p = n.parent, depth = 0; p && depth < 12; child = p, p = p.parent, depth++) {
     if (ts.isJsxAttribute(p)) return displayFields.has(keyName(p.name));
-    if (ts.isPropertyAssignment(p)) return p.initializer === child && ((displayFields.has(keyName(p.name)) && n.getSourceFile().fileName.endsWith(".tsx")) || (keyName(p.name) === "body" && inToast(p)) || inDisplayMap(p));
+    if (ts.isPropertyAssignment(p)) return p.initializer === child && !nonDisplayFields.has(keyName(p.name)) && ((displayFields.has(keyName(p.name)) && n.getSourceFile().fileName.endsWith(".tsx")) || (keyName(p.name) === "body" && inToast(p)) || inDisplayMap(p));
     if (ts.isJsxExpression(p)) {
       if (ts.isJsxAttribute(p.parent)) return displayFields.has(keyName(p.parent.name));
       const opening = p.parent.openingElement;
@@ -65,6 +66,19 @@ export function extract(source, file = 'source.tsx') {
   visit(ast);
   return entries;
 }
+export function extractDynamic(source, file = 'source.tsx') {
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const entries = [];
+  function visit(node) {
+    if (ts.isTemplateExpression(node) && visiblePosition(node)) {
+      const segments = [node.head.text, ...node.templateSpans.map(span => span.literal.text)];
+      if (segments.some(text => /[A-Za-z]{2}/.test(text))) entries.push({ text: node.getText(ast), line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1, segments });
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  return entries;
+}
 export function translationFor(entry, catalog, context = {}) {
   const key = `${entry.line}:${entry.text}`;
   if (Object.hasOwn(context, key)) return context[key];
@@ -72,6 +86,17 @@ export function translationFor(entry, catalog, context = {}) {
   return Object.hasOwn(catalog, entry.text) ? catalog[entry.text] : undefined;
 }
 export function transform(source, file, catalog, context = {}) {
+  const safetyAst = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  function checkImplicitOption(node) {
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText() === "option" && !node.openingElement.attributes.properties.some(p => keyName(p.name) === "value")) {
+      for (const child of node.children) if (ts.isJsxText(child)) {
+        const text = normalize(child.getText(safetyAst));
+        if (Object.hasOwn(catalog, text) && catalog[text] !== text) throw new Error(`Unsafe implicit option value in ${file}: ${text}; add a stable explicit value in a reviewed patch`);
+      }
+    }
+    ts.forEachChild(node, checkImplicitOption);
+  }
+  checkImplicitOption(safetyAst);
   const entries = extract(source, file);
   const edits = entries.filter(e => translationFor(e, catalog, context) !== undefined && translationFor(e, catalog, context) !== e.text).map(e => {
     const zh = translationFor(e, catalog, context);

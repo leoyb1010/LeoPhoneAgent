@@ -4,7 +4,7 @@ LeoPhoneAgent bundles, links, or depends on the following third-party components
 
 ## Paperclip 中文服务器集成
 
-Paperclip AI (`paperclipai/paperclip`) is pinned to commit `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a` under the **MIT License**, copyright (c) 2025 Paperclip AI. The separately deployed server source is obtained and transformed by the reproducible distribution layer in `src/server/paperclip`; the original license is preserved as `LICENSE.paperclip`. Native clients implement the HTTP contract rather than bundling the upstream execution server. Product names and original notices are retained; this integration is not an upstream endorsement.
+Paperclip AI (`paperclipai/paperclip`) is pinned to commit `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a` under the **MIT License**, copyright (c) 2025 Paperclip AI. The separately deployed server source is obtained and transformed by the reproducible distribution layer in `src/server/paperclip`; the original license is preserved as `LICENSE.paperclip`. Native clients implement the HTTP contract rather than bundling the upstream execution server. Product names and original notices are retained; this integration is not an upstream endorsement. The Chinese server layer also contains reviewed UI translation keys for MDXEditor 4.2.3, covered by its MIT License preserved as `src/server/paperclip/LICENSE.mdxeditor`; these labels do not transform user-authored Markdown.
 
 ## Native C/C++ dependencies (`deps/`)
 

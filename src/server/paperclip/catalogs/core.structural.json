@@ -528,12 +528,6 @@
     "expected": 1
   },
   {
-    "file": "ui/src/pages/apps/Connections.tsx",
-    "from": "label: \"Healthy\" | \"Needs attention\" | \"Paused\" | \"Not connected\" | \"Retired\";",
-    "to": "label: string;",
-    "expected": 1
-  },
-  {
     "file": "ui/src/pages/IssueDetail.tsx",
     "from": "function AttributionAvatar({\n  label,",
     "to": "function AttributionAvatar({\n  kind,",
@@ -584,7 +578,7 @@
   {
     "file": "ui/src/components/BreadcrumbBar.tsx",
     "from": "breadcrumbs[0]?.label === \"Tasks\"",
-    "to": "[\"Tasks\", \"任务\"].includes(breadcrumbs[0]?.label ?? \"\")",
+    "to": "(breadcrumbs[0]?.label === \"Tasks\" || breadcrumbs[0]?.label === \"任务\")",
     "expected": 1
   }
 ]

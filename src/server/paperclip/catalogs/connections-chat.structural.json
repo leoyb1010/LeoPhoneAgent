@@ -1,0 +1,1610 @@
+[
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "from": "            throw new Error(\"The agent’s AI connection changed. Reload the task and try again.\");\n",
+    "to": "            throw new Error(\"智能体的 AI 连接已更改。请重新加载任务后重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "from": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} can now verify and authorize ${interaction.payload.upstreamService.name} through this provider. The app is not yet verified.` : isAi ? \"This agent can now use the connection.\" : `${interaction.payload.requestingAgentName} can use this connection on the continuation run.`,\n",
+    "to": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} can now verify and authorize ${interaction.payload.upstreamService.name} through this provider. The app is not yet verified.` : isAi ? \"此智能体现在可以使用该连接。\" : `${interaction.payload.requestingAgentName} can use this connection on the continuation run.`,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "from": "            body: isAi ? \"The task still needs a working AI connection before it can run.\" : `${interaction.payload.requestingAgentName} was notified and can continue without it.`,\n",
+    "to": "            body: isAi ? \"任务仍需可用的 AI 连接才能运行。\" : `${interaction.payload.requestingAgentName} was notified and can continue without it.`,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "from": "                  ? \"This request was replaced. Use the latest connection card instead.\"\n                  : \"This request is no longer active.\",\n",
+    "to": "                  ? \"此请求已被替代。请使用最新的连接卡片。\"\n                  : \"此请求已不再有效。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    return \"Authorization was cancelled or declined. Your saved connection was not changed.\";\n",
+    "to": "    return \"授权已取消或被拒绝。已保存的连接未发生变化。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    return \"GitHub access is required. Install Paperclip and grant at least one repository, then try again.\";\n",
+    "to": "    return \"需要 GitHub 访问权限。请安装 Paperclip 并授予至少一个仓库的访问权限，然后重试。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "  return \"Authorization did not complete. Your saved connection is still here, so you can try again.\";\n",
+    "to": "  return \"授权未完成。已保存的连接仍然保留，您可以重试。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setOAuthError(\"Paperclip couldn’t open the sign-in window. Open sign-in in a new tab to continue.\");\n",
+    "to": "      setOAuthError(\"Paperclip 无法打开登录窗口。请在新标签页中打开登录页面以继续。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setOAuthError(\"The sign-in window closed. If authorization did not finish, try again.\");\n",
+    "to": "      setOAuthError(\"登录窗口已关闭。如果授权尚未完成，请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "          throw new Error(\"Paperclip couldn’t preserve this sign-in while refreshing your account.\");\n",
+    "to": "          throw new Error(\"Paperclip 在刷新您的账户时无法保留此次登录。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setOAuthError(error instanceof Error ? error.message : \"Paperclip couldn’t start secure sign-in. Try again.\");\n",
+    "to": "      setOAuthError(error instanceof Error ? error.message : \"Paperclip 无法开始安全登录，请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        setOAuthError(\"Authorization was cancelled. You can try again.\");\n",
+    "to": "        setOAuthError(\"授权已取消。您可以重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setOAuthError(\"Authorization did not complete. Try again when you’re ready.\");\n",
+    "to": "      setOAuthError(\"授权未完成。您可以准备好后重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        setOAuthError(\"The sign-in window closed. Try again to finish connecting GitHub.\");\n",
+    "to": "        setOAuthError(\"登录窗口已关闭。请重试以完成 GitHub 连接。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        setOAuthError(\"Authorization did not complete. Finish setup in the sign-in window or try again.\");\n",
+    "to": "        setOAuthError(\"授权未完成。请在登录窗口中完成设置，或重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "          setOAuthError(\"Could not confirm the connection. Try again.\");\n",
+    "to": "          setOAuthError(\"无法确认连接。请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        setConnectorEnrollmentError(\"Open authorization in a new tab to continue.\");\n",
+    "to": "        setConnectorEnrollmentError(\"请在新标签页中打开授权页面以继续。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        setConnectorEnrollmentError(\"Paperclip Cloud did not return an enrollment link. Try again.\");\n",
+    "to": "        setConnectorEnrollmentError(\"Paperclip Cloud 未返回注册链接。请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        error instanceof Error ? error.message : \"Paperclip couldn’t reach Paperclip Cloud. Try again.\",\n",
+    "to": "        error instanceof Error ? error.message : \"Paperclip 无法连接 Paperclip Cloud。请重试。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        details?.code === \"invalid_grant\"\n          ? \"Your authorization expired or was revoked. Reconnect to continue.\"\n",
+    "to": "        details?.code === \"invalid_grant\"\n          ? \"您的授权已过期或被撤销。请重新连接以继续。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            ? error.message\n            : \"Paperclip couldn’t start secure sign-in. Try again.\",\n",
+    "to": "            ? error.message\n            : \"Paperclip 无法开始安全登录，请重试。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            ? \"Your authorization expired or was revoked. Reconnect to continue.\"\n",
+    "to": "            ? \"您的授权已过期或被撤销。请重新连接以继续。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "              : \"Paperclip couldn’t start secure sign-in. Try again.\",\n",
+    "to": "              : \"Paperclip 无法开始安全登录，请重试。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setOAuthPhase(\"error\");\n      setOAuthError(\"Paperclip couldn’t check for an existing connection. Try again.\");\n",
+    "to": "      setOAuthPhase(\"error\");\n      setOAuthError(\"Paperclip 无法检查现有连接。请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "              setExistingConnectionError(error instanceof Error ? error.message : \"Couldn’t use this connection.\");\n",
+    "to": "              setExistingConnectionError(error instanceof Error ? error.message : \"无法使用此连接。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            ?? \"Only a connection manager can share this credential with the organization.\"\n",
+    "to": "            ?? \"只有连接管理员可以将此凭据共享给组织。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            ?? \"Only someone who can configure this connection can give every agent access.\"\n",
+    "to": "            ?? \"只有具备此连接配置权限的人才能授予所有智能体访问权限。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        requestedAgentId ? \"This task grants access only to the agent that asked for it.\" : null,\n",
+    "to": "        requestedAgentId ? \"此任务仅向发出请求的智能体授予访问权限。\" : null,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "              setOAuthError(\"Paperclip couldn’t check for an existing connection. Try again.\");\n",
+    "to": "              setOAuthError(\"Paperclip 无法检查现有连接。请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      ? [\"Share sheet\"]\n",
+    "to": "      ? [\"共享表格\"]\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        ? [\"Add your key\"]\n",
+    "to": "        ? [\"添加密钥\"]\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "          error={connectMutation.isError ? (connectMutation.error instanceof Error ? connectMutation.error.message : \"Please check your key and try again.\") : null}\n",
+    "to": "          error={connectMutation.isError ? (connectMutation.error instanceof Error ? connectMutation.error.message : \"请检查密钥后重试。\") : null}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                setGoogleSheetsError(\"That doesn't look like a Google Sheets link.\");\n",
+    "to": "                setGoogleSheetsError(\"这似乎不是 Google Sheets 链接。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                setGoogleSheetsError(\"Paste at least one Google Sheets link.\");\n",
+    "to": "                setGoogleSheetsError(\"请至少粘贴一个 Google Sheets 链接。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            body: error ?? \"Paperclip couldn’t start secure sign-in. Try again.\",\n",
+    "to": "            body: error ?? \"Paperclip 无法开始安全登录，请重试。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      setLinkError(\"Paste a full http or https link.\");\n",
+    "to": "      setLinkError(\"请粘贴完整的 http 或 https 链接。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "  const identityHeading = githubIdentity ? \"Connect GitHub as\" : \"Which humans can use this credential?\";\n",
+    "to": "  const identityHeading = githubIdentity ? \"连接 GitHub 的身份\" : \"哪些成员可以使用此凭据？\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    ? \"Which agent owns this GitHub account?\"\n",
+    "to": "    ? \"哪个智能体拥有此 GitHub 账户？\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      ? \"Which agents may use your GitHub when you’re responsible?\"\n",
+    "to": "      ? \"您为负责人时，哪些智能体可以使用您的 GitHub？\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        ? \"Which agents may use the shared GitHub account?\"\n        : \"Which agents can use this connection?\";\n",
+    "to": "        ? \"哪些智能体可以使用共享的 GitHub 账户？\"\n        : \"哪些智能体可以使用此连接？\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                ariaLabel={githubIdentity ? identityHeading : \"Which humans can use this credential?\"}\n",
+    "to": "                ariaLabel={githubIdentity ? identityHeading : \"哪些成员可以使用此凭据？\"}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                      ? githubIdentity ? \"Shared organization GitHub account (advanced)\" : \"Any human in the organization\"\n                      : `${githubIdentity ? \"Shared organization GitHub account (advanced)\" : \"Any human in the organization\"}. Unavailable: ${capabilities?.organizationGrantReason ??\n                        \"Only a connection manager can share this credential with the organization.\"}`,\n",
+    "to": "                      ? githubIdentity ? \"组织共享 GitHub 账户（高级）\" : \"组织中的任何人\"\n                      : `${githubIdentity ? \"组织共享 GitHub 账户（高级）\" : \"组织中的任何人\"}. Unavailable: ${capabilities?.organizationGrantReason ??\n                        \"只有连接管理员可以将此凭据共享给组织。\"}`,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                      ? \"Any agent\"\n",
+    "to": "                      ? \"任何智能体\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                        \"Only someone who can configure this connection can choose this.\"}`,\n",
+    "to": "                        \"只有具备此连接配置权限的人才能选择此项。\"}`,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    ? \"No sign-in needed\"\n",
+    "to": "    ? \"无需登录\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      ? \"Connects as you\"\n",
+    "to": "      ? \"以您的身份连接\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        ? \"Connects as a dedicated agent account\"\n        : \"Connects for everyone in your organization\";\n",
+    "to": "        ? \"以智能体专用账户连接\"\n        : \"为组织中的所有人连接\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    ? \"agent access stays as it is\"\n",
+    "to": "    ? \"智能体访问权限保持不变\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      ? \"available to the agent that asked for it\"\n",
+    "to": "      ? \"仅发出请求的智能体可以使用\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        ? \"available to all agents\"\n",
+    "to": "        ? \"所有智能体均可使用\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "          ? \"no agents selected yet\"\n",
+    "to": "          ? \"尚未选择智能体\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    ? \"No identity required\"\n",
+    "to": "    ? \"无需身份\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "      ? \"Your identity\"\n",
+    "to": "      ? \"您的身份\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "        ? \"Dedicated agent identity\"\n      : \"Organization identity\";\n  const availableTo = input.installChoice === \"all\"\n    ? \"Any agent\"\n",
+    "to": "        ? \"智能体专用身份\"\n      : \"组织身份\";\n  const availableTo = input.installChoice === \"all\"\n    ? \"任何智能体\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "from": "  const error = s.connectStatus === \"invalid_url\" ? { title: \"Enter a valid MCP URL\", body: \"Paste the complete server URL, including https:// or http://. A dashboard page is not an MCP endpoint.\" }\n    : s.connectStatus === \"oauth_failed\" ? { title: `${provider.name} couldn’t connect`, body: \"Authorization did not complete. Your saved connection is still here, so you can try again.\" }\n",
+    "to": "  const error = s.connectStatus === \"invalid_url\" ? { title: \"Enter a valid MCP URL\", body: \"请粘贴包含 https:// 或 http:// 的完整服务器 URL。控制台页面不是 MCP 端点。\" }\n    : s.connectStatus === \"oauth_failed\" ? { title: `${provider.name} couldn’t connect`, body: \"授权未完成。已保存的连接仍然保留，您可以重试。\" }\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "from": "    : s.connectStatus === \"unreachable\" ? { title: \"Paperclip could not reach this server\", body: \"Check that the endpoint is running and reachable from Paperclip, then try again. Your draft is still here.\" }\n",
+    "to": "    : s.connectStatus === \"unreachable\" ? { title: \"Paperclip could not reach this server\", body: \"请确认端点正在运行且 Paperclip 可以访问，然后重试。您的草稿仍然保留。\" }\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "from": "            <p className=\"text-sm text-muted-foreground\">If a window did not open, {authorizationUrl ? <a className=\"text-current underline\" href={authorizationUrl} onClick={() => a.openProvider(\"sign_in\")} target=\"_blank\" rel=\"noopener noreferrer\">open sign-in again</a> : external(\"sign_in\", \"open sign-in again\")}.</p>\n",
+    "to": "            <p className=\"text-sm text-muted-foreground\">If a window did not open, {authorizationUrl ? <a className=\"text-current underline\" href={authorizationUrl} onClick={() => a.openProvider(\"sign_in\")} target=\"_blank\" rel=\"noopener noreferrer\">open sign-in again</a> : external(\"sign_in\", \"请重新打开登录页面\")}.</p>\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpDesignExample.tsx",
+    "from": "  const explain = () => edit({ notice: \"Design example only. Review the interactive states in Storybook → Apps / Connections. No credentials are saved or sent.\" });\n",
+    "to": "  const explain = () => edit({ notice: \"仅供设计示例使用。请在 Storybook → Apps / Connections 中查看交互状态。不会保存或发送任何凭据。\" });\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpProductionSetup.tsx",
+    "from": "    identity: null, allAgents: true, agentIds: [], permissions: {}, tools: [], notice: connection?.authKind === \"api_key\" ? \"Saved credentials are retained when these fields are left blank. Enter a replacement only to change them.\" : null, refreshing: false,\n",
+    "to": "    identity: null, allAgents: true, agentIds: [], permissions: {}, tools: [], notice: connection?.authKind === \"api_key\" ? \"这些字段留空时将保留已保存的凭据。仅在需要更改时输入替换值。\" : null, refreshing: false,\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpProductionSetup.tsx",
+    "from": "          if (!header.name.trim() || !header.value) throw new Error(\"Enter both a name and value for each header.\");\n",
+    "to": "          if (!header.name.trim() || !header.value) throw new Error(\"请为每个请求头填写名称和值。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpProductionSetup.tsx",
+    "from": "      edit({ connectStatus: \"idle\", notice: error instanceof Error ? error.message : \"Could not connect. Please try again.\" });\n",
+    "to": "      edit({ connectStatus: \"idle\", notice: error instanceof Error ? error.message : \"无法连接。请重试。\" });\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpProductionSetup.tsx",
+    "from": "      void onUseExisting(id).catch((error) => { setChoiceError(error instanceof Error ? error.message : \"Could not use this connection.\"); setChoicePending(null); });\n",
+    "to": "      void onUseExisting(id).catch((error) => { setChoiceError(error instanceof Error ? error.message : \"无法使用此连接。\"); setChoicePending(null); });\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    description: \"Use the apps and actions on your Zapier MCP server.\",\n    instructions: [\"Create an MCP server in Zapier and choose Other as the client.\", \"Connect your apps and select the actions to expose.\", \"Open Connect, generate a token, and copy the full server URL.\"],\n",
+    "to": "    description: \"使用您的 Zapier MCP 服务器上的应用和操作。\",\n    instructions: [\"在 Zapier 中创建 MCP 服务器，并选择 Other（其他）作为客户端。\", \"连接您的应用，并选择要开放的操作。\", \"打开 Connect（连接），生成令牌并复制完整的服务器 URL。\"],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    defaultUrl: \"\", placeholder: \"Paste the full URL from Zapier\",\n    urlHelp: \"The full server URL can contain a secret token. Paste it exactly as Zapier provides it.\",\n    authHelp: \"For a separate token, use https://mcp.zapier.com/api/v1/connect and choose Bearer token.\",\n",
+    "to": "    defaultUrl: \"\", placeholder: \"粘贴 Zapier 提供的完整 URL\",\n    urlHelp: \"完整的服务器 URL 可能包含秘密令牌。请按 Zapier 提供的内容原样粘贴。\",\n    authHelp: \"如需单独提供令牌，请使用 https://mcp.zapier.com/api/v1/connect 并选择 Bearer 令牌。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    description: \"Use the tools exposed by your Arcade gateway.\",\n    instructions: [\"Create a gateway in Arcade and select its tools.\", \"Choose its User Source and copy the gateway URL.\", \"Paste the URL here, then sign in when prompted.\"],\n",
+    "to": "    description: \"使用您的 Arcade 网关开放的工具。\",\n    instructions: [\"在 Arcade 中创建网关并选择工具。\", \"选择其 User Source（用户来源）并复制网关 URL。\", \"在此粘贴 URL，然后按提示登录。\"],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    urlHelp: \"Copy the MCP gateway URL from Arcade. App authorization may be required the first time you use a tool.\",\n    authHelp: \"For Arcade Headers, use an API key as the bearer token and add the Arcade-User-ID header for the acting user.\",\n",
+    "to": "    urlHelp: \"从 Arcade 复制 MCP 网关 URL。首次使用工具时可能需要进行应用授权。\",\n    authHelp: \"使用 Arcade 请求头时，请将 API 密钥用作 Bearer 令牌，并为执行操作的用户添加 Arcade-User-ID 请求头。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    description: \"Discover and use your apps through Composio Connect.\",\n    instructions: [\"Connect to Composio and sign in with your account.\", \"Connect underlying apps in Composio when prompted.\"],\n",
+    "to": "    description: \"通过 Composio Connect 发现和使用您的应用。\",\n    instructions: [\"连接 Composio 并使用您的账户登录。\", \"按提示在 Composio 中连接底层应用。\"],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    urlHelp: \"Composio Connect is prefilled. For an externally configured session, replace this with its MCP URL and add its supplied headers under Advanced authentication.\",\n    authHelp: \"Session URLs and headers come from your external Composio setup. Direct-tools sessions expose individual actions.\",\n",
+    "to": "    urlHelp: \"已预填 Composio Connect。对于在外部配置的会话，请替换为其 MCP URL，并在“高级身份验证”下添加其提供的请求头。\",\n    authHelp: \"会话 URL 和请求头来自您在外部的 Composio 设置。Direct-tools 会话会开放各项独立操作。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    description: \"Run tools through your Executor workspace.\",\n    instructions: [\"Connect your apps and configure action policies in Executor.\", \"Open Integrations and copy the URL under “Connect an agent”.\", \"Paste it here and sign in when prompted.\"],\n",
+    "to": "    description: \"通过您的 Executor 工作区运行工具。\",\n    instructions: [\"在 Executor 中连接应用并配置操作策略。\", \"打开 Integrations（集成），复制“Connect an agent”（连接智能体）下的 URL。\", \"将其粘贴到此处，然后按提示登录。\"],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/providers.ts",
+    "from": "    defaultUrl: \"\", placeholder: \"Paste your Executor workspace MCP URL\",\n    urlHelp: \"Use the hosted workspace URL or a self-hosted HTTP endpoint reachable from Paperclip. The server’s endpoint policy also applies.\",\n    authHelp: \"Keep any options in the copied URL. If using an API key, use a user key; workspace and organization keys cannot open an MCP session.\",\n",
+    "to": "    defaultUrl: \"\", placeholder: \"粘贴您的 Executor 工作区 MCP URL\",\n    urlHelp: \"使用托管工作区 URL 或 Paperclip 可访问的自托管 HTTP 端点。服务器的端点策略仍然适用。\",\n    authHelp: \"请保留复制 URL 中的所有选项。如果使用 API 密钥，请使用用户密钥；工作区和组织密钥无法打开 MCP 会话。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/useEmailAddressCheck.ts",
+    "from": "          if (!controller.signal.aborted) setCheck({ key, error: error instanceof Error ? error.message : \"Could not check this address.\" });\n",
+    "to": "          if (!controller.signal.aborted) setCheck({ key, error: error instanceof Error ? error.message : \"无法检查此地址。\" });\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "  agentmail: { reconnect: \"Reconnect the same email inbox.\", remove: \"Disconnect email and retain task history.\" },\n",
+    "to": "  agentmail: { reconnect: \"重新连接同一个邮件收件箱。\", remove: \"断开邮件连接并保留任务历史。\" },\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Reconnect verifies or replaces credentials for this same Slack app. It does not reinstall the app or change its workspace or channel membership.\",\n",
+    "to": "      \"重新连接会验证或替换同一个 Slack 应用的凭据，不会重新安装应用或更改其所在工作区及加入的频道。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Paperclip archives the endpoint, stops new ingress, and retires its saved Slack credentials. It does not uninstall the Slack app: the app remains installed, and its bot remains in channels, until you remove them in Slack.\",\n",
+    "to": "      \"Paperclip 会归档端点、停止接收新消息，并停用已保存的 Slack 凭据。它不会卸载 Slack 应用：应用仍处于已安装状态，机器人也仍留在频道中，直到您在 Slack 中将其移除。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Reconnect verifies this same App and installation, then updates its webhook URL, secret, and secure delivery settings. It does not reinstall the App or change repository access.\",\n",
+    "to": "      \"重新连接会验证同一个应用及其安装，然后更新其 Webhook URL、密钥和安全投递设置，不会重新安装应用或更改仓库访问权限。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Paperclip archives the endpoint, stops new ingress, and retires its saved App key and webhook secret. It does not uninstall the GitHub App: the App, its installations, and its webhook settings remain until you remove or update them on GitHub.\",\n",
+    "to": "      \"Paperclip 会归档端点、停止接收新消息，并停用已保存的应用密钥和 Webhook 密钥。它不会卸载 GitHub App：应用、安装及 Webhook 设置将保留，直到您在 GitHub 上移除或更新它们。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Reconnect verifies this same Discord application and server installation. It does not add or remove the bot from the server.\",\n",
+    "to": "      \"重新连接会验证同一个 Discord 应用及其服务器安装，不会从服务器添加或移除机器人。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Paperclip archives the endpoint, stops its Paperclip Gateway connection, and retires its saved bot token. It does not uninstall the bot: the bot remains in the Discord server, and the application remains in the Developer Portal, until you remove them there.\",\n",
+    "to": "      \"Paperclip 会归档端点、停止其 Paperclip Gateway 连接，并停用已保存的机器人令牌。它不会卸载机器人：机器人仍留在 Discord 服务器中，应用也仍保留在开发者门户中，直到您前往相应位置移除它们。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Reconnect verifies this same Microsoft app, tenant, and bot identity. It does not upload or reinstall the Teams app.\",\n",
+    "to": "      \"重新连接会验证同一个 Microsoft 应用、租户和机器人身份，不会上传或重新安装 Teams 应用。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Paperclip archives the endpoint, stops new ingress, and retires its saved client secret. It does not uninstall the Teams app: the Entra app registration, Azure Bot, custom Teams app, and Teams installations remain until you remove them in Microsoft.\",\n",
+    "to": "      \"Paperclip 会归档端点、停止接收新消息，并停用已保存的客户端密钥。它不会卸载 Teams 应用：Entra 应用注册、Azure Bot、自定义 Teams 应用及 Teams 安装将保留，直到您在 Microsoft 中将其移除。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "    reconnect: \"Reconnect verifies the same Photon project and line allocation, then recovers eligible missed messages.\",\n    remove: \"Disconnect archives this channel and removes its saved secret. Your Photon project, number, subscription, and Messages history remain in Photon.\",\n",
+    "to": "    reconnect: \"重新连接会验证同一个 Photon 项目和线路分配，然后恢复符合条件的漏收消息。\",\n    remove: \"断开连接会归档此频道并移除其已保存的密钥。您的 Photon 项目、号码、订阅和 Messages 历史仍保留在 Photon 中。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Reconnect verifies this same BotFather bot and automatically refreshes its Paperclip webhook and command menu.\",\n",
+    "to": "      \"重新连接会验证同一个 BotFather 机器人，并自动刷新其 Paperclip Webhook 和命令菜单。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      \"Paperclip archives the endpoint and queues durable removal of its Telegram webhook and command menu. After Telegram confirms that cleanup, Paperclip retires the saved token. The BotFather bot and its chat memberships remain until you remove them in Telegram.\",\n",
+    "to": "      \"Paperclip 会归档端点，并将移除 Telegram Webhook 和命令菜单的持久任务加入队列。Telegram 确认清理完成后，Paperclip 会停用已保存的令牌。BotFather 机器人及其加入的聊天将保留，直到您在 Telegram 中移除它们。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "    return \"The file upload was confirmed, but its Teams notification was not. Check Teams first. Retrying sends only that notification, not the file bytes, and may create a duplicate card.\";\n",
+    "to": "    return \"文件上传已确认，但其 Teams 通知尚未确认。请先检查 Teams。重试仅会发送通知，不会重新发送文件内容，且可能产生重复卡片。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "    return \"The consent card may have reached Teams. File delivery is not confirmed. Cancelling here does not remove any card already sent.\";\n",
+    "to": "    return \"许可卡片可能已发送到 Teams。文件投递尚未确认。在此取消不会移除已发送的卡片。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "    return \"The file may already exist in OneDrive. Cancelling stops this Paperclip transfer; it does not delete remote bytes. Uploads cannot be marked delivered or retried from this uncertain state.\";\n  return \"Paperclip lost confirmation after sending. Check the provider conversation first. Retrying can create a duplicate message.\";\n",
+    "to": "    return \"文件可能已存在于 OneDrive 中。取消会停止此次 Paperclip 传输，但不会删除远程文件内容。在此状态不确定时，无法将上传标记为已投递或重试。\";\n  return \"Paperclip 发送后未收到确认。请先检查服务商中的对话。重试可能产生重复消息。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      : \"Last reported error\",\n",
+    "to": "      : \"上次报告的错误\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "                try { await copyTextToClipboard(endpoint.botExternalId!); setCopyStatus(\"Number copied\"); }\n                catch { setCopyStatus(\"Could not copy the number. Select and copy it manually.\"); }\n",
+    "to": "                try { await copyTextToClipboard(endpoint.botExternalId!); setCopyStatus(\"号码已复制\"); }\n                catch { setCopyStatus(\"无法复制号码。请选中并手动复制。\"); }\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "                ? \"People must also enable Direct Messages in their shared Discord server’s Privacy Settings.\"\n                : \"People can start or continue a task in a direct conversation.\"\n",
+    "to": "                ? \"用户还必须在共同加入的 Discord 服务器的隐私设置中启用私信。\"\n                : \"用户可以在私信对话中发起或继续任务。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "              detail=\"The bot may participate in group chats where it is installed.\"\n",
+    "to": "              detail=\"机器人可以参与已安装该机器人的群聊。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "        detail=\"They are restricted guests. Their tasks run only with an isolated workspace and sandbox environment; otherwise Paperclip safely refuses the request. They cannot approve, hire, spend, manage access, or reassign agents.\"\n",
+    "to": "        detail=\"他们是受限访客。其任务只能在隔离工作区和沙箱环境中运行，否则 Paperclip 会安全地拒绝请求。他们无法审批、雇用、支出、管理访问权限或重新分配智能体。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "        [\"Events API\", endpoint.setup.callbackSurfaces.events],\n",
+    "to": "        [\"事件 API\", endpoint.setup.callbackSurfaces.events],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "        [\"Slash command\", endpoint.setup.callbackSurfaces.slashCommands],\n",
+    "to": "        [\"斜杠命令\", endpoint.setup.callbackSurfaces.slashCommands],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        <ChatSetupNavigation labels={provider === \"slack\" ? [\"Choose agent\", \"Create Slack app\", \"Add credentials\", \"Verify Slack connection\", \"Add avatar\", \"Connect your Slack account\", \"Try it\"] : undefined} step={0} availableStep={0} onSelect={onChat} />\n",
+    "to": "        <ChatSetupNavigation labels={provider === \"slack\" ? [\"选择智能体\", \"创建 Slack 应用\", \"添加凭据\", \"验证 Slack 连接\", \"添加头像\", \"连接您的 Slack 账户\", \"试用\"] : undefined} step={0} availableStep={0} onSelect={onChat} />\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        labels={isSlack ? [\"Choose agent\", \"Create Slack app\", \"Add credentials\", \"Verify Slack connection\", \"Add avatar\", \"Connect your Slack account\", \"Try it\"] : undefined}\n",
+    "to": "        labels={isSlack ? [\"选择智能体\", \"创建 Slack 应用\", \"添加凭据\", \"验证 Slack 连接\", \"添加头像\", \"连接您的 Slack 账户\", \"试用\"] : undefined}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "          : \"Paperclip couldn't read that file. Choose the .pem file again or paste the private key.\",\n",
+    "to": "          : \"Paperclip 无法读取该文件。请重新选择 .pem 文件或粘贴私钥。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        {field(\"applicationId\", \"Application ID\", \"text\")}\n        {field(\"guildId\", \"Server ID\", \"text\")}\n        {field(\"botToken\", \"Bot token\")}\n",
+    "to": "        {field(\"applicationId\", \"应用 ID\", \"text\")}\n        {field(\"guildId\", \"服务器 ID\", \"text\")}\n        {field(\"botToken\", \"机器人令牌\")}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        </Button>\n        {field(\"botToken\", \"Bot token\")}\n",
+    "to": "        </Button>\n        {field(\"botToken\", \"机器人令牌\")}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "          \"Paperclip messaging endpoint\",\n",
+    "to": "          \"Paperclip 消息接收端点\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        {field(\"clientId\", \"Application / Client ID\", \"text\")}\n        {field(\"tenantId\", \"Directory / Tenant ID\", \"text\")}\n        {field(\"clientSecret\", \"Client secret value\")}\n",
+    "to": "        {field(\"clientId\", \"应用 / 客户端 ID\", \"text\")}\n        {field(\"tenantId\", \"目录 / 租户 ID\", \"text\")}\n        {field(\"clientSecret\", \"客户端密钥值\")}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "          \"Paperclip homepage URL\",\n",
+    "to": "          \"Paperclip 主页 URL\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        )}\n        {endpointValue(\"Paperclip webhook URL\", endpoint.setup?.webhookUrl)}\n",
+    "to": "        )}\n        {endpointValue(\"Paperclip Webhook URL\", endpoint.setup?.webhookUrl)}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "            {endpointValue(\"Paperclip webhook URL\", endpoint.setup?.webhookUrl)}\n",
+    "to": "            {endpointValue(\"Paperclip Webhook URL\", endpoint.setup?.webhookUrl)}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "            [\"appName\", \"Slack app name\", 35, \"The name of your app in Slack’s app directory and settings.\"],\n            [\"botName\", \"Bot display name\", 80, \"The name people see when your bot sends a message. Use lowercase letters, numbers, periods, hyphens, or underscores.\"],\n            [\"command\", \"Slash command\", 32, \"The command people type in Slack to talk to this agent. Start with /, followed by lowercase letters, numbers, hyphens, or underscores.\"],\n",
+    "to": "            [\"appName\", \"Slack 应用名称\", 35, \"应用在 Slack 应用目录和设置中的名称。\"],\n            [\"botName\", \"机器人显示名称\", 80, \"机器人发送消息时显示的名称。请使用小写字母、数字、句点、连字符或下划线。\"],\n            [\"command\", \"斜杠命令\", 32, \"用户在 Slack 中输入此命令以与智能体对话。以 / 开头，后接小写字母、数字、连字符或下划线。\"],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "    provider === \"imessage-photon\" ? \"send a fresh message to your Photon number\" : provider === \"telegram\"\n      ? \"start a fresh conversation with /new and send the test message again\"\n",
+    "to": "    provider === \"imessage-photon\" ? \"向您的 Photon 号码发送一条新消息\" : provider === \"telegram\"\n      ? \"使用 /new 开始新对话并重新发送测试消息\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "        ? \"start a new issue or pull request conversation and mention the agent again\"\n",
+    "to": "        ? \"开始新的议题或拉取请求对话，并再次提及智能体\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "          ? \"start a new channel post and mention the agent again\"\n          : \"send a new root mention to the agent\";\n",
+    "to": "          ? \"发布新的频道帖子并再次提及智能体\"\n          : \"新发一条顶层消息并提及智能体\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "    ? { tone: \"info\" as const, title: \"Link your Messages identity\", body: \"Send one message to discover your phone number or Apple account address, then link that exact identity in Access. Send a fresh request after linking; earlier messages do not start work.\" }\n",
+    "to": "    ? { tone: \"info\" as const, title: \"Link your Messages identity\", body: \"先发送一条消息以发现您的电话号码或 Apple 账户地址，再在“访问权限”中关联该确切身份。关联后请重新发送请求；之前的消息不会启动工作。\" }\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "                  ? \"Tap Start in Telegram to discover your account; the welcome does not start an agent run. Link the account privately in Access, then return and send the test message.\"\n",
+    "to": "                  ? \"在 Telegram 中点击 Start（开始）以发现您的账户；欢迎消息不会启动智能体运行。请在“访问权限”中私密关联该账户，然后返回并发送测试消息。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "                  ? \"Tap Start in Telegram to discover your account. Until linked, it is a restricted guest and still needs a sandbox-backed isolated run; test that path intentionally, or link it in Access and then send the test message.\"\n",
+    "to": "                  ? \"在 Telegram 中点击 Start（开始）以发现您的账户。关联前，它是受限访客，仍需在沙箱支持的隔离环境中运行；您可以专门测试此访客流程，也可以在“访问权限”中关联身份后发送测试消息。\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "      photonAllocation === \"shared\" ? \"In your Photon project, enroll your sender in Users and find its assigned number in Get started. Send a fresh message to that number from Apple Messages.\" : `Open Apple Messages and send a fresh message to ${botUsername ?? botLabel ?? \"the dedicated number\"}.`,\n      \"Link the discovered sender to a Paperclip person in Access, then send a fresh request.\",\n      \"Wait for the agent’s actual reply. Setup completes after that reply is delivered.\",\n      ...(photonAllocation === \"shared\" ? [\"This Pro-compatible channel supports DMs only. Group messages cannot start work.\"] : [\"For a group: add the number in Messages, send a message, enable the discovered group in Settings, then send a fresh request.\"]),\n",
+    "to": "      photonAllocation === \"shared\" ? \"在 Photon 项目的 Users 中登记发送者，并在 Get started 中找到其分配的号码。从 Apple Messages 向该号码发送一条新消息。\" : `Open Apple Messages and send a fresh message to ${botUsername ?? botLabel ?? \"the dedicated number\"}.`,\n      \"在“访问权限”中将已发现的发送者关联到 Paperclip 用户，然后重新发送请求。\",\n      \"等待智能体的实际回复。回复投递完成后即可完成设置。\",\n      ...(photonAllocation === \"shared\" ? [\"此兼容 Pro 的频道仅支持私信。群聊消息无法启动工作。\"] : [\"如需使用群聊：在 Messages 中添加该号码、发送消息、在“设置”中启用发现的群聊，然后重新发送请求。\"]),\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "          \"Open a text channel where the bot is installed.\",\n",
+    "to": "          \"打开已安装机器人的文字频道。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "            \"Open the bot's private chat.\",\n            \"Tap Start.\",\n            \"Send “Help me test this”.\",\n",
+    "to": "            \"打开与机器人的私聊。\",\n            \"点击 Start（开始）。\",\n            \"发送“帮我测试一下”。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "              \"Open an installed issue or pull request.\",\n",
+    "to": "              \"打开已安装应用的仓库中的议题或拉取请求。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "              \"Add another comment to continue the same task.\",\n",
+    "to": "              \"添加另一条评论以继续同一任务。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "                \"Open an installed channel and start a new post.\",\n",
+    "to": "                \"打开已安装应用的频道并发布新帖子。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "                \"Reply once beneath the post.\",\n",
+    "to": "                \"在帖子下回复一次。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "      {provider === \"imessage-photon\" && botUsername && <div className=\"space-y-2\"><Button variant=\"outline\" onClick={() => { void copyTextToClipboard(botUsername).then(() => { setNumberCopied(true); setCopyError(null); }, () => setCopyError(\"Could not copy the number. Select it in the instructions below.\")); }}>{numberCopied ? \"Number copied\" : `Copy ${botUsername}`}</Button>{copyError && <p role=\"alert\" className=\"text-sm text-destructive\">{copyError}</p>}</div>}\n",
+    "to": "      {provider === \"imessage-photon\" && botUsername && <div className=\"space-y-2\"><Button variant=\"outline\" onClick={() => { void copyTextToClipboard(botUsername).then(() => { setNumberCopied(true); setCopyError(null); }, () => setCopyError(\"无法复制号码。请在下方说明中选中号码。\")); }}>{numberCopied ? \"Number copied\" : `Copy ${botUsername}`}</Button>{copyError && <p role=\"alert\" className=\"text-sm text-destructive\">{copyError}</p>}</div>}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatIdentityConfirm.tsx",
+    "from": "  const paperclipAccount = local ? \"Local Board\" :\n",
+    "to": "  const paperclipAccount = local ? \"本地管理者\" :\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "  const addressError = addressTaken ? \"This email address is already in use. Choose a different address.\"\n    : assignedInbox ? \"This inbox is already assigned to an agent.\" : null;\n",
+    "to": "  const addressError = addressTaken ? \"此邮箱地址已被使用。请选择其他地址。\"\n    : assignedInbox ? \"此收件箱已分配给一个智能体。\" : null;\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "              <CopyText text={inbox.address} ariaLabel=\"Copy email address\" title=\"Copy email address\"\n",
+    "to": "              <CopyText text={inbox.address} ariaLabel=\"复制邮箱地址\" title=\"Copy email address\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Included authors\",\n                \"Leave empty to include any authorized author. One username or glob per line.\",\n",
+    "to": "                \"包含的作者\",\n                \"留空可包含任何已授权的作者。每行填写一个用户名或通配模式。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Excluded authors\",\n                \"One username or glob per line.\",\n",
+    "to": "                \"排除的作者\",\n                \"每行填写一个用户名或通配模式。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Target branches\",\n                \"Leave empty for all branches. Supports * and **.\",\n",
+    "to": "                \"目标分支\",\n                \"留空表示所有分支。支持 * 和 **。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Excluded target branches\",\n                \"Never automatically review these branches. Supports * and **.\",\n",
+    "to": "                \"排除的目标分支\",\n                \"永不自动评审这些分支。支持 * 和 **。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Required labels\",\n                \"All listed labels must be present.\",\n",
+    "to": "                \"必需标签\",\n                \"必须包含列出的所有标签。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Excluded labels\",\n                \"Any listed label prevents automatic review.\",\n",
+    "to": "                \"排除的标签\",\n                \"包含列出的任意标签都会阻止自动评审。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "from": "                \"Ignored file paths\",\n                \"Excluded from manual and automatic analysis. Supports * and **.\",\n",
+    "to": "                \"忽略的文件路径\",\n                \"不纳入手动或自动分析。支持 * 和 **。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotManagement.tsx",
+    "from": "                        \"Repository access refreshed. New repositories stay disabled.\",\n",
+    "to": "                        \"仓库访问权限已刷新。新仓库仍保持禁用。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotManagement.tsx",
+    "from": "              setNotice(\"Configuration saved.\");\n",
+    "to": "              setNotice(\"配置已保存。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "  \"Choose agent\",\n  \"Connect GitHub App\",\n  \"Install GitHub App\",\n  \"Select repositories\",\n  \"Verify connection & tools\",\n  \"Connect your account\",\n  \"Configure behavior\",\n  \"Try it\",\n",
+    "to": "  \"选择智能体\",\n  \"连接 GitHub App\",\n  \"安装 GitHub App\",\n  \"选择仓库\",\n  \"验证连接与工具\",\n  \"连接您的账户\",\n  \"配置行为\",\n  \"试用\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "        labels={identityOnly ? [\"Connect your account\"] : steps}\n",
+    "to": "        labels={identityOnly ? [\"连接您的账户\"] : steps}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "              ? \"Reconnect App\"\n",
+    "to": "              ? \"重新连接应用\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "                ? \"Continue to installation\"\n",
+    "to": "                ? \"继续安装\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "                  ? \"Connect App\"\n                  : \"Prepare registration\",\n",
+    "to": "                  ? \"连接应用\"\n                  : \"准备注册\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "          {footer(\"I’ve installed the App\", async () => {\n",
+    "to": "          {footer(\"我已安装应用\", async () => {\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "            \"Save repositories\",\n",
+    "to": "            \"保存仓库\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "            \"Confirm this is my account\",\n",
+    "to": "            \"确认这是我的账户\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "          {footer(\"Save behavior\", async () => {\n",
+    "to": "          {footer(\"保存行为设置\", async () => {\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "            \"Verify response and finish\",\n",
+    "to": "            \"验证回复并完成\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackAvatarStep.tsx",
+    "from": "        throw new Error(\"Avatar unavailable\");\n",
+    "to": "        throw new Error(\"头像不可用\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackIdentityStep.tsx",
+    "from": "      if (!token) throw new Error(\"Could not create the account confirmation. Try again.\");\n",
+    "to": "      if (!token) throw new Error(\"无法创建账户确认。请重试。\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/chat-setup-error.ts",
+    "from": "  \"Check the required values and provider access, then try again.\";\n",
+    "to": "  \"请检查必填值和服务商访问权限，然后重试。\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/github-private-key-file.ts",
+    "from": "  if (file.size === 0) {\n    throw new Error(\n      \"That file is empty. Choose the private key downloaded from your GitHub App.\",\n",
+    "to": "  if (file.size === 0) {\n    throw new Error(\n      \"文件为空。请选择从 GitHub App 下载的私钥。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/github-private-key-file.ts",
+    "from": "      \"That file is too large. Choose a GitHub App private key smaller than 64 KB.\",\n",
+    "to": "      \"文件过大。请选择小于 64 KB 的 GitHub App 私钥。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/github-private-key-file.ts",
+    "from": "      \"Paperclip couldn't read that file. Choose the .pem file again or paste the private key.\",\n",
+    "to": "      \"Paperclip 无法读取该文件。请重新选择 .pem 文件或粘贴私钥。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/github-private-key-file.ts",
+    "from": "  if (!value.trim()) {\n    throw new Error(\n      \"That file is empty. Choose the private key downloaded from your GitHub App.\",\n",
+    "to": "  if (!value.trim()) {\n    throw new Error(\n      \"文件为空。请选择从 GitHub App 下载的私钥。\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/AgentMailCredentialField.tsx",
+    "to": "      label: `${option.label} · 保存于 ${formatDateTime(option.createdAt)}` }))}\n",
+    "expected": 1,
+    "from": "      label: `${option.label} · saved ${formatDateTime(option.createdAt)}` }))}\n"
+  },
+  {
+    "file": "ui/src/features/connections/AgentMailIntentSetup.tsx",
+    "to": "      if (pending?.address) throw new Error(`地址 ${pending.address} 已被预留。请使用已保存的密钥完成设置。`);\n",
+    "expected": 1,
+    "from": "      if (pending?.address) throw new Error(`The address ${pending.address} is already reserved. Finish setup with its saved key.`);\n"
+  },
+  {
+    "file": "ui/src/features/connections/ApiKeyCredentialField.tsx",
+    "to": "      onChange={event => { onConnectionChange(\"\"); onChange(event.target.value); }} placeholder={`粘贴您的 ${providerName} API 密钥`} />}\n",
+    "expected": 1,
+    "from": "      onChange={event => { onConnectionChange(\"\"); onChange(event.target.value); }} placeholder={`Paste your ${providerName} API key`} />}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "          title: interaction.payload.upstreamService ? \"External provider connected\" : `${interaction.payload.serviceName} 已连接`,\n",
+    "expected": 1,
+    "from": "          title: interaction.payload.upstreamService ? \"External provider connected\" : `${interaction.payload.serviceName} connected`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} 现在可以通过此服务商验证并授权 ${interaction.payload.upstreamService.name}。该应用尚未验证。` : isAi ? \"此智能体现在可以使用该连接。\" : `${interaction.payload.requestingAgentName} can use this connection on the continuation run.`,\n",
+    "expected": 1,
+    "from": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} can now verify and authorize ${interaction.payload.upstreamService.name} through this provider. The app is not yet verified.` : isAi ? \"此智能体现在可以使用该连接。\" : `${interaction.payload.requestingAgentName} can use this connection on the continuation run.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} 现在可以通过此服务商验证并授权 ${interaction.payload.upstreamService.name}。该应用尚未验证。` : isAi ? \"此智能体现在可以使用该连接。\" : `${interaction.payload.requestingAgentName} 可以在继续运行时使用此连接。`,\n",
+    "expected": 1,
+    "from": "          body: interaction.payload.upstreamService ? `${interaction.payload.requestingAgentName} 现在可以通过此服务商验证并授权 ${interaction.payload.upstreamService.name}。该应用尚未验证。` : isAi ? \"此智能体现在可以使用该连接。\" : `${interaction.payload.requestingAgentName} can use this connection on the continuation run.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "            body: isAi ? \"任务仍需可用的 AI 连接才能运行。\" : `已通知 ${interaction.payload.requestingAgentName}，其可以在没有此连接的情况下继续。`,\n",
+    "expected": 1,
+    "from": "            body: isAi ? \"任务仍需可用的 AI 连接才能运行。\" : `${interaction.payload.requestingAgentName} was notified and can continue without it.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "        {repair.connection.ownership === \"personal\" ? `${repair.connection.ownerName ?? \"账户所有者\"} 必须重新连接 ${repair.connection.name}。` : `The account owner must reconnect ${repair.connection.name}.`}\n",
+    "expected": 1,
+    "from": "        {repair.connection.ownership === \"personal\" ? `${repair.connection.ownerName ?? \"The account owner\"} must reconnect ${repair.connection.name}.` : `The account owner must reconnect ${repair.connection.name}.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "        {repair.connection.ownership === \"personal\" ? `${repair.connection.ownerName ?? \"账户所有者\"} 必须重新连接 ${repair.connection.name}。` : `账户所有者必须重新连接 ${repair.connection.name}。`}\n",
+    "expected": 1,
+    "from": "        {repair.connection.ownership === \"personal\" ? `${repair.connection.ownerName ?? \"账户所有者\"} 必须重新连接 ${repair.connection.name}。` : `The account owner must reconnect ${repair.connection.name}.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "              {isAi ? `需要 ${interaction.payload.serviceName} 身份验证` : `${interaction.payload.requestingAgentName} needs ${interaction.payload.serviceName}`}\n",
+    "expected": 1,
+    "from": "              {isAi ? `${interaction.payload.serviceName} authentication required` : `${interaction.payload.requestingAgentName} needs ${interaction.payload.serviceName}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "to": "              {isAi ? `需要 ${interaction.payload.serviceName} 身份验证` : `${interaction.payload.requestingAgentName} 需要 ${interaction.payload.serviceName}`}\n",
+    "expected": 1,
+    "from": "              {isAi ? `需要 ${interaction.payload.serviceName} 身份验证` : `${interaction.payload.requestingAgentName} needs ${interaction.payload.serviceName}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                  : `第 ${stepIndex + 1} 步，共 ${stepLabels.length} 步`\n",
+    "expected": 1,
+    "from": "                  : `Step ${stepIndex + 1} of ${stepLabels.length}`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "        <div className=\"mx-auto max-w-xl\" aria-busy=\"true\" aria-label={`正在加载 ${requestedAppKey} 设置`}>\n",
+    "expected": 1,
+    "from": "        <div className=\"mx-auto max-w-xl\" aria-busy=\"true\" aria-label={`Loading ${requestedAppKey} setup`}>\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "              {title ?? (appIdentity ? `连接 ${appIdentity.name}` : \"Connect your own MCP server\")}\n",
+    "expected": 1,
+    "from": "              {title ?? (appIdentity ? `Connect ${appIdentity.name}` : \"Connect your own MCP server\")}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          ? `完成 ${serverName} 连接`\n",
+    "expected": 1,
+    "from": "          ? `Finish connecting ${serverName}`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          : `将 ${serverName} 连接到 Paperclip`,\n",
+    "expected": 1,
+    "from": "          : `Connect ${serverName} to Paperclip`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          ? `连接已保存。请在 ${serverName} 中继续批准访问权限；其身份和智能体访问权限将保持不变。`\n",
+    "expected": 1,
+    "from": "          ? `Your connection is saved. Continue in ${serverName} to approve access; its identity and agent access will stay the same.`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          : `Paperclip 将打开 ${serverName}，以便您选择工作区并批准访问权限。`,\n",
+    "expected": 1,
+    "from": "          : `Paperclip will open ${serverName} so you can choose a workspace and approve access.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          body: `Paperclip 正在创建安全的 ${serverName} 连接。`,\n",
+    "expected": 1,
+    "from": "          body: `Paperclip is creating a secure ${serverName} connection.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "            title: `正在打开 ${serverName}`,\n",
+    "expected": 1,
+    "from": "            title: `Opening ${serverName}`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "              ? `请在 ${authorizationHost} 继续选择工作区并批准访问权限。仅在您认识并信任该地址时批准。`\n",
+    "expected": 1,
+    "from": "              ? `Continue at ${authorizationHost} to choose a workspace and approve access. Only approve access if you recognize that address.`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "              : `请在 ${serverName} 中继续选择工作区并批准访问权限。`,\n",
+    "expected": 1,
+    "from": "              : `Continue in ${serverName} to choose a workspace and approve access.`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "            title: `${serverName} 无法连接`,\n",
+    "expected": 1,
+    "from": "            title: `${serverName} couldn’t connect`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                ? resuming ? `在 ${serverName} 中完成` : `Continue to ${serverName}`\n",
+    "expected": 1,
+    "from": "                ? resuming ? `Finish with ${serverName}` : `Continue to ${serverName}`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                ? resuming ? `在 ${serverName} 中完成` : `继续前往 ${serverName}`\n",
+    "expected": 1,
+    "from": "                ? resuming ? `在 ${serverName} 中完成` : `Continue to ${serverName}`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "              {phase === \"redirecting\" ? `正在打开 ${serverName}…` : \"Preparing…\"}\n",
+    "expected": 1,
+    "from": "              {phase === \"redirecting\" ? `Opening ${serverName}…` : \"Preparing…\"}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                    : `使用 ${matchedEntry.name}`}\n",
+    "expected": 1,
+    "from": "                    : `Use ${matchedEntry.name}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                      aria-label={row.name.trim() ? `${row.name.trim()} 的值` : \"Header value\"}\n",
+    "expected": 1,
+    "from": "                      aria-label={row.name.trim() ? `Value for ${row.name.trim()}` : \"Header value\"}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "        ariaLabel={`${entry.name} 的访问级别`}\n",
+    "expected": 1,
+    "from": "        ariaLabel={`Access level for ${entry.name}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "      {usingCustomOAuth ? \"Use Paperclip instead\" : `使用您自己的 ${isGoogleWorkspaceConnectorProfileId(managedOAuthMethod.connectorProfile ?? \"\") ? \"Google\" : entry.name} OAuth 应用`}\n",
+    "expected": 1,
+    "from": "      {usingCustomOAuth ? \"Use Paperclip instead\" : `Use your own ${isGoogleWorkspaceConnectorProfileId(managedOAuthMethod.connectorProfile ?? \"\") ? \"Google\" : entry.name} OAuth app`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "        ariaLabel={`如何连接 ${entry.name}`}\n",
+    "expected": 1,
+    "from": "        ariaLabel={`How to connect ${entry.name}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          title: candidate.label ?? (candidate.auth === \"oauth\" ? `使用 ${entry.name} 登录` : \"Use an API key\"),\n",
+    "expected": 1,
+    "from": "          title: candidate.label ?? (candidate.auth === \"oauth\" ? `Sign in with ${entry.name}` : \"Use an API key\"),\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "                ? `${parsed.ids.length} ${parsed.ids.length === 1 ? \"个表格\" : \"个表格\"}已准备好连接。`\n",
+    "expected": 1,
+    "from": "                ? `${parsed.ids.length} ${parsed.ids.length === 1 ? \"sheet\" : \"sheets\"} ready to connect.`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          {required ? method.oauthClientSecretRequired ? \"Your OAuth app\" : `${entry.name} 需要独立的 OAuth 应用` : \"Use your own OAuth app\"}\n",
+    "expected": 1,
+    "from": "          {required ? method.oauthClientSecretRequired ? \"Your OAuth app\" : `${entry.name} needs its own OAuth app` : \"Use your own OAuth app\"}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "            ? `${entry.name} 不允许 Paperclip 自动注册，因此此连接器需要您创建 OAuth 应用。请在 ${entry.name} 中添加下方回调 URL，然后将客户端详情粘贴到此处。`\n",
+    "expected": 1,
+    "from": "            ? `${entry.name} does not let Paperclip register itself automatically, so this connector needs an OAuth app you create. Add the callback URL below in ${entry.name}, then paste the client details back here.`\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "            : `请在 ${entry.name} 中注册 Paperclip 的回调 URI，然后输入您自己管理的客户端详情。`}\n",
+    "expected": 1,
+    "from": "            : `Register Paperclip's callback URI in ${entry.name}, then enter the customer-owned client details.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "          : `可供 ${input.installCount} ${input.installCount === 1 ? \"个所选智能体\" : \"个所选智能体\"}使用`;\n",
+    "expected": 1,
+    "from": "          : `available to ${input.installCount} selected ${input.installCount === 1 ? \"agent\" : \"agents\"}`;\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "  return `${identity}，${reach}。`;\n",
+    "expected": 1,
+    "from": "  return `${identity}, ${reach}.`;\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "    : `${input.installCount} ${input.installCount === 1 ? \"个所选智能体\" : \"个所选智能体\"}`;\n",
+    "expected": 1,
+    "from": "    : `${input.installCount} selected ${input.installCount === 1 ? \"agent\" : \"agents\"}`;\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "to": "      value: `已启用 ${input.enabledCount} ${input.enabledCount === 1 ? \"项操作\" : \"项操作\"}`,\n",
+    "expected": 1,
+    "from": "      value: `${input.enabledCount} ${input.enabledCount === 1 ? \"action\" : \"actions\"} on`,\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpAccountChoice.tsx",
+    "to": "            ? `通过 ${providerName} 连接 ${upstreamServiceName}`\n",
+    "expected": 1,
+    "from": "            ? `Connect ${upstreamServiceName} through ${providerName}`\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpAccountChoice.tsx",
+    "to": "            : `连接 ${providerName}`}\n",
+    "expected": 1,
+    "from": "            : `Connect ${providerName}`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "    <TooltipTrigger asChild><button type=\"button\" aria-label={`${label}的帮助`} onClick={() => setOpen(!open)} className=\"rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring\"><HelpCircle className=\"size-4\" /></button></TooltipTrigger>\n",
+    "expected": 1,
+    "from": "    <TooltipTrigger asChild><button type=\"button\" aria-label={`Help with ${label}`} onClick={() => setOpen(!open)} className=\"rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring\"><HelpCircle className=\"size-4\" /></button></TooltipTrigger>\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "    : s.connectStatus === \"oauth_failed\" ? { title: `${provider.name} 无法连接`, body: \"授权未完成。已保存的连接仍然保留，您可以重试。\" }\n",
+    "expected": 1,
+    "from": "    : s.connectStatus === \"oauth_failed\" ? { title: `${provider.name} couldn’t connect`, body: \"授权未完成。已保存的连接仍然保留，您可以重试。\" }\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "    : s.connectStatus === \"rejected\" ? { title: \"Credentials were rejected\", body: `请检查或更换 ${provider.name} 的凭据，然后重新连接。智能体访问权限和工具选择已保留。` }\n",
+    "expected": 1,
+    "from": "    : s.connectStatus === \"rejected\" ? { title: \"Credentials were rejected\", body: `Check or replace the credentials from ${provider.name}, then reconnect. Your agent access and tool choices are preserved.` }\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      title={upstreamServiceName ? `通过 ${provider.name} 连接 ${upstreamServiceName}` : s.step === \"draft\" ? \"Continue your setup\" : s.setupComplete ? s.step === \"access\" ? \"Who can use this connection\" : s.step === \"connect\" ? `Reconnect ${provider.name}` : provider.name : undefined}\n",
+    "expected": 1,
+    "from": "      title={upstreamServiceName ? `Connect ${upstreamServiceName} through ${provider.name}` : s.step === \"draft\" ? \"Continue your setup\" : s.setupComplete ? s.step === \"access\" ? \"Who can use this connection\" : s.step === \"connect\" ? `Reconnect ${provider.name}` : provider.name : undefined}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      title={upstreamServiceName ? `通过 ${provider.name} 连接 ${upstreamServiceName}` : s.step === \"draft\" ? \"Continue your setup\" : s.setupComplete ? s.step === \"access\" ? \"Who can use this connection\" : s.step === \"connect\" ? `重新连接 ${provider.name}` : provider.name : undefined}\n",
+    "expected": 1,
+    "from": "      title={upstreamServiceName ? `通过 ${provider.name} 连接 ${upstreamServiceName}` : s.step === \"draft\" ? \"Continue your setup\" : s.setupComplete ? s.step === \"access\" ? \"Who can use this connection\" : s.step === \"connect\" ? `Reconnect ${provider.name}` : provider.name : undefined}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `Your ${provider.name} setup is ready to resume.` : s.step === \"permissions\" ? `Connected${s.identity ? ` as ${s.identity}` : \"\"} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}\n",
+    "expected": 1,
+    "from": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip will use ${provider.name} on your behalf.` : s.step === \"draft\" ? `Your ${provider.name} setup is ready to resume.` : s.step === \"permissions\" ? `Connected${s.identity ? ` as ${s.identity}` : \"\"} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `您的 ${provider.name} 设置可以继续。` : s.step === \"permissions\" ? `Connected${s.identity ? ` as ${s.identity}` : \"\"} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}\n",
+    "expected": 1,
+    "from": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `Your ${provider.name} setup is ready to resume.` : s.step === \"permissions\" ? `Connected${s.identity ? ` as ${s.identity}` : \"\"} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `您的 ${provider.name} 设置可以继续。` : s.step === \"permissions\" ? `已连接${s.identity ? `，身份为 ${s.identity}` : \"\"} · ${s.tools.length} 项操作可用` : `Manage this ${provider.name} connection.`}\n",
+    "expected": 1,
+    "from": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `您的 ${provider.name} 设置可以继续。` : s.step === \"permissions\" ? `Connected${s.identity ? ` as ${s.identity}` : \"\"} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "          {!s.connected ? <InlineBanner tone=\"warning\" title=\"Disconnected\">Agents cannot use this connection. Reconnect to restore access under the saved permission choices.</InlineBanner> : <div className=\"space-y-2\"><p className=\"flex items-center gap-2 text-sm\"><CheckCircle2 className=\"size-4\" />Connected{s.identity ? `，身份为 ${s.identity}` : \"\"}</p><p className=\"text-sm text-muted-foreground\">{s.grantKind === \"user\" ? \"Just me\" : \"Any human in the organization\"} · {s.tools.length} tools · {s.allAgents ? \"Any agent\" : `${s.agentIds.length} agents with access`}</p></div>}\n",
+    "expected": 1,
+    "from": "          {!s.connected ? <InlineBanner tone=\"warning\" title=\"Disconnected\">Agents cannot use this connection. Reconnect to restore access under the saved permission choices.</InlineBanner> : <div className=\"space-y-2\"><p className=\"flex items-center gap-2 text-sm\"><CheckCircle2 className=\"size-4\" />Connected{s.identity ? ` as ${s.identity}` : \"\"}</p><p className=\"text-sm text-muted-foreground\">{s.grantKind === \"user\" ? \"Just me\" : \"Any human in the organization\"} · {s.tools.length} tools · {s.allAgents ? \"Any agent\" : `${s.agentIds.length} agents with access`}</p></div>}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `您的 ${provider.name} 设置可以继续。` : s.step === \"permissions\" ? `已连接${s.identity ? `，身份为 ${s.identity}` : \"\"} · ${s.tools.length} 项操作可用` : `管理此 ${provider.name} 连接。`}\n",
+    "expected": 1,
+    "from": "      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip 将代表您使用 ${provider.name}。` : s.step === \"draft\" ? `您的 ${provider.name} 设置可以继续。` : s.step === \"permissions\" ? `已连接${s.identity ? `，身份为 ${s.identity}` : \"\"} · ${s.tools.length} 项操作可用` : `Manage this ${provider.name} connection.`}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "            {external(\"setup\", `打开 ${provider.name} 设置指南`)}\n",
+    "expected": 1,
+    "from": "            {external(\"setup\", `Open ${provider.name} setup guide`)}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "            <div role=\"status\"><InlineBanner title={`完成 ${provider.name} 登录`}>\n",
+    "expected": 1,
+    "from": "            <div role=\"status\"><InlineBanner title={`Finish signing in to ${provider.name}`}>\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "                      <Button type=\"button\" variant=\"ghost\" size=\"icon\" aria-label={`移除第 ${index + 1} 个请求头`} onClick={() => change({ headers: s.headers.filter((h) => h.id !== header.id) })}><Trash2 className=\"size-4\" /></Button>\n",
+    "expected": 1,
+    "from": "                      <Button type=\"button\" variant=\"ghost\" size=\"icon\" aria-label={`Remove header ${index + 1}`} onClick={() => change({ headers: s.headers.filter((h) => h.id !== header.id) })}><Trash2 className=\"size-4\" /></Button>\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "            {footer(<>{s.setupComplete ? <Button type=\"button\" variant=\"outline\" disabled={busy} onClick={a.finish}>Back</Button> : <span />}<Button type=\"submit\" disabled={busy || !s.url.trim()}>{busy ? \"Connecting…\" : error || s.connectStatus === \"cancelled\" ? \"Try again\" : `连接 ${provider.name}`}</Button></>)}\n",
+    "expected": 1,
+    "from": "            {footer(<>{s.setupComplete ? <Button type=\"button\" variant=\"outline\" disabled={busy} onClick={a.finish}>Back</Button> : <span />}<Button type=\"submit\" disabled={busy || !s.url.trim()}>{busy ? \"Connecting…\" : error || s.connectStatus === \"cancelled\" ? \"Try again\" : `Connect ${provider.name}`}</Button></>)}\n"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "to": "          {!s.connected ? <InlineBanner tone=\"warning\" title=\"Disconnected\">Agents cannot use this connection. Reconnect to restore access under the saved permission choices.</InlineBanner> : <div className=\"space-y-2\"><p className=\"flex items-center gap-2 text-sm\"><CheckCircle2 className=\"size-4\" />Connected{s.identity ? `，身份为 ${s.identity}` : \"\"}</p><p className=\"text-sm text-muted-foreground\">{s.grantKind === \"user\" ? \"Just me\" : \"Any human in the organization\"} · {s.tools.length} tools · {s.allAgents ? \"Any agent\" : `${s.agentIds.length} 个智能体拥有访问权限`}</p></div>}\n",
+    "expected": 1,
+    "from": "          {!s.connected ? <InlineBanner tone=\"warning\" title=\"Disconnected\">Agents cannot use this connection. Reconnect to restore access under the saved permission choices.</InlineBanner> : <div className=\"space-y-2\"><p className=\"flex items-center gap-2 text-sm\"><CheckCircle2 className=\"size-4\" />Connected{s.identity ? `，身份为 ${s.identity}` : \"\"}</p><p className=\"text-sm text-muted-foreground\">{s.grantKind === \"user\" ? \"Just me\" : \"Any human in the organization\"} · {s.tools.length} tools · {s.allAgents ? \"Any agent\" : `${s.agentIds.length} agents with access`}</p></div>}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "to": "                  aria-label={`启用 ${resource.label}`}\n",
+    "expected": 1,
+    "from": "                  aria-label={`Enable ${resource.label}`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "to": "                      ? `已关联到 ${link.paperclipUserLabel}`\n",
+    "expected": 1,
+    "from": "                      ? `Linked to ${link.paperclipUserLabel}`\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "to": "        title: `${item.kind === \"publication\" ? \"发布\" : \"投递\"}已加入重放队列`,\n",
+    "expected": 1,
+    "from": "        title: `${item.kind === \"publication\" ? \"Publication\" : \"Delivery\"} queued for replay`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "to": "                    aria-label={`重放失败的活动（${item.kind}）`}\n",
+    "expected": 1,
+    "from": "                    aria-label={`Replay failed ${item.kind}`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                      aria-label={`${label.toLowerCase()}的帮助`}\n",
+    "expected": 1,
+    "from": "                      aria-label={`Help with ${label.toLowerCase()}`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "        body: `请先检查“访问权限”，再等待智能体回复。关联正在测试的账户后，${freshConversationInstruction}。`,\n",
+    "expected": 1,
+    "from": "        body: `Review Access before expecting an agent reply. After linking the account you are testing, ${freshConversationInstruction}.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                  : `您的第一条 ${providerNames[provider]} 消息用于发现外部账户，但访客隔离工作已关闭，因此无法安全地启动 ${agentName}。请先发送一次消息，再在“访问权限”中私密关联该账户，然后${freshConversationInstruction}。`,\n",
+    "expected": 1,
+    "from": "                  : `Your first ${providerNames[provider]} message discovers the external account, but isolated guest work is off, so it cannot safely start ${agentName}. Send it once, link that account privately in Access, then ${freshConversationInstruction}.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                  : `关联前，该账户是受限访客，仍需在沙箱支持的隔离环境中运行。您可以专门测试此访客流程，也可以在“访问权限”中关联账户后${freshConversationInstruction}。`,\n",
+    "expected": 1,
+    "from": "                  : `Until linked, the account is a restricted guest and still needs a sandbox-backed isolated run. Test that guest path intentionally, or link the account in Access and then ${freshConversationInstruction}.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                body: `检测到的外部账户尚未关联，且访客隔离工作已关闭，因此无法安全地启动 ${agentName}。请在“访问权限”中关联账户，然后${freshConversationInstruction}；Paperclip 不会重放已被拒绝的请求。`,\n",
+    "expected": 1,
+    "from": "                body: `An observed external account is unlinked, and isolated guest work is off, so it cannot safely start ${agentName}. Link the account in Access, then ${freshConversationInstruction}; Paperclip does not replay the refused request.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                body: `未关联的账户是受限访客，仍需在沙箱支持的隔离环境中运行。您可以专门测试访客访问，也可以在“访问权限”中关联账户后${freshConversationInstruction}。`,\n",
+    "expected": 1,
+    "from": "                body: `An unlinked account is a restricted guest and still needs a sandbox-backed isolated run. Test guest access intentionally, or link the account in Access and then ${freshConversationInstruction}.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "      photonAllocation === \"shared\" ? \"在 Photon 项目的 Users 中登记发送者，并在 Get started 中找到其分配的号码。从 Apple Messages 向该号码发送一条新消息。\" : `打开 Apple Messages，向 ${botUsername ?? botLabel ?? \"专用号码\"} 发送一条新消息。`,\n",
+    "expected": 1,
+    "from": "      photonAllocation === \"shared\" ? \"在 Photon 项目的 Users 中登记发送者，并在 Get started 中找到其分配的号码。从 Apple Messages 向该号码发送一条新消息。\" : `Open Apple Messages and send a fresh message to ${botUsername ?? botLabel ?? \"the dedicated number\"}.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "          `在新的顶层消息中提及 ${botMention}。`,\n",
+    "expected": 1,
+    "from": "          `Mention ${botMention} in a new root message.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "          `在 ${agentName} 新建的 Discord 讨论串中回复一次。`,\n",
+    "expected": 1,
+    "from": "          `Reply once inside ${agentName}'s new Discord thread.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "              `在评论中提及 ${botMention}。`,\n",
+    "expected": 1,
+    "from": "              `Mention ${botMention} in a comment.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                `在帖子中提及 ${botMention}。`,\n",
+    "expected": 1,
+    "from": "                `Mention ${botMention} in the post.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                `打开频道，必要时邀请 ${botMention}。`,\n",
+    "expected": 1,
+    "from": "                `Open a channel and invite ${botMention} if needed.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                `在新的频道消息中提及 ${botMention}。`,\n",
+    "expected": 1,
+    "from": "                `Mention ${botMention} in a new channel message.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "                `在 ${agentName} 的讨论串中回复一次。`,\n",
+    "expected": 1,
+    "from": "                `Reply once in ${agentName}'s thread.`,\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "to": "      {provider === \"imessage-photon\" && botUsername && <div className=\"space-y-2\"><Button variant=\"outline\" onClick={() => { void copyTextToClipboard(botUsername).then(() => { setNumberCopied(true); setCopyError(null); }, () => setCopyError(\"无法复制号码。请在下方说明中选中号码。\")); }}>{numberCopied ? \"Number copied\" : `复制 ${botUsername}`}</Button>{copyError && <p role=\"alert\" className=\"text-sm text-destructive\">{copyError}</p>}</div>}\n",
+    "expected": 1,
+    "from": "      {provider === \"imessage-photon\" && botUsername && <div className=\"space-y-2\"><Button variant=\"outline\" onClick={() => { void copyTextToClipboard(botUsername).then(() => { setNumberCopied(true); setCopyError(null); }, () => setCopyError(\"无法复制号码。请在下方说明中选中号码。\")); }}>{numberCopied ? \"Number copied\" : `Copy ${botUsername}`}</Button>{copyError && <p role=\"alert\" className=\"text-sm text-destructive\">{copyError}</p>}</div>}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "to": "          {addressCheck.checking ? \"Checking address…\" : addressCheck.error ? `无法检查此地址。${addressCheck.error}`\n",
+    "expected": 1,
+    "from": "          {addressCheck.checking ? \"Checking address…\" : addressCheck.error ? `Could not check this address. ${addressCheck.error}`\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "to": "          aria-label={`${eventLabels[prompt]}提示词`}\n",
+    "expected": 1,
+    "from": "          aria-label={`${eventLabels[prompt]} prompt`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "to": "              label={`为 @${person.login} 自动评审 PR`}\n",
+    "expected": 1,
+    "from": "              label={`Automatic PR reviews for @${person.login}`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "to": "            : `GitHub 机器人 · 第 ${step + 1} 步，共 ${steps.length} 步`}\n",
+    "expected": 1,
+    "from": "            : `GitHub bot · Step ${step + 1} of ${steps.length}`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackAvatarStep.tsx",
+    "to": "          alt={`${agentName} 的 Cliptoon 头像`}\n",
+    "expected": 1,
+    "from": "          alt={`${agentName}’s Cliptoon avatar`}\n"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackIdentityStep.tsx",
+    "to": "                  : <Button variant=\"outline\" disabled={!userId || link.isPending} onClick={() => link.mutate(identity.principalId)} aria-label={`将 ${identity.externalLabel} 关联到我的 Paperclip 账户`}>\n",
+    "expected": 1,
+    "from": "                  : <Button variant=\"outline\" disabled={!userId || link.isPending} onClick={() => link.mutate(identity.principalId)} aria-label={`Link ${identity.externalLabel} to my Paperclip account`}>\n"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "          name: linkName.trim() || endpointHost(linkUrl) || \"this server\",\n",
+    "to": "          name: linkName.trim() || endpointHost(linkUrl) || \"此服务器\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "  const serverName = entry?.name ?? identity?.name ?? \"this server\";\n",
+    "to": "  const serverName = entry?.name ?? identity?.name ?? \"此服务器\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    (linkName.trim() || defaultGenericMcpName(linkUrl) || \"this app\");\n",
+    "to": "    (linkName.trim() || defaultGenericMcpName(linkUrl) || \"此应用\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "    ? allAgents.find((agent) => agent.id === lockedAgentId)?.name ?? \"the requesting agent\"\n",
+    "to": "    ? allAgents.find((agent) => agent.id === lockedAgentId)?.name ?? \"发出请求的智能体\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            <CopyValueButton value={callbackUrl} ariaLabel=\"Copy callback URL\" />\n",
+    "to": "            <CopyValueButton value={callbackUrl} ariaLabel=\"复制回调 URL\" />\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                      : `${githubIdentity ? \"组织共享 GitHub 账户（高级）\" : \"组织中的任何人\"}. Unavailable: ${capabilities?.organizationGrantReason ??\n",
+    "to": "                      : `${githubIdentity ? \"组织共享 GitHub 账户（高级）\" : \"组织中的任何人\"}。不可用：${capabilities?.organizationGrantReason ??\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                      : `Any agent. Unavailable: ${capabilities?.companyInstallReason ??\n",
+    "to": "                      : `任何智能体。不可用：${capabilities?.companyInstallReason ??\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            <div className=\"py-10 text-center text-sm text-muted-foreground\">No apps match “{search}”.</div>\n",
+    "to": "            <div className=\"py-10 text-center text-sm text-muted-foreground\">没有与“{search}”匹配的应用。</div>\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "                <span className=\"truncate\">This looks like {matchedEntry.name}.</span>\n",
+    "to": "                <span className=\"truncate\">这似乎是 {matchedEntry.name}。</span>\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            <span className=\"truncate\">Paperclip has a guided setup for {matchedEntry.name}.</span>\n",
+    "to": "            <span className=\"truncate\">Paperclip 提供 {matchedEntry.name} 的设置向导。</span>\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "from": "            Add this exact URL to {entry.name} before continuing. It must match the authorization request.\n",
+    "to": "            请将此 URL 原样添加到 {entry.name} 后再继续。它必须与授权请求中的 URL 完全一致。\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionIntentInteractionBody.tsx",
+    "from": "          Use Connections for {interaction.payload.requestingAgentName}? This replaces the agent’s existing authentication\n          with the responsible person’s {interaction.payload.serviceName} connection. The model stays the same.\n",
+    "to": "          要为 {interaction.payload.requestingAgentName} 使用连接吗？这会将智能体现有的身份验证\n          替换为负责人的 {interaction.payload.serviceName} 连接。模型保持不变。\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "from": "      step={currentStep >= 0 && !s.setupComplete ? \"key\" : \"gallery\"} activeIndex={currentStep} labels={steps.map(() => \"Connect\")} onCancel={busy || s.step === \"management\" || s.step === \"permissions\" || s.step === \"draft\" ? undefined : onCancel ?? a.saveExit} />\n",
+    "to": "      step={currentStep >= 0 && !s.setupComplete ? \"key\" : \"gallery\"} activeIndex={currentStep} labels={steps.map(() => \"连接\")} onCancel={busy || s.step === \"management\" || s.step === \"permissions\" || s.step === \"draft\" ? undefined : onCancel ?? a.saveExit} />\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "from": "          submitLabel={s.setupComplete ? \"Done\" : \"Continue\"} onBack={s.setupComplete ? a.finish : a.saveExit} onContinue={s.setupComplete ? a.finish : () => a.navigate(\"connect\")} />}\n",
+    "to": "          submitLabel={s.setupComplete ? \"完成\" : \"继续\"} onBack={s.setupComplete ? a.finish : a.saveExit} onContinue={s.setupComplete ? a.finish : () => a.navigate(\"connect\")} />}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "  action: \"Provider action\",\n",
+    "to": "  action: \"服务商操作\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "  return replayableFailureStates.has(item.status) ? \"Reason\" : \"Details\";\n",
+    "to": "  return replayableFailureStates.has(item.status) ? \"原因\" : \"Details\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "      ? \"Reason\"\n",
+    "to": "      ? \"原因\"\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "  return replayableFailureStates.has(item.status) ? \"原因\" : \"Details\";\n",
+    "to": "  return replayableFailureStates.has(item.status) ? \"原因\" : \"详情\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "        [\"Interactivity\", endpoint.setup.callbackSurfaces.interactivity],\n",
+    "to": "        [\"交互\", endpoint.setup.callbackSurfaces.interactivity],\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "            What should this {providerNames[provider]} connection do?\n",
+    "to": "            您希望此 {providerNames[provider]} 连接做什么？\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "              People in {providerNames[provider]} can start and continue\n              Paperclip tasks.\n",
+    "to": "              {providerNames[provider]} 中的人员可以发起和继续\n              Paperclip 任务。\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointSetup.tsx",
+    "from": "              Let agents use {providerNames[provider]} actions and data while\n              they work.\n",
+    "to": "              让智能体在工作时使用 {providerNames[provider]} 的操作和数据。\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "      setRestrictedInbox(inspected.data?.inboxes[0]?.inbox_id ?? \"this inbox\");\n",
+    "to": "      setRestrictedInbox(inspected.data?.inboxes[0]?.inbox_id ?? \"此收件箱\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "        setRestrictedInbox(details.inboxes[0]?.inbox_id ?? \"this inbox\");\n",
+    "to": "        setRestrictedInbox(details.inboxes[0]?.inbox_id ?? \"此收件箱\");\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "    {step < 2 && <ChatSetupNavigation labels={[\"Agent\", \"Email address\"]} step={step}\n",
+    "to": "    {step < 2 && <ChatSetupNavigation labels={[\"智能体\", \"邮箱地址\"]} step={step}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatIdentityConfirm.tsx",
+    "from": "    \"the signed-in account\";\n",
+    "to": "    \"当前登录的账户\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "          {footer(\"Continue\", () => go(5), !verification?.ready)}\n",
+    "to": "          {footer(\"继续\", () => go(5), !verification?.ready)}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "from": "          {footer(\n            \"Continue\",\n",
+    "to": "          {footer(\n            \"继续\",\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "  label: value[0].toUpperCase() + value.slice(1),",
+    "to": "  label: ({ settings: \"设置\", access: \"访问权限\", reviews: \"评审\", conversations: \"对话\", activity: \"活动\" } as const)[value],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "const replayableFailureStates = new Set([\"failed\"]);",
+    "to": "function chatStateLabel(value: string): string {\n  const labels: Readonly<Record<string, string>> = {\n    draft: \"草稿\", verifying: \"验证中\", active: \"活跃\", paused: \"已暂停\",\n    attention: \"需要处理\", revoked: \"已撤销\", archived: \"已归档\",\n    waiting: \"等待中\", completed: \"已完成\", unavailable: \"不可用\", endpoint_removed: \"连接已移除\",\n    received: \"已接收\", filtered: \"已筛除\", processing: \"处理中\", processed: \"已处理\",\n    retry: \"等待重试\", pending: \"待处理\", streaming: \"正在流式传输\", published: \"已发布\",\n    delivery_unknown: \"投递结果未知\", failed: \"已失败\", cancelled: \"已取消\",\n    consent_pending: \"等待请求许可\", consent_sending: \"正在发送许可请求\", consent_unknown: \"许可请求结果未知\",\n    awaiting_consent: \"等待许可\", upload_pending: \"等待上传\", uploading: \"上传中\", upload_unknown: \"上传结果未知\",\n    file_info_pending: \"等待文件通知\", file_info_sending: \"正在发送文件通知\", file_info_unknown: \"文件通知结果未知\",\n    delivered: \"已投递\", declined: \"已拒绝\", expired: \"已过期\", conflict: \"冲突\",\n  };\n  return labels[value] ?? value;\n}\n\nconst replayableFailureStates = new Set([\"failed\"]);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "<StatusBadge status={endpoint.status} />",
+    "to": "<StatusBadge status={endpoint.status} label={chatStateLabel(endpoint.status)} />",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "<StatusBadge status={row.state} />",
+    "to": "<StatusBadge status={row.state} label={chatStateLabel(row.state)} />",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "<StatusBadge status={item.status} />",
+    "to": "<StatusBadge status={item.status} label={chatStateLabel(item.status)} />",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "{item.fileTransfer.phase.replaceAll(\"_\", \" \")}",
+    "to": "{chatStateLabel(item.fileTransfer.phase)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/ChatEndpointDetail.tsx",
+    "from": "`重放失败的活动（${item.kind}）`",
+    "to": "`重放失败的${activityKindLabels[item.kind]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotManagement.tsx",
+    "from": "export function GitHubBotManagement({",
+    "to": "function githubReviewStateLabel(value: string): string {\n  const labels: Readonly<Record<string, string>> = {\n    queued: \"排队中\", running: \"运行中\", completed: \"已完成\", incomplete: \"未完成\",\n    error: \"异常\", superseded: \"已被替代\", manual_required: \"需要手动处理\",\n    success: \"通过\", failure: \"未通过\", neutral: \"中立\", action_required: \"需要处理\",\n  };\n  return labels[value] ?? value;\n}\n\nexport function GitHubBotManagement({",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotManagement.tsx",
+    "from": "review.state.replaceAll(\"_\", \" \")",
+    "to": "githubReviewStateLabel(review.state)",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotManagement.tsx",
+    "from": "review.conclusion?.replaceAll(\"_\", \" \") ?? \"Awaiting assessment\"",
+    "to": "review.conclusion ? githubReviewStateLabel(review.conclusion) : \"等待评估\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+    "from": "inbox.status === \"revoked\" ? \"Access revoked\" : undefined",
+    "to": "inbox.status === \"revoked\" ? \"Access revoked\" : ({ draft: \"草稿\", verifying: \"验证中\", active: \"活跃\", paused: \"已暂停\", attention: \"需要处理\", revoked: \"已撤销\", archived: \"已归档\" } as Readonly<Record<string, string>>)[inbox.status]",
+    "expected": 1
+  }
+]

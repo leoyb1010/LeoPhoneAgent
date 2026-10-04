@@ -206,5 +206,59 @@
   },
   "ui/src/pages/CompanyEnvironments.tsx": {
     "user": "user"
+  },
+  "ui/src/pages/apps/Connections.tsx": {
+    "Retired": "Retired",
+    "Not connected": "Not connected",
+    "Paused": "Paused",
+    "Needs attention": "Needs attention",
+    "Healthy": "Healthy"
+  },
+  "ui/src/components/DecisionCard.tsx": {
+    "Type": "输入"
+  },
+  "ui/src/adapters/openclaw-gateway/config-fields.tsx": {
+    "Fixed": "固定"
+  },
+  "ui/src/components/AgentProperties.tsx": {
+    "Title": "职称"
+  },
+  "ui/src/components/AgentConfigForm.tsx": {
+    "Title": "职称"
+  },
+  "ui/src/components/DocumentAnnotationPanel.tsx": {
+    "s": ""
+  },
+  "ui/src/components/RunnerInspector.tsx": {
+    "s": ""
+  },
+  "ui/src/pages/Dashboard.tsx": {
+    "s": ""
+  },
+  "ui/src/pages/Inbox.tsx": {
+    "s": ""
+  },
+  "ui/src/pages/LegacyInbox.tsx": {
+    "s": ""
+  },
+  "ui/src/pages/Timeline.tsx": {
+    "s": ""
+  },
+  "ui/src/pages/BoardChat.tsx": {
+    "s": "秒"
+  },
+  "ui/src/pages/StatusCards/StatusCardSettingsForm.tsx": {
+    "s": "秒"
+  },
+  "ui/src/components/EnforcementBanner.tsx": {
+    "was": "已",
+    "s were": "已"
+  },
+  "ui/src/components/FrontmatterPanel.tsx": {
+    "issue": "项问题",
+    "issues": "项问题"
+  },
+  "ui/src/pages/Search.tsx": {
+    "type": "输入"
   }
 }
