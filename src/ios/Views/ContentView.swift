@@ -373,6 +373,7 @@ struct ContentView: View {
     /// Launch screen preference: 0=Auto, 1=Last Session, 2=New Chat.
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
+    @AppStorage("leo.ios.executionBackend.v1") private var executionBackend = IOSExecutionBackend.local.rawValue
     @AppStorage("leo.torchOn") private var torchOn = false
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
@@ -2425,6 +2426,18 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "gear")
                 }
+            }
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            if !isSelecting {
+                Button {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    executionBackend = IOSExecutionBackend.paperclip.rawValue
+                } label: {
+                    Image(systemName: "network")
+                }
+                .accessibilityLabel("服务器任务")
+                .accessibilityIdentifier("paperclip.openWorkspace")
             }
         }
         // [T-home-simplify-1.41] iPhone 标题栏只留:设置、搜索、藏宝阁。

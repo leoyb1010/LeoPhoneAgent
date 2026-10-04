@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.52.0%20(139)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.53.0%20(141)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.4.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.5.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -21,12 +21,12 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
 
-## Paperclip 服务器工作区（iOS 1.52.0 / Mac 1.4.0）
+## Paperclip 对话工作区（iOS 1.53.0 / Mac 1.5.0）
 
 吸收 [Paperclip](https://github.com/paperclipai/paperclip) 的公司、Agent、任务、审批与运行记录能力。服务器持有任务和执行状态，客户端通过原生工作区连接独立部署的 HTTPS 服务；管理员使用服务器的人类账号登录，不把 Agent API Key 当作个人登录凭据。
 
-- iOS 默认保留本机工作区，首页「执行后端」切换 Paperclip。添加服务器地址、登录、选择公司后，可搜索/分页浏览任务、创建任务、评论、改状态、查看审批与运行日志。切换不会迁移已有本机会话。此版本不提供 iOS 原生运行取消、附件下载或文档/工作产物管理。
-- Mac 默认直接进入服务器工作区，不等待本机 Host 启动；可配置服务、登录、选择公司，并管理任务、审批、运行日志和取消，以及受控下载任务附件。原本机工作区通过明确的本机恢复模式进入。
+- iOS 默认保留本机工作区，首页「服务器任务」进入 Paperclip，页面可返回本机。添加服务器地址、登录、选择公司后，可搜索/分页浏览任务会话，通过底部输入创建任务、回复、改状态、查看审批与运行日志；服务器设置独立管理。切换不会迁移已有本机会话。此版本不提供 iOS 原生运行取消、附件下载或文档/工作产物管理。
+- Mac 默认直接进入服务器工作区，不等待本机 Host 启动；提供公司与任务侧栏、真实作者消息流、固定输入区和可收起的属性检查器；配置独立管理，可处理审批、运行日志和取消，以及受控下载任务附件。原本机工作区通过明确的本机恢复模式进入。
 - 每次写操作绑定服务器、公司与用户，处理注销、换账号、超时和结果未知；不把不确定写入自动重发。创建草稿保留内容和回执，超过服务器幂等窗口后需要人工核对。
 
 部署使用上游独立服务器和数据库，建议仅监听回环地址并通过现有 HTTPS 入口访问；完成首位管理员设置后关闭公开注册。原生入口、隔离会话、权限边界与部署验证范围见 [Mac 工作区说明](src/mac/leophone/docs/specs/paperclip-server-workspace.md) 与 [iOS 原生测试说明](scripts/native-paperclip-audit/README.md)；本次完整验证范围、失败通道与实机边界见 [交付证据](docs/paperclip/DELIVERY_20261004.md)。

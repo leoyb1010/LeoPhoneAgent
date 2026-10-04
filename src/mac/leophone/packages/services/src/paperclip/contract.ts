@@ -29,6 +29,9 @@ export interface PaperclipComment {
   companyId: string;
   issueId: string;
   body: string;
+  authorUserId?: string | null;
+  authorAgentId?: string | null;
+  createdAt?: string | null;
   clientRequestId?: string | null;
 }
 export interface PaperclipRun {

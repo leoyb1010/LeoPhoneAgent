@@ -228,6 +228,9 @@ test("human operator commands compose into a task, decision, run and attachment 
           id: "comment",
           companyId: "a",
           issueId: "a-issue",
+          authorUserId: "human",
+          authorAgentId: null,
+          createdAt: "2026-10-04T06:00:00Z",
           ...(input.body as object),
         });
       return { status: 200, data: input.method === "POST" ? comments[0] : comments };
@@ -295,6 +298,9 @@ test("human operator commands compose into a task, decision, run and attachment 
   await item.workspace.command({ kind: "cancel", issueId: "a-issue", runId: "run" });
   await item.workspace.downloadAttachment("attachment");
   assert.equal(item.workspace.getSnapshot().detail?.comments[0]?.body, "补充要求");
+  assert.equal(item.workspace.getSnapshot().detail?.comments[0]?.authorUserId, "human");
+  assert.equal(item.workspace.getSnapshot().detail?.comments[0]?.authorAgentId, null);
+  assert.equal(item.workspace.getSnapshot().detail?.comments[0]?.createdAt, "2026-10-04T06:00:00Z");
   assert.equal(item.workspace.getSnapshot().detail?.issue.status, "blocked");
   assert.equal(item.workspace.getSnapshot().detail?.approvals[0]?.status, "approved");
   assert.equal(item.workspace.getSnapshot().detail?.runs[0]?.status, "cancelled");

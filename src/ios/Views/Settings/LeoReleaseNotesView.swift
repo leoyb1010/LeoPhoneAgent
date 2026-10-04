@@ -12,6 +12,26 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.53.0",
+            date: "2026-10-04",
+            title: "Paperclip 手机对话工作区",
+            highlights: [
+                "服务器任务按会话浏览，底部直接输入要求并选择真实服务器执行者；创建成功后进入任务对话。",
+                "任务对话采用消息流与固定回复框，任务状态、审批和日志收进信息页；服务器配置独立管理。",
+                "首页和聊天返回导航恢复，切换工作区保留本机内容；编辑、确认和设置期间暂停自动刷新。"
+            ]
+        ),
+        LeoRelease(
+            version: "1.52.1",
+            date: "2026-10-04",
+            title: "首页导航与服务器任务布局修复",
+            highlights: [
+                "聊天滚动后返回箭头和操作栏保持可见；移除覆盖所有页面的工作区切换条，首页提供服务器任务入口。",
+                "服务器任务与服务器设置分成独立页面，搜索移到列表内；创建、设置、本机返回入口更清楚。",
+                "切换工作区保留本机会话和草稿；编辑和核对任务期间暂停自动刷新，避免打断操作。"
+            ]
+        ),
+        LeoRelease(
             version: "1.52.0",
             date: "2026-10-04",
             title: "Paperclip 中文服务器工作区",

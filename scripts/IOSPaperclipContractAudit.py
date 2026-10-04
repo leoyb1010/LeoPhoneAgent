@@ -25,7 +25,9 @@ class IOSPaperclipContractAudit(unittest.TestCase):
     def test_local_stays_default_and_existing_gateway_is_not_rewired(self):
         root = (VIEWS / "PaperclipWorkspaceView.swift").read_text()
         self.assertIn("IOSExecutionBackend.local.rawValue", root)
-        self.assertIn("else { localContent() }", root)
+        self.assertIn("TabView(selection: $selected)", root)
+        self.assertIn("localContent()", root)
+        self.assertNotIn(".safeAreaInset(edge: .top", root.split("struct PaperclipBackendSettingsView", 1)[0])
         self.assertIn("IOSWorkspaceRootView { ContentView() }", (IOS / "MinisApp.swift").read_text())
         client = (CORE / "PaperclipClient.swift").read_text()
         for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "apiKey", 'forHTTPHeaderField: "Authorization"']:
@@ -82,7 +84,7 @@ class IOSPaperclipContractAudit(unittest.TestCase):
     def test_all_new_visible_literals_are_chinese(self):
         for path in VIEWS.glob("*.swift"):
             for literal in re.findall(r'\b(?:Text|Button|Label|Section|TextField|Picker|ProgressView)\("([^"\\]*)"', path.read_text()):
-                if literal:
+                if literal and any(character.isalpha() for character in literal):
                     self.assertRegex(literal, r"[\u3400-\u9fff]", f"{path.name}: {literal}")
 
 

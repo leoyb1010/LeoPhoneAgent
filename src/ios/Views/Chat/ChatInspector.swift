@@ -299,13 +299,12 @@ enum LeoDuration {
     }
 }
 
-/// iOS 27: the navigation bar tucks away while you scroll down through a reply
-/// and comes back when you scroll up. Lives on the small wrappers around the
-/// chat, never on AIChatView's own (deep) modifier chain.
+/// Keep the chat's back button and actions available even during scrolling.
+/// Lives on the small wrappers, outside AIChatView's deep modifier chain.
 struct ChatToolbarMinimization: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 27, *) {
-            content.toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+            content.toolbarMinimizationBehavior(.never, for: .navigationBar)
         } else {
             content
         }

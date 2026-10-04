@@ -24,6 +24,9 @@ export const commentSchema = z.object({
   companyId: id,
   issueId: id,
   body: z.string(),
+  authorUserId: z.string().nullable().optional(),
+  authorAgentId: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
   clientRequestId: z.string().nullable().optional(),
 });
 export const runSchema = z.object({ runId: id, agentId: id, status: z.string() });
