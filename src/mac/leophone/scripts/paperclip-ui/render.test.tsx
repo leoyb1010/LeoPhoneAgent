@@ -6,6 +6,8 @@ import { PaperclipWorkspace } from "../../packages/ui/src/paperclip/PaperclipWor
 import { PaperclipTaskDetail } from "../../packages/ui/src/paperclip/PaperclipTaskDetail.js";
 import { PaperclipReceiptBanner } from "../../packages/ui/src/paperclip/PaperclipReceiptBanner.js";
 
+import { PaperclipTaskConfirmation } from "../../packages/ui/src/paperclip/PaperclipTaskConfirmation.js";
+
 test("首次启动有中文配置与显式恢复入口，不提供Agent密钥或本地兜底", () => {
   const html = renderToStaticMarkup(
     <PaperclipWorkspace
@@ -80,4 +82,55 @@ test("待核实操作有恢复与人工核实的可见入口", () => {
   assert.ok(html.includes("核实结果"));
   assert.ok(html.includes("已人工核实"));
   assert.ok(html.includes("receipt-1"));
+});
+
+test("受阻确认框要求明确解除行动，空输入不能提交", () => {
+  const html = renderToStaticMarkup(
+    <PaperclipTaskConfirmation
+      command={{ kind: "status", issueId: "i1", status: "blocked" }}
+      issueTitle="示例任务"
+      locked={false}
+      submitting={false}
+      onClose={() => {}}
+      onConfirm={async () => {}}
+    />,
+  );
+  assert.ok(html.includes('aria-label="解除受阻所需操作"'));
+  assert.ok(html.includes('required=""'));
+  assert.ok(html.includes('maxLength="2000"'));
+  assert.ok(html.includes("解除受阻的责任人将设为当前登录账号"));
+  assert.match(html, /<button[^>]*disabled=""[^>]*>确认提交<\/button>/);
+});
+
+
+test("评论作者依据明确身份展示，缺失或空白身份保持未知", () => {
+  const cases = [
+    { author: { authorUserId: "user-1" }, label: "用户" },
+    { author: { authorAgentId: "agent-1" }, label: "智能体" },
+    { author: { authorUserId: "user-1", authorAgentId: "agent-1" }, label: "用户" },
+    { author: {}, label: "未知作者" },
+    { author: { authorUserId: "", authorAgentId: "" }, label: "未知作者" },
+    { author: { authorUserId: "  ", authorAgentId: "  " }, label: "未知作者" },
+  ];
+  for (const { author, label } of cases) {
+    const html = renderToStaticMarkup(
+      <PaperclipTaskDetail
+        detail={{
+          issue: { id: "i1", companyId: "c1", title: "示例任务", status: "todo" },
+          comments: [{ id: "comment-1", companyId: "c1", issueId: "i1", body: "测试回复", ...author }],
+          runs: [], approvals: [], documents: [], attachments: [], products: [],
+        }}
+        log={null}
+        disabled={false}
+        onCommand={async () => true}
+        onLog={() => {}}
+        onDownload={() => {}}
+        onDocument={async () => null}
+      />,
+    );
+    const comment = html.match(/<article[^>]*data-testid="paperclip-comment"[\s\S]*?<\/article>/)?.[0];
+    assert.ok(comment, "存在评论容器");
+    assert.match(comment, new RegExp(`>${label}<`));
+    if (label !== "智能体") assert.ok(!comment.includes("智能体"));
+  }
 });

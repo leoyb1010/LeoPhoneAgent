@@ -2,9 +2,18 @@ import {
   PaperclipFailure,
   PaperclipHealthFailure,
   paperclipApprovalFingerprint,
+  requirePaperclipUnblockAction,
 } from "./protocol.js";
-import type { PaperclipCommand, PaperclipSnapshot } from "./contract.js";
-export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipCommand) {
+import type {
+  PaperclipCommand,
+  PaperclipSnapshot,
+  PaperclipReceipt,
+  PaperclipReplyConfirmation,
+} from "./contract.js";
+export function validatePaperclipCommand(
+  state: PaperclipSnapshot,
+  c: PaperclipCommand,
+): PaperclipCommand {
   const detail = state.detail;
   if (c.kind === "create") {
     if (
@@ -14,7 +23,7 @@ export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipC
       )
     )
       throw new Error("请填写任务标题并选择可用的服务器智能体");
-    return;
+    return c;
   }
   if (!detail || detail.issue.id !== c.issueId) throw new Error("任务已切换，请重新打开任务后操作");
   if (c.kind === "reply" && !c.body.trim()) throw new Error("请输入回复内容");
@@ -40,6 +49,9 @@ export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipC
     )
   )
     throw new Error("审批已处理或不属于当前任务，请刷新");
+  return c.kind === "status" && c.status === "blocked"
+    ? { ...c, unblockAction: requirePaperclipUnblockAction(c.unblockAction) }
+    : c;
 }
 
 export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({
@@ -55,6 +67,7 @@ export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({
   error: null,
   notice: null,
   receipt: null,
+  confirmedReply: null,
   log: null,
   updatedAt: null,
 });
@@ -68,5 +81,28 @@ export function paperclipFailureState(error: unknown): Partial<PaperclipSnapshot
       : auth
         ? { connection: "signed-out" as const }
         : {}),
+  };
+}
+
+export function confirmedPaperclipReply(
+  receipt: PaperclipReceipt,
+): PaperclipReplyConfirmation | null {
+  return receipt.command.kind === "reply"
+    ? {
+        receiptId: receipt.id,
+        binding: { ...receipt.binding },
+        issueId: receipt.command.issueId,
+        body: receipt.command.body,
+      }
+    : null;
+}
+
+export function paperclipReconciliationState(
+  receipt: PaperclipReceipt,
+): Partial<PaperclipSnapshot> {
+  return {
+    receipt: null,
+    confirmedReply: confirmedPaperclipReply(receipt),
+    notice: "已核实：服务器确认了原操作",
   };
 }

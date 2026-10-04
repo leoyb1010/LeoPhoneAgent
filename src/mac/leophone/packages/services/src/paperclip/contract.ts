@@ -50,6 +50,10 @@ export interface PaperclipIssue {
   title: string;
   description?: string | null;
   status: string;
+  unblockDescriptor?: {
+    owner: { userId: string } | { agentId: string } | "board";
+    action: string;
+  } | null;
   assigneeAgentId?: string | null;
   updatedAt?: string;
 }
@@ -120,7 +124,7 @@ export interface PaperclipDetail {
 export type PaperclipCommand =
   | { kind: "create"; title: string; description: string; agentId: string }
   | { kind: "reply"; issueId: string; body: string }
-  | { kind: "status"; issueId: string; status: string }
+  | { kind: "status"; issueId: string; status: string; unblockAction?: string }
   | {
       kind: "approve" | "reject";
       issueId: string;
@@ -129,6 +133,12 @@ export type PaperclipCommand =
       decisionNote: string;
     }
   | { kind: "cancel"; issueId: string; runId: string };
+export interface PaperclipReplyConfirmation {
+  receiptId: string;
+  binding: PaperclipBinding;
+  issueId: string;
+  body: string;
+}
 export interface PaperclipReceipt {
   id: string;
   binding: PaperclipBinding;
@@ -149,6 +159,7 @@ export interface PaperclipSnapshot {
   error: string | null;
   notice: string | null;
   receipt: PaperclipReceipt | null;
+  confirmedReply: PaperclipReplyConfirmation | null;
   log: { runId: string; content: string; nextOffset: number } | null;
   updatedAt: string | null;
 }

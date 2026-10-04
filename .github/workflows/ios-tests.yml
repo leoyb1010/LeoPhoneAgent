@@ -305,6 +305,7 @@ jobs:
           node scripts/paperclip/typecheck-transport.mjs
           node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
           node --import tsx --test packages/services/test/paperclipWorkspace.test.ts
+          node --import tsx --test packages/ui/test/paperclipReplyDraft.test.ts
           TSX_TSCONFIG_PATH=packages/ui/tsconfig.json node --import tsx --test scripts/paperclip-ui/render.test.tsx
           pnpm leo:test:agent
           node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts

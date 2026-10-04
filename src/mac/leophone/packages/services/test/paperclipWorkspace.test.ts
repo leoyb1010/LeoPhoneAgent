@@ -639,3 +639,179 @@ test("旧服务器健康检查迟到时不会打开已经过时的原生登录�
   assert.equal(signIns, 0);
   assert.equal(f.service.getSnapshot().profile?.serverUrl, "https://new.example");
 });
+
+test("手动标记受阻缺少明确行动或超长时，在任何网络请求之前拒绝", async () => {
+  const f = fixture();
+  await f.connect();
+  f.calls.length = 0;
+  for (const unblockAction of [undefined, "", " \n\t ", "字".repeat(2001)]) {
+    assert.equal(
+      await f.service.mutate({
+        kind: "status",
+        issueId: "issue-1",
+        status: "blocked",
+        unblockAction,
+      }),
+      false,
+    );
+    assert.equal(f.calls.length, 0);
+    assert.equal(f.service.getSnapshot().receipt, null);
+    assert.match(f.service.getSnapshot().error!, /解除受阻所需操作/);
+  }
+});
+test("受阻状态精确发送裁剪后的行动和绑定的人类账号，不接受其他owner", async () => {
+  const f = fixture();
+  await f.connect();
+  const command = {
+    kind: "status" as const,
+    issueId: "issue-1",
+    status: "blocked",
+    unblockAction: "  提供已确认的接口定义\n ",
+    unblockDescriptor: { owner: { userId: "unrelated-user" }, action: "不可信内容" },
+  };
+  assert.equal(await f.service.mutate(command), true);
+  assert.equal(f.mutations[0]?.method, "PATCH");
+  assert.equal(f.mutations[0]?.path, "/api/issues/issue-1");
+  assert.equal(f.mutations[0]?.expectedUserId, "user-1");
+  assert.deepEqual(f.mutations[0]?.body, {
+    status: "blocked",
+    unblockDescriptor: { owner: { userId: "user-1" }, action: "提供已确认的接口定义" },
+  });
+});
+test("非受阻状态不附加解除受阻信息", async () => {
+  const f = fixture();
+  await f.connect();
+  assert.equal(
+    await f.service.mutate({
+      kind: "status",
+      issueId: "issue-1",
+      status: "done",
+      unblockAction: "不应发送",
+    }),
+    true,
+  );
+  assert.deepEqual(f.mutations[0]?.body, { status: "done" });
+});
+test("受阻操作未知结果持久保存原行动和身份，重启核实仍仅GET读回", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) => {
+    if (input.method === "PATCH") throw new Error("lost status receipt");
+    return undefined;
+  });
+  assert.equal(
+    await f.service.mutate({
+      kind: "status",
+      issueId: "issue-1",
+      status: "blocked",
+      unblockAction: "  确认验收范围后继续  ",
+    }),
+    false,
+  );
+  const original = f.service.getSnapshot().receipt!;
+  assert.equal(original.command.kind, "status");
+  assert.equal(
+    original.command.kind === "status" && original.command.unblockAction,
+    "确认验收范围后继续",
+  );
+  assert.equal(original.binding.userId, "user-1");
+  const next = fixture(f.storage);
+  await next.connect();
+  assert.deepEqual(next.service.getSnapshot().receipt?.command, original.command);
+  next.intercept(async (input) =>
+    input.path === "/api/issues/issue-1"
+      ? {
+          status: 200,
+          data: {
+            ...issue,
+            status: "blocked",
+            unblockDescriptor: { owner: { userId: "user-1" }, action: "确认验收范围后继续" },
+          },
+        }
+      : undefined,
+  );
+  await next.service.reconcile();
+  assert.equal(next.mutations.length, 0);
+  assert.equal(next.service.getSnapshot().receipt, null);
+});
+
+test("相同blocked状态但不同owner或行动，不能确认本次不确定更新", async () => {
+  for (const descriptor of [
+    { owner: { userId: "user-1" }, action: "其他人写入的不同行动" },
+    { owner: { userId: "other-user" }, action: "补充接口定义" },
+  ]) {
+    const f = fixture();
+    await f.connect();
+    f.intercept(async (input) => {
+      if (input.method === "PATCH") throw new Error("unknown");
+      return undefined;
+    });
+    await f.service.mutate({
+      kind: "status",
+      issueId: "issue-1",
+      status: "blocked",
+      unblockAction: "补充接口定义",
+    });
+    f.intercept(async (input) =>
+      input.path === "/api/issues/issue-1"
+        ? { status: 200, data: { ...issue, status: "blocked", unblockDescriptor: descriptor } }
+        : undefined,
+    );
+    await f.service.reconcile();
+    assert.ok(f.service.getSnapshot().receipt);
+    assert.equal(f.mutations.length, 1);
+    assert.match(f.service.getSnapshot().error!, /尚未确认/);
+  }
+});
+test("受阻PATCH成功外形若回执行动不一致，也必须保留待核实", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) =>
+    input.method === "PATCH"
+      ? {
+          status: 200,
+          data: {
+            ...issue,
+            status: "blocked",
+            unblockDescriptor: { owner: { userId: "user-1" }, action: "不是原行动" },
+          },
+        }
+      : undefined,
+  );
+  assert.equal(
+    await f.service.mutate({
+      kind: "status",
+      issueId: "issue-1",
+      status: "blocked",
+      unblockAction: "补充接口定义",
+    }),
+    false,
+  );
+  assert.equal(f.service.getSnapshot().receipt?.state, "uncertain");
+});
+test("回复核实仅在服务器回执确认后产生精确的身份与正文标记", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) => (input.method === "POST" ? { status: 503, data: null } : undefined));
+  await f.service.mutate({ kind: "reply", issueId: "issue-1", body: "核实后的原回复" });
+  const receipt = f.service.getSnapshot().receipt!;
+  assert.equal(f.service.getSnapshot().confirmedReply, null);
+  f.intercept(null);
+  await f.service.reconcile();
+  assert.deepEqual(f.service.getSnapshot().confirmedReply, {
+    receiptId: receipt.id,
+    binding: receipt.binding,
+    issueId: "issue-1",
+    body: "核实后的原回复",
+  });
+  await f.service.selectCompany("company-1");
+  assert.equal(f.service.getSnapshot().confirmedReply, null);
+});
+test("人工解除回复回执不会冒充服务器确认，也不触发草稿清除标记", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) => (input.method === "POST" ? { status: 503, data: null } : undefined));
+  await f.service.mutate({ kind: "reply", issueId: "issue-1", body: "保留草稿" });
+  f.service.acknowledgeReceipt();
+  assert.equal(f.service.getSnapshot().confirmedReply, null);
+});

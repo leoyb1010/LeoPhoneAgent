@@ -23,20 +23,37 @@ React 组件 → usePaperclipWorkspace → PaperclipWorkspaceService → Papercl
 
 ## 上游契约（固定 994d6edcdd4e15d5f9cc5cf8c135ac599104b86a）
 
-| 操作        | 接口                                                                     | 证据                                  |
-| ----------- | ------------------------------------------------------------------------ | ------------------------------------- |
-| 用户        | GET /api/auth/get-session                                                | ui/src/api/auth.ts                    |
-| 组织、Agent | GET /api/companies；GET /api/companies/:id/agents                        | ui/src/api/companies.ts、agents.ts    |
-| 创建/列表   | POST/GET /api/companies/:id/issues                                       | ui/src/api/issues.ts                  |
-| 回复        | POST /api/issues/:id/comments，body + clientRequestId(UUID)              | validators/issue.ts，routes/issues.ts |
-| 状态        | PATCH /api/issues/:id，status                                            | ui/src/api/issues.ts                  |
-| 运行        | GET /api/issues/:id/runs（历史）；live-runs（活跃）                      | ui/src/api/activity.ts、heartbeats.ts |
-| 日志        | GET /api/heartbeat-runs/:id/log?offset&limitBytes                        | ui/src/api/heartbeats.ts              |
-| 取消运行    | POST /api/heartbeat-runs/:id/cancel                                      | 同上                                  |
-| 审批        | GET /api/issues/:id/approvals；POST /api/approvals/:id/approve 或 reject | ui/src/api/approvals.ts               |
-| 成果        | GET /api/issues/:id/documents、attachments、work-products                | ui/src/api/issues.ts                  |
+| 操作        | 接口                                                                                                    | 证据                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 用户        | GET /api/auth/get-session                                                                               | ui/src/api/auth.ts                    |
+| 组织、Agent | GET /api/companies；GET /api/companies/:id/agents                                                       | ui/src/api/companies.ts、agents.ts    |
+| 创建/列表   | POST/GET /api/companies/:id/issues                                                                      | ui/src/api/issues.ts                  |
+| 回复        | POST /api/issues/:id/comments，body + clientRequestId(UUID)                                             | validators/issue.ts，routes/issues.ts |
+| 状态        | PATCH /api/issues/:id，status；blocked 另需绑定当前人类 userId 的 unblockDescriptor.owner 与明确 action | ui/src/api/issues.ts                  |
+| 运行        | GET /api/issues/:id/runs（历史）；live-runs（活跃）                                                     | ui/src/api/activity.ts、heartbeats.ts |
+| 日志        | GET /api/heartbeat-runs/:id/log?offset&limitBytes                                                       | ui/src/api/heartbeats.ts              |
+| 取消运行    | POST /api/heartbeat-runs/:id/cancel                                                                     | 同上                                  |
+| 审批        | GET /api/issues/:id/approvals；POST /api/approvals/:id/approve 或 reject                                | ui/src/api/approvals.ts               |
+| 成果        | GET /api/issues/:id/documents、attachments、work-products                                               | ui/src/api/issues.ts                  |
 
 Issue、heartbeat run、agent 分别建模，绝不互换 ID。运行来自任务关系接口，不以同一 Agent 的所有运行冒充任务历史。
+
+### 手动受阻的明确行动
+
+- 确认 `blocked` 时，用户必须填写“解除受阻所需操作”，trim 后 1–2000 字符。服务层在任何网络请求前校验；不编造默认行动。
+- 请求精确包含 `unblockDescriptor: { owner: { userId: receipt.binding.userId }, action }`。责任人由冻结的人类身份绑定决定，不能由 UI 指定其他账号；其他状态仍只提交 status。
+- 裁剪后的 action 与绑定身份保存在不确定操作回执中。成功响应以及未知结果的 GET 核实，都逐字段匹配 status、owner.userId 和 action；仅同为 blocked 或其他人填写的不同说明不足以确认。
+- 核实继续只读取状态，不重发 PATCH。不能确认时保留待核实回执，按既有人工核实流程处理。
+
+### 评论作者展示
+
+- 作者标签只依据服务端身份字段：非空 `authorUserId` 显示“用户”，否则非空 `authorAgentId` 显示“智能体”；两者缺失、为空或仅空白时显示“未知作者”。不得从缺少用户字段推断为智能体。
+
+### 回复核实与编辑器草稿
+
+- 仅服务器确认原回复成功后，服务产生包含 `receiptId + serverUrl + companyId + userId + issueId + body` 的确认标记；普通同正文评论与人工解除回执都不能生成这个标记。
+- 编辑器将当前提交关联到确切回执。收到匹配标记后，仅清空仍等于提交时原始草稿的输入（允许发送时裁剪首尾空格）；用户已改写的新草稿保留。
+- 不同回执、服务器、组织、账号、任务或正文均不能清空草稿。核实后原评论仅一条、输入为空、发送按钮禁用，且除使用原幂等键核实外没有额外 POST。
 
 ## 时序、重连与不确定性
 
@@ -55,6 +72,7 @@ Issue、heartbeat run、agent 分别建模，绝不互换 ID。运行来自任�
 - 配置非法源、空组织、未登录、403/404/409/5xx/非 JSON 均显示中文。
 - 创建指定服务端 Agent 的任务；同一次操作重试只产生一项；回复重复点击、提交超时、重载回执均不重复。
 - 切换服务器/组织/任务时忽略旧响应；更换登录账号不沿用旧身份写入。
+- 校验 blocked 缺少行动时零网络请求，验证 owner 来自绑定账号；同状态但不同 owner/action 不得确认。回复核实后验证精确回执清空、保留新草稿、手动解除不清空及无额外 POST。
 - 检查历史/活跃运行合并、日志增量 offset、取消确认、审批内容与决定备注、文档和附件。
 - 服务不可达绝不显示假完成，绝不进入本地执行；显式恢复模式可访问旧历史并可返回服务器。
 - 服务契约测试覆盖请求路径、身份、回执、恢复和竞争；UI 测试覆盖中文关键路径与恢复入口。Linux 可执行 TypeScript/Node 测试、lint、架构检查；macOS 打包和真实登录/下载人工端到端验证另行记录，未执行不宣称通过。

@@ -83,6 +83,7 @@ const transport: PaperclipTransport = {
           companyId: "company-1",
           issueId: "issue-1",
           ...(body as object),
+          authorUserId: "user-1",
         };
         comments.push(comment);
         data = comment;

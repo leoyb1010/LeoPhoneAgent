@@ -23,12 +23,13 @@ import {
   emptyPaperclipSnapshot,
   paperclipFailureState,
   validatePaperclipCommand,
+  paperclipReconciliationState,
 } from "./commands.js";
 import { readBoundLog, readBoundDocument, downloadBoundAttachment } from "./reads.js";
 import { readDetail, reconcileMutation, sendMutation } from "./api.js";
 import {
   restorePaperclipWorkspace,
-  findPaperclipReceipt,
+  findPaperclipReceipt as pendingReceipt,
   saveProfile,
   saveReceipts,
   recordMutationFailure,
@@ -63,8 +64,7 @@ export class PaperclipWorkspaceService {
     this.state = { ...this.state, ...next };
     for (const listener of this.listeners) listener();
   }
-  private receiptFor = (binding: PaperclipBinding | null) =>
-    findPaperclipReceipt(this.receipts, binding);
+  private receiptFor = (binding: PaperclipBinding | null) => pendingReceipt(this.receipts, binding);
 
   private fail = (error: unknown) => this.publish(paperclipFailureState(error));
   async configure(profile: PaperclipProfile): Promise<boolean> {
@@ -133,6 +133,7 @@ export class PaperclipWorkspaceService {
       detail: null,
       log: null,
       receipt: this.receiptFor(binding),
+      confirmedReply: null,
       error: null,
       notice: null,
       connection: "connecting",
@@ -246,7 +247,7 @@ export class PaperclipWorkspaceService {
     this.publish({ busy: true, error: null, notice: null });
     let receipt: PaperclipReceipt | null = null;
     try {
-      validatePaperclipCommand(this.state, command);
+      command = validatePaperclipCommand(this.state, command);
       await verifyPaperclipUser(this.transport, binding);
       if (generation !== this.generation) return false;
       receipt = {
@@ -340,7 +341,7 @@ export class PaperclipWorkspaceService {
       const issueId = await reconcileMutation(this.transport, receipt);
       this.complete(receipt);
       if (generation === this.generation) {
-        this.publish({ receipt: null, notice: "已核实：服务器确认了原操作" });
+        this.publish(paperclipReconciliationState(receipt));
         await this.refresh();
         if (issueId) await this.selectIssue(issueId);
       }

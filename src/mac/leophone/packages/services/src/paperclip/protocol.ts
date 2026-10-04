@@ -232,3 +232,12 @@ export async function verifyPaperclipUser(
   if (user.id !== binding.userId)
     throw new PaperclipFailure(401, "登录账号已变化。请重新连接组织，原账号待核实操作会保留");
 }
+
+/** 上游 unblockDescriptor.action 要求明确、非空且不超过两千字符。 */
+export function requirePaperclipUnblockAction(value: unknown): string {
+  if (typeof value !== "string" || !value.trim())
+    throw new PaperclipFailure(422, "请填写解除受阻所需操作，说明需要由你完成什么才能继续");
+  const action = value.trim();
+  if (action.length > 2000) throw new PaperclipFailure(422, "解除受阻所需操作不能超过 2000 个字符");
+  return action;
+}

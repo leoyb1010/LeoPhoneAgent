@@ -364,6 +364,8 @@ export function PaperclipWorkspace({
               detail={state.detail}
               disabled={locked}
               log={state.log}
+              receipt={state.receipt}
+              confirmedReply={state.confirmedReply}
               onCommand={(command) => service.mutate(command)}
               onLog={(id) => void service.loadLog(id)}
               onDownload={(id) => void service.download(id)}

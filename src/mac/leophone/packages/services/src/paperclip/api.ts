@@ -10,6 +10,7 @@ import type {
 } from "./contract.js";
 import {
   paperclipApprovalFingerprint,
+  requirePaperclipUnblockAction,
   object,
   PaperclipFailure,
   request,
@@ -70,6 +71,15 @@ export async function readDetail(
     ),
   };
 }
+function matchesBlockedReceipt(value: Record<string, unknown>, receipt: PaperclipReceipt): boolean {
+  if (receipt.command.kind !== "status" || receipt.command.status !== "blocked") return true;
+  const descriptor = object(value.unblockDescriptor);
+  const owner = object(descriptor.owner);
+  return (
+    owner.userId === receipt.binding.userId &&
+    descriptor.action === requirePaperclipUnblockAction(receipt.command.unblockAction)
+  );
+}
 /** 上游只有创建/评论承诺幂等；其他命令必须读回核实，不能盲重试。 */
 export async function sendMutation(
   transport: PaperclipTransport,
@@ -94,7 +104,17 @@ export async function sendMutation(
   } else if (c.kind === "status") {
     path = `/issues/${id(c.issueId)}`;
     method = "PATCH";
-    body = { status: c.status };
+    body = {
+      status: c.status,
+      ...(c.status === "blocked"
+        ? {
+            unblockDescriptor: {
+              owner: { userId: b.userId },
+              action: requirePaperclipUnblockAction(c.unblockAction),
+            },
+          }
+        : {}),
+    };
   } else if (c.kind === "cancel") {
     path = `/heartbeat-runs/${id(c.runId)}/cancel`;
     body = {};
@@ -117,7 +137,12 @@ export async function sendMutation(
     if (value.companyId !== b.companyId) throw new PaperclipFailure(-1);
     return string(value.id);
   } else if (c.kind === "status") {
-    if (value.id !== c.issueId || value.companyId !== b.companyId || value.status !== c.status)
+    if (
+      value.id !== c.issueId ||
+      value.companyId !== b.companyId ||
+      value.status !== c.status ||
+      !matchesBlockedReceipt(value, receipt)
+    )
       throw new PaperclipFailure(-1);
   } else if (
     value.id !== c.approvalId ||
@@ -153,7 +178,7 @@ export async function reconcileMutation(
   if (value.companyId !== b.companyId || value.id !== expectedId) throw new PaperclipFailure(-1);
   const confirmed =
     c.kind === "status"
-      ? value.status === c.status
+      ? value.status === c.status && matchesBlockedReceipt(value, receipt)
       : c.kind === "cancel"
         ? ["cancelled", "succeeded", "failed", "timed_out"].includes(String(value.status))
         : value.status === (c.kind === "approve" ? "approved" : "rejected");

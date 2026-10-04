@@ -78,8 +78,30 @@ try {
     await page.getByRole("button", { name: "发送回复", exact: true }).isDisabled(),
     true,
   );
+  const postsBeforeReconcile = await page.evaluate(() => window.paperclipHarness.posts);
   await page.getByRole("button", { name: "核实结果", exact: true }).click();
-  await page.getByText("断网后核实原操作", { exact: true }).waitFor();
+  const recoveredComment = page
+    .getByTestId("paperclip-comment")
+    .filter({ hasText: "断网后核实原操作" });
+  await recoveredComment.waitFor();
+  assert.equal(await recoveredComment.count(), 1);
+  await page.waitForFunction(() => document.querySelector("#paperclip-reply")?.value === "");
+  assert.equal(
+    await page.getByRole("button", { name: "发送回复", exact: true }).isDisabled(),
+    true,
+  );
+  assert.equal(await page.evaluate(() => window.paperclipHarness.posts), postsBeforeReconcile + 1);
+  await page.getByLabel("任务状态", { exact: true }).selectOption("blocked");
+  await page.getByRole("button", { name: "更新状态", exact: true }).click();
+  assert.equal(
+    await page.getByRole("button", { name: "确认提交", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByLabel("解除受阻所需操作", { exact: true }).fill("提供经确认的验收范围");
+  await page.getByRole("button", { name: "确认提交", exact: true }).click();
+  await page.getByText("LEO-1 · 受阻", { exact: true }).first().waitFor();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(await page.getByRole("dialog").count(), 0);
   await page.getByRole("button", { name: "本地恢复模式", exact: true }).click();
   await page.getByRole("button", { name: "留在服务器工作区", exact: true }).click();
   assert.equal(await page.getByRole("dialog").count(), 0);
@@ -113,6 +135,7 @@ try {
           "阅读文档",
           "下载附件",
           "恢复未知操作回执",
+          "填写解除受阻行动并更新状态",
           "显式本地恢复模式",
           "窄屏布局",
         ],
@@ -128,11 +151,22 @@ try {
 } catch (error) {
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: join(output, "failure.png"), fullPage: true }).catch(() => {});
-  await writeFile(join(output, "failure.json"), JSON.stringify({
-    error: String(error), consoleErrors: errors,
-    url: page.url(),
-    body: await page.locator("body").innerText().catch(() => "页面不可读取"),
-  }, null, 2));
+  await writeFile(
+    join(output, "failure.json"),
+    JSON.stringify(
+      {
+        error: String(error),
+        consoleErrors: errors,
+        url: page.url(),
+        body: await page
+          .locator("body")
+          .innerText()
+          .catch(() => "页面不可读取"),
+      },
+      null,
+      2,
+    ),
+  );
   throw error;
 } finally {
   await browser.close();

@@ -5,14 +5,20 @@ import {
   type PaperclipCommand,
   type PaperclipDetail,
   type PaperclipSnapshot,
+  type PaperclipReceipt,
+  type PaperclipReplyConfirmation,
 } from "@zcode/services/paperclip";
 import { Button } from "../components/ui/button.js";
+import { usePaperclipReplyDraft } from "../hooks/usePaperclipReplyDraft.js";
+import { PaperclipTaskConfirmation } from "./PaperclipTaskConfirmation.js";
 import { Textarea } from "../components/ui/textarea.js";
 
 export interface PaperclipTaskDetailProps {
   detail: PaperclipDetail;
   log: PaperclipSnapshot["log"];
   disabled: boolean;
+  receipt?: PaperclipReceipt | null;
+  confirmedReply?: PaperclipReplyConfirmation | null;
   onCommand: (command: PaperclipCommand) => Promise<boolean>;
   onLog: (runId: string) => void;
   onDownload: (attachmentId: string) => void;
@@ -24,16 +30,21 @@ export function PaperclipTaskDetail({
   detail,
   log,
   disabled,
+  receipt = null,
+  confirmedReply = null,
   onCommand,
   onLog,
   onDownload,
   onDocument,
 }: PaperclipTaskDetailProps) {
   const [tab, setTab] = useState("conversation");
-  const [reply, setReply] = useState("");
+  const { reply, setReply, markSubmitted } = usePaperclipReplyDraft(
+    detail.issue.id,
+    receipt,
+    confirmedReply,
+  );
   const [status, setStatus] = useState(detail.issue.status);
   const [confirmation, setConfirmation] = useState<PaperclipCommand | null>(null);
-  const [note, setNote] = useState("");
   const [document, setDocument] = useState<{ title: string; body: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const locked = disabled || submitting;
@@ -117,11 +128,17 @@ export function PaperclipTaskDetail({
             )}
             {detail.comments.map((comment) => (
               <article
+                data-testid="paperclip-comment"
                 key={comment.id}
                 className="rounded-xl border border-card-border bg-card p-4"
               >
                 <div className="mb-2 text-ui-sm text-foreground-subtle">
-                  {comment.authorUserId ? "用户" : "智能体"}
+                  {/* 缺少用户身份不代表智能体，未返回作者时必须明确未知。 */}
+                  {comment.authorUserId?.trim()
+                    ? "用户"
+                    : comment.authorAgentId?.trim()
+                      ? "智能体"
+                      : "未知作者"}
                   {comment.createdAt
                     ? ` · ${new Date(comment.createdAt).toLocaleString("zh-CN")}`
                     : ""}
@@ -137,9 +154,10 @@ export function PaperclipTaskDetail({
               onSubmit={(event) => {
                 event.preventDefault();
                 const body = reply.trim();
+                if (body) markSubmitted(body);
                 if (body)
                   void send({ kind: "reply", issueId: detail.issue.id, body }).then((ok) => {
-                    if (ok) setReply("");
+                    if (ok) setReply((current) => (current === reply ? "" : current));
                   });
               }}
             >
@@ -242,7 +260,6 @@ export function PaperclipTaskDetail({
                     <Button
                       disabled={locked}
                       onClick={() => {
-                        setNote("");
                         setConfirmation({
                           kind: "approve",
                           issueId: detail.issue.id,
@@ -258,7 +275,6 @@ export function PaperclipTaskDetail({
                       variant="outline"
                       disabled={locked}
                       onClick={() => {
-                        setNote("");
                         setConfirmation({
                           kind: "reject",
                           issueId: detail.issue.id,
@@ -343,55 +359,16 @@ export function PaperclipTaskDetail({
         )}
       </div>
       {confirmation && (
-        <div
-          className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="paperclip-confirm-title"
-        >
-          <section className="w-full max-w-lg space-y-4 rounded-2xl border border-popover-border bg-popover p-6 shadow-lg">
-            <h3 id="paperclip-confirm-title" className="text-ui-lg font-medium">
-              {confirmation.kind === "cancel"
-                ? "确认取消这次运行？"
-                : confirmation.kind === "status"
-                  ? `确认改为“${paperclipLabel(confirmation.status)}”？`
-                  : confirmation.kind === "approve"
-                    ? "确认批准此请求？"
-                    : "确认拒绝此请求？"}
-            </h3>
-            <p>此操作会提交到当前任务所属的服务器和组织。请核对任务“{detail.issue.title}”</p>
-            {(confirmation.kind === "approve" || confirmation.kind === "reject") && (
-              <label className="block space-y-2">
-                处理说明
-                <Textarea
-                  aria-label="审批处理说明"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  maxLength={4000}
-                />
-              </label>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" disabled={submitting} onClick={() => setConfirmation(null)}>
-                返回
-              </Button>
-              <Button
-                disabled={locked}
-                onClick={() => {
-                  const command =
-                    confirmation.kind === "approve" || confirmation.kind === "reject"
-                      ? { ...confirmation, decisionNote: note }
-                      : confirmation;
-                  void send(command).then((ok) => {
-                    if (ok) setConfirmation(null);
-                  });
-                }}
-              >
-                {submitting ? "提交中…" : "确认提交"}
-              </Button>
-            </div>
-          </section>
-        </div>
+        <PaperclipTaskConfirmation
+          command={confirmation}
+          issueTitle={detail.issue.title}
+          locked={locked}
+          submitting={submitting}
+          onClose={() => setConfirmation(null)}
+          onConfirm={async (command) => {
+            if (await send(command)) setConfirmation(null);
+          }}
+        />
       )}
     </section>
   );

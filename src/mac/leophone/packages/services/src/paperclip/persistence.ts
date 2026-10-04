@@ -11,6 +11,7 @@ import {
   object,
   string,
   PaperclipFailure,
+  requirePaperclipUnblockAction,
 } from "./protocol.js";
 const PROFILE = "leophone.paperclip.profile.v1";
 const RECEIPTS = "leophone.paperclip.receipts.v1";
@@ -47,7 +48,10 @@ export function readReceipts(storage: PaperclipPersistence): PaperclipReceipt[] 
     } else {
       string(c.issueId);
       if (c.kind === "reply") string(c.body);
-      if (c.kind === "status") string(c.status);
+      if (c.kind === "status") {
+        string(c.status);
+        if (c.unblockAction !== undefined) requirePaperclipUnblockAction(c.unblockAction);
+      }
       if (c.kind === "cancel") string(c.runId);
       if (c.kind === "approve" || c.kind === "reject") {
         string(c.approvalId);
