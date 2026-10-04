@@ -42,8 +42,10 @@ test('all five exact source targets parse and summary additions remain optional'
     const ast = ts.createSourceFile(file, patched(file), ts.ScriptTarget.Latest, true);
     assert.deepEqual(ast.parseDiagnostics, [], file);
     if (file.endsWith('/types/cost.ts') && !red) {
-      const summary = ast.statements.find(n => ts.isInterfaceDeclaration(n) && n.name.text === 'CostSummary');
-      for (const name of ['reportedEventCount', 'unpricedEventCount', 'unpricedSubscriptionEventCount']) assert.ok(summary.members.find(m => m.name.getText() === name)?.questionToken, name);
+      for (const type of ['CostSummary', 'CostByAgent', 'CostByAgentModel', 'CostByProject']) {
+        const summary = ast.statements.find(n => ts.isInterfaceDeclaration(n) && n.name.text === type);
+        for (const name of ['reportedEventCount', 'unpricedEventCount', 'unpricedSubscriptionEventCount']) assert.ok(summary.members.find(m => m.name.getText() === name)?.questionToken, `${type}.${name}`);
+      }
     }
   }
 });
@@ -83,6 +85,40 @@ test('overview fallback is visible-query only and receipt states never fabricate
   assert.equal(display({ ...base, reportedEventCount: 0, unpricedEventCount: 2, unpricedSubscriptionEventCount: 2 }), '订阅内含');
   assert.equal(display({ ...base, spendCents: 120, reportedEventCount: 2, unpricedEventCount: 3, unpricedSubscriptionEventCount: 1 }), '$1.20 + 未定价用量');
   assert.equal(display({ ...base, spendCents: 120, reportedEventCount: 2, unpricedEventCount: 3, unpricedSubscriptionEventCount: 3 }), '$1.20 · 另有订阅内含');
+  assert.equal(text.includes('formatCents(row.costCents)'), false);
+  assert.equal(text.includes('formatCents(modelRow.costCents)'), false);
+  assert.equal(text.split('formatInferenceSpend({ ...row, spendCents: row.costCents })').length - 1, 2);
+  assert.equal(text.split('formatInferenceSpend({ ...modelRow, spendCents: modelRow.costCents })').length - 1, 1);
+});
+test('actual agent/project/model aggregators retain receipt status counts for every detail amount', { skip: !source }, async () => {
+  const text = patched('server/src/services/costs.ts');
+  const ui = patched('ui/src/pages/Costs.tsx');
+  const display = productionFunction(ui, 'formatInferenceSpend', { formatCents: cents => `$${(cents / 100).toFixed(2)}` });
+  const sql = (strings, ...values) => ({ strings: [...strings], values });
+  sql.join = values => values;
+  for (const method of ['byAgent', 'byProject', 'byAgentModel']) for (const receipt of [
+    { costCents: 0, reportedEventCount: 1, unpricedEventCount: 0, unpricedSubscriptionEventCount: 0, label: '$0.00' },
+    { costCents: 0, reportedEventCount: 0, unpricedEventCount: 2, unpricedSubscriptionEventCount: 0, label: '未定价' },
+    { costCents: 0, reportedEventCount: 0, unpricedEventCount: 2, unpricedSubscriptionEventCount: 2, label: '订阅内含' },
+    { costCents: 1, reportedEventCount: 1, unpricedEventCount: 2, unpricedSubscriptionEventCount: 0, label: '$0.01 + 未定价用量' },
+  ]) {
+    const selected = [];
+    const chain = () => {
+      const value = { from: () => value, leftJoin: () => value, innerJoin: () => value, where: () => value, groupBy: () => value, orderBy: () => value, as: () => ({ runId: 'run_id', projectId: 'project_id' }), then: resolve => Promise.resolve([{ ...receipt, agentId: 'agent', agentAppearance: null }]).then(resolve) };
+      return value;
+    };
+    const db = { select: fields => { selected.push(fields); return chain(); }, selectDistinctOn: () => chain() };
+    const { ast, found } = nodes(text, n => ts.isPropertyAssignment(n) && n.name.getText() === method && ts.isArrowFunction(n.initializer));
+    assert.equal(found.length, 1);
+    const js = ts.transpileModule(`const method = ${found[0].initializer.getText(ast)};`, { compilerOptions: { target: ts.ScriptTarget.ES2023 } }).outputText;
+    const deps = { db, costEvents: { companyId: 'company', costCents: 'cost_cents', costStatus: 'cost_status', billingType: 'billing_type' }, agents: {}, issues: {}, projects: {}, activityLog: {}, eq: () => null, gte: () => null, lte: () => null, and: () => null, desc: () => null, isNotNull: () => null, sql, sumAsNumber: value => value, METERED_BILLING_TYPE: 'metered_api', SUBSCRIPTION_BILLING_TYPES: ['subscription_included'], resolveAgentAppearance: () => null, agentAvatarUrl: () => '' };
+    const aggregate = new Function(...Object.keys(deps), `${js};return method;`)(...Object.values(deps));
+    const [row] = await aggregate('company');
+    for (const name of ['reportedEventCount', 'unpricedEventCount', 'unpricedSubscriptionEventCount']) assert.equal(row[name], receipt[name], `${method}.${name}`);
+    assert.equal(display({ ...row, spendCents: row.costCents }), receipt.label, method);
+    assert.ok(selected[0].reportedEventCount.strings.join('').includes("'reported'"));
+    assert.ok(selected[0].unpricedSubscriptionEventCount.strings.join('').includes("'subscription_included'"));
+  }
 });
 test('real runtime-state writer publishes the existing live status only after ledger success', { skip: !source }, async () => {
   const text = patched('server/src/services/heartbeat.ts');

@@ -22,5 +22,41 @@
     "from": "        costCents: additionalCostCents,\n        occurredAt: new Date(),\n      });\n    }\n  }\n\n  // A 403 from claimQueuedRun",
     "to": "        costCents: additionalCostCents,\n        occurredAt: new Date(),\n      });\n      // Idempotent live notification after the ledger commit; no new run event,\n      // status write or wake. The earlier terminal pulse can precede this receipt.\n      publishLiveEvent({\n        companyId: agent.companyId,\n        type: \"heartbeat.run.status\",\n        payload: buildHeartbeatRunStatusLiveEventPayload(run),\n      });\n    }\n  }\n\n  // A 403 from claimQueuedRun",
     "expected": 1
+  },
+  {
+    "file": "packages/shared/src/types/cost.ts",
+    "from": "export interface CostByAgent {\n",
+    "to": "export interface CostByAgent {\n  reportedEventCount?: number;\n  unpricedEventCount?: number;\n  unpricedSubscriptionEventCount?: number;\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/shared/src/types/cost.ts",
+    "from": "export interface CostByAgentModel {\n",
+    "to": "export interface CostByAgentModel {\n  reportedEventCount?: number;\n  unpricedEventCount?: number;\n  unpricedSubscriptionEventCount?: number;\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/shared/src/types/cost.ts",
+    "from": "export interface CostByProject {\n",
+    "to": "export interface CostByProject {\n  reportedEventCount?: number;\n  unpricedEventCount?: number;\n  unpricedSubscriptionEventCount?: number;\n",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/costs.ts",
+    "from": "          agentStatus: agents.status,\n          costCents: sumAsNumber(costEvents.costCents),\n",
+    "to": "          agentStatus: agents.status,\n          costCents: sumAsNumber(costEvents.costCents),\n          reportedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'reported')::int`,\n          unpricedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced')::int`,\n          unpricedSubscriptionEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced' and ${costEvents.billingType} = 'subscription_included')::int`,\n",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/costs.ts",
+    "from": "          agentAppearance: agents.appearance,\n          provider: costEvents.provider,\n          biller: costEvents.biller,\n          billingType: costEvents.billingType,\n          model: costEvents.model,\n          costCents: sumAsNumber(costEvents.costCents),\n",
+    "to": "          agentAppearance: agents.appearance,\n          provider: costEvents.provider,\n          biller: costEvents.biller,\n          billingType: costEvents.billingType,\n          model: costEvents.model,\n          costCents: sumAsNumber(costEvents.costCents),\n          reportedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'reported')::int`,\n          unpricedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced')::int`,\n          unpricedSubscriptionEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced' and ${costEvents.billingType} = 'subscription_included')::int`,\n",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/costs.ts",
+    "from": "          projectName: projects.name,\n          costCents: costCentsExpr,\n",
+    "to": "          projectName: projects.name,\n          costCents: costCentsExpr,\n          reportedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'reported')::int`,\n          unpricedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced')::int`,\n          unpricedSubscriptionEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced' and ${costEvents.billingType} = 'subscription_included')::int`,\n",
+    "expected": 1
   }
 ]
