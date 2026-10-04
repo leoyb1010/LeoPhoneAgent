@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.52.0",
+            date: "2026-10-04",
+            title: "Paperclip 中文服务器工作区",
+            highlights: [
+                "在设置里打开 Paperclip 工作区，连接你自己的 HTTPS 服务器并登录人类账号，按公司查看、创建、评论和更新任务，处理审批、查看运行日志。",
+                "本机与服务器工作区可切换；服务器请求失败会保留草稿并明确反馈，任务不会偷偷改成本机执行。",
+                "刷新保留已加载任务页；登录限定当前服务器，账号或公司切换不混用旧结果，超过服务器去重期限的未知创建需要先核对。"
+            ]
+        ),
+        LeoRelease(
             version: "1.51.0",
             date: "2026-10-04",
             title: "选择更顺手，编辑和失败恢复更可靠",

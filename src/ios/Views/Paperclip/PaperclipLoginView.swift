@@ -41,7 +41,7 @@ struct PaperclipLoginView: View {
 private struct PaperclipLoginBrowser: UIViewRepresentable {
     let profile: PaperclipProfile
     @Binding var error: String?
-    func makeCoordinator() -> Coordinator { Coordinator(error: $error) }
+    func makeCoordinator() -> Coordinator { Coordinator(origin: profile.origin, error: $error) }
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = PaperclipWorkspaceStore.websiteData(for: profile)
@@ -61,12 +61,14 @@ private struct PaperclipLoginBrowser: UIViewRepresentable {
     }
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
+        let origin: URL
         @Binding var error: String?
-        init(error: Binding<String?>) { _error = error }
+        init(origin: URL, error: Binding<String?>) { self.origin = origin; _error = error }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            guard action.request.url?.scheme?.lowercased() == "https" else {
-                error = "登录页面尝试打开非 HTTPS 地址，已阻止。请检查服务器和登录服务配置。"
+                     decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
+            // 994 的 /auth 同源表单登录无需外跳；不能在固定服务器标题下展示任意 HTTPS 登录页。
+            guard let url = action.request.url, PaperclipProfile.sameOrigin(url, origin) else {
+                error = "已阻止离开当前服务器的登录导航。请使用此服务器的网页登录；外部登录流程尚未开放。"
                 decisionHandler(.cancel)
                 return
             }

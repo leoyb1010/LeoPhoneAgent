@@ -231,13 +231,15 @@ private struct PaperclipCreateIssueView: View {
                 }
                 if draft.submitted {
                     Section("待核对提交") {
-                        Text("这份草稿已经提交过，请先在任务列表核对结果。重试将使用原请求编号，不会创建第二份任务。")
+                        Text(draft.canRetryCreation()
+                            ? "这份草稿已经提交过，请先核对任务列表。服务器的创建去重键保留 7 天，期限内重试沿用原请求编号。"
+                            : "这份提交已超出 7 天去重窗口，或缺少可信提交时间，不能再次发送。正文已保留，请先核对服务器任务列表。")
                         Button("放弃本机草稿", role: .destructive) { discard = true }.disabled(busy)
                     }
                 }
                 if let error { Text(error).foregroundStyle(.red) }
                 Button(busy ? "正在提交…" : (draft.submitted ? "重试同一提交" : "创建服务器任务")) { Task { await submit() } }
-                    .disabled(busy || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(busy || !draft.canRetryCreation() || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("paperclip.submitTask")
             }
             .navigationTitle("新建服务器任务")
@@ -251,9 +253,10 @@ private struct PaperclipCreateIssueView: View {
         }
     }
     private func submit() async {
-        guard !busy else { return }
+        guard !busy, draft.canRetryCreation() else { return }
         busy = true
-        draft.submitted = true
+        let wasPreviouslySubmitted = draft.submitted
+        draft.markSubmitted()
         draft.save(key: draftKey)
         do {
             _ = try await client.create(companyID: companyID, userID: userID,
@@ -261,7 +264,11 @@ private struct PaperclipCreateIssueView: View {
             PaperclipDraft.clear(key: draftKey)
             draft = PaperclipDraft()
             dismiss()
-        } catch { self.error = PaperclipLabels.error(error) }
+        } catch {
+            draft.recordFailure(error, wasPreviouslySubmitted: wasPreviouslySubmitted)
+            draft.save(key: draftKey)
+            self.error = PaperclipLabels.error(error)
+        }
         busy = false
     }
 }

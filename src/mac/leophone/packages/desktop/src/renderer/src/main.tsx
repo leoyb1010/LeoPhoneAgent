@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import {
   AppErrorBoundary,
   Root,
+  ServerWorkspaceRoot,
+  Button,
   GlobalDatabaseStartupLoading,
   UpdateStatusWindowRoot,
   ZCodeIntlProvider,
@@ -29,6 +31,7 @@ import {
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
+import { createPaperclipWorkspace } from "@zcode/services";
 import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
@@ -132,6 +135,12 @@ const initialWorkspaceAbsPath = readStringFlag("initialWorkspacePath");
 const initialWorkspacePurpose = readStringFlag("initialWorkspacePurpose");
 const unavailableWorkspacePath = readStringFlag("unavailableWorkspacePath");
 const windowKind = readStringFlag("windowKind");
+const isServerWorkspace = windowKind !== "update-status" && readStringFlag("workspaceMode") !== "local-recovery";
+function navigateWorkspaceMode(mode: "server" | "local-recovery"): void {
+  const target = new URL(window.location.href);
+  target.searchParams.set("workspaceMode", mode);
+  window.location.replace(target.href);
+}
 const initialLocaleFlag = readStringFlag("locale");
 const initialLocale: Locale =
   initialLocaleFlag === "zh-CN" || initialLocaleFlag === "en-US"
@@ -192,7 +201,7 @@ function enterAppIfPrepared(): void {
   if (port) initializeBusinessRoot(port);
 }
 const firstStartupStateTimer =
-  windowKind === "update-status"
+  windowKind === "update-status" || isServerWorkspace
     ? undefined
     : setTimeout(() => {
         if (databaseStartupAdmission.state) return;
@@ -331,7 +340,11 @@ function initializeBusinessRoot(port: MessagePort): void {
         resolveSystemLocale={desktopPlatform.getSystemLocale}
       >
         <StartupReadyNotifier />
-        <Root
+        <div className="flex h-dvh flex-col bg-background [&_[data-desktop-window-frame=true]]:h-full">
+          <div className="flex h-9 shrink-0 items-center justify-end border-b border-border px-3 [app-region:drag]">
+            <Button className="[app-region:no-drag]" variant="ghost" size="sm" onClick={() => navigateWorkspaceMode("server")}>返回服务器工作台</Button>
+          </div>
+          <div className="relative min-h-0 flex-1"><Root
           services={services}
           platform={desktopPlatform}
           isDesktop
@@ -345,16 +358,32 @@ function initializeBusinessRoot(port: MessagePort): void {
             initialWorkspacePurpose === "conversation" ? "conversation" : "project"
           }
           unavailableWorkspacePath={unavailableWorkspacePath}
-        />
+        /></div></div>
       </ZCodeIntlProvider>
     </AppErrorBoundary>,
   );
 }
 
-window.addEventListener("message", handleServicePortMessage);
-if (windowKind !== "update-status") {
+if (!isServerWorkspace) window.addEventListener("message", handleServicePortMessage);
+if (windowKind !== "update-status" && !isServerWorkspace) {
   renderDatabaseStartup();
   sendStartupControl({ action: "snapshot" });
+}
+
+if (isServerWorkspace && desktopPlatform.paperclip) {
+  // 默认入口不等待 Host 的数据库启动或 ServicePort；只有显式恢复才进入旧业务根。
+  appInitialized = true;
+  const paperclipWorkspace = createPaperclipWorkspace(desktopPlatform.paperclip);
+  appRoot?.render(
+    <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>
+      <ZCodeIntlProvider initialLocale="zh-CN" resolveSystemLocale={desktopPlatform.getSystemLocale}>
+        <StartupReadyNotifier />
+        <ServerWorkspaceRoot service={paperclipWorkspace} platform={desktopPlatform}
+          isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}
+          onEnterLocalRecovery={() => navigateWorkspaceMode("local-recovery")} />
+      </ZCodeIntlProvider>
+    </AppErrorBoundary>,
+  );
 }
 
 if (windowKind === "update-status") {

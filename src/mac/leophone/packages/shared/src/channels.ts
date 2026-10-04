@@ -163,6 +163,8 @@ export const PlatformChannels = {
   PaperclipSignIn: "leo:paperclip:sign-in",
   PaperclipSignOut: "leo:paperclip:sign-out",
   PaperclipDownload: "leo:paperclip:download",
+  PaperclipPreferencesGet: "leo:paperclip:preferences:get",
+  PaperclipPreferencesSet: "leo:paperclip:preferences:set",
   /** 打开系统目录选择框 */
   SelectDirectory: "zcode:select-directory",
   /** 打开系统文件选择框 */

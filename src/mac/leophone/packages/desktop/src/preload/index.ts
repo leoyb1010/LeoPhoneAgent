@@ -247,6 +247,9 @@ window.addEventListener("DOMContentLoaded", updateRendererProcessTitle, {
  * 通过 MessagePort RPC 访问，不再经过此 bridge。
  */
 contextBridge.exposeInMainWorld("zcode", {
+  paperclipGetPreferences: () => ipcRenderer.invoke(PlatformChannels.PaperclipPreferencesGet),
+  paperclipSetPreferences: (input: import("@zcode/shared").PaperclipPreferences) =>
+    ipcRenderer.invoke(PlatformChannels.PaperclipPreferencesSet, input),
   paperclipRequest: (input: {
     serverUrl: string;
     method: "GET" | "POST" | "PATCH";
@@ -258,7 +261,7 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.invoke(PlatformChannels.PaperclipSignIn, input),
   paperclipSignOut: (input: { serverUrl: string }) =>
     ipcRenderer.invoke(PlatformChannels.PaperclipSignOut, input),
-  paperclipDownload: (input: { serverUrl: string; path: string; filename: string }) =>
+  paperclipDownload: (input: { serverUrl: string; path: string; filename: string; expectedUserId: string }) =>
     ipcRenderer.invoke(PlatformChannels.PaperclipDownload, input),
   connectRemote: (
     options: RemoteTarget,

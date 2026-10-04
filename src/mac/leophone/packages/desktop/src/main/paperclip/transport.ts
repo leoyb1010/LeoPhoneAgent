@@ -106,18 +106,7 @@ async function request(
   const scope = scopeFor(origin);
   const epoch = scope.generation;
   return scope.run(async (signal) => {
-    if (expectedUserId) {
-      const identity = await request(origin, "/api/auth/get-session", "GET");
-      const current = identity.data as { user?: { id?: string } } | null;
-      if (
-        identity.status !== 200 ||
-        current?.user?.id !== expectedUserId ||
-        scope.generation !== epoch ||
-        scope.signingOut
-      ) {
-        throw new Error("登录身份已改变，请重新选择公司；本次操作未发送");
-      }
-    }
+    if (expectedUserId) await requireCurrentUser(origin, expectedUserId, epoch);
     // 请求单次发送：网络断开或5xx不能证明写入失败，由业务receipt保留未知结果。
     const response = await sessionFor(origin).fetch(new URL(path, origin).href, {
       method,
@@ -152,6 +141,23 @@ async function request(
           : data,
     };
   }, allowSignOut);
+}
+
+async function requireCurrentUser(origin: string, expectedUserId: string, epoch: number) {
+  const scope = scopeFor(origin);
+  // 对话框可能跨过整个注销/登录周期；先检查代际，旧操作不能在新会话里再发身份查询。
+  if (scope.generation !== epoch || scope.signingOut)
+    throw new Error("服务器会话已更改，请重新连接");
+  const identity = await request(origin, "/api/auth/get-session", "GET");
+  const current = identity.data as { user?: { id?: string } } | null;
+  if (
+    identity.status !== 200 ||
+    current?.user?.id !== expectedUserId ||
+    scope.generation !== epoch ||
+    scope.signingOut
+  ) {
+    throw new Error("登录身份已改变，请重新选择公司；本次操作未发送");
+  }
 }
 
 async function hasSession(origin: string): Promise<boolean> {
@@ -231,8 +237,9 @@ async function signIn(origin: string, owner: BrowserWindow): Promise<{ completed
       clearInterval(poll);
       clearTimeout(expiry);
       owner.off("closed", ownerClosed);
+      // 远端页面可用 beforeunload 阻止 close；先强制销毁，避免注销后旧登录页继续写 Cookie。
+      if (!loginWindow.isDestroyed()) loginWindow.destroy();
       logins.delete(origin);
-      if (!loginWindow.isDestroyed()) loginWindow.close();
       resolve({ completed });
     };
     owner.once("closed", ownerClosed);
@@ -300,25 +307,44 @@ export function registerPaperclipIpc(): void {
   });
   ipcMain.handle(
     PlatformChannels.PaperclipDownload,
-    async (event, value: { serverUrl: string; path: string; filename: string }) => {
+    async (
+      event,
+      value: { serverUrl: string; path: string; filename: string; expectedUserId: string },
+    ) => {
       const owner = requireSender(event);
       const origin = canonicalPaperclipOrigin(value?.serverUrl);
       const url = validatePaperclipDownload(origin, value?.path);
+      if (
+        typeof value?.expectedUserId !== "string" ||
+        !value.expectedUserId.trim() ||
+        value.expectedUserId.length > 256
+      ) {
+        throw new Error("下载必须绑定已登录的操作者，请重新连接服务器");
+      }
+      const scope = scopeFor(origin);
+      const epoch = scope.generation;
+      if (scope.signingOut) throw new Error("正在退出服务器，请稍候");
       const selected = await dialog.showSaveDialog(owner, {
         title: "保存服务器产物",
         defaultPath: safeDownloadFilename(value?.filename),
       });
-      if (selected.canceled || !selected.filePath) return;
-      const data = await scopeFor(origin).run(async (signal) => {
+      const selectedPath = selected.filePath;
+      if (selected.canceled || !selectedPath) return;
+      await scope.run(async (signal) => {
+        await requireCurrentUser(origin, value.expectedUserId, epoch);
         const response = await sessionFor(origin).fetch(url, {
           credentials: "include",
           redirect: "manual",
           signal,
         });
         if (!response.ok) throw new Error(`下载未完成（HTTP ${response.status}），请检查登录状态`);
-        return limitedBody(response, 64 * 1024 * 1024);
+        const data = await limitedBody(response, 64 * 1024 * 1024);
+        // 注销会取消网络和文件 IO；不能把旧响应移出 scope 后才写入本机。
+        if (scope.generation !== epoch || scope.signingOut)
+          throw new Error("服务器会话已更改，下载已取消；文件未保存");
+        signal.throwIfAborted();
+        await writeFile(selectedPath, data, { signal });
       });
-      await writeFile(selected.filePath, data);
     },
   );
 }

@@ -17,6 +17,14 @@ modules:
   - id: services
     roots: [packages/services/src]
     managed: false
+  - id: paperclip
+    roots: [packages/services/src/paperclip]
+    managed: true
+    requires: [shared]
+    publicEntrypoints: [packages/services/src/paperclip/contract.ts, packages/services/src/paperclip/adapters/createWorkspace.ts]
+    layers: { domain: domain, app: app, adapters: adapters }
+    layerOrder: [domain, app, adapters]
+    owner: paperclip-client
   - id: session
     roots: [packages/services/src/session]
     managed: false

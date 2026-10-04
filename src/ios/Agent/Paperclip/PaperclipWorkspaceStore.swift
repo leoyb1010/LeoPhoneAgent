@@ -124,6 +124,8 @@ final class PaperclipWorkspaceStore: ObservableObject {
         issues = []
         agents = []
         companyID = id
+        nextOffset = 0
+        hasMore = false
         defaults.set(id, forKey: companyKey(profile: profile, user: user.id))
         await refresh()
     }
@@ -135,7 +137,9 @@ final class PaperclipWorkspaceStore: ObservableObject {
         let offset = loadMore ? nextOffset : 0
         busy = true
         do {
-            let rows = try await client.issues(companyID: company, userID: user.id, offset: offset)
+            let rows = try await (loadMore
+                ? client.issues(companyID: company, userID: user.id, offset: offset)
+                : client.refreshedIssues(companyID: company, userID: user.id, loadedCount: nextOffset))
             let people = try await client.agents(companyID: company, userID: user.id)
             guard stamp == revision else { return }
             if loadMore {
@@ -144,7 +148,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
             } else { issues = rows }
             agents = people
             nextOffset = offset + rows.count
-            hasMore = rows.count == 100
+            hasMore = !rows.isEmpty && rows.count.isMultiple(of: 100)
             error = nil
         } catch {
             guard stamp == revision else { return }

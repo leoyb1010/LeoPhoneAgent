@@ -1,6 +1,9 @@
 // Descriptors & collection (browser-safe)
 export { type ServiceDescriptor, createServiceDescriptor } from "./descriptors.js";
 export { ServiceCollection } from "./collection.js";
+export type { IPaperclipWorkspace, PaperclipSnapshot, PaperclipCommand, PaperclipDetail } from "./paperclip/contract.js";
+export { createPaperclipWorkspace } from "./paperclip/adapters/createWorkspace.js";
+export { creationRetryPermitted, paperclipIdentityKey } from "./paperclip/contract.js";
 export {
   IModelSelectionService,
   IProviderSettingsService,

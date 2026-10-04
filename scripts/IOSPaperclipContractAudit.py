@@ -58,7 +58,10 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         stored = re.findall(r"let\s+(\w+)\s*:", profile)
         self.assertEqual(stored, ["id", "name", "origin"])
         client = (CORE / "PaperclipClient.swift").read_text()
-        self.assertNotIn("while ", client)
+        # 读取已加载列表允许分页循环；只禁止实际请求 IO 自动重试写入。
+        request_io = client.split("private func raw(", 1)[1]
+        self.assertNotIn("while ", request_io)
+        self.assertEqual(request_io.count("session.data(for: request)"), 1)
         self.assertIn("case 500...599 where mutation: throw PaperclipError.uncertain", client)
         self.assertIn('origin == profile.origin', contract)
         self.assertIn('self.userID == userID', contract)

@@ -80,6 +80,17 @@ final class PaperclipClient {
         return rows
     }
 
+    func refreshedIssues(companyID: String, userID: String, loadedCount: Int) async throws -> [PaperclipIssue] {
+        // 官方列表按 100 条分页；重读已加载窗口，让前台轮询更新内容且不截掉后续页。
+        var rows: [PaperclipIssue] = []
+        repeat {
+            let page = try await issues(companyID: companyID, userID: userID, offset: rows.count)
+            rows += page
+            if page.count < 100 { break }
+        } while rows.count < max(100, loadedCount)
+        return rows
+    }
+
     func reference(for issue: PaperclipIssue, userID: String) -> PaperclipTaskReference {
         PaperclipTaskReference(profileID: profile.id, origin: profile.origin, companyID: issue.companyId,
                                userID: userID, issueID: issue.id)

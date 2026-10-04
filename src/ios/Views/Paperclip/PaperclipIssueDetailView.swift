@@ -178,14 +178,19 @@ struct PaperclipIssueDetailView: View {
     private func reply() async {
         guard !model.busy else { return }
         model.busy = true
-        draft.submitted = true
+        let wasPreviouslySubmitted = draft.submitted
+        draft.markSubmitted()
         draft.save(key: draftKey)
         do {
             _ = try await model.client.reply(model.reference, body: draft.body, requestID: draft.requestID)
             draft = PaperclipDraft()
             PaperclipDraft.clear(key: draftKey)
             model.error = nil
-        } catch { model.record(error); model.busy = false; return }
+        } catch {
+            draft.recordFailure(error, wasPreviouslySubmitted: wasPreviouslySubmitted)
+            draft.save(key: draftKey)
+            model.record(error); model.busy = false; return
+        }
         model.busy = false
         await model.refresh()
     }

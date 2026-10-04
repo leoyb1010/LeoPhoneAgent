@@ -114,9 +114,29 @@ final class PaperclipClientTests: XCTestCase {
         XCTAssertEqual(PaperclipClient.cookies(cookies, for: target).count, 1)
     }
     func testCrossCompanyIssueFailsClosed() async throws {
-        let session = Self.session; let issue = Self.issue.replacingOccurrences(of: "company", with: "other")
+        // 只更改字段值；替换 company 全文会误改 companyId，使测试只触发 JSON 解码失败。
+        let session = Self.session
+        let issue = Self.issue.replacingOccurrences(of: #""companyId":"company""#, with: #""companyId":"other""#)
         PaperclipTestProtocol.install { request in request.url!.path == "/api/auth/get-session" ? (200, session, "application/json") : (200, "[\(issue)]", "application/json") }
         do { _ = try await client().issues(companyID: "company", userID: "human"); XCTFail("不得混入其他公司数据") }
         catch { XCTAssertEqual(error as? PaperclipError, .identityChanged) }
+    }
+
+    func testRefreshRetainsLoadedPagesAndPublishesUpdatedRows() async throws {
+        let session = Self.session
+        let first = (0..<100).map { #"{"id":"issue-\#($0)","companyId":"company","title":"已更新","status":"todo","priority":"medium"}"# }.joined(separator: ",")
+        let second = (100..<137).map { #"{"id":"issue-\#($0)","companyId":"company","title":"后续页","status":"todo","priority":"medium"}"# }.joined(separator: ",")
+        PaperclipTestProtocol.install { request in
+            if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            XCTAssertEqual(query.first { $0.name == "limit" }?.value, "100")
+            let offset = query.first { $0.name == "offset" }?.value
+            XCTAssertTrue(offset == "0" || offset == "100")
+            return (200, "[\(offset == "0" ? first : second)]", "application/json")
+        }
+        let rows = try await client().refreshedIssues(companyID: "company", userID: "human", loadedCount: 200)
+        XCTAssertEqual(rows.count, 137)
+        XCTAssertEqual(rows.first?.title, "已更新")
+        XCTAssertEqual(rows.last?.id, "issue-136")
     }
 }

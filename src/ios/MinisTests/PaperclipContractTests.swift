@@ -59,4 +59,57 @@ final class PaperclipContractTests: XCTestCase {
         PaperclipDraft.clear(key: key, defaults: defaults)
         XCTAssertFalse(PaperclipDraft.load(key: key, defaults: defaults).submitted)
     }
+
+    func testCreationRetryExpiresWithServerIdempotencyWindowAndRejectsLegacyTime() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var draft = PaperclipDraft()
+        XCTAssertTrue(draft.canRetryCreation(now: now))
+        let firstSubmission = now.addingTimeInterval(-6 * 24 * 60 * 60)
+        draft.markSubmitted(now: firstSubmission)
+        draft.markSubmitted(now: now)
+        XCTAssertEqual(draft.submittedAt, firstSubmission, "重试不能延长服务器的去重期限")
+        draft.submittedAt = nil
+        draft.submitted = true
+        XCTAssertFalse(draft.canRetryCreation(now: now), "旧草稿没有可信提交时间，不能重发创建")
+        draft.submittedAt = now.addingTimeInterval(-6 * 24 * 60 * 60)
+        XCTAssertTrue(draft.canRetryCreation(now: now))
+        draft.submittedAt = now.addingTimeInterval(-7 * 24 * 60 * 60)
+        XCTAssertFalse(draft.canRetryCreation(now: now))
+        draft.submittedAt = now.addingTimeInterval(60)
+        XCTAssertFalse(draft.canRetryCreation(now: now), "时钟倒退不能扩大去重窗口")
+        let legacy = #"{"requestID":"11111111-1111-1111-1111-111111111111","title":"待核对任务","body":"保留正文","agentID":"","submitted":true}"#
+        let restored = try JSONDecoder().decode(PaperclipDraft.self, from: Data(legacy.utf8))
+        XCTAssertFalse(restored.canRetryCreation(now: now))
+        XCTAssertEqual(restored.body, "保留正文")
+        draft.submittedAt = now
+        let roundTrip = try JSONDecoder().decode(PaperclipDraft.self, from: JSONEncoder().encode(draft))
+        XCTAssertEqual(roundTrip.submittedAt, now)
+    }
+
+    func testLoginNavigationPinsHTTPSHostAndPort() throws {
+        let origin = try PaperclipProfile(name: "测试", address: "https://example.com:8443").origin
+        XCTAssertTrue(PaperclipProfile.sameOrigin(URL(string: "https://example.com:8443/auth?next=/")!, origin))
+        for url in ["https://other.example/auth", "https://example.com/auth", "http://example.com:8443/auth", "file:///tmp/auth"] {
+            XCTAssertFalse(PaperclipProfile.sameOrigin(URL(string: url)!, origin))
+        }
+    }
+
+    func testDefiniteMutationRejectionRestoresEditableDraftWithoutDiscardingText() {
+        var draft = PaperclipDraft()
+        draft.body = "需要修改的正文"
+        draft.submitted = true
+        draft.submittedAt = Date()
+        draft.recordFailure(PaperclipError.http(422), wasPreviouslySubmitted: false)
+        XCTAssertFalse(draft.submitted)
+        XCTAssertNil(draft.submittedAt)
+        XCTAssertEqual(draft.body, "需要修改的正文")
+        draft.submitted = true
+        draft.recordFailure(PaperclipError.uncertain, wasPreviouslySubmitted: false)
+        XCTAssertTrue(draft.submitted)
+        let originalTime = Date(timeIntervalSince1970: 1_800_000_000)
+        draft.submittedAt = originalTime
+        draft.recordFailure(PaperclipError.signedOut, wasPreviouslySubmitted: true)
+        XCTAssertTrue(draft.submitted, "重试时登录失效不能证明原提交未被接收")
+        XCTAssertEqual(draft.submittedAt, originalTime)
+    }
 }
