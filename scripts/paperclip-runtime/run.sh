@@ -31,7 +31,7 @@ PID=$!
 ready=false
 for _ in $(seq 1 120); do
  if ! kill -0 "$PID" 2>/dev/null; then echo '真实服务器提前退出'; exit 1; fi
- if curl --fail --silent http://127.0.0.1:43168/api/health > "$OUTPUT/health.json" && node -e 'const h=require(process.argv[1]);process.exit(h.status==="ok" && h.authReady ? 0 : 1)' "$OUTPUT/health.json"; then ready=true; break; fi
+ if curl --fail --silent http://127.0.0.1:43168/api/health > "$OUTPUT/health.json" && node -e 'const h=require(process.argv[1]);process.exit(h.status==="ok" && h.deploymentMode==="authenticated" && h.commit==="994d6edcdd4e15d5f9cc5cf8c135ac599104b86a" ? 0 : 1)' "$OUTPUT/health.json"; then ready=true; break; fi
  sleep 2
 done
 [[ "$ready" == true ]] || { echo '服务器240秒内未就绪'; exit 1; }
