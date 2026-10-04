@@ -29,7 +29,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - Mac 默认直接进入服务器工作区，不等待本机 Host 启动；可配置服务、登录、选择公司，并管理任务、审批、运行日志和取消，以及受控下载任务附件。原本机工作区通过明确的本机恢复模式进入。
 - 每次写操作绑定服务器、公司与用户，处理注销、换账号、超时和结果未知；不把不确定写入自动重发。创建草稿保留内容和回执，超过服务器幂等窗口后需要人工核对。
 
-部署使用上游独立服务器和数据库，建议仅监听回环地址并通过现有 HTTPS 入口访问；完成首位管理员设置后关闭公开注册。原生入口、隔离会话、权限边界与部署验证范围见 [Mac 工作区说明](src/mac/leophone/docs/specs/paperclip-server-workspace.md) 与 [iOS 原生测试说明](scripts/native-paperclip-audit/README.md)。
+部署使用上游独立服务器和数据库，建议仅监听回环地址并通过现有 HTTPS 入口访问；完成首位管理员设置后关闭公开注册。原生入口、隔离会话、权限边界与部署验证范围见 [Mac 工作区说明](src/mac/leophone/docs/specs/paperclip-server-workspace.md) 与 [iOS 原生测试说明](scripts/native-paperclip-audit/README.md)；本次完整验证范围、失败通道与实机边界见 [交付证据](docs/paperclip/DELIVERY_20261004.md)。
 
 ## 开发 Agent 先读
 
