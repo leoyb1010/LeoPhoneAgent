@@ -1,6 +1,6 @@
 # Paperclip 服务器审计与修复 · 2026-10-04
 
-发行层 1.1.2；固定上游 `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`。服务器为 `LeodeMac-mini-2.local`、用户 `leo`，项目全部部署产物位于 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`。入口 `https://paperclip.leoyuan.top`，仅监听回环 `43871`。本轮范围为服务器；iOS/Mac 原生客户端不发新版。
+发行层 1.1.3（包含 1.1.2 修复）；固定上游 `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`。服务器为 `LeodeMac-mini-2.local`、用户 `leo`，项目全部部署产物位于 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`。入口 `https://paperclip.leoyuan.top`，仅监听回环 `43871`。本轮范围为服务器；iOS/Mac 原生客户端不发新版。
 
 ## 已确认并修复
 
@@ -14,14 +14,14 @@
 | OpenCode Go | 默认提供商/密钥面板容易误导用户，隐藏后还可能注入组织密钥或残留输入。默认沿用服务器已有授权，API 配置明确可选；关闭后不携带这些密钥或隐式 Router 绑定。 |
 | Hermes | 用户智能体误用 Gateway，HTTP 404；已切换本地 `hermes_local` 并保留现有自定义服务配置。适配器默认 `-m auto` 会覆盖实际 CLI 设置，现自动模式不再传该参数。 |
 | 费用刷新 | 实时失效键包含 `undefined`，不能匹配日期范围缓存；运行结束通知又可能早于费用提交。按公司前缀失效费用/提供商/账单方缓存，账本成功提交后发送幂等通知，不新增持久运行事件或触发重跑；可见页保留 30 秒兜底刷新。 |
-| 费用语义 | 有 token 但未报价的事件被显示为零费用。增加兼容的真实状态计数，区分未定价、订阅内含和实际报告金额，不按 token 猜测价格，不改历史账本。 |
+| 费用语义 | 有 token 但未报价的事件被显示为零费用。增加兼容的真实状态计数，区分未定价、订阅内含和实际报告金额，不按 token 猜测价格，不改历史账本；智能体、模型和项目明细也按各自真实状态展示。 |
 | macOS 数据库 | 内置 PostgreSQL npm 包缺少 ICU 等本包动态库 loader 别名。仅补本包内相对别名，保留已有文件；不改系统库或设置 DYLD 绕过。此前跳过的真实数据库测试重新执行。 |
 
 ## 配置与真实验证
 
-- 用户指定的 `LeoOpencode` 已创建，类型 `opencode_local`，模型 `opencode-go/gpt-6-luna`，复用 Mini 的 Go 授权。公网实际读取 10 个免费模型、29 个 Go 模型；hello 实际响应成功。没有要求 OpenRouter 或新 API 密钥。
+- 用户指定的 `LeoOpencode` 已创建，类型 `opencode_local`，模型 `opencode-go/gpt-6-luna`，复用 Mini 的 Go 授权。公网实际读取 10 个免费模型、29 个 Go 模型；hello 实际响应成功。没有要求 OpenRouter 或新 API 密钥。实际任务 LEO-12 在 29 秒内自行回复 OPENCODE_GO_OK 并完成，3 次工具调用，账本收到 CLI 报告的 1 美分报价；这不是账户财务账单。
 - 现有 `LeoCursor` 保留，模型改为与本机原选择一致的 `claude-opus-5-5-medium`。用户最初的裸 `agent login` 实际运行 Grok；后用明确 Cursor 路径完成登录。是否可用以服务器实际请求为准，缓存账号不能作成功证据。SSH 后续发现 macOS 登录钥匙串锁定，需要本人解锁；不导出令牌或削弱系统锁定设置。
-- `LeoHermers` 从 Gateway 改为本地 CLI，明确使用已检测的 `gemini-3.8-flash-high`，不硬填提供商或新密钥，保留 CLI 的 `leostudio` 配置。CLI 安装/配置检查与真实任务执行分别验收，不把 warning 当模型成功。
+- `LeoHermers` 从 Gateway 改为本地 CLI，明确使用已检测的 `gemini-3.8-flash-high`，不硬填提供商或新密钥，保留 CLI 的 `leostudio` 配置。CLI 安装/配置检查与真实任务执行分别验收，不把 warning 当模型成功。实际任务 LEO-13 在 30 秒内自行完成，Gateway 404 不再出现。
 
 ## 检查范围与证据
 
@@ -30,7 +30,7 @@
 | 服务器核心 | 首轮 14 文件 428 项：425 通过，3 项旧测试仍期待错误的 Cursor 静态目录。更新对应契约后该文件 26/26，通过其余 13 文件的结果保留；最终新增命名空间回归单独验证。 |
 | 原生状态/授权及运行 | 核心包含 PTY 授权、清理、费用写入、失败重试、队列失效、任务回复和唤醒、适配器校验及实时 WebSocket；不代表全部供应商真实授权通过。 |
 | 权限、数据库、运维 | 126 个独立用例通过：跨公司权限/归属 84、真实 PG 分页/增量更新 8、Darwin/Linux 动态库 7、实际备份恢复及断链 driver 19、启动器 8。最初 8 个数据库 skip 与 RED 日志保留，最终全部实际执行通过。 |
-| 中文发行层 | 56 项通过、0 skip；最终变化的 OpenCode 合同单独复测。600 文件协议静态检查通过。 |
+| 中文发行层 | 56 项通过、0 skip；最终变化的 OpenCode 合同单独复测；费用明细的 6 项生产方法及 17 项真实数据库费用服务回归另行通过。600 文件协议静态检查通过。 |
 | OpenCode 界面 | 4 项真实 React 交互和实际创建凭据函数契约通过：Go 完整模型 ID、已存 Router 密钥默认不注入、显式 API 配置和折叠后清空待发送凭据。 |
 | 记录连贯性 | 只读检查当时 20 runs 的 227 个持久事件，序号无重复/缺口；成本与 run 的任务引用差异 0，无跨公司引用。4 次成功手动运行本来无任务上下文，不补造关联。 |
 | 存储/备份 | 项目源代码、运行时、产物、缓存、日志及备份在外接盘；7 份自动 SQL gzip 完整，两份升级前 dump 完整解码。发布前另做 1.4 MiB 私有 dump；隔离数据库恢复已实际验证，不宣称线上执行过恢复。 |

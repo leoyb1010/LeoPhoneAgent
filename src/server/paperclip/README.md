@@ -34,7 +34,7 @@ node scripts/apply-test-storage.mjs verify /path/to/paperclip
 
 macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；浏览器配置页的运行测试验证实际服务环境。
 
-发行层 1.1.2 的 Cursor/Hermes/OpenCode 配置、费用实时刷新与 macOS 数据库启动修复，验证范围见 [服务器审计记录](../../../docs/paperclip/SERVER_AUDIT_20261004.md)。
+发行层 1.1.3 的 Cursor/Hermes/OpenCode 配置、费用实时刷新与 macOS 数据库启动修复，验证范围见 [服务器审计记录](../../../docs/paperclip/SERVER_AUDIT_20261004.md)。
 
 详细部署、登录、备份和回滚步骤见 [中文部署手册](docs/DEPLOYMENT.zh-CN.md)。维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。
 
