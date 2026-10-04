@@ -1175,7 +1175,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         // for the delegate's nextRecordZoneChangeBatch call.
         var ckIds: [CKRecord.ID] = []
         var seenIDs: Set<String> = []
-        for portable in batch.records {
+        for portable in batch.records where UploadPolicy.allowsRecordType(portable.id.type) {
             guard let zoneName = Self.zoneByRecordType[portable.id.type] else {
                 logger.warning("[SyncTransport] no zone mapping for type=\(portable.id.type) id=\(portable.id.id.prefix(8))")
                 continue
@@ -1205,7 +1205,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             pendingRecords.append(ck)
             ckIds.append(recordID)
         }
-        for d in batch.deletes {
+        for d in batch.deletes where UploadPolicy.allowsRecordType(d.type) {
             guard let zoneName = Self.zoneByRecordType[d.type] else {
                 logger.warning("[SyncTransport] delete: no zone mapping for type=\(d.type) id=\(d.id.prefix(8)) — dropped")
                 continue
@@ -1605,8 +1605,14 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
     ) async -> CKSyncEngine.RecordZoneChangeBatch? {
         await MainActor.run { [weak self] in
             guard let self else { return nil as CKSyncEngine.RecordZoneChangeBatch? }
-            let recs = self.pendingRecords; self.pendingRecords.removeAll()
-            let dels = self.pendingDeletes; self.pendingDeletes.removeAll()
+            let blocked = self.pendingRecords.filter { !UploadPolicy.allowsRecordType($0.recordType) }
+            let blockedDeletes = self.pendingDeletes.filter { !UploadPolicy.allowsRecordName($0.recordName) }
+            syncEngine.state.remove(pendingRecordZoneChanges:
+                blocked.map { .saveRecord($0.recordID) } + blockedDeletes.map { .deleteRecord($0) })
+            let recs = self.pendingRecords.filter { UploadPolicy.allowsRecordType($0.recordType) }
+            let dels = self.pendingDeletes.filter { UploadPolicy.allowsRecordName($0.recordName) }
+            self.pendingRecords.removeAll()
+            self.pendingDeletes.removeAll()
             guard !recs.isEmpty || !dels.isEmpty else { return nil }
             // Smaller batches keep peak memory + CPU bounded during the
             // initial migration push (each batch builds PortableRecord

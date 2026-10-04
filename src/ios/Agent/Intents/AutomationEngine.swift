@@ -266,6 +266,8 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
     }
 
     private func fire(_ rule: AutomationRule, context: String?) async {
+        // Claim the attempt before awaiting dispatch. Failed starts keep the
+        // existing 30-minute cooldown so reconciliation cannot retry endlessly.
         AutomationStore.shared.markFired(id: rule.id)
         // [T-automation-keepalive] A region wake grants seconds; every other
         // background entry point arms the keep-alive first — so do we.
@@ -273,10 +275,11 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             sessionId: "intent-eager:automation-\(rule.id)", caller: "automation")
         logger.info("firing rule \(rule.name)")
         if let quickTaskId = rule.quickTaskId {
-            _ = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
+            let started = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
             ScheduledTaskRunner.notify(
-                title: String(localized: "Automation started"),
-                body: rule.name, sessionId: nil, gated: false)
+                title: started ? String(localized: "Automation started") : String(localized: "Automation failed to start"),
+                body: started ? rule.name : String(localized: "\(rule.name) did not start. Open Automations and check its Quick Task and provider settings."),
+                sessionId: nil, gated: false)
         } else if let prompt = rule.prompt, !prompt.isEmpty {
             let fullPrompt = context.map { "\($0)\n\n\(prompt)" } ?? prompt
             await WatchAskRunner.run(

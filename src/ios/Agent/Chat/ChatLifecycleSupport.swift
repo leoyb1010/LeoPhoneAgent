@@ -815,6 +815,7 @@ final class ViewModelCache {
     struct PendingTransfer {
         let inputText: String
         let attachments: [InputAttachment]
+        var treasuryContext: String? = nil
     }
 
     /// Set by MoveToSessionSheet, consumed by AIChatView on appear.

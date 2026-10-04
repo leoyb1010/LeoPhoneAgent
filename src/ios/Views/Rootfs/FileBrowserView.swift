@@ -10,6 +10,7 @@ import UIKit
 import QuickLook
 import WebKit
 import FileProvider
+import UniformTypeIdentifiers
 
 enum FileSortKey: String, CaseIterable, Identifiable {
     case name
@@ -927,22 +928,117 @@ struct FileItemRow: View {
 ///
 /// The source lives on the rootfs/fakefs, which isn't a stable URL the share
 /// extensions can read, so we stage a copy in tmp first (mirrors the old
-/// export path), then hand it to `UIActivityViewController` (reusing
-/// `MinisShareSheet.sanitizedShareURL` for the ShareKit UTI crash mitigation).
-struct DocumentExportView: UIViewControllerRepresentable {
+/// export path), then hand it to `UIActivityViewController`. Unsafe extensions
+/// use the same ShareKit UTI mitigation inside this export's private directory.
+struct DocumentExportView: View {
+    let fileURL: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var staged: DocumentExportCopy?
+    @State private var stagingError: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            if let staged {
+                DocumentExportActivity(copy: staged, onFinished: { dismiss() }, onFailure: { error in
+                    self.staged = nil
+                    stagingError = error
+                })
+            } else {
+                NavigationStack {
+                    VStack(spacing: 16) {
+                        if let stagingError {
+                            Text(stagingError).font(.callout).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button("Retry") { self.stagingError = nil; attempt += 1 }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            ProgressView("Preparing file for sharing…")
+                        }
+                    }
+                    .padding(24)
+                    .navigationTitle("Export file")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { dismiss() }
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: attempt) {
+            guard staged == nil, stagingError == nil else { return }
+            do {
+                let source = fileURL
+                let copy = try await Task.detached(priority: .userInitiated) {
+                    try DocumentExportCopy.stage(source: source)
+                }.value
+                guard !Task.isCancelled else { copy.cleanup(); return }
+                staged = copy
+            } catch {
+                guard !Task.isCancelled else { return }
+                stagingError = String(localized: "Couldn't prepare this file for sharing. The original is unchanged. Try again.")
+            }
+        }
+    }
+}
+
+/// Each sheet owns a directory, including the UTI-safe copy. Another iPad
+/// window exporting the same filename must never replace these bytes.
+struct DocumentExportCopy {
+    let directory: URL
     let fileURL: URL
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        // Stage a stable copy in tmp so the share target can read it.
-        let staged = FileManager.default.temporaryDirectory
-            .appendingPathComponent(fileURL.lastPathComponent)
-        try? FileManager.default.removeItem(at: staged)
-        try? FileManager.default.copyItem(at: fileURL, to: staged)
-        let shareURL = MinisShareSheet.sanitizedShareURL(staged) ?? staged
-        return UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+    static func stage(source: URL, temporaryDirectory: URL = FileManager.default.temporaryDirectory) throws -> DocumentExportCopy {
+        let fm = FileManager.default
+        let directory = temporaryDirectory.appendingPathComponent("LeoFileExport-" + UUID().uuidString, isDirectory: true)
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            let ext = source.pathExtension
+            let asciiToken = !ext.isEmpty && ext.count <= 8 && ext.utf8.allSatisfy {
+                (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0)
+            }
+            let safeExtension = asciiToken && UTType(filenameExtension: ext) != nil
+            let base = String(source.deletingPathExtension().lastPathComponent.filter {
+                $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_")
+            }.prefix(40))
+            let name = safeExtension ? source.lastPathComponent : (base.isEmpty ? "share" : base) + ".bin"
+            let target = directory.appendingPathComponent(name)
+            try fm.copyItem(at: source.resolvingSymlinksInPath(), to: target)
+            return DocumentExportCopy(directory: directory, fileURL: target)
+        } catch {
+            try? fm.removeItem(at: directory)
+            throw error
+        }
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    func cleanup() {
+        try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+private struct DocumentExportActivity: UIViewControllerRepresentable {
+    let copy: DocumentExportCopy
+    let onFinished: () -> Void
+    let onFailure: (String) -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: [copy.fileURL], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, error in
+            // Completion covers successful activity and cancellation. Do not
+            // clean up on SwiftUI onDisappear/dismantle: a share extension may
+            // still be reading the URL while its presentation changes.
+            copy.cleanup()
+            Task { @MainActor in
+                if let error { onFailure(error.localizedDescription) }
+                else { onFinished() }
+            }
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - View Model
@@ -1372,21 +1468,13 @@ class FileBrowserViewModel: ObservableObject {
     }
 
     func importFiles(_ urls: [URL]) {
-        let fm = FileManager.default
         let destDir = currentPath.resolvingSymlinksInPath()
         var failCount = 0
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { failCount += 1; continue }
             defer { url.stopAccessingSecurityScopedResource() }
-            let destURL = destDir.appendingPathComponent(url.lastPathComponent)
             do {
-                if fm.fileExists(atPath: destURL.path) {
-                    try MountedFolderCoordinator.remove(at: destURL)
-                    if let destLinux = linuxPath(for: destURL) {
-                        RootfsManager.shared.removeFakefsPath(destLinux)
-                    }
-                }
-                try MountedFolderCoordinator.copy(from: url, to: destURL)
+                let destURL = try MountedFolderCoordinator.importKeepingBoth(from: url, to: destDir)
                 RootfsManager.shared.registerSubtreeInMetaDB(hostRoot: destURL)
                 Self.tracePotentialFPWrite(op: "import", destURL: destURL, srcURL: url)
             } catch {

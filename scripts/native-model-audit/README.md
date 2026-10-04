@@ -81,3 +81,29 @@ containing `/` and `:`, overrides, group order, unresolved references, and bindi
 kind. The current app also runs production `ModelCatalogTests` when present.
 
 Generated projects/results are build artifacts and are not committed.
+
+## Isolated Home composer journeys
+
+Generate a **separate** output directory with `generate.py --source-ref WORKTREE
+--home-composer --output <new-directory>`. This opt-in enables iPhone and iPad
+(`TARGETED_DEVICE_FAMILY=1,2`) and the `AUDIT_ROUTE=home` entry. It does not modify
+an already-generated model-audit project. Build with `build-for-testing`, then run
+only `NativeModelAuditUITests/HomeComposerJourneys` on each existing pinned device
+with parallel testing disabled. No simulator is created or booted by generation.
+
+The full production `Views/Home/HomeComposer.swift` is copied unchanged. The
+complete `FullAutoBadge`, `FullAutoGate.Mode` display extension, Mode enum and
+`LeoTheme` token enum are extracted unchanged with source hashes in the manifest.
+The real `QuickModelSwitchSheet` retains its production medium/large detents.
+`AuditHomeComposer` supplies a plain, full-width native host, a deterministic
+execution-location menu and observable test state. Its canvas is **not** the
+full app's Home/ContentView or iPad sidebar composition.
+
+`HomeComposerAdapters.swift` supplies an in-memory approval mode and no-op haptics.
+Biometric authorization always returns false; no real permission, task, attachment,
+speech or network action can run. The fixture exercises separate execution/model
+actions, draft preservation across model-sheet dismissal and execution-menu
+selection, long labels at accessibility3 text size, and non-overlapping 44-point
+actions inside the actual device viewport. Run the same journeys on both iPhone
+and iPad before claiming both form factors passed. A successful fixture build alone
+is not native runtime evidence or a full-app build.

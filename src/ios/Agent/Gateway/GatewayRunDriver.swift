@@ -49,6 +49,8 @@ final class GatewayRunDriver: ObservableObject {
     /// Non-nil while the remote agent is blocked waiting on the operator.
     @Published private(set) var pendingApproval: GatewayApprovalRequest?
     @Published private(set) var lastError: String?
+    /// Only definitive rejection is safe to offer as an unsent draft.
+    @Published var unsentPrompt: String?
     /// Bumps whenever the stream dropped and was re-established, so the UI can
     /// say so honestly rather than pretending nothing happened.
     @Published private(set) var reconnectCount = 0
@@ -79,6 +81,7 @@ final class GatewayRunDriver: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         lastError = nil
+        items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + trimmed))
         usage = nil
         pendingApproval = nil
         reconnectCount = 0
@@ -101,9 +104,33 @@ final class GatewayRunDriver: ObservableObject {
                 await self.consume(runId: id)
             } catch {
                 await MainActor.run {
-                    self.fail(error.localizedDescription)
+                    if Self.submissionDefinitelyRejected(error) {
+                        self.unsentPrompt = trimmed
+                        self.fail(error.localizedDescription)
+                    } else {
+                        self.fail(String(localized: "Couldn't confirm whether the Mac accepted this request. Check the Mac before sending it again.") + "\n" + error.localizedDescription)
+                    }
                 }
             }
+        }
+    }
+
+    /// Timeouts, connection loss and 5xx can occur after admission. Restoring
+    /// those as ready-to-send drafts would encourage duplicate remote work.
+    static func submissionDefinitelyRejected(_ error: Error) -> Bool {
+        switch error {
+        case GatewayError.unauthorized, GatewayError.harnessNotConfigured, GatewayError.notConfigured, GatewayError.badURL:
+            return true
+        case GatewayError.http(let status, _):
+            return [400, 401, 403, 404, 405, 413, 415, 422, 429].contains(status)
+        case let error as URLError:
+            return [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+                    .badURL, .unsupportedURL, .secureConnectionFailed, .serverCertificateUntrusted,
+                    .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+                    .clientCertificateRejected, .internationalRoamingOff, .callIsActive, .dataNotAllowed,
+                    .appTransportSecurityRequiresSecureConnection].contains(error.code)
+        default:
+            return false
         }
     }
 

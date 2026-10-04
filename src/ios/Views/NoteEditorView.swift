@@ -19,8 +19,8 @@ import SwiftUI
 
 struct NoteEditorView: View {
     let item: CollectedItem
-    /// 保存后回调,让列表刷新标题/时间。
-    var onSaved: (CollectedItem) -> Void
+    /// Persist metadata and refresh the list; false keeps the editor's recovery draft.
+    var onSaved: (CollectedItem) -> Bool
 
     @State private var title: String
     @State private var body_: String = ""
@@ -34,10 +34,16 @@ struct NoteEditorView: View {
     @State private var previewing = false
     @State private var showVersions = false
     @State private var saveTask: Task<Void, Never>?
+    @State private var saveError: String?
+    @State private var isSaving = false
+    @State private var editedBeforeLoad = false
+    @State private var bodyEditedBeforeLoad = false
+    @State private var summarySaveFailed = false
     @FocusState private var bodyFocused: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
-    init(item: CollectedItem, onSaved: @escaping (CollectedItem) -> Void) {
+    init(item: CollectedItem, onSaved: @escaping (CollectedItem) -> Bool) {
         self.item = item
         self.onSaved = onSaved
         _title = State(initialValue: item.title ?? "")
@@ -55,6 +61,17 @@ struct NoteEditorView: View {
 
             Divider().padding(.top, 10)
 
+            if let saveError {
+                HStack(alignment: .top, spacing: 12) {
+                    Text(saveError).font(.footnote).foregroundStyle(.red)
+                    Spacer(minLength: 0)
+                    Button("重试保存") { Task { _ = await persist() } }
+                        .disabled(isSaving || !loaded)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .accessibilityIdentifier("note.save-error")
+            }
+
             if previewing {
                 ScrollView {
                     Text(rendered)
@@ -68,7 +85,10 @@ struct NoteEditorView: View {
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
                     .focused($bodyFocused)
-                    .onChange(of: body_) { _, _ in scheduleSave() }
+                    .onChange(of: body_) { _, _ in
+                        if !loaded { bodyEditedBeforeLoad = true }
+                        scheduleSave()
+                    }
                     .overlay(alignment: .topLeading) {
                         if body_.isEmpty {
                             Text("写点什么…")
@@ -84,7 +104,11 @@ struct NoteEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("完成") { dismiss() }
+                Button(isSaving ? "保存中…" : "完成") {
+                    if !loaded, !editedBeforeLoad { dismiss(); return }
+                    Task { if await persist() { dismiss() } }
+                }
+                .disabled(isSaving)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -126,15 +150,33 @@ struct NoteEditorView: View {
             }
         }
         .task {
-            guard !loaded, let file = item.bodyFile else { loaded = true; return }
-            let disk = await NoteBodyStore.load(file)
+            guard !loaded else { return }
+            let recovery = NoteBodyStore.loadRecoveryDraft(noteID: item.id)
+            let disk: String
+            if let file = item.bodyFile { disk = await NoteBodyStore.load(file) }
+            else { disk = "" }
             // load 排在共用串行队列里,刚导入一批照片(OCR 写盘)时要等
             // 几秒 —— 期间用户可能已经开始打字。无条件覆盖就是把那两秒
             // 的输入吃掉。用户开打了就以输入为准,回头补存。
-            if body_.isEmpty { body_ = disk }
+            if !bodyEditedBeforeLoad { body_ = recovery?.body ?? disk }
+            if !editedBeforeLoad, let recovery { title = recovery.title }
             lastPersistedBody = disk
             loaded = true
-            if !body_.isEmpty, body_ != disk { scheduleSave() }
+            if hasUnsavedChanges {
+                if recovery != nil { saveError = String(localized: "已恢复未保存的编辑，将再次尝试保存。") }
+                scheduleSave()
+            }
+        }
+        .interactiveDismissDisabled(hasUnsavedChanges || isSaving)
+        .alert("摘要与标签未能保存", isPresented: $summarySaveFailed) {
+            Button("重新生成") { summarize() }
+            Button("取消", role: .cancel) {}
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase != .active, hasUnsavedChanges || isSaving else { return }
+            saveTask?.cancel()
+            _ = checkpointRecovery()
+            Task { _ = await persist() }
         }
         .onDisappear {
             // 退出立即落盘:去抖任务还没到点就被取消,内容就丢了。
@@ -144,6 +186,8 @@ struct NoteEditorView: View {
             // 输入的内容 —— 那就是"写完退出,内容没了"。取值发生在视图还
             // 活着的这一刻,Task 里只碰局部常量,没有任何不确定性。
             saveTask?.cancel()
+            guard hasUnsavedChanges || isSaving else { return }
+            _ = checkpointRecovery()
             // 正文还没从磁盘读进来就退出的话,body_ 还是空串 —— 写回去
             // 就是把整篇笔记清空。这个守卫原来在实例方法 persist 里,
             // 重构成静态方法时漏掉了,而 onDisappear 直接调静态版绕过了它。
@@ -157,9 +201,8 @@ struct NoteEditorView: View {
             // 把笔记顶到列表最前;二是比较对象必须是"上次已持久化"的内容
             // 而不是初次载入的 —— 否则去抖保存过中间态后改回原文再退出,
             // 会被误判"没改过"而跳过落盘。
-            guard bodySnapshot != lastPersistedBody || titleSnapshot != lastPersistedTitle else { return }
-            Task { await Self.persist(body: bodySnapshot, title: titleSnapshot,
-                                      item: target, onSaved: onSaved) }
+            Task { _ = await Self.persist(body: bodySnapshot, title: titleSnapshot,
+                                          item: target, onSaved: onSaved) }
         }
     }
 
@@ -173,33 +216,78 @@ struct NoteEditorView: View {
 
     /// 停手 1.2 秒才写盘。每次按键都存 = 主线程之外也扛不住的磁盘噪音。
     private func scheduleSave() {
-        guard loaded else { return }
+        if !loaded { editedBeforeLoad = true }
         saveTask?.cancel()
         saveTask = Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled else { return }
-            await persist()
+            _ = checkpointRecovery()
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            guard !Task.isCancelled else { return }
+            _ = await persist()
         }
     }
 
-    private func persist() async {
-        guard loaded else { return }
+    private var hasUnsavedChanges: Bool {
+        loaded ? body_ != lastPersistedBody || title != lastPersistedTitle : editedBeforeLoad
+    }
+
+    private var recoverySnapshot: NoteBodyStore.RecoveryDraft {
+        .init(body: loaded || bodyEditedBeforeLoad ? body_ : nil, title: title, bodyFile: item.bodyFile)
+    }
+
+    @discardableResult
+    private func checkpointRecovery() -> Bool {
+        let saved = NoteBodyStore.saveRecoveryDraft(recoverySnapshot, noteID: item.id)
+        if !saved { saveError = String(localized: "恢复草稿未能保存。请保持此页，检查存储空间后重试。") }
+        return saved
+    }
+
+    @discardableResult
+    private func persist() async -> Bool {
+        guard loaded, !isSaving else { return false }
+        guard hasUnsavedChanges else {
+            NoteBodyStore.clearRecoveryDraft(noteID: item.id, matching: recoverySnapshot)
+            return true
+        }
+        isSaving = true
+        defer { isSaving = false }
         let bodySnapshot = body_
         let titleSnapshot = title
-        await Self.persist(body: bodySnapshot, title: titleSnapshot, item: item, onSaved: onSaved)
+        let recoverySaved = checkpointRecovery()
+        let result = await Self.persist(body: bodySnapshot, title: titleSnapshot, item: item, onSaved: onSaved)
+        guard result == .saved else {
+            if result == .metadataFailed {
+                saveError = recoverySaved
+                    ? String(localized: "正文已保存，但标题和笔记信息未能保存。编辑已保留在恢复草稿中，请重试。")
+                    : String(localized: "正文已保存，但笔记信息和恢复草稿未能保存。请保持此页，检查存储空间后重试。")
+            } else {
+                saveError = recoverySaved
+                    ? String(localized: "正文未能保存，编辑已保留在本机恢复草稿中。请重试保存。")
+                    : String(localized: "正文和恢复草稿都未能保存。请保持此页，检查存储空间后重试。")
+            }
+            return false
+        }
         // 基线跟着落盘走:之后"改回原样再退出"与这版比才是真的没改。
         await MainActor.run {
             lastPersistedBody = bodySnapshot
             lastPersistedTitle = titleSnapshot
+            saveError = nil
         }
+        // A newer edit may have arrived while the body write was suspended.
+        if hasUnsavedChanges { scheduleSave(); return false }
+        return true
     }
 
     /// 静态版本:只吃传进来的值,不读任何 @State。视图已经消失时也能安全跑完。
+    enum SaveResult: Equatable {
+        case saved, bodyFailed, metadataFailed
+    }
+
     private static func persist(body: String, title: String,
                                 item: CollectedItem,
-                                onSaved: @escaping (CollectedItem) -> Void) async {
-        guard let file = item.bodyFile else { return }
-        await NoteBodyStore.save(body, to: file)
+                                onSaved: @escaping (CollectedItem) -> Bool) async -> SaveResult {
+        guard let file = item.bodyFile, await NoteBodyStore.save(body, to: file) else { return .bodyFailed }
         // 以库里的**最新版**为基底,而不是编辑器打开那一刻的快照。
         // 否则:生成摘要 → 再敲一个字 → persist 用旧快照重建 → 摘要没了。
         // 编辑器开着时在别处改的置顶/归档/批注同理会被回滚。
@@ -209,20 +297,24 @@ struct NoteEditorView: View {
         updated.updatedAt = Date()
         // value 存首行摘要,列表和搜索都直接用它,不必去读正文文件
         updated.value = String(body.prefix(200))
-        await MainActor.run { onSaved(updated) }
+        guard await MainActor.run(body: { onSaved(updated) }) else { return .metadataFailed }
         await CollectionSearchIndex.shared.index(
             itemId: updated.id, title: updated.title ?? "", body: body)
+        NoteBodyStore.clearRecoveryDraft(noteID: item.id,
+            matching: .init(body: body, title: title, bodyFile: item.bodyFile))
+        return .saved
     }
 
     private func summarize() {
         Task {
+            guard await persist() else { return }
             guard let insight = await LocalBrain.shared.summarizeCollection(
                 title: title, text: body_) else { return }
             var updated = CollectionStore.load().first { $0.id == item.id } ?? item
             updated.summary = insight.summary
             if !insight.tags.isEmpty { updated.tags = insight.tags }
             updated.updatedAt = Date()
-            await MainActor.run { onSaved(updated) }
+            if !onSaved(updated) { summarySaveFailed = true }
         }
     }
 }

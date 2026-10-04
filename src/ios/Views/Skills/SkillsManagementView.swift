@@ -362,13 +362,15 @@ private struct ImportSkillSheet: View {
             }
             .sheet(isPresented: $showFilePicker) {
                 SkillFileDocumentPicker { result in
+                    showFilePicker = false
+                    errorMessage = nil
                     do {
-                        switch result {
+                        switch try result.get() {
                         case .text(let content):
                             _ = try SkillStore.shared.importSkill(content: content, source: .file)
                         case .archiveURL(let url):
+                            defer { try? FileManager.default.removeItem(at: url) }
                             _ = try SkillStore.shared.importFromArchive(at: url)
-                            try? FileManager.default.removeItem(at: url)
                         }
                         dismiss()
                     } catch {
@@ -404,14 +406,15 @@ private struct ImportSkillSheet: View {
 
 // MARK: - File Picker
 
-/// Callback receives either a plain-text SKILL.md content string or a file URL for archives.
+/// Successful picks contain SKILL.md text or an owned temporary archive copy.
+/// Read/copy failures reach the importing page so it can show an error and retry.
 private enum SkillFilePickResult {
     case text(String)
     case archiveURL(URL)
 }
 
 private struct SkillFileDocumentPicker: UIViewControllerRepresentable {
-    let onImport: (SkillFilePickResult) -> Void
+    let onImport: (Result<SkillFilePickResult, Error>) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         var types: [UTType] = [.plainText, .zip]
@@ -429,24 +432,34 @@ private struct SkillFileDocumentPicker: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onImport: onImport) }
 
     class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onImport: (SkillFilePickResult) -> Void
-        init(onImport: @escaping (SkillFilePickResult) -> Void) { self.onImport = onImport }
+        let onImport: (Result<SkillFilePickResult, Error>) -> Void
+        init(onImport: @escaping (Result<SkillFilePickResult, Error>) -> Void) { self.onImport = onImport }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             guard let url = urls.first else { return }
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
 
-            let ext = url.pathExtension.lowercased()
-            if ext == "zip" || ext == "skill" {
-                // Copy to temp so we can access after security scope ends
-                let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
-                try? FileManager.default.removeItem(at: tmp)
-                if let _ = try? FileManager.default.copyItem(at: url, to: tmp) {
-                    onImport(.archiveURL(tmp))
+            do {
+                let ext = url.pathExtension.lowercased()
+                if ext == "zip" || ext == "skill" {
+                    // A unique name cannot overwrite an earlier import or delete
+                    // the source when the picked archive already lives in tmp.
+                    let tmp = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("skill-import-\(UUID().uuidString)-\(url.lastPathComponent)")
+                    do {
+                        try FileManager.default.copyItem(at: url, to: tmp)
+                    } catch {
+                        try? FileManager.default.removeItem(at: tmp)
+                        throw error
+                    }
+                    onImport(.success(.archiveURL(tmp)))
+                } else {
+                    let content = try String(contentsOf: url, encoding: .utf8)
+                    onImport(.success(.text(content)))
                 }
-            } else if let content = try? String(contentsOf: url, encoding: .utf8) {
-                onImport(.text(content))
+            } catch {
+                onImport(.failure(error))
             }
         }
     }
@@ -740,17 +753,19 @@ private struct SkillDetailView: View {
         }
         .sheet(isPresented: $showFilePicker) {
             SkillFileDocumentPicker { result in
+                showFilePicker = false
                 do {
-                    switch result {
+                    switch try result.get() {
                     case .text(let newContent):
                         try store.updateSkillContent(skillId, newContent: newContent)
                     case .archiveURL(let url):
+                        defer { try? FileManager.default.removeItem(at: url) }
                         _ = try store.importFromArchive(at: url)
-                        try? FileManager.default.removeItem(at: url)
                     }
                     updateError = nil
                 } catch {
                     updateError = error.localizedDescription
+                    MinisToast.show(error.localizedDescription)
                 }
             }
         }

@@ -99,6 +99,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-ref', default='WORKTREE')
     parser.add_argument('--output', required=True)
+    parser.add_argument('--home-composer', action='store_true', help='Add unchanged HomeComposer and production approval-badge visuals in an isolated fixture')
     args = parser.parse_args()
     out = pathlib.Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -127,6 +128,39 @@ def main():
             raise
         (production / pathlib.Path(relative).name).write_bytes(data)
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
+    if args.home_composer:
+        path = 'src/ios/Views/Home/HomeComposer.swift'
+        data = read_source(args.source_ref, path)
+        (production / 'HomeComposer.swift').write_bytes(data)
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'none'})
+        path = 'src/ios/Agent/Session/FullAuto.swift'
+        data = read_source(args.source_ref, path)
+        source = data.decode()
+        mode = source[source.index('extension FullAutoGate.Mode {'):source.index('// MARK: - 任务来源')]
+        badge = source[source.index('struct FullAutoBadge: View {'):source.index('// MARK: - 设置页开关')]
+        (production / 'HomeFullAutoVisuals.swift').write_text('import SwiftUI\n\n' + mode + '\n' + badge)
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'generated_file': 'HomeFullAutoVisuals.swift',
+            'transformation': 'Extract unchanged FullAutoGate.Mode display extension and complete FullAutoBadge struct. FullAutoStore and biometric authorization are explicit non-executing fixture adapters.'})
+        path = 'src/ios/Agent/Session/SensitiveToolGate.swift'
+        data = read_source(args.source_ref, path)
+        source = data.decode()
+        start = source.index('    enum Mode: String, CaseIterable, Sendable {')
+        end = source.index('\n    }', start) + 6
+        (production / 'HomeFullAutoMode.swift').write_text('enum FullAutoGate {\n' + source[start:end] + '\n}\n')
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'generated_file': 'HomeFullAutoMode.swift',
+            'transformation': 'Extract unchanged Mode enum only; no permission gate or execution implementation.'})
+        path = 'src/ios/Shared/LeoDesignSystem.swift'
+        data = read_source(args.source_ref, path)
+        source = data.decode()
+        tokens = source[source.index('enum LeoTheme {'):source.index('/// Motion values')]
+        (production / 'HomeLeoTheme.swift').write_text('import SwiftUI\nimport UIKit\n\n' + tokens)
+        manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'generated_file': 'HomeLeoTheme.swift',
+            'transformation': 'Extract unchanged LeoTheme token enum; haptic execution remains a no-op fixture adapter.'})
+        for name in ['AuditHomeComposer.swift', 'HomeComposerAdapters.swift']:
+            shutil.copyfile(HERE / name, out / 'Sources' / name)
+    else:
+        for name in ['AuditHomeComposer.swift', 'HomeComposerAdapters.swift']:
+            (out / 'Sources' / name).unlink(missing_ok=True)
     path = 'src/ios/Providers/ProviderConfigStore.swift'
     data = read_source(args.source_ref, path)
     source = data.decode()
@@ -222,6 +256,10 @@ struct AuditProviderCatalog: View {
         manifest['sources'].append({'path': path, 'sha256': hashlib.sha256(data).hexdigest(), 'transformation': 'Add testable import NativeModelAudit to target production app module'})
     (out / 'UITests').mkdir(exist_ok=True)
     shutil.copyfile(HERE / 'NativeModelJourneys.swift', out / 'UITests' / 'NativeModelJourneys.swift')
+    if args.home_composer:
+        shutil.copyfile(HERE / 'HomeComposerJourneys.swift', out / 'UITests' / 'HomeComposerJourneys.swift')
+    else:
+        (out / 'UITests' / 'HomeComposerJourneys.swift').unlink(missing_ok=True)
     is_baseline = args.source_ref == '3c053a7c9b112667a04cea9b12c7c16a03c5ce39'
     (out / 'UITests' / 'AuditSourceKind.swift').write_text(
         '// Explicit source role: current assertions must never skip due to missing UI.\n'
@@ -286,6 +324,9 @@ schemes:
       targets: [NativeModelAuditTests, NativeModelAuditUITests]
       gatherCoverageData: false
 ''')
+    if args.home_composer:
+        project = out / 'project.yml'
+        project.write_text(project.read_text().replace('    TARGETED_DEVICE_FAMILY: \"1\"', '    TARGETED_DEVICE_FAMILY: \"1,2\"', 1).replace('    SWIFT_VERSION: \"5.0\"', '    SWIFT_VERSION: \"5.0\"\n    SWIFT_ACTIVE_COMPILATION_CONDITIONS: \"$(inherited) HOME_COMPOSER_AUDIT\"', 1))
     print(out)
 
 

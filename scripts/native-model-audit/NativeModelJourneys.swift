@@ -5,6 +5,7 @@ import XCTest
 /// XCUIScreenshot attachment from the native simulator, never HTML or a mockup.
 final class NativeModelJourneys: XCTestCase {
     private var app: XCUIApplication!
+    private var initialRoute = ""
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -19,6 +20,7 @@ final class NativeModelJourneys: XCTestCase {
     }
 
     private func launch(_ route: String, reset: Bool = true, large: Bool = true, largeText: Bool = false, empty: Bool = false, legacyPins: Bool = false, language: String = "en", catalogCount: Int = 180, failNextGroupSave: Bool = false, failNextEntrySave: Bool = false) {
+        initialRoute = route
         app.launchEnvironment = ["AUDIT_ROUTE": route, "AUDIT_RESET": reset ? "1" : "0",
                                  "AUDIT_LARGE": large ? "1" : "0", "AUDIT_LARGE_TEXT": largeText ? "1" : "0",
                                  "AUDIT_EMPTY": empty ? "1" : "0", "AUDIT_LEGACY_PINS": legacyPins ? "1" : "0", "AUDIT_LANGUAGE": language, "AUDIT_CATALOG_COUNT": String(catalogCount),
@@ -86,7 +88,18 @@ final class NativeModelJourneys: XCTestCase {
         close.tap()
     }
 
+    private func openFullBrowser() {
+        guard !AuditSourceKind.isBaseline, ["quick", "draft"].contains(initialRoute) else { return }
+        if app.segmentedControls["model-picker.scope"].exists { return }
+        let all = app.buttons["model-picker.all-models"]
+        for _ in 0..<6 where !all.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(all.isHittable, "Quick picker must expose the complete model library")
+        all.tap()
+        XCTAssertTrue(app.segmentedControls["model-picker.scope"].waitForExistence(timeout: 8))
+    }
+
     private func selectScope(_ scope: String) {
+        openFullBrowser()
         let identifier = "model-picker.scope.\(scope.lowercased())"
         if app.buttons[identifier].exists { app.buttons[identifier].tap() }
         else if app.segmentedControls.buttons[scope].exists { app.segmentedControls.buttons[scope].tap() }
@@ -235,7 +248,7 @@ final class NativeModelJourneys: XCTestCase {
     func test09UnavailableGroupsAndExplicitMemberKeepRoutingIdentity() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Improved-scope regression; baseline screenshots exercise original behavior separately")
         }
         selectScope("Groups")
@@ -248,7 +261,11 @@ final class NativeModelJourneys: XCTestCase {
         app.buttons["model-picker.expand-group.daily"].tap()
         capture("18-group-members-and-unavailable-groups")
         let member = app.buttons["model-picker.member.daily.openai-direct/gpt-5"]
-        if member.exists { member.tap() } else { waitForText("GPT-5").tap() }
+        if member.exists {
+            for _ in 0..<4 where !member.isHittable { app.collectionViews.firstMatch.swipeUp() }
+            XCTAssertTrue(member.isHittable, "Expanded group member must be visible before selecting")
+            member.tap()
+        } else { waitForText("GPT-5").tap() }
         XCTAssertEqual(rootValue("audit.selection"), "group:daily")
         XCTAssertEqual(rootValue("audit.reference"), "openai-direct/gpt-5")
         XCTAssertEqual(rootValue("audit.default"), "daily")
@@ -257,7 +274,7 @@ final class NativeModelJourneys: XCTestCase {
     func test10DuplicateNamesSelectExactlyOneProviderIdentity() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Stable row identity assertions apply to improved picker")
         }
         search("gpt-5")
@@ -372,7 +389,8 @@ final class NativeModelJourneys: XCTestCase {
     func test16PrunedLegacyFavoriteRemainsVisible() throws {
         launch("quick", large: false, legacyPins: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        openFullBrowser()
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Alias normalization regression applies to improved picker")
         }
         selectScope("Favorites")
@@ -384,7 +402,8 @@ final class NativeModelJourneys: XCTestCase {
     func test17DraftUnavailableProviderCannotBeSelected() throws {
         launch("draft", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        openFullBrowser()
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Availability gate identifiers apply to improved picker")
         }
         search("Unavailable fixture")
@@ -448,7 +467,7 @@ final class NativeModelJourneys: XCTestCase {
         add(timing)
         XCTAssertLessThan(duration, 60, "Native 1200-model search must remain responsive")
         capture("34-thousand-model-id-search")
-        if app.segmentedControls["model-picker.scope"].exists {
+        if !AuditSourceKind.isBaseline {
             search("Work Relay Catalog Model 1199", replacing: true)
             let result = app.buttons["model-picker.entry.relay-proxy/catalog-1199"]
             XCTAssertTrue(result.waitForExistence(timeout: 10))
@@ -459,7 +478,8 @@ final class NativeModelJourneys: XCTestCase {
     func test20FavoriteEditDragPersistsOrder() throws {
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        openFullBrowser()
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Favorite edit identifiers apply to improved picker")
         }
         selectScope("Favorites")
@@ -488,7 +508,7 @@ final class NativeModelJourneys: XCTestCase {
     func test21ReturningFromGroupManagementKeepsPickerOpen() throws {
         launch("full", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
-        guard app.segmentedControls["model-picker.scope"].exists else {
+        if AuditSourceKind.isBaseline && !app.segmentedControls["model-picker.scope"].exists {
             throw XCTSkip("Shared-picker group-management regression applies to improved picker")
         }
         selectScope("Groups")
@@ -579,6 +599,50 @@ final class NativeModelJourneys: XCTestCase {
         search("Audit Alias")
         XCTAssertTrue(app.buttons["model-catalog.entry.relay-proxy/deepseek-reasoner"].waitForExistence(timeout: 10))
         capture("46-edited-alias-after-relaunch")
+    }
+
+    func test24QuickFavoriteIsOneTapAndKeepsDefault() {
+        launch("quick", large: false)
+        let row = app.buttons["model-picker.entry.openai-direct/gpt-5"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.isHittable, "A favorite must be directly available on the initial sheet")
+        XCTAssertGreaterThanOrEqual(row.frame.height, 44)
+        XCTAssertFalse(app.segmentedControls["model-picker.scope"].exists)
+        capture("48-quick-favorites-direct-choice")
+        row.tap()
+        XCTAssertEqual(rootValue("audit.selection"), "openai-direct/gpt-5")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+    }
+
+    func test25QuickDefaultResetDoesNotCreateSession() {
+        launch("draft", large: false)
+        let reset = app.buttons["model-picker.use-default"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 10))
+        for _ in 0..<4 where !reset.isHittable { app.swipeUp() }
+        XCTAssertTrue(reset.isHittable)
+        reset.tap()
+        XCTAssertEqual(rootValue("audit.draft"), "none")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
+        XCTAssertEqual(rootValue("audit.binding-count"), "1")
+    }
+
+    func test26QuickLibraryReturnPreservesSelection() {
+        launch("quick", large: false)
+        let library = app.buttons["model-picker.library"]
+        let list = app.collectionViews.containing(.button, identifier: "model-picker.all-models").firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 8))
+        for _ in 0..<5 where !library.isHittable { list.swipeUp() }
+        XCTAssertTrue(library.isHittable)
+        library.tap()
+        XCTAssertTrue(app.navigationBars["Model Library"].waitForExistence(timeout: 10))
+        capture("49-library-from-quick-picker")
+        app.buttons["model-picker.close-library"].tap()
+        search("DeepSeek")
+        let result = app.buttons["model-picker.entry.relay-proxy/deepseek-reasoner"]
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        result.tap()
+        XCTAssertEqual(rootValue("audit.selection"), "relay-proxy/deepseek-reasoner")
+        XCTAssertEqual(rootValue("audit.default"), "daily")
     }
 
 }

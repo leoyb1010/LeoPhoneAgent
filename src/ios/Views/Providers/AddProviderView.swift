@@ -180,6 +180,8 @@ struct AddProviderView: View {
     @State private var useResponsesAPI = false
     @State private var manualOAuthTokenInput = ""
     @State private var isSaving = false
+    @State private var validationTask: Task<Void, Never>?
+    @State private var validationGeneration = 0
     @State private var errorMessage: String?
     @State private var pendingInstanceId = UUID().uuidString
     @State private var pendingOAuthDone = false
@@ -228,9 +230,11 @@ struct AddProviderView: View {
 
     var body: some View {
         List {
-            steppedContent
+            steppedContent.disabled(isSaving)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.88), value: currentStep)
+        .interactiveDismissDisabled(isSaving)
+        .onDisappear { cancelValidation() }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -607,7 +611,7 @@ struct AddProviderView: View {
 
             Section {
                 Button {
-                    Task { await validateAndSaveAPIKeyInstance() }
+                    startValidation(.apiKey)
                 } label: {
                     HStack {
                         Spacer()
@@ -711,7 +715,7 @@ struct AddProviderView: View {
                     .font(.system(.body, design: .monospaced))
 
                 Button {
-                    Task { await validateAndSaveManualOAuthInstance() }
+                    startValidation(.manualOAuth)
                 } label: {
                     HStack {
                         Spacer()
@@ -736,7 +740,7 @@ struct AddProviderView: View {
         if pendingOAuthDone {
             Section {
                 Button {
-                    Task { await validateAndSaveOAuthInstance() }
+                    startValidation(.oauth)
                 } label: {
                     HStack {
                         Spacer()
@@ -824,7 +828,7 @@ struct AddProviderView: View {
         let label = labelInput.trimmingCharacters(in: .whitespaces)
         let base = customBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
         return ProviderInstance(
-            id: pendingInstanceId,
+            id: manual ? UUID().uuidString : pendingInstanceId,
             label: label.isEmpty ? defaultLabel(for: type) : label,
             providerType: type,
             credentialType: .oauth,
@@ -833,8 +837,42 @@ struct AddProviderView: View {
         )
     }
 
+    /// The toolbar can cancel a slow test; only its original live attempt may commit.
     @MainActor
-    private func validateAndSaveAPIKeyInstance() async {
+    private func startValidation(_ kind: PendingSaveKind) {
+        guard !isSaving else { return }
+        validationGeneration += 1
+        let attempt = validationGeneration
+        isSaving = true
+        validationTask = Task { @MainActor in
+            switch kind {
+            case .apiKey: await validateAndSaveAPIKeyInstance(attempt: attempt)
+            case .oauth: await validateAndSaveOAuthInstance(attempt: attempt)
+            case .manualOAuth: await validateAndSaveManualOAuthInstance(attempt: attempt)
+            }
+        }
+    }
+
+    @MainActor
+    private func cancelValidation() {
+        validationGeneration += 1
+        validationTask?.cancel()
+        validationTask = nil
+        isSaving = false
+        pendingSaveKind = nil
+    }
+
+    @MainActor
+    private func finishValidation(attempt: Int) {
+        guard validationGeneration == attempt else { return }
+        isSaving = false
+        validationTask = nil
+    }
+
+    @MainActor
+    private func validateAndSaveAPIKeyInstance(attempt: Int) async {
+        guard validationGeneration == attempt, !Task.isCancelled else { return }
+        defer { finishValidation(attempt: attempt) }
         guard let candidate = makeAPIKeyCandidate() else { return }
         isSaving = true
         errorMessage = nil
@@ -842,35 +880,44 @@ struct AddProviderView: View {
         ProviderKeychainHelper.saveAPIKey(candidate.key, instanceId: candidate.instance.id)
         do {
             try await validateConnection(for: candidate.instance)
+            guard validationGeneration == attempt, !Task.isCancelled else {
+                ProviderKeychainHelper.deleteAPIKey(instanceId: candidate.instance.id)
+                return
+            }
             store.addInstance(candidate.instance)
             dismiss()
         } catch {
             ProviderKeychainHelper.deleteAPIKey(instanceId: candidate.instance.id)
+            guard validationGeneration == attempt, !Task.isCancelled else { return }
             errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .apiKey
         }
-        isSaving = false
     }
 
     @MainActor
-    private func validateAndSaveOAuthInstance() async {
+    private func validateAndSaveOAuthInstance(attempt: Int) async {
+        guard validationGeneration == attempt, !Task.isCancelled else { return }
+        defer { finishValidation(attempt: attempt) }
         guard let instance = makeOAuthCandidate(manual: false) else { return }
         isSaving = true
         errorMessage = nil
         pendingSaveKind = nil
         do {
             try await validateConnection(for: instance)
+            guard validationGeneration == attempt, !Task.isCancelled else { return }
             store.addInstance(instance)
             dismiss()
         } catch {
+            guard validationGeneration == attempt, !Task.isCancelled else { return }
             errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .oauth
         }
-        isSaving = false
     }
 
     @MainActor
-    private func validateAndSaveManualOAuthInstance() async {
+    private func validateAndSaveManualOAuthInstance(attempt: Int) async {
+        guard validationGeneration == attempt, !Task.isCancelled else { return }
+        defer { finishValidation(attempt: attempt) }
         guard let instance = makeOAuthCandidate(manual: true) else { return }
         let token = manualOAuthTokenInput.components(separatedBy: .whitespacesAndNewlines).joined()
         guard !token.isEmpty else { return }
@@ -880,14 +927,18 @@ struct AddProviderView: View {
         ProviderKeychainHelper.saveOAuthString(token, instanceId: instance.id, account: "manual-oauth-token")
         do {
             try await validateConnection(for: instance)
+            guard validationGeneration == attempt, !Task.isCancelled else {
+                ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: "manual-oauth-token")
+                return
+            }
             store.addInstance(instance)
             dismiss()
         } catch {
             ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: "manual-oauth-token")
+            guard validationGeneration == attempt, !Task.isCancelled else { return }
             errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
             pendingSaveKind = .manualOAuth
         }
-        isSaving = false
     }
 
     @MainActor
@@ -1030,6 +1081,7 @@ struct AddProviderView: View {
     }
 
     private func goBack() {
+        cancelValidation()
         // Voice-template entry skipped the credential step, so Back returns
         // all the way to the type list (and clears the prefilled fields) rather
         // than dropping the user onto a credential picker they never saw.
@@ -1074,6 +1126,7 @@ struct AddProviderView: View {
     }
 
     private func cleanupAndDismiss() {
+        cancelValidation()
         // If we started OAuth but never saved, clean up
         if pendingOAuthDone {
             ProviderKeychainHelper.deleteOAuthToken(instanceId: pendingInstanceId)

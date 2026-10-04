@@ -354,13 +354,8 @@ final class CloudSyncEngine: ObservableObject {
 
     /// Record types that should be synced based on current category toggles.
     var enabledRecordTypes: Set<String> {
-        var types = Set<String>()
-        if syncSessions { types.formUnion(["Session", "Message", "CompactMarker", "SessionFile"]) }
-
-        if syncSkills { types.insert("Skill") }
-        if syncProviders { types.insert("ProviderConfig") }
-        if syncEnvironments { types.insert("EnvVar") }
-        return types
+        Set(["Session", "Message", "CompactMarker", "SessionFile", "Skill", "ProviderConfig", "EnvVar"]
+            .filter { UploadPolicy.allowsLegacyRecordType($0) })
     }
 
     // MARK: - Per-Device Sync Preferences (Download)
@@ -555,8 +550,7 @@ final class CloudSyncEngine: ObservableObject {
     func refreshPendingChanges() async {
         let refreshStart = CFAbsoluteTimeGetCurrent()
         let enabled = enabledRecordTypes
-        let dirtyRecords = await ChatStore.shared.loadDirtyRecords()
-            .filter { enabled.contains($0.recordType) }
+        let dirtyRecords = await ChatStore.shared.loadDirtyRecords(allowedTypes: enabled)
 
         // Skip records that are already queued in pendingChanges to avoid
         // building duplicate CKRecords when willSendChanges is called before
@@ -577,6 +571,7 @@ final class CloudSyncEngine: ObservableObject {
             var deleteIDs: [CKRecord.ID] = []
 
             for dirty in filteredDirty {
+                guard UploadPolicy.allowsLegacyRecordType(dirty.recordType) else { continue }
                 // Guard against empty values — CKRecord.ID throws NSException for empty recordName
                 guard !dirty.recordType.isEmpty, !dirty.recordId.isEmpty, !dirty.zoneName.isEmpty else {
                     logger.warning("[CloudSync] Skipping dirty record with empty fields: type='\(dirty.recordType)' id='\(dirty.recordId)' zone='\(dirty.zoneName)'")
@@ -3033,7 +3028,16 @@ extension CloudSyncEngine: CKSyncEngineDelegate {
         syncEngine: CKSyncEngine
     ) async -> CKSyncEngine.RecordZoneChangeBatch? {
         // No await — reads from thread-safe PendingRecordChanges, no re-entry possible.
-        let (allRecords, allDeleteIDs) = pendingChanges.takeAll()
+        let pending = pendingChanges.takeAll()
+        // CKSyncEngine can ask after an async build or a settings toggle.
+        // Remove paused items from its volatile state only; their dirty rows
+        // remain available when the user enables that category again.
+        let blocked = pending.records.filter { !UploadPolicy.allowsLegacyRecordType($0.recordType) }
+        let blockedDeletes = pending.deleteIDs.filter { !UploadPolicy.allowsRecordName($0.recordName, legacy: true) }
+        syncEngine.state.remove(pendingRecordZoneChanges:
+            blocked.map { .saveRecord($0.recordID) } + blockedDeletes.map { .deleteRecord($0) })
+        let allRecords = pending.records.filter { UploadPolicy.allowsLegacyRecordType($0.recordType) }
+        let allDeleteIDs = pending.deleteIDs.filter { UploadPolicy.allowsRecordName($0.recordName, legacy: true) }
 
         guard !allRecords.isEmpty || !allDeleteIDs.isEmpty else { return nil }
 

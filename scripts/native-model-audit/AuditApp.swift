@@ -4,7 +4,15 @@ import SwiftUI
     init() { _ = ProviderConfigStore.shared }
     var body: some Scene {
         WindowGroup {
-            AuditRoot()
+            Group {
+                #if HOME_COMPOSER_AUDIT
+                if ProcessInfo.processInfo.environment["AUDIT_ROUTE"] == "home" {
+                    AuditHomeComposer()
+                } else { AuditRoot() }
+                #else
+                AuditRoot()
+                #endif
+            }
                 .environment(\.locale, Locale(identifier: ProcessInfo.processInfo.environment["AUDIT_LANGUAGE"] ?? "en_US"))
                 .dynamicTypeSize(ProcessInfo.processInfo.environment["AUDIT_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
         }
@@ -13,6 +21,9 @@ import SwiftUI
 
 private enum AuditRoute: String, Identifiable {
     case quick, full, groups, catalog, onboarding, draft, voiceInput, voiceOutput
+    #if HOME_COMPOSER_AUDIT
+    case home
+    #endif
     var id: String { rawValue }
 }
 
@@ -43,6 +54,9 @@ private struct AuditRoot: View {
         NavigationStack {
             List {
                 Section("Production view journeys") {
+                    #if HOME_COMPOSER_AUDIT
+                    Button("Home composer") { route = .home }.accessibilityIdentifier("audit.open.home")
+                    #endif
                     Button("Quick picker") { route = .quick }.accessibilityIdentifier("audit.open.quick")
                     Button("Full picker") { route = .full }.accessibilityIdentifier("audit.open.full")
                     Button("Model groups") { route = .groups }.accessibilityIdentifier("audit.open.groups")
@@ -78,6 +92,9 @@ private struct AuditRoot: View {
             .sheet(item: $route) { destination in
                 Group {
                 switch destination {
+                #if HOME_COMPOSER_AUDIT
+                case .home: AuditHomeComposer()
+                #endif
                 case .quick:
                     QuickModelSwitchSheet(sessionId: "audit-session", ensureSessionId: nil)
                 case .full:
@@ -95,7 +112,7 @@ private struct AuditRoot: View {
                 case .onboarding:
                     NavigationStack { OnboardingModelSelectionView() }
                 case .draft:
-                    QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: draftKey, onPick: { key in draftKey = key; route = nil })
+                    QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: draftKey, onPick: { key in draftKey = key; route = nil }, onResetToDefault: { draftKey = nil; route = nil })
                 case .voiceInput:
                     NavigationStack { UnifiedModelPicker(config: .voiceInput()) }
                 case .voiceOutput:

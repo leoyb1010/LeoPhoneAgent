@@ -676,6 +676,14 @@ struct GatewayConsoleView: View {
                 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
+            if let unsent = driver.unsentPrompt {
+                Button("Restore unsent text") {
+                    input = input.isEmpty ? unsent : unsent + "\n\n" + input
+                    driver.unsentPrompt = nil
+                }
+                .font(.footnote)
+                .padding(.horizontal, 14)
+            }
             composer
         }
         .navigationTitle(Text(host.name))
@@ -695,6 +703,11 @@ struct GatewayConsoleView: View {
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.pendingApproval?.runId)
         .onAppear { driver.reattachIfNeeded() }
         .onDisappear { driver.cancelLocalStream() }
+        .onChange(of: driver.unsentPrompt) { _, text in
+            guard let text, input.isEmpty else { return }
+            input = text
+            driver.unsentPrompt = nil
+        }
     }
 
     private var transcript: some View {

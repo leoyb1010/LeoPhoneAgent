@@ -866,16 +866,22 @@ enum CollectionStore {
         }
     }
 
-    static func update(_ item: CollectedItem) {
+    /// A successful result confirms the authoritative row and its change journal
+    /// committed. The legacy fallback is recovery data, not a SQLite commit.
+    @discardableResult
+    static func update(_ item: CollectedItem) -> Bool {
         ioQueue.sync {
-            guard let directory else { return }
+            guard let directory else { return false }
             do {
-                try TreasurySQLiteStore(directory: directory).update(item)
+                // Reuse the existing checked transaction; nil preserves the
+                // item's collection membership, and missing rows return false.
+                return try TreasurySQLiteStore(directory: directory).agentUpdate(item, collectionIDs: nil)
             } catch {
                 mutateLegacyLocked { items in
                     guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
                     items[index] = item
                 }
+                return false
             }
         }
     }

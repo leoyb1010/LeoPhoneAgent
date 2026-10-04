@@ -1341,16 +1341,19 @@ actor ChatStore {
 
     func searchSessions(query: String) -> [SearchResult] {
         guard !query.isEmpty else { return [] }
-        let likePattern = "%\(query)%"
+        let escapedQuery = query.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+        let likePattern = "%\(escapedQuery)%"
         // Find sessions where title matches OR any message text contains the query
         let sql = """
             SELECT DISTINCT s.id, s.title, s.model_id, s.created_at, s.updated_at, s.category,
                    (SELECT m2.parts_json FROM messages m2
-                    WHERE m2.session_id = s.id AND m2.parts_json LIKE ?
+                    WHERE m2.session_id = s.id AND m2.parts_json LIKE ? ESCAPE '\\'
                     ORDER BY m2.sort_order DESC LIMIT 1)
             FROM sessions s
             LEFT JOIN messages m ON m.session_id = s.id
-            WHERE s.title LIKE ? OR m.parts_json LIKE ?
+            WHERE s.title LIKE ? ESCAPE '\\' OR m.parts_json LIKE ? ESCAPE '\\'
             GROUP BY s.id
             ORDER BY s.updated_at DESC
             """
@@ -3748,7 +3751,7 @@ actor ChatStore {
     /// Scan workspace/offloads/attachments dirs for a session and markDirty for each file.
     /// Returns number of files marked.
     @discardableResult
-    private func scanAndMarkSessionFiles(sessionId: String, priority: Int = 0) -> Int {
+    private func scanAndMarkSessionFiles(sessionId: String, priority: Int = 0, preservingPending: Bool = false) -> Int {
         let fm = FileManager.default
         let library = fm.urls(for: .libraryDirectory, in: .userDomainMask).first!
         let sessionDir = library.appendingPathComponent("MinisChat/minis/\(sessionId)")
@@ -3790,7 +3793,11 @@ actor ChatStore {
                 let fileStd = fileURL.standardizedFileURL.path
                 let prefix = sessionDirStd + "/"
                 let relativePath = fileStd.hasPrefix(prefix) ? String(fileStd.dropFirst(prefix.count)) : fileURL.lastPathComponent
-                markDirty(recordType: "SessionFile", recordId: "\(sessionId):\(relativePath)", priority: priority)
+                if preservingPending {
+                    stageUploadBackfillRecord(recordType: "SessionFile", recordId: "\(sessionId):\(relativePath)")
+                } else {
+                    markDirty(recordType: "SessionFile", recordId: "\(sessionId):\(relativePath)", priority: priority)
+                }
                 count += 1
                 subdirCount += 1
                 totalBytes += fileSize
@@ -4330,6 +4337,10 @@ extension ChatStore {
     }
 
     func configureSyncDestinations(_ enabled: Set<String>) throws {
+        // SyncCore.replaceTransports calls this on normal startup, before any
+        // transport starts; sendNow repeats it for an already-running process.
+        let retired = try SyncDeliveryLedger.retireEmptyLegacyContainerUpserts(db)
+        if retired > 0 { iCloudLogger.info("[SyncCore] retired \(retired) empty legacy container upsert intents locally") }
         try SyncDeliveryLedger.configure(db, enabled: enabled)
     }
     @discardableResult
@@ -4338,7 +4349,7 @@ extension ChatStore {
     }
     func loadSyncDeliveryTickets(destination: String, limit: Int = 100) throws -> [SyncDeliveryTicket] {
         try SyncDeliveryLedger.load(db, destination: destination, limit: limit,
-            excludingTypes: Set(UploadPolicy.Category.allCases.filter { !UploadPolicy.isEnabled($0) }.flatMap { $0.recordTypes }))
+            excludingTypes: UploadPolicy.disabledRecordTypes)
     }
     func acknowledgeSyncDelivery(_ ticket: SyncDeliveryTicket) throws {
         try SyncDeliveryLedger.acknowledge(db, ticket: ticket)
@@ -4373,15 +4384,14 @@ extension ChatStore {
             iCloudLogger.info("[iCloudTrace] markDirty SKIP type=\(recordType) id=\(recordId.prefix(20)) op=\(operation) reason=zoneEmpty(syncNotInitialized)")
             return
         }
-        // User-configurable upload policy: skip categories the user has
-        // disabled in iCloud Sync settings (Chat Sessions / Skills /
-        // Providers / Environments / Session Files). SyncDeviceV2 is
-        // always allowed because peer discovery depends on it.
-        guard UploadPolicy.allowsRecordType(recordType) else {
-            iCloudLogger.info("[iCloudTrace] markDirty SKIP type=\(recordType) id=\(recordId.prefix(20)) op=\(operation) reason=uploadPolicyDisabled(user-toggled-off-in-Settings)")
-            return
-        }
+        // Upload preferences pause delivery, not local intent. Keeping edits
+        // and deletes in the durable queue lets re-enabling a category resume
+        // without losing changes or resurrecting a deletion from a peer.
+        let v2Type = Self.v2RecordType(forV1: recordType)
+        let retiredV2Upsert = SyncDeliveryLedger.isRetiredContainerUpsert(
+            recordType: v2Type, recordId: recordId, operation: operation)
         if let destination = seedingDestination {
+            guard UploadPolicy.allowsRecordType(recordType), !retiredV2Upsert else { return }
             do {
                 try SyncDeliveryLedger.seed(db, destination: destination,
                                             recordType: Self.v2RecordType(forV1: recordType), recordId: recordId)
@@ -4451,11 +4461,13 @@ extension ChatStore {
         // UserDefaults is thread-safe; the actor isolation on
         // SyncV2Bootstrap.* is a Swift-6 concurrency annotation, not a
         // real main-thread requirement.
-        let v2Type = Self.v2RecordType(forV1: recordType)
         let v2Enabled = SyncV2Bootstrap.isAnyEnabled
         let migStatus = UserDefaults.standard.string(forKey: "cloudSync.v2.migrationStatus") ?? "pending"
         let v1Paused = v2Enabled && migStatus != "failed"
-        let writeV1Row = !(v1Paused && v2Type != recordType)
+        // A file scanner may still announce the legacy aggregate. Keep its
+        // V1 row when that engine is active, but never recreate retired V2
+        // upserts (or overwrite their one-time explicit deletion intent).
+        let writeV1Row = !(v1Paused && v2Type != recordType) && !(retiredV2Upsert && recordType == v2Type)
         // v1 dirty row.
         var stmt: OpaquePointer?
         // DIAG (T-memory-row-vanish): rows for MemoryGlobalV2/MemoryDailyV2
@@ -4489,7 +4501,7 @@ extension ChatStore {
         // looks up by V2-suffixed type names, so dual-writing here lets
         // both engines coexist during the v2 rollout. v1 ignores rows it
         // doesn't recognize; v2 ignores the un-suffixed names.
-        if v2Type != recordType {
+        if v2Type != recordType, !retiredV2Upsert {
             var v2Stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, sql, -1, &v2Stmt, nil) == SQLITE_OK {
                 sqlite3_bind_text(v2Stmt, 1, (v2Type as NSString).utf8String, -1, nil)
@@ -4513,7 +4525,7 @@ extension ChatStore {
         // without triggering a full sync on every individual write.
         // Skip during agent processing (syncSendDeferred) — flushPendingSyncDirty
         // will trigger a single send when the agent loop finishes.
-        if !syncSendDeferred {
+        if !syncSendDeferred, UploadPolicy.allowsRecordType(recordType) {
             if #available(iOS 17.0, *) {
                 Task { @MainActor in
                     // Drive whichever engine the user is currently on.
@@ -4543,6 +4555,66 @@ extension ChatStore {
         case "Soul":            return "SoulV2"
         case "MCPServers":      return "MCPServersV2"   // [T-mcp-integration-ios]
         default:                return v1Type
+        }
+    }
+
+    /// A category snapshot fills missing work only. Pending edits, frozen
+    /// revisions and deletes always win over this possibly older enumeration.
+    func stageUploadBackfillRecord(recordType: String, recordId: String, operation: String = "upsert") {
+        guard UploadPolicy.allowsRecordType(recordType) else { return }
+        let sql = """
+            SELECT 1 FROM sync_dirty_records WHERE record_type IN (?, ?) AND record_id = ?
+            UNION ALL
+            SELECT 1 FROM sync_delivery_tickets WHERE record_type IN (?, ?) AND record_id = ?
+            LIMIT 1
+            """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return }
+        let values = [recordType, Self.v2RecordType(forV1: recordType), recordId]
+        for (index, value) in (values + values).enumerated() {
+            sqlite3_bind_text(statement, Int32(index + 1), (value as NSString).utf8String, -1,
+                             unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        }
+        guard sqlite3_step(statement) == SQLITE_DONE else { return }
+        markDirty(recordType: recordType, recordId: recordId, operation: operation, priority: 1)
+    }
+
+    /// Backfill chat metadata OR its files, never both implicitly. Pages yield
+    /// to normal chat writes and recheck the user's toggle between pages.
+    func stageChatUploadCategory(_ category: UploadPolicy.Category) async {
+        let tables: [(type: String, table: String)]
+        switch category {
+        case .chatSessions:
+            tables = [("Session", "sessions"), ("Message", "messages"), ("CompactMarker", "compact_markers")]
+        case .sessionFiles:
+            tables = [("SessionFile", "sessions")]
+        default: return
+        }
+        for (type, table) in tables {
+            var lastID = ""
+            while !Task.isCancelled, UploadPolicy.isEnabled(category) {
+                var page: [String] = []
+                let sql = "SELECT id FROM \(table) WHERE id > ? ORDER BY id LIMIT 100"
+                var statement: OpaquePointer?
+                guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return }
+                sqlite3_bind_text(statement, 1, (lastID as NSString).utf8String, -1,
+                                 unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    page.append(String(cString: sqlite3_column_text(statement, 0)))
+                }
+                sqlite3_finalize(statement)
+                guard let last = page.last else { break }
+                for id in page {
+                    if category == .sessionFiles {
+                        _ = scanAndMarkSessionFiles(sessionId: id, priority: 1, preservingPending: true)
+                    } else {
+                        stageUploadBackfillRecord(recordType: type, recordId: id)
+                    }
+                }
+                lastID = last
+                await Task.yield()
+            }
         }
     }
 
@@ -5069,7 +5141,7 @@ extension ChatStore {
         return try stepInbound(statement) == SQLITE_ROW
     }
 
-    func loadDirtyRecords(v2Only: Bool = false) -> [DirtyRecord] {
+    func loadDirtyRecords(v2Only: Bool = false, allowedTypes: Set<String>? = nil) -> [DirtyRecord] {
         // Order Sessions first so receiving device creates sessions before messages arrive
         // Order:
         //   1. priority ASC — user-driven writes (priority=0) before
@@ -5080,7 +5152,15 @@ extension ChatStore {
         //      sees parents before their children.
         //   3. created_at ASC within the same priority/type — push the
         //      oldest dirty first so the queue drains FIFO.
-        let whereClause = v2Only ? "WHERE record_type IN (\(Self.v2SyncRecordTypesSQL))" : ""
+        // Only outbound callers pass allowedTypes. Inbound conflict checks
+        // must still see paused local edits. Apply this filter BEFORE LIMIT.
+        var predicates = v2Only ? ["record_type IN (\(Self.v2SyncRecordTypesSQL))"] : []
+        let allowed = allowedTypes?.sorted()
+        if let allowed {
+            guard !allowed.isEmpty else { return [] }
+            predicates.append("record_type IN (" + Array(repeating: "?", count: allowed.count).joined(separator: ",") + ")")
+        }
+        let whereClause = predicates.isEmpty ? "" : "WHERE " + predicates.joined(separator: " AND ")
         // Newest first within each priority+type group: gives perceived
         // sync responsiveness for what the user just touched while the
         // backlog drains in the background. Parent types (Session*) still
@@ -5103,6 +5183,10 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var records: [DirtyRecord] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            for (index, type) in (allowed ?? []).enumerated() {
+                sqlite3_bind_text(stmt, Int32(index + 1), (type as NSString).utf8String, -1,
+                                 unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
             while sqlite3_step(stmt) == SQLITE_ROW {
                 records.append(DirtyRecord(
                     recordType: String(cString: sqlite3_column_text(stmt, 0)),

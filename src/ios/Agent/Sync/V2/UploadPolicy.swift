@@ -9,10 +9,9 @@ import Foundation
 /// Defaults are permissive — fresh installs sync everything until the
 /// user opts out.
 ///
-/// Filtering happens at `ChatStore.markDirty` so disabled types never
-/// even enter the dirty queue. Records that are already on iCloud from
-/// a prior policy are NOT pulled back; turning a category off only
-/// stops new writes.
+/// Local edits/deletes remain in the dirty queue while a category is off.
+/// Filtering happens before dequeue limits and again at each network send.
+/// Records already uploaded are not removed by turning a category off.
 enum UploadPolicy {
 
     enum Category: String, CaseIterable {
@@ -75,7 +74,7 @@ enum UploadPolicy {
         UserDefaults.standard.set(enabled, forKey: cat.defaultsKey)
     }
 
-    /// Quick lookup: should `markDirty(recordType:)` be allowed through?
+    /// Quick lookup: may this record leave the device right now?
     /// SyncDeviceV2 is always allowed (device discovery itself can't be
     /// disabled — without it the device list would never populate).
     static func allowsRecordType(_ recordType: String) -> Bool {
@@ -86,6 +85,39 @@ enum UploadPolicy {
             return isEnabled(cat)
         }
         return true   // unknown types pass through (forward-compat)
+    }
+
+    static var disabledRecordTypes: Set<String> {
+        Set(Category.allCases.filter { !isEnabled($0) }.flatMap { $0.recordTypes })
+    }
+
+    /// The legacy fallback engine must respect both its persisted preferences
+    /// and the current category controls, including batches queued before a toggle.
+    static func allowsLegacyRecordType(_ recordType: String) -> Bool {
+        guard allowsRecordType(recordType) else { return false }
+        let key: String
+        switch recordType {
+        case "Session", "Message", "CompactMarker": key = "cloudSync.syncSessions"
+        case "SessionFile": key = "cloudSync.syncFiles"
+        case "Skill": key = "cloudSync.syncSkills"
+        case "ProviderConfig": key = "cloudSync.syncProviders"
+        case "EnvVar": key = "cloudSync.syncEnvironments"
+        case "SyncDevice": return true
+        default: return false
+        }
+        return (UserDefaults.standard.object(forKey: key) as? Bool) ?? true
+    }
+
+    static func allowsRecordName(_ name: String, legacy: Bool = false) -> Bool {
+        guard let separator = name.firstIndex(of: ":"), separator != name.startIndex else { return false }
+        let type = String(name[..<separator])
+        return legacy ? allowsLegacyRecordType(type) : allowsRecordType(type)
+    }
+
+    struct UploadPaused: Error {}
+
+    static func requireUpload(_ recordType: String) throws {
+        guard allowsRecordType(recordType) else { throw UploadPaused() }
     }
 
     // MARK: - Per-file cap

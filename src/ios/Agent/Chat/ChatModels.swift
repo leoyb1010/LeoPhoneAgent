@@ -115,6 +115,7 @@ struct QueuedPrompt: Identifiable {
     let text: String
     let attachments: [InputAttachment]
     let timestamp = Date()
+    var treasuryContext: String? = nil
 }
 
 /// Token usage for the current assistant turn.

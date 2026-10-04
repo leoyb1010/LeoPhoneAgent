@@ -279,7 +279,12 @@ struct ModelLibraryView: View {
         }
         .navigationTitle("Model Library")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { dismiss() }
+                    .accessibilityIdentifier("model-picker.close-library")
+            }
+        }
         .sheet(item: $editingEntry) { ModelEntryDetailSheet(entry: $0) }
         .sheet(isPresented: Binding(get: { addingInstanceId != nil }, set: { if !$0 { addingInstanceId = nil } })) {
             if let id = addingInstanceId { AddCustomModelSheet(instanceId: id) }

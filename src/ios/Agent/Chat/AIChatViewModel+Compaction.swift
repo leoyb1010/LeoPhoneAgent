@@ -46,13 +46,15 @@ extension AIChatViewModel {
         showCompactBeforeSendPrompt = false
         let text = pendingSendText ?? ""
         let atts = pendingSendAttachments
+        let treasuryContext = pendingSendTreasuryContext
+        pendingSendTreasuryContext = nil
         pendingSendText = nil
         pendingSendRawText = nil
         pendingSendPastedBlocks = []
         pendingSendAttachments = []
 
         // Show the message as queued immediately
-        let queuedPrompt = QueuedPrompt(text: text, attachments: atts)
+        let queuedPrompt = QueuedPrompt(text: text, attachments: atts, treasuryContext: treasuryContext)
         promptQueue.append(queuedPrompt)
         let chatMsg = ChatMessage(role: .user, content: text, isQueued: true)
         chatMsg.queuedPromptId = queuedPrompt.id
@@ -71,6 +73,7 @@ extension AIChatViewModel {
             let sendParked = { [self] in
                 inputText = text
                 attachments = atts
+                pendingTreasuryContext = treasuryContext
                 skipCompactCheck = true
                 send()
             }
@@ -154,6 +157,8 @@ extension AIChatViewModel {
             }
             attachments += pendingSendAttachments
         }
+        pendingTreasuryContext = ComposerDraftSnapshot.mergedTreasuryContext(pendingTreasuryContext, pendingSendTreasuryContext)
+        pendingSendTreasuryContext = nil
         pendingSendText = nil
         pendingSendRawText = nil
         pendingSendPastedBlocks = []

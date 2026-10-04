@@ -7,6 +7,9 @@ struct SessionModelPicker: View {
     var ensureSessionId: (() async -> String)?
     var draftChoice: String? = nil
     var onPick: ((String) -> Void)? = nil
+    var prefersQuickSelection = false
+    var onResetToDefault: (() -> Void)?
+    var onExpand: (() -> Void)?
     @ObservedObject private var store = ProviderConfigStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var pendingNonTextOutput: PendingSelection?
@@ -22,11 +25,16 @@ struct SessionModelPicker: View {
     }
 
     init(sessionId: String?, ensureSessionId: (() async -> String)? = nil,
-         draftChoice: String? = nil, onPick: ((String) -> Void)? = nil) {
+         draftChoice: String? = nil, onPick: ((String) -> Void)? = nil,
+         prefersQuickSelection: Bool = false, onResetToDefault: (() -> Void)? = nil,
+         onExpand: (() -> Void)? = nil) {
         self.sessionId = sessionId
         self.ensureSessionId = ensureSessionId
         self.draftChoice = draftChoice
         self.onPick = onPick
+        self.prefersQuickSelection = prefersQuickSelection
+        self.onResetToDefault = onResetToDefault
+        self.onExpand = onExpand
     }
 
     private var currentEntryId: String? {
@@ -67,7 +75,10 @@ struct SessionModelPicker: View {
             currentGroupId: { [self] in currentGroupId },
             onSelect: { entry in handleEntryTap(entry) },
             onSelectGroup: { group in handleGroupTap(group) },
-            onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) }
+            onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) },
+            prefersQuickSelection: prefersQuickSelection,
+            onResetToDefault: onResetToDefault.map { action in { action(); dismiss() } },
+            onExpand: onExpand
         ))
         .disabled(isCommitting)
         .alert("Could not select model", isPresented: Binding(

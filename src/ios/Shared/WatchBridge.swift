@@ -19,6 +19,7 @@
 //
 
 import CryptoKit
+import Combine
 import Foundation
 #if canImport(WatchConnectivity)
 import WatchConnectivity
@@ -277,6 +278,11 @@ enum WatchStandalone {
 @MainActor
 final class WatchBridge: NSObject, ObservableObject {
     static let shared = WatchBridge()
+    @Published private(set) var connectionRevision: UInt = 0
+
+    /// Settings reads live WCSession properties; lifecycle changes must invalidate
+    /// those computed values even when no model/tool preference changed.
+    func refreshWatchState() { connectionRevision &+= 1 }
 
     private var session: WCSession? {
         WCSession.isSupported() ? WCSession.default : nil
@@ -441,7 +447,8 @@ final class WatchBridge: NSObject, ObservableObject {
         }
     }
 
-    /// Why nothing reaches the watch right now; nil when it can.
+    /// Why a background configuration transfer cannot be queued. A temporarily
+    /// unreachable but activated/paired/installed watch remains eligible.
     var watchUnreachableReason: String? {
         guard let session else { return String(localized: "只有 iPhone 能配对 Apple Watch。") }
         #if os(iOS)
@@ -514,6 +521,7 @@ extension WatchBridge: WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {
+        Task { @MainActor in self.refreshWatchState() }
         if let error {
             logger.error("WCSession activation failed: \(error.localizedDescription)")
             return
@@ -531,11 +539,25 @@ extension WatchBridge: WCSessionDelegate {
     }
 
     #if os(iOS)
-    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
+        Task { @MainActor in self.refreshWatchState() }
+    }
+
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        Task { @MainActor in
+            self.refreshWatchState()
+            self.resetDedupe()
+            self.syncStandaloneConfigIfNeeded(force: true)
+            self.pushStatus()
+        }
+    }
 
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
         // Re-activate so a switched watch keeps working.
-        Task { @MainActor in WatchBridge.shared.resetDedupe() }
+        Task { @MainActor in
+            self.refreshWatchState()
+            self.resetDedupe()
+        }
         session.activate()
     }
     #endif
@@ -629,8 +651,10 @@ extension WatchBridge: WCSessionDelegate {
 /// Stub so call sites don't need availability checks on platforms without
 /// WatchConnectivity.
 @MainActor
-final class WatchBridge {
+final class WatchBridge: ObservableObject {
     static let shared = WatchBridge()
+    @Published private(set) var connectionRevision: UInt = 0
+    func refreshWatchState() { connectionRevision &+= 1 }
     var watchUnreachableReason: String? { String(localized: "只有 iPhone 能配对 Apple Watch。") }
     func activate() {}
     func pushStatus() {}
@@ -774,19 +798,14 @@ enum WatchAskRunner {
         // An unsent draft in that chat stays where it was, folded pastes
         // included (send() clears them, and the draft's [Pasted#N] tokens
         // would come back pointing at nothing).
-        let draft = (text: vm.inputText, attachments: vm.attachments, pasted: vm.pastedBlocks)
-        vm.inputText = prompt + wristReminder
-        vm.attachments = []
-        vm.pastedBlocks = []
         // Messages before this turn; the assistant turn it produces comes after.
         let baseline = vm.messages.count
-        vm.send()
-        // send() can return without starting anything (context full, a
-        // "/model" command, a compaction waiting for the user's OK).
-        let runStarted = vm.isProcessing || vm.isCompacting || vm.compactAndSendRequestId != nil
-        vm.inputText = draft.text
-        vm.attachments = draft.attachments
-        vm.pastedBlocks = draft.pasted
+        let runStarted = vm.withComposerSetAside {
+            vm.inputText = prompt + wristReminder
+            vm.send()
+            // send() can park for compaction instead of starting a run.
+            return vm.isProcessing || vm.isCompacting || vm.compactAndSendRequestId != nil
+        }
         guard runStarted else {
             // The eager keep-alive above registered this session as running;
             // nothing else would ever mark it done.

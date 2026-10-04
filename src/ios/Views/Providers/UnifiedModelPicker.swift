@@ -106,6 +106,9 @@ struct ModelPickerConfig {
     var onAddMulti: (@MainActor (Set<String>) -> Void)?
     /// Ordered callback for routing groups: tap order becomes fallback priority.
     var onAddOrdered: (@MainActor ([String]) -> Bool)?
+    var prefersQuickSelection = false
+    var onResetToDefault: (@MainActor () -> Void)?
+    var onExpand: (@MainActor () -> Void)?
 
     enum Mode { case single, multi }
     enum GroupScope {
@@ -256,9 +259,10 @@ struct UnifiedModelPicker: View {
     @State private var searchText = ""
 
     private enum BrowseScope: String, CaseIterable {
-        case favorites, providers, groups
+        case quick, favorites, providers, groups
         var title: LocalizedStringKey {
             switch self {
+            case .quick: return "Quick picks"
             case .favorites: return "Favorites"
             case .providers: return "Providers"
             case .groups: return "Groups"
@@ -266,6 +270,14 @@ struct UnifiedModelPicker: View {
         }
     }
     private var isSearching: Bool { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var isQuickBrowse: Bool { config.prefersQuickSelection && browseScope == .quick && !isMulti }
+    private var quickRecentEntries: [ModelEntry] {
+        let favorites = Set(favoriteEntries.map(\.id))
+        return Array(ModelCatalog.orderedEntries(
+            keys: ModelSwitcher.normalizedChoiceKeys(ModelSwitcher.recentKeys, store: store),
+            entries: candidateEntries
+        ).filter { !favorites.contains($0.id) && memberUnavailableReason($0.id) == nil }.prefix(3))
+    }
     private var supportsGroups: Bool { config.showGroups && !isMulti && config.onSelectGroup != nil }
     private var scopes: [BrowseScope] { supportsGroups ? [.favorites, .providers, .groups] : [.favorites, .providers] }
     private var favoriteEntries: [ModelEntry] {
@@ -285,6 +297,7 @@ struct UnifiedModelPicker: View {
     /// so users can reconfigure groups without dismissing the picker and digging
     /// through Settings.
     @State private var showGroupsManager = false
+    @State private var showModelLibrary = false
     /// The model row whose Quick Test sheet is open (nil = none). Set by the
     /// per-row bolt button so any model — cloud, group member, or System voice —
     /// can be smoke-tested (speak / text output) without leaving the picker.
@@ -401,7 +414,10 @@ struct UnifiedModelPicker: View {
 
     var body: some View {
         List {
-            if !isSearching && !editMode.isEditing {
+            if !isSearching && isQuickBrowse {
+                quickSections
+            }
+            if !isSearching && !editMode.isEditing && !isQuickBrowse {
                 if !isMulti { selectionSummary }
                 Section {
                     if dynamicTypeSize.isAccessibilitySize {
@@ -456,7 +472,10 @@ struct UnifiedModelPicker: View {
             SystemVoiceCatalog.startObservingVoiceChanges()
         }
         .onChange(of: browseScope) { _, _ in editMode = .inactive }
-        .onChange(of: searchText) { _, _ in editMode = .inactive }
+        .onChange(of: searchText) { _, _ in
+            editMode = .inactive
+            if isSearching { config.onExpand?() }
+        }
         .safeAreaInset(edge: .bottom) {
             if isMulti {
                 Button { commitMultiSelection() } label: {
@@ -497,6 +516,11 @@ struct UnifiedModelPicker: View {
                     }
             }
         }
+        .sheet(isPresented: $showModelLibrary) {
+            NavigationStack {
+                ModelLibraryView()
+            }
+        }
         .sheet(item: $quickTestEntry) { entry in
             // [T-quicktest-stale-session] .id(entry.id) forces a FRESH view
             // identity per model: @StateObject's initial-value closure only
@@ -508,6 +532,65 @@ struct UnifiedModelPicker: View {
                 .id(entry.id)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var quickSections: some View {
+        // The selected favorite already has a checkmark and provider label.
+        // Don't spend the compact sheet repeating the same model above it.
+        if config.currentGroupId?() != nil || !favoriteEntries.prefix(3).contains(where: { $0.id == config.currentEntryId?() }) {
+            selectionSummary
+        }
+        if !favoriteEntries.isEmpty {
+            Section("Favorites") {
+                ForEach(favoriteEntries.prefix(3)) { entry in entryRow(entry) }
+                Button("All favorites") { browseScope = .favorites; config.onExpand?() }
+                    .accessibilityIdentifier("model-picker.all-favorites")
+            }
+        }
+        if !quickRecentEntries.isEmpty {
+            Section("Recently used") {
+                ForEach(quickRecentEntries) { entry in entryRow(entry) }
+            }
+        }
+        if favoriteEntries.isEmpty && quickRecentEntries.isEmpty {
+            let available = candidateEntries.filter { memberUnavailableReason($0.id) == nil }
+            if available.isEmpty {
+                emptySection
+            } else {
+                Section("Available models") {
+                    ForEach(available.prefix(3)) { entry in entryRow(entry) }
+                }
+            }
+        }
+        Section {
+            if let reset = config.onResetToDefault {
+                Button(action: reset) {
+                    Label("Use saved default", systemImage: "arrow.uturn.backward")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("model-picker.use-default")
+            }
+            Button { browseScope = .providers; config.onExpand?() } label: {
+                Label("All models", systemImage: "list.bullet")
+                    .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("model-picker.all-models")
+            if supportsGroups {
+                Button { browseScope = .groups; config.onExpand?() } label: {
+                    Label("Groups", systemImage: "square.stack.3d.up")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("model-picker.all-groups")
+            }
+            Button { showModelLibrary = true } label: {
+                Label("Model Library", systemImage: "slider.horizontal.3")
+                    .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("model-picker.library")
+        } footer: {
+            if let note = config.headerNote { Text(note) }
         }
     }
 
@@ -682,6 +765,14 @@ struct UnifiedModelPicker: View {
                 Button("Cancel") { dismiss() }
             }
         } else {
+            if config.prefersQuickSelection && browseScope != .quick && !isSearching {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { browseScope = .quick } label: {
+                        Label("Quick picks", systemImage: "chevron.backward")
+                    }
+                    .accessibilityIdentifier("model-picker.back-to-quick")
+                }
+            }
             if browseScope == .favorites && !isSearching && !favoriteEntries.isEmpty {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(editMode.isEditing ? "Done editing" : "Edit") {
@@ -1065,9 +1156,11 @@ struct UnifiedModelPicker: View {
                         if let provider = store.instance(for: entry.providerInstanceId) {
                             Text(provider.label).font(.caption).foregroundStyle(.secondary)
                         }
-                        Text(traits.subtitle ?? entry.model.id)
-                            .font(isSearching ? .caption2 : .caption).foregroundStyle(.secondary)
-                            .lineLimit(isSearching ? 1 : 2).textSelection(.disabled)
+                        if !isQuickBrowse || isSearching {
+                            Text(traits.subtitle ?? entry.model.id)
+                                .font(isSearching ? .caption2 : .caption).foregroundStyle(.secondary)
+                                .lineLimit(isSearching ? 1 : 2).textSelection(.disabled)
+                        }
                         if disabled { Text(unavailable ?? String(localized: "Unavailable for this purpose")).font(.caption).foregroundStyle(.orange) }
                     }
                     Spacer(minLength: 0)
@@ -1075,6 +1168,8 @@ struct UnifiedModelPicker: View {
             }
             .buttonStyle(.borderless)
             .disabled(disabled)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
             .accessibilityIdentifier("model-picker.entry.\(entry.id)")
             .accessibilityValue(selected ? Text("Selected") : Text("Not selected"))
             if !VoiceProviderResolver.isSystemEntry(entry.providerInstanceId) { favoriteButton(entry) }
@@ -1154,7 +1249,10 @@ struct UnifiedModelPicker: View {
     private func seedCollapse() {
         guard !collapseSeeded else { return }
         collapseSeeded = true
-        if !isMulti && config.effectivePreferModality == nil && !favoriteEntries.isEmpty { browseScope = .favorites }
+        if !isMulti && config.effectivePreferModality == nil {
+            if config.prefersQuickSelection { browseScope = .quick }
+            else if !favoriteEntries.isEmpty { browseScope = .favorites }
+        }
         // Voice pickers (Voice Input / Output group binding, or an explicit audio
         // modality preference) exist specifically to browse and add TTS/ASR voices.
         // Dedicated voice providers carry many rows (Azure TTS ~39 voices, Doubao

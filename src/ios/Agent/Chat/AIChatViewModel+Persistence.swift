@@ -973,17 +973,30 @@ extension AIChatViewModel {
 
     /// Lazily create a session on first message send (draft mode).
     func ensureSession() async {
-        guard sessionId == nil else { return }
         await ensureSessionReturningId()
     }
 
-    /// Creates a session if needed and returns its ID.
+    /// Creates one fully initialized session for every concurrent draft caller.
     @discardableResult
     func ensureSessionReturningId() async -> String {
+        // sessionId is assigned before later initialization awaits. A caller
+        // joining in that window must wait, or the initial binding can overwrite
+        // its model/skill/MCP changes after it returns.
+        if let pending = sessionCreationTask { return await pending.value }
         if let sid = sessionId {
             logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] ensureSession already has sessionId=\(sid)")
             return sid
         }
+        // This shared task is not owned by any one sheet's cancellation. Once
+        // persistence starts, finish initialization for the remaining callers;
+        // each caller still owns its own follow-up operation and cancellation.
+        let pending = Task { @MainActor in await self.createDraftSession() }
+        sessionCreationTask = pending
+        defer { sessionCreationTask = nil }
+        return await pending.value
+    }
+
+    private func createDraftSession() async -> String {
         syncSelectedModelFromBinding()
         let model = selectedModel
         let session = await ChatStore.shared.createSession(modelId: model.id, source: sessionSource)
@@ -1157,8 +1170,11 @@ extension AIChatViewModel {
 
         // [T-home-model-pick] Tier 0 — a model picked on the Home page for this chat.
         // Same binding the in-chat picker writes (ModelSwitcher.apply's direct entry).
-        if let key = initialEntryKey, let entry = store.entry(for: key), !entry.isHidden,
-           let instance = store.instance(for: entry.providerInstanceId), instance.isEnabled {
+        if initialEntryKey != nil {
+            guard let entry = resolveInitialEntry(store: store) else {
+                errorMessage = String(localized: "This model is no longer available. Choose another model.")
+                return
+            }
             var subSource: SessionModelSource? = nil
             if let subGroupId = store.defaultSubGroupId,
                let subGroup = store.group(for: subGroupId),
@@ -1178,10 +1194,15 @@ extension AIChatViewModel {
 
         // Tier 0 — explicit group from long-press FAB.
         let overrideGroupId = initialGroupId
+        let explicitGroupEntry = overrideGroupId == nil ? nil : resolveInitialEntry(store: store)
+        if overrideGroupId != nil, explicitGroupEntry == nil {
+            errorMessage = String(localized: "This group has no available models. Check its members and provider sign-in.")
+            return
+        }
         // Tier 1 — default group (current behaviour).
         if let groupId = overrideGroupId ?? store.defaultPrimaryGroupId,
            let group = store.group(for: groupId),
-           let entryId = ModelGroupRouter.resolve(group: group, sessionId: sessionId, store: store) {
+           let entryId = explicitGroupEntry?.id ?? ModelGroupRouter.resolve(group: group, sessionId: sessionId, store: store) {
             let primarySource = SessionModelSource.group(groupId: groupId, resolvedEntryId: entryId)
 
             // Resolve sub source

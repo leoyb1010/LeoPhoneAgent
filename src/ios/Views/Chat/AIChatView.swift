@@ -897,9 +897,9 @@ struct AIChatView: View {
             MinisShareSheet(url: fileURL)
         }
         .sheet(item: $safariURL) { url in
-            MinisLinkPreviewView(url: url, browserPool: vm.browserTabPool, onExpand: { _ in
+            MinisLinkPreviewView(url: url, browserPool: vm.browserTabPool, onExpand: { holder in
                 fullBrowserIsLocal = false
-                let targetURL = url
+                let targetURL = holder.actionURL(fallback: url)
                 safariURL = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     fullBrowserURL = targetURL
@@ -1032,17 +1032,8 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showMoveToSheet) {
             MoveToSessionSheet(currentSessionId: vm.sessionId) { targetId in
-                // Stash current input into ViewModelCache.
-                // [T-long-paste-fold] Expand folded pastes first: the target VM
-                // has no `pastedBlocks`, and clearing `inputText` below prunes
-                // the source blocks, so a raw token would arrive as "[Pasted#N]".
-                ViewModelCache.pendingTransfer = .init(
-                    inputText: vm.expandPastedBlocks(in: vm.inputText),
-                    attachments: vm.attachments
-                )
-                // Clear current VM input
-                vm.inputText = ""
-                vm.attachments.removeAll()
+                guard let transfer = vm.takeComposerForTransfer() else { return }
+                ViewModelCache.pendingTransfer = transfer
                 // Dismiss keyboard first so it doesn't linger during transition
                 inputFocused = false
                 // Post navigation after sheet dismiss animation completes
@@ -1603,7 +1594,7 @@ struct AIChatView: View {
 
         if let context = pending.treasuryContext?.trimmingCharacters(in: .whitespacesAndNewlines),
            !context.isEmpty {
-            vm.pendingTreasuryContext = context
+            vm.pendingTreasuryContext = ComposerDraftSnapshot.mergedTreasuryContext(vm.pendingTreasuryContext, context)
         }
 
         for (i, item) in pending.items.enumerated() {
@@ -1673,14 +1664,8 @@ struct AIChatView: View {
     private func injectPendingTransferIfNeeded() {
         guard let transfer = ViewModelCache.pendingTransfer else { return }
         ViewModelCache.pendingTransfer = nil
-        minisLogger.info("[MoveTo] Injecting transfer: text='\(String(transfer.inputText.prefix(50)))' attachments=\(transfer.attachments.count) existing=\(vm.attachments.count)")
-        // [T-draft-headless] The target's own composer is the user's restored
-        // draft, not leftovers: keep it and add the moved content after it.
-        if !transfer.inputText.isEmpty {
-            if !vm.inputText.isEmpty { vm.inputText += "\n" }
-            vm.inputText += transfer.inputText
-        }
-        vm.attachments += transfer.attachments
+        minisLogger.info("[MoveTo] Injecting transfer textLength=\(transfer.inputText.count) attachments=\(transfer.attachments.count)")
+        vm.appendTransferredComposer(transfer)
         // Focus input after the view is fully settled and keyboard from
         // the source session has dismissed
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -3860,6 +3845,7 @@ struct AIChatView: View {
                             .background(.ultraThinMaterial)
                             .clipShape(Capsule())
                     }
+                    .disabled(vm.hasLoadingAttachments)
                     .padding(.top, 6)
                     .padding(.trailing, 10)
                 }
@@ -4669,7 +4655,7 @@ struct AIChatView: View {
         // takes it), same content rule as canSend.
         let hasText = !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasReadyAttachment = vm.attachments.contains { $0.loadState == .ready }
-        return vm.isProcessing && (hasText || hasReadyAttachment)
+        return vm.isProcessing && !vm.hasLoadingAttachments && (hasText || hasReadyAttachment)
     }
 
     /// Whether the composer actually holds something worth moving to another
@@ -4678,6 +4664,7 @@ struct AIChatView: View {
     private var hasMovableShareContent: Bool {
         !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !vm.attachments.isEmpty
+            || !(vm.pendingTreasuryContext?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
     /// [T-model-quickswitch] 先切模型再发这一条。

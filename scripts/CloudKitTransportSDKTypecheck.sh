@@ -30,6 +30,7 @@ echo "Checking actual CloudKit transport with SDK: $SDK"
   "$SYNC/SyncHealth.swift" \
   "$SYNC/SyncRetryPolicy.swift" \
   "$SYNC/SyncDeliveryLedger.swift" \
+  "$SYNC/UploadPolicy.swift" \
   "$SYNC/CloudKitInboundJournal.swift" \
   "$ROOT/src/ios/Shared/DeviceIdentity.swift" \
   "$ROOT/scripts/CloudKitTransportSDKStubs.swift" \

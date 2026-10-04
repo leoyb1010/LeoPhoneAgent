@@ -20,6 +20,75 @@ import Foundation
 enum NoteBodyStore {
     private static let maxVersions = 10
 
+    /// Separate, device-local recovery data. The main note may be on an
+    /// unavailable shared container; a failed note write must not eat edits.
+    struct RecoveryDraft: Codable, Equatable {
+        /// nil means only the title was edited before the original body loaded.
+        let body: String?
+        let title: String
+        let bodyFile: String?
+    }
+
+    private static let recoveryQueue = DispatchQueue(label: "leo.note.recovery")
+    private static var recoveryDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("NoteRecoveryDrafts", isDirectory: true)
+    }
+
+    /// Lifecycle callers use this synchronous checkpoint before iOS can
+    /// suspend the app. Normal typing checkpoints only after a short debounce.
+    @discardableResult
+    static func saveRecoveryDraft(_ draft: RecoveryDraft, noteID: String) -> Bool {
+        guard SharedContainerStore.isSafeFileName(noteID) else { return false }
+        return recoveryQueue.sync {
+            do {
+                try FileManager.default.createDirectory(at: recoveryDirectory, withIntermediateDirectories: true)
+                try JSONEncoder().encode(draft).write(
+                    to: recoveryDirectory.appendingPathComponent(noteID + ".json"),
+                    options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                return true
+            } catch { return false }
+        }
+    }
+
+    static func loadRecoveryDraft(noteID: String) -> RecoveryDraft? {
+        guard SharedContainerStore.isSafeFileName(noteID) else { return nil }
+        return recoveryQueue.sync {
+            guard let data = try? Data(contentsOf: recoveryDirectory.appendingPathComponent(noteID + ".json")) else { return nil }
+            return try? JSONDecoder().decode(RecoveryDraft.self, from: data)
+        }
+    }
+
+    static func hasRecoveryDraft(noteID: String) -> Bool {
+        loadRecoveryDraft(noteID: noteID) != nil
+    }
+
+    /// A slower save of an older snapshot must not delete newer recovery text.
+    static func clearRecoveryDraft(noteID: String, matching draft: RecoveryDraft) {
+        guard SharedContainerStore.isSafeFileName(noteID) else { return }
+        recoveryQueue.sync {
+            let url = recoveryDirectory.appendingPathComponent(noteID + ".json")
+            guard let data = try? Data(contentsOf: url),
+                  let saved = try? JSONDecoder().decode(RecoveryDraft.self, from: data),
+                  saved == draft || (saved.body == nil && saved.title == draft.title && saved.bodyFile == draft.bodyFile)
+            else { return }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private static func clearRecoveryDrafts(bodyFile: String) {
+        recoveryQueue.sync {
+            let files = (try? FileManager.default.contentsOfDirectory(at: recoveryDirectory,
+                includingPropertiesForKeys: nil)) ?? []
+            for url in files where url.pathExtension == "json" {
+                guard let data = try? Data(contentsOf: url),
+                      let draft = try? JSONDecoder().decode(RecoveryDraft.self, from: data),
+                      draft.bodyFile == bodyFile else { continue }
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
+
     /// 后台串行队列:同一篇笔记的写入必须有序,否则慢的那次会覆盖新的。
     /// 队列本体声明在 CollectionStore(两个 target 共同编译)—— 删除条目
     /// 时的正文清理也要排进同一条队列,才不会与排队中的自动保存竞态。
@@ -84,6 +153,7 @@ enum NoteBodyStore {
     static func delete(_ fileName: String) {
         guard SharedContainerStore.isSafeFileName(fileName) else { return }
         queue.async {
+            clearRecoveryDrafts(bodyFile: fileName)
             if let dir = CollectionStore.notesDirectory {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
             }

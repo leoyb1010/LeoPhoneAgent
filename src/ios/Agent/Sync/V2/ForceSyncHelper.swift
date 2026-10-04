@@ -51,10 +51,12 @@ enum ForceSyncHelper {
     /// Returns the number of rows newly marked.
     @MainActor
     @discardableResult
-    static func markMemoryDirty(destination: String? = nil) async -> Int {
+    static func markMemoryDirty(destination: String? = nil, preservingPending: Bool = false) async -> Int {
         func stage(_ type: String, _ id: String) async {
             if let destination {
                 await ChatStore.shared.seedSyncDestination(destination, recordType: type, recordId: id)
+            } else if preservingPending {
+                await ChatStore.shared.stageUploadBackfillRecord(recordType: type, recordId: id)
             } else {
                 await ChatStore.shared.markDirty(recordType: type, recordId: id)
             }
@@ -102,11 +104,13 @@ enum ForceSyncHelper {
     /// would just cycle through buildSoul returning nil).
     @MainActor
     @discardableResult
-    static func markSoulDirty(destination: String? = nil) async -> Int {
+    static func markSoulDirty(destination: String? = nil, preservingPending: Bool = false) async -> Int {
         let url = SoulStore.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else { return 0 }
         if let destination {
             await ChatStore.shared.seedSyncDestination(destination, recordType: "SoulV2", recordId: "soul")
+        } else if preservingPending {
+            await ChatStore.shared.stageUploadBackfillRecord(recordType: "SoulV2", recordId: "soul")
         } else {
             await ChatStore.shared.markDirty(recordType: "SoulV2", recordId: "soul")
         }

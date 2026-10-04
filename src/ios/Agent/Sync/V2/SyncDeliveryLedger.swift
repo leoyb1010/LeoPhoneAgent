@@ -16,6 +16,49 @@ struct SyncDeliveryTicket: Codable, Equatable, Sendable {
 /// commit together even when a caller uses raw SQL rather than markDirty().
 enum SyncDeliveryLedger {
     enum LedgerError: Error { case sqlite(Int32, String) }
+
+    /// These two canonical containers are inbound-only compatibility records.
+    /// Their current builders deliberately return nil; per-item records own
+    /// outbound data. Explicit container deletes are still valid work.
+    static func isRetiredContainerUpsert(recordType: String, recordId: String, operation: String) -> Bool {
+        guard operation == "upsert" else { return false }
+        return (recordType == "EnvVarV2" && recordId == "env-vars")
+            || (recordType == "MCPServersV2" && recordId == "mcp-servers")
+    }
+
+    /// Local compatibility migration, never a remote delete or a successful
+    /// delivery ACK. Preserve actual frozen bytes, deletes, current per-item
+    /// records and unknown identities. Safe to repeat at every normal boot.
+    @discardableResult
+    static func retireEmptyLegacyContainerUpserts(_ db: OpaquePointer?) throws -> Int {
+        let retired = "((record_type='EnvVarV2' AND record_id='env-vars') OR (record_type='MCPServersV2' AND record_id='mcp-servers'))"
+        return try transaction(db) {
+            try exec(db, """
+                DELETE FROM sync_dirty_records
+                WHERE operation='upsert' AND \(retired)
+                  AND NOT EXISTS(SELECT 1 FROM sync_delivery_payloads p
+                    WHERE p.record_type=sync_dirty_records.record_type AND p.record_id=sync_dirty_records.record_id)
+                  AND NOT EXISTS(SELECT 1 FROM sync_delivery_tickets t
+                    WHERE t.record_type=sync_dirty_records.record_type AND t.record_id=sync_dirty_records.record_id AND t.operation!='upsert')
+                """)
+            var count = Int(sqlite3_changes(db))
+            // Replica-only seeds have no dirty row for the delete trigger to
+            // retire. The same conservative conditions apply to those tickets.
+            try exec(db, """
+                DELETE FROM sync_delivery_tickets
+                WHERE operation='upsert' AND \(retired)
+                  AND NOT EXISTS(SELECT 1 FROM sync_dirty_records r
+                    WHERE r.record_type=sync_delivery_tickets.record_type AND r.record_id=sync_delivery_tickets.record_id)
+                  AND NOT EXISTS(SELECT 1 FROM sync_delivery_payloads p
+                    WHERE p.record_type=sync_delivery_tickets.record_type AND p.record_id=sync_delivery_tickets.record_id)
+                  AND NOT EXISTS(SELECT 1 FROM sync_delivery_tickets t
+                    WHERE t.record_type=sync_delivery_tickets.record_type AND t.record_id=sync_delivery_tickets.record_id AND t.operation!='upsert')
+                """)
+            count += Int(sqlite3_changes(db))
+            return count
+        }
+    }
+
     static func migrate(_ db: OpaquePointer?, recordTypes: [String]) throws {
         let types = recordTypes.map { "'" + $0.replacingOccurrences(of: "'", with: "''") + "'" }.joined(separator: ",")
         try transaction(db) {

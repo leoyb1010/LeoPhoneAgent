@@ -2,9 +2,8 @@ import SwiftUI
 
 // [T-home-simplify-1.41] 首页"输入框优先":底部一条玻璃输入栏就是整个工作台。
 //
-// 首页只留 8 个可点控件:设置、搜索、藏宝阁(标题栏)+ 位置·模型胶囊、"+"、输入框、
-// "/"、麦克风/发送(这条栏)。原来的工作区卡片、6 个磁贴、系统快捷、Mac 链接卡、
-// 两个浮动按钮都收进"/"面板或胶囊菜单里 —— 能力一个不少,首屏只剩对话。
+// 标题栏保留设置、搜索、藏宝阁;输入栏分别提供执行位置和模型入口。
+// 工作区、系统快捷与 Mac 入口收进 "/" 面板或执行位置菜单。
 //
 // 这些视图都返回具体类型、不带泛型参数:ContentView 的类型链已经贴着真机栈上限
 // (见 ContentView 里 agentHomeCard 的注释),新组件不能再加深它。
@@ -23,8 +22,65 @@ struct HomeCapsuleLabel: Equatable {
 /// (会话分组、置顶、胶囊标签)跟着每个字重算一遍。
 @MainActor
 final class HomeDraft: ObservableObject {
-    @Published var text = ""
+    @Published var text = "" {
+        didSet {
+            guard persistenceURL != nil, text != oldValue else { return }
+            needsSave = true
+            saveTask?.cancel()
+            saveTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                self?.flushPersistence()
+            }
+        }
+    }
     var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private struct Snapshot: Codable { let text: String; let modelChoice: String? }
+    private var persistenceURL: URL?
+    private var modelChoice: String?
+    private var needsSave = false
+    private var saveTask: Task<Void, Never>?
+
+    /// Opt-in: Home search also uses HomeDraft and must remain transient.
+    /// This file is deliberately separate from ComposerDrafts/__new_chat__.json.
+    func enablePersistence(at url: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("HomeComposerDraft.json")) -> String? {
+        guard persistenceURL == nil else { return modelChoice }
+        if text.isEmpty, let data = try? Data(contentsOf: url),
+           let saved = try? JSONDecoder().decode(Snapshot.self, from: data) {
+            text = saved.text
+            modelChoice = saved.modelChoice
+        }
+        persistenceURL = url
+        return modelChoice
+    }
+
+    func updateModelChoice(_ choice: String?) {
+        guard modelChoice != choice else { return }
+        modelChoice = choice
+        needsSave = true
+        flushPersistence()
+    }
+
+    /// Background/disappearance flushes the final keystrokes before the debounce.
+    func flushPersistence() {
+        saveTask?.cancel()
+        saveTask = nil
+        guard needsSave, let url = persistenceURL else { return }
+        do {
+            if text.isEmpty, modelChoice == nil {
+                if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            } else {
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                let data = try JSONEncoder().encode(Snapshot(text: text, modelChoice: modelChoice))
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            }
+            needsSave = false
+        } catch {
+            // Keep dirty state so the next edit/background flush retries the write.
+        }
+    }
 }
 
 /// 首页搜索框:文字放在 HomeDraft 里,只有这一行订阅;每次改动交给首页做防抖搜索,
@@ -55,6 +111,7 @@ struct HomeComposerHost: View {
     var isFocused: FocusState<Bool>.Binding
     let capsule: HomeCapsuleLabel
     let capsuleMenu: AnyView
+    var onChooseModel: (() -> Void)? = nil
     let plusMenu: AnyView
     let isBusy: Bool
     let onSubmit: () -> Void
@@ -68,6 +125,7 @@ struct HomeComposerHost: View {
             isFocused: isFocused,
             capsule: capsule,
             capsuleMenu: capsuleMenu,
+            onChooseModel: onChooseModel,
             plusMenu: plusMenu,
             isBusy: isBusy,
             canSend: !isBusy && !draft.trimmed.isEmpty,
@@ -83,8 +141,9 @@ struct HomeComposerBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     let capsule: HomeCapsuleLabel
-    /// 胶囊菜单内容(位置 + 模型),由 ContentView 组装。AnyView 截断类型链。
+    /// 执行位置菜单,由 ContentView 组装。AnyView 截断类型链。
     let capsuleMenu: AnyView
+    var onChooseModel: (() -> Void)? = nil
     /// "+" 菜单内容。
     let plusMenu: AnyView
     let isBusy: Bool
@@ -94,6 +153,7 @@ struct HomeComposerBar: View {
     let onMic: () -> Void
     let onCancelBusy: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var trimmedEmpty: Bool {
@@ -102,29 +162,22 @@ struct HomeComposerBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Menu { capsuleMenu } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: capsule.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(capsuleTitle)
-                            .font(.footnote.weight(.semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        executionTarget
+                        Spacer(minLength: 0)
+                        FullAutoBadge()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.06), in: Capsule())
-                    .contentShape(Capsule())
+                    modelControl
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("执行位置和模型:\(capsuleTitle)"))
-                .accessibilityHint(Text("选择在哪里执行、用哪个模型"))
-
-                FullAutoBadge()
-                Spacer(minLength: 0)
+            } else {
+                HStack(spacing: 8) {
+                    executionTarget
+                    modelControl
+                    FullAutoBadge()
+                    Spacer(minLength: 0)
+                }
             }
 
             HStack(alignment: .bottom, spacing: 8) {
@@ -156,16 +209,58 @@ struct HomeComposerBar: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 10)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 26, style: .continuous))
+        .glassEffect(.regular, in: .rect(cornerRadius: 26, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: trimmedEmpty)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isBusy)
     }
 
-    private var capsuleTitle: String {
-        if let model = capsule.model, !model.isEmpty { return "\(capsule.place) · \(model)" }
-        return capsule.place
+    private var executionTarget: some View {
+                Menu { capsuleMenu } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: capsule.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(capsule.place)
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 44)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("执行位置:\(capsule.place)"))
+                .accessibilityHint(Text("选择在哪里执行"))
+                .accessibilityIdentifier("home.execution-target")
+    }
+
+    @ViewBuilder
+    private var modelControl: some View {
+                if let onChooseModel {
+                    Button(action: onChooseModel) {
+                        HStack(spacing: 5) {
+                            Text(capsule.model ?? String(localized: "Choose Model"))
+                                .font(.footnote.weight(.semibold))
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                                .multilineTextAlignment(.leading)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("选择模型:\(capsule.model ?? String(localized: "默认"))"))
+                    .accessibilityIdentifier("home.model-picker")
+                }
     }
 
     @ViewBuilder

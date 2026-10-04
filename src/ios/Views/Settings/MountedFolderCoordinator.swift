@@ -253,6 +253,28 @@ enum MountedFolderCoordinator {
         if let innerError { throw innerError }
     }
 
+    /// Import never replaces an existing file. A failed copy cannot remove the
+    /// original, including when the picker points back into this same folder.
+    static func importKeepingBoth(from source: URL, to directory: URL) throws -> URL {
+        let fm = FileManager.default
+        let name = source.lastPathComponent
+        let ext = source.pathExtension
+        let stem = ext.isEmpty ? name : String(name.dropLast(ext.count + 1))
+        var destination = directory.appendingPathComponent(name)
+        var suffix = 2
+        // A dangling symlink also owns its name and must not be replaced.
+        while fm.fileExists(atPath: destination.path)
+            || (try? fm.destinationOfSymbolicLink(atPath: destination.path)) != nil {
+            let numbered = "\(stem) (\(suffix))" + (ext.isEmpty ? "" : ".\(ext)")
+            destination = directory.appendingPathComponent(numbered)
+            suffix += 1
+        }
+        // copyItem fails if another writer claims the name after the check;
+        // it does not replace that writer's file.
+        try copy(from: source, to: destination)
+        return destination
+    }
+
     /// Copy an item, coordinating both src and dst when either is under a mount.
     static func copy(from src: URL, to dst: URL) throws {
         // Reading from a read-only mount is fine; writing to one is not.

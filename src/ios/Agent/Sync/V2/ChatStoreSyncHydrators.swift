@@ -71,9 +71,9 @@ enum ChatStoreSyncHydrators {
             merger: { record in try await mergeProviderConfig(record: record) }
         )
         // [T-mcp-per-server-sync] Legacy whole-file servers.json record.
-        // New devices NEVER emit it (builder returns nil — leftover upsert
-        // dirty rows drain as no-ops; the one-time op=delete row still
-        // pushes). The merger is kept so a peer on an old build can seed
+        // New devices NEVER emit it (builder returns nil). The delivery ledger
+        // explicitly retires only empty canonical upsert intents at startup;
+        // the one-time op=delete row still pushes. The merger lets an old peer seed
         // our list — applied per-server (union) instead of a file
         // overwrite, so a stale whole-file snapshot can't clobber
         // per-item state. MCPStore.scheduleLegacyRecordCleanupIfNeeded
@@ -115,8 +115,9 @@ enum ChatStoreSyncHydrators {
             deletionApplier: { id in try await deleteProviderModelGroupV3(id: id) }
         )
         // Legacy whole-file env-vars record. New devices NEVER emit it
-        // (builder returns nil — caller treats nil as "this builder
-        // chose not to push" and drops the dirty row). The merger is
+        // (builder returns nil). The delivery ledger explicitly retires only
+        // empty canonical upsert intents; other nil builders remain failures.
+        // The merger is
         // kept so a peer running the old build can still seed our
         // env-vars on first sync. Once at least one EnvVarItem has been
         // pushed to cloud, EnvVarMigration.cleanupLegacyRecord deletes
@@ -195,12 +196,14 @@ enum ChatStoreSyncHydrators {
     }
 
     /// `destination` stages only for that destination (replica seed); nil marks dirty for all.
-    static func stageAllArtifacts(destination: String? = nil) async {
+    static func stageAllArtifacts(destination: String? = nil, preservingPending: Bool = false) async {
         guard UploadPolicy.isEnabled(.artifacts),
               let snapshots = try? await ArtifactRepository.shared.list(includeTrashed: true) else { return }
         func stage(_ type: String, _ id: String) async {
             if let destination {
                 await ChatStore.shared.seedSyncDestination(destination, recordType: type, recordId: id)
+            } else if preservingPending {
+                await ChatStore.shared.stageUploadBackfillRecord(recordType: type, recordId: id)
             } else {
                 await ChatStore.shared.markDirty(recordType: type, recordId: id)
             }
@@ -211,6 +214,49 @@ enum ChatStoreSyncHydrators {
             for version in versions where version.byteCount <= Int64(UploadPolicy.maxArtifactSizeBytes) {
                 await stage("ArtifactVersionV2", version.id)
             }
+        }
+    }
+
+    /// Enabling one category never stages the other categories. Existing
+    /// durable intent wins over every snapshot, including pending deletions.
+    static func stageUploadCategory(_ category: UploadPolicy.Category) async {
+        guard UploadPolicy.isEnabled(category) else { return }
+        switch category {
+        case .chatSessions, .sessionFiles:
+            await ChatStore.shared.stageChatUploadCategory(category)
+        case .skills:
+            for id in SkillStore.shared.skills.map(\.id) {
+                await ChatStore.shared.stageUploadBackfillRecord(recordType: "Skill", recordId: id)
+            }
+        case .envVars:
+            for id in EnvVarStore.shared.entries.map(\.id) {
+                await ChatStore.shared.stageUploadBackfillRecord(recordType: "EnvVarItem", recordId: id)
+            }
+        case .providers:
+            let config = ProviderConfigStore.shared.config
+            await ChatStore.shared.stageUploadBackfillRecord(recordType: "ProviderConfig", recordId: "provider-config")
+            let current: [(String, [String], [String])] = [
+                ("ProviderInstanceV3", config.instances.map(\.id), config.deletedInstances.map(\.id)),
+                ("ProviderModelEntryV3", config.modelEntries.map(\.uuid), config.deletedModelEntries.map(\.id)),
+                ("ProviderModelGroupV3", config.modelGroups.map(\.id), config.deletedModelGroups.map(\.id))
+            ]
+            for (type, ids, deleted) in current {
+                for id in ids {
+                    await ChatStore.shared.stageUploadBackfillRecord(recordType: type, recordId: id)
+                }
+                for id in deleted where !ids.contains(id) {
+                    // Model-entry tombstones may use the legacy composite ID.
+                    if type == "ProviderModelEntryV3", config.modelEntries.contains(where: { $0.id == id }) { continue }
+                    await ChatStore.shared.stageUploadBackfillRecord(recordType: type, recordId: id, operation: "delete")
+                }
+            }
+        case .memory:
+            if #available(iOS 17.0, *) {
+                _ = await ForceSyncHelper.markMemoryDirty(preservingPending: true)
+                _ = await ForceSyncHelper.markSoulDirty(preservingPending: true)
+            }
+        case .artifacts:
+            await stageAllArtifacts(preservingPending: true)
         }
     }
 

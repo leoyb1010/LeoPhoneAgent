@@ -71,6 +71,14 @@ struct CollectionsView: View {
     @State private var showScanner = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var importing = false
+    @State private var isSendingToAgent = false
+    @State private var failedAgentShare: FailedAgentShare?
+
+    private struct FailedAgentShare {
+        let items: [CollectedItem]
+        let prompt: String?
+        let message: String
+    }
     @State private var showPhotoPicker = false
     @State private var showImportSheet = false
     @State private var selection = Set<String>()
@@ -285,12 +293,25 @@ struct CollectionsView: View {
             }
             .ignoresSafeArea()
         }
+        .alert("无法准备附件", isPresented: Binding(
+            get: { failedAgentShare != nil },
+            set: { if !$0 { failedAgentShare = nil } }
+        ), presenting: failedAgentShare) { failure in
+            Button("重试") {
+                failedAgentShare = nil
+                sendToAgent(failure.items, prompt: failure.prompt)
+            }
+            Button("取消", role: .cancel) { failedAgentShare = nil }
+        } message: { failure in
+            Text(failure.message)
+        }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
         .sheet(item: $editingNote, onDismiss: discardUntouchedNewNote) { note in
             NavigationStack {
                 NoteEditorView(item: note) { updated in
-                    CollectionStore.update(updated)
+                    guard CollectionStore.update(updated) else { return false }
                     reload()
+                    return true
                 }
             }
         }
@@ -907,6 +928,7 @@ struct CollectionsView: View {
         Task { @MainActor in
             // The editor persists on disappear; let that write land first.
             try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !NoteBodyStore.hasRecoveryDraft(noteID: id) else { return }
             guard let note = CollectionStore.load().first(where: { $0.id == id }),
                   (note.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             else { return }
@@ -1228,25 +1250,18 @@ struct CollectionsView: View {
     /// 都在独立的 untrusted context 字段中，用户提示不会与资料拼成一段。
     private func sendToAgent(_ selectedItems: [CollectedItem], prompt: String?) {
         let chosen = Array(selectedItems.prefix(20))
-        guard !chosen.isEmpty else { return }
-        Task {
+        guard !chosen.isEmpty, !isSendingToAgent else { return }
+        isSendingToAgent = true
+        failedAgentShare = nil
+        Task { @MainActor in
+            defer { isSendingToAgent = false }
             let context = await TreasuryContextBuilder.build(items: chosen)
-            var shareItems: [PendingShare.Item] = []
-            for item in chosen where item.kind == .file {
-                if let src = CollectionStore.fileURL(named: item.value),
-                   let dest = SharedContainerStore.sharedFileURL(named: item.value),
-                   FileManager.default.fileExists(atPath: src.path) {
-                    try? FileManager.default.createDirectory(
-                        at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try? FileManager.default.removeItem(at: dest)
-                    try? FileManager.default.copyItem(at: src, to: dest)
-                    shareItems.append(.init(kind: .attachment, value: item.value))
-                }
-            }
-            let instruction = prompt ?? (chosen.count == 1
-                ? "请使用我从藏宝阁选择的这条资料回答。保留可追踪来源。"
-                : "请综合我从藏宝阁选择的 \(chosen.count) 条资料回答。比较时保留每条资料的可追踪来源。")
-            await MainActor.run {
+            do {
+                // Publish only after every selected attachment has real staged bytes.
+                let shareItems = try Self.stageAgentAttachments(chosen)
+                let instruction = prompt ?? (chosen.count == 1
+                    ? "请使用我从藏宝阁选择的这条资料回答。保留可追踪来源。"
+                    : "请综合我从藏宝阁选择的 \(chosen.count) 条资料回答。比较时保留每条资料的可追踪来源。")
                 ShareCoordinator.shared.storeBuffer(PendingShare(
                     items: shareItems,
                     timestamp: Date(),
@@ -1256,9 +1271,38 @@ struct CollectionsView: View {
                 selection = []
                 editMode = .inactive
                 dismiss()
-                // 分享缓冲已装好,复用主界面现成的"新建对话"通道消费它
                 NotificationCenter.default.post(name: .newChatRequested, object: nil)
+            } catch {
+                failedAgentShare = FailedAgentShare(items: chosen, prompt: prompt,
+                    message: "\(error.localizedDescription) 原资料和选择已保留，请重试。")
             }
+        }
+    }
+
+    /// Unique staging names preserve older buffered shares. A failed batch only
+    /// removes files this attempt created; Treasury originals are never moved.
+    private static func stageAgentAttachments(_ chosen: [CollectedItem]) throws -> [PendingShare.Item] {
+        let fm = FileManager.default
+        var staged: [URL] = []
+        var shareItems: [PendingShare.Item] = []
+        do {
+            for item in chosen where item.kind == .file {
+                let name = "treasury-\(UUID().uuidString)-\(item.value)"
+                guard let src = CollectionStore.fileURL(named: item.value),
+                      let dest = SharedContainerStore.sharedFileURL(named: name) else {
+                    throw NSError(domain: "TreasuryAttachmentTransfer", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "无法读取或暂存附件：\(item.title ?? item.value)。"])
+                }
+                try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                guard !fm.fileExists(atPath: dest.path) else { throw CocoaError(.fileWriteFileExists) }
+                staged.append(dest)
+                try fm.copyItem(at: src, to: dest)
+                shareItems.append(.init(kind: .attachment, value: name))
+            }
+            return shareItems
+        } catch {
+            for url in staged { try? fm.removeItem(at: url) }
+            throw error
         }
     }
 

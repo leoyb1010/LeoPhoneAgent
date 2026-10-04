@@ -156,6 +156,7 @@ final class TailnetSyncTransport: SyncTransport {
                 let record = batch.records.first { $0.id == id }
                 let change = try await wireChange(ticket: ticket, record: record)
                 let payload = try JSONEncoder().encode(["changes": [change]])
+                try UploadPolicy.requireUpload(id.type)
                 let (data, response) = try await client.replicaData(
                     path: "/sync/v1/changes", method: "POST", body: payload, requestId: ticket.changeId,
                     headers: ["Content-Type": "application/json"])
@@ -181,6 +182,10 @@ final class TailnetSyncTransport: SyncTransport {
                     // 票据和用户数据，由冲突处理/拉取远端胜者后显式解决。
                     outcomes.append(.permanentFailure(id, reason: "Replica has a newer edit; resolve conflict"))
                 } else { throw URLError(.cannotParseResponse) }
+            } catch is UploadPolicy.UploadPaused {
+                // Preference changed while hashing/uploading. No ACK or error:
+                // retain the same durable ticket until the category is enabled.
+                continue
             } catch {
                 health.failed("send", error: error as NSError)
                 outcomes.append(.transientFailure(id, retryAfter: nil))
@@ -363,7 +368,7 @@ final class TailnetSyncTransport: SyncTransport {
         var wireAssets: [String: TailnetAsset] = [:]
         for (key, asset) in record?.assets ?? [:] {
             let hash = try await sha256(file: asset.fileURL)
-            try await upload(asset: asset, hash: hash)
+            try await upload(asset: asset, hash: hash, recordType: ticket.recordType)
             wireAssets[key] = TailnetAsset(key: key, sha256: hash, size: asset.size, mimeType: asset.mimeType)
         }
         let wire = record.map {
@@ -389,7 +394,8 @@ final class TailnetSyncTransport: SyncTransport {
                               unknownFields: record.unknownFields, updatedAt: record.updatedAt)
     }
 
-    private func upload(asset: PortableAsset, hash: String) async throws {
+    private func upload(asset: PortableAsset, hash: String, recordType: String) async throws {
+        try UploadPolicy.requireUpload(recordType)
         guard asset.size >= 0, asset.size <= 256 * 1024 * 1024,
               try asset.fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize == asset.size else { throw URLError(.cannotDecodeContentData) }
         let path = "/sync/v1/assets/\(hash)"
@@ -422,6 +428,7 @@ final class TailnetSyncTransport: SyncTransport {
             let range = asset.size == 0 ? "bytes */0" : "bytes \(offset)-\(end)/\(asset.size)"
             var headers = ["Content-Range": range, "Content-Type": "application/octet-stream"]
             if reset { headers["Upload-Reset"] = "true" }
+            try UploadPolicy.requireUpload(recordType)
             let (data, response) = try await client.replicaData(path: path, method: "PUT", body: chunk, headers: headers)
             if response.statusCode == 422, !restartedAfterHashFailure {
                 // An interrupted/corrupt earlier partial must not poison every retry.

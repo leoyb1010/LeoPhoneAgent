@@ -20,6 +20,7 @@ struct EnvironmentVariablesView: View {
     /// Swipe-delete waiting for confirmation: the value is a secret that
     /// can't be recovered once the Keychain item is gone.
     @State private var pendingDelete: EnvVarEntry?
+    @State private var saveError: String?
     /// A delete also reaches the user's other devices while iCloud sync is on
     /// (EnvVarItem op=delete); the confirmations say so.
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = SyncV2Bootstrap.isEnabled
@@ -42,6 +43,9 @@ struct EnvironmentVariablesView: View {
 
     var body: some View {
         List {
+            if let saveError {
+                Text(saveError).foregroundStyle(.red).font(.footnote)
+            }
             Section {
                 Toggle("Privacy Mode", isOn: $privacy.enabled)
             } footer: {
@@ -144,8 +148,14 @@ struct EnvironmentVariablesView: View {
         ) { request in
             Button(request.currentIsEmpty ? String(localized: "Save") : String(localized: "Replace"),
                    role: .destructive) {
-                store.update(id: request.entryId, key: request.key, value: request.newValue)
-                revealedValues[request.entryId] = nil
+                switch store.update(id: request.entryId, key: request.key, value: request.newValue) {
+                case .success:
+                    saveError = nil
+                    revealedValues[request.entryId] = nil
+                case .failure(let error):
+                    if case .valueChangedMetadataWriteFailed = error { revealedValues[request.entryId] = nil }
+                    saveError = error.localizedDescription
+                }
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: { request in
@@ -162,8 +172,13 @@ struct EnvironmentVariablesView: View {
                 initialNote: entry.note,
                 syncOn: iCloudSyncEnabled,
                 onSave: { key, value, note in
-                    store.update(id: entry.id, key: key, value: value, note: note)
-                    revealedValues[entry.id] = nil
+                    let result = store.update(id: entry.id, key: key, value: value, note: note)
+                    switch result {
+                    case .success: revealedValues[entry.id] = nil
+                    case .failure(.valueChangedMetadataWriteFailed): revealedValues[entry.id] = nil
+                    case .failure: break
+                    }
+                    return result
                 },
                 onDelete: {
                     store.delete(id: entry.id)
@@ -250,7 +265,7 @@ private struct EnvVarFormSheet: View {
     var initialNote: String = ""
     /// iCloud sync on: a delete also removes it on the user's other devices.
     var syncOn: Bool = false
-    let onSave: (String, String, String) -> Void
+    let onSave: (String, String, String) -> Result<Void, EnvVarStore.MutationError>
     var onDelete: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -258,6 +273,7 @@ private struct EnvVarFormSheet: View {
     @State private var value = ""
     @State private var note = ""
     @State private var showingDeleteConfirm = false
+    @State private var saveError: String?
     /// [T-envvar-secret-handling] The value is masked unless the user asks to see it.
     @State private var showValue = false
     @FocusState private var focusedField: Field?
@@ -271,6 +287,9 @@ private struct EnvVarFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let saveError {
+                    Section { Text(saveError).foregroundStyle(.red).font(.footnote) }
+                }
                 Section {
                     TextField("NAME", text: Binding(
                         get: { key },
@@ -359,8 +378,10 @@ private struct EnvVarFormSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(mode == .add ? "Add" : "Save") {
-                        onSave(key, value, note.trimmingCharacters(in: .whitespacesAndNewlines))
-                        dismiss()
+                        switch onSave(key, value, note.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        case .success: dismiss()
+                        case .failure(let error): saveError = error.localizedDescription
+                        }
                     }
                     .disabled(!isValid)
                 }

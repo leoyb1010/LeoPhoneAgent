@@ -100,17 +100,21 @@ extension AIChatViewModel {
         // [T-long-paste-fold] Same expansion as send(): the queued bubble and
         // the injected prompt must carry the pasted text, not the token.
         let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !attachments.isEmpty, isProcessing else { return }
+        // A loading photo still belongs to the composer: its completion callback
+        // resolves the placeholder here, not inside a queued value snapshot.
+        guard !hasLoadingAttachments, isProcessing else { return }
+        let pendingAttachments = attachments.filter { $0.loadState == .ready }
+        let treasuryContext = pendingTreasuryContext?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || !pendingAttachments.isEmpty || treasuryContext?.isEmpty == false else { return }
         if AgentChatCorrectness.shouldBlockImageAttachments(
-            hasImages: attachments.contains(where: { $0.kind == .image }),
+            hasImages: pendingAttachments.contains(where: { $0.kind == .image }),
             supportsImageInput: currentModelSupportsImageInput
         ) {
             appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
             return
         }
         LeoHaptics.impact(.light)
-        let pendingAttachments = attachments
-        let prompt = QueuedPrompt(text: text, attachments: pendingAttachments)
+        let prompt = QueuedPrompt(text: text, attachments: pendingAttachments, treasuryContext: treasuryContext)
         promptQueue.append(prompt)
         // Show in chat immediately with queued styling
         let chatMsg = ChatMessage(role: .user, content: text, isQueued: true)
@@ -121,6 +125,7 @@ extension AIChatViewModel {
         inputText = ""
         pastedBlocks.removeAll()
         attachments = []
+        pendingTreasuryContext = nil
         logger.info("Enqueued prompt (\(text.count)ch, \(pendingAttachments.count) attachments), queue size=\(self.promptQueue.count)")
         // Privacy: keep only structural diagnostics. Prompt text must never be
         // copied into the shareable on-disk log, including Debug builds.

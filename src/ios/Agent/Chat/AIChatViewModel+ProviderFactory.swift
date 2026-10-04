@@ -87,14 +87,16 @@ extension AIChatViewModel {
     /// L1 cache (T-new-session-hang-credential-cache): SwiftUI body re-eval
     /// drives this ~84-178×/new-session (nav-bar thinking badge etc.), each call
     /// re-walking the group + per-member `hasAnyCredential`. The result is a pure
-    /// function of (sessionId, cachedSessionModelId, defaultGroupId, configRevision,
-    /// authRevision); when all five are unchanged the answer can't change, so we
+    /// function of session identity, draft choice, persisted/default model and
+    /// config/auth revisions; unchanged inputs can reuse the same resolution, so we
     /// memoize. configRevision/authRevision are the epoch counters bumped on any
     /// config or credential mutation, so a stale entry cannot survive a change.
     private struct ResolveCacheKey: Hashable {
         let sessionId: String
         let cachedModelId: String
         let defaultGroupId: String
+        let draftChoice: String
+        let draftRoutingId: String
         let configRevision: UInt
         let authRevision: UInt
     }
@@ -118,6 +120,8 @@ extension AIChatViewModel {
             sessionId: sessionId ?? "",
             cachedModelId: cachedSessionModelId,
             defaultGroupId: store.defaultPrimaryGroupId ?? "",
+            draftChoice: initialEntryKey.map { "entry:" + $0 } ?? initialGroupId.map { "group:" + $0 } ?? "",
+            draftRoutingId: draftId ?? "",
             configRevision: store.configRevision,
             authRevision: store.authRevision
         )
@@ -131,6 +135,22 @@ extension AIChatViewModel {
         let resolved = resolveCurrentEntryUncached()
         Self.resolveCache[key] = resolved?.id ?? Self.resolveNilSentinel
         return resolved
+    }
+
+    /// The Home choice is already active before a draft acquires a database id.
+    /// Return nil for an unavailable explicit choice; never borrow the default.
+    func resolveInitialEntry(store: ProviderConfigStore) -> ModelEntry? {
+        if let key = initialEntryKey {
+            guard let entry = store.entry(for: key), ModelSwitcher.isAvailable(entry, store: store) else { return nil }
+            return entry
+        }
+        if let groupId = initialGroupId,
+           let group = store.group(for: groupId),
+           let entryId = ModelGroupRouter.resolve(group: group, sessionId: draftId ?? sessionId ?? "__draft__", store: store, verbose: false),
+           let entry = store.entry(for: entryId), ModelSwitcher.isAvailable(entry, store: store) {
+            return entry
+        }
+        return nil
     }
 
     private func resolveCurrentEntryUncached() -> ModelEntry? {
@@ -179,6 +199,11 @@ extension AIChatViewModel {
             }
         } else {
             logger.info("🔀RESOLVE no binding for session=\(self.sessionId ?? "nil")")
+        }
+
+        if (initialEntryKey != nil || initialGroupId != nil),
+           sessionId.flatMap({ store.binding(for: $0) }) == nil {
+            return resolveInitialEntry(store: store)
         }
 
         // 2. Try the session's persisted modelId (cached at loadSession time)

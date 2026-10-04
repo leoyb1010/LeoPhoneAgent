@@ -33,11 +33,15 @@ final class WebViewHolder: NSObject, ObservableObject {
     /// called by the hosting SwiftUI view in `.onAppear`. See the comment
     /// inside `startIfNeeded()` for why we can't load at init-time.
     private var pendingURL: URL?
-    private var pendingLocalFile: Bool = false
+    /// The initial file grant is retained across navigation and retries.
+    /// Following a link must never grant access to a different directory.
+    private let localFileReadAccessURL: URL?
+    private var activeNavigation: WKNavigation?
     private var didStart: Bool = false
     private var windowWaitRetries: Int = 0
 
     init(url: URL, localFile: Bool) {
+        localFileReadAccessURL = localFile && url.isFileURL ? url.deletingLastPathComponent() : nil
         let config = WKWebViewConfiguration()
         // Match BrowserUseManager verbatim: shared process pool, default
         // data store, JS on, fullscreen enabled. This keeps the in-chat
@@ -123,7 +127,6 @@ final class WebViewHolder: NSObject, ObservableObject {
         // Stash the URL. Deliberately do NOT call webView.load here — see
         // startIfNeeded() for the rationale.
         pendingURL = url
-        pendingLocalFile = localFile
     }
 
     /// Start the deferred navigation. Must be called from the hosting
@@ -160,7 +163,8 @@ final class WebViewHolder: NSObject, ObservableObject {
 
     private func performLoad(url: URL) {
         loadError = nil  // [T-ios-webview-error-ui] clear stale error on (re)load
-        if pendingLocalFile {
+        pendingURL = url
+        if url.isFileURL {
             loadLocalFileBypassingCache(url)
         } else {
             webView.load(URLRequest(url: url))
@@ -170,12 +174,30 @@ final class WebViewHolder: NSObject, ObservableObject {
     /// [T-ios-webview-error-ui] Retry the URL that failed (or reload current).
     /// Used by the error overlay's "Try Again".
     func retryFailedLoad() {
+        let failed = loadError?.failedURL ?? pendingURL ?? webView.url
         loadError = nil
-        if let failed = pendingURL {
+        if let failed {
             performLoad(url: failed)
         } else {
             webView.reload()
         }
+    }
+
+    /// Share, copy and external-open actions follow the top-level page (or
+    /// its error overlay), never an iframe or the original tapped link.
+    func actionURL(fallback: URL) -> URL {
+        let target = loadError?.failedURL ?? webView.url ?? pendingURL ?? fallback
+        // A web page's failed file:// link is not authorization to export it.
+        if target.isFileURL, !canReadFileURL(target) { return fallback }
+        return target
+    }
+
+    private func canReadFileURL(_ url: URL) -> Bool {
+        guard url.isFileURL, let scope = localFileReadAccessURL else { return false }
+        let root = scope.standardizedFileURL.resolvingSymlinksInPath().path
+        let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        return target == root || target.hasPrefix(prefix)
     }
 
     /// Load a local file while bypassing WebKit's cache.
@@ -190,7 +212,10 @@ final class WebViewHolder: NSObject, ObservableObject {
     /// `.reloadIgnoringLocalCacheData` to force WebKit to re-read the file from
     /// disk every time the preview is presented. Available iOS 15+.
     private func loadLocalFileBypassingCache(_ url: URL) {
-        let readAccess = url.deletingLastPathComponent()
+        guard let readAccess = localFileReadAccessURL, canReadFileURL(url) else {
+            loadError = WebLoadError(error: URLError(.noPermissionsToReadFile), failedURL: url)
+            return
+        }
         if #available(iOS 15.0, *) {
             var req = URLRequest(url: url)
             req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -200,7 +225,15 @@ final class WebViewHolder: NSObject, ObservableObject {
         }
     }
 
-    func reload() { loadError = nil; webView.reload() }
+    func reload() {
+        if loadError != nil {
+            retryFailedLoad()
+        } else if let url = webView.url, url.isFileURL {
+            performLoad(url: url)
+        } else {
+            webView.reload()
+        }
+    }
     func stopLoading() { webView.stopLoading() }
 
     /// Toggle desktop-mode UA for this preview session only. Does not touch
@@ -249,8 +282,8 @@ extension WebViewHolder: WKScriptMessageHandler {
 // MARK: - Shared "More" menu
 
 /// The "..." menu shared between the sheet and fullscreen previews.
-/// `url` is the original tap target (used for share / open-in-Safari /
-/// copy-link). `desktopMode` is a per-preview toggle; flipping it calls
+/// `url` is only the initial fallback; actions use the holder's current page.
+/// `desktopMode` is a per-preview toggle; flipping it calls
 /// `holder.setDesktopMode(...)` and reloads.
 struct WebPreviewMoreMenu: View {
     let url: URL
@@ -269,6 +302,8 @@ struct WebPreviewMoreMenu: View {
     /// the entry is hidden (Safari shortcut sheets aren't reachable from
     /// inside our app anyway).
     var onAddToHomeScreen: (() -> Void)? = nil
+
+    private var targetURL: URL { holder.actionURL(fallback: url) }
 
     var body: some View {
         Menu {
@@ -316,9 +351,9 @@ struct WebPreviewMoreMenu: View {
                     Label(String(localized: "Request Desktop Site"), systemImage: "desktopcomputer")
                 }
             }
-            if allowOpenInSafari {
+            if allowOpenInSafari, ["http", "https"].contains(targetURL.scheme?.lowercased() ?? "") {
                 Button {
-                    UIApplication.shared.open(url)
+                    UIApplication.shared.open(targetURL)
                 } label: {
                     Label(String(localized: "Open in Safari"), systemImage: "safari")
                 }
@@ -334,7 +369,7 @@ struct WebPreviewMoreMenu: View {
                 Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
             }
             Button {
-                UIPasteboard.general.string = url.absoluteString
+                UIPasteboard.general.string = targetURL.absoluteString
             } label: {
                 Label(String(localized: "Copy Link"), systemImage: "doc.on.doc")
             }
@@ -365,6 +400,10 @@ extension WebViewHolder: WKNavigationDelegate {
             confirmExternalOpen(url, from: webView)
             return
         }
+        if navigationAction.targetFrame?.isMainFrame == true,
+           let url = navigationAction.request.url {
+            pendingURL = url
+        }
         decisionHandler(.allow)
     }
 
@@ -390,21 +429,51 @@ extension WebViewHolder: WKNavigationDelegate {
     // timeout — the server response never arrives); `didFail` covers failures
     // after a response started. A real load starting/finishing clears it.
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        activeNavigation = navigation
         if loadError != nil { loadError = nil }
     }
 
+    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+        guard isCurrentNavigation(navigation) else { return }
+        recordMainFrameURL(webView.url)
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard isCurrentNavigation(navigation) else { return }
+        recordMainFrameURL(webView.url)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard isCurrentNavigation(navigation) else { return }
+        recordMainFrameURL(webView.url)
         loadError = nil
     }
 
     func webView(_ webView: WKWebView,
                  didFailProvisionalNavigation navigation: WKNavigation!,
                  withError error: Error) {
-        loadError = WebLoadError(error: error, failedURL: pendingURL)
+        guard isCurrentNavigation(navigation),
+              let failure = WebLoadError(error: error, failedURL: pendingURL ?? webView.url) else { return }
+        loadError = failure
+        recordMainFrameURL(failure.failedURL)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        loadError = WebLoadError(error: error, failedURL: pendingURL)
+        guard isCurrentNavigation(navigation),
+              let failure = WebLoadError(error: error, failedURL: pendingURL ?? webView.url) else { return }
+        loadError = failure
+        recordMainFrameURL(failure.failedURL)
+    }
+
+    private func recordMainFrameURL(_ url: URL?) {
+        guard let url else { return }
+        pendingURL = url
+        currentURL = url.absoluteString
+    }
+
+    private func isCurrentNavigation(_ navigation: WKNavigation?) -> Bool {
+        guard let activeNavigation, let navigation else { return true }
+        return activeNavigation === navigation
     }
 }
 
@@ -637,7 +706,7 @@ struct MinisSafariView: View {
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil)
         .sheet(isPresented: $showShareSheet) {
-            MinisShareSheet(url: shareURL)
+            MinisShareSheet(url: holder.actionURL(fallback: shareURL))
         }
     }
 
@@ -694,25 +763,7 @@ struct MinisSafariView: View {
     }
 
     private func reload() {
-        if let url = holder.webView.url ?? URL(string: shareURL.absoluteString) {
-            // For local files reload() can race when the resource was
-            // re-bundled out from under us; loadFileURL is the safer
-            // fallback that re-grants read-access too.
-            if isLocalFile && url.isFileURL {
-                // [T-ios-file-preview-stale-cache] Bypass WebKit's cache so a
-                // manual Reload of an in-place-rewritten local file shows the
-                // current disk bytes, not the cached body.
-                if #available(iOS 15.0, *) {
-                    var req = URLRequest(url: url)
-                    req.cachePolicy = .reloadIgnoringLocalCacheData
-                    holder.webView.loadFileRequest(req, allowingReadAccessTo: url.deletingLastPathComponent())
-                } else {
-                    holder.webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-                }
-            } else {
-                holder.webView.reload()
-            }
-        }
+        holder.reload()
     }
 
     private func exitFullscreen(returnToSheet: Bool) {
@@ -771,7 +822,9 @@ struct MinisLinkPreviewView: View {
                 // laid the web view out under the toolbar, so the ChatGPT
                 // header etc. ended up hidden behind our own toolbar.
                 .ignoresSafeArea(.keyboard)
-                .navigationTitle(holder.pageTitle.isEmpty ? (url.host ?? url.absoluteString) : holder.pageTitle)
+                .navigationTitle(holder.pageTitle.isEmpty
+                                 ? (holder.actionURL(fallback: url).host ?? holder.actionURL(fallback: url).absoluteString)
+                                 : holder.pageTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
@@ -808,7 +861,7 @@ struct MinisLinkPreviewView: View {
         // and leaving dismiss enabled preserves nav-bar pull-down + xmark.
         .preferredColorScheme(appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil)
         .sheet(isPresented: $showShareSheet) {
-            MinisShareSheet(url: url)
+            MinisShareSheet(url: holder.actionURL(fallback: url))
         }
     }
 }

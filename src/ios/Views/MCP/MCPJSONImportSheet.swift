@@ -16,6 +16,11 @@ struct MCPJSONImportSheet: View {
     @State private var text: String = ""
     @State private var parsed: [MCPServerConfig] = []
     @State private var errorMessage: String?
+    @State private var confirmingReplacement = false
+
+    private var replacementNames: [String] {
+        parsed.filter { candidate in store.servers.contains { $0.id == candidate.id } }.map(\.id)
+    }
 
     var body: some View {
         NavigationStack {
@@ -48,7 +53,12 @@ struct MCPJSONImportSheet: View {
                             HStack(spacing: 8) {
                                 Image(systemName: server.isSTDIO ? "terminal" : "globe")
                                     .foregroundStyle(.secondary)
-                                Text(server.id)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(server.id)
+                                    if replacementNames.contains(server.id) {
+                                        Text("Replaces existing server").font(.caption).foregroundStyle(.orange)
+                                    }
+                                }
                                 Spacer()
                                 Text(server.isSTDIO ? "STDIO" : "HTTP")
                                     .font(.caption2.weight(.semibold))
@@ -57,6 +67,12 @@ struct MCPJSONImportSheet: View {
                         }
                     }
                 }
+            }
+            .alert("Replace existing MCP servers?", isPresented: $confirmingReplacement) {
+                Button("Replace", role: .destructive) { commit() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The imported configuration will replace these servers: \(replacementNames.joined(separator: ", ")).")
             }
             .navigationTitle(Text("Import JSON"))
             .navigationBarTitleDisplayMode(.inline)
@@ -69,7 +85,10 @@ struct MCPJSONImportSheet: View {
                         Button(String(localized: "Parse")) { parse() }
                             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
-                        Button(String(localized: "Import")) { commit() }
+                        Button(String(localized: "Import")) {
+                            if replacementNames.isEmpty { commit() }
+                            else { confirmingReplacement = true }
+                        }
                     }
                 }
             }
@@ -87,7 +106,11 @@ struct MCPJSONImportSheet: View {
     }
 
     private func commit() {
-        store.commitImport(parsed)
-        dismiss()
+        do {
+            try store.commitImport(parsed)
+            dismiss()
+        } catch {
+            errorMessage = String(localized: "Couldn't save the imported servers. Your JSON is still here; check available storage and try again.")
+        }
     }
 }

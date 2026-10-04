@@ -10,6 +10,7 @@
 import SwiftUI
 
 struct WatchSettingsView: View {
+    @ObservedObject private var bridge = WatchBridge.shared
     @AppStorage(WatchStandalone.modeKey) private var mode = WatchStandalone.mode.rawValue
     @AppStorage(WatchStandalone.entryKey) private var entryId = ""
     @State private var candidates: [WatchStandalone.Candidate] = []
@@ -36,13 +37,15 @@ struct WatchSettingsView: View {
 
             if !isOff {
                 Section {
-                    Picker("直连模型", selection: $entryId) {
-                        Text("跟默认模型分组走").tag("")
-                        ForEach(candidates) { candidate in
-                            Text("\(candidate.modelName) · \(candidate.providerName)").tag(candidate.id)
+                    NavigationLink {
+                        WatchDirectModelPicker(entryId: $entryId, candidates: candidates)
+                    } label: {
+                        LabeledContent("直连模型") {
+                            Text(selectedModelLabel)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
-                    .pickerStyle(.navigationLink)
                     let resolved = resolvedLine
                     Label(resolved.text, systemImage: resolved.ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                         .font(.footnote)
@@ -90,9 +93,9 @@ struct WatchSettingsView: View {
                 Button("现在同步到手表") {
                     WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true)
                 }
-                .disabled(WatchBridge.shared.watchUnreachableReason != nil)
+                .disabled(bridge.watchUnreachableReason != nil)
             } footer: {
-                Text(WatchBridge.shared.watchUnreachableReason ?? "改了上面的选项会自动同步;手表暂时连不上时,下次连上自动送到。")
+                Text(bridge.watchUnreachableReason ?? "改了上面的选项会自动同步;手表暂时连不上时,下次连上自动送到。")
             }
         }
         .navigationTitle("Apple Watch")
@@ -101,8 +104,8 @@ struct WatchSettingsView: View {
             candidates = WatchStandalone.candidates()
             toolRows = WatchStandalone.toolRows()
             toolsOn = WatchStandalone.toolsOn
-            // 选过的模型被删了或服务商关了:回到跟默认分组走
-            if !entryId.isEmpty, !candidates.contains(where: { $0.id == entryId }) { entryId = "" }
+            // An unavailable explicit choice stays selected until the user changes it.
+            bridge.refreshWatchState()
         }
         .onChange(of: mode) { _, _ in WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true) }
         .onChange(of: entryId) { _, _ in WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true) }
@@ -119,10 +122,130 @@ struct WatchSettingsView: View {
         }
     }
 
+    private var selectedModelLabel: String {
+        guard !entryId.isEmpty else { return String(localized: "跟默认模型分组走") }
+        guard let selected = candidates.first(where: { $0.id == entryId }) else {
+            return String(localized: "Unavailable model")
+        }
+        return "\(selected.modelName) · \(selected.providerName)"
+    }
+
     private var resolvedLine: (ok: Bool, text: String) {
         switch WatchStandalone.resolve() {
         case .success(let config): return (true, "手表会用 \(config.modelName) · \(config.providerName)")
         case .failure(let reason): return (false, reason.explanation)
         }
+    }
+}
+
+private struct WatchDirectModelPicker: View {
+    @Binding var entryId: String
+    let candidates: [WatchStandalone.Candidate]
+    @State private var query = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var selected: WatchStandalone.Candidate? {
+        candidates.first { $0.id == entryId }
+    }
+
+    private var matches: [WatchStandalone.Candidate] {
+        WatchModelSearch.results(candidates, query: query)
+    }
+
+    var body: some View {
+        List {
+            // Keep the actual choice visible even when the search excludes it.
+            // Merely opening, filtering or leaving this list never writes entryId.
+            Section("Current selection") {
+                if entryId.isEmpty {
+                    defaultChoice
+                } else if let selected {
+                    candidateChoice(selected)
+                } else {
+                    HStack {
+                        Text("Unavailable model")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                    }
+                    .accessibilityAddTraits(.isSelected)
+                }
+            }
+
+            Section("Available models") {
+                if !entryId.isEmpty { defaultChoice }
+                ForEach(matches.filter { $0.id != entryId }) { candidate in
+                    candidateChoice(candidate)
+                }
+                if matches.isEmpty {
+                    if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("No models available").foregroundStyle(.secondary)
+                    } else {
+                        Text("No results").foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .navigationTitle("直连模型")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search model, ID or provider")
+    }
+
+    private var defaultChoice: some View {
+        Button { select("") } label: {
+            HStack {
+                Text("跟默认模型分组走")
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                if entryId.isEmpty {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityAddTraits(entryId.isEmpty ? .isSelected : [])
+    }
+
+    private func candidateChoice(_ candidate: WatchStandalone.Candidate) -> some View {
+        Button { select(candidate.id) } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(candidate.modelName).foregroundStyle(.primary)
+                    Text(candidate.providerName).font(.subheadline).foregroundStyle(.secondary)
+                    Text(WatchModelSearch.modelID(candidate)).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                if candidate.id == entryId {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityAddTraits(candidate.id == entryId ? .isSelected : [])
+    }
+
+    private func select(_ id: String) {
+        if entryId != id { entryId = id }
+        dismiss()
+    }
+}
+
+private enum WatchModelSearch {
+    static func results(_ candidates: [WatchStandalone.Candidate], query: String) -> [WatchStandalone.Candidate] {
+        candidates.filter { candidate in
+            ModelCatalog.matches(query, text: [candidate.modelName, candidate.providerName, modelID(candidate)].joined(separator: " "))
+        }
+    }
+
+    static func modelID(_ candidate: WatchStandalone.Candidate) -> String {
+        // Entry identity is providerInstanceId/baseModel.id; model IDs may contain slashes.
+        candidate.id.split(separator: "/", maxSplits: 1).last.map(String.init) ?? candidate.id
     }
 }

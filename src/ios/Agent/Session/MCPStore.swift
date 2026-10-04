@@ -523,7 +523,8 @@ final class MCPStore: ObservableObject {
     }
 
     /// Persist the parsed servers, overwriting any name collisions (LWW).
-    func commitImport(_ parsed: [MCPServerConfig]) {
+    func commitImport(_ parsed: [MCPServerConfig]) throws {
+        let previous = servers
         let now = Date().timeIntervalSince1970
         for server in parsed {
             var server = server
@@ -539,7 +540,10 @@ final class MCPStore: ObservableObject {
             }
         }
         servers.sort { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-        save()
+        guard save() else {
+            servers = previous
+            throw CocoaError(.fileWriteUnknown)
+        }
         noteSyncedLocalChange(names: parsed.map(\.id))
     }
 
@@ -547,7 +551,7 @@ final class MCPStore: ObservableObject {
     @discardableResult
     func importJSON(_ text: String) throws -> [MCPServerConfig] {
         let parsed = try parseImport(text)
-        commitImport(parsed)
+        try commitImport(parsed)
         return parsed
     }
 

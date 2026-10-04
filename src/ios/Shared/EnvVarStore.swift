@@ -107,12 +107,14 @@ final class EnvVarStore: ObservableObject {
         entries = Self.loadEntries(from: fileURL)
     }
 
-    private func saveEntries() {
+    @discardableResult
+    private func saveEntries() -> Bool {
         do {
             let data = try JSONEncoder().encode(entries)
             try data.write(to: fileURL, options: .atomic)
         } catch {
             logger.error("Failed to save env var entries: \(error)")
+            return false
         }
         // v2 sync uses per-variable EnvVarItem records. Per-key markDirty
         // is issued by the call sites that actually mutate a specific
@@ -123,6 +125,7 @@ final class EnvVarStore: ObservableObject {
         // Legacy EnvVar (whole-file) markDirty is no longer issued —
         // SyncedEnvVars builder returns nil, so any leftover dirty rows
         // get drained as no-ops.
+        return true
     }
 
     /// Mark a single variable's per-key sync record as dirty. Caller
@@ -232,6 +235,30 @@ final class EnvVarStore: ObservableObject {
         return String(data: data, encoding: .utf8)
     }
 
+    /// A rollback snapshot must distinguish a genuinely absent secret from a
+    /// locked/unreadable Keychain item. Only "not found" permits legacy fallback.
+    nonisolated private static func readValueForMutation(forKey key: String) -> Result<String?, MutationError> {
+        for synchronizable in [true, false] {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: keychainService,
+                kSecAttrAccount as String: key,
+                kSecAttrSynchronizable as String: synchronizable,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne,
+            ]
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+            if status == errSecItemNotFound { continue }
+            guard status == errSecSuccess, let data = result as? Data,
+                  let value = String(data: data, encoding: .utf8) else {
+                return .failure(.keychainReadFailed)
+            }
+            return .success(value)
+        }
+        return .success(nil)
+    }
+
     @discardableResult
     nonisolated private static func deleteValue(forKey key: String) -> Bool {
         let query: [String: Any] = [
@@ -278,63 +305,85 @@ final class EnvVarStore: ObservableObject {
 
     // MARK: - Public API
 
-    func add(key: String, value: String, note: String = "") {
-        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !trimmedKey.isEmpty, Self.isValidKey(trimmedKey) else { return }
+    enum MutationError: LocalizedError {
+        case invalidKey, duplicateKey, missingEntry, keychainWriteFailed, metadataWriteFailed
+        case keychainReadFailed, valueChangedMetadataWriteFailed
 
-        // Don't allow duplicate keys
-        guard !entries.contains(where: { $0.key == trimmedKey }) else {
-            logger.warning("Duplicate env var key: \(trimmedKey)")
-            return
+        var errorDescription: String? {
+            switch self {
+            case .invalidKey: return String(localized: "Enter a valid variable name.")
+            case .duplicateKey: return String(localized: "A variable with this name already exists. Choose another name.")
+            case .missingEntry: return String(localized: "This variable no longer exists. Your changes have not been saved.")
+            case .keychainWriteFailed: return String(localized: "Couldn't save the value to Keychain. Your changes are still here; try again.")
+            case .metadataWriteFailed: return String(localized: "Couldn't save the variable. Check available storage and try again.")
+            case .keychainReadFailed: return String(localized: "Couldn't read the previous value from Keychain. Nothing was changed. Try again.")
+            case .valueChangedMetadataWriteFailed: return String(localized: "The value changed, but its note could not be saved. The previous value could not be restored. Try saving again.")
+            }
         }
+    }
 
-        let cleanValue = Self.sanitizeValue(value)
-        // Commit the value to the Keychain FIRST. If it fails, don't insert a
-        // list entry — otherwise the variable shows up with a blank value.
-        guard Self.saveValue(cleanValue, forKey: trimmedKey) else {
-            logger.error("Add env var aborted — Keychain write failed for \(trimmedKey)")
-            return
+    @discardableResult
+    func add(key: String, value: String, note: String = "") -> Result<Void, MutationError> {
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmedKey.isEmpty, Self.isValidKey(trimmedKey) else { return .failure(.invalidKey) }
+        guard !entries.contains(where: { $0.key == trimmedKey }) else { return .failure(.duplicateKey) }
+        guard Self.saveValue(Self.sanitizeValue(value), forKey: trimmedKey) else {
+            return .failure(.keychainWriteFailed)
         }
         let entry = EnvVarEntry(key: trimmedKey, note: note)
         entries.append(entry)
-        saveEntries()
+        guard saveEntries() else {
+            entries.removeAll { $0.id == entry.id }
+            return .failure(.metadataWriteFailed)
+        }
         markEntryDirty(entryId: entry.id, operation: "upsert")
-        logger.info("Added env var: \(trimmedKey)")
+        return .success(())
     }
 
-    /// Update an entry. Pass `note: nil` to leave the existing note untouched
-    /// (used by the deep-link overwrite path which only updates the value).
-    func update(id: String, key: String, value: String, note: String? = nil) {
-        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
-
-        let oldKey = entries[idx].key
+    /// Commit a rename before retiring the old secret. For a same-key edit,
+    /// restore the secret if metadata fails; report an explicit partial outcome
+    /// if that compensation also fails so the editor cannot claim full rollback.
+    @discardableResult
+    func update(id: String, key: String, value: String, note: String? = nil) -> Result<Void, MutationError> {
+        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return .failure(.missingEntry) }
+        let original = entries[idx]
+        let oldKey = original.key
         let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !trimmedKey.isEmpty, Self.isValidKey(trimmedKey) else { return }
-
-        // If key changed, delete old keychain entry and check for duplicates
-        if oldKey != trimmedKey {
-            guard !entries.contains(where: { $0.key == trimmedKey && $0.id != id }) else {
-                logger.warning("Cannot rename to duplicate key: \(trimmedKey)")
-                return
-            }
-            Self.deleteValue(forKey: oldKey)
+        guard !trimmedKey.isEmpty, Self.isValidKey(trimmedKey) else { return .failure(.invalidKey) }
+        guard !entries.contains(where: { $0.key == trimmedKey && $0.id != id }) else {
+            return .failure(.duplicateKey)
         }
-
-        let cleanValue = Self.sanitizeValue(value)
-        // Commit the new value FIRST; only mutate the entry (and persist the
-        // key rename) once the Keychain write succeeds, so a failed write
-        // never leaves the list pointing at a blanked value. On key rename the
-        // old value was already migrated/removed above; if the new write
-        // fails, re-log so the caller can retry.
-        guard Self.saveValue(cleanValue, forKey: trimmedKey) else {
-            logger.error("Update env var aborted — Keychain write failed for \(trimmedKey)")
-            return
+        var previousValue: String?
+        if oldKey == trimmedKey {
+            switch Self.readValueForMutation(forKey: oldKey) {
+            case .success(let saved): previousValue = saved
+            case .failure(let error): return .failure(error)
+            }
+        }
+        guard Self.saveValue(Self.sanitizeValue(value), forKey: trimmedKey) else {
+            return .failure(.keychainWriteFailed)
         }
         entries[idx].key = trimmedKey
         if let note { entries[idx].note = note }
-        saveEntries()
-        markEntryDirty(entryId: entries[idx].id, operation: "upsert")
-        logger.info("Updated env var: \(trimmedKey)")
+        guard saveEntries() else {
+            entries[idx] = original
+            if oldKey == trimmedKey {
+                let restored = previousValue.map { Self.saveValue($0, forKey: oldKey) }
+                    ?? Self.deleteValue(forKey: oldKey)
+                guard restored else {
+                    // The live secret changed even though the metadata stayed old.
+                    // Report that partial outcome and let sync see the actual value.
+                    markEntryDirty(entryId: id, operation: "upsert")
+                    return .failure(.valueChangedMetadataWriteFailed)
+                }
+            }
+            return .failure(.metadataWriteFailed)
+        }
+        if oldKey != trimmedKey, !entries.contains(where: { $0.key == oldKey }) {
+            _ = Self.deleteValue(forKey: oldKey)
+        }
+        markEntryDirty(entryId: id, operation: "upsert")
+        return .success(())
     }
 
     /// Update only the human-readable note without touching the

@@ -29,7 +29,7 @@ private struct HostSheetItem: Identifiable {
 struct RemoteHostSettingsView: View {
     @ObservedObject private var store = RemoteHostStore.shared
     @State private var sheetItem: HostSheetItem?
-    /// [T-fleet] hostId → reachable, probed on appear.
+    /// [T-fleet] hostId → reachable for the current saved host configuration.
     @State private var reachability: [String: Bool] = [:]
     @State private var pendingDelete: RemoteHost?
 
@@ -67,12 +67,7 @@ struct RemoteHostSettingsView: View {
             }
         }
         .navigationTitle(Text("Remote Hosts"))
-        .task {
-            for host in store.hosts {
-                let ok = await RemoteSSHExecutor.probe(host: host)
-                reachability[host.id] = ok
-            }
-        }
+        .task(id: store.hosts) { await refreshReachability() }
         .sheet(item: $sheetItem) { item in
             RemoteHostEditSheet(sheetId: item.id, host: item.host)
         }
@@ -87,6 +82,19 @@ struct RemoteHostSettingsView: View {
             Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
         } message: { host in
             Text(String(localized: "\(host.name) and its saved password will be removed from this device."))
+        }
+    }
+
+    private func refreshReachability() async {
+        guard !Task.isCancelled else { return }
+        let hosts = store.hosts
+        reachability = [:]
+        for host in hosts {
+            guard !Task.isCancelled else { return }
+            let ok = await RemoteSSHExecutor.probe(host: host)
+            // Network.framework may complete an earlier probe after task cancellation.
+            guard !Task.isCancelled, store.hosts.contains(host) else { return }
+            reachability[host.id] = ok
         }
     }
 }

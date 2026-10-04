@@ -110,9 +110,11 @@ class AlarmListViewModel: ObservableObject {
     @Published var alarms: [AlarmItem] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published private(set) var cancellingIDs: Set<String> = []
 
     func load() {
         guard #available(iOS 26.0, *) else { return }
+        error = nil
         isLoading = true
         _loadImpl()
     }
@@ -136,28 +138,31 @@ class AlarmListViewModel: ObservableObject {
     }
 
     func delete(id: String) {
-        alarms.removeAll { $0.id == id }
-        guard #available(iOS 26.0, *) else { return }
+        guard #available(iOS 26.0, *), alarms.contains(where: { $0.id == id }),
+              cancellingIDs.insert(id).inserted else { return }
+        error = nil
         _cancelImpl(id: id)
     }
 
     @available(iOS 26.0, *)
     private func _cancelImpl(id: String) {
-        AlarmOffloadBridge.cancelAlarm(withId: id) { _, _ in }
+        AlarmOffloadBridge.cancelAlarm(withId: id) { [weak self] succeeded, failure in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.cancellingIDs.remove(id)
+                if succeeded, failure == nil {
+                    self.alarms.removeAll { $0.id == id }
+                } else {
+                    self.error = String(localized: "The alarm could not be cancelled. It is still scheduled. Try again.")
+                        + (failure.map { "\n" + $0.localizedDescription } ?? "")
+                }
+            }
+        }
     }
 
     func clearAll() {
-        let ids = alarms.map { $0.id }
-        alarms.removeAll()
-        guard #available(iOS 26.0, *) else { return }
-        _clearAllImpl(ids: ids)
-    }
-
-    @available(iOS 26.0, *)
-    private func _clearAllImpl(ids: [String]) {
-        for id in ids {
-            AlarmOffloadBridge.cancelAlarm(withId: id) { _, _ in }
-        }
+        // Each result owns its row: failures remain visible and retryable.
+        for id in alarms.map(\.id) { delete(id: id) }
     }
 
     /// Group alarms by week for sectioned display.
@@ -245,6 +250,10 @@ struct AlarmListView: View {
                             Section(section.title) {
                                 ForEach(section.alarms) { alarm in
                                     AlarmRowView(alarm: alarm)
+                                        .deleteDisabled(vm.cancellingIDs.contains(alarm.id))
+                                        .overlay(alignment: .trailing) {
+                                            if vm.cancellingIDs.contains(alarm.id) { ProgressView() }
+                                        }
                                 }
                                 .onDelete { indexSet in
                                     for idx in indexSet {
@@ -270,7 +279,7 @@ struct AlarmListView: View {
                     } label: {
                         Text("Clear All")
                     }
-                    .disabled(vm.alarms.isEmpty)
+                    .disabled(vm.alarms.isEmpty || !vm.cancellingIDs.isEmpty)
                     .opacity(vm.alarms.isEmpty ? 0 : 1)
                 }
             }
@@ -281,6 +290,13 @@ struct AlarmListView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("All \(vm.alarms.count) alarm(s) will be removed. This cannot be undone.")
+            }
+            .alert("Alarm operation failed", isPresented: Binding(
+                get: { vm.error != nil }, set: { if !$0 { vm.error = nil } }
+            )) {
+                Button("OK", role: .cancel) { vm.error = nil }
+            } message: {
+                Text(vm.error ?? "")
             }
             .onAppear { vm.load() }
         }

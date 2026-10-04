@@ -586,7 +586,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Hidden structured material selected from Treasury. It is emitted as a
     /// separate Agent content part before the user's instruction, never folded
     /// into the editable prompt string.
-    var pendingTreasuryContext: String?
+    var pendingTreasuryContext: String? {
+        didSet { if pendingTreasuryContext != oldValue { scheduleComposerDraftSave() } }
+    }
     /// Caret position (character offset) published by the input text view.
     /// Used by the `@` mention detector to locate the active token.
     @Published var inputCaret: Int = 0 {
@@ -916,6 +918,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var showContextExhaustedPrompt = false
     /// Message text held back while the compact-before-send prompt is shown.
     var pendingSendText: String?
+    var pendingSendTreasuryContext: String?
     /// Attachments held back while the compact-before-send prompt is shown.
     var pendingSendAttachments: [InputAttachment] = []
     /// [T-long-paste-fold] The composer text as typed (folded `[Pasted#N]` tokens)
@@ -2129,6 +2132,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
+    /// One draft initialization shared by model, skill, MCP and send callers.
+    /// Keep it until memory/model binding is ready, not just until an id exists.
+    var sessionCreationTask: Task<String, Never>?
+
     /// Session ID for persistence integration. Set by the view on appear.
     var sessionId: String? {
         didSet {
@@ -2305,6 +2312,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     func send() {
         // Read-only mode — cannot send messages
         guard remoteDeviceId == nil else { return }
+        // Direct callers must honor the same loading gate as the send button.
+        guard !hasLoadingAttachments else { return }
+        if initialEntryKey != nil || initialGroupId != nil {
+            let store = ProviderConfigStore.shared
+            if sessionId.flatMap({ store.binding(for: $0) }) == nil,
+               resolveInitialEntry(store: store) == nil {
+                errorMessage = String(localized: "This model is no longer available. Choose another model.")
+                return
+            }
+        }
 
         // [T-ios-photo-pick-placeholder] Drop any non-ready attachments (failed
         // photo loads, or a stray still-loading placeholder) so only fully-loaded
@@ -2394,6 +2411,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // no-prompt path — compact and send without asking.
                     logger.info("[Context] Near capacity — auto-compacting (\(sessionSource == "shortcut" ? "shortcut session" : "autoCompactEnabled"))")
                     pendingSendText = text
+                    pendingSendTreasuryContext = treasuryContext
+                    pendingTreasuryContext = nil
                     pendingSendAttachments = pendingAttachments
                     inputText = ""
                     pastedBlocks.removeAll()
@@ -2402,6 +2421,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     return
                 }
                 pendingSendText = text
+                pendingSendTreasuryContext = treasuryContext
+                pendingTreasuryContext = nil
                 pendingSendRawText = inputText
                 pendingSendPastedBlocks = pastedBlocks
                 pendingSendAttachments = pendingAttachments
@@ -2421,6 +2442,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     return
                 }
                 pendingSendText = text
+                pendingSendTreasuryContext = treasuryContext
+                pendingTreasuryContext = nil
                 pendingSendAttachments = pendingAttachments
                 inputText = ""
                 pastedBlocks.removeAll()
@@ -3758,6 +3781,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Set the user's draft aside; the edited message must neither
         // overwrite it nor send its attachments along.
         stashComposerDraftForEdit()
+        pendingTreasuryContext = nil
         pastedBlocks = []
         attachments = []
         inputText = text
@@ -3885,6 +3909,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             if let last = promptQueue.last {
                 inputText = last.text
                 attachments = last.attachments
+                pendingTreasuryContext = last.treasuryContext
             }
             promptQueue.removeAll()
         }
@@ -4004,6 +4029,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
             var combinedParts: [AgentContentPart] = []
             for prompt in queued {
+                if let context = prompt.treasuryContext, !context.isEmpty { combinedParts.append(.text(context)) }
                 if !prompt.attachments.isEmpty {
                     let (attParts, attMetas) = self.processAttachments(prompt.attachments, uploadsDir: uploadsDir, nowStr: nowStr)
                     combinedParts.append(contentsOf: attParts)
@@ -4125,6 +4151,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         var qCombinedParts: [AgentContentPart] = []
         for prompt in queued {
+            if let context = prompt.treasuryContext, !context.isEmpty { qCombinedParts.append(.text(context)) }
             if !prompt.attachments.isEmpty {
                 let (attParts, attMetas) = processAttachments(prompt.attachments, uploadsDir: qUploadsDir, nowStr: qNowStr)
                 qCombinedParts.append(contentsOf: attParts)

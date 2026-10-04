@@ -578,11 +578,19 @@ struct ContentView: View {
             }
             .onAppear {
                 isWideLayout = wide
+                if !homeDraftRestored {
+                    homeDraftRestored = true
+                    homeModelChoice = homeDraft.enablePersistence()
+                }
                 wireMenuActions()
                 WindowRegistry.shared.register(windowId, window: nil)
             }
             .onDisappear {
+                homeDraft.flushPersistence()
                 WindowRegistry.shared.unregister(windowId)
+            }
+            .onChange(of: homeModelChoice) { _, choice in
+                homeDraft.updateModelChoice(choice)
             }
             // [T-windowregistry-staleness] Hand the registry this window's
             // actual UIWindow: it is both the reliable liveness signal (weak
@@ -1298,6 +1306,7 @@ struct ContentView: View {
                 deepLink.pendingSessionId = nil
             }
             .onChange(of: scenePhase) { phase in
+                if phase != .active { homeDraft.flushPersistence() }
                 // Re-claim app-wide notifications for whichever window the user
                 // just brought forward. [T-multiwindow-notification-fanout]
                 if phase == .active { WindowRegistry.shared.markActive(windowId) }
@@ -1492,7 +1501,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                if providerStore.modelGroups.isEmpty {
+                if !homeHasAvailableModel {
                     Button("连接模型,处理更复杂的任务") {
                         if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
                     }
@@ -1779,7 +1788,8 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHomeModelPicker) {
             QuickModelSwitchSheet(sessionId: nil, ensureSessionId: nil, pickedKey: homeModelChoice,
-                                  onPick: { homeModelChoice = $0 })
+                                  onPick: { homeModelChoice = $0 },
+                                  onResetToDefault: { homeModelChoice = nil })
         }
         // [T-session-attention-bar] Aggregate what needs the user, above the
         // list. Individual rows already carry badges, but with several
@@ -2958,6 +2968,7 @@ struct ContentView: View {
     @State private var macChatTarget: MacChatTarget?
     /// 引用对象放在 @State 里:ContentView 不订阅它,打字只重画输入栏(见 HomeDraft)。
     @State private var homeDraft = HomeDraft()
+    @State private var homeDraftRestored = false
     /// 这次快捷动作是不是从首页发起的(决定新对话要不要带推入动画)。
     @State private var quickActionStartedAtHome = false
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
@@ -3068,7 +3079,7 @@ struct ContentView: View {
 
     private var emptyState: some View {
         HomeEmptyState(
-            hasModel: !providerStore.modelGroups.isEmpty,
+            hasModel: homeHasAvailableModel,
             onSuggestion: { text in
                 homeDraft.text = text
                 homePromptFocused = true
@@ -3151,6 +3162,7 @@ struct ContentView: View {
                 isFocused: $homePromptFocused,
                 capsule: homeCapsuleLabel,
                 capsuleMenu: AnyView(homeCapsuleMenuContent),
+                onChooseModel: homeTargetIsIPhone ? { showHomeModelPicker = true } : nil,
                 plusMenu: AnyView(homePlusMenuContent),
                 isBusy: homeRoutingInProgress,
                 onSubmit: { runHomePrompt() },
@@ -3194,81 +3206,40 @@ struct ContentView: View {
         return HomeCapsuleLabel(icon: homeTargetMenuIcon, place: homeExecutionTargetTitle, model: nil)
     }
 
-    /// 胶囊菜单:在哪里执行 + 用哪个模型。一个入口管两件事。
+    /// Execution location and model selection are separate, directly reachable controls.
     @ViewBuilder
     private var homeCapsuleMenuContent: some View {
         Section("在哪里执行") { homeTargetMenuItems }
-        if homeTargetIsIPhone {
-            // [T-home-model-pick] 这一个对话用哪个模型:默认分组、常用 / 最近用过的模型、分组、全部模型。
-            // 以前只能换默认分组,选不了具体模型。
-            Section("用哪个模型") {
-                Button {
-                    homeModelChoice = nil
-                    LeoHaptics.selection()
-                } label: {
-                    let name = ModelSwitcher.defaultLabel() ?? String(localized: "默认")
-                    if homeModelChoice == nil {
-                        Label("默认 · \(name)", systemImage: "checkmark")
-                    } else {
-                        Text("默认 · \(name)")
-                    }
-                }
-                ForEach(homeQuickModelEntries, id: \.compositeKey) { entry in
-                    homeModelChoiceButton(key: entry.compositeKey, title: entry.model.displayName)
-                }
-                if !providerStore.modelGroups.isEmpty {
-                    Menu("模型分组") {
-                        ForEach(providerStore.modelGroups) { group in
-                            homeModelChoiceButton(key: "group:\(group.id)", title: group.name)
-                        }
-                    }
-                }
-                Button { showHomeModelPicker = true } label: {
-                    Label("更多模型…", systemImage: "magnifyingglass")
-                }
-                Button {
-                    if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
-                } label: {
-                    Label(providerStore.modelGroups.isEmpty ? "连接模型" : "管理模型", systemImage: "slider.horizontal.3")
-                }
-            }
+    }
+
+    private var homeHasAvailableModel: Bool {
+        providerStore.modelEntries.contains { ModelSwitcher.isAvailable($0, store: providerStore) }
+    }
+
+    private func homeChoiceIsAvailable(_ choice: String) -> Bool {
+        if choice.hasPrefix("group:") {
+            guard let group = providerStore.group(for: String(choice.dropFirst(6))) else { return false }
+            return ModelGroupRouter.resolve(group: group, sessionId: "draft", store: providerStore, verbose: false) != nil
         }
+        guard let entry = providerStore.entry(for: choice) else { return false }
+        return ModelSwitcher.isAvailable(entry, store: providerStore)
     }
 
     /// 胶囊上显示的、为下一个对话选好的模型名;没选就是 nil(显示默认分组解析出的模型)。
     private var homeChoiceLabel: String? {
         guard let choice = homeModelChoice else { return nil }
         if choice.hasPrefix("group:") {
-            return providerStore.group(for: String(choice.dropFirst("group:".count)))?.name
+            return providerStore.group(for: String(choice.dropFirst("group:".count)))?.name ?? String(localized: "Unavailable model")
         }
-        return providerStore.entry(for: choice)?.model.displayName
-    }
-
-    /// 常用(钉住的)+ 最近用过的,最多 6 个;一个都没有就列前几个可用模型,首页也能一步选到。
-    private var homeQuickModelEntries: [ModelEntry] {
-        var out = Array(ModelSwitcher.pinnedEntries(store: providerStore).prefix(6))
-        for entry in ModelSwitcher.recentEntries(store: providerStore, limit: 3)
-        where !out.contains(where: { $0.compositeKey == entry.compositeKey }) {
-            out.append(entry)
+        guard let entry = providerStore.entry(for: choice) else { return String(localized: "Unavailable model") }
+        let name = entry.model.displayName
+        let duplicate = providerStore.modelEntries.contains {
+            $0.id != entry.id && $0.model.displayName == name && !$0.isHidden
         }
-        if out.isEmpty {
-            out = ModelSwitcher.allChoices(store: providerStore, includeGroups: false)
-                .prefix(4).compactMap { providerStore.entry(for: $0.id) }
+        if duplicate, let provider = providerStore.instance(for: entry.providerInstanceId) {
+            return "\(name) · \(provider.label)"
         }
-        return Array(out.prefix(6))
-    }
-
-    private func homeModelChoiceButton(key: String, title: String) -> some View {
-        Button {
-            homeModelChoice = key
-            LeoHaptics.selection()
-        } label: {
-            if homeModelChoice == key {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
+        return name
     }
 
     @ViewBuilder
@@ -3458,7 +3429,11 @@ struct ContentView: View {
                 homeNativeResult = .init(text: native.spoken(), outcome: .waitingForUser)
                 return
             }
-            guard !providerStore.modelGroups.isEmpty else {
+            if let choice = homeModelChoice, !homeChoiceIsAvailable(choice) {
+                homeRoutingError = String(localized: "This model is no longer available. Choose another model.")
+                return
+            }
+            guard homeHasAvailableModel else {
                 if providerStore.instances.isEmpty { showAddProvider = true }
                 else { showSelectModels = true }
                 return

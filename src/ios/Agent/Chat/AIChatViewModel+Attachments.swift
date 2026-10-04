@@ -535,9 +535,20 @@ struct ComposerDraftSnapshot {
     var text: String
     var attachments: [InputAttachment]
     var pastedBlocks: [PastedBlock]
+    var treasuryContext: String? = nil
 
     var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty && pastedBlocks.isEmpty
+            && (treasuryContext?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    /// Explicitly moved/selected material is additive, like the visible prompt.
+    /// Keep both structured fragments intact instead of silently truncating one.
+    static func mergedTreasuryContext(_ existing: String?, _ incoming: String?) -> String? {
+        let values = [existing, incoming].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let first = values.first else { return nil }
+        return values.count == 1 || values[1] == first ? first : values.joined(separator: "\n")
     }
 }
 
@@ -554,6 +565,8 @@ enum ComposerDraftStore {
         let text: String
         let attachments: [Attachment]
         let pasted: [Pasted]
+        // Optional for drafts saved by earlier app versions.
+        let treasuryContext: String?
     }
 
     private static var directory: URL {
@@ -604,7 +617,8 @@ enum ComposerDraftStore {
             attachments: draft.attachments.filter { $0.loadState == .ready }.map {
                 .init(fileName: $0.fileName, path: storedPath(for: $0.cacheURL), kind: kindName($0.kind))
             },
-            pasted: draft.pastedBlocks.map { .init(index: $0.index, text: $0.text) }
+            pasted: draft.pastedBlocks.map { .init(index: $0.index, text: $0.text) },
+            treasuryContext: draft.treasuryContext
         )
         guard let data = try? JSONEncoder().encode(stored) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -626,7 +640,8 @@ enum ComposerDraftStore {
             let preview = firstLine.count > 60 ? String(firstLine.prefix(60)) + "…" : firstLine
             return PastedBlock(id: UUID(), index: p.index, text: p.text, preview: preview, charCount: p.text.count)
         }
-        let snapshot = ComposerDraftSnapshot(text: stored.text, attachments: attachments, pastedBlocks: blocks)
+        let snapshot = ComposerDraftSnapshot(text: stored.text, attachments: attachments, pastedBlocks: blocks,
+                                             treasuryContext: stored.treasuryContext)
         return snapshot.isEmpty ? nil : snapshot
     }
 
@@ -655,7 +670,8 @@ extension AIChatViewModel {
     var composerDraftKey: String { sessionId ?? ComposerDraftStore.newChatKey }
 
     var currentComposerDraft: ComposerDraftSnapshot {
-        ComposerDraftSnapshot(text: inputText, attachments: attachments, pastedBlocks: pastedBlocks)
+        ComposerDraftSnapshot(text: inputText, attachments: attachments, pastedBlocks: pastedBlocks,
+                              treasuryContext: pendingTreasuryContext)
     }
 
     /// What should survive a relaunch: while the composer is borrowed for
@@ -699,6 +715,7 @@ extension AIChatViewModel {
               let saved = ComposerDraftStore.load(key: composerDraftKey) else { return }
         pastedBlocks = saved.pastedBlocks
         attachments = saved.attachments
+        pendingTreasuryContext = saved.treasuryContext
         inputText = saved.text
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] restored persisted draft text=\(saved.text.count)ch attachments=\(saved.attachments.count) key=\(self.composerDraftKey)")
     }
@@ -731,6 +748,32 @@ extension AIChatViewModel {
         }
     }
 
+    /// Transfer the complete composer only after photo loading has settled.
+    func takeComposerForTransfer() -> ViewModelCache.PendingTransfer? {
+        guard !hasLoadingAttachments else {
+            transientNotice = String(localized: "Attachments are still loading. Try moving them again when loading finishes.")
+            return nil
+        }
+        guard !currentComposerDraft.isEmpty else { return nil }
+        let transfer = ViewModelCache.PendingTransfer(inputText: expandPastedBlocks(in: inputText),
+            attachments: attachments, treasuryContext: pendingTreasuryContext)
+        inputText = ""
+        pastedBlocks = []
+        attachments = []
+        pendingTreasuryContext = nil
+        return transfer
+    }
+
+    func appendTransferredComposer(_ transfer: ViewModelCache.PendingTransfer) {
+        pendingTreasuryContext = ComposerDraftSnapshot.mergedTreasuryContext(pendingTreasuryContext, transfer.treasuryContext)
+        if !transfer.inputText.isEmpty {
+            if !inputText.isEmpty { inputText += "\n" }
+            inputText += transfer.inputText
+        }
+        attachments += transfer.attachments
+        flushComposerDraft()
+    }
+
     /// [T-draft-headless] Headless senders (Siri / Shortcuts / widget quick
     /// tasks / WorkerPool / `minis-sessions send` / watch) borrow the composer
     /// for their own prompt only: `body` fills it and calls `send()`
@@ -744,7 +787,6 @@ extension AIChatViewModel {
         let draft = currentComposerDraft
         let editIndex = editingMessageIndex
         let editStash = draftStashedForEdit
-        let treasury = pendingTreasuryContext
         editingMessageIndex = nil
         draftStashedForEdit = nil
         pendingTreasuryContext = nil
@@ -759,7 +801,7 @@ extension AIChatViewModel {
             pastedBlocks = draft.pastedBlocks
             attachments = draft.attachments
             inputText = draft.text
-            pendingTreasuryContext = treasury
+            pendingTreasuryContext = draft.treasuryContext
             draftStashedForEdit = editStash
             editingMessageIndex = editIndex
         }
@@ -773,11 +815,13 @@ extension AIChatViewModel {
         showContextExhaustedPrompt = false
         let text = (pendingSendText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let moved = pendingSendAttachments
+        let treasuryContext = pendingSendTreasuryContext
+        pendingSendTreasuryContext = nil
         pendingSendText = nil
         pendingSendRawText = nil
         pendingSendPastedBlocks = []
         pendingSendAttachments = []
-        guard !text.isEmpty || !moved.isEmpty else { return }
+        guard !text.isEmpty || !moved.isEmpty || treasuryContext?.isEmpty == false else { return }
         // A new-chat draft that is already waiting stays; the message goes after it.
         var draft = ComposerDraftStore.load(key: ComposerDraftStore.newChatKey)
             ?? ComposerDraftSnapshot(text: "", attachments: [], pastedBlocks: [])
@@ -785,6 +829,7 @@ extension AIChatViewModel {
             draft.text = draft.text.isEmpty ? text : draft.text + "\n" + text
         }
         draft.attachments += moved
+        draft.treasuryContext = ComposerDraftSnapshot.mergedTreasuryContext(draft.treasuryContext, treasuryContext)
         ComposerDraftStore.save(draft, key: ComposerDraftStore.newChatKey)
     }
 
@@ -794,6 +839,7 @@ extension AIChatViewModel {
         draftStashedForEdit = nil
         pastedBlocks = stash.pastedBlocks
         attachments = stash.attachments
+        pendingTreasuryContext = stash.treasuryContext
         inputText = stash.text
     }
 }

@@ -29,6 +29,7 @@ struct CloudSyncSettingsV2View: View {
     @State private var checkingCloud = false
     @State private var health = SyncTransportHealth()
     @State private var pendingCount = 0
+    @State private var categoryPausedCount = 0
     @State private var retryAt: Date?
     // [T-ios-migration-timer-sessionlist-uaf-crash] 5s refresh cadence is driven by
     // a `.task` async loop (see refreshLoop), NOT a process-lived
@@ -135,8 +136,8 @@ struct CloudSyncSettingsV2View: View {
                                 UploadPolicy.setEnabled(cat, newVal)
                                 categoriesEnabled[cat] = newVal
                                 Task {
-                                    if cat == .artifacts && newVal {
-                                        await ChatStoreSyncHydrators.stageAllArtifacts()
+                                    if newVal {
+                                        await ChatStoreSyncHydrators.stageUploadCategory(cat)
                                     }
                                     await markDeviceDirty()
                                 }
@@ -196,7 +197,7 @@ struct CloudSyncSettingsV2View: View {
                         }
                     }
                 } footer: {
-                    Text("选择此设备上传到已启用目的地的数据。环境变量和服务商密钥沿用现有编码策略；关闭对应类别可将它们保留在本机。")
+                    Text("选择此设备上传到已启用目的地的数据。关闭类别会保留本机待传改动和删除，重新开启后继续上传；已上传的数据不会因此删除。")
                         .font(.caption)
                 }
 
@@ -218,6 +219,9 @@ struct CloudSyncSettingsV2View: View {
 
                 Section("Sync activity") {
                     LabeledContent("Pending upload", value: String(pendingCount))
+                    if categoryPausedCount > 0 {
+                        LabeledContent("Paused by category", value: String(categoryPausedCount))
+                    }
                     LabeledContent("Last successful upload", value: health.lastSendAt.map(relativeDate) ?? "—")
                     LabeledContent("Last successful download", value: health.lastFetchAt.map(relativeDate) ?? "—")
                     if let retryAt, retryAt > Date() {
@@ -341,7 +345,9 @@ struct CloudSyncSettingsV2View: View {
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
         if #available(iOS 17.0, *), v2Enabled || tailnetEnabled {
             health = v2Enabled ? SyncCore.shared.cloudHealth : (SyncCore.shared.transports.first { $0.name.hasPrefix("tailnet:") }?.health ?? SyncTransportHealth())
-            pendingCount = await ChatStore.shared.countDirtyRecords().total
+            let counts = await ChatStore.shared.countDirtyRecords()
+            categoryPausedCount = counts.byType.filter { !UploadPolicy.allowsRecordType($0.key) }.values.reduce(0, +)
+            pendingCount = counts.total - categoryPausedCount
             retryAt = SyncCore.shared.nextEarliestSendAt
             let issues = health.issues.values.sorted { $0.operation < $1.operation }
             if let first = issues.first {
