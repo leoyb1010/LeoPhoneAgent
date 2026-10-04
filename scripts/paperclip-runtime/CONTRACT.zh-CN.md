@@ -11,7 +11,7 @@
 | 组织 | `POST /api/companies {name,description}` 创建返回组织；owner membership自动建立；读取 `?scope=accessible`；PATCH requireBoardApprovalForNewAgents | `server/src/routes/companies.ts:1193`；`packages/shared/src/validators/company.ts`；`ui/src/api/companies.ts` |
 | 创建任务 | title/description/backlog/idempotencyKey；同请求同键返回同ID；随后GET校验companyId | `packages/shared/src/validators/issue.ts` createIssueSchema；`server/src/services/issues.ts:9845` 的事务锁和去重记录（保留7天） |
 | 回复 | body + UUID clientRequestId；两次返回同ID，GET comments数组只有一条该请求记录 | `validators/issue.ts:1055`；`services/issues.ts:12245` 按issue/authorUserId/clientRequestId查重；`routes/issues.ts:15279` 返回数组 |
-| 状态/文档 | PATCH blocked；PUT documents/output 的 format=markdown、body、title；GET文档断言body | `routes/issues.ts` 状态更新及 `:10139` 文档PUT；`validators/issue.ts:2187`；GET文档直接返回doc |
+| 状态/文档 | PATCH blocked必须带unblockDescriptor（owner绑定当前人类用户、action说明），或者已有未解决依赖/待审批；PUT documents/output 的 format=markdown、body、title；GET文档断言body | `routes/issues.ts:13306–13362` 阻塞前置条件，`validators/issue.ts:694` 描述符schema及 `routes/issues.ts:10139` 文档PUT；`validators/issue.ts:2187`；GET文档直接返回doc |
 | 审批 | type=approve_ceo_strategy、payload对象、issueIds数组；按任务读取关联审批；approve返回approved | `validators/approval.ts`；`routes/approvals.ts:222,286`；`services/approvals.ts` 仅hire_agent分支创建新执行体，策略审批不需要真实模型 |
 | 确定性执行器 | role=ceo、adapterType=process、Node命令+args+timeoutSec；没有模型密钥 | `validators/agent.ts:87`；`routes/agents.ts:2195` 支持已注册process，`:2218` native provider检查只适用于paperclip_runner；`adapters/process/execute.ts` |
 | 任务唤醒 | PATCH分配assigneeAgentId并设todo；等待任务历史中的runId，而非把HTTP成功当运行完成 | `routes/issues.ts` 的assignment wakeup；`routes/activity.ts:350`、`services/activity.ts:391` 明确历史字段为runId/agentId/status |

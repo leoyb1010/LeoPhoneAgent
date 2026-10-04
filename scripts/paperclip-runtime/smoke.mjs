@@ -26,8 +26,11 @@ async function api(path, method = "GET", body, authenticated = true) {
   const text = await response.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { throw new Error(`${method} ${path} 返回非JSON (${response.status})`); }
-  // 错误只记录HTTP路径/状态，不把会话Cookie、随机密码、注册响应写入工件。
-  if (!response.ok) throw new Error(`${method} ${path}: HTTP ${response.status}`);
+  // 仅非认证路径记录有界错误摘要；会话Cookie、随机密码和认证响应不写入工件。
+  if (!response.ok) {
+    const reason = !path.startsWith("/api/auth/") && typeof data?.error === "string" ? `: ${data.error.slice(0, 1000)}` : "";
+    throw new Error(`${method} ${path}: HTTP ${response.status}${reason}`);
+  }
   return data;
 }
 async function expectSignedOut(cookieHeader) {
@@ -63,7 +66,7 @@ try {
     assert.equal((await api("/api/auth/get-session")).user.id, user.id);
     await api("/api/bootstrap/claim", "POST", {});
   });
-  await record("公司隔离与Cookie鉴权", async () => {
+  await record("组织隔离与Cookie鉴权", async () => {
     company = await api("/api/companies", "POST", { name: "中文集成验证", description: "一次性CI测试数据" });
     const listed = await api("/api/companies?scope=accessible"); assert.ok(listed.some(c => c.id === company.id));
     const response = await fetch(`${base}/api/companies/${company.id}/issues`, { signal: AbortSignal.timeout(10000) });
@@ -77,12 +80,20 @@ try {
     assert.equal(duplicate.id, issue.id);
     assert.equal((await api(`/api/issues/${issue.id}`)).companyId, company.id);
   });
-  await record("回复真实去重、任务状态及文档产物", async () => {
+  await record("回复真实去重", async () => {
     const body = { body: "中文回复：检查异步执行", clientRequestId: randomUUID() };
     const a = await api(`/api/issues/${issue.id}/comments`, "POST", body);
     const b = await api(`/api/issues/${issue.id}/comments`, "POST", body); assert.equal(a.id,b.id);
     const comments = await api(`/api/issues/${issue.id}/comments?order=asc`); assert.equal(comments.filter(c=>c.clientRequestId===body.clientRequestId).length,1);
-    const updated = await api(`/api/issues/${issue.id}`, "PATCH", { status: "blocked" }); assert.equal(updated.status,"blocked");
+  });
+  await record("真实阻塞状态与解除描述符", async () => {
+    const updated = await api(`/api/issues/${issue.id}`, "PATCH", { status: "blocked", unblockDescriptor: { owner: { userId:user.id }, action:"等待测试操作者确认继续" } });
+    assert.equal(updated.status,"blocked"); assert.equal(updated.unblockDescriptor.owner.userId,user.id);
+    assert.equal(updated.unblockDescriptor.action,"等待测试操作者确认继续");
+    const reread = await api(`/api/issues/${issue.id}`);
+    assert.deepEqual(reread.unblockDescriptor, updated.unblockDescriptor);
+  });
+  await record("真实文档产物保存与读取", async () => {
     await api(`/api/issues/${issue.id}/documents/output`, "PUT", { title:"中文验证产物", format:"markdown", body:"服务器保存的中文产物" });
     const doc = await api(`/api/issues/${issue.id}/documents/output`); assert.equal(doc.body,"服务器保存的中文产物");
   });

@@ -22,6 +22,8 @@ checks = [
     ("historical-runs", "server/src/routes/activity.ts", ['router.get("/issues/:id/runs"', "svc.runsForIssue(issue.companyId, issue.id)"]),
     ("cancel-run", "server/src/routes/agents.ts", ['router.post("/heartbeat-runs/:runId/cancel"']),
     ("create-comment-routes", "server/src/routes/issues.ts", ['"/companies/:companyId/issues"', '"/issues/:id/comments"']),
+    ("blocked-precondition", "server/src/routes/issues.ts", ['existing.status !== "blocked" && updateFields.status === "blocked"', "!hasUnresolvedBlocker", "!pendingInteraction", "!pendingApproval", "!descriptor", "Entering blocked requires unresolved blockers, a pending interaction/approval, or unblockDescriptor"]),
+    ("unblock-descriptor", "packages/shared/src/validators/issue.ts", ["unblockDescriptor: z", "z.object({ userId: z.string().trim().min(1) }).strict()", "action: multilineTextSchema.pipe(z.string().trim().min(1).max(2_000))"]),
     ("accessible-companies", "ui/src/api/companies.ts", ['"/companies?scope=accessible"']),
     ("board-session", "ui/src/api/auth.ts", ['"/api/auth/get-session"', 'credentials: "include"']),
     ("artifact-route", "server/src/routes/issues.ts", ['`/api/attachments/${attachment.id}/content`']),
