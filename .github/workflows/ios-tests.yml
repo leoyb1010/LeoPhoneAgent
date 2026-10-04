@@ -140,7 +140,6 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       PAPERCLIP_ALLOW_EPHEMERAL_SMOKE: '1'
-      DATABASE_URL: postgresql://paperclip:paperclip-ci-only@127.0.0.1:${{ job.services.postgres.ports[5432] }}/paperclip
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -155,6 +154,8 @@ jobs:
           corepack pnpm install --frozen-lockfile
           corepack pnpm --filter @paperclipai/plugin-sdk build
       - name: Test real Better Auth, tasks and deterministic process adapter
+        env:
+          DATABASE_URL: postgresql://paperclip:paperclip-ci-only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/paperclip
         run: bash scripts/paperclip-runtime/run.sh "$RUNNER_TEMP/paperclip-http"
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
