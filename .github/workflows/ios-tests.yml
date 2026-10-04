@@ -96,6 +96,32 @@ jobs:
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
 
+  paperclip-chinese-server:
+    name: Paperclip 中文服务源码、构建与界面
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Enable pinned upstream package manager
+        run: corepack enable
+      - name: Prepare pinned Chinese source and verify native API evidence
+        run: |
+          set -euo pipefail
+          bash src/server/paperclip/scripts/prepare.sh "$RUNNER_TEMP/paperclip-zh"
+          python3 scripts/PaperclipUpstreamContractAudit.py "$RUNNER_TEMP/paperclip-zh"
+      - name: Test localization, compile UI and exercise Chinese pages
+        run: bash src/server/paperclip/scripts/check-upstream.sh "$RUNNER_TEMP/paperclip-zh"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: paperclip-chinese-server
+          path: src/server/paperclip/reports/
+          if-no-files-found: warn
+          retention-days: 14
+
   paperclip-native-ios:
     name: Paperclip 原生 iOS 中文工作区
     runs-on: macos-26
@@ -236,6 +262,7 @@ jobs:
           node scripts/paperclip/typecheck-transport.mjs
           node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
           node --import tsx --test packages/services/test/paperclipWorkspace.test.ts
+          TSX_TSCONFIG_PATH=packages/ui/tsconfig.json node --import tsx --test scripts/paperclip-ui/render.test.tsx
           pnpm leo:test:agent
           node --import tsx --test packages/desktop/src/host/leo/link/*.test.ts
           node --import tsx --test packages/ui/test/phonePairingSession.test.ts

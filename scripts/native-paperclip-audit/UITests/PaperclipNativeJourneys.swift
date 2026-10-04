@@ -9,7 +9,9 @@ final class PaperclipNativeJourneys: XCTestCase {
         XCTAssertTrue(app.staticTexts["fixture.localSessions"].waitForExistence(timeout: 10))
         app.segmentedControls["paperclip.backend"].buttons["Paperclip 服务器"].tap()
         XCTAssertTrue(app.navigationBars["Paperclip 工作区"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["paperclip.create"].exists)
         XCTAssertFalse(app.buttons["paperclip.create"].isEnabled)
+        XCTAssertEqual(app.searchFields.count, 0)
         screenshot("中文服务器空状态", app)
         app.buttons["paperclip.addProfile"].tap()
         XCTAssertTrue(app.navigationBars["添加服务器"].waitForExistence(timeout: 5))
@@ -34,5 +36,61 @@ final class PaperclipNativeJourneys: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+extension PaperclipNativeJourneys {
+    @MainActor
+    func testProductionTaskListReplyStatusAndApprovalWithFixtureAPI() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-paperclip-fixture", "--server-task-fixture", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        let task = app.descendants(matching: .any).matching(identifier: "paperclip.issue.issue-1").firstMatch
+        XCTAssertTrue(task.waitForExistence(timeout: 20))
+        screenshot("真实生产任务列表_模拟接口", app)
+        app.buttons["paperclip.create"].tap()
+        let title = app.textFields["paperclip.taskTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("创建中文任务")
+        let create = app.buttons["paperclip.submitTask"]
+        scrollTo(create, app)
+        create.tap()
+        XCTAssertTrue(app.navigationBars["Paperclip 工作区"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["创建中文任务"].waitForExistence(timeout: 10))
+        screenshot("真实生产创建回执_模拟接口", app)
+        scrollTo(task, app)
+        task.tap()
+        XCTAssertTrue(app.navigationBars["服务器任务详情"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["状态：进行中"].waitForExistence(timeout: 10))
+        screenshot("真实生产任务详情_模拟接口", app)
+        app.buttons["paperclip.changeStatus"].tap()
+        app.buttons["已完成"].tap()
+        app.alerts.buttons["确认"].tap()
+        XCTAssertTrue(app.staticTexts["状态：已完成"].waitForExistence(timeout: 10))
+        let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
+        scrollTo(reply, app)
+        reply.tap(); reply.typeText("请补充验证结果")
+        let send = app.buttons["paperclip.sendReply"]
+        scrollTo(send, app)
+        send.tap()
+        XCTAssertTrue(app.staticTexts["请补充验证结果"].waitForExistence(timeout: 10))
+        screenshot("真实生产回复回执_模拟接口", app)
+        let approval = app.buttons["聘用代理 · 待审批"]
+        scrollTo(approval, app)
+        approval.tap()
+        let approve = app.buttons["paperclip.approve.approval-1"]
+        scrollTo(approve, app)
+        approve.tap()
+        app.alerts.buttons["确认"].tap()
+        XCTAssertTrue(app.buttons["聘用代理 · 已批准"].waitForExistence(timeout: 10))
+        screenshot("真实生产审批回执_模拟接口", app)
+    }
+    @MainActor
+    private func scrollTo(_ target: XCUIElement, _ app: XCUIApplication) {
+        for _ in 0..<10 {
+            if target.exists && target.isHittable { return }
+            app.swipeUp()
+        }
+        XCTAssertTrue(target.exists && target.isHittable)
     }
 }

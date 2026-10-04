@@ -1,0 +1,543 @@
+{
+  "commit": "994d6edcdd4e15d5f9cc5cf8c135ac599104b86a",
+  "meaning": "Non-regression baseline for reviewed static UI nodes. Allowed remaining entries are explicit known gaps or preserved technical strings, not a claim of 100% localization.",
+  "groups": {
+    "初始化与认证": {
+      "pattern": "ui/src/(?:App\\.tsx|pages/(?:Auth|BoardClaim|CliAuth)\\.tsx|components/(?:BootstrapPendingPage|CloudAccessGate|CloudSignIn|OnboardingWizard|OnboardingChat|SetupWizard)\\.tsx|components/onboarding/.*\\.tsx)$",
+      "minimumFiles": 14,
+      "minimumTranslated": 192,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/components/CloudAccessGate.tsx",
+          "text": "Connection interrupted. Reconnecting automatically…",
+          "line": 217
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "ANTHROPIC_API_KEY",
+          "line": 2953
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "Respond with hello.",
+          "line": 2991
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "CURSOR_API_KEY",
+          "line": 3002
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "GEMINI_API_KEY",
+          "line": 3004
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "KIMI_MODEL_NAME + KIMI_MODEL_API_KEY",
+          "line": 3006
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "OPENAI_API_KEY",
+          "line": 3007
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "agent login",
+          "line": 3012
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "codex login",
+          "line": 3014
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "gemini auth",
+          "line": 3016
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "kimi login",
+          "line": 3018
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "opencode auth login",
+          "line": 3019
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "claude login",
+          "line": 3026
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "ws://127.0.0.1:18789",
+          "line": 3047
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "https://...",
+          "line": 3048
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "Continue",
+          "line": 3093
+        },
+        {
+          "file": "ui/src/components/OnboardingWizard.tsx",
+          "text": "Get started",
+          "line": 3095
+        },
+        {
+          "file": "ui/src/components/onboarding/ConnectModelPreview.tsx",
+          "text": "Claude Code",
+          "line": 50
+        },
+        {
+          "file": "ui/src/components/onboarding/ConnectModelPreview.tsx",
+          "text": "Codex",
+          "line": 55
+        },
+        {
+          "file": "ui/src/pages/CliAuth.tsx",
+          "text": "paperclipai cli",
+          "line": 136
+        }
+      ]
+    },
+    "任务核心": {
+      "pattern": "ui/src/(?:pages/(?:Issues|IssueDetail|MyIssues)\\.tsx|components/(?:NewIssueDialog|IssuesList|IssueProperties|IssueBlockedNotice|StatusIcon|PriorityIcon|StatusBadge|IssueDocumentsSection|IssueCommentThread|IssueDescription)\\.tsx)$",
+      "minimumFiles": 9,
+      "minimumTranslated": 464,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/components/NewIssueDialog.tsx",
+          "text": "&rsaquo;",
+          "line": 1452
+        },
+        {
+          "file": "ui/src/components/NewIssueDialog.tsx",
+          "text": "&times;",
+          "line": 1472
+        },
+        {
+          "file": "ui/src/components/NewIssueDialog.tsx",
+          "text": "application/octet-stream",
+          "line": 2092
+        }
+      ]
+    },
+    "智能体核心": {
+      "pattern": "ui/src/(?:pages/(?:Agents|AgentDetail)(?:\\.production)?\\.tsx|pages/NewAgent\\.tsx|components/(?:AgentConfigForm|AgentProperties|AgentActionButtons)\\.tsx|components/new-agent/.*\\.tsx)$",
+      "minimumFiles": 12,
+      "minimumTranslated": 804,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/components/AgentConfigForm.tsx",
+          "text": "Paperclip Computer",
+          "line": 887
+        },
+        {
+          "file": "ui/src/components/AgentConfigForm.tsx",
+          "text": "/path/to/project",
+          "line": 1711
+        },
+        {
+          "file": "ui/src/components/new-agent/AgentBasicsDialog.tsx",
+          "text": "Claude (ACPX)",
+          "line": 276
+        },
+        {
+          "file": "ui/src/components/new-agent/AgentBasicsDialog.tsx",
+          "text": "Grok Build (ACPX)",
+          "line": 277
+        },
+        {
+          "file": "ui/src/components/new-agent/AgentBasicsDialog.tsx",
+          "text": "OpenCode",
+          "line": 278
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "Cursor Cloud",
+          "line": 616
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "Hermes Gateway",
+          "line": 618
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "Paperclip Runner",
+          "line": 647
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "OpenRouter",
+          "line": 942
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "OpenAI",
+          "line": 944
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "Anthropic",
+          "line": 946
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "https://hermes.example.com",
+          "line": 1047
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "kimi-for-coding",
+          "line": 1061
+        },
+        {
+          "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+          "text": "https://github.com/your-org/repo",
+          "line": 1107
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "&middot;",
+          "line": 1717
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "/absolute/path/to/agent/prompts",
+          "line": 2761
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "TOOLS.md",
+          "line": 2858
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "tok",
+          "line": 3145
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "&rarr;",
+          "line": 3480
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "&rarr;",
+          "line": 3485
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "ID",
+          "line": 3623
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.production.tsx",
+          "text": "KB",
+          "line": 4286
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "&middot;",
+          "line": 1645
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "/absolute/path/to/agent/prompts",
+          "line": 2759
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "TOOLS.md",
+          "line": 2857
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "tok",
+          "line": 3261
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "&rarr;",
+          "line": 3721
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "&rarr;",
+          "line": 3726
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "ID",
+          "line": 3865
+        },
+        {
+          "file": "ui/src/pages/AgentDetail.tsx",
+          "text": "KB",
+          "line": 4539
+        }
+      ]
+    },
+    "审批与预算": {
+      "pattern": "ui/src/(?:pages/(?:Approvals|ApprovalDetail|Costs)(?:\\.production)?\\.tsx|components/(?:ApprovalCard|ApprovalPayload|BudgetPolicyCard|BudgetIncidentCard|BillerSpendCard|FinanceBillerCard|FinanceKindCard|FinanceTimelineCard|ProviderQuotaCard)\\.tsx)$",
+      "minimumFiles": 13,
+      "minimumTranslated": 304,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/pages/ApprovalDetail.tsx",
+          "text": "/costs",
+          "line": 287
+        }
+      ]
+    },
+    "后台配置": {
+      "pattern": "ui/src/(?:pages/(?:CompanyAccess|CompanySettings|CompanySettingsPluginPage|InstanceAccess|InstanceGeneralSettings|InstanceExperimentalSettings|Secrets|CompanyEnvironments|PluginManager|PluginSettings|AdapterManager|CompanyImport|CompanyExport)\\.tsx|components/CompanySettingsSidebar(?:\\.production)?\\.tsx|components/access/(?:CompanySettingsNav|ModeBadge)\\.tsx)$",
+      "minimumFiles": 17,
+      "minimumTranslated": 1197,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/pages/AdapterManager.tsx",
+          "text": "v",
+          "line": 88
+        },
+        {
+          "file": "ui/src/pages/AdapterManager.tsx",
+          "text": "/mnt/e/Projects/my-adapter or E:\\Projects\\my-adapter",
+          "line": 463
+        },
+        {
+          "file": "ui/src/pages/AdapterManager.tsx",
+          "text": "my-paperclip-adapter",
+          "line": 480
+        },
+        {
+          "file": "ui/src/pages/CompanyEnvironments.tsx",
+          "text": "SSH",
+          "line": 2261
+        },
+        {
+          "file": "ui/src/pages/CompanyEnvironments.tsx",
+          "text": "/Users/paperclip/workspace",
+          "line": 2307
+        },
+        {
+          "file": "ui/src/pages/CompanyImport.tsx",
+          "text": "&rarr;",
+          "line": 187
+        },
+        {
+          "file": "ui/src/pages/CompanyImport.tsx",
+          "text": "&rarr;",
+          "line": 246
+        },
+        {
+          "file": "ui/src/pages/CompanyImport.tsx",
+          "text": "https://github.com/owner/repo/tree/main/company",
+          "line": 1927
+        },
+        {
+          "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+          "text": "Paperclip Runner",
+          "line": 448
+        },
+        {
+          "file": "ui/src/pages/PluginManager.tsx",
+          "text": "@paperclipai/plugin-example",
+          "line": 218
+        },
+        {
+          "file": "ui/src/pages/PluginManager.tsx",
+          "text": "· v",
+          "line": 401
+        },
+        {
+          "file": "ui/src/pages/PluginSettings.tsx",
+          "text": "v",
+          "line": 181
+        },
+        {
+          "file": "ui/src/pages/PluginSettings.tsx",
+          "text": "PID",
+          "line": 318
+        },
+        {
+          "file": "ui/src/pages/PluginSettings.tsx",
+          "text": "v",
+          "line": 550
+        },
+        {
+          "file": "ui/src/pages/PluginSettings.tsx",
+          "text": "/absolute/path/to/folder",
+          "line": 759
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "v",
+          "line": 2109
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "v",
+          "line": 2182
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "v",
+          "line": 2281
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "clientsecret",
+          "line": 2662
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "/dev/foo/bar",
+          "line": 2682
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "arn:aws:secretsmanager:...",
+          "line": 2717
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "PERSONAL_GH_TOKEN",
+          "line": 2774
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "us-east-1",
+          "line": 3790
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "production",
+          "line": 3791
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "paperclip",
+          "line": 3792
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "alias/paperclip-secrets",
+          "line": 3793
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "platform",
+          "line": 3794
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "prod",
+          "line": 3795
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "paperclip-prod",
+          "line": 3803
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "global",
+          "line": 3804
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "production",
+          "line": 3805
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "paperclip",
+          "line": 3806
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "https://vault.example.com",
+          "line": 3813
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "admin",
+          "line": 3814
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "secret",
+          "line": 3815
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "paperclip/prod",
+          "line": 3816
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "secret_provider_config.discovery.preview",
+          "line": 3992
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "aws_secrets_manager",
+          "line": 3996
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "draft_config",
+          "line": 4000
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "secret.create",
+          "line": 4093
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "MY_SECRET",
+          "line": 4597
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "v",
+          "line": 4660
+        },
+        {
+          "file": "ui/src/pages/Secrets.tsx",
+          "text": "v",
+          "line": 4735
+        }
+      ]
+    },
+    "导航与全局错误": {
+      "pattern": "ui/src/components/(?:Sidebar[^/]*|Layout|MobileBottomNav|AppErrorBoundary|RouteErrorBoundary)(?:\\.production)?\\.tsx$",
+      "minimumFiles": 22,
+      "minimumTranslated": 213,
+      "allowedRemaining": [
+        {
+          "file": "ui/src/components/SidebarAccountMenu.production.tsx",
+          "text": "SHA",
+          "line": 226
+        },
+        {
+          "file": "ui/src/components/SidebarAccountMenu.tsx",
+          "text": "SHA",
+          "line": 225
+        }
+      ]
+    }
+  }
+}

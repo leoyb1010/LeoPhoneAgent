@@ -429,3 +429,64 @@ test("旧服务器的迟到刷新不得覆盖新服务器身份和数据", async
   assert.equal(f.service.getSnapshot().binding, null);
   assert.equal(f.service.getSnapshot().companies[0]?.id, "company-1");
 });
+
+test("审批内容在用户确认后变化时中止，不发出任何审批决定", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) =>
+    input.path === "/api/approvals/approval-1"
+      ? { status: 200, data: { ...approval, payload: { name: "不同的执行者", dangerous: true } } }
+      : undefined,
+  );
+  const ok = await f.service.mutate({
+    kind: "approve",
+    issueId: "issue-1",
+    approvalId: "approval-1",
+    expectedApproval: paperclipApprovalFingerprint(approval),
+    decisionNote: "已核对",
+  });
+  assert.equal(ok, false);
+  assert.equal(f.mutations.length, 0);
+  assert.equal(f.service.getSnapshot().receipt, null);
+  assert.match(f.service.getSnapshot().error!, /审批内容已变化/);
+});
+test("人工核实解除阻塞保留原回执，重启不重放、不再次阻塞", async () => {
+  const f = fixture();
+  await f.connect();
+  f.intercept(async (input) => (input.method === "POST" ? { status: 503, data: null } : undefined));
+  await f.service.mutate({ kind: "reply", issueId: "issue-1", body: "人工核对的原内容" });
+  f.service.acknowledgeReceipt();
+  assert.equal(f.service.getSnapshot().receipt, null);
+  assert.equal(f.mutations.length, 1);
+  const saved = JSON.parse(f.storage.getItem("leophone.paperclip.receipts.v1")!);
+  assert.equal(saved[0].state, "acknowledged");
+  assert.equal(saved[0].command.body, "人工核对的原内容");
+  const next = fixture(f.storage);
+  await next.connect();
+  assert.equal(next.service.getSnapshot().receipt, null);
+  await next.service.reconcile();
+  assert.equal(next.mutations.length, 0);
+});
+test("缺失、非法或未来的创建时间禁止自动重放", async () => {
+  for (const createdAt of [undefined, "not-a-date", new Date(Date.now() + 3600000).toISOString()]) {
+    const f = fixture();
+    await f.connect();
+    f.intercept(async (input) =>
+      input.method === "POST" ? { status: 503, data: null } : undefined,
+    );
+    await f.service.mutate({
+      kind: "create",
+      title: "时间异常",
+      description: "",
+      agentId: "agent-1",
+    });
+    const key = "leophone.paperclip.receipts.v1";
+    const saved = JSON.parse(f.storage.getItem(key)!);
+    saved[0].createdAt = createdAt;
+    f.storage.setItem(key, JSON.stringify(saved));
+    const next = fixture(f.storage);
+    await next.connect();
+    await next.service.reconcile();
+    assert.equal(next.mutations.length, 0);
+  }
+});

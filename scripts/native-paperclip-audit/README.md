@@ -12,7 +12,10 @@ bash scripts/native-paperclip-audit/run.sh
 - Foundation 契约、身份绑定、HTTPS 地址、状态中文、草稿恢复测试
 - URLProtocol 生产客户端测试：人类会话、Cookie 范围、禁止 Bearer Key、超时不确定性、回执、跨公司数据拒绝
 - 真实 WebKit 容器隔离与配置恢复测试
-- 真实 SwiftUI 界面旅程：默认本机、切换服务器、中文空状态、HTTP 拒绝、取消与反复返回，并保存截图
+- 真实 SwiftUI 界面旅程：默认本机、切换服务器、中文空状态（未连接时没有搜索框）、HTTP 拒绝、取消与反复返回，并保存截图
+- 使用 URLProtocol 固定服务响应驱动真实生产工作区页面：有数据的任务列表、创建回执与详情、回复回执、状态修改、关联审批确认与回执，并保存截图。此组是模拟 API 原生旅程，不是真实 Paperclip 部署联调
+
+宿主的“本机会话保留”页面仅为导航占位，不能证明原 App 的本机能力运行。`IOSPaperclipContractAudit.py` 专门核对生产 `MinisApp` 仍通过 `IOSWorkspaceRootView { ContentView() }` 接入原根视图，且 Paperclip 客户端没有引用旧 Gateway/ChatStore 执行接口；真实本机全能力仍需原 App/真机验证
 
 `PaperclipContractTests`、`PaperclipClientTests` 也加入现有 `MinisLogicTests`。独立宿主另外编译全部新 UI，不能用逻辑测试通过代替 UI 编译。
 

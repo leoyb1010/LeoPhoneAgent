@@ -58,7 +58,11 @@ export function rows<T>(
   if (!Array.isArray(value)) throw new PaperclipFailure(-1);
   return value.map((entry) => {
     const row = object(entry);
-    for (const field of required) string(row[field]);
+    for (const field of required) {
+      if (field === "body") {
+        if (typeof row[field] !== "string") throw new PaperclipFailure(-1);
+      } else string(row[field]);
+    }
     if (binding && row.companyId !== binding.companyId)
       throw new PaperclipFailure(-1, "服务器返回了其他公司的内容，已阻止显示");
     if (issueId && row.issueId !== issueId)
@@ -119,6 +123,11 @@ const labels: Record<string, string> = {
   error: "异常",
   terminated: "已停用",
   pending: "待审批",
+  pending_approval: "等待批准",
+  scheduled_retry: "等待重试",
+  interrupted: "已中断",
+  budget_override_required: "预算超限审批",
+  request_board_approval: "人工审批请求",
   approved: "已批准",
   rejected: "已拒绝",
   revision_requested: "要求修改",

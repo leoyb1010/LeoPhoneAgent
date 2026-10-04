@@ -6,7 +6,7 @@ export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipC
     if (
       !c.title.trim() ||
       !state.agents.some(
-        (a) => a.id === c.agentId && !["paused", "terminated", "error"].includes(a.status),
+        (a) => a.id === c.agentId && ["active", "idle", "running"].includes(a.status),
       )
     )
       throw new Error("请填写任务标题并选择可用的服务器执行者");

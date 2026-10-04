@@ -1,0 +1,23 @@
+# 这是待审核的部署模板，不会被准备/构建脚本自动执行。
+# 宿主机仅监听 127.0.0.1；跨设备访问前由管理员配置 HTTPS 反向代理。
+services:
+  paperclip:
+    image: ${PAPERCLIP_ZH_IMAGE:-leophone-paperclip-zh:994d6ed}
+    restart: unless-stopped
+    pids_limit: 2048
+    ports:
+      - "127.0.0.1:${PAPERCLIP_PORT:-3100}:3100"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3100"
+      SERVE_UI: "true"
+      PAPERCLIP_HOME: "/paperclip"
+      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: "${PAPERCLIP_DEPLOYMENT_EXPOSURE:-private}"
+      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:?请设置浏览器实际访问的完整地址}"
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?请通过安全方式设置强随机会话签名密钥}"
+      PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: "${PAPERCLIP_TOOL_ACTION_SIGNING_SECRET:?请设置独立的工具操作签名密钥}"
+    volumes:
+      - paperclip-data:/paperclip
+volumes:
+  paperclip-data:

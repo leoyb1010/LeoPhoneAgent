@@ -18,6 +18,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private var revision = UUID()
     private var nextOffset = 0
     private var cookieVaults: [UUID: PaperclipCookieVault] = [:]
+    private let makeConfiguration: @MainActor () -> URLSessionConfiguration
     private let defaults: UserDefaults
     private let makeCookieVault: @MainActor (PaperclipProfile) -> PaperclipCookieVault
     private static let profilesKey = "leo.paperclip.profiles.v1"
@@ -26,9 +27,10 @@ final class PaperclipWorkspaceStore: ObservableObject {
     init(defaults: UserDefaults = .standard,
          makeCookieVault: @escaping @MainActor (PaperclipProfile) -> PaperclipCookieVault = {
              PaperclipCookieVault.shared(for: $0)
-         }) {
+         }, makeConfiguration: @escaping @MainActor () -> URLSessionConfiguration = { .ephemeral }) {
         self.defaults = defaults
         self.makeCookieVault = makeCookieVault
+        self.makeConfiguration = makeConfiguration
         if let data = defaults.data(forKey: Self.profilesKey),
            let saved = try? JSONDecoder().decode([PaperclipProfile].self, from: data) {
             profiles = saved.compactMap { try? $0.validated() }
@@ -92,7 +94,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
         error = nil
         let cookies = vault(for: profile)
         let generation = cookies.generation
-        let candidate = PaperclipClient(profile: profile, readCookies: {
+        let candidate = PaperclipClient(profile: profile, configuration: makeConfiguration(), readCookies: {
             await cookies.read(generation: generation)
         }, saveCookies: { updated in
             await cookies.write(updated, generation: generation)

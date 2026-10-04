@@ -7,12 +7,11 @@
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
-**个人 AI Agent：iPhone 与 Android 都能独立工作，三台 Mac 是“第二具身体”。**
+**个人 AI 工作区：Mac 以中文 Paperclip 服务器为主，iPhone 可选择服务器或保留本机 Agent。**
 
-手机端本身是一个完整的端上 Agent（模型接入、Linux 沙箱、浏览器自动化、
-技能与记忆);同时通过自营中继,在任意网络(蜂窝/WiFi)远程指挥任意一台
-Mac 上的编码 CLI(Claude Code / Codex / Cursor / Grok),支持断线续传、远程审批、
-会话接管。Mac 侧当前桌面与运行时主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 保留作归档。
+本开发分支的 Mac 默认进入原生服务器任务工作区，任务、智能体执行、审批和产物由独立部署的 Paperclip 服务管理。iOS 保留完整的本机模型接入、Linux 沙箱、浏览器自动化、技能与记忆，新增的服务器工作区通过明确选择进入，两种环境不自动迁移会话。
+
+原有自营中继、远程 Mac CLI（Claude Code / Codex / Cursor / Grok）协议与本机历史仍保留；Mac 的旧入口需要明确进入本地恢复模式。当前桌面主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 保留作归档。此改造尚未作为签名安装包发布，版本徽标仍指向既有发布记录。
 
 Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Standard
 与 Power 两种构建；Power 版为 Accessibility、Shizuku 与受控系统操作预留
@@ -20,6 +19,10 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
+
+## Paperclip 中文服务器工作区（开发分支）
+
+`feat/paperclip-server-workspace` 将当前 Mac 首屏改为 Paperclip 服务器任务工作区，iOS 增加可选服务器模式并保留本机能力。服务器提供固定上游版本的源码级中文发行层。任务/审批/运行归服务器所有，旧本机会话不自动迁移。详见 [集成、使用与验证边界](docs/paperclip/README.zh-CN.md) 和 [中文服务器源码](src/server/paperclip)。本节不代表签名安装包或真实服务器部署已经发布。
 
 ## 开发 Agent 先读
 

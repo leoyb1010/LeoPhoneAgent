@@ -1,0 +1,2318 @@
+[
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "function statusLabel(status: IssueThreadInteraction[\"status\"]) {\n  switch (status) {\n    case \"pending\":\n      return \"Pending\";\n    case \"accepted\":\n      return \"Accepted\";\n    case \"rejected\":\n      return \"Rejected\";\n    case \"answered\":\n      return \"Answered\";\n    case \"cancelled\":\n      return \"Cancelled\";\n    case \"expired\":\n      return \"Expired\";\n    case \"failed\":\n      return \"Failed\";\n    default:\n      return status;\n  }\n}",
+    "to": "function statusLabel(status: IssueThreadInteraction[\"status\"]) {\n  switch (status) {\n    case \"pending\":\n      return \"待处理\";\n    case \"accepted\":\n      return \"已接受\";\n    case \"rejected\":\n      return \"已拒绝\";\n    case \"answered\":\n      return \"已回答\";\n    case \"cancelled\":\n      return \"已取消\";\n    case \"expired\":\n      return \"已过期\";\n    case \"failed\":\n      return \"失败\";\n    default:\n      return status;\n  }\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "function interactionKindLabel(kind: IssueThreadInteraction[\"kind\"]) {\n  switch (kind) {\n    case \"suggest_tasks\":\n      return \"Suggested tasks\";\n    case \"ask_user_questions\":\n      return \"Ask user questions\";\n    case \"request_confirmation\":\n      return \"Confirmation\";\n    case \"request_checkbox_confirmation\":\n      return \"Checkbox confirmation\";\n    case \"request_item_verdicts\":\n      return \"Item verdicts\";\n    case \"connection_intent\":\n      return \"Connection request\";\n    default:\n      return kind;\n  }\n}",
+    "to": "function interactionKindLabel(kind: IssueThreadInteraction[\"kind\"]) {\n  switch (kind) {\n    case \"suggest_tasks\":\n      return \"建议的任务\";\n    case \"ask_user_questions\":\n      return \"向用户提问\";\n    case \"request_confirmation\":\n      return \"确认\";\n    case \"request_checkbox_confirmation\":\n      return \"勾选确认\";\n    case \"request_item_verdicts\":\n      return \"逐项审查结论\";\n    case \"connection_intent\":\n      return \"连接请求\";\n    default:\n      return kind;\n  }\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueWorkspaceCard.tsx",
+    "from": "function workspaceModeLabel(mode: string | null | undefined) {\n  switch (mode) {\n    case \"isolated_workspace\": return \"Isolated workspace\";\n    case \"operator_branch\": return \"Operator branch\";\n    case \"cloud_sandbox\": return \"Cloud environment\";\n    case \"adapter_managed\": return \"Adapter managed\";\n    default: return \"Workspace\";\n  }\n}",
+    "to": "function workspaceModeLabel(mode: string | null | undefined) {\n  switch (mode) {\n    case \"isolated_workspace\": return \"隔离工作区\";\n    case \"operator_branch\": return \"操作人员分支\";\n    case \"cloud_sandbox\": return \"云端环境\";\n    case \"adapter_managed\": return \"由适配器管理\";\n    default: return \"工作区\";\n  }\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueWorkspaceCard.tsx",
+    "from": "function configuredWorkspaceLabel(\n  selection: string | null | undefined,\n  reusableWorkspace: ExecutionWorkspace | null,\n) {\n  switch (selection) {\n    case \"isolated_workspace\":\n      return \"New isolated workspace\";\n    case \"reuse_existing\":\n      return reusableWorkspace?.mode === \"isolated_workspace\"\n        ? \"Existing isolated workspace\"\n        : \"Reuse existing workspace\";\n    default:\n      return \"Project default\";\n  }\n}",
+    "to": "function configuredWorkspaceLabel(\n  selection: string | null | undefined,\n  reusableWorkspace: ExecutionWorkspace | null,\n) {\n  switch (selection) {\n    case \"isolated_workspace\":\n      return \"新建隔离工作区\";\n    case \"reuse_existing\":\n      return reusableWorkspace?.mode === \"isolated_workspace\"\n        ? \"现有隔离工作区\"\n        : \"复用现有工作区\";\n    default:\n      return \"项目默认设置\";\n  }\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "function stopReasonLabel(run: RunForIssue) {\n  const result = asRecord(run.resultJson);\n  const stopReason = readString(result?.stopReason);\n  const timeoutFired = result?.timeoutFired === true;\n  const effectiveTimeoutSec = readNumber(result?.effectiveTimeoutSec);\n  const timeoutText =\n    effectiveTimeoutSec && effectiveTimeoutSec > 0\n      ? `${effectiveTimeoutSec}s timeout`\n      : null;\n\n  if (timeoutFired || stopReason === \"timeout\") {\n    return timeoutText ? `timeout (${timeoutText})` : \"timeout\";\n  }\n  if (\n    stopReason === \"max_turns_exhausted\" ||\n    stopReason === \"turn_limit_exhausted\"\n  )\n    return \"max turns exhausted\";\n  if (stopReason === \"budget_paused\") return \"budget paused\";\n  if (stopReason === \"cancelled\") return \"cancelled\";\n  if (stopReason === \"paused\") return \"paused by board\";\n  if (stopReason === \"process_lost\") return \"process lost\";\n  if (stopReason === \"unmanaged_background_task_stopped\")\n    return \"unmanaged background task stopped\";\n  if (stopReason === \"adapter_failed\") return \"adapter failed\";\n  if (stopReason === \"completed\")\n    return timeoutText ? `completed (${timeoutText})` : \"completed\";\n  return timeoutText;\n}",
+    "to": "function stopReasonLabel(run: RunForIssue) {\n  const result = asRecord(run.resultJson);\n  const stopReason = readString(result?.stopReason);\n  const timeoutFired = result?.timeoutFired === true;\n  const effectiveTimeoutSec = readNumber(result?.effectiveTimeoutSec);\n  const timeoutText =\n    effectiveTimeoutSec && effectiveTimeoutSec > 0\n      ? `${effectiveTimeoutSec}s timeout`\n      : null;\n\n  if (timeoutFired || stopReason === \"timeout\") {\n    return timeoutText ? `timeout (${timeoutText})` : \"超时\";\n  }\n  if (\n    stopReason === \"max_turns_exhausted\" ||\n    stopReason === \"turn_limit_exhausted\"\n  )\n    return \"已达到轮次上限\";\n  if (stopReason === \"budget_paused\") return \"因预算限制暂停\";\n  if (stopReason === \"cancelled\") return \"已取消\";\n  if (stopReason === \"paused\") return \"已由管理者暂停\";\n  if (stopReason === \"process_lost\") return \"进程失联\";\n  if (stopReason === \"unmanaged_background_task_stopped\")\n    return \"未受管的后台任务已停止\";\n  if (stopReason === \"adapter_failed\") return \"适配器失败\";\n  if (stopReason === \"completed\")\n    return timeoutText ? `completed (${timeoutText})` : \"已完成\";\n  return timeoutText;\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "function stopStatusLabel(run: LedgerRun, stopReason: string | null) {\n  if (stopReason) return stopReason;\n  if (run.status === \"scheduled_retry\") return \"Retry pending\";\n  if (run.status === \"queued\") return \"Waiting to start\";\n  if (run.status === \"running\") return \"Still running\";\n  if (!run.livenessState) return \"Unavailable\";\n  return \"No stop reason\";\n}",
+    "to": "function stopStatusLabel(run: LedgerRun, stopReason: string | null) {\n  if (stopReason) return stopReason;\n  if (run.status === \"scheduled_retry\") return \"等待重试\";\n  if (run.status === \"queued\") return \"等待开始\";\n  if (run.status === \"running\") return \"仍在运行\";\n  if (!run.livenessState) return \"不可用\";\n  return \"没有停止原因\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "function lastUsefulActionLabel(run: LedgerRun) {\n  if (run.status === \"scheduled_retry\") return \"Waiting for next attempt\";\n  if (run.lastUsefulActionAt) return relativeTime(run.lastUsefulActionAt);\n  if (isActiveRun(run)) return \"No action recorded yet\";\n  if (\n    run.livenessState === \"plan_only\" ||\n    run.livenessState === \"needs_followup\"\n  ) {\n    return \"No concrete action\";\n  }\n  if (run.livenessState === \"empty_response\") return \"No useful output\";\n  if (!run.livenessState) return \"Unavailable\";\n  return \"None recorded\";\n}",
+    "to": "function lastUsefulActionLabel(run: LedgerRun) {\n  if (run.status === \"scheduled_retry\") return \"等待下次尝试\";\n  if (run.lastUsefulActionAt) return relativeTime(run.lastUsefulActionAt);\n  if (isActiveRun(run)) return \"尚未记录操作\";\n  if (\n    run.livenessState === \"plan_only\" ||\n    run.livenessState === \"needs_followup\"\n  ) {\n    return \"没有具体操作\";\n  }\n  if (run.livenessState === \"empty_response\") return \"没有有效输出\";\n  if (!run.livenessState) return \"不可用\";\n  return \"无记录\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "import { useEffect, useMemo, useState, type ReactNode } from \"react\";",
+    "to": "import { displayStatus as localizedStatusLabel } from \"@/i18n/zh-CN\";\nimport { useEffect, useMemo, useState, type ReactNode } from \"react\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "import type {\n  IssueBlockerAttention,",
+    "to": "import { displayStatus as localizedStatusLabel } from \"@/i18n/zh-CN\";\nimport type {\n  IssueBlockerAttention,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueLinkQuicklook.tsx",
+    "from": "import * as React from \"react\";",
+    "to": "import { displayStatus as localizedStatusLabel } from \"@/i18n/zh-CN\";\nimport * as React from \"react\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueWorkspaceCard.tsx",
+    "from": "import { useWorkspaceIsolationControls } from \"@/hooks/useWorkspaceIsolationControls\";",
+    "to": "import { displayStatus as localizedStatusLabel } from \"@/i18n/zh-CN\";\nimport { useWorkspaceIsolationControls } from \"@/hooks/useWorkspaceIsolationControls\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "return status.replace(/_/g, \" \");",
+    "to": "return localizedStatusLabel(status);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "return status.replace(/_/g, \" \").replace(/\\b\\w/g, (character) => character.toUpperCase());",
+    "to": "return localizedStatusLabel(status);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "reopenSuppressedLeaf.status.replace(/_/g, \" \")",
+    "to": "localizedStatusLabel(reopenSuppressedLeaf.status)",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueLinkQuicklook.tsx",
+    "from": "const words = status.replace(/_/g, \" \");\n  return words.charAt(0).toUpperCase() + words.slice(1);",
+    "to": "return localizedStatusLabel(status);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueWorkspaceCard.tsx",
+    "from": "{status.replace(/_/g, \" \")}",
+    "to": "{localizedStatusLabel(status)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "KIND_LABEL: Record<IssueRecoveryActionKind, string> = {\n  missing_disposition: \"Missing Disposition\",\n  deliberate_wait_without_target: \"Wait Without A Target\",\n  stranded_assigned_issue: \"Stranded Task\",\n  workspace_validation: \"Workspace Validation\",\n  configuration_validation: \"Configuration Validation\",\n  active_run_watchdog: \"Active Watchdog\",\n  issue_graph_liveness: \"Task Needs Next Step\",\n}",
+    "to": "KIND_LABEL: Record<IssueRecoveryActionKind, string> = {\n  missing_disposition: \"缺少处理决定\",\n  deliberate_wait_without_target: \"等待对象不明确\",\n  stranded_assigned_issue: \"停滞任务\",\n  workspace_validation: \"工作区校验\",\n  configuration_validation: \"配置校验\",\n  active_run_watchdog: \"活跃运行监控\",\n  issue_graph_liveness: \"任务需要下一步\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "KIND_HEADLINE: Record<IssueRecoveryActionKind, string> = {\n  missing_disposition:\n    \"This task's run finished, but no next step was chosen. Choose what happens next — try the task again, mark it done, or send it for review.\",\n  deliberate_wait_without_target:\n    \"This task's last run stopped to wait, but there is no reviewer, blocker, monitor, or approval to wait for. Paperclip is repairing the next step; the task stays with its owner.\",\n  stranded_assigned_issue:\n    \"Paperclip retried this task's last run, but there is still no queued run, reviewer, blocker, or other next owner. To get it moving, choose what happens next — try the task again, mark it done, or send it for review.\",\n  workspace_validation:\n    \"Paperclip stopped this run because the task's git workspace could not be validated.\",\n  configuration_validation:\n    \"Paperclip stopped before dispatching this run because required secret/env bindings are missing.\",\n  active_run_watchdog:\n    \"The active run has been silent. Recovery is observing without interrupting it.\",\n  issue_graph_liveness:\n    \"Paperclip could not find a clear next step for this open task. Choose whether to continue work, send it for review, mark it done, or record what is blocking it.\",\n}",
+    "to": "KIND_HEADLINE: Record<IssueRecoveryActionKind, string> = {\n  missing_disposition:\n    \"此任务的运行已结束，但尚未选择下一步。请选择重试任务、标记完成或提交审查。\",\n  deliberate_wait_without_target:\n    \"此任务的上次运行已停止并等待，但并无可等待的审查者、阻塞项、监控或审批。Paperclip 正在修复下一步，任务仍由原负责人负责。\",\n  stranded_assigned_issue:\n    \"Paperclip 已重试此任务的上次运行，但仍没有排队的运行、审查者、阻塞项或后续负责人。请选择重试任务、标记完成或提交审查，让工作继续。\",\n  workspace_validation:\n    \"无法校验此任务的 Git 工作区，Paperclip 已停止本次运行。\",\n  configuration_validation:\n    \"缺少必需的密钥或环境变量绑定，Paperclip 已在分发本次运行前停止。\",\n  active_run_watchdog:\n    \"活跃运行已长时间没有输出。恢复机制正在观察，不会中断运行。\",\n  issue_graph_liveness:\n    \"Paperclip 无法为此未关闭的任务确定下一步。请选择继续工作、提交审查、标记完成，或记录阻塞原因。\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "OUTCOME_LABEL: Record<IssueRecoveryActionOutcome, string> = {\n  restored: \"restored\",\n  handed_back: \"handed back to original owner\",\n  owner_completed: \"completed by recovery owner\",\n  delegated: \"delegated to follow-up\",\n  false_positive: \"false positive\",\n  blocked: \"blocked\",\n  escalated: \"escalated\",\n  cancelled: \"cancelled\",\n}",
+    "to": "OUTCOME_LABEL: Record<IssueRecoveryActionOutcome, string> = {\n  restored: \"已恢复\",\n  handed_back: \"已交回原负责人\",\n  owner_completed: \"由恢复负责人完成\",\n  delegated: \"已委派后续处理\",\n  false_positive: \"误报\",\n  blocked: \"受阻\",\n  escalated: \"已升级处理\",\n  cancelled: \"已取消\",\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.tsx",
+    "from": "`Duplicate ${agent.name} as ${nextName}?`",
+    "to": "`要将 ${agent.name} 复制为 ${nextName} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.tsx",
+    "from": "`Open actions for ${agent.name}`",
+    "to": "`打开 ${agent.name} 的操作菜单`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentChatPicker.tsx",
+    "from": "`No agents match “${search}”`",
+    "to": "`没有与“${search}”匹配的智能体`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "`Default (${DEFAULT_CLAUDE_LOCAL_MODEL})`",
+    "to": "`默认（${DEFAULT_CLAUDE_LOCAL_MODEL}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "`Sign in to ${provider}`",
+    "to": "`登录 ${provider}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentContextualSidebar.tsx",
+    "from": "`${resolvedName} navigation`",
+    "to": "`${resolvedName} 导航`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentMultiSelect.tsx",
+    "from": "`Select ${agent.name}`",
+    "to": "`选择 ${agent.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentMultiSelect.tsx",
+    "from": "`${selectedCount} ${selectedCount === 1 ? \"agent\" : \"agents\"} selected`",
+    "to": "`已选择 ${selectedCount} 个${selectedCount === 1 ? \"智能体\" : \"智能体\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentMultiSelect.tsx",
+    "from": "`Allow ${agent.name}`",
+    "to": "`允许 ${agent.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentMultiSelect.tsx",
+    "from": "`${workingAgentIds.size} selected`",
+    "to": "`已选择 ${workingAgentIds.size} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`Set up the ${state.definition.displayName}`",
+    "to": "`设置 ${state.definition.displayName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`${label} is generated by a built-in agent. Configure its model to enable the feature.`",
+    "to": "`${label} 由内置智能体生成。配置其模型后即可启用此功能。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`Set up ${state.definition.displayName}`",
+    "to": "`设置 ${state.definition.displayName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`${state.definition.displayName} is pending approval`",
+    "to": "`${state.definition.displayName} 正在等待审批`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`${label} will be available after the board approves this built-in agent hire.`",
+    "to": "`管理者批准聘用此内置智能体后，即可使用 ${label}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BuiltInAgentGate.tsx",
+    "from": "`${label} is paused.`",
+    "to": "`${label} 已暂停。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ConfigureBuiltInAgentModal.tsx",
+    "from": "`Model “${normalizedModel}” is not available for ${adapterType}. Choose a known model.`",
+    "to": "`模型“${normalizedModel}”不适用于 ${adapterType}，请选择已知的模型。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ConfigureBuiltInAgentModal.tsx",
+    "from": "`Configure & enable ${definition.displayName}`",
+    "to": "`配置并启用 ${definition.displayName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ConfigureBuiltInAgentModal.tsx",
+    "from": "`Provision ${definition.displayName}`",
+    "to": "`创建 ${definition.displayName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/InboxAgentPolicyControl.tsx",
+    "from": "`${selectedAgentIds.size} ${selectedAgentIds.size === 1 ? \"agent\" : \"agents\"} selected`",
+    "to": "`已选择 ${selectedAgentIds.size} 个${selectedAgentIds.size === 1 ? \"智能体\" : \"智能体\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueAttachmentsSection.tsx",
+    "from": "`Unable to load attachment preview (${response.status})`",
+    "to": "`无法加载附件预览（${response.status}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueAttachmentsSection.tsx",
+    "from": "`Browse ${filename} in gallery`",
+    "to": "`在图库中浏览 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueAttachmentsSection.tsx",
+    "from": "`Open ${filename}`",
+    "to": "`打开 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueAttachmentsSection.tsx",
+    "from": "`Download ${filename}`",
+    "to": "`下载 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "`${label} — ${detail}. Open the source task to act.`",
+    "to": "`${label}：${detail}。请打开原任务进行操作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "`${label} — open the source task to act.`",
+    "to": "`${label}：请打开原任务进行操作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "`scheduled ${relative}`",
+    "to": "`计划于 ${relative}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "`${waitingTaskStatusLabel(blocker.status)} status`",
+    "to": "`${waitingTaskStatusLabel(blocker.status)}状态`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "` and ${reopenSuppressedOtherCount} other ${\n                        reopenSuppressedOtherCount === 1 ? \"task\" : \"tasks\"\n                      }`",
+    "to": "`及其他 ${reopenSuppressedOtherCount} 个${\n                        reopenSuppressedOtherCount === 1 ? \"任务\" : \"任务\"\n                      }`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`Using ${currentToolName}`",
+    "to": "`正在使用 ${currentToolName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`no output for ${lastActivityElapsed} - still running`",
+    "to": "`已 ${lastActivityElapsed} 没有输出，仍在运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`${lastActivityElapsed} ago`",
+    "to": "`${lastActivityElapsed}前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`Tool: ${part.toolName}`",
+    "to": "`工具：${part.toolName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`Args:\\n${part.argsText}`",
+    "to": "`参数：\\n${part.argsText}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`Result:\\n${part.result}`",
+    "to": "`结果：\\n${part.result}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`ran ${commands} command${commands === 1 ? \"\" : \"s\"}`",
+    "to": "`已运行 ${commands} 条命令${commands === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`called ${other} tool${other === 1 ? \"\" : \"s\"}`",
+    "to": "`已调用 ${other} 个工具${other === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`for ${liveElapsed}`",
+    "to": "`持续 ${liveElapsed}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`for ${durationText}`",
+    "to": "`持续 ${durationText}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueChatThread.tsx",
+    "from": "`Remove ${attachment.name}`",
+    "to": "`移除 ${attachment.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueColumns.tsx",
+    "from": "`Updated ${issueActivityTimestamp(issue)}`",
+    "to": "`更新时间：${issueActivityTimestamp(issue)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueColumns.tsx",
+    "from": "`${subtreeLiveCount} sub-task${subtreeLiveCount === 1 ? \"\" : \"s\"} running below`",
+    "to": "`下级有 ${subtreeLiveCount} 个子任务${subtreeLiveCount === 1 ? \"\" : \"\"}正在运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueContinuationHandoff.tsx",
+    "from": "` - revision ${document.latestRevisionNumber}`",
+    "to": "` - 修订版本 ${document.latestRevisionNumber}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueDocumentsSection.tsx",
+    "from": "`Unlock ${doc.key} document`",
+    "to": "`解锁 ${doc.key} 文档`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueDocumentsSection.tsx",
+    "from": "`Lock ${doc.key} document`",
+    "to": "`锁定 ${doc.key} 文档`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueFiltersPopover.tsx",
+    "from": "`Search ${label.toLowerCase()}...`",
+    "to": "`搜索${label.toLowerCase()}…`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueFiltersPopover.tsx",
+    "from": "`Search ${label.toLowerCase()}`",
+    "to": "`搜索${label.toLowerCase()}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueFiltersPopover.tsx",
+    "from": "`Filters: ${activeFilterCount}`",
+    "to": "`筛选条件：${activeFilterCount}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/IssueFiltersPopover.tsx",
+    "from": "`Remove creator ${creator.label}`",
+    "to": "`移除创建者 ${creator.label}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Agent resumes ${eta}`",
+    "to": "`智能体将于 ${eta} 恢复`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Waiting on monitor — resumes ${eta}`",
+    "to": "`等待监控检查，将于 ${eta} 恢复`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Resumes ${eta}`",
+    "to": "`将于 ${eta} 恢复`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Agent retry ${eta}`",
+    "to": "`智能体将于 ${eta} 重试`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Waiting on monitor — ${eta}`",
+    "to": "`等待监控检查：${eta}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Attempt ${derived.attemptCount}`",
+    "to": "`第 ${derived.attemptCount} 次尝试`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`Watching: ${derived.serviceName}`",
+    "to": "`监控对象：${derived.serviceName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueMonitorBanner.tsx",
+    "from": "`${absolute} (your time)`",
+    "to": "`${absolute}（你的本地时间）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuePlanDecompositionsSection.tsx",
+    "from": "`${items.length} accepted plan revisions`",
+    "to": "`${items.length} 个已接受的计划版本`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuePlanDecompositionsSection.tsx",
+    "from": "`revision ${record.acceptedPlanRevisionNumber}`",
+    "to": "`修订版本 ${record.acceptedPlanRevisionNumber}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuePlanDecompositionsSection.tsx",
+    "from": "`revision ${record.acceptedPlanRevisionId.slice(0, 8)}`",
+    "to": "`修订版本 ${record.acceptedPlanRevisionId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`issue ${contention.claimedByIssueId.slice(0, 8)}`",
+    "to": "`任务 ${contention.claimedByIssueId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`${dirtyCount} uncommitted ${dirtyCount === 1 ? \"change\" : \"changes\"}`",
+    "to": "`${dirtyCount} 项未提交的${dirtyCount === 1 ? \"更改\" : \"更改\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`Check scheduled · ${interval}`",
+    "to": "`已安排检查 · ${interval}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`in ${absMin}m`",
+    "to": "`${absMin} 分钟后`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`${absMin}m ago`",
+    "to": "`${absMin} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`agent ${agentId.slice(0, 8)}`",
+    "to": "`智能体 ${agentId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`Recovery resolved as ${OUTCOME_LABEL[action.outcome] ?? action.outcome}.`",
+    "to": "`恢复问题已按以下方式解决：${OUTCOME_LABEL[action.outcome] ?? action.outcome}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`Recovery action: ${ariaState}`",
+    "to": "`恢复操作：${ariaState}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`Retry missed ${retryOffset}`",
+    "to": "`错过重试：${retryOffset}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRecoveryActionCard.tsx",
+    "from": "`Next try ${retryOffset}`",
+    "to": "`下次尝试：${retryOffset}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRow.tsx",
+    "from": "`${label} — ${detail}. Open the source task to act.`",
+    "to": "`${label}：${detail}。请打开原任务进行操作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRow.tsx",
+    "from": "`${label} — open the source task to act.`",
+    "to": "`${label}：请打开原任务进行操作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`Running now by ${agentName}`",
+    "to": "`${agentName} 正在运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`Queued for ${agentName}`",
+    "to": "`已为 ${agentName} 排队`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`Automatic retry scheduled for ${agentName}`",
+    "to": "`已为 ${agentName} 安排自动重试`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`${statusLabel(run.status)} by ${agentName}`",
+    "to": "`${agentName}：${statusLabel(run.status)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`${effectiveTimeoutSec}s timeout`",
+    "to": "`${effectiveTimeoutSec} 秒超时`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`timeout (${timeoutText})`",
+    "to": "`超时（${timeoutText}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`completed (${timeoutText})`",
+    "to": "`已完成（${timeoutText}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`Continuation attempt ${run.continuationAttempt}`",
+    "to": "`第 ${run.continuationAttempt} 次续跑尝试`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`${totalMinutes} minute${totalMinutes === 1 ? \"\" : \"s\"}`",
+    "to": "`${totalMinutes} 分钟${totalMinutes === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`${hours} hour${hours === 1 ? \"\" : \"s\"}`",
+    "to": "`${hours} 小时${hours === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`${children.active.length} active, ${children.done} done, ${children.cancelled} cancelled`",
+    "to": "`${children.active.length} 个活跃，${children.done} 个已完成，${children.cancelled} 个已取消`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`all ${children.total} terminal (${children.done} done, ${children.cancelled} cancelled)`",
+    "to": "`全部 ${children.total} 个均已结束（${children.done} 个已完成，${children.cancelled} 个已取消）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRunLedger.tsx",
+    "from": "`Acting on behalf of ${onBehalfOfLabel}`",
+    "to": "`代表 ${onBehalfOfLabel} 执行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Include ${node.task.title}`",
+    "to": "`包含 ${node.task.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${hiddenChildCount} follow-on tasks hidden in preview`",
+    "to": "`预览中隐藏了 ${hiddenChildCount} 个后续任务`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${totalTasks} draft issues`",
+    "to": "`${totalTasks} 个任务草稿`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Created ${createdCount} draft ${createdCount === 1 ? \"issue\" : \"issues\"} and skipped ${skippedCount} during review.`",
+    "to": "`已创建 ${createdCount} 个${createdCount === 1 ? \"任务\" : \"任务\"}草稿，并在审查时跳过 ${skippedCount} 个。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Created all ${createdCount} draft ${createdCount === 1 ? \"issue\" : \"issues\"}.`",
+    "to": "`已创建全部 ${createdCount} 个${createdCount === 1 ? \"任务\" : \"任务\"}草稿。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`All ${totalTasks} draft ${totalTasks === 1 ? \"issue\" : \"issues\"} selected`",
+    "to": "`已选中全部 ${totalTasks} 个${totalTasks === 1 ? \"任务\" : \"任务\"}草稿`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${selectedCount} of ${totalTasks} draft ${totalTasks === 1 ? \"issue\" : \"issues\"} selected`",
+    "to": "`已选择 ${selectedCount} / ${totalTasks} 个${totalTasks === 1 ? \"任务\" : \"任务\"}草稿`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${questions.length} questions`",
+    "to": "`${questions.length} 个问题`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Describe your answer for ${question.prompt}`",
+    "to": "`请回答：${question.prompt}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Other answer for ${question.prompt}`",
+    "to": "`${question.prompt}的其他回答`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Plan${revision}`",
+    "to": "`计划${revision}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Paperclip is retrying the agent resume after approval (attempt ${resumeFailure.attempt}/${resumeFailure.maxAttempts}).`",
+    "to": "`批准后，Paperclip 正在重试恢复智能体（第 ${resumeFailure.attempt} / ${resumeFailure.maxAttempts} 次尝试）。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Waiting for ${copy.addresseeLabel}`",
+    "to": "`等待 ${copy.addresseeLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${copy.providerName} connected`",
+    "to": "`${copy.providerName} 已连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${agentLabel} needs your ${providerName} identity for work running as you.`",
+    "to": "`${agentLabel} 需要使用你的 ${providerName} 身份，以你的身份执行工作。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Waiting for ${addresseeLabel}`",
+    "to": "`等待 ${addresseeLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Only ${addresseeLabel} can connect their own ${providerName} account.`",
+    "to": "`只有 ${addresseeLabel} 可以连接其本人的 ${providerName} 账号。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${providerName} connected`",
+    "to": "`${providerName} 已连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "` on ${formatDateTime(interaction.resolvedAt)}`",
+    "to": "`于 ${formatDateTime(interaction.resolvedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${providerName} was not connected`",
+    "to": "`${providerName} 未连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Remove ${shot.name}`",
+    "to": "`移除 ${shot.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Confirmed ${selectedCount} of ${totalOptions} ${totalOptions === 1 ? \"option\" : \"options\"}`",
+    "to": "`已确认 ${selectedCount} / ${totalOptions} 个${totalOptions === 1 ? \"选项\" : \"选项\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`+${hiddenCount} more`",
+    "to": "`另有 ${hiddenCount} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Select at least ${minSelected} options.`",
+    "to": "`请至少选择 ${minSelected} 项。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Select at most ${maxSelected} options.`",
+    "to": "`请最多选择 ${maxSelected} 项。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`All ${totalOptions} options selected`",
+    "to": "`已选中全部 ${totalOptions} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${selectedCount} of ${totalOptions} ${totalOptions === 1 ? \"option\" : \"options\"} selected`",
+    "to": "`已选择 ${selectedCount} / ${totalOptions} 个${totalOptions === 1 ? \"选项\" : \"选项\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Pick at least ${minSelected}.`",
+    "to": "`请至少选择 ${minSelected} 项。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${VERDICT_LABEL[verdict]} this item`",
+    "to": "`${VERDICT_LABEL[verdict]}此项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Apply ${draftCount} decision${draftCount === 1 ? \"\" : \"s\"}`",
+    "to": "`应用 ${draftCount} 项决定${draftCount === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${progress.decided} items were`",
+    "to": "`${progress.decided} 项已`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${draftCount} draft verdict${draftCount === 1 ? \"\" : \"s\"} ready to apply`",
+    "to": "`${draftCount} 项待应用的审查结论${draftCount === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`${progress.decided} of ${progress.total} decided`",
+    "to": "`已决定 ${progress.decided} / ${progress.total} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "`Connect your ${connectionAuthorization.providerName} to continue`",
+    "to": "`连接你的 ${connectionAuthorization.providerName} 以继续`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "` on ${formatShortDate(interaction.resolvedAt)}`",
+    "to": "`于 ${formatShortDate(interaction.resolvedAt)}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "`Create ${createIssueLabel}`",
+    "to": "`创建${createIssueLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "`New ${createIssueLabel}`",
+    "to": "`新建${createIssueLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "`New task in ${group.label}`",
+    "to": "`在“${group.label}”中新建任务`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "`blocked by ${label}${blockerStepSuffix}`",
+    "to": "`被 ${label}${blockerStepSuffix} 阻塞`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "` ... and ${additionalVisibleBlockerCount} more`",
+    "to": "`…另有 ${additionalVisibleBlockerCount} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "`Rendering ${Math.min(renderedIssueRowLimit, filtered.length)} of ${filtered.length} tasks`",
+    "to": "`已显示 ${Math.min(renderedIssueRowLimit, filtered.length)} / ${filtered.length} 个任务`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "`Create ${createIssueLabel}`",
+    "to": "`创建${createIssueLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "`New ${createIssueLabel}`",
+    "to": "`新建${createIssueLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "`New task in ${group.label}`",
+    "to": "`在“${group.label}”中新建任务`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "`blocked by ${label}${blockerStepSuffix}`",
+    "to": "`被 ${label}${blockerStepSuffix} 阻塞`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "` ... and ${additionalVisibleBlockerCount} more`",
+    "to": "`…另有 ${additionalVisibleBlockerCount} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "`Rendering ${Math.min(renderedIssueRowLimit, filtered.length)} of ${filtered.length} tasks`",
+    "to": "`已显示 ${Math.min(renderedIssueRowLimit, filtered.length)} / ${filtered.length} 个任务`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "`Created ${issueRef} with upload warnings`",
+    "to": "`已创建 ${issueRef}，但上传出现警告`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "`${failures.length} staged ${failures.length === 1 ? \"file\" : \"files\"} could not be added.`",
+    "to": "`有 ${failures.length} 个待上传${failures.length === 1 ? \"文件\" : \"文件\"}未能添加。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "`Open ${issueRef}`",
+    "to": "`打开 ${issueRef}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SidebarAgents.tsx",
+    "from": "`Open actions for ${agent.name}`",
+    "to": "`打开 ${agent.name} 的操作菜单`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/artifacts/IssueArtifactCard.tsx",
+    "from": "`Open in tab: ${props.title}`",
+    "to": "`在标签页打开：${props.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/IssueOutputSection.tsx",
+    "from": "`Browse ${filename} in gallery`",
+    "to": "`在图库中浏览 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/IssueOutputSection.tsx",
+    "from": "`Open ${filename}`",
+    "to": "`打开 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputPrimaryCard.tsx",
+    "from": "`Browse ${filename} in gallery`",
+    "to": "`在图库中浏览 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputPrimaryCard.tsx",
+    "from": "`Open ${filename}`",
+    "to": "`打开 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputPrimaryCard.tsx",
+    "from": "`Download ${filename}`",
+    "to": "`下载 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputRow.tsx",
+    "from": "`Open ${filename}`",
+    "to": "`打开 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputRow.tsx",
+    "from": "`Download ${filename}`",
+    "to": "`下载 ${filename}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-output/OutputVideoPlayer.tsx",
+    "from": "`Video output: ${title}`",
+    "to": "`视频输出：${title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Copy ${value} to clipboard`",
+    "to": "`将 ${value} 复制到剪贴板`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Override · ${details.join(\" · \")}`",
+    "to": "`覆盖设置 · ${details.join(\" · \")}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Task-level model override — replaces the agent's primary model for this issue.${details.length > 0 ? ` (${details.join(\" · \")})` : \"\"}`",
+    "to": "`任务级模型覆盖：仅为此任务替代智能体的主要模型。${details.length > 0 ? ` (${details.join(\" · \")})` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`last checked ${timeAgo(monitorLastTriggeredAt)}`",
+    "to": "`上次检查：${timeAgo(monitorLastTriggeredAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`after attempt ${monitorAttemptCount}`",
+    "to": "`第 ${monitorAttemptCount} 次尝试后`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`${action} due now`",
+    "to": "`${action}现已到期`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Assign to ${creatorUserLabel}`",
+    "to": "`分配给 ${creatorUserLabel}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Archived by ${archivedByName} · ${formatDateTime(issue.archivedAt)}`",
+    "to": "`归档者：${archivedByName} · ${formatDateTime(issue.archivedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssueProperties.tsx",
+    "from": "`Close ${tab.label} tab`",
+    "to": "`关闭“${tab.label}”标签页`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssuePropertiesArtifactsTab.tsx",
+    "from": "`Open in tab: ${workProduct.title}`",
+    "to": "`在标签页打开：${workProduct.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssuePropertiesArtifactsTab.tsx",
+    "from": "`Open raw ${workProduct.title}`",
+    "to": "`打开 ${workProduct.title} 的原始内容`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssuePropertiesArtifactsTab.tsx",
+    "from": "`Download ${workProduct.title}`",
+    "to": "`下载 ${workProduct.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssuePropertiesArtifactsTab.tsx",
+    "from": "`Run ${group.runId.slice(0, 8)}`",
+    "to": "`运行 ${group.runId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/IssuePropertiesPlansTab.tsx",
+    "from": "`Revision ${planDocument.latestRevisionNumber ?? 1} · updated ${new Date(planDocument.updatedAt).toLocaleString([], {\n              month: \"short\",\n              day: \"numeric\",\n              hour: \"numeric\",\n              minute: \"2-digit\",\n            })}`",
+    "to": "`修订版本 ${planDocument.latestRevisionNumber ?? 1} · 更新时间：${new Date(planDocument.updatedAt).toLocaleString([], {\n              month: \"short\",\n              day: \"numeric\",\n              hour: \"numeric\",\n              minute: \"2-digit\",\n            })}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/external-object-rows.tsx",
+    "from": "`Issue ${number}`",
+    "to": "`任务 ${number}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Remove ${issueLabel} as blocker`",
+    "to": "`将 ${issueLabel} 从阻塞项中移除`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Actions for blocker ${issueLabel}`",
+    "to": "`阻塞项 ${issueLabel} 的操作`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Task ${issueLabel}: ${issue.title}`",
+    "to": "`任务 ${issueLabel}：${issue.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Task: ${issue.title}`",
+    "to": "`任务：${issue.title}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Show ${hiddenCount} more items`",
+    "to": "`再显示 ${hiddenCount} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/issue-properties/relation-controls.tsx",
+    "from": "`Show ${hiddenCount} more`",
+    "to": "`再显示 ${hiddenCount} 项`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentBasicsDialog.tsx",
+    "from": "`How should ${name.trim()} work?`",
+    "to": "`${name.trim()} 应如何工作？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "from": "`Provide your ${provider} API key to connect`",
+    "to": "`输入你的 ${provider} API 密钥以连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "from": "`Sign in to ${provider}`",
+    "to": "`登录 ${provider}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "`Enter ${envKey} or select an organization secret.`",
+    "to": "`请输入 ${envKey}，或选择组织密钥。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "`${original ? `${original} ` : \"\"}Could not remove an unused setup credential. Remove it from Secrets before retrying.`",
+    "to": "`${original ? `${original} ` : \"\"}无法移除未使用的设置凭据。请先在“密钥”中删除，再重试。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "`Connect ${name} to ${connectionAdapter === \"claude_local\" ? \"Claude\" : connectionAdapter === \"grok_local\" ? \"Grok\" : \"OpenAI\"}.`",
+    "to": "`将 ${name} 连接到 ${connectionAdapter === \"claude_local\" ? \"Claude\" : connectionAdapter === \"grok_local\" ? \"Grok\" : \"OpenAI\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "` Use a ${provider}/model ID.`",
+    "to": "`请使用 ${provider}/model 格式的模型 ID。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "`${agent.name} version`",
+    "to": "`${agent.name} 的版本`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "`${agent.name} skill version`",
+    "to": "`${agent.name} 的技能版本`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "`Confirm removing this skill from ${agent.name}`",
+    "to": "`确认从 ${agent.name} 移除此技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "`Remove this skill from ${agent.name}`",
+    "to": "`从 ${agent.name} 移除此技能`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "` to ${relativeTime(operation.finishedAt)}`",
+    "to": "`至 ${relativeTime(operation.finishedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Run ${urlRunId.slice(0, 8)}`",
+    "to": "`运行 ${urlRunId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`${agent.name} avatar`",
+    "to": "`${agent.name} 的头像`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Pause the ${builtInState.definition.displayName}?`",
+    "to": "`要暂停 ${builtInState.definition.displayName} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`${selectedFileDetail?.language ?? \"text\"} file`",
+    "to": "`${selectedFileDetail?.language ?? \"text\"} 文件`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Delete ${selectedOrEntryFile}?`",
+    "to": "`要删除 ${selectedOrEntryFile} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Preserved edits for ${candidate.entryFile}`",
+    "to": "`为 ${candidate.entryFile} 保留的修改`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Copy preserved edits for ${candidate.entryFile}`",
+    "to": "`复制为 ${candidate.entryFile} 保留的修改`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`Clear session for ${issueCount} issue${issueCount === 1 ? \"\" : \"s\"} touched by this run?`",
+    "to": "`要清除此运行涉及的 ${issueCount} 个任务${issueCount === 1 ? \"\" : \"\"}的会话吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "` of ${Math.round(run.logBytes / 1024).toLocaleString(\"en-US\")} KB`",
+    "to": "` / 共 ${Math.round(run.logBytes / 1024).toLocaleString(\"en-US\")} KB`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentToolsTab.tsx",
+    "from": "` as @${personalLogin}`",
+    "to": "`以 @${personalLogin} 身份`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentToolsTab.tsx",
+    "from": "`Install ${connection.name} on ${agentName}`",
+    "to": "`为 ${agentName} 安装 ${connection.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentToolsTab.tsx",
+    "from": "`Policy #${order}: ${policy.name}`",
+    "to": "`策略 #${order}：${policy.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.tsx",
+    "from": "`${getSandboxProviderLabel(environment, capabilities)} sandbox provider`",
+    "to": "`${getSandboxProviderLabel(environment, capabilities)} 沙箱提供商`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.tsx",
+    "from": "`Unknown environment - ${environmentId}`",
+    "to": "`未知环境 - ${environmentId}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Run was stopped, but updating the task failed: ${err.message}`",
+    "to": "`运行已停止，但更新任务失败：${err.message}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`${label}: ${actor.name} · via ${via}`",
+    "to": "`${label}：${actor.name} · 通过 ${via}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Routine execution from routine ${headerSeed.originId}`",
+    "to": "`来自例行任务 ${headerSeed.originId} 的执行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)}, cached ${formatTokens(issueCostSummary.cached)})`",
+    "to": "`（输入 ${formatTokens(issueCostSummary.input)}，输出 ${formatTokens(issueCostSummary.output)}，缓存 ${formatTokens(issueCostSummary.cached)}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)})`",
+    "to": "`（输入 ${formatTokens(issueCostSummary.input)}，输出 ${formatTokens(issueCostSummary.output)}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (${issueCostSummary.runCount} run${issueCostSummary.runCount === 1 ? \"\" : \"s\"})`",
+    "to": "`（${issueCostSummary.runCount} 次运行${issueCostSummary.runCount === 1 ? \"\" : \"\"}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)}, cached ${formatTokens(issueTreeCostSummary.cachedInputTokens)})`",
+    "to": "`（输入 ${formatTokens(issueTreeCostSummary.inputTokens)}，输出 ${formatTokens(issueTreeCostSummary.outputTokens)}，缓存 ${formatTokens(issueTreeCostSummary.cachedInputTokens)}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)})`",
+    "to": "`（输入 ${formatTokens(issueTreeCostSummary.inputTokens)}，输出 ${formatTokens(issueTreeCostSummary.outputTokens)}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "` (${issueTreeCostSummary.runCount} run${issueTreeCostSummary.runCount === 1 ? \"\" : \"s\"})`",
+    "to": "`（${issueTreeCostSummary.runCount} 次运行${issueTreeCostSummary.runCount === 1 ? \"\" : \"\"}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Accepted ${createdCount} draft${createdCount === 1 ? \"\" : \"s\"} and skipped ${skippedCount}`",
+    "to": "`已接受 ${createdCount} 个草稿${createdCount === 1 ? \"\" : \"\"}，跳过 ${skippedCount} 个`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Applied ${applied} decision${applied === 1 ? \"\" : \"s\"}`",
+    "to": "`已应用 ${applied} 项决定${applied === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Configure ${conversationAgent.name}`",
+    "to": "`配置 ${conversationAgent.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`${created.identifier} will run on a fresh isolated workspace.`",
+    "to": "`${created.identifier} 将在全新的隔离工作区中运行。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`Routine execution from routine ${issue.originId}`",
+    "to": "`来自例行任务 ${issue.originId} 的执行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "`This task is in ${workModeMeta.label.toLowerCase()}.`",
+    "to": "`此任务处于${workModeMeta.label.toLowerCase()}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Could not resolve the environment.\"",
+    "to": "\"无法确定运行环境。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Choose or enter a model in provider/model format.\"",
+    "to": "\"请选择或输入 provider/model 格式的模型。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Enter a GitHub repository URL.\"",
+    "to": "\"请输入 GitHub 仓库网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Enter a Cursor API key.\"",
+    "to": "\"请输入 Cursor API 密钥。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Enter the Hermes API base URL.\"",
+    "to": "\"请输入 Hermes API 基础网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "\"Enter the Kimi API model name.\"",
+    "to": "\"请输入 Kimi API 模型名称。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Select an organization to create secrets\"",
+    "to": "\"请选择组织以创建密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Select an organization to upload images\"",
+    "to": "\"请选择组织以上传图片\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Select an organization to detect the model\"",
+    "to": "\"请选择组织以检测模型\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Select an organization to test adapter environment\"",
+    "to": "\"请选择组织以测试适配器环境\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not load environment settings to determine which environment to test in. Retry the test.\"",
+    "to": "\"无法加载环境设置，因此无法确定测试环境。请重试测试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Failed to refresh adapter models.\"",
+    "to": "\"无法刷新适配器模型。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Run heartbeat every\"",
+    "to": "\"心跳运行间隔\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Login timed out\"",
+    "to": "\"登录超时\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Login cancelled\"",
+    "to": "\"登录已取消\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Login failed\"",
+    "to": "\"登录失败\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Sign in to the environment\"",
+    "to": "\"登录运行环境\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Another sign-in attempt is active. Finish or cancel that attempt before starting a new sign-in.\"",
+    "to": "\"另一次登录正在进行。请完成或取消该次登录，再开始新登录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not start the login.\"",
+    "to": "\"无法启动登录。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not cancel the login.\"",
+    "to": "\"无法取消登录。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not cancel the previous sign-in. Retry before starting a new one.\"",
+    "to": "\"无法取消上一次登录，请重试后再开始新登录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not check for an active login.\"",
+    "to": "\"无法检查是否有正在进行的登录。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"The login did not finish. Start the login again.\"",
+    "to": "\"登录未完成，请重新开始登录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"The login timed out. Start the login again.\"",
+    "to": "\"登录已超时，请重新开始登录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Another sign-in attempt is active. Finish or cancel it in its original account setup before starting this one.\"",
+    "to": "\"另一次登录正在进行。请在原账号设置中完成或取消该次登录，再开始本次登录。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "\"Could not submit the browser code.\"",
+    "to": "\"无法提交浏览器验证码。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Discard unsaved agent configuration changes?\"",
+    "to": "\"要丢弃未保存的智能体配置更改吗？\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Worktree setup\"",
+    "to": "\"工作树设置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Config freshness\"",
+    "to": "\"配置时效检查\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Worktree cleanup\"",
+    "to": "\"工作树清理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"No agent reference\"",
+    "to": "\"缺少智能体引用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Assign Task\"",
+    "to": "\"分配任务\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Repair this agent's reporting chain before assigning tasks or starting runs\"",
+    "to": "\"分配任务或启动运行前，请先修复此智能体的汇报关系\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Adapter default\"",
+    "to": "\"适配器默认设置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Could not save agent\"",
+    "to": "\"无法保存智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Enabled automatically for CEO agents.\"",
+    "to": "\"对 CEO 智能体自动启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Enabled automatically while this agent can create new agents.\"",
+    "to": "\"此智能体拥有创建智能体权限时，自动启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Enabled via explicit organization permission grant.\"",
+    "to": "\"已通过组织明确授权启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Enabled by simple organization-wide task assignment defaults.\"",
+    "to": "\"已根据组织统一的简化任务分配规则启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Disabled unless explicitly granted.\"",
+    "to": "\"除非明确授权，否则禁用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Agent identity\"",
+    "to": "\"智能体身份\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"These instruction edits have not been retrieved yet.\"",
+    "to": "\"尚未获取这些指令修改。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Select an organization to upload images\"",
+    "to": "\"请选择组织以上传图片\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Copy instructions file as markdown\"",
+    "to": "\"将指令文件复制为 Markdown\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Resume request was skipped.\"",
+    "to": "\"恢复请求已跳过。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Trace re-run was skipped.\"",
+    "to": "\"追踪重跑已跳过。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Failed to load run log\"",
+    "to": "\"无法加载运行日志\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "\"Failed to load more run log\"",
+    "to": "\"无法加载更多运行日志\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Run was stopped, but updating the task failed. Retry the task status update.\"",
+    "to": "\"运行已停止，但更新任务失败。请重试更新任务状态。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Only board users can preview subtree controls.\"",
+    "to": "\"仅管理者可以预览子任务树控制项。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Preview is stale because subtree hold state changed. Retry to refresh.\"",
+    "to": "\"子任务树的暂停状态已更改，此预览已过时，请重试刷新。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"This subtree action is currently invalid for the selected tasks.\"",
+    "to": "\"当前无法对所选任务执行此子任务树操作。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Unable to load preview.\"",
+    "to": "\"无法加载预览。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Failed run is no longer available.\"",
+    "to": "\"失败的运行已不可用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The queued message is awaiting server acknowledgement.\"",
+    "to": "\"排队中的消息正在等待服务器确认。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The queued messages are awaiting server acknowledgement.\"",
+    "to": "\"排队中的消息正在等待服务器确认。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The queued message no longer has an active run target.\"",
+    "to": "\"排队中的消息已没有活跃的目标运行。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Couldn’t interrupt. Message is still queued.\"",
+    "to": "\"无法中断，消息仍在排队。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Pause work\"",
+    "to": "\"暂停工作\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Pausing...\"",
+    "to": "\"正在暂停…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The task’s state has changed. Refresh to see its current state.\"",
+    "to": "\"任务状态已更改，请刷新以查看当前状态。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"No active subtree pause hold is available to resume.\"",
+    "to": "\"没有可恢复的子任务树暂停状态。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Task details are still loading. Please try again.\"",
+    "to": "\"任务详情仍在加载，请稍后重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Document import failed\"",
+    "to": "\"文档导入失败\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Stopping and cancelling...\"",
+    "to": "\"正在停止并取消…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Stopping and marking done...\"",
+    "to": "\"正在停止并标记完成…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"No assignee agent\"",
+    "to": "\"没有负责此任务的智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Task is not loaded yet.\"",
+    "to": "\"任务尚未加载。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"This issue's isolated workspace was archived. Your next comment or resume reopens it and rebuilds the worktree.\"",
+    "to": "\"此任务的隔离工作区已归档。下次评论或恢复任务时，会重新打开并重建工作树。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"You don’t have permission to retry this recovery action.\"",
+    "to": "\"你没有权限重试此恢复操作。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Couldn’t check whether this task is paused. Refresh to try again.\"",
+    "to": "\"无法检查此任务是否已暂停，请刷新后重试。\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The task is paused. Resume it before retrying.\"",
+    "to": "\"任务已暂停，请先恢复再重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"The project is paused. Resume it before retrying.\"",
+    "to": "\"项目已暂停，请先恢复再重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "\"Agent Chat is disabled in Experimental settings.\"",
+    "to": "\"智能体对话已在“实验功能”设置中禁用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"No organization selected\"",
+    "to": "\"未选择组织\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"Claude options\"",
+    "to": "\"Claude 选项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"Codex options\"",
+    "to": "\"Codex 选项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"OpenCode options\"",
+    "to": "\"OpenCode 选项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"Agent options\"",
+    "to": "\"智能体选项\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "\"Failed to create task. Try again.\"",
+    "to": "\"无法创建任务，请重试。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/StatusIcon.tsx",
+    "from": "import { useState } from \"react\";",
+    "to": "import { useState } from \"react\";\nimport { displayStatus as localizedStatusLabel } from \"@/i18n/zh-CN\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/StatusIcon.tsx",
+    "from": "return status.replace(/_/g, \" \").replace(/\\b\\w/g, (c) => c.toUpperCase());",
+    "to": "return localizedStatusLabel(status);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/StatusIcon.tsx",
+    "from": "function blockedAttentionLabel(blockerAttention: IssueBlockerAttention | null | undefined) {\n  if (!blockerAttention || blockerAttention.state === \"none\") return \"Blocked\";\n\n  if (blockerAttention.reason === \"active_child\") {\n    const count = blockerAttention.coveredBlockerCount;\n    if (count === 1 && blockerAttention.sampleBlockerIdentifier) {\n      return `Blocked · waiting on active sub-task ${blockerAttention.sampleBlockerIdentifier}`;\n    }\n    if (count === 1) return \"Blocked · waiting on 1 active sub-task\";\n    return `Blocked · waiting on ${count} active sub-tasks`;\n  }\n\n  if (blockerAttention.reason === \"active_dependency\") {\n    const count = blockerAttention.coveredBlockerCount;\n    if (count === 1 && blockerAttention.sampleBlockerIdentifier) {\n      return `Blocked · covered by active dependency ${blockerAttention.sampleBlockerIdentifier}`;\n    }\n    if (count === 1) return \"Blocked · covered by 1 active dependency\";\n    return `Blocked · covered by ${count} active dependencies`;\n  }\n\n  if (blockerAttention.reason === \"stalled_review\") {\n    const count = blockerAttention.stalledBlockerCount;\n    const leaf = blockerAttention.sampleStalledBlockerIdentifier ?? blockerAttention.sampleBlockerIdentifier;\n    if (count === 1 && leaf) return `Blocked · review stalled on ${leaf}`;\n    if (count === 1) return \"Blocked · review stalled with no clear next step\";\n    return `Blocked · ${count} reviews stalled with no clear next step`;\n  }\n\n  if (blockerAttention.reason === \"attention_required\") {\n    const count = blockerAttention.attentionBlockerCount || blockerAttention.unresolvedBlockerCount;\n    const attentionCopy = `${count} ${count === 1 ? \"blocker needs\" : \"blockers need\"} attention`;\n    const coveredCount = blockerAttention.coveredBlockerCount;\n    if (coveredCount > 0) {\n      return `Blocked · ${attentionCopy}; ${coveredCount} covered by active work`;\n    }\n    return `Blocked · ${attentionCopy}`;\n  }\n\n  return \"Blocked\";\n}",
+    "to": "function blockedAttentionLabel(blockerAttention: IssueBlockerAttention | null | undefined) {\n  if (!blockerAttention || blockerAttention.state === \"none\") return \"受阻\";\n\n  if (blockerAttention.reason === \"active_child\") {\n    const count = blockerAttention.coveredBlockerCount;\n    if (count === 1 && blockerAttention.sampleBlockerIdentifier) {\n      return `受阻 · 等待正在处理的子任务 ${blockerAttention.sampleBlockerIdentifier}`;\n    }\n    if (count === 1) return \"受阻 · 等待 1 个正在处理的子任务\";\n    return `受阻 · 等待 ${count} 个正在处理的子任务`;\n  }\n\n  if (blockerAttention.reason === \"active_dependency\") {\n    const count = blockerAttention.coveredBlockerCount;\n    if (count === 1 && blockerAttention.sampleBlockerIdentifier) {\n      return `受阻 · 依赖任务 ${blockerAttention.sampleBlockerIdentifier} 正在处理中`;\n    }\n    if (count === 1) return \"受阻 · 1 个依赖任务正在处理中\";\n    return `受阻 · ${count} 个依赖任务正在处理中`;\n  }\n\n  if (blockerAttention.reason === \"stalled_review\") {\n    const count = blockerAttention.stalledBlockerCount;\n    const leaf = blockerAttention.sampleStalledBlockerIdentifier ?? blockerAttention.sampleBlockerIdentifier;\n    if (count === 1 && leaf) return `受阻 · ${leaf} 的审查已停滞`;\n    if (count === 1) return \"受阻 · 审查停滞，尚未明确下一步\";\n    return `受阻 · ${count} 项审查停滞，尚未明确下一步`;\n  }\n\n  if (blockerAttention.reason === \"attention_required\") {\n    const count = blockerAttention.attentionBlockerCount || blockerAttention.unresolvedBlockerCount;\n    const attentionCopy = `${count} 个${count === 1 ? \"阻塞项需要\" : \"阻塞项需要\"}处理`;\n    const coveredCount = blockerAttention.coveredBlockerCount;\n    if (coveredCount > 0) {\n      return `受阻 · ${attentionCopy}；${coveredCount} 个已有工作正在处理`;\n    }\n    return `受阻 · ${attentionCopy}`;\n  }\n\n  return \"受阻\";\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/StatusIcon.tsx",
+    "from": "`Change status (current: ${ariaLabel})`",
+    "to": "`更改状态（当前：${ariaLabel}）`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/PriorityIcon.tsx",
+    "from": "`Change priority (current: ${config.label})`",
+    "to": "`更改优先级（当前：${config.label}）`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/IssuesList.tsx",
+    "from": "({totalDescendants} sub-task{totalDescendants !== 1 ? \"s\" : \"\"})",
+    "to": "（{totalDescendants} 个子任务{totalDescendants !== 1 ? \"\" : \"\"}）",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/LegacyIssuesList.tsx",
+    "from": "({totalDescendants} sub-task{totalDescendants !== 1 ? \"s\" : \"\"})",
+    "to": "（{totalDescendants} 个子任务{totalDescendants !== 1 ? \"\" : \"\"}）",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "{behindLatest} version{behindLatest === 1 ? \"\" : \"s\"} behind latest",
+    "to": "落后最新版本 {behindLatest} 个版本{behindLatest === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.tsx",
+    "from": "{filtered.length} agent{filtered.length !== 1 ? \"s\" : \"\"}",
+    "to": "{filtered.length} 个智能体{filtered.length !== 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "{issueTreeCostSummary.issueCount} task\n                    {issueTreeCostSummary.issueCount === 1 ? \"\" : \"s\"}",
+    "to": "{issueTreeCostSummary.issueCount} 个任务\n                    {issueTreeCostSummary.issueCount === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "` to ${relativeTime(operation.finishedAt)}`",
+    "to": "`至 ${relativeTime(operation.finishedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "`Run ${urlRunId.slice(0, 8)}`",
+    "to": "`运行 ${urlRunId.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "`Pause the ${builtInState.definition.displayName}?`",
+    "to": "`要暂停 ${builtInState.definition.displayName} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "`${selectedFileDetail?.language ?? \"text\"} file`",
+    "to": "`${selectedFileDetail?.language ?? \"text\"} 文件`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "`Delete ${selectedOrEntryFile}?`",
+    "to": "`要删除 ${selectedOrEntryFile} 吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "`Clear session for ${issueCount} issue${issueCount === 1 ? \"\" : \"s\"} touched by this run?`",
+    "to": "`要清除此运行涉及的 ${issueCount} 个任务${issueCount === 1 ? \"\" : \"\"}的会话吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "` of ${Math.round(run.logBytes / 1024).toLocaleString(\"en-US\")} KB`",
+    "to": "` / 共 ${Math.round(run.logBytes / 1024).toLocaleString(\"en-US\")} KB`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.production.tsx",
+    "from": "`${getSandboxProviderLabel(environment, capabilities)} sandbox provider`",
+    "to": "`${getSandboxProviderLabel(environment, capabilities)} 沙箱提供商`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.production.tsx",
+    "from": "`Unknown environment - ${environmentId}`",
+    "to": "`未知环境 - ${environmentId}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Discard unsaved agent configuration changes?\"",
+    "to": "\"要丢弃未保存的智能体配置更改吗？\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Worktree setup\"",
+    "to": "\"工作树设置\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Config freshness\"",
+    "to": "\"配置时效检查\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Worktree cleanup\"",
+    "to": "\"工作树清理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"No agent reference\"",
+    "to": "\"缺少智能体引用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Assign Task\"",
+    "to": "\"分配任务\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Repair this agent's reporting chain before assigning tasks or starting runs\"",
+    "to": "\"分配任务或启动运行前，请先修复此智能体的汇报关系\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Could not save agent\"",
+    "to": "\"无法保存智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Enabled automatically for CEO agents.\"",
+    "to": "\"对 CEO 智能体自动启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Enabled automatically while this agent can create new agents.\"",
+    "to": "\"此智能体拥有创建智能体权限时，自动启用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Disabled unless explicitly granted.\"",
+    "to": "\"除非明确授权，否则禁用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Copy instructions file as markdown\"",
+    "to": "\"将指令文件复制为 Markdown\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Resume request was skipped.\"",
+    "to": "\"恢复请求已跳过。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Failed to load run log\"",
+    "to": "\"无法加载运行日志\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "\"Failed to load more run log\"",
+    "to": "\"无法加载更多运行日志\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.production.tsx",
+    "from": "{filtered.length} agent{filtered.length !== 1 ? \"s\" : \"\"}",
+    "to": "{filtered.length} 个智能体{filtered.length !== 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.tsx",
+    "from": "AGENT_ROLE_LABELS as Record<string, string>",
+    "to": "{\n  ...AGENT_ROLE_LABELS,\n  ceo: \"首席执行官\",\n  cto: \"首席技术官\",\n  cmo: \"首席营销官\",\n  cfo: \"首席财务官\",\n  security: \"安全专家\",\n  engineer: \"工程师\",\n  designer: \"设计师\",\n  pm: \"产品经理\",\n  qa: \"质量保障工程师\",\n  devops: \"开发运维工程师\",\n  researcher: \"研究员\",\n  general: \"通用智能体\",\n} as Record<string, string>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.production.tsx",
+    "from": "AGENT_ROLE_LABELS as Record<string, string>",
+    "to": "{\n  ...AGENT_ROLE_LABELS,\n  ceo: \"首席执行官\",\n  cto: \"首席技术官\",\n  cmo: \"首席营销官\",\n  cfo: \"首席财务官\",\n  security: \"安全专家\",\n  engineer: \"工程师\",\n  designer: \"设计师\",\n  pm: \"产品经理\",\n  qa: \"质量保障工程师\",\n  devops: \"开发运维工程师\",\n  researcher: \"研究员\",\n  general: \"通用智能体\",\n} as Record<string, string>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentProperties.tsx",
+    "from": "AGENT_ROLE_LABELS as Record<string, string>",
+    "to": "{\n  ...AGENT_ROLE_LABELS,\n  ceo: \"首席执行官\",\n  cto: \"首席技术官\",\n  cmo: \"首席营销官\",\n  cfo: \"首席财务官\",\n  security: \"安全专家\",\n  engineer: \"工程师\",\n  designer: \"设计师\",\n  pm: \"产品经理\",\n  qa: \"质量保障工程师\",\n  devops: \"开发运维工程师\",\n  researcher: \"研究员\",\n  general: \"通用智能体\",\n} as Record<string, string>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "AGENT_ROLE_LABELS as Record<string, string>",
+    "to": "{\n  ...AGENT_ROLE_LABELS,\n  ceo: \"首席执行官\",\n  cto: \"首席技术官\",\n  cmo: \"首席营销官\",\n  cfo: \"首席财务官\",\n  security: \"安全专家\",\n  engineer: \"工程师\",\n  designer: \"设计师\",\n  pm: \"产品经理\",\n  qa: \"质量保障工程师\",\n  devops: \"开发运维工程师\",\n  researcher: \"研究员\",\n  general: \"通用智能体\",\n} as Record<string, string>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Display name for this agent.\"",
+    "to": "\"此智能体的显示名称。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Job title shown in the org chart.\"",
+    "to": "\"组织结构图中显示的职务名称。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Organizational role. Determines position and capabilities.\"",
+    "to": "\"组织角色，决定其位置和能力。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"The agent this one reports to in the org hierarchy.\"",
+    "to": "\"此智能体在组织层级中汇报的上级智能体。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Describes what this agent can do. Shown in the org chart and used for task routing.\"",
+    "to": "\"描述此智能体的能力。会显示在组织结构图中，并用于任务分配。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"How this agent runs: local CLI (Claude/Codex/OpenCode), OpenClaw Gateway, spawned process, or generic HTTP webhook.\"",
+    "to": "\"此智能体的运行方式：本地 CLI（Claude/Codex/OpenCode）、OpenClaw Gateway、启动的进程，或通用 HTTP webhook。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Deprecated legacy working directory fallback for local adapters. Existing agents may still carry this value, but new configurations should use project workspaces instead.\"",
+    "to": "\"已弃用的本地适配器旧版工作目录回退设置。现有智能体可能仍保留此值，新配置应改用项目工作区。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Sent on every heartbeat. Keep this small and dynamic. Use it for current-task framing, not large static instructions. Supports {{ agent.id }}, {{ agent.name }}, {{ agent.role }} and other template variables.\"",
+    "to": "\"每次心跳都会发送。请保持简短，并使用动态变量，用于当前任务说明，不要放入大量静态指令。支持 {{ agent.id }}、{{ agent.name }}、{{ agent.role }} 等模板变量。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Override the default model used by the adapter.\"",
+    "to": "\"覆盖适配器使用的默认模型。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Control model reasoning depth. Supported values vary by adapter/model.\"",
+    "to": "\"控制模型推理深度。支持的取值因适配器和模型而异。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Enable Claude's Chrome integration by passing --chrome.\"",
+    "to": "\"通过传入 --chrome 启用 Claude 的 Chrome 集成。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Run unattended by auto-approving adapter permission prompts when supported.\"",
+    "to": "\"在适配器支持时自动批准权限提示，以无人值守方式运行。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Run Codex without sandbox restrictions. Required for filesystem/network access.\"",
+    "to": "\"让 Codex 在不受沙箱限制的情况下运行，以获得文件系统和网络访问权限。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Enable Codex web search capability during runs.\"",
+    "to": "\"运行时启用 Codex 网页搜索能力。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Enable Codex Fast mode. This burns credits/tokens much faster and is supported on GPT-6, GPT-5.6, GPT-5.5, GPT-5.4, and manual Codex model IDs.\"",
+    "to": "\"启用 Codex 快速模式。此模式会更快地消耗额度和 token，支持 GPT-6、GPT-5.6、GPT-5.5、GPT-5.4，以及手动输入的 Codex 模型 ID。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"How Paperclip should realize an execution workspace for this agent. Keep project_primary for normal cwd execution, or use git_worktree for issue-scoped isolated checkouts.\"",
+    "to": "\"Paperclip 为此智能体创建执行工作区的方式。普通工作目录执行使用 project_primary；按任务隔离的检出使用 git_worktree。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Base git ref used when creating a worktree branch. Leave blank to use the resolved workspace ref or HEAD.\"",
+    "to": "\"创建工作树分支时使用的 Git 基准引用。留空则使用解析后的工作区引用或 HEAD。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Template for naming derived branches. Supports {{issue.identifier}}, {{issue.title}}, {{agent.name}}, {{project.id}}, {{workspace.repoRef}}, and {{slug}}.\"",
+    "to": "\"派生分支的命名模板。支持 {{issue.identifier}}、{{issue.title}}、{{agent.name}}、{{project.id}}、{{workspace.repoRef}} 和 {{slug}}。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Directory where derived worktrees should be created. Absolute, ~-prefixed, and repo-relative paths are supported.\"",
+    "to": "\"创建派生工作树的目录。支持绝对路径、以 ~ 开头的路径及相对仓库路径。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Optional workspace runtime service definitions. Use this for shared app servers, workers, or other long-lived companion processes attached to the workspace.\"",
+    "to": "\"可选的工作区运行服务定义。可用于附属于此工作区的共享应用服务器、工作进程或其他长期运行的辅助进程。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Maximum number of agentic turns (tool calls) per heartbeat run.\"",
+    "to": "\"每次心跳运行允许的最大智能体轮次（工具调用次数）。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"The command to execute (e.g. node, python).\"",
+    "to": "\"要执行的命令，例如 node、python。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Override the path to the CLI command you want the adapter to call (e.g. /usr/local/bin/claude, codex, opencode).\"",
+    "to": "\"覆盖适配器调用的 CLI 命令路径，例如 /usr/local/bin/claude、codex、opencode。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Command-line arguments, comma-separated.\"",
+    "to": "\"命令行参数，以逗号分隔。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Extra CLI arguments for local adapters, comma-separated.\"",
+    "to": "\"本地适配器的附加 CLI 参数，以逗号分隔。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Environment variables injected into the adapter process. Use plain values or secret references.\"",
+    "to": "\"注入适配器进程的环境变量。可使用普通值或密钥引用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Secrets this agent can reach. Env-var bindings are injected at run start; API-access bindings are fetched on demand via the run-bound agent API and never written to the environment.\"",
+    "to": "\"此智能体可以访问的密钥。环境变量绑定会在运行开始时注入；API 访问绑定通过与运行绑定的智能体 API 按需读取，绝不会写入环境变量。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Only sent when Paperclip starts a fresh session. Use this for stable setup guidance that should not be repeated on every heartbeat.\"",
+    "to": "\"仅在 Paperclip 开始新会话时发送。适合放置稳定的设置说明，避免在每次心跳中重复。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Optional JSON merged into remote adapter request payloads before Paperclip adds its standard wake and workspace fields.\"",
+    "to": "\"可选的 JSON：在 Paperclip 添加标准唤醒字段和工作区字段前，合并到远程适配器请求中。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"The URL that receives POST requests when the agent is invoked.\"",
+    "to": "\"调用智能体时接收 POST 请求的网址。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Run this agent automatically on a timer. Useful for periodic tasks like checking for new work.\"",
+    "to": "\"定时自动运行此智能体。适用于检查新工作等周期性任务。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Seconds between automatic heartbeat invocations.\"",
+    "to": "\"自动心跳调用之间的间隔秒数。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Maximum seconds a run can take before being terminated. 0 means no timeout.\"",
+    "to": "\"单次运行在被终止前允许的最长秒数。0 表示不设超时。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Seconds to wait after sending interrupt before force-killing the process.\"",
+    "to": "\"发送中断信号后，到强制终止进程前的等待秒数。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Allow this agent to be woken by assignments, API calls, UI actions, or automated systems.\"",
+    "to": "\"允许通过任务分配、API 调用、界面操作或自动化系统唤醒此智能体。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Minimum seconds between consecutive heartbeat runs.\"",
+    "to": "\"连续两次心跳运行之间的最短间隔秒数。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Maximum number of heartbeat runs that can execute simultaneously for this agent.\"",
+    "to": "\"此智能体可同时执行的最大心跳运行数。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Automatically queue bounded continuation runs when an adapter stops because its per-run turn cap was exhausted.\"",
+    "to": "\"适配器因耗尽单次运行轮次上限而停止时，自动安排有限次数的续跑。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Maximum automatic continuations after one max-turn stop. This is separate from max turns per run.\"",
+    "to": "\"单次达到轮次上限后，允许自动续跑的最大次数。与每次运行的最大轮次分开计算。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Seconds to wait before starting each max-turn continuation.\"",
+    "to": "\"每次达到轮次上限后的续跑开始前，需要等待的秒数。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/agent-config-primitives.tsx",
+    "from": "\"Monthly spending limit in cents. 0 means no limit.\"",
+    "to": "\"每月支出上限，单位为分。0 表示不限额。\"",
+    "expected": 1
+  }
+]

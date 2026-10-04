@@ -1,0 +1,590 @@
+[
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "return \"Resolved\"",
+    "to": "return \"已解决\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "return \"Dismissed\"",
+    "to": "return \"已处理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "return \"Escalated\"",
+    "to": "return \"已升级处理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "return \"Pending approval\"",
+    "to": "return \"待批准\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "return \"Open\"",
+    "to": "return \"待处理\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetIncidentCard.tsx",
+    "from": "{incident.scopeType} hard stop",
+    "to": "{({ company: \"组织\", agent: \"智能体\", project: \"项目\" } as Record<string, string>)[incident.scopeType] ?? incident.scopeType} hard stop",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetPolicyCard.tsx",
+    "from": "\"Lifetime budget\" : \"Monthly UTC budget\"",
+    "to": "\"累计预算\" : \"UTC 月度预算\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BudgetPolicyCard.tsx",
+    "from": "`${summary.utilizationPercent}% of limit`",
+    "to": "`已使用限额的 ${summary.utilizationPercent}%`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/BudgetPolicyCard.tsx",
+    "from": "` · ${summary.pauseReason} pause`",
+    "to": "` · 暂停原因：${summary.pauseReason}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/BudgetPolicyCard.tsx",
+    "from": "`Budget utilization: ${Math.round(progress)}% used`",
+    "to": "`预算使用率：已使用 ${Math.round(progress)}%`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"log display\"",
+    "to": "\"日志显示\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"backup retention\"",
+    "to": "\"备份保留\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"data sharing\"",
+    "to": "\"数据共享\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"Ready\"",
+    "to": "\"已就绪\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"Not ready\"",
+    "to": "\"未就绪\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"Setup required\"",
+    "to": "\"需要初始化\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"Active\"",
+    "to": "\"有效\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"None\"",
+    "to": "\"无\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"1 week\"",
+    "to": "\"1 周\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"1 month\"",
+    "to": "\"1 个月\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "\"Failed to sign out.\"",
+    "to": "\"退出登录失败。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "`${weeks} weeks`",
+    "to": "`${weeks} 周`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "`${months} months`",
+    "to": "`${months} 个月`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "`${visibleTopics.slice(0, -1).join(\", \")}, and ${visibleTopics[visibleTopics.length - 1]}`",
+    "to": "`${visibleTopics.slice(0, -1).join(\"、\")}，以及${visibleTopics[visibleTopics.length - 1]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceGeneralSettings.tsx",
+    "from": "visibleTopics.join(\" and \")",
+    "to": "visibleTopics.join(\"和\")",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${eventCount} total event${eventCount === 1 ? \"\" : \"s\"} in range`",
+    "to": "`期间共 ${eventCount} 条记录`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${formatTokens(inferenceTokenTotal)} tokens across request-scoped events`",
+    "to": "`请求级记录共使用 ${formatTokens(inferenceTokenTotal)} 词元`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${budgetData?.pausedAgentCount ?? 0} agents paused · ${budgetData?.pausedProjectCount ?? 0} projects paused`",
+    "to": "`${budgetData?.pausedAgentCount ?? 0} 个智能体已暂停 · ${budgetData?.pausedProjectCount ?? 0} 个项目已暂停`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)}`",
+    "to": "`已用 ${formatCents(spendData.summary.spendCents)} / ${formatCents(spendData.summary.budgetCents)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${formatCents(financeData?.summary.debitCents ?? 0)} debits · ${formatCents(financeData?.summary.creditCents ?? 0)} credits`",
+    "to": "`支出 ${formatCents(financeData?.summary.debitCents ?? 0)} · 返还 ${formatCents(financeData?.summary.creditCents ?? 0)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${formatCents(financeData?.summary.estimatedDebitCents ?? 0)} estimated in range`",
+    "to": "`期间估算 ${formatCents(financeData?.summary.estimatedDebitCents ?? 0)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`Budget ${formatCents(spendData.summary.budgetCents)}`",
+    "to": "`预算 ${formatCents(spendData.summary.budgetCents)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${row.subscriptionRunCount} subscription`",
+    "to": "`${row.subscriptionRunCount} 次订阅运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "`${row.apiRunCount} api`",
+    "to": "`${row.apiRunCount} 次 API 运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BillerSpendCard.tsx",
+    "from": "`${Math.round(budgetPct)}% of allocation`",
+    "to": "`占分配额度的 ${Math.round(budgetPct)}%`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BillerSpendCard.tsx",
+    "from": "`${row.apiRunCount} metered run${row.apiRunCount === 1 ? \"\" : \"s\"}`",
+    "to": "`${row.apiRunCount} 次按量计费运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BillerSpendCard.tsx",
+    "from": "`${row.subscriptionRunCount} subscription run${row.subscriptionRunCount === 1 ? \"\" : \"s\"}`",
+    "to": "`${row.subscriptionRunCount} 次订阅运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`~${totalApiRuns} api`",
+    "to": "`约 ${totalApiRuns} 次 API 运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`~${totalSubRuns} sub`",
+    "to": "`约 ${totalSubRuns} 次订阅运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`${Math.round(budgetPct)}% of allocation`",
+    "to": "`占分配额度的 ${Math.round(budgetPct)}%`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`~${formatCents(Math.round(weeklyBudgetShare))} / wk`",
+    "to": "`约 ${formatCents(Math.round(weeklyBudgetShare))} / 周`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`${Math.round(tokenPct)}% of provider tokens`",
+    "to": "`占服务商词元用量的 ${Math.round(tokenPct)}%`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderQuotaCard.tsx",
+    "from": "`${Math.round(costPct)}% of provider cost`",
+    "to": "`占服务商费用的 ${Math.round(costPct)}%`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Metered API\"",
+    "to": "\"按量计费 API\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Subscription\"",
+    "to": "\"订阅\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Subscription overage\"",
+    "to": "\"订阅超额\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Credits\"",
+    "to": "\"返还\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Fixed\"",
+    "to": "\"固定费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Unknown\"",
+    "to": "\"未知\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Inference charge\"",
+    "to": "\"推理费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Platform fee\"",
+    "to": "\"平台费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Credit purchase\"",
+    "to": "\"额度购买\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Credit refund\"",
+    "to": "\"额度返还\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Credit expiry\"",
+    "to": "\"额度过期\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"BYOK fee\"",
+    "to": "\"自带密钥费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Gateway overhead\"",
+    "to": "\"网关开销\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Log storage\"",
+    "to": "\"日志存储\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Logpush\"",
+    "to": "\"日志推送\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Provisioned capacity\"",
+    "to": "\"预置容量\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Training\"",
+    "to": "\"训练\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Custom model import\"",
+    "to": "\"自定义模型导入\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Custom model storage\"",
+    "to": "\"自定义模型存储\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Manual adjustment\"",
+    "to": "\"手动调整\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Credit\"",
+    "to": "\"返还\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"Debit\"",
+    "to": "\"支出\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"just now\"",
+    "to": "\"刚刚\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${diffMin}m ago`",
+    "to": "`${diffMin} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${diffHr}h ago`",
+    "to": "`${diffHr} 小时前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${diffDay}d ago`",
+    "to": "`${diffDay} 天前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "\"0s\"",
+    "to": "\"0 秒\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${totalSeconds}s`",
+    "to": "`${totalSeconds} 秒`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${minutes}m ${seconds}s`",
+    "to": "`${minutes} 分 ${seconds} 秒`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${minutes}m`",
+    "to": "`${minutes} 分`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${hours}h ${remainingMinutes}m`",
+    "to": "`${hours} 小时 ${remainingMinutes} 分`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${hours}h`",
+    "to": "`${hours} 小时`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${days}d ${remainingHours}h`",
+    "to": "`${days} 天 ${remainingHours} 小时`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/utils.ts",
+    "from": "`${days}d`",
+    "to": "`${days} 天`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BootstrapPendingPage.tsx",
+    "from": "\"Refresh to sign in, or ask the existing admin to invite you from Settings -> Access.\"",
+    "to": "\"请刷新后登录，或联系现有管理员从“设置 → 访问权限”邀请你。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${eventCount} total event${eventCount === 1 ? \"\" : \"s\"} in range`",
+    "to": "`期间共 ${eventCount} 条记录`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${formatTokens(inferenceTokenTotal)} tokens across request-scoped events`",
+    "to": "`请求级记录共使用 ${formatTokens(inferenceTokenTotal)} 词元`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${budgetData?.pausedAgentCount ?? 0} agents paused · ${budgetData?.pausedProjectCount ?? 0} projects paused`",
+    "to": "`${budgetData?.pausedAgentCount ?? 0} 个智能体已暂停 · ${budgetData?.pausedProjectCount ?? 0} 个项目已暂停`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)}`",
+    "to": "`已用 ${formatCents(spendData.summary.spendCents)} / ${formatCents(spendData.summary.budgetCents)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${formatCents(financeData?.summary.debitCents ?? 0)} debits · ${formatCents(financeData?.summary.creditCents ?? 0)} credits`",
+    "to": "`支出 ${formatCents(financeData?.summary.debitCents ?? 0)} · 返还 ${formatCents(financeData?.summary.creditCents ?? 0)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${formatCents(financeData?.summary.estimatedDebitCents ?? 0)} estimated in range`",
+    "to": "`期间估算 ${formatCents(financeData?.summary.estimatedDebitCents ?? 0)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`Budget ${formatCents(spendData.summary.budgetCents)}`",
+    "to": "`预算 ${formatCents(spendData.summary.budgetCents)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${row.subscriptionRunCount} subscription`",
+    "to": "`${row.subscriptionRunCount} 次订阅运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "from": "`${row.apiRunCount} api`",
+    "to": "`${row.apiRunCount} 次 API 运行`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/access/ModeBadge.tsx",
+    "from": "? \"Local trusted\"\n      : `Authenticated ${deploymentExposure ?? \"private\"}`",
+    "to": "? \"本地信任模式\"\n      : deploymentExposure === \"public\" ? \"认证公开模式\" : \"认证私有模式\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "label: \"Healthy\" | \"Needs attention\" | \"Paused\" | \"Not connected\" | \"Retired\";",
+    "to": "label: string;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "function AttributionAvatar({\n  label,",
+    "to": "function AttributionAvatar({\n  kind,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "label: \"Assignee\" | \"Originating\";",
+    "to": "kind: \"Assignee\" | \"Originating\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "  const accessibleLabel = via",
+    "to": "  const label = kind === \"Assignee\" ? \"负责人\" : \"来源\";\n  const accessibleLabel = via",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "const testIdLabel = label.toLowerCase();",
+    "to": "const testIdLabel = kind.toLowerCase();",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "<AttributionAvatar label=\"Assignee\"",
+    "to": "<AttributionAvatar kind=\"Assignee\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "label=\"Originating\"",
+    "to": "kind=\"Originating\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  const id = `provider-vault-${label.toLowerCase().replace(/[^a-z0-9]+/g, \"-\")}`;",
+    "to": "  const id = `provider-vault-${useId()}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "import { useCallback,",
+    "to": "import { useId, useCallback,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/BreadcrumbBar.tsx",
+    "from": "breadcrumbs[0]?.label === \"Tasks\"",
+    "to": "[\"Tasks\", \"任务\"].includes(breadcrumbs[0]?.label ?? \"\")",
+    "expected": 1
+  }
+]

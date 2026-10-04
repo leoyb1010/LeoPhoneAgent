@@ -42,8 +42,8 @@ export function PaperclipWorkspace({
   const [agentId, setAgentId] = useState("");
   const [query, setQuery] = useState("");
   const locked = state.busy || !!state.receipt || state.connection !== "online";
-  const availableAgents = state.agents.filter(
-    (agent) => !["paused", "terminated", "error"].includes(agent.status),
+  const availableAgents = state.agents.filter((agent) =>
+    ["active", "idle", "running"].includes(agent.status),
   );
   const bindingKey = state.binding
     ? `${state.binding.serverUrl}/${state.binding.companyId}/${state.binding.userId}`

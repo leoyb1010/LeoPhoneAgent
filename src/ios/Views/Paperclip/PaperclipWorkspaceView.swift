@@ -38,8 +38,12 @@ struct PaperclipBackendSettingsView: View {
     }
 }
 
+@MainActor
 struct PaperclipWorkspaceView: View {
-    @StateObject private var store = PaperclipWorkspaceStore()
+    @StateObject private var store: PaperclipWorkspaceStore
+    init(store: PaperclipWorkspaceStore? = nil) {
+        _store = StateObject(wrappedValue: store ?? PaperclipWorkspaceStore())
+    }
     @State private var addProfile = false
     @State private var login = false
     @State private var create = false
@@ -107,7 +111,7 @@ struct PaperclipWorkspaceView: View {
                 }
             }
             .navigationTitle("Paperclip 工作区")
-            .searchable(text: $query, prompt: "搜索已加载的任务")
+            .modifier(PaperclipTaskSearch(isEnabled: store.user != nil && !store.companyID.isEmpty, query: $query))
             .refreshable { if store.user == nil { await store.connect() } else { await store.refresh() } }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -249,6 +253,7 @@ private struct PaperclipCreateIssueView: View {
                     .disabled(busy || !draft.canRetryCreate() || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("paperclip.submitTask")
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("新建服务器任务")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { draft.save(key: draftKey); dismiss() }.disabled(busy) } }
             .interactiveDismissDisabled(busy)
@@ -294,5 +299,15 @@ struct PaperclipCheckedDraftView: View {
             Text("这里只保留本机诊断内容，不会发送。服务器是否已生效以服务器记录为准。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
+    }
+}
+
+
+private struct PaperclipTaskSearch: ViewModifier {
+    let isEnabled: Bool
+    @Binding var query: String
+    @ViewBuilder func body(content: Content) -> some View {
+        if isEnabled { content.searchable(text: $query, prompt: "搜索已加载的任务") }
+        else { content }
     }
 }

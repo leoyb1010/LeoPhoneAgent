@@ -84,7 +84,7 @@ struct PaperclipIssueDetailView: View {
                             Button(status.title) { pendingDecision = Decision(status: status, approval: nil, approve: false) }
                                 .disabled(status.rawValue == issue.status)
                         }
-                    }.disabled(model.busy)
+                    }.disabled(model.busy).accessibilityIdentifier("paperclip.changeStatus")
                 }
                 commentsSection
                 replySection
@@ -92,6 +92,7 @@ struct PaperclipIssueDetailView: View {
                 approvalsSection
             } else if model.busy { ProgressView("正在加载任务…") }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("服务器任务详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .primaryAction) { Button("刷新") { Task { await model.refresh() } }.disabled(model.busy) } }
@@ -178,9 +179,11 @@ struct PaperclipIssueDetailView: View {
                     if approval.status == "pending" {
                         TextField("决定说明（可选）", text: $decisionNote, axis: .vertical).disabled(model.busy)
                         Button("批准") { pendingDecision = Decision(status: nil, approval: approval, approve: true) }.disabled(model.busy)
+                            .accessibilityIdentifier("paperclip.approve.\(approval.id)")
                         Button("拒绝", role: .destructive) { pendingDecision = Decision(status: nil, approval: approval, approve: false) }.disabled(model.busy)
+                            .accessibilityIdentifier("paperclip.reject.\(approval.id)")
                     }
-                }
+                }.accessibilityIdentifier("paperclip.approval.\(approval.id)")
             }
         }
     }

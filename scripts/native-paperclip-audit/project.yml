@@ -16,6 +16,7 @@ targets:
       - path: ../../src/ios/Agent/Paperclip
       - path: ../../src/ios/Views/Paperclip
       - path: AuditApp.swift
+      - path: FixtureServer.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.leoyuan.paperclip-native-audit

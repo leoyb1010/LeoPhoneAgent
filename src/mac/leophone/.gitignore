@@ -69,3 +69,6 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+
+# Paperclip 原生界面验收的可再生证据
+paperclip-ui-results/

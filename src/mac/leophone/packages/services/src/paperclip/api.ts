@@ -1,4 +1,5 @@
 import type {
+  PaperclipApproval,
   PaperclipBinding,
   PaperclipComment,
   PaperclipDetail,
@@ -49,12 +50,16 @@ export async function readDetail(
     issue,
     comments: rows<PaperclipComment>(
       values[1],
-      ["id", "issueId", "companyId"],
+      ["id", "issueId", "companyId", "body"],
       binding,
       issueId,
     ).reverse(),
     runs: [...new Map([...historical, ...live].map((run) => [run.id, run])).values()],
-    approvals: rows(values[4], ["id", "companyId", "type", "status"], binding),
+    approvals: rows<PaperclipApproval>(
+      values[4],
+      ["id", "companyId", "type", "status"],
+      binding,
+    ).map((approval) => ({ ...approval, payload: object(approval.payload) })),
     documents: rows(values[5], ["id", "companyId", "issueId", "key"], binding, issueId),
     attachments: rows(values[6], ["id", "companyId", "issueId"], binding, issueId),
     products: rows(
@@ -133,7 +138,7 @@ export async function reconcileMutation(
   if (!Number.isFinite(age) || age < 0 || (c.kind === "create" && age >= 6 * 24 * 60 * 60 * 1000)) {
     throw new PaperclipFailure(
       -1,
-      "这项创建操作已超过安全核实期限，请在服务器任务列表中人工确认。不会重新发送，以免创建重复任务",
+      "操作时间无效或已超过安全核实期限，请在服务器任务列表中人工确认。不会重新发送，以免产生重复操作",
     );
   }
   if (c.kind === "create" || c.kind === "reply") return sendMutation(transport, receipt);
