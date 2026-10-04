@@ -29,7 +29,15 @@ export function usePaperclipWorkspace(service: IPaperclipWorkspace) {
   useEffect(() => {
     const timer = setInterval(() => {
       const current = service.getSnapshot();
+      const editing = document.activeElement?.matches(
+        "input, textarea, select, [contenteditable='true']",
+      );
+      const confirming = Array.from(
+        document.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
+      ).some((dialog) => dialog.getClientRects().length > 0);
       if (
+        !editing &&
+        !confirming &&
         current.user &&
         current.companyId &&
         !current.busy &&
