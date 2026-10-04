@@ -117,6 +117,7 @@ try {
     await expect(page.getByRole('heading', { name: /^(此页面发生错误|Paperclip 发生错误)$/ })).toHaveCount(0);
     await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
     assert.ok((await page.locator('body').textContent()).includes(company.name), 'User-provided organization text changed');
+    await expect(page.getByText('用户', { exact: true }).first()).toBeVisible();
     if (name === 'agents') {
       const create = page.getByRole('button', { name: '新建智能体', exact: true }).first();
       await expect(create).toBeEnabled();

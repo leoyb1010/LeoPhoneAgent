@@ -52,5 +52,17 @@
     "from": "label: \"Timeline\"",
     "to": "label: \"时间线\"",
     "expected": 1
+  },
+  {
+    "file": "ui/src/components/SidebarAccountMenu.tsx",
+    "from": "const displayName = session?.user.name?.trim() || \"Board\";",
+    "to": "const displayName = session?.user.name?.trim() || \"用户\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SidebarAccountMenu.production.tsx",
+    "from": "const displayName = session?.user.name?.trim() || \"Board\";",
+    "to": "const displayName = session?.user.name?.trim() || \"用户\";",
+    "expected": 1
   }
 ]
