@@ -83,7 +83,7 @@ describe("Chinese dates, relative time and calendar wording", () => {
   });
 });
 
-import type { DashboardSummary, ResourceMemberships, BudgetOverview, InstanceExperimentalSettingsWithManaged, InstanceSettings, SidebarBadges } from "@paperclipai/shared";
+import type { DashboardSummary, ResourceMemberships, BudgetOverview, InstanceExperimentalSettingsWithManaged, InstanceSettings, SidebarBadges, EnvironmentCapabilities } from "@paperclipai/shared";
 import boardFixture from "./smoke-board-fixture.json";
 import { computeInboxBadgeData } from "../lib/inbox";
 it("the browser fixture satisfies shell dashboard/membership/budget contracts", () => {
@@ -92,6 +92,11 @@ it("the browser fixture satisfies shell dashboard/membership/budget contracts", 
   const budgets: BudgetOverview = boardFixture.budgets;
   const badges: SidebarBadges = boardFixture.sidebarBadges;
   expect(badges.inbox).toBe(0);
+  const drivers: EnvironmentCapabilities["drivers"] = { local: "supported", ssh: "unsupported", sandbox: "unsupported", plugin: "unsupported" };
+  expect(boardFixture.environmentCapabilities.drivers).toEqual(drivers);
+  expect(boardFixture.environmentCapabilities.sandboxProviders.fake.status).toBe("unsupported");
+  const capabilities: EnvironmentCapabilities = { ...boardFixture.environmentCapabilities, drivers, sandboxProviders: { fake: { ...boardFixture.environmentCapabilities.sandboxProviders.fake, status: "unsupported" } } };
+  expect(capabilities.adapters).toEqual([]); expect(capabilities.sandboxProviders.fake.supportsRunExecution).toBe(false);
   const experimental: InstanceExperimentalSettingsWithManaged = boardFixture.instanceSettings.experimental;
   const instance: Omit<InstanceSettings, "general" | "createdAt" | "updatedAt"> = boardFixture.instanceSettings;
   expect(instance.experimental.enableBuiltInAgents).toBe(false);

@@ -45,6 +45,11 @@ const server = http.createServer((req, res) => {
     else if (url.pathname === '/api/instance/settings/experimental') body = boardFixture.instanceSettings.experimental;
     else if (url.pathname === '/api/instance/settings/general') body = boardFixture.instanceSettings.general;
     else if (url.pathname === `/api/companies/${companyId}/sidebar-badges`) body = boardFixture.sidebarBadges;
+    else if (url.pathname === `/api/companies/${companyId}/environments/capabilities`) body = boardFixture.environmentCapabilities;
+    else if (req.method === 'GET' && url.pathname === '/api/agent-avatars/cap-v1/muted-dream/sleepy.png') {
+      // Exercise the upstream documented 503 fallback instead of running the image worker.
+      status = 503; body = { error: 'Avatar temporarily unavailable' };
+    }
     else if (url.pathname.endsWith('/budgets/overview')) body = boardFixture.budgets;
     else if (url.pathname.endsWith('/costs/summary')) body = boardFixture.costSummary;
     else if (url.pathname.endsWith('/costs/finance-summary')) body = boardFixture.financeSummary;

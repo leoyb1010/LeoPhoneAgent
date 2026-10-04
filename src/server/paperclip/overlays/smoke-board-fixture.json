@@ -120,5 +120,28 @@
     "approvals": 0,
     "failedRuns": 0,
     "joinRequests": 0
+  },
+  "environmentCapabilities": {
+    "adapters": [],
+    "drivers": {
+      "local": "supported",
+      "ssh": "unsupported",
+      "sandbox": "unsupported",
+      "plugin": "unsupported"
+    },
+    "sandboxProviders": {
+      "fake": {
+        "status": "unsupported",
+        "supportsSavedProbe": false,
+        "supportsUnsavedProbe": false,
+        "supportsRunExecution": false,
+        "supportsReusableLeases": false,
+        "supportsInteractiveSetup": false,
+        "interactiveSetupConnectionTypes": [],
+        "supportsTemplateCapture": false,
+        "supportsTemplateDelete": false,
+        "supportsLoginPty": false
+      }
+    }
   }
 }

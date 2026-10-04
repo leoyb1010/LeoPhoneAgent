@@ -106,6 +106,7 @@ const roots: Array<{ root: ReturnType<typeof createRoot>; client: QueryClient; h
 beforeEach(() => {
   mockAgentsApi.list.mockResolvedValue([]); mockAgentsApi.org.mockResolvedValue([]);
   mockBuiltInAgentsApi.list.mockResolvedValue([]); mockEnvironmentsApi.list.mockResolvedValue([]);
+  mockEnvironmentsApi.capabilities.mockResolvedValue(boardFixture.environmentCapabilities);
   mockHeartbeatsApi.liveRunsForCompany.mockResolvedValue([]);
   mockResourceMembershipsApi.listMine.mockResolvedValue(boardFixture.memberships);
   mockInstanceSettingsApi.get.mockResolvedValue(boardFixture.instanceSettings);
