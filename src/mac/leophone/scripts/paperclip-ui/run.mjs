@@ -125,6 +125,15 @@ try {
   console.log(
     "Paperclip UI smoke PASS: 配置、登录、公司、回复、日志、取消返回、审批、文档、下载、未知回执核实、恢复模式与窄屏",
   );
+} catch (error) {
+  await mkdir(output, { recursive: true });
+  await page.screenshot({ path: join(output, "failure.png"), fullPage: true }).catch(() => {});
+  await writeFile(join(output, "failure.json"), JSON.stringify({
+    error: String(error), consoleErrors: errors,
+    url: page.url(),
+    body: await page.locator("body").innerText().catch(() => "页面不可读取"),
+  }, null, 2));
+  throw error;
 } finally {
   await browser.close();
   await server.close();

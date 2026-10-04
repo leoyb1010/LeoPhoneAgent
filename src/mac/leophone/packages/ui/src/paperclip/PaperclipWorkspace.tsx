@@ -206,6 +206,7 @@ export function PaperclipWorkspace({
               <label className="block space-y-1">
                 <span className="text-ui-sm">工作公司</span>
                 <select
+                  aria-label="工作公司"
                   value={state.binding?.companyId || ""}
                   disabled={state.busy}
                   className={selectClass}
