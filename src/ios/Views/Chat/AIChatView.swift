@@ -1705,6 +1705,10 @@ struct AIChatView: View {
             isEditing: vm.editingMessageIndex != nil,
             isLocked: titleIsVisuallyLocked,
             onNewChat: { requestNewChatFromMenu() },
+            onOpenPaperclip: {
+                inputFocused = false
+                NotificationCenter.default.post(name: Notification.Name("leo.openPaperclipFromChat"), object: nil)
+            },
             // [T-chat-menu-compact-entry] Same effect as the /compact slash
             // command (AIChatViewModel+SlashCommands case "compact").
             onCompact: { vm.compactAll() },
@@ -5162,6 +5166,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let isLocked: Bool
 
     let onNewChat: () -> Void
+    let onOpenPaperclip: () -> Void
     let onCompact: () -> Void
     let onClearChat: () -> Void
     let onForceSync: () -> Void
@@ -5269,6 +5274,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "New Chat"),
                      image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
+            UIAction(title: String(localized: "服务器任务"),
+                     image: UIImage(systemName: "network")) { _ in coordinator.parent.onOpenPaperclip() },
         ]))
 
         // [T-session-export] Whole-conversation export; disabled while empty.

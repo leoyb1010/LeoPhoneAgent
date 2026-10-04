@@ -374,10 +374,11 @@ struct ContentView: View {
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
     @AppStorage("leo.ios.executionBackend.v1") private var executionBackend = IOSExecutionBackend.local.rawValue
-    // SceneStorage keeps this window's return route separate from another iPad window.
     // Empty means home; a nonempty value is the session that opened Paperclip.
-    @SceneStorage("leo.paperclip.localReturnSession.v1") private var paperclipReturnSession = ""
-    @SceneStorage("leo.paperclip.localReturnPending.v1") private var paperclipReturnPending = false
+    // The backend is app-wide; its return bookmark must survive a process
+    // termination, even before UIKit has saved the scene restoration state.
+    @AppStorage("leo.paperclip.localReturnSession.v1") private var paperclipReturnSession = ""
+    @AppStorage("leo.paperclip.localReturnPending.v1") private var paperclipReturnPending = false
     @AppStorage("leo.torchOn") private var torchOn = false
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
@@ -1126,6 +1127,10 @@ struct ContentView: View {
                 if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
                 fetchAlarmsIfNeeded()
                 await refreshRemoteDeviceSessions()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("leo.openPaperclipFromChat"))) { _ in
+                rememberPaperclipReturnLocation()
+                executionBackend = IOSExecutionBackend.paperclip.rawValue
             }
             .onChange(of: executionBackend) { old, new in
                 if old == IOSExecutionBackend.local.rawValue,

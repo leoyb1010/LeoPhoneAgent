@@ -287,7 +287,9 @@ struct PaperclipIssueDetailView: View {
             TextField("回复任务或补充要求…", text: $draft.body, axis: .vertical).lineLimit(1...5)
                 .font(.body).lineSpacing(4)
                 .focused($editingReply)
-                .disabled(model.busy || draft.submitted || model.pendingStatus != nil).accessibilityIdentifier("paperclip.replyBody")
+                // A read-only refresh may finish while typing; it never owns this draft.
+                // Lock only submitted/uncertain writes, and keep send gated by busy.
+                .disabled(draft.submitted || model.pendingStatus != nil).accessibilityIdentifier("paperclip.replyBody")
             Button { Task { await reply() } } label: {
                 if model.busy { ProgressView() }
                 else { Image(systemName: draft.submitted ? "arrow.clockwise.circle.fill" : "arrow.up.circle.fill").font(.title) }
