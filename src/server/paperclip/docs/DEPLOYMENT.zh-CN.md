@@ -65,6 +65,51 @@ curl --fail http://127.0.0.1:3100/api/health
 
 上游提供的“简化技术英语交互”实验开关会影响模型输出语言，中文场景请保持关闭。界面汉化并不保证第三方模型或用户提供的内容必然输出中文。若要模型用中文，请在组织/智能体指令中明确要求，同时保留命令、标识和错误日志原文。
 
+### macOS 原生服务的 CLI 与已有登录
+
+`codex_local` 的 CLI 和登录状态归属运行服务的系统用户。浏览器“执行框架 / 运行环境 → 运行测试”会验证实际命令、认证以及最小模型响应；登录状态存在不代表网络或执行已经正常。配置页可以选择现有认证或托管连接，查看测试详情，不需要把 auth.json、密码或令牌复制到浏览器。
+
+原生 launchd 服务可使用 `scripts/start-native-server.sh` 模板。默认部署根为该服务用户的 `~/.leophoneagent/paperclip`，可用 `PAPERCLIP_DEPLOY_ROOT` 显式指定；模板保留项目锁定 Node 在 PATH 首位，同时包含该用户的 npm 全局 CLI 和 `~/.local/bin`。自定义 npm 前缀使用 `PAPERCLIP_CLI_BIN_DIR`。不要仅以 SSH 终端的 `command -v codex` 作为服务进程可用的证据。
+
+如果管理员的本机 CLI 已依赖本机代理，launchd 不会自动继承交互 shell 的代理变量。在私有 `env/server.env` 中显式配置同一个已验证代理，并排除本机 API/数据库地址，例如：
+
+```sh
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+export NO_PROXY=localhost,127.0.0.1,::1
+export no_proxy=localhost,127.0.0.1,::1
+```
+
+示例端口必须按实际代理配置调整。启动模板不会擅自登录、改账号或设置代理；它只加载管理员已经保存的服务环境。先确认没有运行中/排队任务并保留旧配置，再重启服务；随后从远端浏览器执行连接测试及最小任务验收。执行引擎、模型和权限以管理员的智能体配置为准，不能为通过测试偷偷改成另一种引擎或降低权限要求。
+
+### 原生编译版头像 worker
+
+本次固定上游的 shared 包子路径导出指向 TypeScript 源码，但编译后的头像 worker 没有源码分支的 TSX 启动包装，导致 `definition.js` 模块解析失败及头像 HTTP 503。原生构建须先完成 shared/server 的上游构建，再在物理源码目录应用、验证独立运行时叠层：
+
+```sh
+node scripts/apply-native-avatar-runtime.mjs apply /physical/path/to/paperclip
+node scripts/apply-native-avatar-runtime.mjs verify /physical/path/to/paperclip
+node scripts/verify-native-avatar-worker.mjs fixed /physical/path/to/paperclip /Volumes/Leo-bubu/Mac-Offload/lpa-t
+```
+
+工具核对固定上游提交、相关源码 SHA、编译 worker SHA 和已构建 shared 模块，只原子替换 renderer import 为对应的 built JS 路径；拒绝未知构建或符号链接。上游重新构建会覆盖编译文件，须重新应用和验证。此修复与验证限定本次 macOS 原生部署，不宣称已验证 Docker 镜像。
+
+### macOS 外接盘部署与缓存
+
+Mac mini 本次部署使用 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`；`~/.leophoneagent/paperclip` 仅作为兼容符号链接。源码、候选构建、Node/pnpm/Rust 运行时、工作空间、上传存储、配置、日志、数据库备份与旧版本归档均放在项目外接盘目录内。
+
+外接盘需启用 macOS 文件所有权，项目目录只允许服务用户访问。文件所有权与 macOS 隐私授权是独立机制：SSH 能读取外接盘不代表 launchd 后台进程能读取。后台读取若返回 `Operation not permitted`，需由管理员在系统设置授予服务入口 `/bin/bash` 及该项目 Node 可执行文件适用的磁盘权限；不要通过关闭系统隐私保护处理。LaunchAgent 使用系统 `/bin/bash` 入口、服务用户主目录作为初始工作目录；项目启动模板再进入实际工作目录，用户进程将日志重定向到外接盘，launchd 的初始标准输出使用 `/dev/null`。私有 `env/server.env` 设置 `PAPERCLIP_STORAGE_VOLUME` 和对应 `PAPERCLIP_STORAGE_VOLUME_UUID`。原生启动模板核对真实挂载点、卷 UUID、所有权和部署目录归属；验证失败则停止启动，不会在内置盘创建替代数据目录。
+
+迁移时必须同时把 `PAPERCLIP_HOME`、`PAPERCLIP_CONFIG`、主密钥路径、config 的备份/日志/存储路径、智能体 `instructionsFilePath`/`instructionsRootPath` 与会话 `cwd`/`stateDir` 重定位到真实物理目录。兼容符号链接只用于旧入口；严格指令文件校验会拒绝任何经过符号链接的路径。更新前保存私有 env/config 和数据库字段快照，事务修改当前配置与会话路径，不重写历史消息、运行审计或权限；必须用真实任务验收，不能仅凭健康检查或模型 hello 判断迁移成功。
+
+项目缓存环境按部署位置显式设置：`XDG_CACHE_HOME`、`npm_config_cache`/`NPM_CONFIG_CACHE`、`npm_config_store_dir`、`COREPACK_HOME`、`PYTHONPYCACHEPREFIX`、`CARGO_HOME` 和 `RUSTUP_HOME`。构建、测试与维护命令也须加载同一服务环境；仅设置 launchd 环境不会改变另一个 SSH shell 的缓存位置。已安装的共享 CLI 与账号认证保留其系统用户归属；不设置全局 `CODEX_HOME`，以免隐藏已登录账号。
+
+上游稳定测试脚本使用独立、固定源码指纹的 `apply-test-storage.mjs` 叠层，支持 `PAPERCLIP_TEST_TMPDIR`。Mac mini 使用外接盘的短路径 `/Volumes/Leo-bubu/Mac-Offload/lpa-t` 同时承载 `TMPDIR` 和测试临时根，避免嵌套路径过长影响 Unix socket。未配置该变量时，上游测试行为不变；显式配置但目录不存在时测试失败，不回退内置盘。`prepare.sh` 自动应用并核对这层修改，UI 汉化扫描范围仍限定原范围。
+
+共享 Homebrew PostgreSQL 集群和用户级 CLI 认证不是本项目缓存，不迁移其他服务的数据库或账号。此部署的 Paperclip 数据库仍使用既有集群，数据库备份产物放到外接盘；若要迁移数据库本体，应单独迁移独立实例并验证恢复，不能只搬整个共享集群目录。
+
 ## 5. 权限、预算与数据
 
 - 通过“成员”和“实例访问权限”授权，遵循最小权限

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "ui/src/lib/work-mode-meta.ts",
+    "from": "value: \"standard\",\n      label: \"Auto mode\",",
+    "to": "value: \"standard\",\n      label: \"自动模式\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/assignees.ts",
+    "from": "    label: \"Me\",",
+    "to": "    label: \"我\",",
+    "expected": 1
+  }
+]

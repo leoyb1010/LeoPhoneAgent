@@ -1,0 +1,92 @@
+[
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "    label: \"Agent\",\n    items: [",
+    "to": "    label: \"智能体\",\n    items: [",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "    label: \"Runtime\",\n    items: [",
+    "to": "    label: \"运行环境\",\n    items: [",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "    label: \"Governance\",\n    items: [",
+    "to": "    label: \"治理\",\n    items: [",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"overview\", label: \"Overview\" }",
+    "to": "{ value: \"overview\", label: \"概览\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"instructions\", label: \"Instructions\" }",
+    "to": "{ value: \"instructions\", label: \"指令\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"skills\", label: \"Skills\" }",
+    "to": "{ value: \"skills\", label: \"技能\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"runtime\", label: \"Harness / Runtime\" }",
+    "to": "{ value: \"runtime\", label: \"执行框架 / 运行环境\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"secrets\", label: \"Secrets\" }",
+    "to": "{ value: \"secrets\", label: \"密钥\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"tools\", label: \"Tools\" }",
+    "to": "{ value: \"tools\", label: \"工具\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"channels\", label: \"Channels\" }",
+    "to": "{ value: \"channels\", label: \"通道\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"permissions\", label: \"Permissions / Trust\" }",
+    "to": "{ value: \"permissions\", label: \"权限 / 信任\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"api-keys\", label: \"API Keys\" }",
+    "to": "{ value: \"api-keys\", label: \"API 密钥\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/agent-detail-navigation.ts",
+    "from": "{ value: \"revisions\", label: \"Revisions\" }",
+    "to": "{ value: \"revisions\", label: \"修订版本\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentContextualSidebar.tsx",
+    "to": "  labels = { secrets: \"密钥与变量\" },",
+    "expected": 1,
+    "from": "  labels = { secrets: \"Secrets & variables\" },"
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "to": "activeView === \"secrets\" ? \"密钥与变量\" : AGENT_DETAIL_NAVIGATION",
+    "expected": 1,
+    "from": "activeView === \"secrets\" ? \"Secrets & variables\" : AGENT_DETAIL_NAVIGATION"
+  }
+]

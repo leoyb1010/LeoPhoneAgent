@@ -1,0 +1,8 @@
+[
+  {
+    "file": "ui/src/components/task-chat/TaskChatBubbleActions.tsx",
+    "from": "const label = failed ? \"Couldn’t copy message\" : \"Copy message\";",
+    "to": "const label = copied ? \"已复制\" : failed ? \"复制消息失败\" : \"复制消息\";",
+    "expected": 1
+  }
+]

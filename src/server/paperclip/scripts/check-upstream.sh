@@ -3,9 +3,10 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE="${1:-$HERE/.upstream}"
 node "$HERE/scripts/localize.mjs" verify "$SOURCE"
+node "$HERE/scripts/apply-test-storage.mjs" verify "$SOURCE"
 node "$HERE/scripts/coverage-contract.mjs" "$HERE/reports/coverage.json"
 node "$HERE/scripts/check-protocol-invariants.mjs" "$SOURCE"
-(cd "$HERE" && PAPERCLIP_SOURCE="$SOURCE" npm test)
+(cd "$HERE" && PAPERCLIP_SOURCE="$SOURCE" PAPERCLIP_CANDIDATE="$SOURCE" npm test && npm run test:native-launcher)
 cd "$SOURCE"
 corepack pnpm --version
 corepack pnpm install --frozen-lockfile

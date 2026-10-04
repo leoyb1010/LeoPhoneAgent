@@ -1,6 +1,6 @@
 {
   "name": "leophone-paperclip-zh-cn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "Pinned source-level Simplified Chinese distribution overlay for Paperclip",
@@ -10,7 +10,8 @@
     "extract": "node scripts/localize.mjs extract",
     "apply": "node scripts/localize.mjs apply",
     "verify": "node scripts/localize.mjs verify",
-    "check:upstream": "bash scripts/check-upstream.sh"
+    "check:upstream": "bash scripts/check-upstream.sh",
+    "test:native-launcher": "python3 tests/native-launcher.test.py"
   },
   "devDependencies": { "typescript": "5.9.3" }
 }

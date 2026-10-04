@@ -5,7 +5,7 @@
 - 上游：`paperclipai/paperclip`
 - 固定提交：`994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`
 - 授权：MIT，完整保留于 `LICENSE.paperclip`；编辑器翻译 hook 的依赖归属于 `LICENSE.mdxeditor`
-- 未在本次工作中部署服务器、建立真实账号、配置真实密钥、连接模型服务或运行收费智能体
+- 源码工具本身不自动部署、建立账号或登录模型；当前 Mac mini 实例的部署与真实运行验证另见项目 `docs/paperclip/` 交付记录
 
 ## 使用
 
@@ -24,7 +24,11 @@ npm test
 node scripts/localize.mjs extract /path/to/paperclip
 node scripts/localize.mjs apply /path/to/paperclip
 node scripts/localize.mjs verify /path/to/paperclip
+node scripts/apply-test-storage.mjs apply /path/to/paperclip
+node scripts/apply-test-storage.mjs verify /path/to/paperclip
 ```
+
+macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；浏览器配置页的运行测试验证实际服务环境。
 
 详细部署、登录、备份和回滚步骤见 [中文部署手册](docs/DEPLOYMENT.zh-CN.md)。维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。
 

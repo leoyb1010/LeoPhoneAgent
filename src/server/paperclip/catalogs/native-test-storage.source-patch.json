@@ -1,0 +1,7 @@
+{
+  "file": "scripts/run-vitest-stable.mjs",
+  "sourceSha256": "31e273724bc8c22fb93ca5f3d1889b2996127eb5fad9629e1edb60d8beb42c57",
+  "from": "  const tempRootParent = process.platform === \"win32\" ? os.tmpdir() : \"/tmp\";",
+  "to": "  const tempRootParent = process.env.PAPERCLIP_TEST_TMPDIR || (process.platform === \"win32\" ? os.tmpdir() : \"/tmp\");",
+  "expected": 1
+}

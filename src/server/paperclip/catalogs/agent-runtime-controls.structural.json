@@ -1,0 +1,44 @@
+[
+  {
+    "file": "ui/src/components/AgentActionButtons.tsx",
+    "from": "  runLabel = \"Run now\",",
+    "to": "  runLabel = \"立即运行\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "sectionTitles={{ adapter: \"Adapter\", configuration: \"Configuration\", identity:",
+    "to": "sectionTitles={{ adapter: \"适配器\", configuration: \"配置\", identity:",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "codexReasoningEffortOptions(currentModelId, \"Auto\")",
+    "to": "codexReasoningEffortOptions(currentModelId, \"自动\")",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RuntimeTestCard.tsx",
+    "from": "action: \"Run test\"",
+    "to": "action: \"运行测试\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RuntimeTestCard.tsx",
+    "from": "action: \"Testing…\"",
+    "to": "action: \"正在测试…\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RuntimeTestCard.tsx",
+    "from": "action: \"Test again\"",
+    "to": "action: \"再次测试\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/RuntimeTestCard.tsx",
+    "from": "action: \"Retry test\"",
+    "to": "action: \"重试测试\"",
+    "expected": 1
+  }
+]

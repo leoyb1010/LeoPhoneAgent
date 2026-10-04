@@ -18,4 +18,6 @@ fi
 (cd "$HERE" && npm ci --ignore-scripts --no-audit --no-fund)
 node "$HERE/scripts/localize.mjs" apply "$DEST"
 node "$HERE/scripts/localize.mjs" verify "$DEST"
+node "$HERE/scripts/apply-test-storage.mjs" apply "$DEST"
+node "$HERE/scripts/apply-test-storage.mjs" verify "$DEST"
 printf '\n中文源码已准备：%s\n请阅读 docs/DEPLOYMENT.zh-CN.md 后构建和部署。此脚本没有启动服务或修改服务器配置。\n' "$DEST"
