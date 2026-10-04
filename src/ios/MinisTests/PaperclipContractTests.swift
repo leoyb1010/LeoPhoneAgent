@@ -38,6 +38,17 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.utf8)).first?.id, "run-1")
         XCTAssertThrowsError(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.replacingOccurrences(of: "runId", with: "id").utf8)))
     }
+    func testBackgroundPollingStopsDuringStatusSheetReplyEditingOrBackground() {
+        for active in [false, true] {
+            for sheetOpen in [false, true] {
+                for replyFocused in [false, true] {
+                    let actual = PaperclipPollingPolicy.canRefresh(active: active, statusSheetOpen: sheetOpen, replyFocused: replyFocused)
+                    XCTAssertEqual(actual, active && !sheetOpen && !replyFocused)
+                }
+            }
+        }
+    }
+
     func testCommentAuthorUsesValidUserAgentOrUnknown() throws {
         let cases: [([String: String], String)] = [
             ([:], "未知作者"),

@@ -18,7 +18,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         app.buttons["paperclip.addProfile"].tap()
         XCTAssertTrue(app.navigationBars["添加服务器"].waitForExistence(timeout: 5))
         let address = app.textFields["paperclip.serverURL"]
-        address.tap(); address.typeText("http://example.com")
+        enterText("http://example.com", into: address, app: app)
         app.buttons["保存"].tap()
         XCTAssertTrue(app.staticTexts["请输入独立服务器的 HTTPS 根地址，不包含账号、密码、路径、查询参数或片段。"].waitForExistence(timeout: 5))
         screenshot("拒绝不安全服务器地址", app)
@@ -44,7 +44,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         app.buttons["paperclip.create"].tap()
         let title = app.textFields["paperclip.taskTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
-        title.tap(); title.typeText("创建中文任务")
+        enterText("创建中文任务", into: title, app: app)
         let create = app.buttons["paperclip.submitTask"]
         scrollTo(create, app)
         create.tap()
@@ -80,7 +80,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         openDetail(app)
         let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
         scrollTo(reply, app)
-        reply.tap(); reply.typeText("请补充验证结果")
+        enterText("请补充验证结果", into: reply, app: app)
         let send = app.buttons["paperclip.sendReply"]
         scrollTo(send, app)
         send.tap()
@@ -122,7 +122,21 @@ final class PaperclipNativeJourneys: XCTestCase {
         let confirm = app.buttons["paperclip.confirmStatus"]
         XCTAssertTrue(confirm.exists)
         XCTAssertFalse(confirm.isEnabled, "不能在用户未说明解除阻塞条件时提交")
-        action.tap(); action.typeText("请确认访问范围")
+        enterText("请确认访问范围", into: action, app: app)
+        let textEntered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "请确认访问范围"), object: action)
+        let inputResult = XCTWaiter.wait(for: [textEntered], timeout: 5)
+        if inputResult != .completed {
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "解除阻塞输入未保留_无障碍层级"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+            screenshot("解除阻塞输入未保留_真实画面", app)
+        }
+        XCTAssertEqual(inputResult, .completed, "用户输入必须真实保留，不能仅验证按钮状态")
+        let disabledDuringEditing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == false"), object: action)
+        disabledDuringEditing.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [disabledDuringEditing], timeout: 16), .completed, "编辑跨过刷新周期时输入框不得被禁用")
+        XCTAssertEqual(action.value as? String, "请确认访问范围")
         scrollTo(confirm, app)
         XCTAssertTrue(confirm.isEnabled)
         screenshot("真实生产受阻说明确认_模拟接口", app)
@@ -184,12 +198,60 @@ final class PaperclipNativeJourneys: XCTestCase {
             if target.exists && target.frame.minY < app.frame.minY + 100 { app.swipeDown() }
             else { app.swipeUp() }
         }
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "目标控件不可点击_无障碍层级"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        screenshot("目标控件不可点击_真实画面", app)
         XCTAssertTrue(target.exists && target.isHittable)
+    }
+
+    @MainActor
+    private func quickPathNotice(_ app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Speed up your typing by sliding your finger")).firstMatch
+    }
+
+    @MainActor
+    private func dismissObservedKeyboardGuide(_ app: XCUIApplication, waitForAppearance: Bool = false) {
+        let notice = quickPathNotice(app)
+        let present = waitForAppearance ? notice.waitForExistence(timeout: 3) : notice.exists
+        guard present else { return }
+        // 只处理已从失败工件确认的QuickPath说明，不接受其他系统权限或通用Continue按钮。
+        let evidence = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        evidence.name = "系统QuickPath首次引导_处理前诊断"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        let next = app.buttons["Continue"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        next.tap()
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: notice)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "系统首次键盘引导必须先消失")
+    }
+
+    @MainActor
+    private func enterText(_ text: String, into field: XCUIElement, app: XCUIApplication) {
+        field.tap()
+        dismissObservedKeyboardGuide(app, waitForAppearance: true)
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "输入前必须确认系统键盘就绪")
+        field.typeText(text)
+        dismissObservedKeyboardGuide(app)
+        let entered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", text), object: field)
+        let result = XCTWaiter.wait(for: [entered], timeout: 5)
+        if result != .completed {
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "输入值不符_真实无障碍层级"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+        XCTAssertEqual(result, .completed, "输入值必须与用户文本一致，不重试掩盖首次失败")
     }
 
     @MainActor
     private func screenshot(_ name: String, _ app: XCUIApplication) {
         XCTAssertEqual(app.state, .runningForeground)
+        dismissObservedKeyboardGuide(app)
+        XCTAssertFalse(quickPathNotice(app).exists, "完整应用截图不能被系统首次引导遮挡")
         // 捕获真实前台模拟器画面，避免为每张图再查询整个应用AX树。
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

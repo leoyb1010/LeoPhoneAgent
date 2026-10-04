@@ -88,6 +88,14 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertNotIn("changeStatus(", pending)
         self.assertIn("pendingVerification != nil", view)
 
+    def test_editing_pauses_background_refresh_and_approval_ids_are_local(self):
+        view = (VIEWS / "PaperclipIssueDetailView.swift").read_text()
+        self.assertIn(".task(id: pollingEnabled)", view)
+        self.assertIn("PaperclipPollingPolicy.canRefresh(active: scenePhase == .active, statusSheetOpen: showStatusPicker, replyFocused: isReplyFocused)", view)
+        self.assertIn(".focused($isReplyFocused)", view)
+        self.assertNotIn('}.accessibilityIdentifier("paperclip.approval.', view)
+        self.assertEqual(view.count(".buttonStyle(.borderless)"), 2)
+
     def test_all_new_visible_literals_are_chinese(self):
         for path in VIEWS.glob("*.swift"):
             for literal in re.findall(r'\b(?:Text|Button|Label|Section|TextField|Picker|ProgressView)\("([^"\\]*)"', path.read_text()):

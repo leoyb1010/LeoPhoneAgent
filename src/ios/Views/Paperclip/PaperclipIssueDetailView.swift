@@ -75,8 +75,12 @@ struct PaperclipIssueDetailView: View {
     @State private var discardReply = false
     @State private var showStatusPicker = false
     @State private var lastChecked: PaperclipDraft?
+    @FocusState private var isReplyFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
     private let draftKey: String
+    private var pollingEnabled: Bool {
+        PaperclipPollingPolicy.canRefresh(active: scenePhase == .active, statusSheetOpen: showStatusPicker, replyFocused: isReplyFocused)
+    }
     private struct Decision: Identifiable {
         let id = UUID()
         let approval: PaperclipApproval
@@ -129,8 +133,9 @@ struct PaperclipIssueDetailView: View {
         .toolbar { ToolbarItem(placement: .primaryAction) { Button("刷新") { Task { await model.refresh() } }.disabled(model.busy) } }
         .refreshable { await model.refresh() }
         .task { await model.refresh() }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
+        // 后台刷新不能通过busy反复禁用正在编辑的输入控件，否则可能丢焦点/输入。
+        .task(id: pollingEnabled) {
+            guard pollingEnabled else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
                 await model.refresh()
@@ -185,6 +190,7 @@ struct PaperclipIssueDetailView: View {
     private var replySection: some View {
         Section("发送回复") {
             TextField("补充要求或回复任务", text: $draft.body, axis: .vertical).lineLimit(3...8)
+                .focused($isReplyFocused)
                 .disabled(model.busy || draft.submitted).accessibilityIdentifier("paperclip.replyBody")
             if draft.submitted {
                 Text("上次提交结果待核对，重试会沿用同一请求编号。请先刷新查看对话。")
@@ -218,7 +224,7 @@ struct PaperclipIssueDetailView: View {
         Section("关联审批") {
             if model.approvals.isEmpty { Text("暂无关联审批").foregroundStyle(.secondary) }
             ForEach(model.approvals) { approval in
-                DisclosureGroup("\(approval.title) · \(PaperclipLabels.status(approval.status))") {
+                DisclosureGroup {
                     Text("审批编号：\(approval.id)").font(.caption).textSelection(.enabled)
                     Text("申请者：\(approval.requestedByUserId ?? approval.requestedByAgentId ?? "未提供")").font(.caption).textSelection(.enabled)
                     Text("以下内容由服务器提供，请完整核对后决定。").font(.footnote).foregroundStyle(.secondary)
@@ -227,11 +233,17 @@ struct PaperclipIssueDetailView: View {
                     if approval.status == "pending" {
                         TextField("决定说明（可选）", text: $decisionNote, axis: .vertical).disabled(model.busy)
                         Button("批准") { pendingDecision = Decision(approval: approval, approve: true) }.disabled(model.busy)
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("paperclip.approve.\(approval.id)")
                         Button("拒绝", role: .destructive) { pendingDecision = Decision(approval: approval, approve: false) }.disabled(model.busy)
+                            .buttonStyle(.borderless)
                             .accessibilityIdentifier("paperclip.reject.\(approval.id)")
                     }
-                }.accessibilityIdentifier("paperclip.approval.\(approval.id)")
+                } label: {
+                    Text("\(approval.title) · \(PaperclipLabels.status(approval.status))")
+                        .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        .accessibilityIdentifier("paperclip.approval.\(approval.id)")
+                }
             }
         }
     }
@@ -243,6 +255,7 @@ struct PaperclipIssueDetailView: View {
         draft.save(key: draftKey)
         do {
             _ = try await model.client.reply(model.reference, body: draft.body, requestID: draft.requestID)
+            isReplyFocused = false
             draft = PaperclipDraft()
             PaperclipDraft.clear(key: draftKey)
             model.error = nil
