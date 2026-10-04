@@ -139,6 +139,7 @@ jobs:
           --health-cmd "pg_isready -U paperclip -d paperclip"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      PAPERCLIP_ALLOW_EPHEMERAL_SMOKE: '1'
       DATABASE_URL: postgresql://paperclip:paperclip-ci-only@127.0.0.1:${{ job.services.postgres.ports[5432] }}/paperclip
     steps:
       - uses: actions/checkout@v4

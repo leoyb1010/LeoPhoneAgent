@@ -7,8 +7,8 @@
 固定上游没有关闭 runner 模块加载的官方总开关。官方源码开发入口会导入 runner TypeScript；`process` 适配器是上游真实支持的非 native 执行路径，创建时明确不触发原生 provider 检查，所以此 job 不伪造 runner binary，也不把缺少 Rust 编译掩盖为 native 执行通过。Node 4GB约定来自固定上游 Dockerfile，仅用于标准 CI。完整发布镜像仍须按上游构建 Rust runner。
 
 ```sh
-# 仅用于一次性本机/CI数据库，不能指向生产库
-DATABASE_URL=postgresql://paperclip:paperclip-ci-only@127.0.0.1:5432/paperclip \
+# 仅允许CI明确启用，必须是本job创建的一次性数据库
+CI=true PAPERCLIP_ALLOW_EPHEMERAL_SMOKE=1 DATABASE_URL=postgresql://paperclip:paperclip-ci-only@127.0.0.1:5432/paperclip \
   bash scripts/paperclip-runtime/run.sh /path/to/pinned-paperclip
 ```
 
