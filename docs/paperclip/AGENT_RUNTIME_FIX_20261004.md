@@ -7,7 +7,7 @@
 - 智能体详情导航中的分组、概览、指令、技能、执行框架、密钥与变量、工具、通道、权限、API 密钥和修订版本由固定源码补丁汉化；运行、测试、自动模式及消息复制反馈也补齐。保留真实名称、路由、协议枚举、模型名、诊断与消息原文。
 - CLI 在 SSH 中存在，但 launchd 的 PATH 缺少服务用户 npm 全局命令目录，导致 ACP 执行器找不到 `codex`。原生启动模板保留锁定 Node 在 PATH 首位，同时纳入用户 CLI 路径，不更换智能体执行引擎或模型来规避失败。
 - PATH 修复后，模型测试仍超时。服务没有继承该主机 CLI 实际使用的代理环境；直接 OpenAI/ChatGPT 出站超时，已验证本机代理下出站正常。仅在项目私有服务环境中显式配置代理与本机直连例外。
-- 原生编译版头像 worker 错误加载 shared TypeScript 源码导出导致 503；固定源码/产物指纹的 postbuild 叠层改用 built JS renderer。真实 worker 对照复现失败，修复后候选与 live 均生成 64×64、3,531 字节有效 PNG。
+- 原生编译版头像 worker 错误加载 shared TypeScript 源码导出导致 503；固定源码/产物指纹的 postbuild 叠层改用 built JS renderer。真实 worker 对照复现失败，修复后候选与 live 均生成 64×64、3,531 字节有效 PNG；公网管理页实际加载的 256×256 头像已解码，naturalWidth/naturalHeight 均为 256。
 - Mac mini 项目外接盘目标为 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`，兼容入口保留 `~/.leophoneagent/paperclip`。缓存和测试临时根均显式配置到外接盘；短临时根 `/Volumes/Leo-bubu/Mac-Offload/lpa-t` 避免 Unix socket 路径过长。
 - 原生启动保护核对真实挂载点、卷 UUID、文件所有权与项目目录所在卷，失败不创建内置盘替代目录。上游稳定测试 runner 的独立叠层只修改临时根选择一行，验证固定 Git 提交、全源码 SHA 与精确上下文。
 

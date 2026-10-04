@@ -100,7 +100,7 @@ node scripts/verify-native-avatar-worker.mjs fixed /physical/path/to/paperclip /
 
 Mac mini 本次部署使用 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`；`~/.leophoneagent/paperclip` 仅作为兼容符号链接。源码、候选构建、Node/pnpm/Rust 运行时、工作空间、上传存储、配置、日志、数据库备份与旧版本归档均放在项目外接盘目录内。
 
-外接盘需启用 macOS 文件所有权，项目目录只允许服务用户访问。文件所有权与 macOS 隐私授权是独立机制：SSH 能读取外接盘不代表 launchd 后台进程能读取。后台读取若返回 `Operation not permitted`，需由管理员在系统设置授予服务入口 `/bin/bash` 及该项目 Node 可执行文件适用的磁盘权限；不要通过关闭系统隐私保护处理。LaunchAgent 使用系统 `/bin/bash` 入口、服务用户主目录作为初始工作目录；项目启动模板再进入实际工作目录，用户进程将日志重定向到外接盘，launchd 的初始标准输出使用 `/dev/null`。私有 `env/server.env` 设置 `PAPERCLIP_STORAGE_VOLUME` 和对应 `PAPERCLIP_STORAGE_VOLUME_UUID`。原生启动模板核对真实挂载点、卷 UUID、所有权和部署目录归属；验证失败则停止启动，不会在内置盘创建替代数据目录。
+外接盘需启用 macOS 文件所有权，项目目录只允许服务用户访问。文件所有权与 macOS 隐私授权是独立机制：SSH 能读取外接盘不代表 launchd 后台进程能读取。后台读取若返回 `Operation not permitted`，需由管理员在系统设置授予服务入口 `/bin/bash` 及该项目 Node 可执行文件适用的磁盘权限；配置也放在外接盘的现有 Cloudflare 隧道进程还需允许可移动磁盘访问，程序通常位于 Homebrew 的 `cloudflared` 安装目录；不要通过关闭系统隐私保护处理。LaunchAgent 使用系统 `/bin/bash` 入口、服务用户主目录作为初始工作目录；项目启动模板再进入实际工作目录，用户进程将日志重定向到外接盘，launchd 的初始标准输出使用 `/dev/null`。私有 `env/server.env` 设置 `PAPERCLIP_STORAGE_VOLUME` 和对应 `PAPERCLIP_STORAGE_VOLUME_UUID`。原生启动模板核对真实挂载点、卷 UUID、所有权和部署目录归属；验证失败则停止启动，不会在内置盘创建替代数据目录。
 
 迁移时必须同时把 `PAPERCLIP_HOME`、`PAPERCLIP_CONFIG`、主密钥路径、config 的备份/日志/存储路径、智能体 `instructionsFilePath`/`instructionsRootPath` 与会话 `cwd`/`stateDir` 重定位到真实物理目录。兼容符号链接只用于旧入口；严格指令文件校验会拒绝任何经过符号链接的路径。更新前保存私有 env/config 和数据库字段快照，事务修改当前配置与会话路径，不重写历史消息、运行审计或权限；必须用真实任务验收，不能仅凭健康检查或模型 hello 判断迁移成功。
 
