@@ -5,7 +5,7 @@
 输入固定为 `upstream.lock.json` 的 Git commit。所有自动转换都从 `git show HEAD:<path>` 的固定源文件读取，不把已汉化源码当成下一次转换输入。输出写入独立上游工作目录，不把完整 Paperclip 复制进 LeoPhoneAgent 仓库。
 
 顺序：
-1. 校验 Git SHA 与全部 609 个扫描源文件的 SHA-256（清单缺项或新增项也失败）
+1. 校验 Git SHA 与全部 1121 个扫描源文件的 SHA-256（清单缺项或新增项也失败）
 2. 应用 `catalogs/*.structural.json`：每项包含完整原始上下文、替换文本、预期出现次数；不匹配立即失败
 3. TypeScript AST 提取静态显示节点，对照扁平英文→中文词库
 4. 使用 `contexts.json` 按文件、必要时按 `行号:源文本` 消除相同英文的歧义

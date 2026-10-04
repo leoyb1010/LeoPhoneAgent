@@ -11,7 +11,7 @@ corepack pnpm --version
 corepack pnpm install --frozen-lockfile
 corepack pnpm --filter @paperclipai/plugin-sdk build
 corepack pnpm --filter @paperclipai/ui typecheck
-corepack pnpm --filter @paperclipai/ui exec vitest run src/pages/Auth.zh-CN.test.tsx src/i18n/zh-CN.ui.test.tsx
+corepack pnpm --filter @paperclipai/ui exec vitest run src/pages/Auth.zh-CN.test.tsx src/pages/Agents.zh-CN.test.tsx src/i18n/zh-CN.ui.test.tsx
 corepack pnpm --filter @paperclipai/ui build
 # Smoke suite targets isolated fixtures; it never logs into a real provider.
 if [[ -n "${CI:-}" ]]; then

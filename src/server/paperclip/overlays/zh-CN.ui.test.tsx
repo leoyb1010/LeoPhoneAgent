@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BudgetPolicyCard } from "../components/BudgetPolicyCard";
@@ -82,14 +83,59 @@ describe("Chinese dates, relative time and calendar wording", () => {
   });
 });
 
-import type { DashboardSummary, ResourceMemberships, BudgetOverview } from "@paperclipai/shared";
+import type { DashboardSummary, ResourceMemberships, BudgetOverview, InstanceExperimentalSettingsWithManaged, InstanceSettings, SidebarBadges } from "@paperclipai/shared";
 import boardFixture from "./smoke-board-fixture.json";
 import { computeInboxBadgeData } from "../lib/inbox";
 it("the browser fixture satisfies shell dashboard/membership/budget contracts", () => {
   const dashboard: DashboardSummary = boardFixture.dashboard;
   const memberships: ResourceMemberships = boardFixture.memberships;
   const budgets: BudgetOverview = boardFixture.budgets;
+  const badges: SidebarBadges = boardFixture.sidebarBadges;
+  expect(badges.inbox).toBe(0);
+  const experimental: InstanceExperimentalSettingsWithManaged = boardFixture.instanceSettings.experimental;
+  const instance: Omit<InstanceSettings, "general" | "createdAt" | "updatedAt"> = boardFixture.instanceSettings;
+  expect(instance.experimental.enableBuiltInAgents).toBe(false);
+  expect(experimental.enableStreamlinedUi).toBe(true);
   expect(memberships.starredAgentIds).toEqual([]);
   expect(budgets.activeIncidents).toEqual([]);
   expect(() => computeInboxBadgeData({ dashboard, approvals: [], joinRequests: [], heartbeatRuns: [], mineIssues: [], dismissedAlerts: new Set(), dismissedAtByKey: new Map() })).not.toThrow();
+});
+
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { createRef } from "react";
+import { ChineseFileInput } from "../components/ChineseFileInput";
+it("the Chinese file chooser retains native accept, multiple, ref and File objects", () => {
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host); const ref = createRef<HTMLInputElement>(); const onChange = vi.fn();
+  try {
+    flushSync(() => root.render(<ChineseFileInput ref={ref} accept="image/png" multiple aria-label="选择组织标志图片" onChange={onChange} />));
+    const input = host.querySelector("input")!;
+    expect(input).toBe(ref.current); expect(input.accept).toBe("image/png"); expect(input.multiple).toBe(true);
+    expect(host.textContent).toContain("选择文件"); expect(host.textContent).toContain("未选择文件");
+    const file = new File(["synthetic"], "English 原名.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    flushSync(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange.mock.calls[0][0].target.files[0]).toBe(file);
+    expect(host.textContent).toContain(file.name);
+    expect(host.textContent).not.toMatch(/Choose File|No file chosen/);
+  } finally { flushSync(() => root.unmount()); host.remove(); }
+});
+it("the Chinese file chooser keeps the original reset and disabled semantics", () => {
+  const host = document.createElement("div"); const root = createRoot(host);
+  try {
+    flushSync(() => root.render(<ChineseFileInput disabled onChange={event => { event.currentTarget.value = ""; Object.defineProperty(event.currentTarget, "files", { value: [], configurable: true }); }} />));
+    const input = host.querySelector("input")!; expect(input.disabled).toBe(true);
+    Object.defineProperty(input, "files", { value: [new File(["x"], "Raw.png")], configurable: true });
+    flushSync(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(input.value).toBe(""); expect(host.textContent).toContain("未选择文件");
+  } finally { flushSync(() => root.unmount()); }
+});
+
+import { AUDIT_SECTIONS, auditSectionHref } from "../pages/audit/audit-navigation";
+it("budget navigation labels are Chinese while route values and scoped links stay stable", () => {
+  expect(AUDIT_SECTIONS.map(item => item.label)).toEqual(["活动", "运行", "费用", "预算", "时间线"]);
+  expect(AUDIT_SECTIONS.map(item => item.value)).toEqual(["activity", "runs", "costs", "budgets", "timeline"]);
+  expect(auditSectionHref("budgets", { agentId: "Agent Raw" })).toBe("/activity/budgets?agentId=Agent+Raw");
 });

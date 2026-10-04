@@ -1,0 +1,56 @@
+[
+  {
+    "file": "ui/src/pages/CompanySettings.tsx",
+    "from": "import { ChangeEvent, useEffect, useState } from \"react\";",
+    "to": "import { ChineseFileInput } from \"@/components/ChineseFileInput\";\nimport { ChangeEvent, useEffect, useState } from \"react\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySettings.tsx",
+    "from": "<input\n                    type=\"file\"\n                    accept=\"image/png,image/jpeg,image/webp,image/gif,image/svg+xml\"\n                    onChange={handleLogoFileChange}\n                    className=\"w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs\"\n                  />",
+    "to": "<ChineseFileInput\n                    type=\"file\"\n                    accept=\"image/png,image/jpeg,image/webp,image/gif,image/svg+xml\"\n                    aria-label=\"选择组织标志图片\"\n                    onChange={handleLogoFileChange}\n                  />",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.tsx",
+    "from": "action=\"New Agent\"",
+    "to": "action=\"新建智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Agents.production.tsx",
+    "from": "action=\"New Agent\"",
+    "to": "action=\"新建智能体\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/audit-navigation.ts",
+    "from": "label: \"Activity\"",
+    "to": "label: \"活动\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/audit-navigation.ts",
+    "from": "label: \"Runs\"",
+    "to": "label: \"运行\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/audit-navigation.ts",
+    "from": "label: \"Costs\"",
+    "to": "label: \"费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/audit-navigation.ts",
+    "from": "label: \"Budgets\"",
+    "to": "label: \"预算\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/audit-navigation.ts",
+    "from": "label: \"Timeline\"",
+    "to": "label: \"时间线\"",
+    "expected": 1
+  }
+]

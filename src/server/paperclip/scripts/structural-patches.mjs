@@ -34,9 +34,11 @@ export function applyStructuralPatches({ root, changed, report }) {
   const editorPath = 'ui/src/components/MarkdownEditor.tsx';
   changed.set(editorPath, 'import { editorTranslation } from "@/i18n/editor.zh-CN";\n' + read(editorPath));
   overlay('ui/src/pages/Auth.zh-CN.test.tsx', 'Auth.zh-CN.test.tsx');
+  overlay('ui/src/pages/Agents.zh-CN.test.tsx', 'Agents.zh-CN.test.tsx');
   overlay('ui/src/i18n/zh-CN.ui.test.tsx', 'zh-CN.ui.test.tsx');
   overlay('ui/src/i18n/smoke-board-fixture.json', 'smoke-board-fixture.json');
   overlay('ui/src/components/ChineseError.tsx', 'ChineseError.tsx');
+  overlay('ui/src/components/ChineseFileInput.tsx', 'ChineseFileInput.tsx');
   overlay('ui/src/lib/timeAgo.ts', 'timeAgo.ts');
   replace('ui/src/lib/utils.ts', '"en-US"', '"zh-CN"', 5);
   replace('ui/src/lib/utils.ts', '`${amount}/mo`', '`${amount}/月`');

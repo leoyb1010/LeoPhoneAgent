@@ -1,22 +1,124 @@
 {
   "dashboard": {
     "companyId": "11111111-1111-4111-8111-111111111111",
-    "agents": { "active": 0, "running": 0, "paused": 0, "error": 0 },
-    "tasks": { "open": 0, "inProgress": 0, "blocked": 0, "done": 0 },
-    "costs": { "monthSpendCents": 0, "monthBudgetCents": 10000, "monthUtilizationPercent": 0 },
+    "agents": {
+      "active": 0,
+      "running": 0,
+      "paused": 0,
+      "error": 0
+    },
+    "tasks": {
+      "open": 0,
+      "inProgress": 0,
+      "blocked": 0,
+      "done": 0
+    },
+    "costs": {
+      "monthSpendCents": 0,
+      "monthBudgetCents": 10000,
+      "monthUtilizationPercent": 0
+    },
     "pendingApprovals": 0,
-    "budgets": { "activeIncidents": 0, "pendingApprovals": 0, "pausedAgents": 0, "pausedProjects": 0 },
+    "budgets": {
+      "activeIncidents": 0,
+      "pendingApprovals": 0,
+      "pausedAgents": 0,
+      "pausedProjects": 0
+    },
     "runActivity": []
   },
   "memberships": {
-    "projectMemberships": {}, "agentMemberships": {},
-    "starredProjectIds": [], "starredAgentIds": [], "starredDocumentIds": [],
-    "projectStarredAt": {}, "agentStarredAt": {}, "documentStarredAt": {}, "updatedAt": null
+    "projectMemberships": {},
+    "agentMemberships": {},
+    "starredProjectIds": [],
+    "starredAgentIds": [],
+    "starredDocumentIds": [],
+    "projectStarredAt": {},
+    "agentStarredAt": {},
+    "documentStarredAt": {},
+    "updatedAt": null
   },
   "budgets": {
     "companyId": "11111111-1111-4111-8111-111111111111",
-    "policies": [], "activeIncidents": [], "pausedAgentCount": 0, "pausedProjectCount": 0, "pendingApprovalCount": 0
+    "policies": [],
+    "activeIncidents": [],
+    "pausedAgentCount": 0,
+    "pausedProjectCount": 0,
+    "pendingApprovalCount": 0
   },
-  "costSummary": { "companyId": "11111111-1111-4111-8111-111111111111", "spendCents": 0, "budgetCents": 10000, "utilizationPercent": 0 },
-  "financeSummary": { "debitCents": 0, "creditCents": 0, "netCents": 0, "eventCount": 0, "estimatedDebitCents": 0 }
+  "costSummary": {
+    "companyId": "11111111-1111-4111-8111-111111111111",
+    "spendCents": 0,
+    "budgetCents": 10000,
+    "utilizationPercent": 0
+  },
+  "financeSummary": {
+    "debitCents": 0,
+    "creditCents": 0,
+    "netCents": 0,
+    "eventCount": 0,
+    "estimatedDebitCents": 0
+  },
+  "instanceSettings": {
+    "id": "test-instance",
+    "defaultEnvironmentId": null,
+    "general": {
+      "censorUsernameInLogs": false,
+      "feedbackDataSharingPreference": "denied",
+      "backupRetention": {
+        "dailyDays": 7,
+        "weeklyWeeks": 4,
+        "monthlyMonths": 6
+      }
+    },
+    "experimental": {
+      "enableEnvironments": true,
+      "enableNativeRunner": false,
+      "enableManagedSandboxOnly": false,
+      "enableIsolatedWorkspaces": false,
+      "enableIsolatedWorkspacesByDefault": false,
+      "enableStreamlinedLeftNavigation": true,
+      "enableStreamlinedUi": true,
+      "enableApps": true,
+      "enableChatConnectors": false,
+      "enableMcpAggregators": true,
+      "enableMemoryConnectors": false,
+      "enablePipelines": false,
+      "enableCases": false,
+      "enableAgentChat": false,
+      "enableConferenceRoomChat": false,
+      "enableClassicTaskInterface": false,
+      "enableIssuePlanDecompositions": false,
+      "enableExperimentalFileViewer": false,
+      "enableExternalObjects": false,
+      "enableSmokeLab": false,
+      "enableBuiltInAgents": false,
+      "enableBetaSkills": false,
+      "enableSummaries": false,
+      "enableStatusCards": false,
+      "enableDecisions": false,
+      "enableGoalsSidebarLink": false,
+      "enableServerInfoDebugView": false,
+      "enablePaperclipDeveloperMode": false,
+      "enableSimplifiedEnglishInteractions": false,
+      "enableFirstTaskPlanProposal": false,
+      "autoRestartDevServerWhenIdle": false,
+      "enableWorkspaceBranchReconcileForward": false,
+      "enableWorkspaceDirtyQuarantineRepair": false,
+      "enableOwnerInstanceAdmin": false,
+      "enableSandboxDuplexBridge": false,
+      "enableRunnerPreviewIngress": false,
+      "enableWorktreeRunExecution": false,
+      "worktreeRunExecutionActivatedAt": null,
+      "worktreeRunExecutionActivationInstanceId": null
+    },
+    "createdAt": "2026-10-04T00:00:00Z",
+    "updatedAt": "2026-10-04T00:00:00Z"
+  },
+  "sidebarBadges": {
+    "inbox": 0,
+    "approvals": 0,
+    "failedRuns": 0,
+    "joinRequests": 0
+  }
 }
