@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { matchesPaperclipReplyConfirmation } from "./replyDraftConfirmation.js";
 import { createUuid } from "@zcode/shared";
 import {
   creationRetryPermitted,
@@ -81,12 +82,20 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
     clear,
     clearConfirmed: (confirmation: PaperclipSnapshot["confirmedReply"]) => {
       if (
-        !confirmation ||
-        confirmation.receiptId !== current.current.id ||
-        confirmation.body !== current.current.body ||
-        confirmation.issueId !== issueId ||
-        confirmation.identity !==
-          paperclipIdentityKey(snapshot.origin, snapshot.user?.id ?? "", snapshot.companyId)
+        !matchesPaperclipReplyConfirmation(
+          {
+            receiptId: current.current.id,
+            body: current.current.body,
+            draft: current.current.body,
+            identity: paperclipIdentityKey(
+              snapshot.origin,
+              snapshot.user?.id ?? "",
+              snapshot.companyId,
+            ),
+          },
+          confirmation ?? null,
+          issueId,
+        )
       )
         return false;
       clear();

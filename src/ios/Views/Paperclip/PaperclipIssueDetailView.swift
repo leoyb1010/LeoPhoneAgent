@@ -199,7 +199,7 @@ struct PaperclipIssueDetailView: View {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if visible && !editingReply && !editingDecision && draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                if PaperclipPollingPolicy.canRefresh(active: visible, statusSheetOpen: statusDecision != nil, replyFocused: editingReply || editingDecision) && draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     && decisionNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     && pendingDecision == nil && statusDecision == nil && !discardReply && !details && expandedApprovalIDs.isEmpty {
                     await model.refresh()

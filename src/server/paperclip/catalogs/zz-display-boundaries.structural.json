@@ -1,0 +1,12 @@
+[
+  {"file":"ui/src/components/SidebarSection.tsx","from":"`Collapse ${label}`","to":"`收起${label}`","expected":1},
+  {"file":"ui/src/components/SidebarSection.tsx","from":"`Expand ${label}`","to":"`展开${label}`","expected":1},
+  {"file":"ui/src/components/side-panel/SidePanelTab.tsx","from":"`Close ${label}`","to":"`关闭${label}`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Plan with ${agentName}…`","to":"`与 ${agentName} 一起规划…`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Ask ${agentName}…`","to":"`向 ${agentName} 提问…`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Message ${agentName}…`","to":"`给 ${agentName} 发消息…`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Plan with ${agentName} — shapes the plan doc, no code changes…`","to":"`与 ${agentName} 一起规划，完善计划文档，不修改代码…`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Ask ${agentName} a question — read-only, nothing runs…`","to":"`向 ${agentName} 提问，只读交流，不执行操作…`","expected":1},
+  {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Message ${agentName} — describe what you want done…`","to":"`给 ${agentName} 发消息，描述你希望完成的工作…`","expected":1},
+  {"file":"ui/src/components/task-side-panel/TaskSidePanel.tsx","from":"    return {\n      id: tab.id,\n      type: tab.type,\n      label: browserLabel ??","to":"    const systemTabLabel = tab.payload.kind === \"properties\" ? \"属性\" : tab.payload.kind === \"artifacts\" ? \"成果文件\" : tab.payload.kind === \"subtasks\" ? taskLabel : null;\n    return {\n      id: tab.id,\n      type: tab.type,\n      label: systemTabLabel ?? browserLabel ??","expected":1}
+]

@@ -1,0 +1,380 @@
+[
+  {
+    "file": "ui/src/adapters/codex-local/config-fields.tsx",
+    "text": "`${displayRunnerPermissionText(runnerPermissionCapability.description)} 所选模式不会放宽 Paperclip 的工作区、网络、凭据或规划权限边界。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/AdapterLoginChrome.tsx",
+    "text": "`提供你的 ${providerName} API 密钥以连接`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/AdapterLoginChrome.tsx",
+    "text": "`在运行 Paperclip 的计算机上为此连接登录 ${provider}，现有终端登录状态将保持独立。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/AdapterLoginChrome.tsx",
+    "text": "`连接功能使用运行 Paperclip 的计算机上的本地 ${provider} 账号。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/FileViewerSheet.tsx",
+    "text": "`${resource.title} 渲染后的 Markdown`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "text": "`批准后，Paperclip 正在重试恢复智能体（第 ${resumeFailure.attempt} / ${resumeFailure.maxAttempts} 次尝试）。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/JsonSchemaForm.tsx",
+    "text": "`${label} JSON`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/components/MarkdownBody.tsx",
+    "text": "`无法渲染 Mermaid 图表：${error}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`无法保存 API 密钥：${err.message}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`配置的 OpenCode 模型不可用：${selectedModelId}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`提供你的 ${\n                          CONNECT_SOURCE_NAMES[adapterType] ?? adapterType\n                        } API 密钥以连接`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} -p --mode ask --output-format json \\\"Respond with hello.\\\"`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} exec --json -`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} --output-format json \"Respond with hello.\"`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} -p \"Respond with hello.\" --output-format stream-json`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} run --format json \"Respond with hello.\"`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "text": "`${effectiveAdapterCommand} --print - --output-format stream-json --verbose`",
+    "category": "copyable-command",
+    "reason": "可复制CLI探测命令及其测试提示，保留可执行参数。"
+  },
+  {
+    "file": "ui/src/components/RoutineOverview.tsx",
+    "text": "`${webhooks.length} 个活跃 webhook${webhooks.length === 1 ? \"\" : \"\"}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/RunWorkspaceRecoverySurface.tsx",
+    "text": "`Re-issue (isolated): ${issue.title ?? sourceLabel}`",
+    "category": "persisted-default",
+    "reason": "持久化的新任务默认标题或恢复审计元数据，保持业务默认数据和既有行为；不将其当作界面词条改写。"
+  },
+  {
+    "file": "ui/src/components/RunnerInspector.tsx",
+    "text": "`${range} · ${groupEvents.length} 个 PRP 事件${groupEvents.length === 1 ? \"\" : \"\"}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/RunnerInspector.tsx",
+    "text": "`PRP ${eventSourceId(event) || `事件 ${event.seq}`} · 无原始关联`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/SidebarAccountMenu.production.tsx",
+    "text": "`在 GitHub 上查看提交 ${stagingCommit}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/SidebarAccountMenu.tsx",
+    "text": "`在 GitHub 上查看提交 ${stagingCommit}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "text": "`输入你的 ${provider} API 密钥以连接`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/components/task-chat/TweakPanel.tsx",
+    "text": "`${Math.round(parseCssTimeMs(values[t.name] ?? \"0\"))}ms`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/connect-flow-preview-main.tsx",
+    "text": "`提供你的 ${providerName} API 密钥以连接`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ApiKeyCredentialField.tsx",
+    "text": "`粘贴您的 ${providerName} API 密钥`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "text": "`将 ${serverName} 连接到 Paperclip`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "text": "`使用您自己的 ${isGoogleWorkspaceConnectorProfileId(managedOAuthMethod.connectorProfile ?? \"\") ? \"Google\" : entry.name} OAuth 应用`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "text": "`${entry.name} 需要独立的 OAuth 应用`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "text": "`${entry.name} 不允许 Paperclip 自动注册，因此此连接器需要您创建 OAuth 应用。请在 ${entry.name} 中添加下方回调 URL，然后将客户端详情粘贴到此处。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "text": "`请在 ${entry.name} 中注册 Paperclip 的回调 URI，然后输入您自己管理的客户端详情。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx",
+    "text": "`Paperclip 将代表您使用 ${provider.name}。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "text": "`类型“${result.type}”已从 npm 更新。${result.version ? ` (v${result.version})` : \"\"}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "text": "` / 共 ${Math.round(run.logBytes / 1024).toLocaleString(\"zh-CN\")} KB`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "text": "` / 共 ${Math.round(run.logBytes / 1024).toLocaleString(\"zh-CN\")} KB`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "text": "`服务商 ${activeTemplate.templateKind}，引用 ${templateRef}（Paperclip 模板 ${activeTemplate.id}）`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "text": "`id ${formatShortId(activeTemplate.id)}`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "text": "`${resultCheckedFiles.size} 个文件${resultCheckedFiles.size === 1 ? \"\" : \"\"}已导出为 ${result.rootPath}.zip`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "text": "` (${formatMegabytes(localCompressedBytes)} zip)`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "text": "`现在可以在 Paperclip 工作区中编辑 ${skill.name}。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "text": "`现在可以在 Paperclip 工作区中编辑 ${skill.name}。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/Costs.production.tsx",
+    "text": "`${row.apiRunCount} 次 API 运行`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "text": "`${row.apiRunCount} 次 API 运行`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "text": "`请先创建 Paperclip 账号，然后会返回此处，接受以下组织的邀请：${companyDisplayName}。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "text": "`Re-issue (isolated): ${issue.title ?? sourceLabel}`",
+    "category": "persisted-default",
+    "reason": "持久化的新任务默认标题或恢复审计元数据，保持业务默认数据和既有行为；不将其当作界面词条改写。"
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.production.tsx",
+    "text": "`已恢复 ${response.secretMaterials.length} 个 webhook 触发器`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "text": "`已恢复 ${response.secretMaterials.length} 个 webhook 触发器`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "text": "`${removed.displayName}已从 Paperclip 中移除，远程数据不受影响。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "text": "`Restore of v${version.revisionNumber}`",
+    "category": "persisted-default",
+    "reason": "持久化的新任务默认标题或恢复审计元数据，保持业务默认数据和既有行为；不将其当作界面词条改写。"
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "text": "`${target.providerName}已断开连接，现有 Paperclip 任务仍可使用。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/Browse.tsx",
+    "text": "`此连接将停止接收来自以下服务的新工作：${connectionToRemove.providerName}。现有 Paperclip 任务和对话历史仍可使用。不会删除以下服务中的应用、机器人或账号：${connectionToRemove.providerName}。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/ConnectionProvenanceChip.tsx",
+    "text": "`凭据由 Vercel Connect 管理（${connectorUid}）`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/ActionTestDialog.tsx",
+    "text": "`批准后，请使用此执行 ID 测试 ${pending.resumeTool} 操作。请勿重新启动原始操作。`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+    "text": "`Paperclip 将此操作归类为 ${action.riskLevel}`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "text": "`为 @${person.login} 自动评审 PR`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "text": "`GitHub 机器人 · 第 ${step + 1} 步，共 ${steps.length} 步`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackAvatarStep.tsx",
+    "text": "`${agentName} 的 Cliptoon 头像`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackIdentityStep.tsx",
+    "text": "`将 ${identity.externalLabel} 关联到我的 Paperclip 账户`",
+    "category": "localized-brand",
+    "reason": "中文句子中的品牌、协议名、格式名或技术单位保持原样；插值不是翻译输入。"
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "text": "`app:${applicationsById.get(entry.applicationId ?? \"\") ?? entry.applicationId ?? \"?\"}`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "text": "`conn:${connectionsById.get(entry.connectionId ?? \"\") ?? entry.connectionId ?? \"?\"}`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/pages/tools/ProfilesTab.tsx",
+    "text": "`risk:${entry.riskLevel ?? \"?\"}`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  },
+  {
+    "file": "ui/src/pages/tools/connection-dialogs.tsx",
+    "text": "`${probeResult.latencyMs}ms`",
+    "category": "technical-notation",
+    "reason": "JSON/ID、归档格式、计时单位或app/conn/risk技术选择器标记，保持原技术表示。"
+  }
+]

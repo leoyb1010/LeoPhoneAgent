@@ -205,6 +205,94 @@ final class PaperclipClientTests: XCTestCase {
         XCTAssertFalse(ledger.values.contains("POST"))
     }
 
+    func testBlockedStatusNeedsExplicitValidActionBeforeNetwork() async throws {
+        PaperclipTestProtocol.install { _ in XCTFail("缺少解除阻塞说明时不得发请求"); return (500, "{}", "application/json") }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        for action in [nil, "", " \n ", String(repeating: "🚀", count: 1001)] as [String?] {
+            do { _ = try await client.setStatus(ref, status: .blocked, unblockAction: action); XCTFail("不允许空白或超长说明") }
+            catch { XCTAssertEqual(error as? PaperclipError, .unblockActionRequired) }
+        }
+    }
+
+    func testBlockedStatusPinsDescriptorToTaskHumanAndTrimsAction() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
+            if request.httpMethod != "PATCH" { return (200, issue, "application/json") }
+            let body = try PaperclipTestProtocol.body(request)
+            XCTAssertEqual(Set(body.keys), Set(["status", "unblockDescriptor"]))
+            XCTAssertEqual(body["status"] as? String, "blocked")
+            let descriptor = try XCTUnwrap(body["unblockDescriptor"] as? [String: Any])
+            XCTAssertEqual(Set(descriptor.keys), Set(["owner", "action"]))
+            XCTAssertEqual(descriptor["action"] as? String, "请确认访问范围")
+            XCTAssertEqual(descriptor["owner"] as? [String: String], ["userId": "human"])
+            var receipt = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(issue.utf8)) as? [String: Any])
+            receipt["status"] = "blocked"
+            receipt["unblockDescriptor"] = descriptor
+            return (200, String(decoding: try JSONSerialization.data(withJSONObject: receipt), as: UTF8.self), "application/json")
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        let result = try await client.setStatus(ref, status: .blocked, unblockAction: " \n请确认访问范围  ")
+        XCTAssertEqual(result.status, "blocked")
+    }
+
+    func testBlockedReceiptMustConfirmSameOwnerAndAction() async throws {
+        let session = Self.session; let issue = Self.issue
+        for descriptor in [
+            #"{"owner":{"userId":"human"},"action":"另一项未确认条件"}"#,
+            #"{"owner":{"userId":"other"},"action":"请确认访问范围"}"#,
+            "null"
+        ] {
+            PaperclipTestProtocol.install { request in
+                if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
+                if request.httpMethod != "PATCH" { return (200, issue, "application/json") }
+                let base = issue.replacingOccurrences(of: "\"status\":\"todo\"", with: "\"status\":\"blocked\"")
+                let receipt = String(base.dropLast()) + ",\"unblockDescriptor\":\(descriptor)}"
+                return (200, receipt, "application/json")
+            }
+            let client = try client()
+            let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                             companyID: "company", userID: "human", issueID: "issue")
+            do { _ = try await client.setStatus(ref, status: .blocked, unblockAction: "请确认访问范围"); XCTFail("不能确认不同或丢失的解除条件") }
+            catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+        }
+    }
+
+    func testOtherStatusesNeverSendUnblockDescriptor() async throws {
+        let session = Self.session; let issue = Self.issue
+        for status in PaperclipIssueStatus.allCases where status != .blocked {
+            let raw = status.rawValue
+            PaperclipTestProtocol.install { request in
+                if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
+                if request.httpMethod != "PATCH" { return (200, issue, "application/json") }
+                let body = try PaperclipTestProtocol.body(request)
+                XCTAssertEqual(Set(body.keys), Set(["status"]))
+                XCTAssertEqual(body["status"] as? String, raw)
+                return (200, issue.replacingOccurrences(of: "\"status\":\"todo\"", with: "\"status\":\"\(raw)\""), "application/json")
+            }
+            let client = try client()
+            let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                             companyID: "company", userID: "human", issueID: "issue")
+            _ = try await client.setStatus(ref, status: status, unblockAction: "此说明不得随其他状态发送")
+        }
+    }
+
+    func testStatusUpdateRequiresRequestedStateInReceipt() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            request.url!.path == "/api/auth/get-session" ? (200, session, "application/json") : (200, issue, "application/json")
+        }
+        let client = try client()
+        let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                         companyID: "company", userID: "human", issueID: "issue")
+        do { _ = try await client.setStatus(ref, status: .done); XCTFail("返回旧状态不得报告修改成功") }
+        catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+    }
+
     func testInvalidatedClientDoesNotSendRequests() async throws {
         PaperclipTestProtocol.install { _ in XCTFail("退出后不得重用会话"); return (500, "{}", "application/json") }
         let client = try client()

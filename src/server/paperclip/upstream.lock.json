@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/paperclipai/paperclip.git",
+  "commit": "994d6edcdd4e15d5f9cc5cf8c135ac599104b86a",
+  "license": "MIT",
+  "node": ">=24.11.0",
+  "packageManager": "pnpm@9.15.4"
+}

@@ -3,7 +3,14 @@ import SwiftUI
 /// 两个工作区各自拥有导航栈；切换不会销毁本机的会话与未发送草稿。
 struct IOSWorkspaceRootView<LocalContent: View>: View {
     @AppStorage("leo.ios.executionBackend.v1") private var selected = IOSExecutionBackend.local.rawValue
+    private let makeStore: @MainActor () -> PaperclipWorkspaceStore
     @ViewBuilder let localContent: () -> LocalContent
+
+    init(makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore() },
+         @ViewBuilder localContent: @escaping () -> LocalContent) {
+        self.makeStore = makeStore
+        self.localContent = localContent
+    }
 
     var body: some View {
         TabView(selection: $selected) {
@@ -11,7 +18,7 @@ struct IOSWorkspaceRootView<LocalContent: View>: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tag(IOSExecutionBackend.local.rawValue)
                 .tabItem { Label("本机", systemImage: "iphone") }
-            PaperclipWorkspaceView(onReturnToLocal: { selected = IOSExecutionBackend.local.rawValue })
+            PaperclipWorkspaceView(onReturnToLocal: { selected = IOSExecutionBackend.local.rawValue }, makeStore: makeStore)
                 .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
                 .toolbar(.hidden, for: .tabBar)
                 .tag(IOSExecutionBackend.paperclip.rawValue)
@@ -38,8 +45,14 @@ struct PaperclipBackendSettingsView: View {
 }
 
 struct PaperclipWorkspaceView: View {
-    var onReturnToLocal: () -> Void = {}
-    @StateObject private var store = PaperclipWorkspaceStore()
+    let onReturnToLocal: () -> Void
+    @StateObject private var store: PaperclipWorkspaceStore
+
+    init(onReturnToLocal: @escaping () -> Void = {},
+         makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore() }) {
+        self.onReturnToLocal = onReturnToLocal
+        _store = StateObject(wrappedValue: makeStore())
+    }
     @State private var settings = false
     @State private var composing = false
     @State private var focusRequest = 0

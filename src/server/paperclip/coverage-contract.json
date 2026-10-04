@@ -1,0 +1,42 @@
+{
+  "commit": "994d6edcdd4e15d5f9cc5cf8c135ac599104b86a",
+  "meaning": "Reviewed source-level display coverage; raw diagnostics, technical identifiers, user content and explicit dynamic exceptions are retained. Not a runtime or production acceptance claim.",
+  "groups": {
+    "初始化与认证": {
+      "pattern": "ui/src/(?:App\\.tsx|pages/(?:Auth|BoardClaim|CliAuth)\\.tsx|components/(?:BootstrapPendingPage|CloudAccessGate|CloudSignIn|OnboardingWizard|OnboardingChat|SetupWizard)\\.tsx|components/onboarding/.*\\.tsx)$",
+      "minimumFiles": 14,
+      "allowedRemaining": []
+    },
+    "任务核心": {
+      "pattern": "ui/src/(?:pages/(?:Issues|IssueDetail|MyIssues)\\.tsx|components/(?:NewIssueDialog|IssuesList|IssueProperties|IssueBlockedNotice|StatusIcon|PriorityIcon|StatusBadge|IssueDocumentsSection|IssueCommentThread|IssueDescription)\\.tsx)$",
+      "minimumFiles": 9,
+      "allowedRemaining": []
+    },
+    "智能体核心": {
+      "pattern": "ui/src/(?:pages/(?:Agents|AgentDetail)(?:\\.production)?\\.tsx|pages/NewAgent\\.tsx|components/(?:AgentConfigForm|AgentProperties|AgentActionButtons)\\.tsx|components/new-agent/.*\\.tsx)$",
+      "minimumFiles": 12,
+      "allowedRemaining": []
+    },
+    "审批与预算": {
+      "pattern": "ui/src/(?:pages/(?:Approvals|ApprovalDetail|Costs)(?:\\.production)?\\.tsx|components/(?:ApprovalCard|ApprovalPayload|BudgetPolicyCard|BudgetIncidentCard|BillerSpendCard|FinanceBillerCard|FinanceKindCard|FinanceTimelineCard|ProviderQuotaCard)\\.tsx)$",
+      "minimumFiles": 13,
+      "allowedRemaining": []
+    },
+    "后台配置": {
+      "pattern": "ui/src/(?:pages/(?:CompanyAccess|CompanySettings|CompanySettingsPluginPage|InstanceAccess|InstanceGeneralSettings|InstanceExperimentalSettings|Secrets|CompanyEnvironments|PluginManager|PluginSettings|AdapterManager|CompanyImport|CompanyExport)\\.tsx|components/CompanySettingsSidebar(?:\\.production)?\\.tsx|components/access/(?:CompanySettingsNav|ModeBadge)\\.tsx)$",
+      "minimumFiles": 17,
+      "allowedRemaining": []
+    },
+    "导航与全局错误": {
+      "pattern": "ui/src/components/(?:Sidebar[^/]*|Layout|MobileBottomNav|AppErrorBoundary|RouteErrorBoundary)(?:\\.production)?\\.tsx$",
+      "minimumFiles": 22,
+      "allowedRemaining": []
+    },
+    "全站生产显示源码": {
+      "pattern": "^ui/src/",
+      "minimumFiles": 590,
+      "allowedRemaining": []
+    }
+  },
+  "maximumUnreviewedStaticRemaining": 0
+}

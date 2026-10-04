@@ -81,6 +81,25 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertIn("exit 2", script)
         self.assertIn("-resultBundlePath", script)
 
+    def test_uncertain_status_sheet_can_only_verify_with_read(self):
+        view = (VIEWS / "PaperclipIssueDetailView.swift").read_text()
+        self.assertIn("pendingStatus: PaperclipStatusExpectation?", view)
+        verify = view.split("func verifyStatus(", 1)[1].split("func refresh(", 1)[0]
+        self.assertIn("client.issue(reference)", verify)
+        self.assertIn("expected.matches(current)", verify)
+        self.assertNotIn("setStatus(", verify)
+        self.assertIn('"核实状态（不会重新发送）"', view)
+        self.assertIn("model.pendingStatus != nil", view)
+
+    def test_editing_pauses_background_refresh_and_approval_ids_are_local(self):
+        view = (VIEWS / "PaperclipIssueDetailView.swift").read_text()
+        self.assertIn(".task(id: scenePhase)", view)
+        self.assertIn("PaperclipPollingPolicy.canRefresh(active: visible", view)
+        self.assertIn("statusSheetOpen: statusDecision != nil", view)
+        self.assertIn("replyFocused: editingReply || editingDecision", view)
+        self.assertIn(".focused($editingReply)", view)
+        self.assertIn("expandedApprovalIDs.isEmpty", view)
+
     def test_all_new_visible_literals_are_chinese(self):
         for path in VIEWS.glob("*.swift"):
             for literal in re.findall(r'\b(?:Text|Button|Label|Section|TextField|Picker|ProgressView)\("([^"\\]*)"', path.read_text()):

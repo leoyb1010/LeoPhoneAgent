@@ -48,6 +48,33 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.utf8)).first?.id, "run-1")
         XCTAssertThrowsError(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.replacingOccurrences(of: "runId", with: "id").utf8)))
     }
+    func testBackgroundPollingStopsDuringStatusSheetReplyEditingOrBackground() {
+        for active in [false, true] {
+            for sheetOpen in [false, true] {
+                for replyFocused in [false, true] {
+                    let actual = PaperclipPollingPolicy.canRefresh(active: active, statusSheetOpen: sheetOpen, replyFocused: replyFocused)
+                    XCTAssertEqual(actual, active && !sheetOpen && !replyFocused)
+                }
+            }
+        }
+    }
+
+    func testCommentAuthorUsesValidUserAgentOrUnknown() throws {
+        let cases: [([String: String], String)] = [
+            ([:], "未知作者"),
+            (["authorUserId": "", "authorAgentId": "   "], "未知作者"),
+            (["authorUserId": "human"], "用户消息"),
+            (["authorAgentId": "agent"], "智能体消息"),
+            (["authorUserId": "human", "authorAgentId": "agent"], "未知作者")
+        ]
+        for (authors, expected) in cases {
+            var row = ["id": "comment", "companyId": "company", "issueId": "issue", "body": "内容"]
+            row.merge(authors) { _, new in new }
+            let comment = try JSONDecoder().decode(PaperclipComment.self, from: JSONSerialization.data(withJSONObject: row))
+            XCTAssertEqual(comment.authorLabel(currentUserID: "other"), expected)
+        }
+    }
+
     func testChineseLabelsNeverExposeUnknownWireStatus() {
         XCTAssertEqual(IOSExecutionBackend.local.title, "本机")
         XCTAssertEqual(PaperclipLabels.status("future_status"), "未知状态")

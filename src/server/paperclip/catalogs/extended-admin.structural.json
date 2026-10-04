@@ -1,0 +1,1112 @@
+[
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "                  toggleTitleDisabled={isBuiltinOverride ? \"Pause external override\" : undefined}",
+    "to": "                  toggleTitleDisabled={isBuiltinOverride ? \"暂停外部覆盖\" : undefined}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "                  toggleTitleEnabled={isBuiltinOverride ? \"Resume external override\" : undefined}",
+    "to": "                  toggleTitleEnabled={isBuiltinOverride ? \"恢复外部覆盖\" : undefined}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "                  disabledBadgeLabel={isBuiltinOverride ? \"Override paused\" : undefined}",
+    "to": "                  disabledBadgeLabel={isBuiltinOverride ? \"覆盖已暂停\" : undefined}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Cannot delete the managed local environment.\";",
+    "to": "    return \"无法删除托管的本地环境。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Cannot delete the current instance default environment. Set a new default environment before deleting this one.\";",
+    "to": "    return \"无法删除当前实例的默认环境。请先设置新的默认环境，再删除此环境。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Cannot delete this environment while a sandbox cleanup is pending. Wait for the cleanup sweep to destroy the orphan sandbox, then retry.\";",
+    "to": "    return \"沙箱清理待执行时无法删除此环境。请等待清理任务销毁孤立沙箱后重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Cannot delete this environment while it has a reusable sandbox lease. Remove the associated execution workspace or issue so Paperclip can destroy the sandbox, then retry.\";",
+    "to": "    return \"此环境仍有可复用沙箱租约，无法删除。请先移除关联的执行工作区或任务，让 Paperclip 销毁沙箱，然后重试。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "const DISCARD_ENVIRONMENT_CHANGES_MESSAGE = \"Discard unsaved environment changes?\";",
+    "to": "const DISCARD_ENVIRONMENT_CHANGES_MESSAGE = \"放弃尚未保存的环境更改？\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Setup connection details could not be refreshed. You can still finish or cancel this setup.\";",
+    "to": "    return \"无法刷新配置连接详情。你仍可完成或取消此次配置。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "  if (!input.payload) {\n    return \"Connection details are not available yet. You can still finish or cancel this setup.\";\n  }",
+    "to": "  if (!input.payload) {\n    return \"连接详情暂不可用。你仍可完成或取消此次配置。\";\n  }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"Browser terminal is not available for this provider connection. Use the provider setup instructions, then finish or cancel here.\";",
+    "to": "    return \"此服务商连接不支持浏览器终端。请按照服务商的配置说明操作，然后在此完成或取消。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "  if (!readConnectionCommand(input.payload)) {\n    return \"Connection details are not available yet. You can still finish or cancel this setup.\";\n  }",
+    "to": "  if (!readConnectionCommand(input.payload)) {\n    return \"连接详情暂不可用。你仍可完成或取消此次配置。\";\n  }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Connecting\";",
+    "to": "      return \"正在连接\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Connected\";",
+    "to": "      return \"已连接\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Closed\";",
+    "to": "      return \"已关闭\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Connection failed\";",
+    "to": "      return \"连接失败\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Ready to connect\";",
+    "to": "      return \"准备连接\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return typeof reason === \"string\" && reason.trim() ? \"Terminal closed.\" : null;",
+    "to": "    return typeof reason === \"string\" && reason.trim() ? \"终端已关闭。\" : null;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup session expired.\";",
+    "to": "      return \"配置会话已过期。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"SSH session closed.\";",
+    "to": "      return \"SSH 会话已关闭。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Terminal server shut down.\";",
+    "to": "      return \"终端服务器已关闭。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup session finished.\";",
+    "to": "      return \"配置会话已完成。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup session cancelled.\";",
+    "to": "      return \"配置会话已取消。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      setErrorMessage(\"Browser terminal is unavailable in this browser.\");",
+    "to": "      setErrorMessage(\"当前浏览器不支持浏览器终端。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "          setErrorMessage(typeof frame.message === \"string\" ? frame.message : \"Terminal connection failed.\");",
+    "to": "          setErrorMessage(typeof frame.message === \"string\" ? frame.message : \"终端连接失败。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "        setErrorMessage(\"Terminal websocket connection failed.\");",
+    "to": "        setErrorMessage(\"终端 WebSocket 连接失败。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      setErrorMessage(error instanceof Error ? error.message : \"Terminal session could not be opened.\");",
+    "to": "      setErrorMessage(error instanceof Error ? error.message : \"无法打开终端会话。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      reason: \"This provider does not advertise interactive template setup.\",",
+    "to": "      reason: \"此服务商未声明支持交互式模板设置。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      reason: \"This provider advertises setup, but image capture is unavailable.\",",
+    "to": "      reason: \"此服务商声明支持配置功能，但镜像捕获不可用。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup starting\";",
+    "to": "      return \"正在启动配置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup running\";",
+    "to": "      return \"正在配置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Capturing template\";",
+    "to": "      return \"正在捕获模板\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Template captured\";",
+    "to": "      return \"模板已捕获\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup cancelled\";",
+    "to": "      return \"配置已取消\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup expired\";",
+    "to": "      return \"配置已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup failed\";",
+    "to": "      return \"配置失败\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      return \"Setup status\";",
+    "to": "      return \"配置状态\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "    return \"The base image changed since this image was captured.\";",
+    "to": "    return \"捕获此镜像后，基础镜像已发生变化。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "  return \"The server cannot verify the boot source; the snapshot will override the current base image.\";",
+    "to": "  return \"服务器无法验证启动来源；此快照将覆盖当前基础镜像。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      if (!editingEnvironmentId) throw new Error(\"No environment selected\");",
+    "to": "      if (!editingEnvironmentId) throw new Error(\"未选择环境\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      if (!selectedCompanyId) throw new Error(\"Select a company to create environments\");",
+    "to": "      if (!selectedCompanyId) throw new Error(\"请选择一个组织以创建环境\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      if (!selectedCompanyId) throw new Error(\"Select a company to test environments\");",
+    "to": "      if (!selectedCompanyId) throw new Error(\"请选择一个组织以测试环境\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "        \"Other references to this environment (agents in other organizations or terminated agents) fall back to the instance default.\",",
+    "to": "        \"对此环境的其他引用（其他组织中的智能体或已终止的智能体）将回退到实例默认环境。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "      deleteImpactNotes.push(\"Active runs or sandbox leases currently resolve to this environment.\");",
+    "to": "      deleteImpactNotes.push(\"当前有运行中的任务或沙箱租约使用此环境。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "                            return summary ?? \"Provisioned and maintained for you.\";",
+    "to": "                            return summary ?? \"由系统为你创建和维护。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "  return error instanceof Error ? error.message : \"Failed to load export data.\";",
+    "to": "  return error instanceof Error ? error.message : \"加载导出数据失败。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "        action=\"Load preview\"",
+    "to": "        action=\"加载预览\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "    throw new Error(\"Select a .zip organization package.\");",
+    "to": "    throw new Error(\"请选择 .zip 格式的组织软件包。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "    throw new Error(\"No package files were found in the selected zip archive.\");",
+    "to": "    throw new Error(\"所选 zip 压缩文件中未找到软件包文件。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "          \"The server no longer reports this import job — it may have restarted while the import ran.\",",
+    "to": "          \"服务器已无法找到此导入任务，可能在导入期间发生了重启。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "          \"The import status can no longer be read — your session may have expired. Reload and sign in to check on it.\",",
+    "to": "          \"无法继续读取导入状态，登录会话可能已过期。请重新加载并登录以查看进度。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "      throw new Error(job.error?.message ?? \"Import failed on the server.\");",
+    "to": "      throw new Error(job.error?.message ?? \"服务器端导入失败。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "    \"Upload a .zip exported directly from Paperclip. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.\";",
+    "to": "    \"请上传直接从 Paperclip 导出的 .zip 文件。使用访达、资源管理器或其他压缩工具重新打包的文件可能无法正确导入。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "        if (!localPackage) throw new Error(\"No source configured.\");",
+    "to": "        if (!localPackage) throw new Error(\"未配置来源。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "      if (!source) throw new Error(\"No source configured.\");",
+    "to": "      if (!source) throw new Error(\"未配置来源。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "        throw new Error(\"No source configured.\");",
+    "to": "        throw new Error(\"未配置来源。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "        nextFailures[item.key] = err instanceof Error ? err.message : \"Activation failed.\";",
+    "to": "        nextFailures[item.key] = err instanceof Error ? err.message : \"启用失败。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginManager.tsx",
+    "from": "  return firstNonEmptyLine(plugin.lastError) ?? \"Plugin entered an error state without a stored error message.\";",
+    "to": "  return firstNonEmptyLine(plugin.lastError) ?? \"插件发生错误，但没有已保存的错误信息。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginManager.tsx",
+    "from": "                {errorDetailsPlugin?.lastError ?? \"No stored error message.\"}",
+    "to": "                {errorDetailsPlugin?.lastError ?? \"没有已保存的错误信息。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "  const pluginDescription = plugin.manifestJson.description || \"No description provided.\";",
+    "to": "  const pluginDescription = plugin.manifestJson.description || \"未提供说明。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "          ? \"Local folder saved.\"",
+    "to": "          ? \"本地文件夹已保存。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "          : \"Local folder saved, but validation still needs attention.\",",
+    "to": "          : \"本地文件夹已保存，但仍有验证问题需要处理。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setMessage({ type: \"error\", text: err.message || \"Failed to save local folder.\" });",
+    "to": "      setMessage({ type: \"error\", text: err.message || \"保存本地文件夹失败。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setMessage({ type: \"error\", text: \"Local folder path is required.\" });",
+    "to": "      setMessage({ type: \"error\", text: \"请填写本地文件夹路径。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setMessage({ type: \"error\", text: \"Local folder must be a full absolute path.\" });",
+    "to": "      setMessage({ type: \"error\", text: \"本地文件夹必须使用完整的绝对路径。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "          value={access === \"read\" ? \"Not requested\" : status?.writable ? \"Yes\" : \"No\"}",
+    "to": "          value={access === \"read\" ? \"未要求\" : status?.writable ? \"Yes\" : \"No\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "        missingLabel=\"Missing directories\"",
+    "to": "        missingLabel=\"缺失的目录\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "        missingLabel=\"Missing files\"",
+    "to": "        missingLabel=\"缺失的文件\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      if (!companyId) throw new Error(\"Select an organization before saving plugin configuration.\");",
+    "to": "      if (!companyId) throw new Error(\"请先选择组织，再保存插件配置。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setSaveMessage({ type: \"success\", text: \"Configuration saved.\" });",
+    "to": "      setSaveMessage({ type: \"success\", text: \"配置已保存。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setSaveMessage({ type: \"error\", text: err.message || \"Failed to save configuration.\" });",
+    "to": "      setSaveMessage({ type: \"error\", text: err.message || \"保存配置失败。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      if (!companyId) throw new Error(\"Select an organization before testing plugin configuration.\");",
+    "to": "      if (!companyId) throw new Error(\"请先选择组织，再测试插件配置。\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "        setTestResult({ type: \"success\", text: \"Configuration test passed.\" });",
+    "to": "        setTestResult({ type: \"success\", text: \"配置测试通过。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "        setTestResult({ type: \"error\", text: result.message || \"Configuration test failed.\" });",
+    "to": "        setTestResult({ type: \"error\", text: result.message || \"配置测试失败。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "      setTestResult({ type: \"error\", text: err.message || \"Configuration test failed.\" });",
+    "to": "      setTestResult({ type: \"error\", text: err.message || \"配置测试失败。\" });",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "  if (diffMs < 0) return \"just now\";",
+    "to": "  if (diffMs < 0) return \"刚刚\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  return \"Unexpected error\";",
+    "to": "  return \"发生意外错误\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  return managedMode === \"paperclip_managed\" ? \"Paperclip-managed\" : \"Linked external\";",
+    "to": "  return managedMode === \"paperclip_managed\" ? \"由 Paperclip 托管\" : \"外部关联\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    return \"Paperclip owns create and rotation writes for this provider secret.\";",
+    "to": "    return \"此服务商密钥的创建和轮换写入由 Paperclip 管理。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    ? \"Paperclip resolves this provider reference and can write new values to it via Update value.\"",
+    "to": "    ? \"Paperclip 会解析此服务商引用，并可通过“更新值”写入新值。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    : \"Paperclip resolves this provider reference but does not rotate the provider value.\";",
+    "to": "    : \"Paperclip 会解析此服务商引用，但不会轮换服务商处的密钥值。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  if (!provider) return \"Select a provider.\";",
+    "to": "  if (!provider) return \"请选择服务商。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    const nextStep = \" Select a ready provider vault or configure the deployment default.\";",
+    "to": "    const nextStep = \"请选择已就绪的服务商密钥库，或配置部署默认设置。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  if (config.status === \"disabled\") return \"This provider vault is disabled.\";",
+    "to": "  if (config.status === \"disabled\") return \"此服务商密钥库已停用。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  if (config.status === \"coming_soon\") return \"This provider vault is saved as draft metadata only.\";",
+    "to": "  if (config.status === \"coming_soon\") return \"此服务商密钥库仅保存了元数据草稿。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    return config.healthMessage ?? \"This provider vault health check failed.\";",
+    "to": "    return config.healthMessage ?? \"此服务商密钥库的健康检查失败。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  if (!id) return \"Deployment default\";",
+    "to": "  if (!id) return \"部署默认配置\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "  return configs.find((config) => config.id === id)?.displayName ?? \"Unknown vault\";",
+    "to": "  return configs.find((config) => config.id === id)?.displayName ?? \"未知密钥库\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "      if (!selectedSecret) throw new Error(\"Select a secret first\");",
+    "to": "      if (!selectedSecret) throw new Error(\"请先选择密钥\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "      setRotateError(error instanceof Error ? error.message : \"Rotate failed\");",
+    "to": "      setRotateError(error instanceof Error ? error.message : \"轮换失败\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    return secret.managedMode === \"external_reference\" && !secretSupportsExternalValueWrite(secret)\n      ? \"Update reference\"\n      : \"Update value\";",
+    "to": "    return secret.managedMode === \"external_reference\" && !secretSupportsExternalValueWrite(secret)\n      ? \"更新引用\"\n      : \"更新值\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "    const currentName = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].name : \"All secrets\";",
+    "to": "    const currentName = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].name : \"全部密钥\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "      { name: \"All secrets\", path: \"\" },",
+    "to": "      { name: \"全部密钥\", path: \"\" },",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "              {parentLabel !== \"All secrets\" ? (",
+    "to": "              {parentFolderPath ? (",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "                action=\"New secret\"",
+    "to": "                action=\"新建密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "                      action=\"New secret here\"",
+    "to": "                      action=\"在此新建密钥\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "`Type \"${result.type}\" registered successfully.${result.version ? ` (v${result.version})` : \"\"}`",
+    "to": "`类型“${result.type}”注册成功。${result.version ? ` (v${result.version})` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "`Type \"${result.type}\" reloaded.${result.version ? ` (v${result.version})` : \"\"}`",
+    "to": "`类型“${result.type}”已重新加载。${result.version ? ` (v${result.version})` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AdapterManager.tsx",
+    "from": "`Type \"${result.type}\" updated from npm.${result.version ? ` (v${result.version})` : \"\"}`",
+    "to": "`类型“${result.type}”已从 npm 更新。${result.version ? ` (v${result.version})` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Base image changed: ${parts.join(\"; \")}`",
+    "to": "`基础镜像已更改：${parts.join(\"; \")}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`The base image changed: ${valued.path} ${formatRelinkDriftValue(valued.from)} -> ${formatRelinkDriftValue(valued.to)}.`",
+    "to": "`基础镜像已更改：${valued.path} ${formatRelinkDriftValue(valued.from)} -> ${formatRelinkDriftValue(valued.to)}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${warning}\\n\\nRelink this image anyway?`",
+    "to": "`${warning}\\n\\n仍要重新关联此镜像吗？`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "` · expires ${sessionExpiresAt}`",
+    "to": "` · 过期时间：${sessionExpiresAt}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Provider ${activeTemplate.templateKind} ref ${templateRef} (Paperclip template ${activeTemplate.id})`",
+    "to": "`服务商 ${activeTemplate.templateKind}，引用 ${templateRef}（Paperclip 模板 ${activeTemplate.id}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "` · captured ${capturedAt}`",
+    "to": "` · 捕获时间：${capturedAt}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "` · last used ${lastUsedAt}`",
+    "to": "` · 上次使用：${lastUsedAt}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Not in use — ${bootSourceDriftSummary}. Runs fall back to the base configuration until you relink this image or capture a new one.`",
+    "to": "`未使用：${bootSourceDriftSummary}。在重新关联此镜像或捕获新镜像前，运行将使用基础配置。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Capture a custom ${providerDisplayName} image with your tools already logged in.`",
+    "to": "`捕获自定义 ${providerDisplayName} 镜像，保留工具的登录状态。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${environment.name} will inject the updated variables into future runs.`",
+    "to": "`${environment.name} 将在后续运行中注入更新后的变量。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${environment.name} is ready.`",
+    "to": "`${environment.name} 已就绪。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${environment.name} was deleted. Destroyed ${destroyedCount === 1 ? \"1 reusable sandbox\" : `${destroyedCount} reusable sandboxes`}.`",
+    "to": "`${environment.name} 已删除。已销毁 ${destroyedCount === 1 ? \"1 个可复用沙箱\" : `${destroyedCount} 个可复用沙箱`}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${environment.name} was deleted.`",
+    "to": "`${environment.name} 已删除。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${selectionCount} workspace, issue, or project environment ${selectionCount === 1 ? \"selection\" : \"selections\"} will be cleared.`",
+    "to": "`${selectionCount} 项工作区、任务或项目环境${selectionCount === 1 ? \"选择\" : \"选择\"}将被清除。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${deleteBlastRadius.staticReferences.secretBindingCount} secret ${deleteBlastRadius.staticReferences.secretBindingCount === 1 ? \"binding\" : \"bindings\"} will be removed.`",
+    "to": "`${deleteBlastRadius.staticReferences.secretBindingCount} 个密钥${deleteBlastRadius.staticReferences.secretBindingCount === 1 ? \"绑定\" : \"绑定\"}将被移除。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${sandboxProviderDisplayName} sandbox provider${summary ? ` · ${summary}` : \"\"}`",
+    "to": "`${sandboxProviderDisplayName} 沙箱服务商${summary ? ` · ${summary}` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Delete ${editingEnvironment.name}`",
+    "to": "`删除 ${editingEnvironment.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${deleteBlastRadius.reusableSandboxLeaseCount === 1 ? \"1 reusable sandbox\" : `${deleteBlastRadius.reusableSandboxLeaseCount} reusable sandboxes`} will be destroyed; the workspaces holding them stay open and provision a fresh sandbox on their next run.`",
+    "to": "`${deleteBlastRadius.reusableSandboxLeaseCount === 1 ? \"1 个可复用沙箱\" : `${deleteBlastRadius.reusableSandboxLeaseCount} 个可复用沙箱`}将被销毁；持有它们的工作区将保持打开，并在下次运行时创建新沙箱。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${agentsUsingEnvironment.length === 1 ? \"1 agent uses\" : `${agentsUsingEnvironment.length} agents use`} this environment as their default. Choose the environment those agents should be reassigned to.`",
+    "to": "`${agentsUsingEnvironment.length === 1 ? \"1 个智能体正在使用\" : `${agentsUsingEnvironment.length} 个智能体正在使用`}此环境作为默认环境。请选择要将这些智能体重新分配到的环境。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`${group.leaseCount} sandbox leases`",
+    "to": "`${group.leaseCount} 个沙箱租约`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "`Destroy ${deleteBlastRadius.reusableSandboxLeaseCount === 1 ? \"1 sandbox\" : `${deleteBlastRadius.reusableSandboxLeaseCount} sandboxes`} and delete`",
+    "to": "`销毁 ${deleteBlastRadius.reusableSandboxLeaseCount === 1 ? \"1 个沙箱\" : `${deleteBlastRadius.reusableSandboxLeaseCount} 个沙箱`}并删除`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "`${resultCheckedFiles.size} file${resultCheckedFiles.size === 1 ? \"\" : \"s\"} exported as ${result.rootPath}.zip`",
+    "to": "`${resultCheckedFiles.size} 个文件${resultCheckedFiles.size === 1 ? \"\" : \"\"}已导出为 ${result.rootPath}.zip`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "`Export ${selectedCount.toLocaleString()} file${selectedCount === 1 ? \"\" : \"s\"}`",
+    "to": "`导出 ${selectedCount.toLocaleString()} 个文件${selectedCount === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`Uploading part ${currentPart} of ${progress.totalParts} — ${formatMegabytes(progress.uploadedBytes)} of ${formatMegabytes(progress.totalBytes)} uploaded.`",
+    "to": "`正在上传第 ${currentPart} / ${progress.totalParts} 个分片；已上传 ${formatMegabytes(progress.uploadedBytes)} / ${formatMegabytes(progress.totalBytes)}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`Part ${part.index + 1} of ${manifest.parts.length} failed to upload.`",
+    "to": "`第 ${part.index + 1} / ${manifest.parts.length} 个分片上传失败。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`${failureCount} item${failureCount === 1 ? \"\" : \"s\"} failed to activate; the rest were activated.`",
+    "to": "`${failureCount} 项内容${failureCount === 1 ? \"\" : \"\"}启用失败；其他内容已启用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`Activate selected (${pendingCount})`",
+    "to": "`启用所选项目（${pendingCount}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`${formatTransferProgress(transferProgress)} An interrupted upload resumes from the finished parts.`",
+    "to": "`${formatTransferProgress(transferProgress)} 上传中断后会从已完成的分片处继续。`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`Uploading and analyzing your package${\n                    localCompressedBytes !== null ? ` (${formatMegabytes(localCompressedBytes)} zip)` : \"\"\n                  } — large packages can take a few minutes. Keep this page open.`",
+    "to": "`正在上传并分析软件包${\n                    localCompressedBytes !== null ? ` (${formatMegabytes(localCompressedBytes)} zip)` : \"\"\n                  }；大型软件包可能需要几分钟，请保持此页面打开。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "`Import ${selectedCount} file${selectedCount === 1 ? \"\" : \"s\"}`",
+    "to": "`导入 ${selectedCount} 个文件${selectedCount === 1 ? \"\" : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "`${seconds}s ago`",
+    "to": "`${seconds} 秒前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "`${minutes}m ago`",
+    "to": "`${minutes} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "`${hours}h ago`",
+    "to": "`${hours} 小时前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/PluginSettings.tsx",
+    "from": "`${days}d ago`",
+    "to": "`${days} 天前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Request failed: ${error.status}`",
+    "to": "`请求失败：${error.status}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${seconds}s ago`",
+    "to": "`${seconds} 秒前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${minutes}m ago`",
+    "to": "`${minutes} 分钟前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${hours}h ago`",
+    "to": "`${hours} 小时前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${days}d ago`",
+    "to": "`${days} 天前`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Vault: ${vault}`",
+    "to": "`密钥库：${vault}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Reference: ${secret.externalRef}`",
+    "to": "`引用：${secret.externalRef}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${provider.label} does not support Paperclip-managed secret values.`",
+    "to": "`${provider.label}不支持 Paperclip 托管的密钥值。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${provider.label} does not support linked external references.`",
+    "to": "`${provider.label}不支持关联外部引用。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Deployment default ${provider.label} is not configured.`",
+    "to": "`部署默认的 ${provider.label}尚未配置。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${provider.label} health check failed: ${healthEntry.message}`",
+    "to": "`${provider.label}健康检查失败：${healthEntry.message}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Using selected provider vault. Deployment default ${provider.label} is not configured.`",
+    "to": "`正在使用所选服务商密钥库。部署默认的 ${provider.label}尚未配置。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Secret ${updated.status}`",
+    "to": "`密钥${statusLabel(updated.status)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`User-provided secret ${updated.status}`",
+    "to": "`用户自备密钥${statusLabel(updated.status)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${removed.displayName} was removed from Paperclip only.`",
+    "to": "`${removed.displayName}已从 Paperclip 中移除，远程数据不受影响。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Actions for ${name}`",
+    "to": "`操作：${name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "` · searching everywhere, not just ${folderPath}`",
+    "to": "` · 正在搜索所有位置，而不只是 ${folderPath}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Updated: ${formatRelative(row.secret.updatedAt)}`",
+    "to": "`更新时间：${formatRelative(row.secret.updatedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Last rotated: ${formatRelative(row.secret.lastRotatedAt)}`",
+    "to": "`上次轮换：${formatRelative(row.secret.lastRotatedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Last resolved: ${formatRelative(row.secret.lastResolvedAt)}`",
+    "to": "`上次解析：${formatRelative(row.secret.lastResolvedAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Updated: ${formatRelative(row.definition.updatedAt)}\\nLast resolved: user values resolve per member`",
+    "to": "`更新时间：${formatRelative(row.definition.updatedAt)}\\n上次解析：用户密钥按成员分别解析`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`More actions for ${selectedSecret.name}`",
+    "to": "`更多操作：${selectedSecret.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Usage (${usageQuery.data.bindings.length})`",
+    "to": "`使用情况（${usageQuery.data.bindings.length}）`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`More actions for ${selectedDefinition.name}`",
+    "to": "`更多操作：${selectedDefinition.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${usageDialogSecret.name} is referenced by ${usageDialogSecret.referenceCount ?? 0} ${\n                    (usageDialogSecret.referenceCount ?? 0) === 1 ? \"place\" : \"places\"\n                  }.`",
+    "to": "`${usageDialogSecret.name}的引用数为 ${usageDialogSecret.referenceCount ?? 0} ${\n                    (usageDialogSecret.referenceCount ?? 0) === 1 ? \"处\" : \"处\"\n                  }。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Filters: ${activeFilterCount}`",
+    "to": "`筛选条件：${activeFilterCount}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${summary.configuredCount}/${summary.configuredCount + summary.missingCount + summary.inactiveCount} set`",
+    "to": "`${summary.configuredCount}/${summary.configuredCount + summary.missingCount + summary.inactiveCount} 已设置`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${summary.missingCount} miss`",
+    "to": "`${summary.missingCount} 缺失`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${summary.missingCount} missing`",
+    "to": "`${summary.missingCount} 缺失`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${detail.name} already has an env var named ${key}.`",
+    "to": "`${detail.name}已有同名环境变量：${key}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${agent.name} now receives ${variables.key}`",
+    "to": "`${agent.name}现在可接收 ${variables.key}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`Remove access for ${agent.name}`",
+    "to": "`移除访问权限：${agent.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "`${secret.referenceCount ?? 0} bindings`",
+    "to": "`${secret.referenceCount ?? 0} 个绑定`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "              Exporting {selectedCount.toLocaleString()} of {totalFiles.toLocaleString()} file{totalFiles === 1 ? \"\" : \"s\"}",
+    "to": "              Exporting {selectedCount.toLocaleString()} of {totalFiles.toLocaleString()} file{totalFiles === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyExport.tsx",
+    "from": "                {warnings.length} warning{warnings.length === 1 ? \"\" : \"s\"}",
+    "to": "                {warnings.length} warning{warnings.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {conflicts.length} item{conflicts.length === 1 ? \"\" : \"s\"}",
+    "to": "            {conflicts.length} item{conflicts.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {agents.length} agent{agents.length === 1 ? \"\" : \"s\"}",
+    "to": "            {agents.length} agent{agents.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {result.company.name}: {result.agents.length} agent{result.agents.length === 1 ? \"\" : \"s\"},{\" \"}",
+    "to": "            {result.company.name}: {result.agents.length} agent{result.agents.length === 1 ? \"\" : \"\"},{\" \"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {skillResults.length} skill{skillResults.length === 1 ? \"\" : \"s\"},{\" \"}",
+    "to": "            {skillResults.length} skill{skillResults.length === 1 ? \"\" : \"\"},{\" \"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {result.projects.length} project{result.projects.length === 1 ? \"\" : \"s\"}, and{\" \"}",
+    "to": "            {result.projects.length} project{result.projects.length === 1 ? \"\" : \"\"}, and{\" \"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "            {result.routines.length} routine{result.routines.length === 1 ? \"\" : \"s\"} processed.",
+    "to": "            {result.routines.length} routine{result.routines.length === 1 ? \"\" : \"\"} processed.",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "                  {Object.keys(localPackage.files).length === 1 ? \"\" : \"s\"}",
+    "to": "                  {Object.keys(localPackage.files).length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "                {selectedCount} / {totalFiles} file{totalFiles === 1 ? \"\" : \"s\"} selected",
+    "to": "                {selectedCount} / {totalFiles} file{totalFiles === 1 ? \"\" : \"\"} selected",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "                  {conflicts.length} conflict{conflicts.length === 1 ? \"\" : \"s\"}",
+    "to": "                  {conflicts.length} conflict{conflicts.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyImport.tsx",
+    "from": "                  {importPreview.errors.length} error{importPreview.errors.length === 1 ? \"\" : \"s\"}",
+    "to": "                  {importPreview.errors.length} error{importPreview.errors.length === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "              {preview.candidates.length} candidate{preview.candidates.length === 1 ? \"\" : \"s\"} from{\" \"}",
+    "to": "              {preview.candidates.length} candidate{preview.candidates.length === 1 ? \"\" : \"\"} from{\" \"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "              {preview.sampledSecretCount} sampled secret{preview.sampledSecretCount === 1 ? \"\" : \"s\"}",
+    "to": "              {preview.sampledSecretCount} sampled secret{preview.sampledSecretCount === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "              {candidate.sampleCount} sample{candidate.sampleCount === 1 ? \"\" : \"s\"}",
+    "to": "              {candidate.sampleCount} sample{candidate.sampleCount === 1 ? \"\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "        Coverage is counts only across {total} member{total === 1 ? \"\" : \"s\"}. Secret values are never shown here.",
+    "to": "        Coverage is counts only across {total} member{total === 1 ? \"\" : \"\"}. Secret values are never shown here.",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "function statusLabel(status: SecretStatus) {\n  return status.charAt(0).toUpperCase() + status.slice(1);\n}",
+    "to": "function statusLabel(status: SecretStatus) {\n  const labels: Record<string, string> = { active: \"已启用\", disabled: \"已停用\", archived: \"已归档\", deleted: \"已删除\" };\n  return labels[status] ?? status.charAt(0).toUpperCase() + status.slice(1);\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "{providerLabel(providers, selectedSecret.provider)} secret {selectedSecret.key}",
+    "to": "{providerLabel(providers, selectedSecret.provider)} 密钥 {selectedSecret.key}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "              Finished\n",
+    "to": "              完成配置\n",
+    "expected": 1
+  }
+]

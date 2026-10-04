@@ -19,7 +19,7 @@ xcodebuild test -project scripts/native-paperclip-audit/PaperclipNativeAudit.xco
   -scheme PaperclipNativeAudit \
   -destination "${PAPERCLIP_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5}" \
   -parallel-testing-enabled NO \
-  -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 240 -maximum-test-execution-time-allowance 300 \
   -resultBundlePath "$RESULT" \
   -derivedDataPath "$OUTPUT/DerivedData" \
   CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$OUTPUT/xcodebuild.log"

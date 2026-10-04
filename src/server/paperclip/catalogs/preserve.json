@@ -1,0 +1,1335 @@
+{
+  "/absolute/path/to/AGENTS.md": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/claude-local/config-fields.tsx",
+      "ui/src/adapters/codex-local/config-fields.tsx",
+      "ui/src/adapters/cursor/config-fields.tsx",
+      "ui/src/adapters/gemini-local/config-fields.tsx",
+      "ui/src/adapters/grok-local/config-fields.tsx",
+      "ui/src/adapters/kimi-local/config-fields.tsx",
+      "ui/src/adapters/opencode-local/config-fields.tsx",
+      "ui/src/adapters/pi-local/config-fields.tsx"
+    ]
+  },
+  "Claude CLI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/claude-local/config-fields.tsx"
+    ]
+  },
+  "ACP": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/claude-local/config-fields.tsx",
+      "ui/src/adapters/codex-local/config-fields.tsx",
+      "ui/src/adapters/gemini-local/config-fields.tsx"
+    ]
+  },
+  "claude-agent-acp": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/adapters/claude-local/config-fields.tsx"
+    ]
+  },
+  "/path/to/acp-state": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/claude-local/config-fields.tsx",
+      "ui/src/adapters/codex-local/config-fields.tsx",
+      "ui/src/adapters/gemini-local/config-fields.tsx"
+    ]
+  },
+  "Codex CLI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "Codex": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx",
+      "ui/src/components/onboarding/ConnectModelPreview.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "OpenCode 1.18.32": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "Claude Managed": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "AWS AgentCore": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "Grok Build": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "managed-primary": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "agentcore-primary": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "codex-acp": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/adapters/codex-local/config-fields.tsx"
+    ]
+  },
+  "Gemini CLI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/adapters/gemini-local/config-fields.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "gemini --acp": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/adapters/gemini-local/config-fields.tsx"
+    ]
+  },
+  "http://127.0.0.1:8642": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/hermes-gateway/config-fields.tsx"
+    ]
+  },
+  "http://127.0.0.1:3100": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/hermes-gateway/config-fields.tsx"
+    ]
+  },
+  "{\"x-custom-header\": \"value\"}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/hermes-gateway/config-fields.tsx",
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "https://...": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/http/config-fields.tsx",
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "ws://127.0.0.1:18789": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx",
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "agent-123": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "paperclip": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "operator": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "operator.admin": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "https://paperclip.example": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "~/.openclaw/workspace/paperclip-claimed-api-key.json": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/openclaw-gateway/config-fields.tsx"
+    ]
+  },
+  "{ \"services\": [ { \"name\": \"preview\", \"lifecycle\": \"ephemeral\", \"metadata\": { \"purpose\": \"remote preview\" } } ] }": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/runtime-json-fields.tsx"
+    ]
+  },
+  "{ \"agentId\": \"remote-agent-123\", \"metadata\": { \"team\": \"platform\" } }": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/adapters/runtime-json-fields.tsx"
+    ]
+  },
+  "Paperclip Computer": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/AgentConfigForm.tsx"
+    ]
+  },
+  "/path/to/project": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/AgentConfigForm.tsx"
+    ]
+  },
+  "v": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/AgentSecretAccessEditor.tsx",
+      "ui/src/components/SecretBindingPicker.tsx",
+      "ui/src/components/environment-variables-editor/Row.tsx",
+      "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+      "ui/src/pages/AdapterManager.tsx",
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.tsx",
+      "ui/src/pages/PluginSettings.tsx",
+      "ui/src/pages/PluginSettings.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/SkillStudio.tsx",
+      "ui/src/pages/SkillStudio.tsx",
+      "ui/src/pages/StatusCards/StatusCardDetailDrawer.tsx"
+    ]
+  },
+  "true": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/CaseFieldsPanel.tsx"
+    ]
+  },
+  "&ldquo;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/CommandPalette.tsx",
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/components/environment-variables-editor/SecretPicker.tsx",
+      "ui/src/components/search/ZeroResultsRecovery.tsx"
+    ]
+  },
+  "C": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/components/CommandPalette.tsx"
+    ]
+  },
+  "g f": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/components/CommandPalette.tsx"
+    ]
+  },
+  "YAML": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/FrontmatterPanel.tsx"
+    ]
+  },
+  "description": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/FrontmatterPanel.tsx"
+    ]
+  },
+  "allowed-tools": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/FrontmatterPanel.tsx"
+    ]
+  },
+  "metadata": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/FrontmatterPanel.tsx"
+    ]
+  },
+  "Paperclip": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/IssueChatThread.tsx",
+      "ui/src/components/IssueRecoveryActionCard.tsx",
+      "ui/src/components/PaperclipLockup.tsx",
+      "ui/src/components/StandaloneBrowserControls.tsx",
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.tsx"
+    ]
+  },
+  "&middot;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/IssueRow.tsx",
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx"
+    ]
+  },
+  "Esc": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/components/KeyboardShortcutsCheatsheet.tsx"
+    ]
+  },
+  "&rsaquo;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/NewGoalDialog.tsx",
+      "ui/src/components/NewIssueDialog.tsx"
+    ]
+  },
+  "&times;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/NewGoalDialog.tsx",
+      "ui/src/components/NewIssueDialog.tsx"
+    ]
+  },
+  "ANTHROPIC_API_KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "Respond with hello.": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "CURSOR_API_KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "GEMINI_API_KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "KIMI_MODEL_NAME + KIMI_MODEL_API_KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "OPENAI_API_KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx",
+      "ui/src/components/SecretBindingPicker.tsx"
+    ]
+  },
+  "agent login": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "codex login": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "gemini auth": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "kimi login": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "opencode auth login": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "claude login": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/OnboardingWizard.tsx"
+    ]
+  },
+  "OpenCode": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/OpenCodeLogoIcon.tsx",
+      "ui/src/components/OpenCodeLogoIcon.tsx",
+      "ui/src/components/new-agent/AgentBasicsDialog.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "macOS": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/PathInstructionsModal.tsx"
+    ]
+  },
+  "Windows": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/PathInstructionsModal.tsx"
+    ]
+  },
+  "Linux": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/PathInstructionsModal.tsx"
+    ]
+  },
+  "&rdquo;?": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx"
+    ]
+  },
+  "HTTPS": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx"
+    ]
+  },
+  "/absolute/path/to/workspace": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "origin/main": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+      "ui/src/pages/ProjectWorkspaceDetail.tsx",
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "{{issue.identifier}}-{{slug}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx"
+    ]
+  },
+  ".paperclip/worktrees": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx"
+    ]
+  },
+  "bash ./scripts/provision-worktree.sh": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx"
+    ]
+  },
+  "bash ./scripts/provision-worktree-runtime.sh": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx"
+    ]
+  },
+  "bash ./scripts/teardown-worktree.sh": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/components/ProjectProperties.tsx",
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx"
+    ]
+  },
+  "⌘S": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/components/RoutineSaveBar.tsx"
+    ]
+  },
+  "Webhook": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/RoutineTriggerCard.tsx",
+      "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+      "ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
+      "ui/src/pages/apps/chat/EmailEndpointSetup.tsx"
+    ]
+  },
+  "API": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/RoutineTriggerCard.tsx"
+    ]
+  },
+  "{{name}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/RoutineVariablesEditor.tsx"
+    ]
+  },
+  "{{variable_name}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/RoutineVariablesEditor.tsx"
+    ]
+  },
+  "&quot;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/components/RunnerInspector.tsx",
+      "ui/src/components/RunnerInspector.tsx"
+    ]
+  },
+  "null": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/RunnerInspector.tsx"
+    ]
+  },
+  "SHA": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/SidebarAccountMenu.production.tsx",
+      "ui/src/components/SidebarAccountMenu.tsx"
+    ]
+  },
+  "text-muted-foreground": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/SystemNotice.tsx"
+    ]
+  },
+  "text-sky-800 dark:text-sky-200": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/SystemNotice.tsx"
+    ]
+  },
+  "text-emerald-800 dark:text-emerald-200": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/SystemNotice.tsx"
+    ]
+  },
+  "text-amber-900 dark:text-amber-200": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/SystemNotice.tsx"
+    ]
+  },
+  "text-red-900 dark:text-red-200": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/SystemNotice.tsx"
+    ]
+  },
+  "/Users/yourname/Documents/project": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/agent-config-primitives.tsx"
+    ]
+  },
+  "Shift": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/components/agent-config-primitives.tsx"
+    ]
+  },
+  "C:\\Users\\yourname\\Documents\\project": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/agent-config-primitives.tsx"
+    ]
+  },
+  "Markdown": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/artifacts/RichArtifactCards.tsx"
+    ]
+  },
+  "CSV ·": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/artifacts/RichArtifactCards.tsx"
+    ]
+  },
+  "secret_name": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx"
+    ]
+  },
+  "KEY": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/environment-variables-editor/Row.tsx"
+    ]
+  },
+  "Claude (ACPX)": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/AgentBasicsDialog.tsx"
+    ]
+  },
+  "Grok Build (ACPX)": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/AgentBasicsDialog.tsx"
+    ]
+  },
+  "Cursor Cloud": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Hermes Gateway": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Paperclip Runner": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+      "ui/src/pages/InstanceExperimentalSettings.tsx"
+    ]
+  },
+  "OpenRouter": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx"
+    ]
+  },
+  "OpenAI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx",
+      "ui/src/connect-flow-preview-main.tsx"
+    ]
+  },
+  "Anthropic": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx"
+    ]
+  },
+  "https://hermes.example.com": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx"
+    ]
+  },
+  "kimi-for-coding": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx"
+    ]
+  },
+  "https://github.com/your-org/repo": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/components/new-agent/NewAgentSetup.tsx"
+    ]
+  },
+  "Claude Code": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/onboarding/ConnectModelPreview.tsx",
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "UTC": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/routine-triggers/RoutineTriggers.tsx"
+    ]
+  },
+  "GitHub": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/routine-triggers/TriggerWizard.tsx",
+      "ui/src/components/routine-triggers/TriggerWizard.tsx",
+      "ui/src/lib/external-objects.ts",
+      "ui/src/lib/external-objects.ts",
+      "ui/src/lib/external-objects.ts",
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.tsx",
+      "ui/src/pages/CompanySkills.tsx"
+    ]
+  },
+  "bg-(--chip-match-title-bg) text-(--chip-match-title-fg) border-(--chip-match-title-border)": {
+    "reason": "样式令牌（提取器的保守候选，不是显示文案）",
+    "files": [
+      "ui/src/components/search/MatchSourceChip.tsx"
+    ]
+  },
+  "Pi": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Kimi Code": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Cursor": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Grok CLI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "Hermes CLI": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "HTTP": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "OpenClaw Gateway": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx"
+    ]
+  },
+  "MCP": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/components/task-chat/tool-taxonomy.ts"
+    ]
+  },
+  "Claude": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/connect-flow-preview-main.tsx"
+    ]
+  },
+  "Vercel Connect": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/features/connections/ConnectionSetupFlow.tsx"
+    ]
+  },
+  "https://mcp.zapier.com/api/v1/connect?token=…": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/features/connections/ConnectionSetupFlow.tsx",
+      "ui/src/features/connections/ConnectionSetupFlow.tsx"
+    ]
+  },
+  "https://example.com/actions": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/features/connections/ConnectionSetupFlow.tsx"
+    ]
+  },
+  "https://docs.google.com/spreadsheets/d/...": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/features/connections/ConnectionSetupFlow.tsx",
+      "ui/src/pages/apps/app-detail/SetupPanel.tsx"
+    ]
+  },
+  "Arcade-User-ID": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/features/connections/remote-mcp/RemoteMcpConnectionSetup.tsx"
+    ]
+  },
+  "HubSpot": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/lib/external-objects.ts"
+    ]
+  },
+  "Linear": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/lib/external-objects.ts"
+    ]
+  },
+  "Jira": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/lib/external-objects.ts"
+    ]
+  },
+  "Notion": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/lib/external-objects.ts"
+    ]
+  },
+  "Asana": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/lib/external-objects.ts"
+    ]
+  },
+  "/mnt/e/Projects/my-adapter or E:\\Projects\\my-adapter": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/AdapterManager.tsx"
+    ]
+  },
+  "my-paperclip-adapter": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/AdapterManager.tsx"
+    ]
+  },
+  "/absolute/path/to/agent/prompts": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx"
+    ]
+  },
+  "TOOLS.md": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx"
+    ]
+  },
+  "&rarr;": {
+    "reason": "HTML 标点实体",
+    "files": [
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx",
+      "ui/src/pages/AgentDetail.tsx",
+      "ui/src/pages/CompanyImport.tsx",
+      "ui/src/pages/CompanyImport.tsx"
+    ]
+  },
+  "ID": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx"
+    ]
+  },
+  "KB": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/AgentDetail.production.tsx",
+      "ui/src/pages/AgentDetail.tsx"
+    ]
+  },
+  "/costs": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/ApprovalDetail.tsx"
+    ]
+  },
+  "paperclipai cli": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/pages/CliAuth.tsx"
+    ]
+  },
+  "SSH": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/CompanyEnvironments.tsx"
+    ]
+  },
+  "/Users/paperclip/workspace": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/CompanyEnvironments.tsx"
+    ]
+  },
+  "https://github.com/owner/repo/tree/main/company": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/CompanyImport.tsx"
+    ]
+  },
+  "skills.sh": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.tsx",
+      "ui/src/pages/CompanySkills.tsx"
+    ]
+  },
+  "SKILL.md": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/CompanySkills.production.tsx",
+      "ui/src/pages/CompanySkills.tsx"
+    ]
+  },
+  "PAP-946-workspace": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx"
+    ]
+  },
+  "https://github.com/org/repo": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "pkill -f vite || true": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx",
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "{ \"commands\": [ { \"id\": \"web\", \"name\": \"web\", \"kind\": \"service\", \"command\": \"pnpm dev\", \"cwd\": \".\", \"port\": { \"type\": \"auto\" } }, { \"id\": \"db-migrate\", \"name\": \"db:migrate\", \"kind\": \"job\", \"command\": \"pnpm db:migrate\", \"cwd\": \".\" } ] }": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/ExecutionWorkspaceDetail.tsx"
+    ]
+  },
+  "POST": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/InviteLanding.tsx"
+    ]
+  },
+  "j": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/Pipelines.tsx"
+    ]
+  },
+  "k": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/Pipelines.tsx"
+    ]
+  },
+  "Enter": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/Pipelines.tsx"
+    ]
+  },
+  "a": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/Pipelines.tsx"
+    ]
+  },
+  "· v": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/PluginManager.tsx"
+    ]
+  },
+  "PID": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/PluginSettings.tsx"
+    ]
+  },
+  "/absolute/path/to/folder": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/PluginSettings.tsx"
+    ]
+  },
+  "frontend": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "codespaces": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "workspace-123": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "pnpm install && pnpm dev": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "{ \"commands\": [ { \"id\": \"web\", \"name\": \"web\", \"kind\": \"service\", \"command\": \"pnpm dev\", \"cwd\": \".\", \"port\": { \"type\": \"auto\" }, \"readiness\": { \"type\": \"http\", \"urlTemplate\": \"http://127.0.0.1:${port}\" }, \"expose\": { \"type\": \"url\", \"urlTemplate\": \"http://127.0.0.1:${port}\" }, \"lifecycle\": \"shared\", \"reuseScope\": \"project_workspace\" }, { \"id\": \"db-migrate\", \"name\": \"db:migrate\", \"kind\": \"job\", \"command\": \"pnpm db:migrate\", \"cwd\": \".\" } ] }": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/ProjectWorkspaceDetail.tsx"
+    ]
+  },
+  "⌘K": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/Search.tsx"
+    ]
+  },
+  "clientsecret": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "/dev/foo/bar": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "arn:aws:secretsmanager:...": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "PERSONAL_GH_TOKEN": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/secrets/UserSecretDefinitionsTab.tsx"
+    ]
+  },
+  "us-east-1": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "production": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx",
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "alias/paperclip-secrets": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "platform": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "prod": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "paperclip-prod": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "global": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "https://vault.example.com": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "admin": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "secret": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "paperclip/prod": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "secret_provider_config.discovery.preview": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "aws_secrets_manager": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "draft_config": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "secret.create": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "MY_SECRET": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/Secrets.tsx"
+    ]
+  },
+  "https://github.com/owner/repository": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillSources.tsx"
+    ]
+  },
+  "code-review": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "references/examples": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx",
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "references/examples.md": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "onboarding/happy-path": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{skillName}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{skillKey}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{skillInvocation}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{skillVersion}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{runId}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{issueId}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "{{outputDocumentKey}}": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/SkillStudio.tsx"
+    ]
+  },
+  "ssh.railway.com ssh-ed25519 …": {
+    "reason": "可复制命令、原始探测提示或密钥示例",
+    "files": [
+      "ui/src/pages/apps/app-detail/RailwayAccessPanel.tsx"
+    ]
+  },
+  "/status": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/apps/chat/ChatEndpointSetup.tsx"
+    ]
+  },
+  "/new": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/apps/chat/ChatEndpointSetup.tsx"
+    ]
+  },
+  "/close": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/apps/chat/ChatEndpointSetup.tsx"
+    ]
+  },
+  "Microsoft Teams": {
+    "reason": "品牌、产品或模型名称",
+    "files": [
+      "ui/src/pages/apps/chat/ChatEndpointSetup.tsx"
+    ]
+  },
+  "GitHub ID": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/apps/chat/GitHubChatSetup.tsx"
+    ]
+  },
+  "audit:view_agent_actions": {
+    "reason": "权限标识",
+    "files": [
+      "ui/src/pages/audit/AuditFeed.production.tsx",
+      "ui/src/pages/audit/AuditFeed.tsx"
+    ]
+  },
+  "dev/github": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/secrets/proposal-review.tsx"
+    ]
+  },
+  "client-secret": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/secrets/proposal-review.tsx"
+    ]
+  },
+  "p": {
+    "reason": "原始键盘快捷键",
+    "files": [
+      "ui/src/pages/tools/ProfilesTab.tsx"
+    ]
+  },
+  "ms": {
+    "reason": "协议、格式、单位或配置标识",
+    "files": [
+      "ui/src/pages/tools/SmokeLabTab.tsx"
+    ]
+  },
+  "https://mcp.example.com": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/tools/connection-dialogs.tsx"
+    ]
+  },
+  "vault://": {
+    "reason": "路径、地址、结构化示例或占位符",
+    "files": [
+      "ui/src/pages/tools/connection-dialogs.tsx"
+    ]
+  },
+  "application/octet-stream": {
+    "reason": "MIME 类型",
+    "files": [
+      "ui/src/components/NewIssueDialog.tsx"
+    ]
+  },
+  "high, medium, low": {
+    "reason": "协议枚举示例",
+    "files": [
+      "ui/src/components/RoutineVariablesEditor.tsx"
+    ]
+  },
+  "PAPERCLIP_*": {
+    "reason": "受保护的环境变量前缀",
+    "files": [
+      "ui/src/components/StageSecretsPanel.tsx",
+      "ui/src/components/routine-sections/editable-sections.production.tsx",
+      "ui/src/components/routine-sections/editable-sections.tsx"
+    ]
+  },
+  "@paperclipai/plugin-example": {
+    "reason": "npm 包名示例",
+    "files": [
+      "ui/src/pages/PluginManager.tsx"
+    ]
+  }
+}

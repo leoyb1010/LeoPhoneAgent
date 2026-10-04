@@ -211,6 +211,12 @@ enum PaperclipIssueStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { PaperclipLabels.status(rawValue) }
 }
+enum PaperclipPollingPolicy {
+    static func canRefresh(active: Bool, statusSheetOpen: Bool, replyFocused: Bool) -> Bool {
+        active && !statusSheetOpen && !replyFocused
+    }
+}
+
 struct PaperclipStatusExpectation: Codable {
     let status: PaperclipIssueStatus
     let userID: String

@@ -1,0 +1,194 @@
+[
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "[\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"]",
+    "to": "[\"星期日\", \"星期一\", \"星期二\", \"星期三\", \"星期四\", \"星期五\", \"星期六\"]",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "\"every day\"",
+    "to": "\"每天\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "\"every weekday\"",
+    "to": "\"每个工作日\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "\"every weekend\"",
+    "to": "\"每逢周末\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`every ${names[0]}`",
+    "to": "`每${names[0]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`every ${names.slice(0, -1).join(\", \")} and ${names[names.length - 1]}`",
+    "to": "`每${names.slice(0, -1).join(\"、\")}和${names[names.length - 1]}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`Every ${everyMinutes[1]} minutes`",
+    "to": "`每 ${everyMinutes[1]} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`Every ${everyHours[1]} hours at :${pad2(Number(minute))}`",
+    "to": "`每 ${everyHours[1]} 小时的第 ${pad2(Number(minute))} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`Every hour at :${pad2(Number(minute))}`",
+    "to": "`每小时的第 ${pad2(Number(minute))} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`Every day at ${time}`",
+    "to": "`每天 ${time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`${dowText[0].toUpperCase()}${dowText.slice(1)} at ${time}`",
+    "to": "`${dowText[0].toUpperCase()}${dowText.slice(1)} ${time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/cron-readable.ts",
+    "from": "`Day ${dom} of every month at ${time}`",
+    "to": "`每月 ${dom} 日 ${time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-monitor.ts",
+    "from": "`Today, ${time}`",
+    "to": "`今天，${time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-monitor.ts",
+    "from": "`${weekday} ${date}, ${time}`",
+    "to": "`${date} ${weekday}，${time}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-monitor.ts",
+    "from": "`${datePart}, ${timePart}`",
+    "to": "`${datePart}，${timePart}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${weeks} week${weeks === 1 ? \"\" : \"s\"} visible`",
+    "to": "`可见范围 ${weeks} 周`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${days} day${days === 1 ? \"\" : \"s\"} visible`",
+    "to": "`可见范围 ${days} 天`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${days}d${hours > 0 ? ` ${hours}h` : \"\"} visible`",
+    "to": "`可见范围 ${days} 天${hours > 0 ? ` ${hours} 小时` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${hours} hour${hours === 1 ? \"\" : \"s\"} visible`",
+    "to": "`可见范围 ${hours} 小时`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${Math.floor(rounded / 60)}h ${rounded % 60}m visible`",
+    "to": "`可见范围 ${Math.floor(rounded / 60)} 小时 ${rounded % 60} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "`${rounded} minutes visible`",
+    "to": "`可见范围 ${rounded} 分钟`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "`Project ${target.id.slice(0, 8)}`",
+    "to": "`项目 ${target.id.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "`Root issue ${target.id.slice(0, 8)}`",
+    "to": "`根任务 ${target.id.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "`Issue ${target.id.slice(0, 8)}`",
+    "to": "`任务 ${target.id.slice(0, 8)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "\"No boundary selected\"",
+    "to": "\"未选择边界\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "`${countBoundaryTargets(boundary)} boundaries`",
+    "to": "`${countBoundaryTargets(boundary)} 个边界`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "\"Promoted from low-trust\"",
+    "to": "\"已从低信任来源提升\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "\"Low-trust source\"",
+    "to": "\"低信任来源\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SourceTrustBadge.tsx",
+    "from": "const tooltip = promoted",
+    "to": "const artifactDisplayLabel = { comment: \"评论\", document: \"文档\", \"work product\": \"工作成果\", content: \"内容\" }[artifactLabel];\n  const tooltip = promoted",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SourceTrustBadge.tsx",
+    "from": "`Promoted from low-trust${sourceTrust.promotedAt ? ` on ${new Date(sourceTrust.promotedAt).toLocaleString()}` : \"\"}.`",
+    "to": "`已从低信任来源提升${sourceTrust.promotedAt ? `，时间：${new Date(sourceTrust.promotedAt).toLocaleString()}` : \"\"}。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SourceTrustBadge.tsx",
+    "from": "`Authored by a low-trust review agent. Raw ${artifactLabel} is not auto-shared with higher-trust agents.`",
+    "to": "`由低信任审查智能体编写。原始${artifactDisplayLabel}不会自动共享给较高信任级别的智能体。`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-monitor.ts",
+    "from": "export function formatMonitorEtaLabel(nextCheckAt: MonitorDate, now: MonitorDate = new Date()): string {\n  const eta = formatMonitorEta(nextCheckAt, now);\n  return `${eta.charAt(0).toUpperCase()}${eta.slice(1)}`;\n}",
+    "to": "/** Convert a raw monitor status phrase only at the presentation boundary. */\nexport function displayMonitorEta(raw: string): string {\n  const duration = (value: string) => value.replace(/(\\d+)d\\b/g, \"$1 天\").replace(/(\\d+)h\\b/g, \"$1 小时\").replace(/(\\d+)m\\b/g, \"$1 分钟\").replace(/(\\d+)s\\b/g, \"$1 秒\");\n  if (raw === \"due now\" || raw === \"now\") return \"现在到期\";\n  if (raw.startsWith(\"in \")) return `${duration(raw.slice(3))}后`;\n  if (raw.startsWith(\"overdue by \")) return `已逾期 ${duration(raw.slice(11))}`;\n  if (raw.endsWith(\" ago\")) return `${duration(raw.slice(0, -4))}前`;\n  return duration(raw);\n}\nexport function formatMonitorEtaLabel(nextCheckAt: MonitorDate, now: MonitorDate = new Date()): string {\n  return displayMonitorEta(formatMonitorEta(nextCheckAt, now));\n}",
+    "expected": 1
+  }
+]

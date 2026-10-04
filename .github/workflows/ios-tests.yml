@@ -96,6 +96,75 @@ jobs:
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
 
+  paperclip-chinese-server:
+    name: Paperclip 中文服务源码、构建与界面
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Enable pinned upstream package manager
+        run: corepack enable
+      - name: Prepare pinned Chinese source and verify native API evidence
+        run: |
+          set -euo pipefail
+          bash src/server/paperclip/scripts/prepare.sh "$RUNNER_TEMP/paperclip-zh"
+          python3 scripts/PaperclipUpstreamContractAudit.py "$RUNNER_TEMP/paperclip-zh"
+      - name: Test localization, compile UI and exercise Chinese pages
+        run: bash src/server/paperclip/scripts/check-upstream.sh "$RUNNER_TEMP/paperclip-zh"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: paperclip-chinese-server
+          path: src/server/paperclip/reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  paperclip-real-server:
+    name: Paperclip 真实认证与任务 HTTP 烟测
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: paperclip
+          POSTGRES_PASSWORD: paperclip-ci-only
+          POSTGRES_DB: paperclip
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U paperclip -d paperclip"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PAPERCLIP_ALLOW_EPHEMERAL_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - name: Prepare official pinned source and dependencies
+        run: |
+          set -euo pipefail
+          corepack enable
+          bash src/server/paperclip/scripts/prepare.sh "$RUNNER_TEMP/paperclip-http"
+          cd "$RUNNER_TEMP/paperclip-http"
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm --filter @paperclipai/plugin-sdk build
+      - name: Test real Better Auth, tasks and deterministic process adapter
+        env:
+          DATABASE_URL: postgresql://paperclip:paperclip-ci-only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/paperclip
+        run: bash scripts/paperclip-runtime/run.sh "$RUNNER_TEMP/paperclip-http"
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: paperclip-real-server
+          path: paperclip-runtime-results/
+          if-no-files-found: warn
+          retention-days: 14
+
   paperclip-native-ios:
     name: Paperclip 原生 iOS 中文工作区
     runs-on: macos-26
@@ -260,6 +329,7 @@ jobs:
           node scripts/paperclip/typecheck-transport.mjs
           node --import tsx --test packages/desktop/src/main/paperclip/*.test.ts
           node --import tsx --test packages/services/src/paperclip/adapters/*.test.ts
+          node --import tsx --test packages/ui/test/paperclipReplyDraft.test.ts
           pnpm leo:test:agent
           node --import tsx --test $(find packages/desktop/src/host -name '*.test.ts' -print)
           node --import tsx --test packages/server/test/localTaskListController.test.ts packages/server/test/localTaskListHttp.test.ts

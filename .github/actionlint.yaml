@@ -1,0 +1,5 @@
+# actionlint 1.7.7 predates this GitHub-hosted image. Its availability is verified
+# by the existing successful Apple jobs; this only extends static label checking.
+self-hosted-runner:
+  labels:
+    - macos-26

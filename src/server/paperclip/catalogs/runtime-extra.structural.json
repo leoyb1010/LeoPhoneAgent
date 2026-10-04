@@ -1,0 +1,92 @@
+[
+  {
+    "file": "ui/src/components/environment-variables-editor/index.tsx",
+    "from": "`Bind ${secret.name}`",
+    "to": "`绑定 ${secret.name}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/transcript/RunTranscriptView.tsx",
+    "from": "`runtime ${entry.requestType}`",
+    "to": "`运行时 ${entry.requestType}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/transcript/RunTranscriptView.tsx",
+    "from": "`result · ${entry.disposition}`",
+    "to": "`结果 · ${entry.disposition}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/transcript/RunTranscriptView.tsx",
+    "from": "`${uniqueNames.length} tools`",
+    "to": "`${uniqueNames.length} 个工具`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/connect-flow-preview-main.tsx",
+    "from": "`Sign in to ${providerName}`",
+    "to": "`登录 ${providerName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/connect-flow-preview-main.tsx",
+    "from": "`Provide your ${providerName} API key to connect`",
+    "to": "`提供你的 ${providerName} API 密钥以连接`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InviteLanding.tsx",
+    "from": "`Join ${companyDisplayName}`",
+    "to": "`加入 ${companyDisplayName}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/SystemNotice.tsx",
+    "from": "new Date(ts).toLocaleString(undefined, {",
+    "to": "new Date(ts).toLocaleString(\"zh-CN\", {",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "import { AgentCharacter } from \"../components/AgentCharacter\";",
+    "to": "import { displayStatus as localizedStatusText } from \"../i18n/zh-CN\";\nimport { AgentCharacter } from \"../components/AgentCharacter\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "{status.replace(\"_\", \" \")}",
+    "to": "{localizedStatusText(status)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "import { AgentCharacter } from \"../components/AgentCharacter\";",
+    "to": "import { displayStatus as localizedStatusText } from \"../i18n/zh-CN\";\nimport { AgentCharacter } from \"../components/AgentCharacter\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "{status.replace(\"_\", \" \")}",
+    "to": "{localizedStatusText(status)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "`${lastRun.status} · ${relativeTime(lastRun.createdAt)}`",
+    "to": "`${localizedStatusText(lastRun.status)} · ${relativeTime(lastRun.createdAt)}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+    "from": "{label}\n    </span>",
+    "to": "{({\"Trace expired\": \"跟踪已过期\", \"Raw tracing enabled\": \"已启用原始跟踪\", \"Trace captured\": \"跟踪已采集\", \"Trace incomplete\": \"跟踪不完整\", \"Trace truncated\": \"跟踪已截断\", \"Trace deleted\": \"跟踪已删除\", \"Trace requested\": \"已请求跟踪\", \"Trace off\": \"跟踪已关闭\"} as const)[label]}\n    </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/plugins/bridge-init.ts",
+    "from": "createElement(\"div\", { className: \"text-sm text-muted-foreground\" }, \"Loading...\")",
+    "to": "createElement(\"div\", { className: \"text-sm text-muted-foreground\" }, \"正在加载…\")",
+    "expected": 1
+  }
+]
