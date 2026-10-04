@@ -30,6 +30,15 @@ async function api(path, method = "GET", body, authenticated = true) {
   if (!response.ok) throw new Error(`${method} ${path}: HTTP ${response.status}`);
   return data;
 }
+async function expectSignedOut(cookieHeader) {
+  const response = await fetch(base + "/api/auth/get-session", {
+    headers: { Accept:"application/json", ...(cookieHeader ? { Cookie:cookieHeader } : {}) },
+    redirect:"error", signal:AbortSignal.timeout(10000),
+  });
+  // 固定上游的board会话路由对匿名/已注销用户返回401，而不是Better Auth裸接口的null。
+  assert.equal(response.status,401);
+}
+const cookieHeader = () => [...cookies].map(([k,v])=>`${k}=${v}`).join("; ");
 async function record(name, work) { await work(); checks.push({ name, passed: true }); console.log(`PASS ${name}`); }
 async function until(work, accept, limitMs = 60_000) {
   const deadline = Date.now() + limitMs;
@@ -47,8 +56,9 @@ try {
   await record("真实Better Auth注册、注销、登录及人类会话", async () => {
     await api("/api/auth/sign-up/email", "POST", { name: "隔离验证用户", email, password });
     user = (await api("/api/auth/get-session")).user; assert.ok(user.id);
+    const oldSession = cookieHeader();
     await api("/api/auth/sign-out", "POST", {}); cookies.clear();
-    assert.equal(await api("/api/auth/get-session"), null);
+    await expectSignedOut(oldSession);
     await api("/api/auth/sign-in/email", "POST", { email, password });
     assert.equal((await api("/api/auth/get-session")).user.id, user.id);
     await api("/api/bootstrap/claim", "POST", {});
@@ -101,7 +111,10 @@ try {
     const cancelled = await until(()=>api(`/api/heartbeat-runs/${accepted.id}`), r=>["cancelled","succeeded","failed","timed_out"].includes(r.status));
     assert.equal(cancelled.status,"cancelled");
   });
-  await record("注销后会话失效", async () => { await api("/api/auth/sign-out","POST",{}); cookies.clear(); assert.equal(await api("/api/auth/get-session"),null); });
+  await record("注销后旧Cookie会话失效", async () => {
+    const oldSession = cookieHeader();
+    await api("/api/auth/sign-out","POST",{}); cookies.clear(); await expectSignedOut(oldSession);
+  });
   await writeFile(resolve(output,"summary.json"),JSON.stringify({ passed:true, checks, server:"fixed-upstream-real-http", auth:"real-Better-Auth-cookie", execution:"upstream-process-adapter-deterministic-node-command", realProviderUsed:false, productionDeployment:false, nativeRunnerProviderTested:false },null,2));
 } catch (error) {
   await writeFile(resolve(output,"summary.json"),JSON.stringify({passed:false,checks,error:String(error),realProviderUsed:false,productionDeployment:false},null,2));
