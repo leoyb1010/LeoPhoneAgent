@@ -17,7 +17,7 @@ const runs = [
     agentId: "agent-1",
     companyId: "company-1",
     status: "running",
-    agentName: "中文执行者",
+    agentName: "中文智能体",
   },
 ];
 const approvals = [
@@ -26,7 +26,7 @@ const approvals = [
     companyId: "company-1",
     type: "hire_agent",
     status: "pending",
-    payload: { name: "新的执行者" },
+    payload: { name: "新的智能体" },
   },
 ];
 const comments: unknown[] = [];
@@ -56,6 +56,8 @@ const transport: PaperclipTransport = {
   },
   request: async ({ path, method, body }) => {
     const p = path.split("?")[0];
+    if (p === "/api/health")
+      return { status: 200, data: { status: "ok", deploymentMode: "authenticated" } };
     if (p === "/api/auth/get-session")
       return { status: 200, data: loggedIn ? { user: { id: "user-1", name: "测试用户" } } : null };
     if (!loggedIn) return { status: 401, data: null };
@@ -65,9 +67,9 @@ const transport: PaperclipTransport = {
       throw new Error("测试：回执丢失");
     }
     let data: unknown = [];
-    if (p === "/api/companies") data = [{ id: "company-1", name: "中文测试公司" }];
+    if (p === "/api/companies") data = [{ id: "company-1", name: "中文测试组织" }];
     if (p === "/api/companies/company-1/agents")
-      data = [{ id: "agent-1", companyId: "company-1", name: "中文执行者", status: "idle" }];
+      data = [{ id: "agent-1", companyId: "company-1", name: "中文智能体", status: "idle" }];
     if (p === "/api/companies/company-1/issues")
       data = method === "POST" ? { ...issue, title: (body as { title: string }).title } : [issue];
     if (p === "/api/issues/issue-1") {

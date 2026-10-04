@@ -8,12 +8,13 @@ export class PaperclipFailure extends Error {
     super(message ?? paperclipError(status));
   }
 }
+export class PaperclipHealthFailure extends PaperclipFailure {}
 export function paperclipError(status: number): string {
   if (status === 401) return "登录已过期，请重新登录服务器";
   if (status === 403) return "当前账号没有此操作的权限，请联系服务器管理员";
   if (status === 404) return "内容不存在或已移除，请刷新后重试";
   if (status === 409) return "服务器状态已变化，请刷新后核对";
-  if (status === 422 || status === 400) return "服务器未接受填写的内容，请检查任务、执行者和状态";
+  if (status === 422 || status === 400) return "服务器未接受填写的内容，请检查任务、智能体和状态";
   if (status === 429) return "请求过于频繁，请稍后刷新";
   if (status >= 500) return "服务器暂时异常；已提交的操作需要核实结果";
   if (status === 0) return "无法连接服务器，请检查网络、服务器地址和证书";
@@ -64,7 +65,7 @@ export function rows<T>(
       } else string(row[field]);
     }
     if (binding && row.companyId !== binding.companyId)
-      throw new PaperclipFailure(-1, "服务器返回了其他公司的内容，已阻止显示");
+      throw new PaperclipFailure(-1, "服务器返回了其他组织的内容，已阻止显示");
     if (issueId && row.issueId !== issueId)
       throw new PaperclipFailure(-1, "服务器返回了其他任务的内容，已阻止显示");
     return row as T;
@@ -93,10 +94,58 @@ export async function request(
   if (response.status < 200 || response.status >= 300) throw new PaperclipFailure(response.status);
   return response.data;
 }
+/** 匿名健康响应不包含 authReady；不能因此拒绝真实 authenticated 部署。 */
+export async function requirePaperclipHealth(
+  transport: PaperclipTransport,
+  serverUrl: string,
+): Promise<void> {
+  let raw: unknown;
+  try {
+    raw = await request(transport, serverUrl, "GET", "/health");
+  } catch (error) {
+    throw new PaperclipHealthFailure(
+      error instanceof PaperclipFailure ? error.status : 0,
+      "无法检查服务器状态，请确认服务器已启动、网络可达且证书有效",
+    );
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    throw new PaperclipHealthFailure(-1, "服务器健康信息无法识别，请检查服务器版本");
+  const health = raw as Record<string, unknown>;
+  if (health.deploymentMode !== "authenticated")
+    throw new PaperclipHealthFailure(
+      403,
+      "服务器未启用身份验证模式，已阻止连接。请让管理员启用个人账号登录后再连接",
+    );
+  if (health.status === "starting")
+    throw new PaperclipHealthFailure(
+      503,
+      "服务器正在启动或恢复数据，请稍后刷新；暂不能登录或提交任务",
+    );
+  if (health.status !== "ok")
+    throw new PaperclipHealthFailure(503, "服务器当前不可用，请稍后刷新或联系管理员");
+  if (health.authReady !== undefined && typeof health.authReady !== "boolean")
+    throw new PaperclipHealthFailure(-1, "服务器认证状态无法识别，请检查服务器版本");
+  if (health.authReady === false)
+    throw new PaperclipHealthFailure(503, "服务器身份认证尚未就绪，请等待管理员完成初始化后刷新");
+}
+export async function signInToPaperclip(
+  transport: PaperclipTransport,
+  serverUrl: string,
+  current: () => boolean,
+): Promise<{ completed: boolean }> {
+  await requirePaperclipHealth(transport, serverUrl);
+  if (!current()) return { completed: false };
+  try {
+    return await transport.signIn({ serverUrl });
+  } catch {
+    throw new PaperclipFailure(0, "无法完成服务器登录，请检查网络并重新打开登录窗口");
+  }
+}
 export async function session(
   transport: PaperclipTransport,
   serverUrl: string,
 ): Promise<{ id: string; name: string }> {
+  await requirePaperclipHealth(transport, serverUrl);
   const raw = await request(transport, serverUrl, "GET", "/auth/get-session");
   if (!raw) throw new PaperclipFailure(401);
   const outer = object(raw);
@@ -131,7 +180,7 @@ const labels: Record<string, string> = {
   approved: "已批准",
   rejected: "已拒绝",
   revision_requested: "要求修改",
-  hire_agent: "新增执行者",
+  hire_agent: "新增智能体",
   approve_ceo_strategy: "战略审批",
   ready_for_review: "待审阅",
   changes_requested: "需要修改",
@@ -181,5 +230,5 @@ export async function verifyPaperclipUser(
 ): Promise<void> {
   const user = await session(transport, binding.serverUrl);
   if (user.id !== binding.userId)
-    throw new PaperclipFailure(401, "登录账号已变化。请重新连接公司，原账号待核实操作会保留");
+    throw new PaperclipFailure(401, "登录账号已变化。请重新连接组织，原账号待核实操作会保留");
 }

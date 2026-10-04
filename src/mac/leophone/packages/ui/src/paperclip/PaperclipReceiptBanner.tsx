@@ -49,7 +49,7 @@ export function PaperclipReceiptBanner({
             <p className="break-all text-ui-sm">
               服务器：{receipt.binding.serverUrl}
               <br />
-              公司：{receipt.binding.companyId}
+              组织：{receipt.binding.companyId}
               <br />
               回执：{receipt.id}
               <br />

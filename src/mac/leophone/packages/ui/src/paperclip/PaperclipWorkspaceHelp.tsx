@@ -25,8 +25,8 @@ export function PaperclipWorkspaceHelp({
             <h2 className="text-ui-lg font-medium">从连接到交付</h2>
             <ol className="list-inside list-decimal space-y-2">
               <li>填写服务器地址，点击“登录服务器”，在独立安全窗口中登录个人账号</li>
-              <li>选择有权访问的公司。执行者的模型、工作目录和 CLI 都在服务器端配置</li>
-              <li>新建任务时选择执行者，在任务中查看回复、运行日志、审批和成果</li>
+              <li>选择有权访问的组织。智能体的模型、工作目录和 CLI 都在服务器端配置</li>
+              <li>新建任务时选择智能体，在任务中查看回复、运行日志、审批和成果</li>
               <li>
                 网络中断时保留只读快照；恢复网络后刷新。若操作结果未知，点击“核实结果”，不要新建重复任务
               </li>

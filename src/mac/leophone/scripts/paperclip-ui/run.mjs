@@ -46,7 +46,7 @@ try {
   await page.getByLabel("服务器地址", { exact: true }).fill("https://server.example");
   await page.getByRole("button", { name: "保存并连接", exact: true }).click();
   await page.getByRole("button", { name: "登录服务器", exact: true }).click();
-  await page.getByLabel("工作公司", { exact: true }).selectOption("company-1");
+  await page.getByLabel("工作组织", { exact: true }).selectOption("company-1");
   await page.getByRole("button", { name: /验证原生任务工作区/ }).click();
   await page.getByLabel("回复任务", { exact: true }).fill("请给出中文结果");
   await page.getByRole("button", { name: "发送回复", exact: true }).click();
@@ -63,7 +63,7 @@ try {
   await page.getByRole("button", { name: "批准请求", exact: true }).click();
   await page.getByLabel("审批处理说明").fill("已核对权限范围");
   await page.getByRole("button", { name: "确认提交", exact: true }).click();
-  await page.getByText("新增执行者 · 已批准", { exact: true }).waitFor();
+  await page.getByText("新增智能体 · 已批准", { exact: true }).waitFor();
   await page.getByRole("tab", { name: "成果与附件", exact: true }).click();
   await page.getByRole("button", { name: "阅读文档", exact: true }).click();
   await page.getByText("这是服务器上的中文文档正文", { exact: true }).waitFor();
@@ -105,7 +105,7 @@ try {
         journeys: [
           "配置服务器",
           "登录个人账号",
-          "选择公司",
+          "选择组织",
           "回复任务",
           "查看运行日志",
           "取消运行后返回",
@@ -123,7 +123,7 @@ try {
     ),
   );
   console.log(
-    "Paperclip UI smoke PASS: 配置、登录、公司、回复、日志、取消返回、审批、文档、下载、未知回执核实、恢复模式与窄屏",
+    "Paperclip UI smoke PASS: 配置、登录、组织、回复、日志、取消返回、审批、文档、下载、未知回执核实、恢复模式与窄屏",
   );
 } catch (error) {
   await mkdir(output, { recursive: true });

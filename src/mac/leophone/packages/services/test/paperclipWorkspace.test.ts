@@ -15,13 +15,13 @@ const issue = {
   description: "验证服务端契约",
   status: "todo",
 };
-const agent = { id: "agent-1", companyId: "company-1", name: "执行者", status: "idle" };
+const agent = { id: "agent-1", companyId: "company-1", name: "智能体", status: "idle" };
 const approval = {
   id: "approval-1",
   companyId: "company-1",
   type: "hire_agent",
   status: "pending",
-  payload: { name: "新执行者" },
+  payload: { name: "新智能体" },
 };
 const run = { id: "run-1", companyId: "company-1", agentId: "agent-1", status: "running" };
 function memory(): PaperclipPersistence {
@@ -51,8 +51,9 @@ function fixture(storage = memory()) {
       if (overridden) return overridden;
       const path = input.path.split("?")[0];
       let data: unknown;
-      if (path === "/api/auth/get-session") data = { user: { id: userId, name: "测试用户" } };
-      else if (path === "/api/companies") data = [{ id: "company-1", name: "测试公司" }];
+      if (path === "/api/health") data = { status: "ok", deploymentMode: "authenticated" };
+      else if (path === "/api/auth/get-session") data = { user: { id: userId, name: "测试用户" } };
+      else if (path === "/api/companies") data = [{ id: "company-1", name: "测试组织" }];
       else if (path === "/api/companies/company-1/agents") data = [agent];
       else if (path === "/api/companies/company-1/issues")
         data = input.method === "POST" ? issue : [issue];
@@ -147,7 +148,7 @@ test("源地址只允许安全 origin，拒绝凭据、路径、远端 HTTP", ()
   ])
     assert.throws(() => canonicalPaperclipServer(url));
 });
-test("连接必须选择授权公司；历史 runId 与活跃 id 正确合并", async () => {
+test("连接必须选择授权组织；历史 runId 与活跃 id 正确合并", async () => {
   const f = fixture();
   await f.connect();
   assert.equal(f.service.getSnapshot().binding?.userId, "user-1");
@@ -159,7 +160,7 @@ test("连接必须选择授权公司；历史 runId 与活跃 id 正确合并", 
   await f.service.selectCompany("unauthorized");
   assert.equal(f.service.getSnapshot().binding?.companyId, "company-1");
 });
-test("创建提交上游 idempotencyKey、执行者和 todo，而非把 task 当 run", async () => {
+test("创建提交上游 idempotencyKey、智能体和 todo，而非把 task 当 run", async () => {
   const f = fixture();
   await f.connect();
   assert.equal(
@@ -354,7 +355,7 @@ test("日志增量 offset、只允许关联运行、文档返回正文", async (
   assert.equal(await f.service.readDocument("plan"), "中文正文");
   assert.equal(await f.service.readDocument("unknown"), null);
 });
-test("服务器返回其他公司的任务时 fail closed", async () => {
+test("服务器返回其他组织的任务时 fail closed", async () => {
   const f = fixture();
   await f.connect();
   f.intercept(async (input) =>
@@ -364,7 +365,7 @@ test("服务器返回其他公司的任务时 fail closed", async () => {
   );
   await f.service.selectIssue("issue-1");
   assert.equal(f.service.getSnapshot().detail, null);
-  assert.match(f.service.getSnapshot().error!, /其他公司/);
+  assert.match(f.service.getSnapshot().error!, /其他组织/);
 });
 test("保存回执失败必须在任何远端写入之前中止", async () => {
   const storage = memory();
@@ -423,7 +424,7 @@ test("旧服务器的迟到刷新不得覆盖新服务器身份和数据", async
   const old = f.service.refresh();
   await started;
   await f.service.configure({ serverUrl: "https://new.example", name: "新服务器" });
-  release({ status: 200, data: [{ id: "old-company", name: "旧公司" }] });
+  release({ status: 200, data: [{ id: "old-company", name: "旧组织" }] });
   await old;
   assert.equal(f.service.getSnapshot().profile?.serverUrl, "https://new.example");
   assert.equal(f.service.getSnapshot().binding, null);
@@ -435,7 +436,7 @@ test("审批内容在用户确认后变化时中止，不发出任何审批决�
   await f.connect();
   f.intercept(async (input) =>
     input.path === "/api/approvals/approval-1"
-      ? { status: 200, data: { ...approval, payload: { name: "不同的执行者", dangerous: true } } }
+      ? { status: 200, data: { ...approval, payload: { name: "不同的智能体", dangerous: true } } }
       : undefined,
   );
   const ok = await f.service.mutate({
@@ -489,4 +490,152 @@ test("缺失、非法或未来的创建时间禁止自动重放", async () => {
     await next.service.reconcile();
     assert.equal(next.mutations.length, 0);
   }
+});
+
+test("连接先检查健康状态；匿名健康响应省略 authReady 仍能登录真实身份", async () => {
+  const f = fixture();
+  await f.connect();
+  assert.equal(f.calls[0]?.path, "/api/health");
+  const firstSession = f.calls.findIndex((input) => input.path === "/api/auth/get-session");
+  assert.ok(firstSession > 0);
+  assert.equal(f.service.getSnapshot().connection, "online");
+  assert.equal(f.service.getSnapshot().binding?.userId, "user-1");
+});
+test("本地信任和未知部署模式不能通过合成 board 身份进入工作区或打开登录", async () => {
+  for (const deploymentMode of ["local_trusted", "unknown", undefined]) {
+    const f = fixture();
+    let signIns = 0;
+    f.transport.signIn = async () => {
+      signIns++;
+      return { completed: true };
+    };
+    f.intercept(async (input) =>
+      input.path === "/api/health"
+        ? { status: 200, data: { status: "ok", deploymentMode } }
+        : undefined,
+    );
+    await f.service.configure({ serverUrl: "https://server.example", name: "不安全测试" });
+    await f.service.signIn();
+    assert.equal(f.service.getSnapshot().connection, "offline");
+    assert.equal(f.service.getSnapshot().user, null);
+    assert.match(f.service.getSnapshot().error!, /未启用身份验证模式/);
+    assert.equal(signIns, 0);
+    assert.ok(f.calls.every((input) => input.path === "/api/health"));
+  }
+});
+test("启动中、认证未就绪和不可用健康状态均给出中文提示且不读取会话", async () => {
+  for (const [health, message] of [
+    [{ status: "starting", deploymentMode: "authenticated" }, /正在启动或恢复数据/],
+    [{ status: "ok", deploymentMode: "authenticated", authReady: false }, /身份认证尚未就绪/],
+    [{ status: "unhealthy", deploymentMode: "authenticated" }, /当前不可用/],
+    [{ status: "ok", deploymentMode: "authenticated", authReady: "true" }, /认证状态无法识别/],
+  ] as const) {
+    const f = fixture();
+    let signIns = 0;
+    f.transport.signIn = async () => {
+      signIns++;
+      return { completed: true };
+    };
+    f.intercept(async (input) =>
+      input.path === "/api/health" ? { status: 200, data: health } : undefined,
+    );
+    await f.service.configure({ serverUrl: "https://server.example", name: "健康状态测试" });
+    await f.service.signIn();
+    assert.match(f.service.getSnapshot().error!, message);
+    assert.equal(signIns, 0);
+    assert.ok(f.calls.every((input) => input.path === "/api/health"));
+    assert.equal(f.service.getSnapshot().connection, "offline");
+  }
+});
+test("健康端点失败或畸形响应不回退到 get-session，恢复后可以刷新重连", async () => {
+  for (const response of [
+    { status: 503, data: { status: "unhealthy" } },
+    { status: 200, data: "<html>服务启动页</html>" },
+  ]) {
+    const f = fixture();
+    f.intercept(async (input) => (input.path === "/api/health" ? response : undefined));
+    await f.service.configure({ serverUrl: "https://server.example", name: "健康失败" });
+    assert.equal(f.service.getSnapshot().connection, "offline");
+    assert.ok(f.calls.every((input) => input.path === "/api/health"));
+    assert.match(f.service.getSnapshot().error!, /无法检查服务器状态|健康信息无法识别/);
+    f.intercept(null);
+    await f.service.refresh();
+    assert.equal(f.service.getSnapshot().connection, "online");
+  }
+});
+test("健康模式在连接后变为本地信任时，提交前禁止使用旧身份写入", async () => {
+  const f = fixture();
+  await f.connect();
+  f.calls.length = 0;
+  f.intercept(async (input) =>
+    input.path === "/api/health"
+      ? { status: 200, data: { status: "ok", deploymentMode: "local_trusted" } }
+      : undefined,
+  );
+  assert.equal(
+    await f.service.mutate({ kind: "reply", issueId: "issue-1", body: "不能写入" }),
+    false,
+  );
+  assert.equal(f.mutations.length, 0);
+  assert.equal(f.service.getSnapshot().connection, "offline");
+  assert.equal(f.service.getSnapshot().detail?.issue.id, "issue-1");
+  assert.ok(f.calls.every((input) => input.path === "/api/health"));
+});
+test("原生登录健康准入支持省略或显式就绪 authReady，取消仍保留中文提示", async () => {
+  for (const authReady of [undefined, true]) {
+    const f = fixture();
+    let signIns = 0;
+    f.intercept(async (input) =>
+      input.path === "/api/health"
+        ? {
+            status: 200,
+            data: {
+              status: "ok",
+              deploymentMode: "authenticated",
+              ...(authReady === undefined ? {} : { authReady }),
+            },
+          }
+        : undefined,
+    );
+    await f.service.configure({ serverUrl: "https://server.example", name: "匿名健康" });
+    f.transport.signIn = async () => {
+      signIns++;
+      return { completed: false };
+    };
+    f.calls.length = 0;
+    await f.service.signIn();
+    assert.equal(signIns, 1);
+    assert.equal(f.calls[0]?.path, "/api/health");
+    assert.match(f.service.getSnapshot().notice!, /登录已取消/);
+  }
+});
+test("旧服务器健康检查迟到时不会打开已经过时的原生登录窗口", async () => {
+  const f = fixture();
+  await f.connect();
+  let signIns = 0;
+  f.transport.signIn = async () => {
+    signIns++;
+    return { completed: true };
+  };
+  let release!: (value: { status: number; data: unknown }) => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  f.intercept(async (input) => {
+    if (input.serverUrl === "https://server.example" && input.path === "/api/health") {
+      entered();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    }
+    return undefined;
+  });
+  const old = f.service.signIn();
+  await started;
+  await f.service.configure({ serverUrl: "https://new.example", name: "新服务器" });
+  release({ status: 200, data: { status: "ok", deploymentMode: "authenticated" } });
+  await old;
+  assert.equal(signIns, 0);
+  assert.equal(f.service.getSnapshot().profile?.serverUrl, "https://new.example");
 });

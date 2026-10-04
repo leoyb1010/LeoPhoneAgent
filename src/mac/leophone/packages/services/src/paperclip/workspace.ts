@@ -16,6 +16,7 @@ import {
   request,
   rows,
   session,
+  signInToPaperclip,
   verifyPaperclipUser,
 } from "./protocol.js";
 import {
@@ -62,9 +63,8 @@ export class PaperclipWorkspaceService {
     this.state = { ...this.state, ...next };
     for (const listener of this.listeners) listener();
   }
-  private receiptFor(binding: PaperclipBinding | null) {
-    return findPaperclipReceipt(this.receipts, binding);
-  }
+  private receiptFor = (binding: PaperclipBinding | null) =>
+    findPaperclipReceipt(this.receipts, binding);
 
   private fail = (error: unknown) => this.publish(paperclipFailureState(error));
   async configure(profile: PaperclipProfile): Promise<boolean> {
@@ -89,17 +89,17 @@ export class PaperclipWorkspaceService {
     const profile = this.state.profile;
     if (!profile || this.state.busy) return;
     const generation = this.generation;
+    const current = () => generation === this.generation;
     this.publish({ busy: true, error: null });
     try {
-      const result = await this.transport.signIn({ serverUrl: profile.serverUrl });
-      if (generation !== this.generation) return;
+      const result = await signInToPaperclip(this.transport, profile.serverUrl, current);
+      if (!current()) return;
       if (!result.completed) this.publish({ notice: "登录已取消，可以稍后继续" });
       else await this.refresh();
-    } catch {
-      if (generation === this.generation)
-        this.fail(new Error("无法完成服务器登录，请检查网络并重新打开登录窗口"));
+    } catch (error) {
+      if (current()) this.fail(error);
     } finally {
-      if (generation === this.generation) this.publish({ busy: false });
+      if (current()) this.publish({ busy: false });
     }
   }
   async signOut(): Promise<void> {
@@ -163,7 +163,7 @@ export class PaperclipWorkspaceService {
           user,
           companies,
           connection: "online",
-          notice: "登录账号已变化，请重新选择公司；之前的操作仍绑定原账号",
+          notice: "登录账号已变化，请重新选择组织；之前的操作仍绑定原账号",
         });
         return;
       }

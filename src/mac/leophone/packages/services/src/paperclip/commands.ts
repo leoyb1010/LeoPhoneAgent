@@ -1,4 +1,8 @@
-import { PaperclipFailure, paperclipApprovalFingerprint } from "./protocol.js";
+import {
+  PaperclipFailure,
+  PaperclipHealthFailure,
+  paperclipApprovalFingerprint,
+} from "./protocol.js";
 import type { PaperclipCommand, PaperclipSnapshot } from "./contract.js";
 export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipCommand) {
   const detail = state.detail;
@@ -9,7 +13,7 @@ export function validatePaperclipCommand(state: PaperclipSnapshot, c: PaperclipC
         (a) => a.id === c.agentId && ["active", "idle", "running"].includes(a.status),
       )
     )
-      throw new Error("请填写任务标题并选择可用的服务器执行者");
+      throw new Error("请填写任务标题并选择可用的服务器智能体");
     return;
   }
   if (!detail || detail.issue.id !== c.issueId) throw new Error("任务已切换，请重新打开任务后操作");
@@ -59,6 +63,10 @@ export function paperclipFailureState(error: unknown): Partial<PaperclipSnapshot
   const auth = error instanceof PaperclipFailure && error.status === 401;
   return {
     error: error instanceof Error ? error.message : "操作未完成，请重试",
-    ...(auth ? { connection: "signed-out" as const } : {}),
+    ...(error instanceof PaperclipHealthFailure
+      ? { connection: "offline" as const }
+      : auth
+        ? { connection: "signed-out" as const }
+        : {}),
   };
 }

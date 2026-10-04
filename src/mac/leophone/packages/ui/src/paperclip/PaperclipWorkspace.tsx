@@ -123,7 +123,7 @@ export function PaperclipWorkspace({
           >
             <h2 className="text-ui-lg font-medium">连接 Paperclip 服务器</h2>
             <p className="text-foreground-subtle">
-              任务和执行者由服务器管理。首次使用请先部署服务器、创建公司并配置服务器上的 CLI 执行者
+              任务和智能体由服务器管理。首次使用请先部署服务器、创建组织并配置服务器上的 CLI 智能体
             </p>
             <label className="block space-y-1">
               服务器名称
@@ -204,9 +204,9 @@ export function PaperclipWorkspace({
                 </Button>
               </div>
               <label className="block space-y-1">
-                <span className="text-ui-sm">工作公司</span>
+                <span className="text-ui-sm">工作组织</span>
                 <select
-                  aria-label="工作公司"
+                  aria-label="工作组织"
                   value={state.binding?.companyId || ""}
                   disabled={state.busy}
                   className={selectClass}
@@ -217,7 +217,7 @@ export function PaperclipWorkspace({
                   }}
                 >
                   <option value="" disabled>
-                    请选择公司
+                    请选择组织
                   </option>
                   {state.companies.map((company) => (
                     <option key={company.id} value={company.id}>
@@ -228,7 +228,7 @@ export function PaperclipWorkspace({
               </label>
               {state.companies.length === 0 && (
                 <p className="text-ui-sm text-foreground-subtle">
-                  还没有可访问的公司，请联系服务器管理员
+                  还没有可访问的组织，请联系服务器管理员
                 </p>
               )}
               <Button
@@ -306,7 +306,7 @@ export function PaperclipWorkspace({
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     disabled={locked}
-                    placeholder="希望执行者完成什么？"
+                    placeholder="希望智能体完成什么？"
                   />
                 </label>
                 <label className="block space-y-1">
@@ -320,7 +320,7 @@ export function PaperclipWorkspace({
                   />
                 </label>
                 <label className="block space-y-1">
-                  服务器执行者
+                  服务器智能体
                   <select
                     required
                     value={agentId}
@@ -329,7 +329,7 @@ export function PaperclipWorkspace({
                     disabled={locked}
                   >
                     <option value="" disabled>
-                      请选择执行者
+                      请选择智能体
                     </option>
                     {availableAgents.map((agent) => (
                       <option key={agent.id} value={agent.id}>
@@ -340,7 +340,7 @@ export function PaperclipWorkspace({
                 </label>
                 {!availableAgents.length && (
                   <p className="text-warning">
-                    当前公司没有可用的执行者。请在服务器配置并启用 CLI 执行者后刷新
+                    当前组织没有可用的智能体。请在服务器配置并启用 CLI 智能体后刷新
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -372,7 +372,7 @@ export function PaperclipWorkspace({
           ) : (
             <section className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
               <h2 className="text-ui-lg font-medium">
-                {state.binding ? "选择一个任务，继续推进工作" : "选择公司后开始工作"}
+                {state.binding ? "选择一个任务，继续推进工作" : "选择组织后开始工作"}
               </h2>
               <p className="max-w-lg text-foreground-subtle">
                 在这里查看任务、运行、审批和交付成果。所有任务都保存在你选择的服务器中

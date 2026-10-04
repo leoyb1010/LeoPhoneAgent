@@ -112,7 +112,7 @@ export function PaperclipTaskDetail({
             )}
             {detail.comments.length === 0 && (
               <p className="text-foreground-subtle">
-                还没有回复。任务由服务器上的执行者处理，你可以在这里补充要求
+                还没有回复。任务由服务器上的智能体处理，你可以在这里补充要求
               </p>
             )}
             {detail.comments.map((comment) => (
@@ -121,7 +121,7 @@ export function PaperclipTaskDetail({
                 className="rounded-xl border border-card-border bg-card p-4"
               >
                 <div className="mb-2 text-ui-sm text-foreground-subtle">
-                  {comment.authorUserId ? "用户" : "执行者"}
+                  {comment.authorUserId ? "用户" : "智能体"}
                   {comment.createdAt
                     ? ` · ${new Date(comment.createdAt).toLocaleString("zh-CN")}`
                     : ""}
@@ -148,7 +148,7 @@ export function PaperclipTaskDetail({
               </label>
               <Textarea
                 id="paperclip-reply"
-                placeholder="补充要求或回答执行者的问题…"
+                placeholder="补充要求或回答智能体的问题…"
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 disabled={locked}
@@ -165,7 +165,7 @@ export function PaperclipTaskDetail({
             <p className="text-ui-sm text-foreground-subtle">
               运行发生在服务器的执行环境中；取消运行不会自动更改任务状态
             </p>
-            {!detail.runs.length && <p>尚无运行记录。请确认任务已分配给可用的服务器执行者</p>}
+            {!detail.runs.length && <p>尚无运行记录。请确认任务已分配给可用的服务器智能体</p>}
             {detail.runs.map((run) => (
               <article
                 key={run.id}
@@ -173,7 +173,7 @@ export function PaperclipTaskDetail({
               >
                 <div className="flex flex-wrap justify-between gap-2">
                   <strong className="font-medium">
-                    {run.agentName || "服务器执行者"} · {paperclipLabel(run.status)}
+                    {run.agentName || "服务器智能体"} · {paperclipLabel(run.status)}
                   </strong>
                   <span className="text-ui-sm">
                     {run.startedAt ? new Date(run.startedAt).toLocaleString("zh-CN") : "等待启动"}
@@ -359,7 +359,7 @@ export function PaperclipTaskDetail({
                     ? "确认批准此请求？"
                     : "确认拒绝此请求？"}
             </h3>
-            <p>此操作会提交到当前任务所属的服务器和公司。请核对任务“{detail.issue.title}”</p>
+            <p>此操作会提交到当前任务所属的服务器和组织。请核对任务“{detail.issue.title}”</p>
             {(confirmation.kind === "approve" || confirmation.kind === "reject") && (
               <label className="block space-y-2">
                 处理说明
