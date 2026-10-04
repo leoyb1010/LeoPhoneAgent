@@ -117,6 +117,11 @@ struct PaperclipIssue: Decodable, Identifiable, Sendable {
     let priority: String
     let assigneeAgentId: String?
     let updatedAt: String?
+    let unblockDescriptor: PaperclipUnblockDescriptor?
+}
+struct PaperclipUnblockDescriptor: Decodable, Equatable, Sendable {
+    let owner: PaperclipJSON
+    let action: String
 }
 struct PaperclipComment: Decodable, Identifiable, Sendable {
     let id: String
@@ -127,6 +132,15 @@ struct PaperclipComment: Decodable, Identifiable, Sendable {
     let authorAgentId: String?
     let clientRequestId: String?
     let createdAt: String?
+    var authorLabel: String {
+        let hasUser = !(authorUserId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasAgent = !(authorAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        switch (hasUser, hasAgent) {
+        case (true, false): return "用户回复"
+        case (false, true): return "智能体回复"
+        default: return "未知作者"
+        }
+    }
 }
 struct PaperclipRun: Decodable, Identifiable, Sendable {
     let runId: String
@@ -198,6 +212,38 @@ enum PaperclipIssueStatus: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { PaperclipLabels.status(rawValue) }
 }
+struct PaperclipStatusExpectation {
+    let status: PaperclipIssueStatus
+    let userID: String
+    let unblockAction: String?
+    init(status: PaperclipIssueStatus, userID: String, unblockAction: String?) throws {
+        self.status = status
+        self.userID = userID
+        if status == .blocked {
+            guard let action = PaperclipUnblockAction.normalized(unblockAction) else { throw PaperclipError.unblockActionRequired }
+            self.unblockAction = action
+        } else { self.unblockAction = nil }
+    }
+    func matches(_ issue: PaperclipIssue) -> Bool {
+        guard issue.status == status.rawValue else { return false }
+        if status == .blocked {
+            return issue.unblockDescriptor?.owner == .object(["userId": .string(userID)]) &&
+                issue.unblockDescriptor?.action == unblockAction
+        }
+        return true
+    }
+}
+
+enum PaperclipUnblockAction {
+    /// 上游 z.string().trim().min(1).max(2000) 按 UTF-16 长度计数。
+    static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let action = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !action.isEmpty, action.utf16.count <= 2_000 else { return nil }
+        return action
+    }
+}
+
 enum PaperclipLabels {
     static func status(_ value: String) -> String {
         ["backlog": "待规划", "todo": "待处理", "in_progress": "进行中", "in_review": "待审核",
@@ -214,7 +260,7 @@ enum PaperclipLabels {
     }
 }
 enum PaperclipError: LocalizedError, Equatable {
-    case invalidAddress, signedOut, forbidden, identityChanged, invalidResponse, unavailable, cancelled
+    case invalidAddress, signedOut, forbidden, identityChanged, invalidResponse, unavailable, cancelled, unblockActionRequired, statusNotConfirmed
     case http(Int), uncertain
     var errorDescription: String? {
         switch self {
@@ -225,6 +271,8 @@ enum PaperclipError: LocalizedError, Equatable {
         case .invalidResponse: return "服务器响应格式不兼容，请确认部署版本与客户端契约一致。"
         case .unavailable: return "服务器尚未就绪或无法连接，请稍后重试。不会改用本机执行。"
         case .cancelled: return "请求已取消。"
+        case .unblockActionRequired: return "请填写解除阻塞需要做什么（1 到 2000 个字符），再提交受阻状态。"
+        case .statusNotConfirmed: return "服务器当前状态或解除条件与本次目标不一致，尚未核实成功，也没有重新发送。可继续核实，或取消后刷新任务再决定。"
         case .http(409): return "任务或审批已被其他操作更新，请刷新并重新核对后再决定。"
         case .http(let status): return "服务器请求失败（状态码 \(status)），请刷新后检查结果。"
         case .uncertain: return "服务器可能已收到操作，但返回结果尚未确认。请先刷新核对；创建和回复重试会保留同一请求编号。不会自动重发或转为本机执行。"

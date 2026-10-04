@@ -76,6 +76,18 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertIn("exit 2", script)
         self.assertIn("-resultBundlePath", script)
 
+    def test_uncertain_status_sheet_can_only_verify_with_read(self):
+        view = (VIEWS / "PaperclipIssueDetailView.swift").read_text()
+        self.assertIn("pendingVerification: PaperclipStatusExpectation?", view)
+        verify = view.split("func verifyStatus(")[1].split("func record(")[0]
+        self.assertIn("client.issue(reference)", verify)
+        self.assertIn("expected.matches(current)", verify)
+        self.assertNotIn("setStatus(", verify)
+        pending = view.split("if let pendingVerification {")[1].split("} else {")[0]
+        self.assertIn('"paperclip.verifyStatus"', pending)
+        self.assertNotIn("changeStatus(", pending)
+        self.assertIn("pendingVerification != nil", view)
+
     def test_all_new_visible_literals_are_chinese(self):
         for path in VIEWS.glob("*.swift"):
             for literal in re.findall(r'\b(?:Text|Button|Label|Section|TextField|Picker|ProgressView)\("([^"\\]*)"', path.read_text()):

@@ -28,16 +28,36 @@ final class PaperclipIssueDetailModel: ObservableObject {
         } catch { record(error) }
         busy = false
     }
-    func changeStatus(_ status: PaperclipIssueStatus) async -> Bool {
-        guard !busy else { return false }
+    enum StatusResult { case confirmed, uncertain, rejected }
+    func changeStatus(_ expected: PaperclipStatusExpectation) async -> StatusResult {
+        guard !busy else { return .rejected }
         busy = true
         do {
-            issue = try await client.setStatus(reference, status: status)
+            issue = try await client.setStatus(reference, status: expected.status, unblockAction: expected.unblockAction)
             error = nil
-        } catch { record(error); busy = false; return false }
+        } catch {
+            record(error)
+            busy = false
+            return error as? PaperclipError == .uncertain ? .uncertain : .rejected
+        }
         busy = false
         await refresh()
-        return true
+        return .confirmed
+    }
+    /// 未知回执恢复只允许GET，不能把核实按钮变成第二次PATCH。
+    func verifyStatus(_ expected: PaperclipStatusExpectation) async -> Bool {
+        guard !busy else { return false }
+        guard expected.userID == reference.userID else { record(PaperclipError.identityChanged); return false }
+        busy = true
+        defer { busy = false }
+        do {
+            let current = try await client.issue(reference)
+            issue = current
+            guard expected.matches(current) else { error = PaperclipError.statusNotConfirmed.errorDescription; return false }
+            error = nil
+            lastRefreshed = Date()
+            return true
+        } catch { record(error); return false }
     }
     func record(_ error: Error) {
         self.error = PaperclipLabels.error(error)
@@ -155,7 +175,7 @@ struct PaperclipIssueDetailView: View {
             if model.comments.isEmpty { Text("暂无回复").foregroundStyle(.secondary) }
             ForEach(model.comments) { comment in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(comment.authorUserId == nil ? "智能体回复" : "用户回复").font(.caption).foregroundStyle(.secondary)
+                    Text(comment.authorLabel).font(.caption).foregroundStyle(.secondary)
                     Text(comment.body).textSelection(.enabled)
                     if let time = comment.createdAt { Text(time).font(.caption2).foregroundStyle(.secondary) }
                 }.padding(.vertical, 4)
@@ -249,6 +269,8 @@ private struct PaperclipStatusPickerView: View {
     @ObservedObject var model: PaperclipIssueDetailModel
     @Environment(\.dismiss) private var dismiss
     @State private var selected: PaperclipIssueStatus
+    @State private var unblockAction = ""
+    @State private var pendingVerification: PaperclipStatusExpectation?
     init(model: PaperclipIssueDetailModel) {
         self.model = model
         _selected = State(initialValue: PaperclipIssueStatus(rawValue: model.issue?.status ?? "") ?? .backlog)
@@ -267,19 +289,47 @@ private struct PaperclipStatusPickerView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("paperclip.status.\(status.rawValue)")
-                        .disabled(model.busy)
+                        .disabled(model.busy || pendingVerification != nil)
+                    }
+                }
+                if selected == .blocked {
+                    Section("解除阻塞说明") {
+                        TextField("解除阻塞需要做什么", text: $unblockAction, axis: .vertical).lineLimit(2...6)
+                            .disabled(model.busy || pendingVerification != nil).accessibilityIdentifier("paperclip.unblockAction")
+                        Text("请明确填写所需行动，不能留空。负责人将绑定为本任务当前用户；说明上限为2000个字符。")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 Section("确认服务器操作") {
                     Text("将任务改为「\(selected.title)」。这会修改服务器记录，并可能影响服务器调度。")
                     if let error = model.error { Text(error).foregroundStyle(.red) }
-                    Button(model.busy ? "正在更新…" : "确认更改状态") {
-                        Task { if await model.changeStatus(selected) { dismiss() } }
+                    if let pendingVerification {
+                        Text("上次提交结果尚未确认，目标和说明已锁定。这里只读取服务器核实，不会重新发送。也可取消后刷新任务，再作新的决定。")
+                            .font(.footnote).foregroundStyle(.orange)
+                        Button(model.busy ? "正在核实…" : "核实状态") {
+                            Task { if await model.verifyStatus(pendingVerification) { dismiss() } }
+                        }
+                        .disabled(model.busy)
+                        .accessibilityIdentifier("paperclip.verifyStatus")
+                    } else {
+                        Button(model.busy ? "正在更新…" : "确认更改状态") {
+                            do {
+                                let expected = try PaperclipStatusExpectation(status: selected, userID: model.reference.userID, unblockAction: unblockAction)
+                                Task {
+                                    switch await model.changeStatus(expected) {
+                                    case .confirmed: dismiss()
+                                    case .uncertain: pendingVerification = expected
+                                    case .rejected: break
+                                    }
+                                }
+                            } catch { model.record(error) }
+                        }
+                        .disabled(model.busy || selected.rawValue == model.issue?.status || (selected == .blocked && PaperclipUnblockAction.normalized(unblockAction) == nil))
+                        .accessibilityIdentifier("paperclip.confirmStatus")
                     }
-                    .disabled(model.busy || selected.rawValue == model.issue?.status)
-                    .accessibilityIdentifier("paperclip.confirmStatus")
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("更改任务状态")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(model.busy) } }

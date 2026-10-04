@@ -127,11 +127,16 @@ final class PaperclipClient {
         return row
     }
 
-    func setStatus(_ ref: PaperclipTaskReference, status: PaperclipIssueStatus) async throws -> PaperclipIssue {
+    func setStatus(_ ref: PaperclipTaskReference, status: PaperclipIssueStatus, unblockAction: String? = nil) async throws -> PaperclipIssue {
+        let expected = try PaperclipStatusExpectation(status: status, userID: ref.userID, unblockAction: unblockAction)
+        var body: [String: Any] = ["status": status.rawValue]
+        if let action = expected.unblockAction {
+            body["unblockDescriptor"] = ["owner": ["userId": ref.userID], "action": action]
+        }
         _ = try await issue(ref)
-        let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: ["status": status.rawValue], userID: ref.userID)
+        let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: body, userID: ref.userID)
         try verify(row, ref)
-        guard row.status == status.rawValue else { throw PaperclipError.uncertain }
+        guard expected.matches(row) else { throw PaperclipError.uncertain }
         return row
     }
 

@@ -29,15 +29,22 @@ enum PaperclipAuditFixture {
     }
 }
 
+private struct PaperclipFixtureLostReceipt {}
+
 private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var status = "in_progress"
     nonisolated(unsafe) private static var approvalStatus = "pending"
+    nonisolated(unsafe) private static var unblockDescriptor: [String: Any]?
+    nonisolated(unsafe) private static var loseStatusReceipt = false
+    nonisolated(unsafe) private static var statusPatchCount = 0
     nonisolated(unsafe) private static var comments: [[String: Any]] = []
     nonisolated(unsafe) private static var created: [[String: Any]] = []
     static func reset() {
         lock.lock(); defer { lock.unlock() }
-        status = "in_progress"; approvalStatus = "pending"; comments = []; created = []
+        status = "in_progress"; approvalStatus = "pending"; unblockDescriptor = nil; comments = []; created = []
+        loseStatusReceipt = ProcessInfo.processInfo.arguments.contains("--status-receipt-unknown-fixture")
+        statusPatchCount = 0
     }
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "paperclip.fixture.invalid" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -48,16 +55,24 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
             Self.lock.lock()
             let result = Self.respond(path: request.url!.path, method: request.httpMethod ?? "GET", body: body, query: request.url!.query ?? "")
             Self.lock.unlock()
+            if result is PaperclipFixtureLostReceipt {
+                client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
+                return
+            }
             let data = try JSONSerialization.data(withJSONObject: result)
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
+            let rejected = (result as? [String: Any])?["error"] != nil
+            let response = HTTPURLResponse(url: request.url!, statusCode: rejected ? 422 : 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
     private static func issue() -> [String: Any] {
-        ["id": "issue-1", "companyId": "company", "identifier": "任务-1", "title": "修复登录流程",
+        var row: [String: Any] = ["id": "issue-1", "companyId": "company", "identifier": "任务-1", "title": "修复登录流程",
          "description": "检查身份边界，完成中文界面回归验证。", "status": status, "priority": "high", "assigneeAgentId": "agent"]
+        if let unblockDescriptor { row["unblockDescriptor"] = unblockDescriptor }
+        if loseStatusReceipt { row["description"] = "检查身份边界，完成中文界面回归验证。\n状态写入次数：\(statusPatchCount)" }
+        return row
     }
     private static func approval() -> [String: Any] {
         ["id": "approval-1", "companyId": "company", "type": "hire_agent", "status": approvalStatus,
@@ -76,7 +91,18 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
             }
             return [issue()] + created
         case "/api/issues/issue-1":
-            if method == "PATCH", let newStatus = body["status"] as? String { status = newStatus }
+            if method == "PATCH", let newStatus = body["status"] as? String {
+                if newStatus == "blocked" {
+                    guard let descriptor = body["unblockDescriptor"] as? [String: Any],
+                          let owner = descriptor["owner"] as? [String: String], owner == ["userId": "human"],
+                          let action = descriptor["action"] as? String, !action.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          action.utf16.count <= 2_000 else { return ["error": "受阻状态缺少有效解除说明或绑定用户"] }
+                    unblockDescriptor = descriptor
+                }
+                status = newStatus
+                statusPatchCount += 1
+                if loseStatusReceipt { return PaperclipFixtureLostReceipt() }
+            }
             return issue()
         case "/api/issues/issue-1/comments":
             if method == "POST" {
