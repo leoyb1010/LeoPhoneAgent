@@ -2,6 +2,7 @@
 import "@zcode/shared/leo-network-guard";
 import "./leoEarlyEnv.js";
 import { installLeoSessionGuard } from "./leoSessionGuard.js";
+import { requestsLocalRecovery } from "./paperclip/workspaceMode.js";
 import { registerPaperclipIpc, registerPaperclipWindow } from "./paperclip/transport.js";
 import { registerLeoLinkIpc } from "./leoLinkIpc.js";
 import { createLocalTtftExporter } from "./localTtftExporter.js";
@@ -1703,6 +1704,7 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
     windowHostProcessMap,
     onHostProcessReady: (windowKey) => cuaPipFocusRouter.refreshWindow(windowKey),
     awaitFirstHostSpawnDecision,
+    shouldStartLocalHost: (window) => requestsLocalRecovery(window.webContents.getURL()),
     spawnHostProcess: (win, label, initMessage) =>
       spawnHostProcess(
         win,

@@ -252,6 +252,7 @@ contextBridge.exposeInMainWorld("zcode", {
     method: "GET" | "POST" | "PATCH";
     path: string;
     body?: unknown;
+    expectedUserId?: string;
   }) => ipcRenderer.invoke(PlatformChannels.PaperclipRequest, input),
   paperclipSignIn: (input: { serverUrl: string }) =>
     ipcRenderer.invoke(PlatformChannels.PaperclipSignIn, input),

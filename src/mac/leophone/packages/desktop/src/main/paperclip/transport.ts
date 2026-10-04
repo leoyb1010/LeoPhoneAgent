@@ -101,8 +101,23 @@ async function request(
   method: string,
   body?: unknown,
   allowSignOut = false,
+  expectedUserId?: string,
 ) {
-  return scopeFor(origin).run(async (signal) => {
+  const scope = scopeFor(origin);
+  const epoch = scope.generation;
+  return scope.run(async (signal) => {
+    if (expectedUserId) {
+      const identity = await request(origin, "/api/auth/get-session", "GET");
+      const current = identity.data as { user?: { id?: string } } | null;
+      if (
+        identity.status !== 200 ||
+        current?.user?.id !== expectedUserId ||
+        scope.generation !== epoch ||
+        scope.signingOut
+      ) {
+        throw new Error("登录身份已改变，请重新选择公司；本次操作未发送");
+      }
+    }
     // 请求单次发送：网络断开或5xx不能证明写入失败，由业务receipt保留未知结果。
     const response = await sessionFor(origin).fetch(new URL(path, origin).href, {
       method,
@@ -249,7 +264,14 @@ export function registerPaperclipIpc(): void {
   ipcMain.handle(PlatformChannels.PaperclipRequest, async (event, value: unknown) => {
     requireSender(event);
     const input = validatePaperclipRequest(value);
-    return request(input.serverUrl, input.path, input.method, input.body);
+    return request(
+      input.serverUrl,
+      input.path,
+      input.method,
+      input.body,
+      false,
+      input.expectedUserId,
+    );
   });
   ipcMain.handle(PlatformChannels.PaperclipSignIn, (event, value: { serverUrl: string }) => {
     const owner = requireSender(event);

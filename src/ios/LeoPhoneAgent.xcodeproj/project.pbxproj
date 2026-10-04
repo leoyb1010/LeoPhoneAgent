@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F0ACA0000000000000000001 /* PaperclipContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000001 /* PaperclipContract.swift */; };
+		F0ACB0000000000000000001 /* PaperclipContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000001 /* PaperclipContract.swift */; };
+		F0ACA0000000000000000002 /* PaperclipClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000002 /* PaperclipClient.swift */; };
+		F0ACB0000000000000000002 /* PaperclipClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000002 /* PaperclipClient.swift */; };
+		F0ACA0000000000000000003 /* PaperclipDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000003 /* PaperclipDraft.swift */; };
+		F0ACB0000000000000000003 /* PaperclipDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000003 /* PaperclipDraft.swift */; };
+		F0ACA0000000000000000004 /* PaperclipWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */; };
+		F0ACA0000000000000000005 /* PaperclipLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000005 /* PaperclipLoginView.swift */; };
+		F0ACA0000000000000000006 /* PaperclipWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */; };
+		F0ACA0000000000000000007 /* PaperclipIssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */; };
 		EA1CATA20000000000000002 /* ProviderModelCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */; };
 		EA1CATA10000000000000002 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA10000000000000001 /* ModelCatalog.swift */; };
         E5HOUB001 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
@@ -725,6 +735,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F0AC10000000000000000001 /* PaperclipContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipContract.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000002 /* PaperclipClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipClient.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000003 /* PaperclipDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipDraft.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipWorkspaceStore.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000005 /* PaperclipLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipLoginView.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipWorkspaceView.swift; sourceTree = SOURCE_ROOT; };
+		F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipIssueDetailView.swift; sourceTree = SOURCE_ROOT; };
 		EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Providers/ProviderModelCatalogView.swift"; sourceTree = SOURCE_ROOT; };
 		EA1CATA10000000000000001 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelCatalog.swift"; sourceTree = SOURCE_ROOT; };
         E5HOUB003 /* HarnessOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessOutbox.swift; sourceTree = SOURCE_ROOT; };
@@ -2143,6 +2160,13 @@
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
 				E5RTG0003 /* LeoAgentRouting.swift */,
+				F0AC10000000000000000001 /* PaperclipContract.swift */,
+				F0AC10000000000000000002 /* PaperclipClient.swift */,
+				F0AC10000000000000000003 /* PaperclipDraft.swift */,
+				F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */,
+				F0AC10000000000000000005 /* PaperclipLoginView.swift */,
+				F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */,
+				F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */,
                 E5HOUB003 /* HarnessOutbox.swift */,
                 E5SSHT003 /* RemoteSSHTrust.swift */,
                 E5CKIJ003 /* CloudKitInboundJournal.swift */,
@@ -2912,6 +2936,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				1002171D84B5B80449161785 /* CommandRisk.swift in Sources */,
+				F0ACB0000000000000000001 /* PaperclipContract.swift in Sources */,
+				F0ACB0000000000000000002 /* PaperclipClient.swift in Sources */,
+				F0ACB0000000000000000003 /* PaperclipDraft.swift in Sources */,
                 E5HOUB002 /* HarnessOutbox.swift in Sources */,
                 E5SSHT002 /* RemoteSSHTrust.swift in Sources */,
 				E5TRP001 /* CollectionStore.swift in Sources */,
@@ -3430,6 +3457,13 @@
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
 				E5W000009 /* ICloudSharedZoneTransport.swift in Sources */,
 				E5RTG0001 /* LeoAgentRouting.swift in Sources */,
+				F0ACA0000000000000000001 /* PaperclipContract.swift in Sources */,
+				F0ACA0000000000000000002 /* PaperclipClient.swift in Sources */,
+				F0ACA0000000000000000003 /* PaperclipDraft.swift in Sources */,
+				F0ACA0000000000000000004 /* PaperclipWorkspaceStore.swift in Sources */,
+				F0ACA0000000000000000005 /* PaperclipLoginView.swift in Sources */,
+				F0ACA0000000000000000006 /* PaperclipWorkspaceView.swift in Sources */,
+				F0ACA0000000000000000007 /* PaperclipIssueDetailView.swift in Sources */,
                 E5HOUB001 /* HarnessOutbox.swift in Sources */,
                 E5SSHT001 /* RemoteSSHTrust.swift in Sources */,
                 E5CKIJ001 /* CloudKitInboundJournal.swift in Sources */,

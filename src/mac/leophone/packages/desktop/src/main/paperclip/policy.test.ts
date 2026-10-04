@@ -39,6 +39,7 @@ test("only bounded upstream methods and paths pass IPC", () => {
       method: "POST",
       path: "/api/heartbeat-runs/r1/cancel",
       body: {},
+      expectedUserId: "u1",
     }),
   );
   for (const path of [
@@ -108,5 +109,18 @@ test("auth query cannot bypass token stripping and renderer grants bind exact en
   assert.equal(
     matchesPaperclipRenderer("file:///app/renderer/other.html", "file:///app/renderer/index.html"),
     false,
+  );
+});
+
+test("all writes require the task-bound human identity", () => {
+  assert.throws(
+    () =>
+      validatePaperclipRequest({
+        serverUrl: "https://example.com",
+        method: "POST",
+        path: "/api/issues/i1/comments",
+        body: { body: "hello" },
+      }),
+    /操作者/,
   );
 });

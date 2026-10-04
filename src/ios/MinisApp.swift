@@ -163,7 +163,7 @@ struct MinisApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                ContentView()
+                IOSWorkspaceRootView { ContentView() }
                     .overlay(alignment: .top) {
                         BackgroundInterruptionBanner()
                     }

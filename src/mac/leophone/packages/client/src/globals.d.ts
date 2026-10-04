@@ -61,6 +61,7 @@ declare global {
         method: "GET" | "POST" | "PATCH";
         path: string;
         body?: unknown;
+        expectedUserId?: string;
       }): Promise<{ status: number; data: unknown }>;
       paperclipSignIn(input: { serverUrl: string }): Promise<{ completed: boolean }>;
       paperclipSignOut(input: { serverUrl: string }): Promise<void>;

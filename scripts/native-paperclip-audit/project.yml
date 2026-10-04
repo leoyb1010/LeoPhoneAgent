@@ -1,0 +1,59 @@
+name: PaperclipNativeAudit
+options:
+  deploymentTarget:
+    iOS: "26.2"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGNING_ALLOWED: NO
+    GENERATE_INFOPLIST_FILE: YES
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  PaperclipNativeAudit:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../../src/ios/Agent/Paperclip
+      - path: ../../src/ios/Views/Paperclip
+      - path: AuditApp.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leoyuan.paperclip-native-audit
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+  PaperclipNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ../../src/ios/Agent/Paperclip
+      - path: ../../src/ios/Views/Paperclip
+      - path: ../../src/ios/MinisTests/PaperclipContractTests.swift
+      - path: ../../src/ios/MinisTests/PaperclipClientTests.swift
+      - path: Tests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leoyuan.paperclip-native-audit.tests
+        TEST_HOST: ""
+  PaperclipNativeJourneys:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: PaperclipNativeAudit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.leoyuan.paperclip-native-audit.journeys
+        TEST_TARGET_NAME: PaperclipNativeAudit
+schemes:
+  PaperclipNativeAudit:
+    build:
+      targets:
+        PaperclipNativeAudit: all
+        PaperclipNativeTests: [test]
+        PaperclipNativeJourneys: [test]
+    test:
+      gatherCoverageData: true
+      targets:
+        - PaperclipNativeTests
+        - PaperclipNativeJourneys

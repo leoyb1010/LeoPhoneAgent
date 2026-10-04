@@ -4,6 +4,7 @@ export interface NativePaperclipRequest {
   method: "GET" | "POST" | "PATCH";
   path: string;
   body?: unknown;
+  expectedUserId?: string;
 }
 
 export function canonicalPaperclipOrigin(value: unknown): string {
@@ -69,6 +70,14 @@ export function validatePaperclipRequest(value: unknown): NativePaperclipRequest
           : [];
   if (!permitted.some((pattern) => pattern.test(url.pathname)))
     throw new Error("此服务器操作尚未开放");
+  if (
+    input.method !== "GET" &&
+    (typeof input.expectedUserId !== "string" ||
+      !input.expectedUserId.trim() ||
+      input.expectedUserId.length > 256)
+  ) {
+    throw new Error("写入必须绑定已登录的操作者，请重新连接服务器");
+  }
   if (input.method === "GET" && input.body !== undefined) throw new Error("读取请求不能包含正文");
   if (input.body !== undefined && JSON.stringify(input.body).length > 1024 * 1024)
     throw new Error("提交内容超过 1 MB 限制");

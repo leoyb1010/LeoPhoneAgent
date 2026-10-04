@@ -96,6 +96,33 @@ jobs:
             echo "::error::found failure markers in xcodebuild log"; exit 1
           fi
 
+  paperclip-native-ios:
+    name: Paperclip 原生 iOS 中文工作区
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Paperclip contracts and test harness
+        run: |
+          set -euo pipefail
+          python3 scripts/IOSPaperclipContractAudit.py
+          bash -n scripts/native-paperclip-audit/run.sh
+      - name: Install native harness project generator
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Compile production Swift and exercise native Chinese journeys
+        run: bash scripts/native-paperclip-audit/run.sh
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: paperclip-native-ios
+          path: |
+            native-paperclip-audit-results/
+            !native-paperclip-audit-results/DerivedData/**
+          if-no-files-found: warn
+          retention-days: 14
+
   native-model-audit:
     name: Native model UI (${{ matrix.label }})
     # Test-only fixtures, no app signing, credentials, submodules, or releases.
