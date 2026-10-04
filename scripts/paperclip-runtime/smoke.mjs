@@ -83,11 +83,23 @@ try {
   });
   await record("官方process适配器异步运行及真实日志", async () => {
     agent = await api(`/api/companies/${company.id}/agents`, "POST", { name:"确定性测试执行器", role:"ceo", adapterType:"process", adapterConfig:{ command:process.execPath, args:["-e", "console.log('中文fixture执行完成')"], timeoutSec:20 } });
-    const accepted = await api(`/api/agents/${agent.id}/heartbeat/invoke`, "POST", { idempotencyKey:randomUUID(), payload:{ issueId:issue.id } });
-    assert.ok(accepted.id, "必须返回真实run ID，不能把202视为完成");
-    const run = await until(()=>api(`/api/heartbeat-runs/${accepted.id}`), r=>["succeeded","failed","cancelled","timed_out"].includes(r.status));
+    // 与原生客户端相同：任务指派后等待服务器创建运行，不拿POST成功当执行成功。
+    await api(`/api/issues/${issue.id}`, "PATCH", { assigneeAgentId:agent.id, status:"todo" });
+    const linked = await until(()=>api(`/api/issues/${issue.id}/runs`), rows=>rows.some(r=>r.agentId===agent.id && r.runId));
+    const accepted = linked.find(r=>r.agentId===agent.id && r.runId);
+    const run = await until(()=>api(`/api/heartbeat-runs/${accepted.runId}`), r=>["succeeded","failed","cancelled","timed_out"].includes(r.status));
+    assert.equal(run.companyId,company.id);
     assert.equal(run.status,"succeeded");
     const log = await api(`/api/heartbeat-runs/${run.id}/log?offset=0&limitBytes=256000`); assert.match(log.content,/中文fixture执行完成/);
+  });
+  await record("真实运行取消不会被误当作普通POST完成", async () => {
+    await api(`/api/agents/${agent.id}`, "PATCH", { adapterConfig:{ command:process.execPath, args:["-e","console.log('等待取消');setTimeout(()=>{},60000)"], timeoutSec:90 } });
+    const accepted = await api(`/api/agents/${agent.id}/heartbeat/invoke`, "POST", { idempotencyKey:randomUUID() });
+    assert.ok(accepted.id);
+    await until(()=>api(`/api/heartbeat-runs/${accepted.id}`), r=>r.status==="running");
+    await api(`/api/heartbeat-runs/${accepted.id}/cancel`, "POST", {});
+    const cancelled = await until(()=>api(`/api/heartbeat-runs/${accepted.id}`), r=>["cancelled","succeeded","failed","timed_out"].includes(r.status));
+    assert.equal(cancelled.status,"cancelled");
   });
   await record("注销后会话失效", async () => { await api("/api/auth/sign-out","POST",{}); cookies.clear(); assert.equal(await api("/api/auth/get-session"),null); });
   await writeFile(resolve(output,"summary.json"),JSON.stringify({ passed:true, checks, server:"fixed-upstream-real-http", auth:"real-Better-Auth-cookie", execution:"upstream-process-adapter-deterministic-node-command", realProviderUsed:false, productionDeployment:false, nativeRunnerProviderTested:false },null,2));

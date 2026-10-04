@@ -13,6 +13,7 @@ cleanup() { if [[ -n "$PID" ]]; then kill "$PID" 2>/dev/null || true; wait "$PID
 trap cleanup EXIT
 mkdir -p "$WORK/home" "$WORK/state"
 SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+TOOL_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
 # 上游dev入口会加载runner的TypeScript定义，没有关闭runner的官方总开关。
 # 此烟测只执行官方process适配器；不声称Rust/native模型provider已验证。
 # 4GB沿用固定上游Dockerfile的Node构建约定，仅在标准CI运行，不调整用户机器设置。
@@ -20,7 +21,7 @@ SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).t
  NODE_ENV=test HOST=127.0.0.1 PORT=43168 SERVE_UI=false DATABASE_URL="$DATABASE_URL" \
  PAPERCLIP_HOME="$WORK/state" PAPERCLIP_DEPLOYMENT_MODE=authenticated PAPERCLIP_DEPLOYMENT_EXPOSURE=private \
  PAPERCLIP_AUTH_BASE_URL_MODE=explicit PAPERCLIP_AUTH_PUBLIC_BASE_URL=http://127.0.0.1:43168 \
- BETTER_AUTH_SECRET="$SECRET" PAPERCLIP_AGENT_JWT_SECRET="$SECRET" \
+ BETTER_AUTH_SECRET="$SECRET" PAPERCLIP_AGENT_JWT_SECRET="$SECRET" PAPERCLIP_TOOL_ACTION_SIGNING_SECRET="$TOOL_SECRET" \
  PAPERCLIP_MIGRATION_PROMPT=never PAPERCLIP_MIGRATION_AUTO_APPLY=true \
  PAPERCLIP_TELEMETRY_DISABLED=1 HEARTBEAT_SCHEDULER_ENABLED=false \
  node --import ./server/node_modules/tsx/dist/loader.mjs server/src/index.ts) > "$OUTPUT/server.log" 2>&1 &
