@@ -17,12 +17,18 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private(set) var client: PaperclipClient?
     private var revision = UUID()
     private var nextOffset = 0
+    private var cookieVaults: [UUID: PaperclipCookieVault] = [:]
     private let defaults: UserDefaults
+    private let makeCookieVault: @MainActor (PaperclipProfile) -> PaperclipCookieVault
     private static let profilesKey = "leo.paperclip.profiles.v1"
     private static let selectionKey = "leo.paperclip.selectedProfile.v1"
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         makeCookieVault: @escaping @MainActor (PaperclipProfile) -> PaperclipCookieVault = {
+             PaperclipCookieVault.shared(for: $0)
+         }) {
         self.defaults = defaults
+        self.makeCookieVault = makeCookieVault
         if let data = defaults.data(forKey: Self.profilesKey),
            let saved = try? JSONDecoder().decode([PaperclipProfile].self, from: data) {
             profiles = saved.compactMap { try? $0.validated() }
@@ -71,9 +77,10 @@ final class PaperclipWorkspaceStore: ObservableObject {
     func clearLogin() async {
         guard let profile = selectedProfile else { return }
         resetConnection()
+        let stamp = revision
         busy = true
-        let data = Self.websiteData(for: profile)
-        await data.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        await vault(for: profile).clear()
+        guard stamp == revision, selectedID == profile.id else { return }
         busy = false
     }
 
@@ -83,11 +90,12 @@ final class PaperclipWorkspaceStore: ObservableObject {
         let stamp = revision
         busy = true
         error = nil
-        let data = Self.websiteData(for: profile)
+        let cookies = vault(for: profile)
+        let generation = cookies.generation
         let candidate = PaperclipClient(profile: profile, readCookies: {
-            await data.httpCookieStore.allCookies()
-        }, saveCookies: { cookies in
-            for cookie in cookies { await data.httpCookieStore.setCookie(cookie) }
+            await cookies.read(generation: generation)
+        }, saveCookies: { updated in
+            await cookies.write(updated, generation: generation)
         })
         do {
             _ = try await candidate.health()
@@ -161,7 +169,81 @@ final class PaperclipWorkspaceStore: ObservableObject {
         if stamp == revision { busy = false }
     }
 
+    private func vault(for profile: PaperclipProfile) -> PaperclipCookieVault {
+        if let vault = cookieVaults[profile.id] { return vault }
+        let vault = makeCookieVault(profile)
+        cookieVaults[profile.id] = vault
+        return vault
+    }
+
     private func companyKey(profile: PaperclipProfile, user: String) -> String {
         "leo.paperclip.company.\(profile.id.uuidString).\(user)"
+    }
+}
+
+/// Cookie 写入和清除串行化；旧请求不能在退出完成后重新填回登录 Cookie。
+@MainActor
+protocol PaperclipCookieStorage: AnyObject {
+    func allCookies() async -> [HTTPCookie]
+    func setCookie(_ cookie: HTTPCookie) async
+    func removeAllData() async
+}
+
+@MainActor
+private final class PaperclipWebCookieStorage: PaperclipCookieStorage {
+    let store: WKWebsiteDataStore
+    init(store: WKWebsiteDataStore) { self.store = store }
+    func allCookies() async -> [HTTPCookie] { await store.httpCookieStore.allCookies() }
+    func setCookie(_ cookie: HTTPCookie) async { await store.httpCookieStore.setCookie(cookie) }
+    func removeAllData() async {
+        await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+    }
+}
+
+@MainActor
+final class PaperclipCookieVault {
+    // 工作区关闭后旧网络任务可能仍在结束；所有同配置实例共用撤销代际和写入队列。
+    private static var sharedVaults: [UUID: PaperclipCookieVault] = [:]
+    static func shared(for profile: PaperclipProfile) -> PaperclipCookieVault {
+        if let vault = sharedVaults[profile.id] { return vault }
+        let vault = PaperclipCookieVault(store: PaperclipWorkspaceStore.websiteData(for: profile))
+        sharedVaults[profile.id] = vault
+        return vault
+    }
+    private(set) var generation = UUID()
+    private let storage: any PaperclipCookieStorage
+    private var pending: Task<Void, Never>?
+    init(storage: any PaperclipCookieStorage) { self.storage = storage }
+    convenience init(store: WKWebsiteDataStore) { self.init(storage: PaperclipWebCookieStorage(store: store)) }
+
+    func read(generation expected: UUID) async -> [HTTPCookie] {
+        await pending?.value
+        guard generation == expected else { return [] }
+        let cookies = await storage.allCookies()
+        return generation == expected ? cookies : []
+    }
+    func write(_ cookies: [HTTPCookie], generation expected: UUID) async {
+        let previous = pending
+        let operation = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, self.generation == expected else { return }
+            for cookie in cookies {
+                guard self.generation == expected else { return }
+                await self.storage.setCookie(cookie)
+            }
+        }
+        pending = operation
+        await operation.value
+    }
+    func clear() async {
+        generation = UUID()
+        let previous = pending
+        let storage = storage
+        let operation = Task { @MainActor in
+            await previous?.value
+            await storage.removeAllData()
+        }
+        pending = operation
+        await operation.value
     }
 }

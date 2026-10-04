@@ -105,3 +105,6 @@ export { generateMobileDeviceFingerprint, setStreamClientId } from "./lib/stream
 export { GlobalDatabaseStartupLoading } from "./root/GlobalDatabaseStartupLoading.js";
 
 export { LocalTtftObserver, setLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
+
+export { PaperclipWorkspace } from './paperclip/PaperclipWorkspace.js';
+export type { PaperclipWorkspaceProps } from './paperclip/PaperclipWorkspace.js';

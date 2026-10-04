@@ -42,6 +42,7 @@ struct PaperclipIssueDetailView: View {
     @State private var decisionNote = ""
     @State private var pendingDecision: Decision?
     @State private var discardReply = false
+    @State private var lastChecked: PaperclipDraft?
     @Environment(\.scenePhase) private var scenePhase
     private let draftKey: String
     private struct Decision: Identifiable {
@@ -57,6 +58,7 @@ struct PaperclipIssueDetailView: View {
         let key = PaperclipDraft.key(profile: client.profile, companyID: reference.companyID, userID: reference.userID, issueID: reference.issueID)
         draftKey = key
         _draft = State(initialValue: PaperclipDraft.load(key: key))
+        _lastChecked = State(initialValue: PaperclipDraft.lastChecked(key: key))
     }
     var body: some View {
         List {
@@ -110,9 +112,14 @@ struct PaperclipIssueDetailView: View {
                 primaryButton: .default(Text("确认")) { Task { await apply(decision) } }, secondaryButton: .cancel(Text("取消")))
         }
         .confirmationDialog("放弃草稿不会撤销服务器可能已接收的回复", isPresented: $discardReply, titleVisibility: .visible) {
-            Button("已核对，放弃草稿", role: .destructive) { draft = PaperclipDraft(); PaperclipDraft.clear(key: draftKey) }
+            Button("已核对，解除待提交状态", role: .destructive) {
+                draft.archive(key: draftKey)
+                lastChecked = draft
+                draft = PaperclipDraft()
+                model.error = nil
+            }
             Button("取消", role: .cancel) {}
-        }
+        } message: { Text("回复可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送。") }
     }
     private var commentsSection: some View {
         Section("任务对话") {
@@ -135,6 +142,7 @@ struct PaperclipIssueDetailView: View {
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("放弃本机回复草稿", role: .destructive) { discardReply = true }.disabled(model.busy)
             }
+            if let lastChecked { PaperclipCheckedDraftView(draft: lastChecked) }
             Button(draft.submitted ? "重试同一回复" : "发送到服务器") { Task { await reply() } }
                 .disabled(model.busy || draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityIdentifier("paperclip.sendReply")
@@ -163,6 +171,7 @@ struct PaperclipIssueDetailView: View {
             ForEach(model.approvals) { approval in
                 DisclosureGroup("\(approval.title) · \(PaperclipLabels.status(approval.status))") {
                     Text("审批编号：\(approval.id)").font(.caption).textSelection(.enabled)
+                    Text("申请者：\(approval.requestedByUserId ?? approval.requestedByAgentId ?? "未提供")").font(.caption).textSelection(.enabled)
                     Text("以下内容由服务器提供，请完整核对后决定。").font(.footnote).foregroundStyle(.secondary)
                     Text(approval.payloadText).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                     if let note = approval.decisionNote { Text("决定说明：\(note)") }
@@ -178,6 +187,7 @@ struct PaperclipIssueDetailView: View {
     private func reply() async {
         guard !model.busy else { return }
         model.busy = true
+        if !draft.submitted { draft.firstSubmittedAt = Date() }
         draft.submitted = true
         draft.save(key: draftKey)
         do {
@@ -195,7 +205,7 @@ struct PaperclipIssueDetailView: View {
         do {
             if let status = decision.status { _ = try await model.client.setStatus(model.reference, status: status) }
             if let approval = decision.approval {
-                _ = try await model.client.resolve(model.reference, approvalID: approval.id, approve: decision.approve, note: decisionNote)
+                _ = try await model.client.resolve(model.reference, approval: approval, approve: decision.approve, note: decisionNote)
                 decisionNote = ""
             }
             model.error = nil
@@ -210,29 +220,40 @@ private struct PaperclipRunLogView: View {
     let reference: PaperclipTaskReference
     let run: PaperclipRun
     @State private var content = ""
+    @State private var nextOffset = 0
+    @State private var canReadMore = false
     @State private var error: String?
     @State private var busy = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("运行编号：\(run.runId)").font(.caption)
-                Text("显示服务器日志开头最多 64 KB。日志是服务器原始输出，可能包含英文。")
+                Text("日志每次读取最多64KB，可继续读取下一段。内容为服务器原始输出，可能包含英文；此页不会自动刷新。")
                     .font(.footnote).foregroundStyle(.secondary)
                 if let error { Text(error).foregroundStyle(.red) }
                 if busy { ProgressView("正在读取日志…") }
                 Text(content.isEmpty && !busy ? "暂无日志内容" : content)
                     .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                if canReadMore {
+                    Button("继续读取下一段日志") { Task { await load(reset: false) } }.disabled(busy)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading).padding()
         }
         .navigationTitle("运行日志")
         .toolbar { Button("刷新") { Task { await load() } }.disabled(busy) }
         .task { await load() }
     }
-    private func load() async {
+    private func load(reset: Bool = true) async {
         guard !busy else { return }
         busy = true
-        do { content = try await client.runLog(reference, runID: run.runId); error = nil }
-        catch { self.error = PaperclipLabels.error(error); content = "" }
+        let offset = reset ? 0 : nextOffset
+        do {
+            let chunk = try await client.runLog(reference, runID: run.runId, offset: offset)
+            content = reset ? chunk.content : content + chunk.content
+            nextOffset = chunk.nextOffset ?? offset
+            canReadMore = !chunk.content.isEmpty && nextOffset > offset
+            error = nil
+        } catch { self.error = PaperclipLabels.error(error) }
         busy = false
     }
 }

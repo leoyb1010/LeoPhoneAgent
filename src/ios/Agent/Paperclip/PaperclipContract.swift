@@ -136,12 +136,19 @@ struct PaperclipRun: Decodable, Identifiable, Sendable {
     let finishedAt: String?
     var id: String { runId }
 }
-struct PaperclipApproval: Decodable, Identifiable, Sendable {
+struct PaperclipRunLogChunk: Decodable, Sendable {
+    let runId: String
+    let content: String
+    let nextOffset: Int?
+}
+struct PaperclipApproval: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let companyId: String
     let type: String
     let status: String
     let payload: [String: PaperclipJSON]
+    let requestedByAgentId: String?
+    let requestedByUserId: String?
     let decisionNote: String?
     var payloadText: String {
         guard let data = try? JSONEncoder.paperclipPretty.encode(payload) else { return "无法显示审批内容" }
@@ -155,7 +162,7 @@ struct PaperclipApproval: Decodable, Identifiable, Sendable {
         }
     }
 }
-indirect enum PaperclipJSON: Codable, Sendable {
+indirect enum PaperclipJSON: Codable, Sendable, Equatable {
     case string(String), number(Double), bool(Bool), object([String: PaperclipJSON]), array([PaperclipJSON]), null
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
@@ -218,6 +225,7 @@ enum PaperclipError: LocalizedError, Equatable {
         case .invalidResponse: return "服务器响应格式不兼容，请确认部署版本与客户端契约一致。"
         case .unavailable: return "服务器尚未就绪或无法连接，请稍后重试。不会改用本机执行。"
         case .cancelled: return "请求已取消。"
+        case .http(409): return "任务或审批已被其他操作更新，请刷新并重新核对后再决定。"
         case .http(let status): return "服务器请求失败（状态码 \(status)），请刷新后检查结果。"
         case .uncertain: return "服务器可能已收到操作，但返回结果尚未确认。请先刷新核对；创建和回复重试会保留同一请求编号。不会自动重发或转为本机执行。"
         }

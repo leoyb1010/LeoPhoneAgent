@@ -50,7 +50,8 @@ class IOSPaperclipContractAudit(unittest.TestCase):
             self.assertIn(marker, client)
         self.assertIn("let runId: String", (CORE / "PaperclipContract.swift").read_text())
         self.assertIn("await issue(ref)", client)
-        self.assertIn('current.contains(where: { $0.id == approvalID && $0.status == "pending" })', client)
+        self.assertIn('approval.status == "pending"', client)
+        self.assertIn("current.contains(where: { $0 == approval })", client)
 
     def test_no_secrets_in_profile_or_draft_and_no_automatic_mutation_retry(self):
         contract = (CORE / "PaperclipContract.swift").read_text()

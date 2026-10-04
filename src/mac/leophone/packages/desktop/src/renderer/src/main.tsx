@@ -5,6 +5,8 @@ import { useEffect } from "react";
 import {
   AppErrorBoundary,
   Root,
+  PaperclipWorkspace,
+  Button,
   GlobalDatabaseStartupLoading,
   UpdateStatusWindowRoot,
   ZCodeIntlProvider,
@@ -29,6 +31,7 @@ import {
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
+import type { PaperclipTransport } from "@zcode/services/paperclip";
 import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
@@ -133,6 +136,9 @@ const initialWorkspacePurpose = readStringFlag("initialWorkspacePurpose");
 const unavailableWorkspacePath = readStringFlag("unavailableWorkspacePath");
 const windowKind = readStringFlag("windowKind");
 const initialLocaleFlag = readStringFlag("locale");
+// 默认服务器工作区不依赖旧本地数据库；仅显式恢复模式走旧启动链路。
+const isPaperclipWorkspace =
+  windowKind !== "update-status" && readStringFlag("workspaceMode") !== "local-recovery";
 const initialLocale: Locale =
   initialLocaleFlag === "zh-CN" || initialLocaleFlag === "en-US"
     ? initialLocaleFlag
@@ -192,7 +198,7 @@ function enterAppIfPrepared(): void {
   if (port) initializeBusinessRoot(port);
 }
 const firstStartupStateTimer =
-  windowKind === "update-status"
+  windowKind === "update-status" || isPaperclipWorkspace
     ? undefined
     : setTimeout(() => {
         if (databaseStartupAdmission.state) return;
@@ -259,6 +265,12 @@ function StartupReadyNotifier() {
 }
 
 function handleServicePortMessage(event: MessageEvent): void {
+  if (isPaperclipWorkspace) {
+    // 服务器 UI 不接收本地 Host 业务流，不因旧数据库失败降级到本地执行。
+    if (event.source === window && event.data?.type === InternalChannels.ServicePort)
+      event.ports[0]?.close();
+    return;
+  }
   if (event.source === window && event.data?.type === InternalChannels.DatabaseStartupState) {
     const result = databaseStartupStateSchema.safeParse(event.data.state);
     if (!result.success || appInitialized) return;
@@ -331,6 +343,20 @@ function initializeBusinessRoot(port: MessagePort): void {
         resolveSystemLocale={desktopPlatform.getSystemLocale}
       >
         <StartupReadyNotifier />
+        <div className="fixed top-9 right-4 z-50 flex items-center gap-2 rounded-lg border border-border bg-popover p-2 text-ui-sm text-foreground">
+          <span>本地恢复模式 · 与服务器独立</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("workspaceMode");
+              window.location.assign(url.href);
+            }}
+          >
+            返回服务器工作区
+          </Button>
+        </div>
         <Root
           services={services}
           platform={desktopPlatform}
@@ -352,9 +378,38 @@ function initializeBusinessRoot(port: MessagePort): void {
 }
 
 window.addEventListener("message", handleServicePortMessage);
-if (windowKind !== "update-status") {
+if (windowKind !== "update-status" && !isPaperclipWorkspace) {
   renderDatabaseStartup();
   sendStartupControl({ action: "snapshot" });
+}
+
+if (isPaperclipWorkspace) {
+  const transport: PaperclipTransport = {
+    request: (input) => window.zcode.paperclipRequest(input),
+    signIn: (input) => window.zcode.paperclipSignIn(input),
+    signOut: async (input) => {
+      await window.zcode.paperclipSignOut(input);
+    },
+    download: async (input) => {
+      await window.zcode.paperclipDownload(input);
+    },
+  };
+  appRoot?.render(
+    <ZCodeIntlProvider initialLocale="zh-CN">
+      <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>
+        <StartupReadyNotifier />
+        <PaperclipWorkspace
+          transport={transport}
+          persistence={localStorage}
+          onRecovery={() => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("workspaceMode", "local-recovery");
+            window.location.assign(url.href);
+          }}
+        />
+      </AppErrorBoundary>
+    </ZCodeIntlProvider>,
+  );
 }
 
 if (windowKind === "update-status") {

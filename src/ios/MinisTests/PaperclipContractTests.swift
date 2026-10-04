@@ -43,6 +43,36 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(PaperclipLabels.status("future_status"), "未知状态")
         for status in PaperclipIssueStatus.allCases { XCTAssertNotEqual(status.title, status.rawValue) }
     }
+    func testCreateRetryStopsBeforeServerSevenDayKeyExpiry() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var draft = PaperclipDraft()
+        XCTAssertTrue(draft.canRetryCreate(now: now))
+        draft.submitted = true
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(-60)
+        XCTAssertTrue(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(-6 * 24 * 60 * 60)
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+        draft.firstSubmittedAt = now.addingTimeInterval(1)
+        XCTAssertFalse(draft.canRetryCreate(now: now))
+    }
+
+    func testManualDraftReleaseKeepsDiagnosticRecordWithoutResending() throws {
+        let suite = "paperclip.archive-test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var draft = PaperclipDraft()
+        draft.title = "已核对任务"; draft.body = "原始内容"; draft.submitted = true
+        draft.firstSubmittedAt = Date(timeIntervalSince1970: 1_000)
+        draft.save(key: "fixture", defaults: defaults)
+        draft.archive(key: "fixture", defaults: defaults)
+        let archived = try XCTUnwrap(PaperclipDraft.lastChecked(key: "fixture", defaults: defaults))
+        XCTAssertEqual(archived.requestID, draft.requestID)
+        XCTAssertEqual(archived.body, draft.body)
+        XCTAssertEqual(archived.firstSubmittedAt, draft.firstSubmittedAt)
+        XCTAssertFalse(PaperclipDraft.load(key: "fixture", defaults: defaults).submitted)
+    }
+
     func testPendingDraftRetainsIdAcrossRestartAndIsIdentityScoped() throws {
         let suite = "paperclip.test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
