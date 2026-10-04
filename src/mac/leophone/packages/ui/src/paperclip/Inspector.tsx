@@ -27,6 +27,28 @@ export function PaperclipInspector({
   const assignee = snapshot.agents.find((agent) => agent.id === detail.issue.assigneeAgentId);
   return (
     <div className="space-y-5 text-ui-caption">
+      {Object.values(snapshot.receipts)
+        .filter(
+          (row) =>
+            row.state === "unknown" &&
+            row.targetId === detail.issue.id &&
+            ["status", "approval", "cancel"].includes(row.kind ?? ""),
+        )
+        .map((receipt) => (
+          <section key={receipt.id} className="space-y-2">
+            <p>原操作结果待核实。核实只读取服务器，不会再次提交。</p>
+            {receipt.unblockAction && <p>原解除条件：{receipt.unblockAction}</p>}
+            <Button
+              variant="outline"
+              disabled={snapshot.busy || snapshot.ready === false}
+              onClick={() =>
+                void invoke(() => service.command({ kind: "reconcile", receiptId: receipt.id }))
+              }
+            >
+              核实原操作
+            </Button>
+          </section>
+        ))}
       <section className="space-y-4">
         <h3 className="text-ui-base font-medium">任务属性</h3>
         <label className="flex flex-col gap-2">
@@ -35,7 +57,7 @@ export function PaperclipInspector({
             aria-label="更改任务状态"
             className="pc-select text-ui-caption"
             value={detail.issue.status}
-            disabled={snapshot.busy}
+            disabled={snapshot.busy || snapshot.ready === false}
             onChange={(event) =>
               setDecision({
                 title: `将任务设为「${paperclipStatus(event.target.value)}」？`,
@@ -92,7 +114,7 @@ export function PaperclipInspector({
                   aria-label="决定说明"
                   placeholder="决定说明（可选）"
                   value={note}
-                  disabled={snapshot.busy}
+                  disabled={snapshot.busy || snapshot.ready === false}
                   onChange={(event) => setNote(event.target.value)}
                 />
                 <div className="flex gap-2">
@@ -100,7 +122,7 @@ export function PaperclipInspector({
                     <Button
                       key={String(approve)}
                       variant={approve ? "default" : "outline"}
-                      disabled={snapshot.busy}
+                      disabled={snapshot.busy || snapshot.ready === false}
                       onClick={() =>
                         setDecision({
                           title: approve ? "确认批准此请求？" : "确认拒绝此请求？",
@@ -140,7 +162,7 @@ export function PaperclipInspector({
             </span>
             <Button
               variant="outline"
-              disabled={snapshot.busy}
+              disabled={snapshot.busy || snapshot.ready === false}
               onClick={() => void invoke(() => service.readLog(run.runId))}
             >
               {snapshot.log?.runId === run.runId ? "继续读取日志" : "读取日志"}
@@ -148,7 +170,7 @@ export function PaperclipInspector({
             {["queued", "running"].includes(run.status) && (
               <Button
                 variant="outline"
-                disabled={snapshot.busy}
+                disabled={snapshot.busy || snapshot.ready === false}
                 onClick={() =>
                   setDecision({
                     title: "确认取消此服务器运行？",
@@ -188,7 +210,7 @@ export function PaperclipInspector({
             </span>
             <Button
               variant="outline"
-              disabled={snapshot.busy}
+              disabled={snapshot.busy || snapshot.ready === false}
               onClick={() => void invoke(() => service.downloadAttachment(attachment.id))}
             >
               下载附件

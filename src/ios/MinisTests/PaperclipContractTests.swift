@@ -2,6 +2,16 @@ import Foundation
 import XCTest
 
 final class PaperclipContractTests: XCTestCase {
+    func testBlockedExpectationRequiresExplicitBoundOwnerAction() throws {
+        XCTAssertThrowsError(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: "  "))
+        XCTAssertThrowsError(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: String(repeating: "😀", count: 1001)))
+        let expected = try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: " 核对需求 ")
+        let matching = #"{"id":"issue","companyId":"company","title":"任务","status":"blocked","priority":"medium","unblockDescriptor":{"owner":{"userId":"human"},"action":"核对需求"}}"#
+        XCTAssertTrue(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.utf8))))
+        XCTAssertFalse(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.replacingOccurrences(of: "human", with: "other").utf8))))
+        XCTAssertFalse(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.replacingOccurrences(of: "核对需求", with: "其他操作").utf8))))
+    }
+
     func testOnlyHTTPSOriginIsAccepted() throws {
         let profile = try PaperclipProfile(name: "测试", address: " HTTPS://EXAMPLE.COM:443/ ")
         XCTAssertEqual(profile.origin.absoluteString, "https://example.com")

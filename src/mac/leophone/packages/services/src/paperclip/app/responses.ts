@@ -18,6 +18,7 @@ export const issueSchema = z.object({
   description: z.string().nullable().optional(),
   identifier: z.string().nullable().optional(),
   assigneeAgentId: z.string().nullable().optional(),
+  unblockDescriptor: z.object({ owner: z.unknown(), action: z.string() }).nullable().optional(),
 });
 export const commentSchema = z.object({
   id,
@@ -52,6 +53,10 @@ export const attachmentSchema = z.object({
 export const healthSchema = z.object({
   status: z.literal("ok"),
   deploymentMode: z.literal("authenticated"),
+  authReady: z
+    .boolean()
+    .optional()
+    .refine((value) => value !== false, "服务器身份认证尚未就绪，请等待管理员完成初始化。"),
 });
 export const sessionSchema = z.object({ user: userSchema });
 export const logSchema = z.object({
@@ -74,6 +79,7 @@ export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({
   selectedIssueId: null,
   busy: false,
   error: null,
+  ready: false,
   log: null,
   receipts: {},
 });

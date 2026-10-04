@@ -6,6 +6,10 @@ export const paperclipStoredReceiptSchema = z.object({
   kind: z.enum(["create", "comment", "status", "approval", "cancel"]),
   submittedAt: z.number().finite(),
   targetId: z.string().max(256).optional(),
+  status: z.string().max(64).optional(),
+  unblockAction: z.string().max(2000).optional(),
+  operationTargetId: z.string().max(256).optional(),
+  expectedStatus: z.string().max(64).optional(),
   state: z.enum(["unknown", "archived"]),
 });
 export type PaperclipStoredReceipt = z.infer<typeof paperclipStoredReceiptSchema>;

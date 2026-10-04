@@ -11,7 +11,44 @@ final class PaperclipIssueDetailModel: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published var lastRefreshed: Date?
-    init(client: PaperclipClient, reference: PaperclipTaskReference) { self.client = client; self.reference = reference }
+    @Published private(set) var pendingStatus: PaperclipStatusExpectation?
+    private var statusKey: String { "leo.paperclip.status.v1." + reference.id }
+    init(client: PaperclipClient, reference: PaperclipTaskReference) {
+        self.client = client; self.reference = reference
+        if let data = UserDefaults.standard.data(forKey: "leo.paperclip.status.v1." + reference.id) {
+            pendingStatus = try? JSONDecoder().decode(PaperclipStatusExpectation.self, from: data)
+        }
+    }
+    func changeStatus(_ expected: PaperclipStatusExpectation) async {
+        guard !busy, pendingStatus == nil else { return }
+        busy = true
+        pendingStatus = expected
+        if let data = try? JSONEncoder().encode(expected) { UserDefaults.standard.set(data, forKey: statusKey) }
+        do {
+            issue = try await client.setStatus(reference, status: expected.status, unblockAction: expected.unblockAction)
+            pendingStatus = nil; UserDefaults.standard.removeObject(forKey: statusKey); error = nil
+        } catch {
+            record(error)
+            if error as? PaperclipError != .uncertain { pendingStatus = nil; UserDefaults.standard.removeObject(forKey: statusKey) }
+        }
+        busy = false
+    }
+    func acknowledgeStatus() {
+        guard !busy, let pendingStatus else { return }
+        if let data = try? JSONEncoder().encode(pendingStatus) { UserDefaults.standard.set(data, forKey: statusKey + ".lastChecked") }
+        self.pendingStatus = nil; UserDefaults.standard.removeObject(forKey: statusKey)
+        error = nil
+    }
+    func verifyStatus() async {
+        guard !busy, let expected = pendingStatus, expected.userID == reference.userID else { return }
+        busy = true; defer { busy = false }
+        do {
+            let current = try await client.issue(reference)
+            issue = current
+            guard expected.matches(current) else { throw PaperclipError.statusNotConfirmed }
+            pendingStatus = nil; UserDefaults.standard.removeObject(forKey: statusKey); error = nil
+        } catch { record(error) }
+    }
 
     func refresh() async {
         guard !busy else { return }
@@ -40,8 +77,10 @@ struct PaperclipIssueDetailView: View {
     @StateObject private var model: PaperclipIssueDetailModel
     @State private var draft: PaperclipDraft
     @State private var decisionNote = ""
+    @State private var statusDecision: PaperclipIssueStatus?
     @State private var pendingDecision: Decision?
     @State private var discardReply = false
+    @State private var acknowledgeStatus = false
     @State private var lastChecked: PaperclipDraft?
     @State private var visible = false
     @State private var details = false
@@ -108,15 +147,16 @@ struct PaperclipIssueDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    if model.pendingStatus != nil { Button("核实状态（不会重新发送）") { Task { await model.verifyStatus() } }.disabled(model.busy) }
                     Button("刷新消息", systemImage: "arrow.clockwise") { Task { await model.refresh() } }.disabled(model.busy)
                     Button("任务信息、运行与审批", systemImage: "sidebar.right") { details = true }
                     if let issue = model.issue {
                         Menu("更改任务状态") {
                             ForEach(PaperclipIssueStatus.allCases) { status in
-                                Button(status.title) { pendingDecision = Decision(status: status, approval: nil, approve: false) }
+                                Button(status.title) { statusDecision = status }
                                     .disabled(status.rawValue == issue.status)
                             }
-                        }.disabled(model.busy)
+                        }.disabled(model.busy || model.pendingStatus != nil)
                     }
                 } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("任务操作").accessibilityIdentifier("paperclip.taskActions")
@@ -133,6 +173,14 @@ struct PaperclipIssueDetailView: View {
                         if let issue = model.issue { Text("优先级：\(PaperclipLabels.priority(issue.priority))") }
                         if let date = model.lastRefreshed { Text("最近同步：\(date.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary) }
                     }
+                    if let expected = model.pendingStatus {
+                        Section("状态结果待核实") {
+                            Text("原目标：\(expected.status.title)")
+                            if let action = expected.unblockAction { Text(action) }
+                            Button("核实状态（不会重新发送）") { Task { await model.verifyStatus() } }.disabled(model.busy)
+                            Button("已人工核对，解除待核实状态") { acknowledgeStatus = true }.disabled(model.busy)
+                        }
+                    }
                     runsSection
                     approvalsSection
                     if let lastChecked { Section { PaperclipCheckedDraftView(draft: lastChecked) } }
@@ -142,6 +190,9 @@ struct PaperclipIssueDetailView: View {
                 .alert(item: $pendingDecision) { decisionAlert($0) }
             }
         }
+        .sheet(item: $statusDecision) { status in
+            PaperclipStatusDecisionSheet(model: model, selected: status)
+        }
         .refreshable { await model.refresh() }
         .task { await model.refresh() }
         .task(id: scenePhase) {
@@ -150,7 +201,7 @@ struct PaperclipIssueDetailView: View {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
                 if visible && !editingReply && !editingDecision && draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     && decisionNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && pendingDecision == nil && !discardReply && !details && expandedApprovalIDs.isEmpty {
+                    && pendingDecision == nil && statusDecision == nil && !discardReply && !details && expandedApprovalIDs.isEmpty {
                     await model.refresh()
                 }
             }
@@ -158,6 +209,10 @@ struct PaperclipIssueDetailView: View {
         .onDisappear { visible = false; if !draft.body.isEmpty { draft.save(key: draftKey) } }
         .onChange(of: draft.body) { _, _ in draft.save(key: draftKey) }
         .alert(item: Binding(get: { details ? nil : pendingDecision }, set: { pendingDecision = $0 })) { decisionAlert($0) }
+        .confirmationDialog("解除只保存人工核对记录，不会撤销或重发服务器操作", isPresented: $acknowledgeStatus, titleVisibility: .visible) {
+            Button("已核对，解除待核实状态", role: .destructive) { model.acknowledgeStatus() }
+            Button("取消", role: .cancel) {}
+        }
         .confirmationDialog("放弃草稿不会撤销服务器可能已接收的回复", isPresented: $discardReply, titleVisibility: .visible) {
             Button("已核对，解除待提交状态", role: .destructive) {
                 draft.archive(key: draftKey)
@@ -191,8 +246,8 @@ struct PaperclipIssueDetailView: View {
             if model.comments.isEmpty { Text("还没有任务消息。任务状态以服务器为准。").font(.footnote).foregroundStyle(.secondary) }
             ForEach(model.comments) { comment in
                 messageBubble(body: comment.body,
-                    author: comment.authorUserId == model.reference.userID ? "我" : (comment.authorAgentId != nil ? "执行者消息" : (comment.authorUserId != nil ? "用户消息" : "任务消息")),
-                    time: comment.createdAt, mine: comment.authorUserId == model.reference.userID)
+                    author: comment.authorLabel(currentUserID: model.reference.userID),
+                    time: comment.createdAt, mine: comment.authorLabel(currentUserID: model.reference.userID) == "我")
                     .id(comment.id)
             }
         }
@@ -232,12 +287,12 @@ struct PaperclipIssueDetailView: View {
             TextField("回复任务或补充要求…", text: $draft.body, axis: .vertical).lineLimit(1...5)
                 .font(.body).lineSpacing(4)
                 .focused($editingReply)
-                .disabled(model.busy || draft.submitted).accessibilityIdentifier("paperclip.replyBody")
+                .disabled(model.busy || draft.submitted || model.pendingStatus != nil).accessibilityIdentifier("paperclip.replyBody")
             Button { Task { await reply() } } label: {
                 if model.busy { ProgressView() }
                 else { Image(systemName: draft.submitted ? "arrow.clockwise.circle.fill" : "arrow.up.circle.fill").font(.title) }
             }
-                .disabled(model.busy || draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(model.busy || model.pendingStatus != nil || draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel(draft.submitted ? "重试同一回复" : "发送到服务器")
                 .accessibilityIdentifier("paperclip.sendReply")
                 .tint(.primary)
@@ -289,13 +344,15 @@ struct PaperclipIssueDetailView: View {
         }
     }
     private func reply() async {
-        guard !model.busy else { return }
+        guard !model.busy, model.pendingStatus == nil else { return }
         model.busy = true
         let wasPreviouslySubmitted = draft.submitted
         draft.markSubmitted()
         draft.save(key: draftKey)
+        let submitted = draft
         do {
-            let sent = try await model.client.reply(model.reference, body: draft.body, requestID: draft.requestID)
+            let sent = try await model.client.reply(model.reference, body: submitted.body, requestID: submitted.requestID)
+            guard draft.requestID == submitted.requestID, draft.body == submitted.body else { model.busy = false; return }
             revealCommentID = sent.id
             draft = PaperclipDraft()
             PaperclipDraft.clear(key: draftKey)
@@ -321,6 +378,38 @@ struct PaperclipIssueDetailView: View {
         } catch { model.record(error); model.busy = false; return }
         model.busy = false
         await model.refresh()
+    }
+}
+
+private struct PaperclipStatusDecisionSheet: View {
+    @ObservedObject var model: PaperclipIssueDetailModel
+    let selected: PaperclipIssueStatus
+    @State private var action = ""
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { Text("将任务设为「\(selected.title)」？") }
+                if selected == .blocked {
+                    Section("解除受阻所需操作") {
+                        TextField("你需要完成什么，任务才能继续", text: $action, axis: .vertical).lineLimit(3...6)
+                        Text("责任人是当前登录用户；请填写真实解除条件。最多 2000 个字符。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if let error = model.error { Text(error).foregroundStyle(.red) }
+                Button("确认更改状态") {
+                    Task {
+                        do {
+                            let expected = try PaperclipStatusExpectation(status: selected, userID: model.reference.userID, unblockAction: action)
+                            await model.changeStatus(expected)
+                            if model.pendingStatus != nil || model.error == nil { dismiss() }
+                        } catch { model.record(error) }
+                    }
+                }.disabled(model.busy || (selected == .blocked && PaperclipUnblockAction.normalized(action) == nil))
+            }.navigationTitle("确认状态")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(model.busy) } }
+        }
     }
 }
 

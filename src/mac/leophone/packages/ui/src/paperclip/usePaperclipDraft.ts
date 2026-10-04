@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createUuid } from "@zcode/shared";
 import {
   creationRetryPermitted,
@@ -44,7 +44,10 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
     }
     return fresh();
   });
+  const current = useRef(draft);
+  current.current = draft;
   const save = (value: Draft) => {
+    current.current = value;
     setDraft(value);
     try {
       localStorage.setItem(key, JSON.stringify(value));
@@ -55,6 +58,7 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
   const update = (patch: Partial<Draft>) => save({ ...draft, ...patch });
   const clear = () => {
     const value = fresh();
+    current.current = value;
     setDraft(value);
     localStorage.removeItem(key);
   };
@@ -75,6 +79,19 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
     draft,
     update,
     clear,
+    clearConfirmed: (confirmation: PaperclipSnapshot["confirmedReply"]) => {
+      if (
+        !confirmation ||
+        confirmation.receiptId !== current.current.id ||
+        confirmation.body !== current.current.body ||
+        confirmation.issueId !== issueId ||
+        confirmation.identity !==
+          paperclipIdentityKey(snapshot.origin, snapshot.user?.id ?? "", snapshot.companyId)
+      )
+        return false;
+      clear();
+      return true;
+    },
     submit,
     rejected,
     creationRetryAllowed:

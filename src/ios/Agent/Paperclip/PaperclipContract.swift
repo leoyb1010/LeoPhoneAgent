@@ -73,6 +73,7 @@ struct PaperclipTaskReference: Codable, Hashable, Identifiable, Sendable {
 struct PaperclipHealth: Decodable, Sendable {
     let status: String
     let deploymentMode: String?
+    let authReady: Bool?
     let commit: String?
 }
 struct PaperclipUser: Decodable, Equatable, Sendable {
@@ -117,6 +118,11 @@ struct PaperclipIssue: Decodable, Identifiable, Sendable {
     let priority: String
     let assigneeAgentId: String?
     let updatedAt: String?
+    let unblockDescriptor: PaperclipUnblockDescriptor?
+}
+struct PaperclipUnblockDescriptor: Decodable, Equatable, Sendable {
+    let owner: PaperclipJSON
+    let action: String
 }
 struct PaperclipComment: Decodable, Identifiable, Sendable {
     let id: String
@@ -127,6 +133,13 @@ struct PaperclipComment: Decodable, Identifiable, Sendable {
     let authorAgentId: String?
     let clientRequestId: String?
     let createdAt: String?
+    func authorLabel(currentUserID: String) -> String {
+        let user = (authorUserId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let agent = (authorAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !user.isEmpty && agent.isEmpty { return user == currentUserID ? "我" : "用户消息" }
+        if user.isEmpty && !agent.isEmpty { return "智能体消息" }
+        return "未知作者"
+    }
 }
 struct PaperclipRun: Decodable, Identifiable, Sendable {
     let runId: String
@@ -193,11 +206,43 @@ extension JSONEncoder {
     }
 }
 
-enum PaperclipIssueStatus: String, CaseIterable, Identifiable {
+enum PaperclipIssueStatus: String, Codable, CaseIterable, Identifiable {
     case backlog, todo, inProgress = "in_progress", inReview = "in_review", done, blocked, cancelled
     var id: String { rawValue }
     var title: String { PaperclipLabels.status(rawValue) }
 }
+struct PaperclipStatusExpectation: Codable {
+    let status: PaperclipIssueStatus
+    let userID: String
+    let unblockAction: String?
+    init(status: PaperclipIssueStatus, userID: String, unblockAction: String?) throws {
+        self.status = status
+        self.userID = userID
+        if status == .blocked {
+            guard let action = PaperclipUnblockAction.normalized(unblockAction) else { throw PaperclipError.unblockActionRequired }
+            self.unblockAction = action
+        } else { self.unblockAction = nil }
+    }
+    func matches(_ issue: PaperclipIssue) -> Bool {
+        guard issue.status == status.rawValue else { return false }
+        if status == .blocked {
+            return issue.unblockDescriptor?.owner == .object(["userId": .string(userID)]) &&
+                issue.unblockDescriptor?.action == unblockAction
+        }
+        return true
+    }
+}
+
+enum PaperclipUnblockAction {
+    /// 上游 z.string().trim().min(1).max(2000) 按 UTF-16 长度计数。
+    static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let action = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !action.isEmpty, action.utf16.count <= 2_000 else { return nil }
+        return action
+    }
+}
+
 enum PaperclipLabels {
     static func status(_ value: String) -> String {
         ["backlog": "待规划", "todo": "待处理", "in_progress": "进行中", "in_review": "待审核",
@@ -215,7 +260,7 @@ enum PaperclipLabels {
 }
 enum PaperclipError: LocalizedError, Equatable {
     case invalidAddress, signedOut, forbidden, identityChanged, invalidResponse, unavailable, cancelled
-    case http(Int), uncertain
+    case http(Int), uncertain, unblockActionRequired, statusNotConfirmed
     var errorDescription: String? {
         switch self {
         case .invalidAddress: return "请输入独立服务器的 HTTPS 根地址，不包含账号、密码、路径、查询参数或片段。"
@@ -227,6 +272,8 @@ enum PaperclipError: LocalizedError, Equatable {
         case .cancelled: return "请求已取消。"
         case .http(409): return "任务或审批已被其他操作更新，请刷新并重新核对后再决定。"
         case .http(let status): return "服务器请求失败（状态码 \(status)），请刷新后检查结果。"
+        case .unblockActionRequired: return "请填写解除受阻需要做什么（1 到 2000 个字符）。"
+        case .statusNotConfirmed: return "服务器状态或解除条件与原目标不同，尚未核实成功；没有重新发送。"
         case .uncertain: return "服务器可能已收到操作，但返回结果尚未确认。请先刷新核对；创建和回复重试会保留同一请求编号。不会自动重发或转为本机执行。"
         }
     }

@@ -15,6 +15,16 @@ export function pendingReceipt(
     submittedAt:
       previousSubmittedAt ?? (command.kind === "create" ? command.firstSubmittedAt : Date.now()),
     targetId: command.kind === "create" ? undefined : command.issueId,
+    ...(command.kind === "status"
+      ? { status: command.status, unblockAction: command.unblockAction }
+      : {}),
+    ...(command.kind === "approval"
+      ? {
+          operationTargetId: command.approvalId,
+          expectedStatus: command.approve ? "approved" : "rejected",
+        }
+      : {}),
+    ...(command.kind === "cancel" ? { operationTargetId: command.runId } : {}),
   };
 }
 

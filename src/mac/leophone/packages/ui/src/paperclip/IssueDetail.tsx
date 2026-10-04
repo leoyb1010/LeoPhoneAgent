@@ -21,9 +21,13 @@ export function PaperclipIssueDetail({
   onHome: () => void;
 }) {
   const detail = snapshot.detail!;
-  const { draft, update, submit, rejected, clear } = usePaperclipDraft(snapshot, detail.issue.id);
+  const { draft, update, submit, rejected, clear, clearConfirmed } = usePaperclipDraft(
+    snapshot,
+    detail.issue.id,
+  );
   const [decision, setDecision] = useState<PaperclipDecision | null>(null);
   const [note, setNote] = useState("");
+  const [unblockAction, setUnblockAction] = useState("");
   const [properties, setProperties] = useState(false);
   const propertiesFocus = useDialogFocusReturn(
     "[data-pc-inspector-trigger], [data-pc-home-trigger]",
@@ -48,8 +52,7 @@ export function PaperclipIssueDetail({
       }),
     );
     const receipt = service.getSnapshot().receipts[pending.id];
-    if (receipt?.state === "confirmed") {
-      clear();
+    if (receipt?.state === "confirmed" && clearConfirmed(service.getSnapshot().confirmedReply)) {
       follow.current = true;
     } else if (receipt?.state === "rejected") rejected(draft.submitted);
   };
@@ -58,7 +61,10 @@ export function PaperclipIssueDetail({
       service={service}
       snapshot={snapshot}
       invoke={invoke}
-      setDecision={setDecision}
+      setDecision={(value) => {
+        setUnblockAction("");
+        setDecision(value);
+      }}
       note={note}
       setNote={setNote}
     />
@@ -127,23 +133,21 @@ export function PaperclipIssueDetail({
               </div>
             )}
             {detail.comments.map((comment) => {
-              // 作者来自服务器字段；仅已确认本机请求编号可补证本人身份，缺失作者不能伪装成 AI。
-              const own =
-                comment.authorUserId === snapshot.user?.id ||
-                Boolean(
-                  comment.clientRequestId &&
-                  snapshot.receipts[comment.clientRequestId]?.state === "confirmed" &&
-                  snapshot.receipts[comment.clientRequestId]?.kind === "comment",
-                );
-              const agent = snapshot.agents.find((item) => item.id === comment.authorAgentId);
+              const user = comment.authorUserId?.trim();
+              const agentId = comment.authorAgentId?.trim();
+              const validUser = !!user && !agentId;
+              const validAgent = !!agentId && !user;
+              const own = validUser && user === snapshot.user?.id;
+              const agent = validAgent
+                ? snapshot.agents.find((item) => item.id === agentId)
+                : undefined;
               const author = own
                 ? snapshot.user?.name || "你"
-                : agent?.name ||
-                  (comment.authorAgentId
-                    ? "服务器代理"
-                    : comment.authorUserId
-                      ? "团队成员"
-                      : "服务器留言");
+                : validUser
+                  ? "团队成员"
+                  : validAgent
+                    ? agent?.name || "服务器智能体"
+                    : "未知作者";
               const date = comment.createdAt ? new Date(comment.createdAt) : null;
               const time =
                 date && Number.isFinite(date.getTime())
@@ -188,7 +192,7 @@ export function PaperclipIssueDetail({
                 <span className="min-w-0 flex-1">原回复结果待核对。重试沿用原请求编号。</span>
                 <Button
                   variant="ghost"
-                  disabled={snapshot.busy}
+                  disabled={snapshot.busy || snapshot.ready === false}
                   onClick={() =>
                     void invoke(async () => {
                       if (snapshot.receipts[draft.id]?.state === "unknown")
@@ -276,13 +280,38 @@ export function PaperclipIssueDetail({
               {decision.preview}
             </pre>
           )}
+          {decision?.command.kind === "status" && decision.command.status === "blocked" && (
+            <label className="flex flex-col gap-2 text-ui-caption">
+              解除受阻所需操作
+              <Textarea
+                aria-label="解除受阻所需操作"
+                placeholder="你需要完成什么，任务才能继续"
+                value={unblockAction}
+                onChange={(event) => setUnblockAction(event.target.value)}
+              />
+              <span>责任人是当前登录用户；请输入真实解除条件（最多 2000 个字符）。</span>
+            </label>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDecision(null)}>
               取消
             </Button>
             <Button
+              disabled={
+                snapshot.busy ||
+                (decision?.command.kind === "status" &&
+                  decision.command.status === "blocked" &&
+                  (!unblockAction.trim() || unblockAction.trim().length > 2000))
+              }
               onClick={() => {
-                if (decision) void invoke(() => service.command(decision.command));
+                if (decision)
+                  void invoke(() =>
+                    service.command(
+                      decision.command.kind === "status"
+                        ? { ...decision.command, unblockAction }
+                        : decision.command,
+                    ),
+                  );
                 setDecision(null);
               }}
             >

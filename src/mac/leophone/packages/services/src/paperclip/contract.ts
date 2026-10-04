@@ -23,6 +23,7 @@ export interface PaperclipIssue {
   status: string;
   priority: string;
   assigneeAgentId?: string | null;
+  unblockDescriptor?: { owner: unknown; action: string } | null;
 }
 export interface PaperclipComment {
   id: string;
@@ -72,6 +73,10 @@ export interface PaperclipReceipt {
   kind?: PaperclipMutationCommand["kind"];
   submittedAt?: number;
   targetId?: string;
+  status?: string;
+  unblockAction?: string;
+  operationTargetId?: string;
+  expectedStatus?: string;
 }
 export interface PaperclipSnapshot {
   generation: number;
@@ -86,10 +91,15 @@ export interface PaperclipSnapshot {
   selectedIssueId: string | null;
   busy: boolean;
   error: string | null;
+  ready?: boolean;
   log: { runId: string; content: string; nextOffset: number } | null;
   receipts: Record<string, PaperclipReceipt>;
+  confirmedReply?: { receiptId: string; identity: string; issueId: string; body: string } | null;
 }
-export type PaperclipCommand = PaperclipMutationCommand | { kind: "archive"; receiptId: string };
+export type PaperclipCommand =
+  | PaperclipMutationCommand
+  | { kind: "archive"; receiptId: string }
+  | { kind: "reconcile"; receiptId: string };
 export type PaperclipMutationCommand =
   | {
       kind: "create";
@@ -101,7 +111,7 @@ export type PaperclipMutationCommand =
       agentId?: string;
     }
   | { kind: "comment"; requestId: string; retry: boolean; issueId: string; body: string }
-  | { kind: "status"; issueId: string; status: string }
+  | { kind: "status"; issueId: string; status: string; unblockAction?: string }
   | {
       kind: "approval";
       issueId: string;

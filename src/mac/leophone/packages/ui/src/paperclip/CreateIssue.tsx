@@ -22,7 +22,8 @@ export function PaperclipCreateIssue({
   const [details, setDetails] = useState(false);
   const company = snapshot.companies.find((item) => item.id === snapshot.companyId);
   const send = async () => {
-    if (!creationRetryAllowed || snapshot.busy || !draft.title.trim()) return;
+    if (!creationRetryAllowed || snapshot.busy || snapshot.ready === false || !draft.title.trim())
+      return;
     const pending = submit();
     await invoke(() =>
       service.command({
@@ -117,7 +118,12 @@ export function PaperclipCreateIssue({
               type="submit"
               className="pc-send"
               aria-label={draft.submitted ? "重试同一创建" : "创建任务"}
-              disabled={snapshot.busy || !creationRetryAllowed || !draft.title.trim()}
+              disabled={
+                snapshot.busy ||
+                snapshot.ready === false ||
+                !creationRetryAllowed ||
+                !draft.title.trim()
+              }
             >
               <ArrowUp size={19} />
             </button>
@@ -142,7 +148,7 @@ export function PaperclipCreateIssue({
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                disabled={snapshot.busy || !creationRetryAllowed}
+                disabled={snapshot.busy || snapshot.ready === false || !creationRetryAllowed}
                 onClick={() => void send()}
               >
                 重试同一创建

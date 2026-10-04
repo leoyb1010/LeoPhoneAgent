@@ -4,12 +4,13 @@ import XCTest
 private final class PaperclipTestProtocol: URLProtocol, @unchecked Sendable {
     static let lock = NSLock()
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) throws -> (Int, String, String))?
+    nonisolated(unsafe) static var defaultHealth = true
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.lock.lock(); let handler = Self.handler; Self.lock.unlock()
         do {
-            let result = try handler!(request)
+            let result = Self.defaultHealth && request.url?.path == "/api/health" ? (200, #"{"status":"ok","deploymentMode":"authenticated"}"#, "application/json") : try handler!(request)
             let response = HTTPURLResponse(url: request.url!, statusCode: result.0, httpVersion: nil,
                                            headerFields: ["Content-Type": result.2])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -32,8 +33,8 @@ private final class PaperclipTestProtocol: URLProtocol, @unchecked Sendable {
         }
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
-    static func install(_ handler: @escaping @Sendable (URLRequest) throws -> (Int, String, String)) {
-        lock.lock(); Self.handler = handler; lock.unlock()
+    static func install(defaultHealth: Bool = true, _ handler: @escaping @Sendable (URLRequest) throws -> (Int, String, String)) {
+        lock.lock(); Self.handler = handler; Self.defaultHealth = defaultHealth; lock.unlock()
     }
 }
 
@@ -99,8 +100,8 @@ final class PaperclipClientTests: XCTestCase {
         XCTAssertEqual(ledger.values, ["POST"])
     }
     func testHealthRejectsHTMLAndLocalTrustedServer() async throws {
-        for result in [(200, "<html>登录</html>", "text/html"), (200, #"{"status":"ok","deploymentMode":"local_trusted"}"#, "application/json")] {
-            PaperclipTestProtocol.install { _ in result }
+        for result in [(200, "<html>登录</html>", "text/html"), (200, #"{"status":"ok","deploymentMode":"local_trusted"}"#, "application/json"), (200, #"{"status":"ok"}"#, "application/json"), (200, #"{"status":"ok","deploymentMode":"future"}"#, "application/json"), (200, #"{"status":"ok","deploymentMode":"authenticated","authReady":false}"#, "application/json"), (200, #"{"status":"ok","deploymentMode":"authenticated","authReady":"yes"}"#, "application/json")] {
+            PaperclipTestProtocol.install(defaultHealth: false) { _ in result }
             do { _ = try await client().health(); XCTFail("不兼容服务不能启用") } catch {}
         }
     }
@@ -138,6 +139,26 @@ final class PaperclipClientTests: XCTestCase {
             catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
         }
         XCTAssertEqual(ledger.values, [requestID.uuidString, requestID.uuidString])
+    }
+
+    func testReplyReceiptMustMatchNonceHumanAuthorAndOriginalBody() async throws {
+        let session = Self.session; let issue = Self.issue; let nonce = UUID()
+        let response: [String: String] = ["id": "comment", "companyId": "company", "issueId": "issue", "body": "原回复", "authorUserId": "human", "clientRequestId": nonce.uuidString]
+        for mismatch in ["body", "authorUserId", "clientRequestId"] {
+            var row = response; row[mismatch] = "other"
+            let payload = String(data: try JSONSerialization.data(withJSONObject: row), encoding: .utf8)!
+            PaperclipTestProtocol.install { request in
+                switch request.url!.path {
+                case "/api/auth/get-session": return (200, session, "application/json")
+                case "/api/issues/issue": return (200, issue, "application/json")
+                default: return (200, payload, "application/json")
+                }
+            }
+            let client = try client()
+            let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin, companyID: "company", userID: "human", issueID: "issue")
+            do { _ = try await client.reply(ref, body: "原回复", requestID: nonce); XCTFail("其他回复不能清空原草稿") }
+            catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+        }
     }
 
     func testUnrelatedApprovalCannotBeResolved() async throws {

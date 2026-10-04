@@ -41,7 +41,7 @@ struct PaperclipLoginView: View {
 private struct PaperclipLoginBrowser: UIViewRepresentable {
     let profile: PaperclipProfile
     @Binding var error: String?
-    func makeCoordinator() -> Coordinator { Coordinator(origin: profile.origin, error: $error) }
+    func makeCoordinator() -> Coordinator { Coordinator(origin: profile.origin, profileID: profile.id, error: $error) }
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = PaperclipWorkspaceStore.websiteData(for: profile)
@@ -51,19 +51,38 @@ private struct PaperclipLoginBrowser: UIViewRepresentable {
         let login = profile.origin.appendingPathComponent("auth")
         var request = URLRequest(url: login)
         request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
-        view.load(request)
+        context.coordinator.healthTask = Task { @MainActor [weak view, weak coordinator = context.coordinator] in
+            let client = PaperclipClient(profile: profile, readCookies: { [] })
+            do {
+                _ = try await client.health()
+                guard !Task.isCancelled, let coordinator, coordinator.origin == profile.origin, coordinator.profileID == profile.id else { return }
+                view?.load(request)
+            } catch {
+                guard !Task.isCancelled else { return }
+                coordinator?.error = PaperclipLabels.error(error)
+            }
+        }
         return view
     }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        if context.coordinator.origin != profile.origin || context.coordinator.profileID != profile.id {
+            context.coordinator.healthTask?.cancel()
+            uiView.stopLoading()
+        }
+    }
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        coordinator.healthTask?.cancel()
+        coordinator.healthTask = nil
         uiView.stopLoading()
         uiView.navigationDelegate = nil
     }
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
         let origin: URL
+        let profileID: UUID
+        var healthTask: Task<Void, Never>?
         @Binding var error: String?
-        init(origin: URL, error: Binding<String?>) { self.origin = origin; _error = error }
+        init(origin: URL, profileID: UUID, error: Binding<String?>) { self.origin = origin; self.profileID = profileID; _error = error }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             // 994 的 /auth 同源表单登录无需外跳；不能在固定服务器标题下展示任意 HTTPS 登录页。

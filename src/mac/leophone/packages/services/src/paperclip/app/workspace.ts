@@ -1,9 +1,4 @@
-import type {
-  NativePaperclipPort,
-  PaperclipPreferences,
-  PaperclipStoredReceipt,
-} from "@zcode/shared";
-import { createUuid } from "@zcode/shared";
+import { createUuid, type NativePaperclipPort, type PaperclipPreferences, type PaperclipStoredReceipt } from "@zcode/shared";
 import type {
   IPaperclipWorkspace,
   PaperclipCommand,
@@ -15,7 +10,7 @@ import {
   normalizePaperclipOrigin,
   paperclipIdentityKey,
 } from "../domain/identity.js";
-import { emptyPaperclipSnapshot, companySchema, healthSchema, sessionSchema } from "./responses.js";
+import { emptyPaperclipSnapshot, companySchema, sessionSchema } from "./responses.js";
 import {
   buildPaperclipMutation,
   verifyPaperclipMutation,
@@ -29,17 +24,8 @@ import {
   downloadBoundAttachment,
 } from "./reads.js";
 import { receiptsFor, updateReceipt, pendingReceipt } from "./receipts.js";
-
-class OperationError extends Error {
-  constructor(
-    message: string,
-    readonly kind: "unknown" | "rejected" | "signed-out" = "rejected",
-  ) {
-    super(message);
-  }
-}
-
-/** 服务器拥有业务状态；此协调者只拥有读投影、发布代际和单次提交的回执。 */
+import { OperationError, requestPaperclip, assertPaperclipReady } from "./api.js";
+import { normalizeStatusCommand, readReconciliation } from "./reconcile.js";
 export class PaperclipWorkspace implements IPaperclipWorkspace {
   private state = emptyPaperclipSnapshot();
   private preferences: PaperclipPreferences = { origin: "", companies: {} };
@@ -83,6 +69,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
         generation = this.reset();
       }
       this.publish(generation, {
+        ...(error instanceof OperationError && error.kind === "unready" ? { ready: false } : {}),
         error: error instanceof Error ? error.message : "服务器操作失败，请重试。",
       });
       throw error;
@@ -90,42 +77,14 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
       this.publish(generation, { busy: false });
     }
   }
-  private async api(
+  private api(
     path: string,
     method: "GET" | "POST" | "PATCH" = "GET",
     body?: unknown,
     userId = this.state.user?.id,
     origin = this.state.origin,
   ): Promise<unknown> {
-    let reply: { status: number; data: unknown };
-    try {
-      reply = await this.port.request({
-        serverUrl: origin,
-        path,
-        method,
-        body,
-        expectedUserId: userId,
-      });
-    } catch {
-      throw new OperationError(
-        method === "GET"
-          ? "无法连接服务器，请检查网络后刷新。"
-          : "提交结果待确认，请先刷新核对。不会自动重发或转为本机执行。",
-        method === "GET" ? "rejected" : "unknown",
-      );
-    }
-    if (reply.status === 401) throw new OperationError("登录已过期，请重新登录。", "signed-out");
-    if (reply.status === 403) throw new OperationError("当前用户没有执行此操作的权限。");
-    if (reply.status < 200 || reply.status >= 300) {
-      const unknown = method !== "GET" && reply.status >= 500;
-      throw new OperationError(
-        unknown
-          ? "提交结果待确认，请刷新核对后决定。"
-          : `服务器请求失败（HTTP ${reply.status}），请刷新后核对。`,
-        unknown ? "unknown" : "rejected",
-      );
-    }
-    return reply.data;
+    return requestPaperclip(this.port, path, method, body, userId, origin);
   }
   async initialize(): Promise<void> {
     this.preferences = await this.port.getPreferences();
@@ -142,7 +101,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   }
   private async connect(generation: number): Promise<void> {
     const origin = this.state.origin;
-    healthSchema.parse(await this.api("/api/health", "GET", undefined, undefined, origin));
+    assertPaperclipReady(await this.api("/api/health", "GET", undefined, undefined, origin));
     const session = sessionSchema.safeParse(
       await this.api("/api/auth/get-session", "GET", undefined, undefined, origin),
     );
@@ -156,6 +115,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     const companyId =
       companies.find((company) => company.id === preferred)?.id ?? companies[0]?.id ?? "";
     this.publish(generation, {
+      ready: true,
       user,
       companies,
       companyId,
@@ -167,6 +127,8 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     if (!this.state.origin) throw new OperationError("请先保存服务器地址。");
     const generation = this.reset();
     await this.action(generation, async () => {
+      assertPaperclipReady(await this.api("/api/health"));
+      if (generation !== this.state.generation) return;
       const result = await this.port.signIn({ serverUrl: this.state.origin });
       if (generation !== this.state.generation) return;
       if (!result.completed) throw new OperationError("登录已取消，可重新打开登录窗口。");
@@ -205,6 +167,8 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   }
   private async readWorkspace(generation: number, loadMore = false): Promise<void> {
     const { companyId, user, origin } = this.context();
+    assertPaperclipReady(await this.api("/api/health", "GET", undefined, user.id, origin));
+    this.publish(generation, { ready: true });
     const { rows, agents, consumed, hasMore } = await readBoundWorkspace(
       (path) => this.api(path, "GET", undefined, user.id, origin),
       companyId,
@@ -260,6 +224,8 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   }
   async command(command: PaperclipCommand): Promise<void> {
     if (command.kind === "archive") return this.archiveReceipt(command.receiptId);
+    if (command.kind === "reconcile") return this.reconcileReceipt(command.receiptId);
+    command = normalizeStatusCommand(command);
     const { origin, user, companyId, generation } = this.context();
     const id = "requestId" in command ? command.requestId : createUuid();
     const identity = paperclipIdentityKey(origin, user.id, companyId);
@@ -287,6 +253,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     await this.action(generation, async () => {
       let sent = false;
       try {
+        assertPaperclipReady(await this.api("/api/health", "GET", undefined, user.id, origin));
         if (command.kind !== "create") {
           if (command.issueId !== this.state.selectedIssueId)
             throw new OperationError("当前任务已改变，请重新选择任务。");
@@ -304,14 +271,25 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
         }
         if (generation !== this.state.generation)
           throw new OperationError("当前工作区已改变，操作未发送。");
-        const mutation = buildPaperclipMutation(command, companyId, id);
+        const mutation = buildPaperclipMutation(command, companyId, id, user.id);
         sent = true;
         const raw = await this.api(mutation.path, mutation.method, mutation.body, user.id, origin);
-        const createdIssueId = verifyPaperclipMutation(command, raw, companyId, id);
+        const createdIssueId = verifyPaperclipMutation(command, raw, companyId, id, user.id);
+        if (command.kind === "cancel")
+          await readReconciliation(
+            (path) => this.api(path, "GET", undefined, user.id, origin),
+            receipt,
+            user.id,
+            companyId,
+          );
         await this.persistReceipt(identity, id);
         if (createdIssueId) this.publish(generation, { selectedIssueId: createdIssueId });
         this.publish(generation, {
-          receipts: { ...this.state.receipts, [id]: { id, state: "confirmed" } },
+          receipts: { ...this.state.receipts, [id]: { ...receipt, state: "confirmed" } },
+          confirmedReply:
+            command.kind === "comment"
+              ? { receiptId: id, identity, issueId: command.issueId, body: command.body }
+              : this.state.confirmedReply,
         });
       } catch (error) {
         const unknown =
@@ -355,6 +333,28 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     const preferences = updateReceipt(this.preferences, identity, id, receipt);
     await this.port.setPreferences(preferences);
     this.preferences = { ...this.preferences, receipts: preferences.receipts };
+  }
+  private async reconcileReceipt(id: string): Promise<void> {
+    const { origin, user, companyId, generation } = this.context();
+    const identity = paperclipIdentityKey(origin, user.id, companyId);
+    const receipt = this.preferences.receipts?.find(
+      (row) => row.identity === identity && row.id === id && row.state === "unknown",
+    );
+    if (!receipt) throw new OperationError("当前身份没有此待核对操作。");
+    await this.action(generation, async () => {
+      assertPaperclipReady(await this.api("/api/health", "GET", undefined, user.id, origin));
+      await readReconciliation(
+        (path) => this.api(path, "GET", undefined, user.id, origin),
+        receipt,
+        user.id,
+        companyId,
+      );
+      await this.persistReceipt(identity, id);
+      this.publish(generation, {
+        receipts: { ...this.state.receipts, [id]: { ...receipt, state: "confirmed" } },
+      });
+    });
+    if (generation === this.state.generation) await this.refresh();
   }
   private async archiveReceipt(id: string): Promise<void> {
     const { origin, user, companyId, generation } = this.context();

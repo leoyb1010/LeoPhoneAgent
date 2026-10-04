@@ -202,10 +202,11 @@ test("a 401 clears old identity and company data", async () => {
 });
 test("human operator commands compose into a task, decision, run and attachment workflow", async () => {
   let status = "todo";
+  let unblockDescriptor: unknown;
   let approved = false;
   let cancelled = false;
   const comments: unknown[] = [];
-  const currentIssue = () => ({ ...issue("a"), status });
+  const currentIssue = () => ({ ...issue("a"), status, unblockDescriptor });
   const approval = () => ({
     id: "approval",
     companyId: "a",
@@ -219,7 +220,10 @@ test("human operator commands compose into a task, decision, run and attachment 
     if (path === "/api/companies/a/issues")
       return { status: 200, data: input.method === "POST" ? currentIssue() : [currentIssue()] };
     if (path === "/api/issues/a-issue") {
-      if (input.method === "PATCH") status = (input.body as { status: string }).status;
+      if (input.method === "PATCH") {
+        status = (input.body as { status: string }).status;
+        unblockDescriptor = (input.body as { unblockDescriptor?: unknown }).unblockDescriptor;
+      }
       return { status: 200, data: currentIssue() };
     }
     if (path === "/api/issues/a-issue/comments") {
@@ -245,6 +249,11 @@ test("human operator commands compose into a task, decision, run and attachment 
       return {
         status: 200,
         data: [{ runId: "run", agentId: "agent", status: cancelled ? "cancelled" : "running" }],
+      };
+    if (path === "/api/heartbeat-runs/run")
+      return {
+        status: 200,
+        data: { id: "run", companyId: "a", status: cancelled ? "cancelled" : "running" },
       };
     if (path === "/api/heartbeat-runs/run/log")
       return { status: 200, data: { runId: "run", content: "fixture log", nextOffset: 11 } };
@@ -285,7 +294,12 @@ test("human operator commands compose into a task, decision, run and attachment 
     issueId: "a-issue",
     body: "补充要求",
   });
-  await item.workspace.command({ kind: "status", issueId: "a-issue", status: "blocked" });
+  await item.workspace.command({
+    kind: "status",
+    issueId: "a-issue",
+    status: "blocked",
+    unblockAction: "测试用户确认需求后继续",
+  });
   await item.workspace.command({
     kind: "approval",
     issueId: "a-issue",

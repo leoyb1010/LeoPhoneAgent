@@ -1,7 +1,8 @@
 import type { PaperclipMutationCommand, PaperclipDetail } from "../contract.js";
 import { paperclipApprovalFingerprint } from "../domain/approval.js";
 import { paperclipId } from "../domain/identity.js";
-import { approvalSchema, cancelledRunSchema, commentSchema, issueSchema } from "./responses.js";
+import { statusMatches } from "./reconcile.js";
+import { approvalSchema, commentSchema, issueSchema } from "./responses.js";
 
 export function verifyPaperclipCommandRelation(
   command: PaperclipMutationCommand,
@@ -41,6 +42,7 @@ export function buildPaperclipMutation(
   command: PaperclipMutationCommand,
   companyId: string,
   requestId: string,
+  userId: string,
 ) {
   const path =
     command.kind === "create"
@@ -63,7 +65,12 @@ export function buildPaperclipMutation(
       : command.kind === "comment"
         ? { body: command.body, clientRequestId: requestId }
         : command.kind === "status"
-          ? { status: command.status }
+          ? {
+              status: command.status,
+              ...(command.status === "blocked"
+                ? { unblockDescriptor: { owner: { userId }, action: command.unblockAction } }
+                : {}),
+            }
           : command.kind === "approval"
             ? { decisionNote: command.note }
             : {};
@@ -76,13 +83,15 @@ export function verifyPaperclipMutation(
   raw: unknown,
   companyId: string,
   requestId: string,
+  userId: string,
 ): string | undefined {
   if (command.kind === "create" || command.kind === "status") {
     const issue = issueSchema.parse(raw);
     if (
       issue.companyId !== companyId ||
       (command.kind === "status" &&
-        (issue.id !== command.issueId || issue.status !== command.status))
+        (issue.id !== command.issueId ||
+          !statusMatches(issue, command.status, command.unblockAction, userId)))
     )
       throw new Error("服务器回执归属不兼容。");
     if (command.kind === "create") return issue.id;
@@ -91,7 +100,10 @@ export function verifyPaperclipMutation(
     if (
       comment.companyId !== companyId ||
       comment.issueId !== command.issueId ||
-      comment.clientRequestId !== requestId
+      comment.clientRequestId !== requestId ||
+      comment.body !== command.body ||
+      comment.authorUserId !== userId ||
+      !!comment.authorAgentId?.trim()
     )
       throw new Error("回复回执不兼容。");
   } else if (command.kind === "approval") {
@@ -102,7 +114,6 @@ export function verifyPaperclipMutation(
       approval.status !== (command.approve ? "approved" : "rejected")
     )
       throw new Error("审批结果待核对。");
-  } else if (cancelledRunSchema.parse(raw).id !== command.runId)
-    throw new Error("运行取消结果待核对。");
+  } // 取消允许空回执，由绑定 GET 核实最终状态。
   return undefined;
 }

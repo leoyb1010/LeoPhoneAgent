@@ -52,11 +52,12 @@ final class PaperclipClient {
 
     func health() async throws -> PaperclipHealth {
         let result: PaperclipHealth = try await request("/api/health", cookies: [])
-        guard result.status == "ok", result.deploymentMode != "local_trusted" else { throw PaperclipError.unavailable }
+        guard result.status == "ok", result.deploymentMode == "authenticated", result.authReady != false else { throw PaperclipError.unavailable }
         return result
     }
 
     func humanSession() async throws -> PaperclipSession {
+        _ = try await health()
         let cookies = await readCookies()
         let data = try await raw("/api/auth/get-session", cookies: cookies)
         return try PaperclipSession.decode(data)
@@ -134,14 +135,20 @@ final class PaperclipClient {
         _ = try await issue(ref)
         let row: PaperclipComment = try await authenticated(try issuePath(ref) + "/comments", method: "POST",
             body: ["body": body, "clientRequestId": requestID.uuidString], userID: ref.userID)
-        guard row.companyId == ref.companyID, row.issueId == ref.issueID, !row.id.isEmpty else { throw PaperclipError.uncertain }
+        guard row.companyId == ref.companyID, row.issueId == ref.issueID, !row.id.isEmpty,
+              row.clientRequestId == requestID.uuidString, row.authorUserId == ref.userID,
+              (row.authorAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, row.body == body else { throw PaperclipError.uncertain }
         return row
     }
 
-    func setStatus(_ ref: PaperclipTaskReference, status: PaperclipIssueStatus) async throws -> PaperclipIssue {
+    func setStatus(_ ref: PaperclipTaskReference, status: PaperclipIssueStatus, unblockAction: String? = nil) async throws -> PaperclipIssue {
+        let expected = try PaperclipStatusExpectation(status: status, userID: ref.userID, unblockAction: unblockAction)
+        var body: [String: Any] = ["status": status.rawValue]
+        if let action = expected.unblockAction { body["unblockDescriptor"] = ["owner": ["userId": ref.userID], "action": action] }
         _ = try await issue(ref)
-        let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: ["status": status.rawValue], userID: ref.userID)
+        let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: body, userID: ref.userID)
         try verify(row, ref)
+        guard expected.matches(row) else { throw PaperclipError.uncertain }
         return row
     }
 
@@ -182,6 +189,7 @@ final class PaperclipClient {
     private func authenticated<T: Decodable>(_ path: String, method: String = "GET",
                                             body: [String: Any]? = nil, userID: String) async throws -> T {
         // 同一 Cookie 快照用于身份校验和实际请求，切换账号不会改变进行中的请求归属。
+        _ = try await health()
         let cookies = await readCookies()
         let identity = try PaperclipSession.decode(try await raw("/api/auth/get-session", cookies: cookies))
         guard identity.user.id == userID else { throw PaperclipError.identityChanged }
