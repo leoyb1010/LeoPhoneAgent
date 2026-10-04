@@ -1,6 +1,8 @@
 import XCTest
 
 final class PaperclipNativeJourneys: XCTestCase {
+    // 4ea的AX值读取单次耗时超过4秒；只增加只读观察窗口，不重打字或重发动作。
+    private let inputVerificationTimeout: TimeInterval = 15
     override func setUpWithError() throws { continueAfterFailure = false }
 
     @MainActor
@@ -124,7 +126,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         XCTAssertFalse(confirm.isEnabled, "不能在用户未说明解除阻塞条件时提交")
         enterText("请确认访问范围", into: action, app: app)
         let textEntered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "请确认访问范围"), object: action)
-        let inputResult = XCTWaiter.wait(for: [textEntered], timeout: 5)
+        let inputResult = XCTWaiter.wait(for: [textEntered], timeout: inputVerificationTimeout)
         if inputResult != .completed {
             let hierarchy = XCTAttachment(string: app.debugDescription)
             hierarchy.name = "解除阻塞输入未保留_无障碍层级"
@@ -237,7 +239,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         field.typeText(text)
         dismissObservedKeyboardGuide(app)
         let entered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", text), object: field)
-        let result = XCTWaiter.wait(for: [entered], timeout: 5)
+        let result = XCTWaiter.wait(for: [entered], timeout: inputVerificationTimeout)
         if result != .completed {
             let hierarchy = XCTAttachment(string: app.debugDescription)
             hierarchy.name = "输入值不符_真实无障碍层级"
