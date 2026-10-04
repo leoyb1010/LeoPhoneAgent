@@ -1,4 +1,4 @@
-import { access, stat } from "node:fs/promises";
+import { access, stat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -20,8 +20,8 @@ export const HOST_CLI_AUTH_PROFILES: Readonly<Record<string, Profile>> = {
   claude_local: { commands: ["claude"], apiEnvKeys: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"], statusArgs: ["auth", "status"] },
   grok_local: { commands: ["grok"], apiEnvKeys: ["XAI_API_KEY", "GROK_API_KEY"] },
   gemini_local: { commands: ["gemini"], apiEnvKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
-  cursor: { commands: ["agent", "cursor-agent"], apiEnvKeys: ["CURSOR_API_KEY"] },
-  cursor_local: { commands: ["agent", "cursor-agent"], apiEnvKeys: ["CURSOR_API_KEY"] },
+  cursor: { commands: ["cursor-agent", "agent"], apiEnvKeys: ["CURSOR_API_KEY"] },
+  cursor_local: { commands: ["cursor-agent", "agent"], apiEnvKeys: ["CURSOR_API_KEY"] },
   kimi_local: { commands: ["kimi"], apiEnvKeys: ["KIMI_MODEL_API_KEY"] },
   opencode_local: { commands: ["opencode"], apiEnvKeys: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"] },
   pi_local: { commands: ["pi"], apiEnvKeys: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "OPENROUTER_API_KEY"] },
@@ -37,7 +37,13 @@ async function trustedExecutable(profile: Profile, env: NodeJS.ProcessEnv): Prom
       const file = path.join(directory, command);
       try {
         await access(file, constants.X_OK);
-        if ((await stat(file)).isFile()) return file;
+        if (!(await stat(file)).isFile()) continue;
+        // The generic "agent" name can belong to Grok; only accept a Cursor installation alias.
+        if (command === "agent" && profile.commands.includes("cursor-agent")) {
+          const resolved = await realpath(file);
+          if (!resolved.split(path.sep).some(part => part === "cursor-agent" || part === ".cursor")) continue;
+        }
+        return file;
       } catch { /* Try only the next trusted PATH entry. */ }
     }
   }

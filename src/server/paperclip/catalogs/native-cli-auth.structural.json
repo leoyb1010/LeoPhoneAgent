@@ -280,5 +280,11 @@
     "from": "            disabled={submitCode.isPending || isCompleting || codeSubmitted}\n          />\n        )}\n      </ProviderSubscriptionCard>",
     "to": "            disabled={submitCode.isPending || isCompleting || codeSubmitted}\n          />\n        )}\n        {failedNow && <Button type=\"button\" variant=\"outline\" size=\"sm\" disabled={restartLogin.isPending || startDisabled || cancelLogin.isPending}\n          onClick={() => restartLogin.mutate()}>重新开始授权</Button>}\n      </ProviderSubscriptionCard>",
     "expected": 1
+  },
+  {
+    "file": "ui/src/lib/agent-setup-fields.ts",
+    "from": "\"Use a Cursor API key, or run agent login on the selected environment's host.\"",
+    "to": "\"使用 Cursor API 密钥，或在所选服务器运行 cursor-agent login。\"",
+    "expected": 1
   }
 ]

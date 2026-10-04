@@ -2,19 +2,37 @@
   {
     "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
     "from": "  const [runtimeAiBinding, setRuntimeAiBinding] = useState<AiConnectionBinding | undefined>(() =>\n    brandType === \"opencode_local\"\n      ? { provider: \"openrouter\", method: \"api_key\", mode: \"responsible_user\" }\n      : undefined,\n  );",
-    "to": "  const [runtimeAiBinding, setRuntimeAiBinding] = useState<AiConnectionBinding | undefined>();\n  const [showOpenCodeManaged, setShowOpenCodeManaged] = useState(false);",
+    "to": "  const [runtimeAiBinding, setRuntimeAiBinding] = useState<AiConnectionBinding | undefined>();\n  const [showOpenCodeManaged, setShowOpenCodeManaged] = useState(false);\n  const [showOpenCodeApi, setShowOpenCodeApi] = useState(false);",
     "expected": 1
   },
   {
     "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
     "from": "                        <h3 className=\"text-sm font-semibold\">Runtime</h3>",
-    "to": "                        <h3 className=\"text-sm font-semibold\">Runtime</h3>\n                        {brandType === \"opencode_local\" && <div className=\"space-y-3\">\n                          <p className=\"text-sm text-muted-foreground\">运行方式是 OpenCode CLI，模型提供商可独立选择。可沿用服务器已有 CLI 配置，也可单独配置 API 密钥或使用连接管理。</p>\n                          <div className=\"flex flex-wrap gap-2\">\n                            <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => setShowOpenCodeManaged(value => !value)}>可选：使用 OpenRouter 连接管理</Button>\n                            {aiBinding && <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => { setRuntimeAiBinding(undefined); setConnection(null); setShowOpenCodeManaged(false); setProviderBinding(null); setApiKey(\"\"); resetTest(); }}>使用服务器 OpenCode 配置</Button>}\n                          </div>\n                        </div>}",
+    "to": "                        <h3 className=\"text-sm font-semibold\">Runtime</h3>\n                        {brandType === \"opencode_local\" && <div className=\"space-y-3\">\n                          <p className=\"text-sm text-muted-foreground\">运行方式是 OpenCode CLI，默认沿用服务器已有授权与配置。已授权的 OpenCode Go 会员无需另填 API 密钥；模型 ID 按服务器列表完整保留。</p>\n                          <div className=\"flex flex-wrap gap-2\">\n                            <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => setShowOpenCodeApi(value => !value)}>可选：单独配置 API 密钥</Button>\n                            <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => setShowOpenCodeManaged(value => !value)}>可选：使用 OpenRouter 连接管理</Button>\n                            {(aiBinding || showOpenCodeApi || showOpenCodeManaged) && <Button type=\"button\" variant=\"outline\" size=\"sm\" onClick={() => { setRuntimeAiBinding(undefined); setConnection(null); setShowOpenCodeManaged(false); setShowOpenCodeApi(false); setProviderBinding(null); setApiKey(\"\"); resetTest(); }}>使用服务器 OpenCode 配置</Button>}\n                          </div>\n                        </div>}",
     "expected": 1
   },
   {
     "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
     "from": "                        {aiProviderForAdapter(brandType) && (",
     "to": "                        {aiProviderForAdapter(brandType) && (brandType !== \"opencode_local\" || showOpenCodeManaged || Boolean(aiBinding)) && (",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "  const selectedBinding =\n    adapterType === \"cursor_cloud\"",
+    "to": "  const selectedBinding =\n    (adapterType === \"cursor_cloud\" || (brandType === \"opencode_local\" && !showOpenCodeApi))",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "                        {hasCredentialField && !aiBinding && (",
+    "to": "                        {hasCredentialField && !aiBinding && (brandType !== \"opencode_local\" || showOpenCodeApi) && (",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "    if (aiBinding || nextConnection?.aiConnection) return {};",
+    "to": "    if (aiBinding || nextConnection?.aiConnection || (brandType === \"opencode_local\" && !showOpenCodeApi)) return {};",
     "expected": 1
   }
 ]

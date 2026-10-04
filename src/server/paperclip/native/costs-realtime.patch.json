@@ -1,0 +1,26 @@
+[
+  {
+    "file": "packages/shared/src/types/cost.ts",
+    "from": "  utilizationPercent: number;\n}",
+    "to": "  utilizationPercent: number;\n  /** Additive receipt-state counts; absent on older servers. */\n  reportedEventCount?: number;\n  unpricedEventCount?: number;\n  /** Unpriced receipts explicitly marked subscription_included. */\n  unpricedSubscriptionEventCount?: number;\n}",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/costs.ts",
+    "from": "      const [{ total }] = await db\n        .select({\n          total: sumAsNumber(costEvents.costCents),\n        })",
+    "to": "      const [{ total, reportedEventCount, unpricedEventCount, unpricedSubscriptionEventCount }] = await db\n        .select({\n          total: sumAsNumber(costEvents.costCents),\n          reportedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'reported')::int`,\n          unpricedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced')::int`,\n          unpricedSubscriptionEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced' and ${costEvents.billingType} = 'subscription_included')::int`,\n        })",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/costs.ts",
+    "from": "        spendCents,\n        budgetCents:",
+    "to": "        spendCents,\n        reportedEventCount: Number(reportedEventCount),\n        unpricedEventCount: Number(unpricedEventCount),\n        unpricedSubscriptionEventCount: Number(unpricedSubscriptionEventCount),\n        budgetCents:",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/heartbeat.ts",
+    "from": "        costCents: additionalCostCents,\n        occurredAt: new Date(),\n      });\n    }\n  }\n\n  // A 403 from claimQueuedRun",
+    "to": "        costCents: additionalCostCents,\n        occurredAt: new Date(),\n      });\n      // Idempotent live notification after the ledger commit; no new run event,\n      // status write or wake. The earlier terminal pulse can precede this receipt.\n      publishLiveEvent({\n        companyId: agent.companyId,\n        type: \"heartbeat.run.status\",\n        payload: buildHeartbeatRunStatusLiveEventPayload(run),\n      });\n    }\n  }\n\n  // A 403 from claimQueuedRun",
+    "expected": 1
+  }
+]

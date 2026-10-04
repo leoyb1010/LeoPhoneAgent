@@ -11,14 +11,14 @@ const home=fileURLToPath(new URL('..',import.meta.url));
 const root=path.resolve(rootArg);
 assert.equal(fs.realpathSync(root),root,'use physical upstream root');
 const lock=JSON.parse(fs.readFileSync(path.join(home,'upstream.lock.json')));
-assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),lock.commit,'unknown upstream commit');
+assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}).trim(),lock.commit,'unknown upstream commit');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const patchFiles=['backend-api.patch.json','backend-integration.patch.json'];
+const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json'];
 const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))));
 const targets=new Map();
 for (const patch of patches) {
- assert.ok(/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) && !patch.file.split('/').includes('..'),'closed backend patch scope');
- if (!targets.has(patch.file))targets.set(patch.file,execFileSync('git',['show',`HEAD:${patch.file}`],{cwd:root,encoding:'utf8'}));
+ assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
+ if (!targets.has(patch.file))targets.set(patch.file,execFileSync('git',['show',`HEAD:${patch.file}`],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}));
  const input=targets.get(patch.file);assert.equal(input.split(patch.from).length-1,patch.expected ?? 1,`context mismatch: ${patch.file}`);
  targets.set(patch.file,input.split(patch.from).join(patch.to));
 }
@@ -36,6 +36,11 @@ function modules(directory,relative='') {
  }
 }
 modules(path.join(home,'native/server'));
+const dbTest='packages/db/src/embedded-postgres-darwin.test.ts';
+const dbTestSource=path.join(home,'native/db/embedded-postgres-darwin.test.ts');
+assert.ok(fs.lstatSync(dbTestSource).isFile() && !fs.lstatSync(dbTestSource).isSymbolicLink(),'db test must be a regular file');
+assert.ok(!targets.has(dbTest),'duplicate target');
+targets.set(dbTest,fs.readFileSync(dbTestSource,'utf8'));added.push(dbTest);
 const state={commit:lock.commit,files:{}};
 const statePath=path.join(root,'.leophone-native-cli-auth.json');
 const previous=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath)):null;
@@ -48,7 +53,7 @@ for (const [relative,output] of targets) {
  if (fs.existsSync(target)) {
   assert.equal(fs.realpathSync(target),target,'refuse symlinked target');
   const current=fs.readFileSync(target,'utf8');
-  const original=added.includes(relative)?null:execFileSync('git',['show',`HEAD:${relative}`],{cwd:root,encoding:'utf8'});
+  const original=added.includes(relative)?null:execFileSync('git',['show',`HEAD:${relative}`],{cwd:root,encoding:'utf8',maxBuffer:20_000_000});
   assert.ok(current===output||current===original||previous?.files?.[relative]===hash(current),`unknown edits: ${relative}`);
  }
  if(command==='verify')assert.equal(fs.readFileSync(target,'utf8'),output,`overlay differs: ${relative}`);

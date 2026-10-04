@@ -178,5 +178,137 @@
     "from": "  it(\"takes no sandbox lease and starts no model process\", async () => {",
     "to": "  it(\"recognizes native Claude CLI login and returns safe installed metadata\", async () => {\n    mockHostCliStatus.mockResolvedValue({ installed: true, authStatus: \"present\", message: \"Claude CLI 已识别现有登录。\" });\n    const app = await createApp();\n    const res = await request(app).get(authSignalPath(COMPANY_1, \"claude_local\"));\n    expect(res.status).toBe(200);\n    expect(res.body).toEqual({ status: \"present\", installed: true, message: \"Claude CLI 已识别现有登录。\" });\n    expect(mockHostCliStatus).toHaveBeenCalledWith({ adapterType: \"claude_local\", driver: \"local\" });\n  });\n\n  it(\"maps unsupported native state to the existing unknown enum\", async () => {\n    mockHostCliStatus.mockResolvedValue({ installed: true, authStatus: \"unsupported\", message: \"仅支持本机状态检查。\" });\n    const app = await createApp();\n    const res = await request(app).get(authSignalPath(COMPANY_1, \"grok_local\"));\n    expect(res.status).toBe(200); expect(res.body.status).toBe(\"unknown\");\n  });\n\n  it(\"takes no sandbox lease and starts no model process\", async () => {",
     "expected": 1
+  },
+  {
+    "file": "server/src/services/heartbeat.ts",
+    "from": "import { normalizeLegacyRunnerProvider } from \"@paperclipai/adapter-utils\";",
+    "to": "import { normalizeLegacyRunnerProvider } from \"@paperclipai/adapter-utils\";\nimport { isCursorInvalidModelError, CURSOR_INVALID_MODEL_ERROR_CODE } from \"./cursor-model-configuration.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/heartbeat.ts",
+    "from": "                ? (adapterResult.errorCode ??\n                  recordedResponsibleUserDenialCode ??\n                  \"adapter_failed\")",
+    "to": "                ? (isCursorInvalidModelError(agent.adapterType, adapterResult.errorMessage)\n                  ? CURSOR_INVALID_MODEL_ERROR_CODE\n                  : adapterResult.errorCode ?? recordedResponsibleUserDenialCode ?? \"adapter_failed\")",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/cursor-models.ts",
+    "from": "import { spawnSync } from \"node:child_process\";",
+    "to": "import { execFile } from \"node:child_process\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/cursor-models.ts",
+    "from": "let cached: { expiresAt: number; models: AdapterModel[] } | null = null;",
+    "to": "const CURSOR_MODELS_FAILURE_CACHE_TTL_MS = 5_000;\nlet cached: { expiresAt: number; models: AdapterModel[] } | null = null;\nlet pending: Promise<AdapterModel[]> | null = null;",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/cursor-models.ts",
+    "from": "function mergedWithFallback(models: AdapterModel[]): AdapterModel[] {\n  return dedupeModels([...models, ...cursorFallbackModels]);\n}\n\nfunction defaultCursorModelsRunner(): CursorModelsCommandResult {\n  const result = spawnSync(\"agent\", [\"models\"], {\n    encoding: \"utf8\",\n    timeout: CURSOR_MODELS_TIMEOUT_MS,\n    maxBuffer: MAX_BUFFER_BYTES,\n  });\n  return {\n    status: result.status,\n    stdout: typeof result.stdout === \"string\" ? result.stdout : \"\",\n    stderr: typeof result.stderr === \"string\" ? result.stderr : \"\",\n    hasError: Boolean(result.error),\n  };\n}\n\nlet cursorModelsRunner: () => CursorModelsCommandResult = defaultCursorModelsRunner;\n\nfunction fetchCursorModelsFromCli(): AdapterModel[] {\n  const result = cursorModelsRunner();\n  const { stdout, stderr } = result;\n  if (result.hasError && stdout.trim().length === 0 && stderr.trim().length === 0) {\n    return [];\n  }\n  if ((result.status ?? 1) !== 0 && !/available models?:/i.test(`${stdout}\\n${stderr}`)) {\n    return [];\n  }\n\n  return parseCursorModelsOutput(stdout, stderr);\n}\n\nexport async function listCursorModels(): Promise<AdapterModel[]> {\n  const now = Date.now();\n  if (cached && cached.expiresAt > now) {\n    return cached.models;\n  }\n\n  const discovered = fetchCursorModelsFromCli();\n  if (discovered.length > 0) {\n    const merged = mergedWithFallback(discovered);\n    cached = {\n      expiresAt: now + CURSOR_MODELS_CACHE_TTL_MS,\n      models: merged,\n    };\n    return merged;\n  }\n\n  if (cached && cached.models.length > 0) {\n    return cached.models;\n  }\n\n  return dedupeModels(cursorFallbackModels);\n}\n\n",
+    "to": "function defaultCursorModelsRunner(): Promise<CursorModelsCommandResult> {\n  return new Promise(resolve => {\n    execFile(\"cursor-agent\", [\"models\"], {\n      encoding: \"utf8\",\n      timeout: CURSOR_MODELS_TIMEOUT_MS,\n      maxBuffer: MAX_BUFFER_BYTES,\n      killSignal: \"SIGKILL\",\n    }, (error, stdout, stderr) => {\n      resolve({\n        status: error ? (typeof error.code === \"number\" ? error.code : null) : 0,\n        stdout: typeof stdout === \"string\" ? stdout : \"\",\n        stderr: typeof stderr === \"string\" ? stderr : \"\",\n        hasError: Boolean(error),\n      });\n    });\n  });\n}\n\ntype CursorModelsRunner = () => CursorModelsCommandResult | Promise<CursorModelsCommandResult>;\nlet cursorModelsRunner: CursorModelsRunner = defaultCursorModelsRunner;\n\nasync function fetchCursorModelsFromCli(): Promise<AdapterModel[]> {\n  const result = await cursorModelsRunner();\n  const { stdout, stderr } = result;\n  if (result.hasError && stdout.trim().length === 0 && stderr.trim().length === 0) return [];\n  if ((result.status ?? 1) !== 0 && !/available models?:/i.test(`${stdout}\\n${stderr}`)) return [];\n  return parseCursorModelsOutput(stdout, stderr);\n}\n\nexport async function listCursorModels(): Promise<AdapterModel[]> {\n  if (cached && cached.expiresAt > Date.now()) return cached.models;\n  if (pending) return pending;\n  pending = (async () => {\n    const discovered = await fetchCursorModelsFromCli().catch(() => []);\n    // Real account-specific IDs are authoritative, including effort/fast suffixes.\n    const models = discovered.length > 0\n      ? dedupeModels(discovered)\n      : dedupeModels(cursorFallbackModels.filter(model => model.id === \"auto\"));\n    cached = {\n      expiresAt: Date.now() + (discovered.length > 0 ? CURSOR_MODELS_CACHE_TTL_MS : CURSOR_MODELS_FAILURE_CACHE_TTL_MS),\n      models,\n    };\n    return models;\n  })();\n  try { return await pending; }\n  finally { pending = null; }\n}\n\n",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/cursor-models.ts",
+    "from": "  cached = null;\n}",
+    "to": "  cached = null;\n  pending = null;\n}",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/cursor-models.ts",
+    "from": "export function setCursorModelsRunnerForTests(runner: (() => CursorModelsCommandResult) | null)",
+    "to": "export function setCursorModelsRunnerForTests(runner: CursorModelsRunner | null)",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/recovery/service.ts",
+    "from": "const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([",
+    "to": "const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([\n  \"cursor_model_invalid\",",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/recovery/service.ts",
+    "from": "if (latestRun.errorCode === \"adapter_engine_unavailable\" || latestRun.errorCode === \"provider_tool_definition_invalid\") {",
+    "to": "if (latestRun.errorCode === \"cursor_model_invalid\" || latestRun.errorCode === \"adapter_engine_unavailable\" || latestRun.errorCode === \"provider_tool_definition_invalid\") {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  if (model) {\n    args.push(\"-m\", model);\n  }",
+    "to": "  // \"auto\" delegates to the existing CLI configuration; it is not a vendor model ID.\n  if (model && model !== \"auto\") {\n    args.push(\"-m\", model);\n  }",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-models.test.ts",
+    "from": "  it(\"includes current Cursor fallbacks when runtime discovery is unavailable\", async () => {\n    setCursorModelsRunnerForTests(() => ({ status: 1, stdout: \"\", stderr: \"\", hasError: true }));\n    const models = await listAdapterModels(\"cursor\");\n    expect(models.map((model) => model.id)).toEqual(expect.arrayContaining([\n      \"composer-2.5\", \"claude-opus-5-5\", \"claude-fable-5-1\", \"claude-sonnet-5\",\n      \"gpt-5.6-sol\", \"gpt-5.6-terra\", \"gpt-5.6-luna\", \"grok-4.7\", \"gemini-3.8-flash\", \"muse-spark-1.3\",\n    ]));\n  });",
+    "to": "  it(\"offers only safe Cursor automatic selection when runtime discovery is unavailable\", async () => {\n    setCursorModelsRunnerForTests(() => ({ status: 1, stdout: \"\", stderr: \"\", hasError: true }));\n    const models = await listAdapterModels(\"cursor\");\n    expect(models.map((model) => model.id)).toEqual([\"auto\"]);\n  });",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-models.test.ts",
+    "from": "expect(models).toEqual(cursorFallbackModels);",
+    "to": "expect(models).toEqual(cursorFallbackModels.filter(model => model.id === \"auto\"));",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/adapter-models.test.ts",
+    "from": "expect(first.some((model) => model.id === \"composer-1\")).toBe(true);",
+    "to": "expect(first.map(model => model.id)).toEqual([\"auto\", \"composer-1.5\", \"gpt-5.3-codex-high\", \"sonnet-4.6\"]);\n    expect(first.some((model) => model.id === \"composer-1\")).toBe(false);",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.ts",
+    "from": "message: \"Cursor is authenticated via `agent login`.\",",
+    "to": "message: \"Cached Cursor account details were found. A real hello response is required to verify authentication.\",",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.ts",
+    "from": "          ? `Logged in as ${cursorAuth.email}.`\n          : `Credentials found in ${cursorConfigPath(cursorHome)}.`,",
+    "to": "          ? `Cached account: ${cursorAuth.email}.`\n          : `Cached account metadata found in ${cursorConfigPath(cursorHome)}.`,",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.test.ts",
+    "from": "import { describe, expect, it } from \"vitest\";",
+    "to": "import { describe, expect, it, vi } from \"vitest\";",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.test.ts",
+    "from": "describe(\"cursor testEnvironment\", () => {",
+    "to": "describe(\"cursor testEnvironment\", () => {\n  it(\"treats cached account metadata as detection only and still reports an unauthenticated hello probe\", async () => {\n    const root = await fs.mkdtemp(path.join(os.tmpdir(), \"paperclip-cursor-cached-account-\"));\n    const command = path.join(root, \"agent\");\n    const cursorHome = path.join(root, \"cursor\");\n    await fs.mkdir(cursorHome, { recursive: true });\n    await fs.writeFile(path.join(cursorHome, \"cli-config.json\"), JSON.stringify({ authInfo: { email: \"cached@example.invalid\", displayName: \"Cached account\", userId: 1 } }));\n    await fs.writeFile(command, `#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' 'Cursor Agent 1.2.3'\n  exit 0\nfi\nprintf '%s\\n' 'Authentication required. Please login.' >&2\nexit 1\n`, { mode: 0o755 });\n    vi.stubEnv(\"CURSOR_API_KEY\", \"\");\n    try {\n      const result = await testEnvironment({ companyId: \"company-1\", adapterType: \"cursor\", config: { command: \"agent\", cwd: root, env: { PATH: `${root}${path.delimiter}${process.env.PATH ?? \"\"}`, CURSOR_HOME: cursorHome } } });\n      const cached = result.checks.find(check => check.code === \"cursor_native_auth_present\");\n      expect(cached).toMatchObject({ level: \"info\", message: \"Cached Cursor account details were found. A real hello response is required to verify authentication.\", detail: \"Cached account: cached@example.invalid.\" });\n      expect(cached?.message).not.toContain(\"is authenticated\");\n      expect(result.checks).toEqual(expect.arrayContaining([expect.objectContaining({ code: \"cursor_hello_probe_auth_required\" })]));\n      expect(result.checks.some(check => check.code === \"cursor_hello_probe_passed\")).toBe(false);\n      expect(result.status).not.toBe(\"pass\");\n    } finally { vi.unstubAllEnvs(); await fs.rm(root, { recursive: true, force: true }); }\n  });\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/execute.ts",
+    "from": "asString(config.command, \"agent\")",
+    "to": "asString(config.command, \"cursor-agent\")",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.ts",
+    "from": "asString(config.command, \"agent\")",
+    "to": "asString(config.command, \"cursor-agent\")",
+    "expected": 1
+  },
+  {
+    "file": "server/src/adapters/registry.ts",
+    "from": "const command = readConfiguredCommand(config, \"agent\");",
+    "to": "const command = readConfiguredCommand(config, \"cursor-agent\");",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.ts",
+    "from": "`agent login`",
+    "to": "`cursor-agent login`",
+    "expected": 2
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/test.ts",
+    "from": "`agent -p --mode ask --output-format json",
+    "to": "`cursor-agent -p --mode ask --output-format json",
+    "expected": 3
   }
 ]

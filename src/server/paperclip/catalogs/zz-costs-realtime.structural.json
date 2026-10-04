@@ -1,0 +1,62 @@
+[
+  {
+    "file": "ui/src/context/LiveUpdatesProvider.tsx",
+    "from": "queryClient.invalidateQueries({ queryKey: queryKeys.costs(companyId) });",
+    "to": "queryClient.invalidateQueries({ queryKey: [\"costs\", companyId] });",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/context/LiveUpdatesProvider.tsx",
+    "from": "  queryClient.invalidateQueries({ queryKey: [\"costs\", companyId] });\n  queryClient.invalidateQueries({\n    queryKey: queryKeys.sidebarBadges(companyId),",
+    "to": "  queryClient.invalidateQueries({ queryKey: [\"costs\", companyId] });\n  queryClient.invalidateQueries({ queryKey: [\"usage-by-provider\", companyId] });\n  queryClient.invalidateQueries({ queryKey: [\"usage-by-biller\", companyId] });\n  queryClient.invalidateQueries({ queryKey: queryKeys.usageWindowSpend(companyId) });\n  queryClient.invalidateQueries({\n    queryKey: queryKeys.sidebarBadges(companyId),",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/LiveUpdatesProvider.tsx",
+    "from": "      queryKey: queryKeys.usageByProvider(companyId),",
+    "to": "      queryKey: [\"usage-by-provider\", companyId],",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/LiveUpdatesProvider.tsx",
+    "from": "    // usageQuotaWindows is intentionally excluded:",
+    "to": "    queryClient.invalidateQueries({ queryKey: [\"usage-by-biller\", companyId] });\n    // usageQuotaWindows is intentionally excluded:",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "  CostWindowSpendRow,",
+    "to": "  CostWindowSpendRow,\n  CostSummary,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "function currentWeekRange():",
+    "to": "export function formatInferenceSpend(summary: CostSummary | undefined): string {\n  if (!summary) return \"—\";\n  if (summary.unpricedEventCount == null || summary.reportedEventCount == null) {\n    return `已记录 ${formatCents(summary.spendCents)}（报价状态未知）`;\n  }\n  const unpriced = Math.max(0, summary.unpricedEventCount - (summary.unpricedSubscriptionEventCount ?? 0));\n  if (summary.reportedEventCount === 0 && summary.unpricedEventCount > 0) {\n    return unpriced > 0 ? \"未定价\" : \"订阅内含\";\n  }\n  if (unpriced > 0) return `${formatCents(summary.spendCents)} + 未定价用量`;\n  if (summary.unpricedEventCount > 0) return `${formatCents(summary.spendCents)} · 另有订阅内含`;\n  return formatCents(summary.spendCents);\n}\n\nfunction currentWeekRange():",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "      return { summary, byAgent, byProject, byAgentModel };\n    },\n    enabled: !!selectedCompanyId && customReady && showSummaryChrome,",
+    "to": "      return { summary, byAgent, byProject, byAgentModel };\n    },\n    refetchInterval: 30_000,\n    staleTime: 10_000,\n    enabled: !!selectedCompanyId && customReady && showSummaryChrome,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "label=\"Inference spend\"",
+    "to": "label=\"已记录推理费用\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "formatCents(spendData?.summary.spendCents ?? 0)",
+    "to": "formatInferenceSpend(spendData?.summary)",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "Request-scoped inference spend for the selected period.",
+    "to": "所选期间的已记录推理金额；未定价用量不表示零费用，订阅内含用量单独标注。",
+    "expected": 1
+  }
+]

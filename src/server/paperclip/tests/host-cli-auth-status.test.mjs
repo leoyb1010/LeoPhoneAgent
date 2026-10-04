@@ -103,3 +103,14 @@ test.after(() => fs.rm(directory, { recursive: true, force: true }));
 test('Cursor registry type and legacy alias share the fixed CLI profile', () => {
   assert.deepEqual(HOST_CLI_AUTH_PROFILES.cursor, HOST_CLI_AUTH_PROFILES.cursor_local);
 });
+
+test('Cursor prefers its branded CLI and rejects a generic Grok agent alias', async t => {
+  const grok = await fixture(t, 'agent', 'process.exit(99)');
+  const cursor = await fixture(t, 'cursor-agent', 'process.exit(99)');
+  const env = { PATH: `${grok.PATH}${path.delimiter}${cursor.PATH}`, HOME: cursor.HOME };
+  assert.equal(await resolveHostCliExecutable('cursor', env), path.join(cursor.PATH, 'cursor-agent'));
+  assert.equal(await resolveHostCliExecutable('cursor', grok), null);
+  const legacy = path.join(cursor.PATH, '.cursor');
+  await fs.mkdir(legacy); await fs.writeFile(path.join(legacy, 'agent'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+  assert.equal(await resolveHostCliExecutable('cursor', { PATH: legacy }), path.join(legacy, 'agent'));
+});
