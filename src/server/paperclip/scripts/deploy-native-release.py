@@ -147,13 +147,75 @@ def preserve_old_assets(old_release, new_release):
     return copied
 
 
+SKILL_SCAN_SKIP = {"Library", "node_modules", ".Trash", ".git", ".cache", ".npm", ".pnpm-store"}
+
+
+def repoint_managed_skill_links(root, release, home=None, max_depth=5):
+    """把各 CLI 技能目录里指向本部署根旧版本 `<发布目录>/skills/<名称>` 的链接改指到 release。
+
+    为什么需要：Paperclip 把技能以软链接装进 ~/.hermes/skills、~/.claude/skills 等目录，链接指向
+    当时发布目录的物理路径。切换版本后旧目录仍保留（用于回滚），上游 Hermes 适配器发现链接指向
+    另一个仍存在的目录时视为"他人安装"而拒绝启动（Cannot reconcile Hermes skill ... occupied），
+    其他 CLI 则静默读取旧版技能。只处理目标位于部署根内、且形如 <目录>/skills/<名称> 的链接；
+    用户自己安装的技能（目标不在部署根内）不动。返回 [(link, old, new)]。
+    """
+    home = Path(home or os.path.expanduser("~"))
+    root = Path(root).resolve()
+    release = Path(release).resolve()
+    changed = []
+
+    def walk(directory, depth):
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            return
+        for e in entries:
+            if e.name in SKILL_SCAN_SKIP:
+                continue
+            if e.is_symlink():
+                if "skill" not in str(Path(e.path).parent).lower():
+                    continue
+                raw = os.readlink(e.path)
+                target = Path(raw if os.path.isabs(raw) else os.path.join(directory, raw))
+                target = Path(os.path.normpath(target))
+                try:
+                    rel = target.relative_to(root)
+                except ValueError:
+                    continue
+                parts = rel.parts
+                if len(parts) < 3 or parts[-2] != "skills":
+                    continue
+                desired = release / "skills" / parts[-1]
+                if target == desired or not desired.is_dir():
+                    continue
+                tmp = Path(e.path + ".paperclip-swap")
+                if tmp.is_symlink() or tmp.exists():
+                    tmp.unlink()
+                tmp.symlink_to(desired)
+                os.replace(tmp, e.path)
+                changed.append((e.path, str(target), str(desired)))
+            elif depth < max_depth and e.is_dir(follow_symlinks=False):
+                walk(e.path, depth + 1)
+
+    walk(home, 0)
+    return changed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, type=Path)
     ap.add_argument("--candidate", required=True, type=Path)
     ap.add_argument("--public-url", default="")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--repoint-skills-only", action="store_true",
+                    help="只把各 CLI 技能目录中指向旧版本的 Paperclip 技能链接改指到 release/current")
     a = ap.parse_args()
+    if a.repoint_skills_only:
+        current_release = (a.root / "release/current").resolve()
+        for link, old_t, new_t in repoint_managed_skill_links(a.root, current_release):
+            log(f"skill link repointed: {link}: {old_t} -> {new_t}")
+        log("skill links checked")
+        return
 
     root = a.root.resolve()
     candidate = a.candidate.resolve()
@@ -200,8 +262,12 @@ def main():
     swap_symlink(previous, old_release)
     swap_symlink(current, candidate)
     log("release/current switched")
+    skill_links = repoint_managed_skill_links(root, candidate)
+    for link, _, _ in skill_links:
+        log(f"skill link repointed: {link}")
     report = {"timestamp": stamp, "previous": str(old_release), "current": str(candidate),
-              "candidateHead": cand_head, "oldPid": old_pid, "preservedAssets": copied}
+              "candidateHead": cand_head, "oldPid": old_pid, "preservedAssets": copied,
+              "repointedSkillLinks": [link for link, _, _ in skill_links]}
     try:
         new_pid, h = graceful_restart(old_pid)
         report.update(newPid=new_pid, health={k: h.get(k) for k in
@@ -232,6 +298,7 @@ def main():
         report.update(passed=False, error=str(exc))
         log(f"FAILED: {exc}; rolling back to {old_release.name}")
         swap_symlink(current, old_release)
+        repoint_managed_skill_links(root, old_release)
         pid = service_pid()
         if pid:
             graceful_restart(pid)

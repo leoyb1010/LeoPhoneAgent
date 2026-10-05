@@ -12,7 +12,7 @@
     "apply": "node scripts/localize.mjs apply",
     "verify": "node scripts/localize.mjs verify",
     "check:upstream": "bash scripts/check-upstream.sh",
-    "test:native-launcher": "python3 tests/native-launcher.test.py"
+    "test:native-launcher": "python3 tests/native-launcher.test.py && python3 tests/deploy-skill-links.test.py"
   },
   "devDependencies": { "typescript": "5.9.3" }
 }

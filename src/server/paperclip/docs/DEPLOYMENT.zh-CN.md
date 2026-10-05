@@ -39,7 +39,7 @@ python3 scripts/deploy-native-release.py --root <部署根> --candidate <部署�
 python3 scripts/deploy-native-release.py --root <部署根> --candidate <部署根>/candidates/<候选名> --public-url https://<公网域名>
 ```
 
-脚本依次：拒绝未提交的候选与有 running/queued 任务的实例 → 私有 `pg_dump -Fc` 并 `pg_restore --list` 校验 → 建立 `release/previous` → 保留旧散列静态资源 → 原子切换 `release/current` → 只发送 SIGTERM，等待上游优雅排空后由 launchd KeepAlive 拉起新版本（不用 `bootout`/`kickstart -k`，它们约 20 秒后强杀）→ 核对健康状态与回环/公网 index 哈希；任一步失败自动切回旧版本。证据写入 `<部署根>/backups/deploy/<时间>-<候选名>/`（0600）。
+脚本依次：拒绝未提交的候选与有 running/queued 任务的实例 → 私有 `pg_dump -Fc` 并 `pg_restore --list` 校验 → 建立 `release/previous` → 保留旧散列静态资源 → 原子切换 `release/current` → 只发送 SIGTERM，等待上游优雅排空后由 launchd KeepAlive 拉起新版本（不用 `bootout`/`kickstart -k`，它们约 20 秒后强杀）→ 核对健康状态与回环/公网 index 哈希；任一步失败自动切回旧版本。切换（及回滚）时还会把 `~/.hermes/skills`、`~/.claude/skills`、`~/.cursor/skills`、`~/.pi/agent/skills` 等 CLI 技能目录中指向本部署根旧版本 `skills/<名称>` 的 Paperclip 技能链接改指到当前版本：否则旧目录仍在时 Hermes 会以 "occupied by another installation" 拒绝启动，其他 CLI 静默读取旧技能；用户自己安装的技能不受影响。也可单独运行 `--repoint-skills-only`。证据写入 `<部署根>/backups/deploy/<时间>-<候选名>/`（0600）。
 
 ### 数据库口令与库级认证
 
