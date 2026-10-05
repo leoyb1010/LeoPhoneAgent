@@ -2,8 +2,8 @@ import Foundation
 
 /// 同一批工具调用的分道:会互相踩的调用排进同一条道、按模型给出的顺序串行,其余照旧并行。
 ///
-/// 只有批内存在「写」时才合道:同一路径的 file_write / file_edit / file_read,或同一个 Cursor agent 的
-/// followup / cancel / status。没有写的资源(比如五个 file_read)仍然各自并行,不拖慢只读批次。
+/// 只有批内存在「写」时才合道:同一路径的 file_write / file_edit / file_read。
+/// 没有写的资源(比如五个 file_read)仍然各自并行,不拖慢只读批次。
 /// 以前整批无条件并行,模型在一轮里对同一文件发两次 file_edit 时,后一次可能读到旧内容、覆盖掉前一次。
 enum ToolExecutionLanes {
     struct Call {
@@ -39,10 +39,6 @@ enum ToolExecutionLanes {
             guard let path = (call.args["path"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !path.isEmpty else { return nil }
             return ("file:" + (path as NSString).standardizingPath, call.name != "file_read")
-        case "cursor_agent_followup", "cursor_agent_cancel", "cursor_agent_status":
-            guard let id = (call.args["agent_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !id.isEmpty else { return nil }
-            return ("cursor:" + id, call.name != "cursor_agent_status")
         default:
             return nil
         }

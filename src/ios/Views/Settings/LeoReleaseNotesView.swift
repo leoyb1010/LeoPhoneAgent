@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.54.1",
+            date: "2026-10-06",
+            title: "GPT-6.1 Sol 全局可选",
+            highlights: [
+                "修复 iCloud 同步时用旧数据覆盖刚刷新的模型列表：GPT-6.1 Sol 不会再在服务商里出现、却在 Agent Loop 和模型选择里搜不到。",
+                "升级后自动重新拉一次 ChatGPT 账号的模型目录，之前被挤掉的 GPT-6.1 Sol 会自己回来。",
+                "移除上一版的 Cursor 云端 Agent 入口和相关工具。"
+            ]
+        ),
+        LeoRelease(
             version: "1.54.0",
             date: "2026-10-06",
             title: "GPT-6.1 Sol 与 Cursor 云端 Agent",

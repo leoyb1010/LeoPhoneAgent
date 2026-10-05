@@ -1752,10 +1752,7 @@ enum ChatStoreSyncHydrators {
             logger.warning("[v3] refreshStoreFromDB skipped — DB not open yet")
             return
         }
-        let fresh = await db.dumpProviderConfig()
-        await MainActor.run {
-            ProviderConfigStore.shared.applyMergedConfigFromSync(fresh)
-        }
+        await ProviderConfigStore.shared.applyDatabaseFromSync(db)
     }
 }
 

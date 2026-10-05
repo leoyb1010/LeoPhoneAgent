@@ -1,5 +1,12 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.54.1 (151) · 同步覆盖竞态导致新模型消失 - 2026-10-06
+
+- 根因：本机保存先写 JSON 和内存，SQLite 镜像在写队列里异步落库；iCloud V3 入站合并后的整库重建不等这个队列就 dump SQLite，再整份覆盖内存配置。刷新刚加进来的 `gpt-6.1-sol` 因此被旧库快照抹掉，且没有删除墓碑（真机取证：条目只剩在模型存档里，活动列表在一次整库重写后缺失）。
+- 修复：入站重建先排空本机写队列、镜像未完成时推迟，dump 期间若有新保存则重做（`ProviderConfigStore.applyDatabaseFromSync`）。
+- 升级后对 ChatGPT（OAuth）实例自动重拉一次 Codex 模型目录，找回已被挤掉的模型。
+- 移除 1.54.0 的 Cursor 云端 Agent（设置入口、`cursor_agent_*` 工具、审批类别、自检项与相关测试）；Cursor 公开 API 只提供云端编码任务，不能作为 Agent Loop 模型使用。工具分道与会话级提示缓存键保留。
+
 ## iOS 1.54.0 (150) · GPT-6.1 Sol、Cursor 云端 Agent 与工具分道执行 - 2026-10-06
 
 - OpenAI（ChatGPT 账号登录）：Codex 模型目录接口按客户端版本过滤，GPT-6.1 Sol 要求 0.159.0 及以上；客户端版本从旧值升到 0.160.0，模型缓存键带上版本号，内置列表补上 `gpt-6.1-sol`（272K 上下文）。

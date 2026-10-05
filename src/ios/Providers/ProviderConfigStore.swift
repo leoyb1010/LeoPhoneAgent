@@ -1720,6 +1720,30 @@ final class ProviderConfigStore: ObservableObject {
         save()
     }
 
+    /// Rebuild the store from SQLite after inbound V3 merges.
+    ///
+    /// A local save publishes JSON + memory first and mirrors SQLite on the write
+    /// queue. Dumping SQLite before that mirror lands (or applying a dump taken
+    /// before a newer save) used to replace the store with the older rows: a
+    /// model refresh that had just added GPT-6.1 Sol vanished from every picker
+    /// without any delete tombstone. Wait for queued writes, and redo the dump
+    /// whenever a save raced it.
+    func applyDatabaseFromSync(_ db: ProviderConfigDB) async {
+        for _ in 0..<3 {
+            await databaseWrites.drain()
+            if ProviderSnapshotJournal.pendingToken(for: fileURL) != nil {
+                logger.warning("[v3sync] refreshStoreFromDB deferred — local snapshot not yet mirrored to DB")
+                return
+            }
+            let revision = configRevision
+            let fresh = await db.dumpProviderConfig()
+            guard revision == configRevision else { continue }
+            applyMergedConfigFromSync(fresh)
+            return
+        }
+        logger.warning("[v3sync] refreshStoreFromDB skipped — local saves kept racing the DB dump")
+    }
+
     /// Apply a merged config from iCloud sync without triggering a markDirty upload.
     /// Used by `CloudSyncEngine.mergeProviderConfig` — it replaces the in-memory config,
     /// writes it to disk, and publishes the change, but does NOT schedule a re-upload.
@@ -2227,7 +2251,8 @@ final class ProviderConfigStore: ObservableObject {
 
     /// [T-codex-live-models] 升级到读实时目录的这一版后,把已登录的 ChatGPT(OAuth)实例立即刷新一次:
     /// 不等每日刷新,GPT-6 这类新模型装完就出现在列表里。只跑一次。
-    private static let codexLiveCatalogMigrationKey = "codexLiveCatalogMigration.v1.done"
+    /// v2:1.54.1 修掉同步覆盖竞态后再拉一次,找回被旧数据库快照挤掉的 GPT-6.1 Sol。
+    private static let codexLiveCatalogMigrationKey = "codexLiveCatalogMigration.v2.done"
     func refreshCodexCatalogOnceIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: Self.codexLiveCatalogMigrationKey) else { return }
         let targets = config.instances.filter {

@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.54.0%20(150)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.54.1%20(151)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -186,7 +186,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.54.0 (150)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.54.1 (151)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-06 1.54.1：修复 iCloud 同步重建用旧数据库快照覆盖刚刷新的模型列表（GPT-6.1 Sol 在服务商里可见、Agent Loop 与模型选择里搜不到），升级后自动重拉一次 ChatGPT 模型目录；移除 Cursor 云端 Agent。
 - 2026-10-06 1.54.0：ChatGPT 登录可用 GPT-6.1 Sol；新增 Cursor 云端 Agent（设置里填 Cursor API Key，用账号额度在云端仓库编码，启动与追加需审批）；同资源工具调用分道串行，提示缓存键按会话派生；563 项逻辑测试通过。
 - 2026-10-05 1.53.4：实时通道竞态、日志去重、刷新排队与运行中页面提速；537 项逻辑测试、Paperclip 宿主 91 项、Release 构建与发版闸门通过。
 - 2026-10-05 任务过程实时可见：运行中卡片、实时日志、对话线程式新界面，修复发送后卡住；531 项逻辑测试、Paperclip 宿主 79 项与 Release 构建通过，iPhone 18 Pro Max、iPad Pro 13（M4）已安装并回读 `1.53.3 (148)`。

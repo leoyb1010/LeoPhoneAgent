@@ -72,7 +72,6 @@ final class SensitiveToolGate: ObservableObject {
         case shell              // 本机终端
         case remoteShell        // 远程主机终端
         case remoteAgent        // 远程主机 Agent
-        case cursorCloud        // 花 Cursor 额度启动云端 Agent(会推分支、开 PR)
 
         var humanName: String {
             switch self {
@@ -82,7 +81,6 @@ final class SensitiveToolGate: ObservableObject {
             case .shell: return "在本机执行终端命令"
             case .remoteShell: return "在远程主机执行终端命令"
             case .remoteAgent: return "在远程主机启动 Agent 任务"
-            case .cursorCloud: return "用 Cursor 额度启动云端编码任务"
             }
         }
 
@@ -94,7 +92,7 @@ final class SensitiveToolGate: ObservableObject {
 
         var backgroundPolicy: BackgroundPolicy {
             switch self {
-            case .shell, .fileWrite, .remoteShell, .remoteAgent, .cursorCloud:
+            case .shell, .fileWrite, .remoteShell, .remoteAgent:
                 return .notifyAndWait
             case .readCredentials, .writeCredentials:
                 return .denyImmediately
@@ -107,7 +105,6 @@ final class SensitiveToolGate: ObservableObject {
             case "shell_execute": return .shell
             case "remote_shell": return .remoteShell
             case "remote_agent": return .remoteAgent
-            case "cursor_agent_launch", "cursor_agent_followup": return .cursorCloud
             default: return nil
             }
         }
@@ -134,12 +131,6 @@ final class SensitiveToolGate: ObservableObject {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty ?? "空任务"
                 return "\(host) · \(String(detail.prefix(160)))"
-            case "cursor_agent_launch", "cursor_agent_followup":
-                let target = (args["repo"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                    ?? (args["agent_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                    ?? "无仓库"
-                let prompt = (args["prompt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "空任务"
-                return "Cursor · \(target) · \(String(prompt.prefix(160)))"
             default:
                 return "本机"
             }
@@ -165,8 +156,6 @@ final class SensitiveToolGate: ObservableObject {
                 return "remote-shell|\(normalizedHost(args["host"]))"
             case "remote_agent":
                 return "remote-agent|\(normalizedHost(args["host"]))"
-            case "cursor_agent_launch", "cursor_agent_followup":
-                return "cursor-cloud"
             default:
                 return "本机"
             }

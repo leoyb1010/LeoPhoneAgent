@@ -41,18 +41,6 @@ final class ToolExecutionLanesTests: XCTestCase {
         XCTAssertEqual(lanes, [[0, 1]])
     }
 
-    func testCursorCallsOnSameAgentSerializeOnlyWhenOneMutates() {
-        XCTAssertEqual(ToolExecutionLanes.plan([
-            call("cursor_agent_status", ["agent_id": "bc-1"]),
-            call("cursor_agent_status", ["agent_id": "bc-1"]),
-        ]), [[0], [1]])
-        XCTAssertEqual(ToolExecutionLanes.plan([
-            call("cursor_agent_followup", ["agent_id": "bc-1"]),
-            call("cursor_agent_status", ["agent_id": "bc-2"]),
-            call("cursor_agent_status", ["agent_id": "bc-1"]),
-        ]), [[0, 2], [1]])
-    }
-
     func testMissingPathNeverMerges() {
         let lanes = ToolExecutionLanes.plan([
             call("file_write"),

@@ -945,21 +945,6 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
-        // [T-cursor-cloud] 启动/追加由 SensitiveToolGate 先确认(花额度、推分支);查询和取消直接执行。
-        case _ where CursorCloudTools.names.contains(tu.name):
-            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
-            if tu.name == "cursor_agent_status",
-               (args["wait_seconds"] as? Int ?? 0) > 0,
-               msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                messages[msgIdx].blocks[blockIdx].content = "⏳ Waiting for Cursor cloud agent…"
-            }
-            let result = try await CursorCloudTools.execute(name: tu.name, args: args)
-            toolOutput = result.output
-            toolSuccess = result.success
-            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                messages[msgIdx].blocks[blockIdx].content = toolOutput
-            }
-
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false
