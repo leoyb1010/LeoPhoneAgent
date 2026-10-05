@@ -1,0 +1,14 @@
+[
+  {
+    "file": "server/src/services/workspace-file-resources.ts",
+    "from": "    const data = await handle.readFile();",
+    "to": "    // A stat is only a snapshot: cap actual reads even if a file grows concurrently.\n    const buffer = Buffer.alloc(maxBytes + 1);\n    let bytesRead = 0;\n    while (bytesRead < buffer.length) {\n      const chunk = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);\n      if (chunk.bytesRead === 0) break;\n      bytesRead += chunk.bytesRead;\n    }\n    if (bytesRead > maxBytes) throw unprocessable(\"Workspace file is too large to preview\", { code: \"too_large\" });\n    const data = buffer.subarray(0, bytesRead);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "          : await authorizedIssuePage({\n              limit, offset, afterId: listFilters.afterId,\n              keyset: listFilters.sortField === \"id\" && listFilters.sortDir === \"asc\",\n              read: (cursor) => svc.list(companyId, { ...listFilters, ...cursor }),\n              authorize: (rows) => filterIssuesForActor(req, rows),\n            });",
+    "to": "          : await (async () => {\n              const controller = new AbortController();\n              const cancel = () => controller.abort();\n              // Only scoped requests own this computation; shared wide reads are independent.\n              req.once(\"aborted\", cancel);\n              res.once(\"close\", cancel);\n              if (req.aborted || res.destroyed) cancel();\n              try {\n                return await authorizedIssuePage({\n                  limit, offset, afterId: listFilters.afterId,\n                  signal: controller.signal,\n                  keyset: listFilters.sortField === \"id\" && listFilters.sortDir === \"asc\",\n                  read: (cursor) => svc.list(companyId, { ...listFilters, ...cursor }),\n                  authorize: (rows) => filterIssuesForActor(req, rows),\n                });\n              } finally {\n                req.off(\"aborted\", cancel);\n                res.off(\"close\", cancel);\n              }\n            })();",
+    "expected": 1
+  }
+]

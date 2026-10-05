@@ -12,6 +12,7 @@ export async function authorizedIssuePage<T extends { id: string }>(input: {
   maxCandidates?: number;
   maxDurationMs?: number;
   now?: () => number;
+  signal?: AbortSignal;
 }): Promise<T[]> {
   const now = input.now ?? (() => performance.now());
   const started = now();
@@ -25,7 +26,7 @@ export async function authorizedIssuePage<T extends { id: string }>(input: {
   let rawOffset = 0;
   let rawAfterId = input.afterId;
   const exhausted = () => { throw new HttpError(503, "Resource limit reached; retry later or narrow the query."); };
-  const checkTime = () => { if (now() - started > maxDurationMs) exhausted(); };
+  const checkTime = () => { input.signal?.throwIfAborted(); if (now() - started > maxDurationMs) exhausted(); };
 
   while (rows.length < input.limit) {
     checkTime();

@@ -1,0 +1,92 @@
+[
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "import { readApiJson } from \"./response\";",
+    "to": "import { readApiJson } from \"./response\";\nimport { CommentSubmissionUnknownError } from \"@/lib/comment-submit-result\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "const inflightGets = new Map<string, InflightGet>();\nlet sessionChangeDepth = 0;\n\n/** Fence HTTP coalescing, not just query caches, across uncertain cookie changes. */\nexport function beginApiSessionChange(): () => void {\n  sessionChangeDepth += 1;\n  inflightGets.clear();\n  let finished = false;\n  return () => {\n    if (finished) return;\n    finished = true;\n    sessionChangeDepth -= 1;\n    // A failed/lost auth response may still have installed a new cookie.\n    // Never restore the detached session's requests.\n    inflightGets.clear();\n  };\n}\n",
+    "to": "const inflightGets = new Map<string, InflightGet>();\nlet sessionChangeDepth = 0;\nlet sessionEpoch = 0;\nlet externalChangePending = false;\nlet accountBoundaryPending = false;\nlet externalPendingDeadline = 0;\nlet pendingRecoveryTimer: ReturnType<typeof setTimeout> | undefined;\nconst SESSION_EPOCH_KEY = \"paperclip.auth-session-epoch\";\nconst SESSION_BOUNDARY_EVENT = \"paperclip:account-cache-boundary\";\nfunction readSessionMarker(): string | null { try { return typeof localStorage === \"undefined\" ? null : localStorage.getItem(SESSION_EPOCH_KEY); } catch { return null; } }\nlet observedSessionMarker: string | null = null;\nfunction rotateHttpEpoch() { sessionEpoch++; inflightGets.clear(); }\nfunction notifyAccountCacheBoundary() { if (typeof window !== \"undefined\") window.dispatchEvent(new Event(SESSION_BOUNDARY_EVENT)); }\nfunction syncExternalSessionMarker() {\n  if (externalChangePending && externalPendingDeadline > 0 && externalPendingDeadline <= Date.now()) {\n    externalChangePending = false; externalPendingDeadline = 0;\n    rotateHttpEpoch(); accountBoundaryPending = true; queueMicrotask(notifyAccountCacheBoundary);\n  }\n  const raw = readSessionMarker();\n  if (!raw || raw === observedSessionMarker) return;\n  try {\n    const marker = JSON.parse(raw) as { epoch?: unknown; phase?: unknown; expiresAt?: unknown };\n    if (typeof marker.epoch !== \"string\" || ![\"pending\", \"settled\"].includes(String(marker.phase))) return;\n    observedSessionMarker = raw;\n    externalChangePending = marker.phase === \"pending\";\n    externalPendingDeadline = externalChangePending ? Math.min(Date.now() + 30_000, typeof marker.expiresAt === \"number\" && Number.isFinite(marker.expiresAt) ? marker.expiresAt : Date.now() + 30_000) : 0;\n    if (externalChangePending && externalPendingDeadline <= Date.now()) { externalChangePending = false; externalPendingDeadline = 0; }\n    if (pendingRecoveryTimer) clearTimeout(pendingRecoveryTimer);\n    if (externalChangePending) pendingRecoveryTimer = setTimeout(syncExternalSessionMarker, Math.max(0, externalPendingDeadline - Date.now()));\n    rotateHttpEpoch();\n    accountBoundaryPending = true;\n    queueMicrotask(notifyAccountCacheBoundary);\n  } catch { /* Invalid/non-authoritative coordination data never establishes an identity. */ }\n}\nif (typeof window !== \"undefined\") window.addEventListener(\"storage\", event => { if (event.key === SESSION_EPOCH_KEY) syncExternalSessionMarker(); });\nexport function getApiSessionEpoch(): number { syncExternalSessionMarker(); return sessionEpoch; }\nexport function isApiSessionChangePending(): boolean { syncExternalSessionMarker(); return sessionChangeDepth > 0 || externalChangePending; }\nexport function completeAccountCacheBoundary(epoch: number): void { if (epoch === sessionEpoch) accountBoundaryPending = false; }\nexport function subscribeAccountCacheBoundary(callback: () => void): () => void {\n  if (typeof window === \"undefined\") return () => {};\n  window.addEventListener(SESSION_BOUNDARY_EVENT, callback);\n  return () => window.removeEventListener(SESSION_BOUNDARY_EVENT, callback);\n}\n/** The old owner must verify delivery before retrying; never turn this into a 409. */\nexport class ApiSessionChangedError extends CommentSubmissionUnknownError {\n  constructor() { super(); this.name = \"ApiSessionChangedError\"; this.message = \"登录状态已改变。本次操作结果需核实后再重试。\"; }\n}\nfunction publishSessionMarker() {\n  const raw = JSON.stringify({ epoch: crypto.randomUUID(), phase: sessionChangeDepth > 0 ? \"pending\" : \"settled\", expiresAt: Date.now() + 30_000 });\n  try { if (typeof localStorage !== \"undefined\") { localStorage.setItem(SESSION_EPOCH_KEY, raw); observedSessionMarker = raw; } } catch { /* Cross-tab coordination is unavailable; same-tab fencing still works. */ }\n}\n/** Auth submits notify peer tabs. Identity observations rotate only this tab's cache. */\nexport function beginApiSessionChange(authMutation = false): () => void {\n  sessionChangeDepth++;\n  rotateHttpEpoch();\n  if (authMutation) publishSessionMarker();\n  let finished = false;\n  return () => {\n    if (finished) return;\n    finished = true;\n    sessionChangeDepth--;\n    rotateHttpEpoch();\n    if (authMutation) publishSessionMarker();\n    else { accountBoundaryPending = true; notifyAccountCacheBoundary(); }\n  };\n}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "  const headers = new Headers(init?.headers ?? undefined);",
+    "to": "  const requestEpoch = getApiSessionEpoch();\n  const safeRead = !init?.method || init.method === \"GET\";\n  if (safeRead && externalChangePending) throw abortError();\n  if (!safeRead && (sessionChangeDepth > 0 || externalChangePending || accountBoundaryPending)) throw new ApiSessionChangedError();\n  const headers = new Headers(init?.headers ?? undefined);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "  if (!res.ok) {",
+    "to": "  if (safeRead && requestEpoch !== getApiSessionEpoch()) throw abortError();\n  if (!res.ok) {",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "    const errorBody = await readApiJson(res);",
+    "to": "    const errorBody = await readApiJson(res);\n    if (safeRead && requestEpoch !== getApiSessionEpoch()) throw abortError();",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "  const res = await requestResponse(path, init);\n  if (res.status === 204) return undefined as T;\n  return readApiJson<T>(res);",
+    "to": "  const requestEpoch = getApiSessionEpoch();\n  const res = await requestResponse(path, init);\n  if (res.status === 204) return undefined as T;\n  const payload = await readApiJson<T>(res);\n  if ((!init?.method || init.method === \"GET\") && requestEpoch !== getApiSessionEpoch()) throw abortError();\n  return payload;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "  const signal = options?.signal;",
+    "to": "  syncExternalSessionMarker();\n  if (externalChangePending) return Promise.reject(abortError());\n  const signal = options?.signal;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "import { beginApiSessionChange } from \"./client\";",
+    "to": "import { beginApiSessionChange, getApiSessionEpoch, isApiSessionChangePending } from \"./client\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "? beginApiSessionChange() : null;",
+    "to": "? beginApiSessionChange(true) : null;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "  getSession: async (): Promise<AuthSession | null> => {",
+    "to": "  getSession: async (): Promise<AuthSession | null> => {\n    const epoch = getApiSessionEpoch();\n    if (isApiSessionChangePending()) throw new DOMException(\"Session change is pending.\", \"AbortError\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "    const payload = await readApiJson(res);",
+    "to": "    const payload = await readApiJson(res);\n    if (epoch !== getApiSessionEpoch() || isApiSessionChangePending()) throw new DOMException(\"Session changed before verification.\", \"AbortError\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "import { QueryClient, QueryClientProvider } from \"@tanstack/react-query\";",
+    "to": "import { QueryClient, QueryClientProvider, MutationCache } from \"@tanstack/react-query\";\nimport { ApiSessionChangedError, subscribeAccountCacheBoundary, completeAccountCacheBoundary, getApiSessionEpoch } from \"./api/client\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "const queryClient = new QueryClient({\n  defaultOptions: {\n    queries: {\n      staleTime: 30_000,\n      // Explicit so cross-tab-published cache entries for resources this tab\n      // isn't observing get collected promptly rather than lingering. Single\n      // tuning point if we need to trim the cache footprint further.\n      gcTime: 5 * 60_000,\n      refetchOnWindowFocus: true,\n    },\n  },\n});\n",
+    "to": "function createAccountClient(previous?: QueryClient) {\n  let retired = false;\n  const cache = new MutationCache();\n  const build = cache.build.bind(cache);\n  cache.build = ((...args: Parameters<MutationCache[\"build\"]>) => {\n    const mutation = build(...args);\n    const setOptions = mutation.setOptions.bind(mutation);\n    mutation.setOptions = options => setOptions(retired ? { ...options,\n      mutationFn: async () => { throw new ApiSessionChangedError(); },\n      onSuccess: undefined, onError: undefined, onSettled: undefined,\n    } : options);\n    const execute = mutation.execute.bind(mutation);\n    mutation.execute = async variables => {\n      if (retired) throw new ApiSessionChangedError();\n      try {\n        const result = await execute(variables);\n        if (retired) throw new ApiSessionChangedError();\n        return result;\n      } catch (error) {\n        if (retired) throw new ApiSessionChangedError();\n        throw error;\n      }\n    };\n    return mutation;\n  }) as MutationCache[\"build\"];\n  const client = new QueryClient({\n    defaultOptions: { queries: { staleTime: 30_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } },\n    mutationCache: cache,\n  });\n  const health = previous?.getQueryData([\"health\"]);\n  if (health !== undefined) client.setQueryData([\"health\"], health);\n  return { client, retire: () => {\n    retired = true;\n    // Old hooks must not rollback, toast, or send another request as the new owner.\n    for (const mutation of cache.getAll()) {\n      if (mutation.state.status === \"pending\") mutation.setOptions({ ...mutation.options,\n        mutationFn: async () => { throw new ApiSessionChangedError(); },\n        onSuccess: undefined, onError: undefined, onSettled: undefined,\n      });\n    }\n    void client.cancelQueries();\n  } };\n}\nfunction AccountQueryProvider({ children }: { children: React.ReactNode }) {\n  const [state, setState] = React.useState(() => ({ generation: 0, epoch: getApiSessionEpoch(), lease: createAccountClient() }));\n  const current = React.useRef(state);\n  React.useLayoutEffect(() => subscribeAccountCacheBoundary(() => {\n    const old = current.current;\n    old.lease.retire();\n    const next = { generation: old.generation + 1, epoch: getApiSessionEpoch(), lease: createAccountClient(old.lease.client) };\n    current.current = next;\n    setState(next);\n  }), []);\n  React.useLayoutEffect(() => { if (state.generation > 0) completeAccountCacheBoundary(state.epoch); }, [state.generation, state.epoch]);\n  return <QueryClientProvider key={state.generation} client={state.lease.client}>{children}</QueryClientProvider>;\n}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "<QueryClientProvider client={queryClient}>",
+    "to": "<AccountQueryProvider>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "      </QueryClientProvider>",
+    "to": "      </AccountQueryProvider>",
+    "expected": 1
+  }
+]

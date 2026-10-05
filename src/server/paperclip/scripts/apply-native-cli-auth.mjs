@@ -13,11 +13,11 @@ assert.equal(fs.realpathSync(root),root,'use physical upstream root');
 const lock=JSON.parse(fs.readFileSync(path.join(home,'upstream.lock.json')));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}).trim(),lock.commit,'unknown upstream commit');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json'];
+const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json','round2-cli.patch.json','round2-resources.patch.json','round2-backup.patch.json'];
 const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))));
 const targets=new Map();
 for (const patch of patches) {
- assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/backup-lib.ts','packages/adapters/hermes/src/server/test.ts','packages/adapters/opencode-local/src/server/test.ts','packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
+ assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/backup-lib.ts','packages/adapters/hermes/src/server/test.ts','packages/adapters/opencode-local/src/server/test.ts','packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts','packages/adapters/cursor-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/execute.ts','packages/adapters/grok-local/src/server/test.ts','packages/adapters/grok-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
  if (!targets.has(patch.file))targets.set(patch.file,execFileSync('git',['show',`HEAD:${patch.file}`],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}));
  const input=targets.get(patch.file);assert.equal(input.split(patch.from).length-1,patch.expected ?? 1,`context mismatch: ${patch.file}`);
  targets.set(patch.file,input.split(patch.from).join(patch.to));
@@ -37,6 +37,11 @@ function modules(directory,relative='') {
 }
 modules(path.join(home,'native/server'));
 const fixtureModules = [
+ ['native/db/round2-backup-faults.test.ts','packages/db/src/round2-backup-faults.test.ts'],
+ ['tests/fixtures/round2-client-lease.ui.test.tsx','ui/src/lib/round2-client-lease.ui.test.tsx'],
+ ['tests/fixtures/round2-cross-tab-session.ui.test.ts','ui/src/lib/round2-cross-tab-session.ui.test.ts'],
+ ['tests/fixtures/round2-hermes-contract.test.ts','packages/adapters/hermes/src/server/round2-hermes-contract.test.ts'],
+ ['tests/fixtures/round2-model-picker.ui.test.tsx','ui/src/components/task-chat/round2-model-picker.ui.test.tsx'],
  ['native/db/embedded-postgres-darwin.test.ts','packages/db/src/embedded-postgres-darwin.test.ts'],
  ['native/db/backup-collision.test.ts','packages/db/src/backup-collision.test.ts'],
  ['tests/fixtures/round1-hermes-probe.test.ts','packages/adapters/hermes/src/server/round1-hermes-probe.test.ts'],

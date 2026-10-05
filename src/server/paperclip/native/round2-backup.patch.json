@@ -1,0 +1,56 @@
+[
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "import { open as openFile } from \"node:fs/promises\";",
+    "to": "import { open as openFile, mkdtemp, rm } from \"node:fs/promises\";\nimport { tmpdir } from \"node:os\";\nimport { join } from \"node:path\";",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "  const filePromise = openFile(filePath, \"w\");",
+    "to": "  const filePromise = openFile(filePath, \"w\");\n  // Observe early rejection now; consumers still receive the original error.\n  void filePromise.catch(() => {});",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "    pendingWrite = pendingWrite.then(() => writeChunk(chunk));",
+    "to": "    pendingWrite = pendingWrite.then(() => writeChunk(chunk));\n    void pendingWrite.catch(() => {});",
+    "expected": 2
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "  const input = opts.backupFile.endsWith(\".gz\")\n    ? createReadStream(opts.backupFile).pipe(createGunzip())\n    : createReadStream(opts.backupFile);\n\n  await Promise.all([\n    pipeline(input, child.stdin),",
+    "to": "  // runDatabaseRestore supplies a fully validated plain SQL snapshot.\n  await Promise.all([\n    pipeline(createReadStream(opts.backupFile), child.stdin),",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "  const raw = createReadStream(backupFile);\n  const stream = backupFile.endsWith(\".gz\") ? raw.pipe(createGunzip()) : raw;\n  let text = \"\";",
+    "to": "  const raw = createReadStream(backupFile);\n  const stream = raw;\n  let text = \"\";",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "  const raw = createReadStream(backupFile);\n  const stream = backupFile.endsWith(\".gz\") ? raw.pipe(createGunzip()) : raw;\n  stream.setEncoding(\"utf8\");",
+    "to": "  const raw = createReadStream(backupFile);\n  const stream = raw;\n  stream.setEncoding(\"utf8\");",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promise<void> {\n  const connectTimeout = Math.max(1, Math.trunc(opts.connectTimeoutSeconds ?? 5));",
+    "to": "export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promise<void> {\n  // Validate the entire compressed stream before any database mutation. A private\n  // on-disk snapshot bounds memory and prevents re-reading a changed archive.\n  const directory = await mkdtemp(join(tmpdir(), \"paperclip-restore-\"));\n  const backupFile = join(directory, \"validated.sql\");\n  try {\n    const output = createWriteStream(backupFile, { flags: \"wx\", mode: 0o600 });\n    if (opts.backupFile.endsWith(\".gz\")) {\n      await pipeline(createReadStream(opts.backupFile), createGunzip(), output);\n    } else {\n      await pipeline(createReadStream(opts.backupFile), output);\n    }\n    await restoreValidatedDatabase({ ...opts, backupFile }, basename(opts.backupFile));\n  } finally {\n    await rm(directory, { recursive: true, force: true });\n  }\n}\n\nasync function restoreValidatedDatabase(opts: RunDatabaseRestoreOptions, displayName: string): Promise<void> {\n  const connectTimeout = Math.max(1, Math.trunc(opts.connectTimeoutSeconds ?? 5));",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "`Failed to restore ${basename(opts.backupFile)} with psql: ${sanitizeRestoreErrorMessage(error)}`",
+    "to": "`Failed to restore ${displayName} with psql: ${sanitizeRestoreErrorMessage(error)}`",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "`Failed to restore ${basename(opts.backupFile)}: ${sanitizeRestoreErrorMessage(error)}${statementPreview ? ` [statement: ${statementPreview.slice(0, 120)}]` : \"\"}${psqlMessage}`",
+    "to": "`Failed to restore ${displayName}: ${sanitizeRestoreErrorMessage(error)}${statementPreview ? ` [statement: ${statementPreview.slice(0, 120)}]` : \"\"}${psqlMessage}`",
+    "expected": 1
+  }
+]

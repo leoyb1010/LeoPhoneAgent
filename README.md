@@ -481,3 +481,5 @@ pnpm build:bootstrap
 
 分发修改后的二进制须按各自许可证提供对应源码并保留声明。LeoPhoneAgent /
 LeoAgent 名称与图标仅标识本 fork。
+
+Paperclip 服务器发行层 1.1.5 的两轮审计、故障修复与实测边界见 [审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。

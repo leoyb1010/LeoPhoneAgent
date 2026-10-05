@@ -1,0 +1,80 @@
+[
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  isPaperclipRecoveryWakePayload,",
+    "to": "  isPaperclipRecoveryWakePayload,\n  isPaperclipRuntimeEnvKey,",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  const env = Object.fromEntries(Object.entries({ ...process.env, ...configured }).filter((entry): entry is [string, string] => typeof entry[1] === \"string\"));",
+    "to": "  // Config may supply CLI settings, never Paperclip runtime identity (including case aliases).\n  const userEnv = Object.fromEntries(Object.entries(configured).filter(([key]) => !isPaperclipRuntimeEnvKey(key.toUpperCase())));\n  const env = Object.fromEntries(Object.entries({ ...process.env, ...userEnv }).filter((entry): entry is [string, string] => typeof entry[1] === \"string\"));",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "      } else if (probe.exitCode !== 0) {",
+    "to": "      } else if (probe.exitCode !== 0 || parseHermesOutput(probe.stdout, probe.stderr).errorMessage) {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/grok-local/src/server/execute.test.ts",
+    "from": "describe(\"grok_local execute\", () => {",
+    "to": "describe(\"grok_local execute\", () => {\n  it(\"fails a structured provider error even when the CLI exits zero after partial output\", async () => {\n    const root = await makeTempRoot();\n    runProcessMock.mockResolvedValue({ ...makeSuccessfulRunResult(), stdout: [\n      JSON.stringify({ type: \"text\", data: \"hello\" }),\n      JSON.stringify({ type: \"error\", error: { message: \"fixture provider rejected request\" } }),\n      JSON.stringify({ type: \"end\", sessionId: \"fixture-session\", stopReason: \"Error\" }),\n    ].join(\"\\n\") });\n    const result = await execute(await makeCtx(\"round2-structured-error\", root));\n    expect(result.exitCode).toBe(1);\n    expect(result.errorMessage).toBe(\"fixture provider rejected request\");\n    expect(result.summary).toBe(\"hello\");\n    expect(runProcessMock).toHaveBeenCalledTimes(1);\n  });",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/grok-local/src/server/test.test.ts",
+    "from": "  it(\"reports a healthy authenticated host with a working hello probe\", async () => {",
+    "to": "  it(\"rejects a structured hello-probe error instead of trusting exit zero and partial hello\", async () => {\n    runProcessMock.mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false,\n      stdout: \"You are logged in with grok.com.\\nDefault model: grok-build\\nAvailable models:\\n  * grok-build (default)\", stderr: \"\" })\n      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: [\n        JSON.stringify({ type: \"text\", data: \"hello\" }),\n        JSON.stringify({ type: \"error\", error: { message: \"fixture provider rejected request\" } }),\n      ].join(\"\\n\"), stderr: \"\" });\n    const result = await testEnvironment({ companyId: \"fixture\", adapterType: \"grok_local\", config: {} });\n    expect(result.status).toBe(\"fail\");\n    expect(result.checks.some(check => check.code === \"grok_hello_probe_failed\" && check.level === \"error\")).toBe(true);\n    expect(result.checks.some(check => check.code === \"grok_hello_probe_passed\")).toBe(false);\n  });\n\n  it(\"reports a healthy authenticated host with a working hello probe\", async () => {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/grok-local/src/server/execute.ts",
+    "from": "      const failed = attempt.proc.timedOut || (attempt.proc.exitCode ?? 0) !== 0;\n      const parsedError = typeof attempt.parsed.errorMessage === \"string\" ? attempt.parsed.errorMessage.trim() : \"\";",
+    "to": "      const parsedError = typeof attempt.parsed.errorMessage === \"string\" ? attempt.parsed.errorMessage.trim() : \"\";\n      const synthesizedExitCode = parsedError && (attempt.proc.exitCode ?? 0) === 0 ? 1 : attempt.proc.exitCode;\n      const failed = attempt.proc.timedOut || (synthesizedExitCode ?? 0) !== 0;",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/grok-local/src/server/execute.ts",
+    "from": "        exitCode: attempt.proc.exitCode,",
+    "to": "        exitCode: synthesizedExitCode,",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/grok-local/src/server/test.ts",
+    "from": "    } else if ((helloProbe.exitCode ?? 1) !== 0) {",
+    "to": "    } else if ((helloProbe.exitCode ?? 1) !== 0 || parsed.errorMessage) {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/execute.test.ts",
+    "from": "  const systemPath = [\n    \"/usr/local/bin\",\n    \"/opt/homebrew/bin\",\n    \"/usr/local/sbin\",\n    \"/usr/bin\",\n    \"/bin\",\n    \"/usr/sbin\",\n    \"/sbin\",\n  ].join(path.delimiter);",
+    "to": "  // A fake remote runner must never resolve the real host Cursor/Grok CLI.\n  const systemPath = [\"/usr/bin\", \"/bin\"].join(path.delimiter);",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/execute.test.ts",
+    "from": "  return `#!/bin/sh\ncat > ${JSON.stringify(path.join(captureDir, \"prompt.txt\"))}",
+    "to": "  return `#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"Cursor Agent 1.2.3\"; exit 0; fi\ncat > ${JSON.stringify(path.join(captureDir, \"prompt.txt\"))}",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/opencode-local-adapter-environment.test.ts",
+    "from": "classifies ProviderModelNotFoundError probe output as model-unavailable warning",
+    "to": "classifies ProviderModelNotFoundError probe output as a permanent model error",
+    "expected": 1
+  },
+  {
+    "file": "server/src/__tests__/opencode-local-adapter-environment.test.ts",
+    "from": "      expect(modelCheck?.level).toBe(\"warn\");\n      expect(result.status).toBe(\"warn\");",
+    "to": "      expect(modelCheck?.level).toBe(\"error\");\n      expect(result.status).toBe(\"fail\");",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/cursor-local/src/server/execute.test.ts",
+    "from": "      const inheritedPath = input.env?.PATH ?? systemPath;",
+    "to": "      const inheritedPath = (input.env?.PATH ?? systemPath).split(path.delimiter)\n        .filter(entry => entry.startsWith(options.homeDir + path.sep) || [\"/usr/bin\", \"/bin\"].includes(entry))\n        .join(path.delimiter);",
+    "expected": 1
+  }
+]

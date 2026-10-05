@@ -1,0 +1,32 @@
+[
+  {
+    "file": "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    "to": "  const [modelSearch, setModelSearch] = useState(initialModelSearch);\n  const modelListRef = useRef<HTMLDivElement>(null);",
+    "expected": 1,
+    "from": "  const [modelSearch, setModelSearch] = useState(initialModelSearch);"
+  },
+  {
+    "file": "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    "to": "onKeyDown={(event) => {\n      if (event.nativeEvent.isComposing) return;\n      if (event.key === \"ArrowDown\" || event.key === \"ArrowUp\") {\n        const options = modelListRef.current?.querySelectorAll<HTMLButtonElement>('button[role=\"option\"]');\n        if (options?.length) { event.preventDefault(); options[event.key === \"ArrowDown\" ? 0 : options.length - 1]?.focus(); }\n      }\n      if (event.key === \"Enter\") {\n        const match = models.find((item) => item.id.toLowerCase() === query.toLowerCase());\n        if (match || (manualValid && !exactMatch)) { event.preventDefault(); chooseModel(match?.id ?? query); }\n      }\n    }}",
+    "expected": 1,
+    "from": "onKeyDown={(event) => { if (event.key === \"Enter\" && manualValid && !exactMatch) chooseModel(query); }}"
+  },
+  {
+    "file": "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    "to": "<div ref={modelListRef} className=\"mt-2 max-h-60 overflow-y-auto\" role=\"listbox\" aria-label=\"模型\" onKeyDown={(event) => {\n      if (event.key !== \"ArrowDown\" && event.key !== \"ArrowUp\") return;\n      const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role=\"option\"]'));\n      const index = options.indexOf(event.target as HTMLButtonElement);\n      if (index < 0 || !options.length) return;\n      event.preventDefault();\n      options[(index + (event.key === \"ArrowDown\" ? 1 : -1) + options.length) % options.length]?.focus();\n    }}>",
+    "expected": 1,
+    "from": "<div className=\"mt-2 max-h-60 overflow-y-auto\" role=\"listbox\" aria-label=\"Models\">"
+  },
+  {
+    "file": "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    "to": "<span className=\"block break-words font-medium leading-snug\">{item.label}</span>{item.label !== item.id ? <span className=\"mt-0.5 block break-all font-mono text-xs leading-snug text-muted-foreground\">{item.id}</span> : null}",
+    "expected": 1,
+    "from": "<span className=\"block truncate font-medium\">{item.label}</span><span className=\"block truncate font-mono text-xs text-muted-foreground\">{item.id}</span>"
+  },
+  {
+    "file": "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    "to": "<span className=\"max-w-20 shrink-0 text-right text-xs leading-snug text-muted-foreground\">{item.detail ?? \"智能体默认设置\"}</span>",
+    "expected": 1,
+    "from": "<span className=\"shrink-0 text-xs text-muted-foreground\">{item.detail ?? \"Agent default\"}</span>"
+  }
+]
