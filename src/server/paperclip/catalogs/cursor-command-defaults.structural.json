@@ -1,0 +1,4 @@
+[
+  {"file":"ui/src/components/AgentConfigForm.tsx","from":"                        cursor: \"agent\",","to":"                        cursor: \"cursor-agent\",","expected":1},
+  {"file":"ui/src/components/OnboardingWizard.tsx","from":"    cursor: \"agent\",","to":"    cursor: \"cursor-agent\",","expected":1}
+]

@@ -6,6 +6,36 @@ import ts from 'typescript';
 import { localizeDisplayFormats } from './display-locales.mjs';
 import { extract } from './localization-engine.mjs';
 const home = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * 1.1.6：结构补丁 catalog 的显式顺序。不再依赖 zz-/zzzz-/zzzzz- 文件名字典序：
+ * catalogs/order.json 必须逐一登记目录中的全部 *.structural.json（不多不少不重复），
+ * 并声明跨 catalog 的 after 依赖；任何缺失、未知、重复或违反 after 的顺序都直接失败。
+ */
+export function orderedStructuralCatalogs(catalogDir = path.join(home, 'catalogs')) {
+  const present = fs.readdirSync(catalogDir).filter(f => f.endsWith('.structural.json')).sort();
+  const orderPath = path.join(catalogDir, 'order.json');
+  if (!fs.existsSync(orderPath)) throw new Error('缺少结构补丁顺序清单 catalogs/order.json');
+  const order = JSON.parse(fs.readFileSync(orderPath, 'utf8'));
+  const listed = order.structural;
+  if (!Array.isArray(listed) || listed.some(f => typeof f !== 'string' || !f.endsWith('.structural.json') || f.includes('/') || f.includes('..'))) throw new Error('order.json structural 必须是 catalog 文件名数组');
+  const duplicate = listed.find((f, i) => listed.indexOf(f) !== i);
+  if (duplicate) throw new Error(`order.json 重复登记：${duplicate}`);
+  const unlisted = present.filter(f => !listed.includes(f));
+  if (unlisted.length) throw new Error(`结构补丁未在 order.json 登记顺序：${unlisted.join(', ')}`);
+  const missing = listed.filter(f => !present.includes(f));
+  if (missing.length) throw new Error(`order.json 登记的结构补丁不存在：${missing.join(', ')}`);
+  for (const rule of order.after ?? []) {
+    if (!rule || typeof rule.catalog !== 'string' || typeof rule.after !== 'string' || typeof rule.reason !== 'string' || !rule.reason.trim()) throw new Error('order.json after 规则必须包含 catalog、after 与 reason');
+    for (const name of [rule.catalog, rule.after]) if (!listed.includes(name)) throw new Error(`order.json after 规则引用未登记的 catalog：${name}`);
+    if (listed.indexOf(rule.catalog) <= listed.indexOf(rule.after)) throw new Error(`结构补丁顺序冲突：${rule.catalog} 必须在 ${rule.after} 之后`);
+  }
+  return listed;
+}
+
+export function loadStructuralPatches(catalogDir = path.join(home, 'catalogs')) {
+  return orderedStructuralCatalogs(catalogDir).flatMap(f => JSON.parse(fs.readFileSync(path.join(catalogDir, f), 'utf8')));
+}
 export function applyStructuralPatches({ root, changed, report }) {
   const read = file => changed.get(file) ?? execFileSync('git', ['show', `HEAD:${file}`], { cwd: root, encoding: 'utf8', maxBuffer: 20_000_000 });
   function replace(file, from, to, expected = 1) {
@@ -13,9 +43,10 @@ export function applyStructuralPatches({ root, changed, report }) {
     const count = input.split(from).length - 1;
     if (count !== expected) throw new Error(`结构补丁上下文不匹配：${file} 预期 ${expected}，实际 ${count}: ${from.slice(0, 100)}`);
     changed.set(file, input.split(from).join(to));
-    if (!report.structuralFiles.includes(file)) report.structuralFiles.push(file);
+    markStructural(file);
   }
-  function overlay(file, name) { changed.set(file, fs.readFileSync(path.join(home, 'overlays', name), 'utf8')); report.structuralFiles.push(file); }
+  const markStructural = file => { if (!report.structuralFiles.includes(file)) report.structuralFiles.push(file); };
+  function overlay(file, name) { changed.set(file, fs.readFileSync(path.join(home, 'overlays', name), 'utf8')); markStructural(file); }
   replace('ui/src/i18n/locales.ts', 'DEFAULT_LOCALE = "en"', 'DEFAULT_LOCALE = "zh-CN"');
   replace('ui/index.html', 'lang="en"', 'lang="zh-CN"');
   replace('ui/src/i18n/locales/zh-CN.json', '创建您的第一家公司', '创建你的第一个组织');
@@ -79,7 +110,7 @@ export function applyStructuralPatches({ root, changed, report }) {
       source = 'import { ChineseError } from "@/components/ChineseError";\n' + source;
       extract(source, file);
       changed.set(file, source);
-      report.structuralFiles.push(file);
+      markStructural(file);
     }
   }
   report.displayLocaleSites = 0;

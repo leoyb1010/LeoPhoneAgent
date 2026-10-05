@@ -2,13 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
-const source = process.env.PAPERCLIP_SOURCE;
-const candidate = process.env.PAPERCLIP_CANDIDATE;
+import { source, candidate, patched as patchedFile } from './helpers/patched.mjs';
 const file = 'ui/src/components/new-agent/NewAgentSetup.tsx';
 const patches = JSON.parse(fs.readFileSync(new URL('../catalogs/opencode-provider-choice.structural.json', import.meta.url)));
-function patched(){let text=execFileSync('git',['show',`HEAD:${file}`],{cwd:source,encoding:'utf8'});for(const patch of patches){assert.equal(text.split(patch.from).length-1,patch.expected);text=text.split(patch.from).join(patch.to);}return text;}
+const patched=()=>{assert.ok(patches.every(patch=>patch.file===file));return patchedFile(file,patches);};
 function check(text){
  const ast=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);assert.deepEqual(ast.parseDiagnostics,[]);
  const bindings=[];function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='[runtimeAiBinding, setRuntimeAiBinding]')bindings.push(n);ts.forEachChild(n,visit);}visit(ast);assert.equal(bindings.length,1);assert.equal(bindings[0].initializer.arguments.length,0,'choosing the CLI must not synthesize any managed account');

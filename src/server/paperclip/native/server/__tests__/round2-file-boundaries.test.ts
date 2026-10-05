@@ -14,7 +14,8 @@ describe("round-two file content and encoding boundaries", () => {
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("pc-r2-files-");
     db = createDb(database.connectionString);
-    directory = await fs.mkdtemp(path.join(os.tmpdir(), "pc-r2-content-"));
+    // 1.1.6：取物理路径；macOS 的 /var → /private/var 会让按路径匹配的 open 打桩失效（服务读取 realpath）。
+    directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "pc-r2-content-")));
     const [company] = await db.insert(companies).values({ name: "File boundary fixture", issuePrefix: "R2FILE" }).returning();
     const [project] = await db.insert(projects).values({ companyId: company!.id, name: "Fixture files" }).returning();
     const [workspace] = await db.insert(projectWorkspaces).values({ companyId: company!.id, projectId: project!.id,
@@ -57,8 +58,19 @@ describe("round-two file content and encoding boundaries", () => {
       return handle;
     });
     const error = await read("growing.txt").then(() => null, error => error);
-    expect(error).toMatchObject({ status: 422, details: { code: "too_large" } });
-    expect(observedBytes).toBeLessThanOrEqual(WORKSPACE_FILE_TEXT_MAX_BYTES + 1);
+    // 1.1.6：缓冲区按 stat 大小分配，读到超过 stat 的字节即判定文件在读取中变化（仍为 422），
+    // 实际读取量不超过 stat 大小 + 1，远低于 maxBytes + 1。
+    expect(error).toMatchObject({ status: 422, details: { code: "file_changed" } });
+    expect(observedBytes).toBeLessThanOrEqual(Buffer.byteLength("small fixture") + 1);
+  });
+
+  it("allocates a preview buffer from the file size instead of the maximum", async () => {
+    await fs.writeFile(path.join(directory, "tiny.txt"), "tiny preview");
+    const alloc = vi.spyOn(Buffer, "alloc");
+    expect((await read("tiny.txt")).content.data).toBe("tiny preview");
+    const sizes = alloc.mock.calls.map(call => Number(call[0]));
+    expect(sizes).toContain(Buffer.byteLength("tiny preview") + 1);
+    expect(Math.max(...sizes)).toBeLessThan(1024);
   });
 
   it("treats encoded dot/slash names literally and does not decode them a second time", async () => {

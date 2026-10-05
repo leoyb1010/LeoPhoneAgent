@@ -35,6 +35,30 @@ describe("Cursor model discovery is authoritative", () => {
     complete({ status: 0, stdout: '["claude-opus-5-5-high"]', stderr: "", hasError: false });
     expect(await Promise.all(calls)).toEqual(Array(3).fill([{ id: "claude-opus-5-5-high", label: "claude-opus-5-5-high" }]));
   });
+  // 1.1.6 回归：reset 之前的在途探测完成时，既不能清掉 reset 之后的新 pending，也不能用旧结果写缓存。
+  it("keeps the post-reset discovery when a pre-reset discovery finishes later", async () => {
+    type Result = { status: number; stdout: string; stderr: string; hasError: boolean };
+    let finishOld!: (value: Result) => void; let finishNew!: (value: Result) => void;
+    const oldRunner = vi.fn(() => new Promise<Result>(resolve => { finishOld = resolve; }));
+    const newRunner = vi.fn(() => new Promise<Result>(resolve => { finishNew = resolve; }));
+    setCursorModelsRunnerForTests(oldRunner);
+    const stale = listCursorModels();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    resetCursorModelsCacheForTests();
+    setCursorModelsRunnerForTests(newRunner);
+    const fresh = listCursorModels();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    finishOld({ status: 0, stdout: '["stale-model"]', stderr: "", hasError: false });
+    expect((await stale).map(model => model.id)).toEqual(["stale-model"]);
+    const joined = listCursorModels();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(newRunner).toHaveBeenCalledTimes(1);
+    finishNew({ status: 0, stdout: '["fresh-model"]', stderr: "", hasError: false });
+    expect((await fresh).map(model => model.id)).toEqual(["fresh-model"]);
+    expect((await joined).map(model => model.id)).toEqual(["fresh-model"]);
+    expect((await listCursorModels()).map(model => model.id)).toEqual(["fresh-model"]);
+    expect(newRunner).toHaveBeenCalledTimes(1);
+  });
   it("briefly caches timeout/failure auto and retries discovery after the negative TTL", async () => {
     const clock = vi.spyOn(Date, "now").mockReturnValue(100_000);
     const runner = vi.fn(async () => ({ status: null, stdout: "", stderr: "", hasError: true }));

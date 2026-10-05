@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 import { extract, transform } from '../scripts/localization-engine.mjs';
-import { applyStructuralPatches } from '../scripts/structural-patches.mjs';
+import { applyStructuralPatches, orderedStructuralCatalogs } from '../scripts/structural-patches.mjs';
 
 // Run with PAPERCLIP_SOURCE=/path/to/pinned/paperclip npm test. The checkout
 // may already contain the overlay: only committed HEAD blobs are used below.
@@ -75,7 +75,8 @@ function rebuildOverlay(root) {
   }
   // Match localize.mjs ordering and context/preserve handling, including every
   // structural catalog rather than a copied subset of scheduling replacements.
-  const patches = catalogFiles.filter(f => f.endsWith('.structural.json')).sort()
+  // 1.1.6：与 localize.mjs 相同，按 catalogs/order.json 的显式顺序加载。
+  const patches = orderedStructuralCatalogs(path.join(home, 'catalogs'))
     .flatMap(file => readJson(`catalogs/${file}`).map(patch => ({ ...patch, catalogFile: file })));
   assert.ok(patches.some(p => p.catalogFile === 'workflows-skills.structural.json'));
   const contexts = readJson('catalogs/contexts.json');

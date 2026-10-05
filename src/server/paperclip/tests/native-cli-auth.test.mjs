@@ -2,18 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
-const source = process.env.PAPERCLIP_SOURCE;
-const candidate = process.env.PAPERCLIP_CANDIDATE;
+import { source, candidate, patched as patchedFile } from './helpers/patched.mjs';
 const patches = JSON.parse(fs.readFileSync(new URL('../catalogs/native-cli-auth.structural.json', import.meta.url)));
-const original = file => execFileSync('git', ['show', `HEAD:${file}`], { cwd: source, encoding: 'utf8', maxBuffer: 20e6 });
 function patched(file) {
-  let text = original(file);
-  for (const patch of patches.filter(p => p.file === file)) {
-    assert.equal(text.split(patch.from).length - 1, patch.expected, `pinned input anchor ${file}`);
-    text = text.split(patch.from).join(patch.to);
-  }
+  const text = patchedFile(file, patches, { message: `pinned input anchor ${file}` });
   const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   assert.deepEqual(ast.parseDiagnostics, [], `valid TSX ${file}`);
   return text;

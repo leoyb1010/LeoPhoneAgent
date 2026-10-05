@@ -46,7 +46,8 @@ if (command === 'verify') assert.equal(fingerprint, after, 'avatar runtime overl
 if (command === 'apply' && fingerprint === before) {
   const source = current.toString('utf8');
   assert.equal(source.split(from).length - 1, 1, 'expected exactly one reviewed import');
-  const output = Buffer.from(source.replace(from, to));
+  // 1.1.6：split/join 避免 String.replace 对替换串中 $ 模式的特殊解释（上方已断言恰好 1 处）。
+  const output = Buffer.from(source.split(from).join(to));
   assert.equal(hash(output), after, 'unexpected replacement output');
   execFileSync(process.execPath, ['--check', '--input-type=module'], { input: output });
   const temporary = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;

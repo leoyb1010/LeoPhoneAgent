@@ -13,7 +13,7 @@ async function fixture(extraEnv: NodeJS.ProcessEnv = {}, authorize: () => Promis
   await writeFile(binary, `#!/usr/bin/python3
 import os, sys, json, signal, time
 home = os.environ["CODEX_HOME"]
-print("FIXTURE=" + json.dumps({"argv":sys.argv[1:],"ttyIn":os.isatty(0),"ttyOut":os.isatty(1),"home":home,"operatorHome":os.environ.get("HOME"),"apiKey":os.environ.get("OPENAI_API_KEY"),"pid":os.getpid()}), flush=True)
+print("FIXTURE=" + json.dumps({"argv":sys.argv[1:],"ttyIn":os.isatty(0),"ttyOut":os.isatty(1),"home":home,"operatorHome":os.environ.get("HOME"),"apiKey":os.environ.get("OPENAI_API_KEY"),"serverSecrets":[k for k in ("DATABASE_URL","BETTER_AUTH_SECRET","PAPERCLIP_TOOL_ACTION_SIGNING_SECRET","PGPASSWORD","PAPERCLIP_SECRETS_MASTER_KEY") if k in os.environ],"proxy":os.environ.get("HTTPS_PROXY"),"pid":os.getpid()}), flush=True)
 if os.environ.get("FAKE_STALL"):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     while True: time.sleep(0.1)
@@ -61,6 +61,19 @@ for (const [type, args] of [["codex_local", ["-c", 'cli_auth_credentials_store="
     } finally { await f.close(); }
   });
 }
+// 1.1.6 回归：授权 PTY 中的第三方 CLI 不继承服务器私密变量，代理保留。
+test("native login PTY drops server secrets but keeps the operator proxy", async () => {
+  const f = await fixture({ DATABASE_URL: "postgres://fixture:secret@127.0.0.1/db", BETTER_AUTH_SECRET: "auth-secret", PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: "signing-secret", PGPASSWORD: "pg-secret", PAPERCLIP_SECRETS_MASTER_KEY: "master", HTTPS_PROXY: "http://127.0.0.1:7890" });
+  try {
+    const lease = await f.runtime.device.acquireLoginLease(f.input);
+    let output = "";
+    expect((await lease.driver.start("IGNORED", data => { output += data; })).exitCode).toBe(0);
+    const info = parsed(output);
+    expect(info.serverSecrets).toEqual([]);
+    expect(info.proxy).toBe("http://127.0.0.1:7890");
+    await lease.driver.dispose(); await lease.release();
+  } finally { await f.close(); }
+});
 test("Claude setup-token uses a private PTY with delayed browser-code input", async () => {
   const f = await fixture();
   try {

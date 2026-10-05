@@ -1,0 +1,631 @@
+[
+ {
+  "file": "ui/src/context/CompanyContext.test.tsx",
+  "from": "      // The previous account's entry may still sit in the cache; keying by\n      // account is what makes that harmless, since nothing reads it now.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toMatchObject({\n        companies: [{ id: \"company-1\" }],\n      });",
+  "to": "      // R1 contract: an identity change resets every account-scoped query, so\n      // the previous account's list is no longer held in the cache at all.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toBeUndefined();",
+  "expected": 1,
+  "category": "B",
+  "tests": [
+   "CompanyProvider when the account changes in this tab drops the previous account's selection and re-reads the list"
+  ],
+  "reason": "zz-round1-data.structural.json 在身份切换的 useLayoutEffect 中对账号作用域查询执行 resetQueries，旧账号公司列表数据被主动清除；改为断言旧缓存已为 undefined（比“仍缓存但不读取”更强）。"
+ },
+ {
+  "file": "ui/src/context/CompanyContext.test.tsx",
+  "from": "      // Still cached, still keyed to whom it belongs, still unread.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toMatchObject({\n        companies: [{ id: \"company-1\" }],\n      });",
+  "to": "      // R1 contract: the previous account's list is purged, not merely unread.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toBeUndefined();",
+  "expected": 1,
+  "category": "B",
+  "tests": [
+   "CompanyProvider when the account changes in this tab cannot read another account's cached list at all"
+  ],
+  "reason": "zz-round1-data.structural.json 身份切换时 resetQueries 清除旧账号作用域缓存；断言旧账号列表数据已不存在，而非仅“未被读取”。"
+ },
+ {
+  "file": "ui/src/context/LiveUpdatesProvider.hook.test.tsx",
+  "from": "      title: \"Agent run failed\", dedupeKey: \"run-status:unrelated-run:failed\",\n      action: { label: \"View run\", href: `/agents/${agentId}/runs/unrelated-run` },",
+  "to": "      title: \"智能体的运行已失败\", dedupeKey: \"run-status:unrelated-run:failed\",\n      action: { label: \"查看运行\", href: `/agents/${agentId}/runs/unrelated-run` },",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "LiveUpdatesProvider socket run notification scope shows an unrelated retryable failure without issueId for parent-agent",
+   "LiveUpdatesProvider socket run notification scope shows an unrelated retryable failure without issueId for child-agent"
+  ],
+  "reason": "toast 标题由 navigation-dynamic.structural.json 的 `${name}的运行${statusLabel}`、\"Agent\"→\"智能体\"、statusLabel failed→\"已失败\" 组合而成，按钮文案来自 tasks-agents.zh-CN.json \"View run\"→\"查看运行\"。"
+ },
+ {
+  "file": "ui/src/pages/Costs.test.tsx",
+  "from": "        expect(container.textContent).toContain(\"Budget control plane\");\n      });\n    });\n    expect(container.textContent).not.toContain(\"Inference spend\");",
+  "to": "        expect(container.textContent).toContain(\"预算控制台\");\n      });\n    });\n    expect(container.textContent).not.toContain(\"推理支出\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "Costs embedded Audit surfaces renders a focused Budgets section without duplicate Costs chrome or spend queries"
+  ],
+  "reason": "admin.zh-CN.json \"Budget control plane\"→\"预算控制台\"、\"Inference spend\"→\"推理支出\"；同步更新否定断言以保持其约束意义。"
+ },
+ {
+  "file": "ui/src/components/IssueAttachmentsSection.test.tsx",
+  "from": "'button[aria-label=\"Browse demo.webm in gallery\"]'",
+  "to": "'button[aria-label=\"在图库中浏览 demo.webm\"]'",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueAttachmentsSection lets video attachments open the shared media gallery"
+  ],
+  "reason": "tasks-agents.structural.json 将 `Browse ${filename} in gallery` 改为 `在图库中浏览 ${filename}`。"
+ },
+ {
+  "file": "ui/src/components/IssueAttachmentsSection.test.tsx",
+  "from": "a[aria-label=\"Open report.pdf\"]",
+  "to": "a[aria-label=\"打开 report.pdf\"]",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueAttachmentsSection keeps generic attachments as compact file rows with open and download actions"
+  ],
+  "reason": "tasks-agents.structural.json 将 `Open ${filename}` 改为 `打开 ${filename}`。"
+ },
+ {
+  "file": "ui/src/components/IssueAttachmentsSection.test.tsx",
+  "from": "a[aria-label=\"Download report.pdf\"]",
+  "to": "a[aria-label=\"下载 report.pdf\"]",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueAttachmentsSection keeps generic attachments as compact file rows with open and download actions"
+  ],
+  "reason": "tasks-agents.structural.json 将 `Download ${filename}` 改为 `下载 ${filename}`。"
+ },
+ {
+  "file": "ui/src/components/IssueAttachmentsSection.test.tsx",
+  "from": "    expect(container.querySelector('a[aria-label=\"Open stored-report.pdf\"]')).toBeTruthy();\n    expect(container.querySelector('a[aria-label=\"Download stored-report.pdf\"]')).toBeTruthy();\n    expect(container.querySelector('button[title=\"Delete attachment\"]')).toBeNull();\n    expect(container.textContent).not.toContain(\"Delete this attachment?\");",
+  "to": "    expect(container.querySelector('a[aria-label=\"打开 stored-report.pdf\"]')).toBeTruthy();\n    expect(container.querySelector('a[aria-label=\"下载 stored-report.pdf\"]')).toBeTruthy();\n    expect(container.querySelector('button[title=\"删除附件\"]')).toBeNull();\n    expect(container.textContent).not.toContain(\"要删除此附件吗？\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueAttachmentsSection can render read-only attachments without destructive controls"
+  ],
+  "reason": "tasks-agents.structural.json（打开/下载 ${filename}）与 tasks-agents.zh-CN.json（\"Delete attachment\"→\"删除附件\"、\"Delete this attachment? This cannot be undone.\"→\"要删除此附件吗？此操作无法撤销。\"）；否定断言同步改为中文以保持约束。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "'button[aria-label=\"More task actions\"]'",
+  "to": "'button[aria-label=\"更多任务操作\"]'",
+  "expected": 9,
+  "category": "A",
+  "tests": [
+   "IssueDetail loads from the pending state into issue detail without changing hook order",
+   "IssueDetail removes an inbox-origin archived issue and restores it when the toast Undo action is pressed",
+   "IssueDetail keeps an archived task hidden and reports an error when toast Undo fails",
+   "IssueDetail archives a task-page issue with y and returns to the inbox",
+   "IssueDetail pauses the subtree immediately without preview or confirmation",
+   "IssueDetail keeps active-run run controls distinct from pausing future work",
+   "IssueDetail keeps composer run controls distinct from pausing future work",
+   "IssueDetail falls back to execCommand when copying the task from an insecure context",
+   "IssueDetail exposes restore subtree from the issue actions menu",
+   "IssueDetail confirms cancellation once without a reason, checkbox, or task inventory"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"More task actions\"→\"更多任务操作\"（IssueDetail.tsx 的 aria-label/title 已汉化）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Archive from inbox\"",
+  "to": "=== \"从收件箱归档\"",
+  "expected": 3,
+  "category": "A",
+  "tests": [
+   "IssueDetail removes an inbox-origin archived issue and restores it when the toast Undo action is pressed",
+   "IssueDetail keeps an archived task hidden and reports an error when toast Undo fails",
+   "IssueDetail archives a task-page issue with y and returns to the inbox"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Archive from inbox\"→\"从收件箱归档\"（含 y 快捷键用例中的否定断言，同步汉化以保持约束）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Task archived from inbox\"",
+  "to": "\"任务已从收件箱归档\"",
+  "expected": 3,
+  "category": "A",
+  "tests": [
+   "IssueDetail removes an inbox-origin archived issue and restores it when the toast Undo action is pressed",
+   "IssueDetail keeps an archived task hidden and reports an error when toast Undo fails"
+  ],
+  "reason": "tasks-agents.zh-CN.json / admin.zh-CN.json \"Task archived from inbox\"→\"任务已从收件箱归档\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "action: { label: \"Undo\" },",
+  "to": "action: { label: \"撤销\" },",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail removes an inbox-origin archived issue and restores it when the toast Undo action is pressed"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Undo\"→\"撤销\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "title: \"Undo failed\",",
+  "to": "title: \"撤销失败\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail keeps an archived task hidden and reports an error when toast Undo fails"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Undo failed\"→\"撤销失败\"；toast body 仍透传原始 error.message，不变。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "'button[aria-label=\"Back to inbox\"]'",
+  "to": "'button[aria-label=\"返回收件箱\"]'",
+  "expected": 2,
+  "category": "A",
+  "tests": [
+   "IssueDetail uses history Back for a live inbox origin and a route fallback for direct links"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Back to inbox\"→\"返回收件箱\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "b.textContent === \"Retry agent\"",
+  "to": "b.textContent === \"重试智能体\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail connects the inline disposition retry to current state (success)",
+   "IssueDetail connects the inline disposition retry to current state (failure)",
+   "IssueDetail connects the inline disposition retry to current state (pending question)"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Retry agent\"→\"重试智能体\"（DispositionRecoveryNotice）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Respond to the pending question or confirmation before retrying.\"",
+  "to": "\"请先回答待处理的问题或完成确认，再尝试重试。\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail connects the inline disposition retry to current state (pending question)"
+  ],
+  "reason": "navigation-dynamic.structural.json 将该不可重试原因改为\"请先回答待处理的问题或完成确认，再尝试重试。\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "      expect(container.textContent).toContain(fail ? \"Couldn’t confirm the retry. The task is now paused.\" : \"Retry requested\");\n    });",
+  "to": "      expect(container.textContent).toContain(fail ? \"无法确认重试。 操作未完成，请重试；如仍失败，请查看原始诊断并联系管理员。 查看原始诊断\" : \"已请求重试\");\n    });\n    if (fail) {\n      const rawToggle = Array.from(container.querySelectorAll(\"button\")).find(b => b.textContent === \"查看原始诊断\");\n      await act(async () => rawToggle!.click());\n      expect(container.textContent).toContain(\"The task is now paused.\");\n    }",
+  "expected": 1,
+  "category": "B",
+  "tests": [
+   "IssueDetail connects the inline disposition retry to current state (success)",
+   "IssueDetail connects the inline disposition retry to current state (failure)"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Retry requested\"→\"已请求重试\"；失败前缀\"无法确认重试。\"后接 ChineseError（发行层 overlay）：非中文错误显示固定中文说明，原始错误移入\"查看原始诊断\"展开区；断言中文说明并展开验证原始服务端原因仍可见。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Assignee: CodexCoder\",",
+  "to": "\"负责人: CodexCoder\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Assignee\"→\"负责人\"；无 via 分支模板仍为 `${label}: ${actor.name}`（半角冒号）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Originating: Dotta\",",
+  "to": "\"来源: Dotta\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Originating\"→\"来源\"；无 via 分支模板为 `${label}: ${actor.name}`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "avatarStack?.textContent).not.toContain(\"Assignee\");",
+  "to": "avatarStack?.textContent).not.toContain(\"负责人\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Assignee\"→\"负责人\"；否定断言同步汉化以保持“头像堆不显示标签文字”的约束。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "avatarStack?.textContent).not.toContain(\"Originating\");",
+  "to": "avatarStack?.textContent).not.toContain(\"来源\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Originating\"→\"来源\"；否定断言同步汉化。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "tooltip?.textContent).toContain(\"Assignee\");",
+  "to": "tooltip?.textContent).toContain(\"负责人\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Assignee\"→\"负责人\"（tooltip 标签）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "tooltip?.textContent).toContain(\"Originating\");",
+  "to": "tooltip?.textContent).toContain(\"来源\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows assignee and originating avatars in the issue header metadata"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Originating\"→\"来源\"（tooltip 标签）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Originating: Dotta · via CodexCoder\",",
+  "to": "\"来源：Dotta · 通过 CodexCoder\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail attributes an agent-created issue to the transitive responsible user with a via affordance"
+  ],
+  "reason": "tasks-agents.structural.json 将 `${label}: ${actor.name} · via ${via}` 改为 `${label}：${actor.name} · 通过 ${via}`（全角冒号），label 来自 tasks-agents.zh-CN.json \"Originating\"→\"来源\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "toContain(\"via CodexCoder\")",
+  "to": "toContain(\"通过 CodexCoder\")",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail attributes an agent-created issue to the transitive responsible user with a via affordance"
+  ],
+  "reason": "tooltip 中 via 行汉化为 {\"通过\"} {via}（与 tasks-agents.structural.json 中 via→通过 的译法一致）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "'[aria-label=\"Open file in this issue\"]'",
+  "to": "'[aria-label=\"在此任务中打开文件\"]'",
+  "expected": 2,
+  "category": "A",
+  "tests": [
+   "IssueDetail shows file viewer entry points when the experimental flag is enabled"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Open file in this issue\"→\"在此任务中打开文件\"；同一选择器也用于默认隐藏用例的否定断言，一并汉化。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Subtree is paused.\"",
+  "to": "\"子任务树已暂停。\"",
+  "expected": 3,
+  "category": "A",
+  "tests": [
+   "IssueDetail refreshes a released pause and shows partial wake failure=false inline",
+   "IssueDetail refreshes a released pause and shows partial wake failure=true inline",
+   "IssueDetail renders a quiet task pause notice and defaults leaf resume to wake the assignee"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Subtree is paused.\"→\"子任务树已暂停。\"（含 2 处否定断言，同步汉化）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": ").find((button) => button.textContent?.trim() === \"Resume subtree\");",
+  "to": ").find((button) => button.textContent?.trim() === \"恢复子任务树\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail refreshes a released pause and shows partial wake failure=false inline",
+   "IssueDetail refreshes a released pause and shows partial wake failure=true inline"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Resume subtree\"→\"恢复子任务树\"（暂停接管区按钮）；对话框确认按钮仍渲染未汉化的 title \"Resume subtree\"，其 filter 断言保持英文。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Wake affected agents (1)\"",
+  "to": "\"唤醒受影响的智能体（1)\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail refreshes a released pause and shows partial wake failure=false inline",
+   "IssueDetail refreshes a released pause and shows partial wake failure=true inline"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Wake affected agents (\"→\"唤醒受影响的智能体（\"，闭括号仍为源码中的半角\")\"，按实际渲染断言。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": ").toContain(\"Pause released\");",
+  "to": ").toContain(\"已解除暂停\");",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail refreshes a released pause and shows partial wake failure=true inline"
+  ],
+  "reason": "navigation-dynamic.structural.json 将 `Pause released, but …` 改为 `已解除暂停，但 …`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Pause subtree\"",
+  "to": "=== \"暂停子任务树\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail pauses the subtree immediately without preview or confirmation"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Pause subtree\"→\"暂停子任务树\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "        stopRunLabel: \"Pause work\",\n        stoppingRunLabel: \"Pausing...\",",
+  "to": "        stopRunLabel: \"暂停工作\",\n        stoppingRunLabel: \"正在暂停…\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail keeps active-run run controls distinct from pausing future work",
+   "IssueDetail keeps composer run controls distinct from pausing future work"
+  ],
+  "reason": "tasks-agents.structural.json \"Pause work\"→\"暂停工作\"、\"Pausing...\"→\"正在暂停…\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "textContent?.trim() === \"Pause work\"",
+  "to": "textContent?.trim() === \"暂停工作\"",
+  "expected": 2,
+  "category": "A",
+  "tests": [
+   "IssueDetail keeps active-run run controls distinct from pausing future work",
+   "IssueDetail keeps composer run controls distinct from pausing future work"
+  ],
+  "reason": "tasks-agents.zh-CN.json / runtime-interface.zh-CN.json \"Pause work\"→\"暂停工作\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "textContent?.trim() === \"Stop and done\"",
+  "to": "textContent?.trim() === \"停止并标为完成\"",
+  "expected": 2,
+  "category": "A",
+  "tests": [
+   "IssueDetail routes live-run finalization actions through run cancellation before issue status update",
+   "IssueDetail reports partial success when run finalization stops the run but task status update fails"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Stop and done\"→\"停止并标为完成\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "textContent?.trim() === \"Stop and cancel\"",
+  "to": "textContent?.trim() === \"停止并取消\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail routes live-run finalization actions through run cancellation before issue status update"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Stop and cancel\"→\"停止并取消\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "        title: \"Run stopped; task update failed\",\n        body: \"Run was stopped, but updating the task failed: Status write failed\",",
+  "to": "        title: \"运行已停止，但任务更新失败\",\n        body: \"运行已停止，但更新任务失败：Status write failed\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail reports partial success when run finalization stops the run but task status update fails"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Run stopped; task update failed\"→\"运行已停止，但任务更新失败\"；tasks-agents.structural.json 将 body 模板改为 `运行已停止，但更新任务失败：${err.message}`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Copy as markdown\"",
+  "to": "=== \"复制为 Markdown\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail falls back to execCommand when copying the task from an insecure context"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Copy as markdown\"→\"复制为 Markdown\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "title: \"Copied to clipboard\",",
+  "to": "title: \"已复制到剪贴板\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail falls back to execCommand when copying the task from an insecure context"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Copied to clipboard\"→\"已复制到剪贴板\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Couldn’t check whether this task is paused. Refresh to try again.\"",
+  "to": "\"无法检查此任务是否已暂停，请刷新后重试。\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail composer tree control (mobile=false) blocks the composer when the pending tree control request fails",
+   "IssueDetail composer tree control (mobile=true) blocks the composer when the pending tree control request fails"
+  ],
+  "reason": "tasks-agents.structural.json 将该提示改为\"无法检查此任务是否已暂停，请刷新后重试。\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "toContain(\"Task is paused.\")",
+  "to": "toContain(\"任务已暂停。\")",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail renders a quiet task pause notice and defaults leaf resume to wake the assignee"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Task is paused.\"→\"任务已暂停。\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Resume task\"",
+  "to": "=== \"恢复任务\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail renders a quiet task pause notice and defaults leaf resume to wake the assignee"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Resume task\"→\"恢复任务\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Restore subtree...\"",
+  "to": "=== \"恢复子任务树…\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail exposes restore subtree from the issue actions menu"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Restore subtree...\"→\"恢复子任务树…\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"1 task will be restored.\"",
+  "to": "\"1 项任务将被恢复。\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail exposes restore subtree from the issue actions menu"
+  ],
+  "reason": "runtime-dynamic.structural.json：`${affectedCount} 项任务` + `${tasks}将${\"被恢复\"}。`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Restore 1 task\"",
+  "to": "=== \"恢复 1 项任务\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail exposes restore subtree from the issue actions menu"
+  ],
+  "reason": "runtime-dynamic.structural.json：`Restore ${tasks}`→`恢复 ${tasks}`，tasks=`1 项任务`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Cancel subtree...\"",
+  "to": "=== \"取消子任务树…\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail confirms cancellation once without a reason, checkbox, or task inventory"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Cancel subtree...\"→\"取消子任务树…\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"24 tasks will be cancelled.\"",
+  "to": "\"24 项任务将被取消。\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail confirms cancellation once without a reason, checkbox, or task inventory"
+  ],
+  "reason": "runtime-dynamic.structural.json：`${tasks}将被取消。`，tasks=`24 项任务`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "toContain(\"Keep tasks\")",
+  "to": "toContain(\"保留任务\")",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail confirms cancellation once without a reason, checkbox, or task inventory"
+  ],
+  "reason": "runtime-interface.zh-CN.json \"Keep tasks\"→\"保留任务\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "=== \"Cancel 24 tasks\"",
+  "to": "=== \"取消 24 项任务\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail confirms cancellation once without a reason, checkbox, or task inventory"
+  ],
+  "reason": "runtime-dynamic.structural.json：`Cancel ${tasks}`→`取消 ${tasks}`。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "label: \"Stop and cancel\" }",
+  "to": "label: \"停止并取消\" }",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail loads only the shared queue projection for an active codex_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active claude_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active opencode_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active process run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active http run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active custom_plugin run after reassignment"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Stop and cancel\"→\"停止并取消\"（runFinalizationActions label）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "label: \"Stop and done\" }",
+  "to": "label: \"停止并标为完成\" }",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail loads only the shared queue projection for an active codex_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active claude_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active opencode_local run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active process run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active http run after reassignment",
+   "IssueDetail loads only the shared queue projection for an active custom_plugin run after reassignment"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Stop and done\"→\"停止并标为完成\"（runFinalizationActions label）。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "\"Couldn’t interrupt. Message is still queued.\"",
+  "to": "\"无法中断，消息仍在排队。\"",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail restores a failed classic interrupt inline without a toast or an unhandled rejection"
+  ],
+  "reason": "tasks-agents.structural.json 将该提示改为\"无法中断，消息仍在排队。\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "title: \"Message is already being sent\",",
+  "to": "title: \"消息已在发送中\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail uses queue identity for discard and surfaces a persistent too-late error"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Message is already being sent\"→\"消息已在发送中\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "        title: \"Task restored to inbox\",",
+  "to": "        title: \"任务已恢复到收件箱\",",
+  "expected": 1,
+  "category": "A",
+  "tests": [
+   "IssueDetail removes an inbox-origin archived issue and restores it when the toast Undo action is pressed"
+  ],
+  "reason": "tasks-agents.zh-CN.json \"Task restored to inbox\"→\"任务已恢复到收件箱\"。"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.test.tsx",
+  "from": "      expect(container.querySelector('[role=\"alert\"]')?.textContent).toContain(\n        \"Unable to pause. Try again.\",\n      );",
+  "to": "      const pauseAlert = container.querySelector('[role=\"alert\"]');\n      expect(pauseAlert?.textContent).toContain(\"操作未完成，请重试；如仍失败，请查看原始诊断并联系管理员。\");\n      const pauseRawToggle = Array.from(pauseAlert!.querySelectorAll(\"button\")).find(b => b.textContent === \"查看原始诊断\");\n      await act(async () => pauseRawToggle!.click());\n      expect(container.querySelector('[role=\"alert\"]')?.textContent).toContain(\n        \"Unable to pause. Try again.\",\n      );",
+  "expected": 1,
+  "category": "B",
+  "tests": [
+   "IssueDetail keeps active-run run controls distinct from pausing future work",
+   "IssueDetail keeps composer run controls distinct from pausing future work"
+  ],
+  "reason": "发行层 ChineseError overlay（经 IssueDetail.tsx 树控制错误 alert 引入）对非中文错误只显示固定中文说明，原始错误折叠在\"查看原始诊断\"中；断言中文说明，并展开后断言原始错误仍在同一 alert 中可见。"
+ }
+]

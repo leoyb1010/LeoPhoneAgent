@@ -19,6 +19,7 @@ class NativeLauncherTest(unittest.TestCase):
             root = Path(tmp)
             (root / "env").mkdir()
             (root / "env/server.env").write_text("export PAPERCLIP_TEST_MARKER=ready\nexport HTTPS_PROXY=http://127.0.0.1:7890\nexport NO_PROXY=localhost,127.0.0.1,::1\n")
+            (root / "env/server.env").chmod(0o600)
             (root / "release/current").mkdir(parents=True)
             node = root / "runtime/node-v24.11.0-darwin-arm64/bin/node"
             node.parent.mkdir(parents=True)
@@ -47,12 +48,38 @@ class NativeLauncherTest(unittest.TestCase):
             volume = root / "ordinary-directory"
             volume.mkdir()
             (root / "env/server.env").write_text(f'export PAPERCLIP_STORAGE_VOLUME="{volume}"\n')
+            (root / "env/server.env").chmod(0o600)
             before = sorted(str(item.relative_to(root)) for item in root.rglob("*"))
             result = subprocess.run(["/bin/bash", str(LAUNCHER)], env=launcher_env(PAPERCLIP_DEPLOY_ROOT=str(root)), text=True, capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("external storage volume is not mounted", result.stderr)
             self.assertEqual(result.stdout, "")
             self.assertEqual(before, sorted(str(item.relative_to(root)) for item in root.rglob("*")))
+
+    # 1.1.6：私密 env 文件权限过宽、为符号链接时，启动模板在 source 前拒绝，不执行其中任何内容。
+    def test_env_file_wider_than_0600_or_symlink_is_refused_before_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "env").mkdir()
+            marker = root / "sourced"
+            env_file = root / "env/server.env"
+            env_file.write_text(f'touch "{marker}"\n')
+            for mode in (0o644, 0o640, 0o604, 0o660):
+                env_file.chmod(mode)
+                with self.subTest(mode=oct(mode)):
+                    result = subprocess.run(["/bin/bash", str(LAUNCHER)], env=launcher_env(PAPERCLIP_DEPLOY_ROOT=str(root)), text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 78)
+                    self.assertIn("must not be wider than 0600", result.stderr)
+                    self.assertFalse(marker.exists())
+            real = root / "real.env"
+            real.write_text(f'touch "{marker}"\n')
+            real.chmod(0o600)
+            env_file.unlink()
+            env_file.symlink_to(real)
+            result = subprocess.run(["/bin/bash", str(LAUNCHER)], env=launcher_env(PAPERCLIP_DEPLOY_ROOT=str(root)), text=True, capture_output=True)
+            self.assertEqual(result.returncode, 78)
+            self.assertIn("must be a regular file", result.stderr)
+            self.assertFalse(marker.exists())
 
     def check_guard(self, deploy_root, volume, uuid="", mounted=True, info=None):
         if info is None:

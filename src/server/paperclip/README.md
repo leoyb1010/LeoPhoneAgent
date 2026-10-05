@@ -5,38 +5,60 @@
 - 上游：`paperclipai/paperclip`
 - 固定提交：`994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`
 - 授权：MIT，完整保留于 `LICENSE.paperclip`；编辑器翻译 hook 的依赖归属于 `LICENSE.mdxeditor`
-- 源码工具本身不自动部署、建立账号或登录模型；当前 Mac mini 实例的部署与真实运行验证另见项目 `docs/paperclip/` 交付记录
+- 源码工具本身不自动部署、建立账号或登录模型；生产实例的部署与真实运行验证另见项目 `docs/paperclip/` 交付记录
+
+## 部署路线
+
+**当前主线：macOS launchd 原生部署**（外接盘部署根、`scripts/start-native-server.sh` 启动模板、原生 CLI 叠层与头像运行时叠层）。完整步骤见 [中文部署手册](docs/DEPLOYMENT.zh-CN.md)。
+
+Docker 镜像（`build-image.sh`、`compose.example.yaml`）是**未验收的可选路线**：脚本会核对三层源码叠加后再构建，但镜像运行、原生 CLI 授权与头像 worker 均未在 Docker 中验收。
 
 ## 使用
 
 ```sh
 cd src/server/paperclip
 npm ci --ignore-scripts
-npm test
-./scripts/prepare.sh /你的独立工作目录/paperclip-zh
-./scripts/check-upstream.sh /你的独立工作目录/paperclip-zh
-./scripts/build-image.sh /你的独立工作目录/paperclip-zh
+./scripts/prepare.sh /你的独立工作目录/paperclip-zh        # 从固定提交生成中文源码（三层叠加并核对）
+npm run test:full                                         # 或下方完整命令，见“测试”
+./scripts/check-upstream.sh /你的独立工作目录/paperclip-zh # 安装上游依赖后运行回归、类型检查、UI 构建与冒烟
 ```
 
-`prepare.sh` 只准备源码，不启动服务。已有目标目录必须处于锁定提交；工具拒绝覆盖无关本地改动，不执行 `git reset`。中文补丁可以重复应用，也可以离线对已经检出的上游运行：
+`prepare.sh` 只准备源码，不启动服务。已有目标目录必须处于锁定提交；工具拒绝覆盖无关本地改动，不执行 `git reset`。各叠层可以重复应用，也可以离线对已经检出的上游运行：
 
 ```sh
-node scripts/localize.mjs extract /path/to/paperclip
-node scripts/localize.mjs apply /path/to/paperclip
-node scripts/localize.mjs verify /path/to/paperclip
-node scripts/apply-test-storage.mjs apply /path/to/paperclip
-node scripts/apply-test-storage.mjs verify /path/to/paperclip
+node scripts/localize.mjs apply /path/to/paperclip            # 汉化（catalogs/，按 catalogs/order.json 顺序应用结构补丁）
+node scripts/apply-test-storage.mjs apply /path/to/paperclip  # 测试临时目录叠层
+node scripts/apply-native-cli-auth.mjs apply /path/to/paperclip  # 原生后端/CLI/安全叠层（native/）
+# 对应 verify 子命令只核对，不写入
 ```
 
-发行层 1.1.0 新增独立、默认关闭的 Mac 原生 CLI 状态与网页授权叠层，受实例管理员和公司权限限制，复用原有会话、AI 连接存储及清理机制，不开启公网 MCP 信任。
+## 测试
 
-发行层 1.1.1 取消 OpenCode 新建配置的隐式 OpenRouter 账号绑定。OpenCode CLI 与模型提供商独立选择；OpenRouter 连接管理保持可选，既有连接协议不变。Mini CLI 安装清单、Gemini 服务拒绝与公网页面验证见 [本次交付记录](../../../docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。
+`npm test` 只运行不依赖上游源码的部分；**多数回归需要固定上游源码目录**，未设置时会被跳过，并在结尾打印“N 项因缺少 PAPERCLIP_SOURCE 被跳过”。两个环境变量：
 
-macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；浏览器配置页的运行测试验证实际服务环境。
+- `PAPERCLIP_SOURCE`：固定提交的上游 Git 工作区（只读取 `git show HEAD:<文件>` 的原始内容，在内存中重放补丁做断言；工作区是否已打补丁不影响）。
+- `PAPERCLIP_CANDIDATE`：已经由 `prepare.sh` 生成的候选树，用于核对实际写出的产物（可与 SOURCE 是同一目录）。
 
-发行层 1.1.3 的 Cursor/Hermes/OpenCode 配置、费用实时刷新与 macOS 数据库启动修复，验证范围见 [服务器审计记录](../../../docs/paperclip/SERVER_AUDIT_20261004.md)。
+完整命令（默认指向本目录下被 git 忽略的 `.upstream`）：
 
-详细部署、登录、备份和回滚步骤见 [中文部署手册](docs/DEPLOYMENT.zh-CN.md)。维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。
+```sh
+npm run test:full
+# 等价于
+PAPERCLIP_SOURCE=.upstream PAPERCLIP_CANDIDATE=.upstream npm test
+python3 tests/native-launcher.test.py
+```
+
+部分发行层回归（如 `costs-realtime`、`round1-data`）还会加载上游 `ui/node_modules`，因此需先在上游树执行 `npx -y pnpm@9.15.4 install --frozen-lockfile`；`check-upstream.sh` 已按此顺序执行。
+
+## 版本记录
+
+- 1.1.0：独立、默认关闭的 Mac 原生 CLI 状态与网页授权叠层，受实例管理员和公司权限限制，复用原有会话、AI 连接存储及清理机制，不开启公网 MCP 信任。
+- 1.1.1：取消 OpenCode 新建配置的隐式 OpenRouter 账号绑定，见 [交付记录](../../../docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。
+- 1.1.3：Cursor/Hermes/OpenCode 配置、费用实时刷新与 macOS 数据库启动修复，见 [服务器审计记录](../../../docs/paperclip/SERVER_AUDIT_20261004.md)。
+- 1.1.5：跨标签页账号隔离、CLI 自检、模型选择、分页、文件及备份恢复的两轮审计，见 [记录](../../../docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
+- 1.1.6：覆盖门禁恢复为绿；原生 CLI、授权 PTY 与智能体执行子进程剔除服务器私密变量；安全响应头与请求日志降噪；跨标签会话标记冷加载不再重挂载；恢复解压设上限并在备份同目录私有解压；结构补丁显式排序；既有 40 条 UI 测试断言按中文/新契约更新。
+
+macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。
 
 ## 实现边界
 
@@ -45,5 +67,3 @@ macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手
 用户填写的任务标题/正文、评论、智能体输出、文件内容、公司名称不会被自动翻译；API 字段、路由、缓存键、协议枚举、权限判断、金额数值及币种也不会改变。CLI 输出、原始诊断、品牌、模型名、命令和路径保留原文。默认界面语言为 `zh-CN`，金额仍为美元，并不执行汇率换算。
 
 代码里存在的候选文案数量不等于实际翻译数量，也不能证明所有运行态页面都已验收。`reports/coverage.json` 提供逐文件的实译/剩余清单，覆盖矩阵会明确未覆盖的功能与未完成的验证。
-
-发行层 1.1.5：跨标签页账号隔离、CLI 自检、模型选择、分页、文件及备份恢复的两轮审计见 [记录](../../../docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。

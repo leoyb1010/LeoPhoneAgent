@@ -7,7 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
 
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'host-cli-auth-'));
-const source = await fs.readFile(new URL('../native/server/host-cli-auth-status.ts', import.meta.url), 'utf8');
+// 1.1.6：状态模块依赖共享的私密变量剔除模块；测试把包路径改指同目录的编译副本。
+const privateEnvSource = await fs.readFile(new URL('../native/adapter-utils/server-private-env.ts', import.meta.url), 'utf8');
+await fs.writeFile(path.join(directory, 'server-private-env.mjs'), stripTypeScriptTypes(privateEnvSource));
+const source = (await fs.readFile(new URL('../native/server/host-cli-auth-status.ts', import.meta.url), 'utf8'))
+  .split('"@paperclipai/adapter-utils/server-private-env"').join('"./server-private-env.mjs"');
 const compiled = stripTypeScriptTypes(source);
 const moduleFile = path.join(directory, 'status.mjs');
 await fs.writeFile(moduleFile, compiled);
@@ -113,4 +117,22 @@ test('Cursor prefers its branded CLI and rejects a generic Grok agent alias', as
   const legacy = path.join(cursor.PATH, '.cursor');
   await fs.mkdir(legacy); await fs.writeFile(path.join(legacy, 'agent'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
   assert.equal(await resolveHostCliExecutable('cursor', { PATH: legacy }), path.join(legacy, 'agent'));
+});
+
+// 1.1.6：CLI 子进程不继承服务器私密变量，代理与 CLI 配置保留。
+test('host CLI probes do not inherit server database or signing secrets', async t => {
+  const env = await fixture(t, 'codex', 'const keys=["DATABASE_URL","BETTER_AUTH_SECRET","PAPERCLIP_TOOL_ACTION_SIGNING_SECRET","PGPASSWORD","PAPERCLIP_SECRETS_MASTER_KEY"];const leaked=keys.filter(k=>process.env[k]!==undefined);if(leaked.length||process.env.HTTPS_PROXY!=="http://127.0.0.1:7890"||process.env.CODEX_HOME!=="/fixture/codex")process.exit(3);process.stderr.write("Logged in using ChatGPT\\n")');
+  Object.assign(env, { DATABASE_URL: 'postgres://fixture:secret@127.0.0.1/db', BETTER_AUTH_SECRET: 'auth-secret', PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: 'signing-secret', PGPASSWORD: 'pg-secret', PAPERCLIP_SECRETS_MASTER_KEY: 'master', HTTPS_PROXY: 'http://127.0.0.1:7890', CODEX_HOME: '/fixture/codex' });
+  assert.equal((await getHostCliAuthStatus({ adapterType: 'codex_local', driver: 'local', trustedEnv: env })).authStatus, 'present');
+});
+
+// 1.1.6：同一服务器环境的并发请求合并为一次探测，10 秒内复用结果。
+test('status reads are coalesced and briefly cached per server environment', async t => {
+  const env = await fixture(t, 'codex', 'require("node:fs").appendFileSync(process.env.HOME+"/calls","x");process.stderr.write("Not logged in");process.exit(1)');
+  const results = await Promise.all([1, 2, 3].map(() => getHostCliAuthStatus({ adapterType: 'codex_local', driver: 'local', trustedEnv: env })));
+  assert.deepEqual(results.map(r => r.authStatus), ['absent', 'absent', 'absent']);
+  await getHostCliAuthStatus({ adapterType: 'codex_local', driver: 'local', trustedEnv: env });
+  assert.equal(await fs.readFile(path.join(env.HOME, 'calls'), 'utf8'), 'x');
+  assert.equal((await getHostCliAuthStatus({ adapterType: 'codex_local', driver: 'local', trustedEnv: { ...env } })).authStatus, 'absent');
+  assert.equal(await fs.readFile(path.join(env.HOME, 'calls'), 'utf8'), 'xx');
 });

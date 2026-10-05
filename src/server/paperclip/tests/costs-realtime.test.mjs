@@ -3,22 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
-const source = process.env.PAPERCLIP_SOURCE;
+import { source, original, applyPatches } from './helpers/patched.mjs';
 const red = process.env.PAPERCLIP_TEST_ORIGINAL === 'true';
 const uiPatches = JSON.parse(fs.readFileSync(new URL('../catalogs/zz-costs-realtime.structural.json', import.meta.url)));
 const backendPatches = JSON.parse(fs.readFileSync(new URL('../native/costs-realtime.patch.json', import.meta.url)));
-const original = file => execFileSync('git', ['show', `HEAD:${file}`], { cwd: source, encoding: 'utf8', maxBuffer: 20e6 });
 function patched(file) {
-  let text = original(file);
-  if (red) return text;
-  for (const patch of [...uiPatches, ...backendPatches].filter(p => p.file === file)) {
-    assert.equal(text.split(patch.from).length - 1, patch.expected, `exact pinned patch context: ${file}`);
-    text = text.split(patch.from).join(patch.to);
-  }
-  return text;
+  const text = original(file);
+  return red ? text : applyPatches(text, [...uiPatches, ...backendPatches], file, `exact pinned patch context: ${file}`);
 }
 function nodes(text, predicate) {
   const ast = ts.createSourceFile('production.tsx', text, ts.ScriptTarget.Latest, true);

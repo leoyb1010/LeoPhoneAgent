@@ -54,6 +54,17 @@ export function createNativeLoginController(db: Db, env: NodeJS.ProcessEnv = pro
     if (bound.length && !bound.includes(scope.companyId)) throw forbidden("The selected environment belongs to another company.");
     await assertEnvironmentSelectionForCompany(environments, scope.companyId, scope.environmentId, { allowedDrivers: ["local"] });
   }
+  // 发行层 1.1.6：CLI 路径按需解析并短缓存 10 秒，不在首次初始化时固定；服务运行期间
+  // 新安装或升级的 CLI 可被识别，同时只解析固定 profile 命令和服务器可信 PATH。
+  const BINARY_CACHE_TTL_MS = 10_000;
+  const binaryCache = new Map<string, { expiresAt: number; value: string }>();
+  async function resolveBinary(key: "codex" | "grok" | "claude"): Promise<string> {
+    const cached = binaryCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const value = await resolveHostCliExecutable(`${key}_local`, env) ?? "";
+    binaryCache.set(key, { expiresAt: Date.now() + BINARY_CACHE_TTL_MS, value });
+    return value;
+  }
   async function getRuntime() {
     if (runtime) return runtime;
     initializing ??= (async () => {
@@ -64,12 +75,7 @@ export function createNativeLoginController(db: Db, env: NodeJS.ProcessEnv = pro
       // Existing directory is allowed; every acquisition still checks mode/owner.
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     }).then(async () => {
-      const binaries = {
-        codex: await resolveHostCliExecutable("codex_local", env) ?? "",
-        grok: await resolveHostCliExecutable("grok_local", env) ?? "",
-        claude: await resolveHostCliExecutable("claude_local", env) ?? "",
-      };
-      runtime = createNativeProviderLoginRuntime({ root, binaries, env, assertAuthorized: assertScope, onFailure: failure => console.warn("Native CLI login failed:", JSON.stringify(failure)) });
+      runtime = createNativeProviderLoginRuntime({ root, binaries: resolveBinary, env, assertAuthorized: assertScope, onFailure: failure => console.warn("Native CLI login failed:", JSON.stringify(failure)) });
       return runtime;
     });
     try { return await initializing; } catch (error) { initializing = null; throw error; }

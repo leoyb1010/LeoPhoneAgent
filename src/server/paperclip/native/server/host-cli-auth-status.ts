@@ -2,6 +2,7 @@ import { access, stat, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { stripServerPrivateEnv } from "@paperclipai/adapter-utils/server-private-env";
 
 export type HostCliAuthStatus = "present" | "absent" | "unknown" | "unsupported";
 export interface HostCliAuthStatusResult {
@@ -63,7 +64,8 @@ function statusProbe(command: string, args: readonly string[], env: NodeJS.Proce
     let bytes = 0;
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
-    const child = spawn(command, [...args], { env, shell: false, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    // 发行层 1.1.6：第三方 CLI 不继承数据库口令、认证签名密钥等服务器私密变量；PATH/HOME/代理/CLI 配置保留。
+    const child = spawn(command, [...args], { env: stripServerPrivateEnv(env, env), shell: false, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     const finish = (code: number | null, failed: boolean) => {
       if (done) return;
       done = true;
@@ -93,17 +95,39 @@ function statusProbe(command: string, args: readonly string[], env: NodeJS.Proce
   });
 }
 
+// 发行层 1.1.6：状态接口每次 GET 都会派生 CLI 进程；按（服务器环境对象, 适配器, driver）
+// 做 10 秒短缓存并合并并发请求，限制进程数量。缓存只含封闭的状态枚举与固定中文文案。
+const STATUS_CACHE_TTL_MS = 10_000;
+interface CachedStatus { expiresAt: number; promise: Promise<HostCliAuthStatusResult> }
+const statusCache = new WeakMap<NodeJS.ProcessEnv, Map<string, CachedStatus>>();
+
 /** trustedEnv is server state, never adapter/request-supplied env or PATH. */
 export async function getHostCliAuthStatus(input: {
   adapterType: string;
   driver: string | null | undefined;
   trustedEnv?: NodeJS.ProcessEnv;
 }): Promise<HostCliAuthStatusResult> {
+  const env = input.trustedEnv ?? process.env;
+  let entries = statusCache.get(env);
+  if (!entries) { entries = new Map(); statusCache.set(env, entries); }
+  const key = `${input.adapterType}\0${input.driver ?? ""}`;
+  const now = Date.now();
+  const cached = entries.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+  const promise = readHostCliAuthStatus(input.adapterType, input.driver, env);
+  const entry: CachedStatus = { expiresAt: Number.POSITIVE_INFINITY, promise };
+  entries.set(key, entry);
+  // 进行中的探测一直合并；完成后才开始计 TTL。异常不缓存。
+  promise.then(() => { entry.expiresAt = Date.now() + STATUS_CACHE_TTL_MS; }, () => { if (entries?.get(key) === entry) entries.delete(key); });
+  return promise;
+}
+
+async function readHostCliAuthStatus(adapterType: string, driver: string | null | undefined, env: NodeJS.ProcessEnv): Promise<HostCliAuthStatusResult> {
+  const input = { adapterType, driver };
   const profile = Object.hasOwn(HOST_CLI_AUTH_PROFILES, input.adapterType) ? HOST_CLI_AUTH_PROFILES[input.adapterType] : undefined;
   if (input.driver !== "local" || !profile) {
     return { installed: false, authStatus: "unsupported", message: "仅支持检查本机适配器的 CLI 状态。" };
   }
-  const env = input.trustedEnv ?? process.env;
   const command = await resolveHostCliExecutable(input.adapterType, env);
   if (!command) return { installed: false, authStatus: "absent", message: "服务器尚未安装此提供方的 CLI。" };
   const result = (authStatus: HostCliAuthStatus, message: string): HostCliAuthStatusResult => ({ installed: true, authStatus, message });

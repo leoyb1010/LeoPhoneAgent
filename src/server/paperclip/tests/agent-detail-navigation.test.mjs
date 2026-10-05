@@ -5,8 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
-const source = process.env.PAPERCLIP_SOURCE;
-const candidate = process.env.PAPERCLIP_CANDIDATE;
+import { source, candidate, original, patched as patchedFile } from './helpers/patched.mjs';
 const lock = JSON.parse(fs.readFileSync(new URL('../upstream.lock.json', import.meta.url)));
 const patches = JSON.parse(fs.readFileSync(new URL('../catalogs/agent-detail-navigation.structural.json', import.meta.url)));
 const navigationFile = 'ui/src/pages/agent-detail-navigation.ts';
@@ -17,15 +16,7 @@ const expectedNavigation = [
   { label: '运行环境', items: [{ value: 'runtime', label: '执行框架 / 运行环境' }, { value: 'secrets', label: '密钥' }, { value: 'tools', label: '工具' }, { value: 'channels', label: '通道' }] },
   { label: '治理', items: [{ value: 'permissions', label: '权限 / 信任' }, { value: 'api-keys', label: 'API 密钥' }, { value: 'revisions', label: '修订版本' }] },
 ];
-const original = file => execFileSync('git', ['show', `HEAD:${file}`], { cwd: source, encoding: 'utf8', maxBuffer: 20e6 });
-function patched(file) {
-  let text = original(file);
-  for (const patch of patches.filter(p => p.file === file)) {
-    assert.equal(text.split(patch.from).length - 1, patch.expected, `pinned patch context: ${file}`);
-    text = text.split(patch.from).join(patch.to);
-  }
-  return text;
-}
+const patched = file => patchedFile(file, patches);
 function nodes(text, file, predicate) {
   const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const result = [];

@@ -2,12 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
-const source = process.env.PAPERCLIP_SOURCE;
-const candidate = process.env.PAPERCLIP_CANDIDATE;
+import { source, candidate, original as pinned } from './helpers/patched.mjs';
 const [patch] = JSON.parse(fs.readFileSync(new URL('../catalogs/task-message-copy.structural.json', import.meta.url)));
-const original = () => execFileSync('git', ['show', `HEAD:${patch.file}`], { cwd: source, encoding: 'utf8' });
+const original = () => pinned(patch.file);
 function check(text) {
   const ast = ts.createSourceFile(patch.file, text, ts.ScriptTarget.Latest, true);
   let label;
@@ -40,8 +38,8 @@ function check(text) {
 test('message copy action and feedback are Chinese while copied comment contents stay exact', { skip: !source }, () => {
   const text = original();
   assert.equal(text.split(patch.from).length - 1, patch.expected);
-  const localized = text.replace(patch.from, patch.to);
-  assert.equal(localized.replace(patch.to, patch.from), text, 'no changes outside copy-action label');
+  const localized = text.split(patch.from).join(patch.to);
+  assert.equal(localized.split(patch.to).join(patch.from), text, 'no changes outside copy-action label');
   check(localized);
 });
 test('generated candidate contains the Chinese message copy action and success/failure feedback', { skip: !source || !candidate }, () => check(fs.readFileSync(path.join(candidate, patch.file), 'utf8')));

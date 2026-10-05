@@ -15,7 +15,8 @@ assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: '
 const original = execFileSync('git', ['show', `HEAD:${patch.file}`], { cwd: root, encoding: 'utf8' });
 assert.equal(hash(original), patch.sourceSha256, 'pinned test runner source fingerprint');
 assert.equal(original.split(patch.from).length - 1, patch.expected, 'exact reviewed patch context');
-const output = original.replace(patch.from, patch.to);
+// 1.1.6：split/join 避免 String.replace 的 $ 替换模式（上方已断言精确出现次数）。
+const output = original.split(patch.from).join(patch.to);
 const target = path.join(root, patch.file);
 assert.ok(!fs.lstatSync(target).isSymbolicLink(), 'test runner must not be a symlink');
 const current = fs.readFileSync(target, 'utf8');

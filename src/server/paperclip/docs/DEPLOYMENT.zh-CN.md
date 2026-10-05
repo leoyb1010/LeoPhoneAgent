@@ -6,7 +6,50 @@ Mac 应用是连接和操作 Paperclip 的入口，服务器提供中文管理�
 
 中文化不绕开审批、预算强制停止、组织访问边界、任务单负责人或原子领取机制，也不修改服务器认证 API。
 
-## 2. 构建前准备
+## 0. 路线说明
+
+**当前主线是 macOS launchd 原生部署**：固定提交生成中文源码 → 安装上游依赖并验证 → 上游 UI/服务端构建 → 原生头像运行时叠层 → 以 `scripts/start-native-server.sh` 由 launchd 启动（见第 4 节各 macOS 小节）。第 2–3 节的 Docker 镜像与 compose 模板是**未验收的可选路线**，仅保留供参考。
+
+文中 `<部署根>` 指服务用户的 Paperclip 部署根目录（启动模板默认 `~/.leophoneagent/paperclip`，可由 `PAPERCLIP_DEPLOY_ROOT` 指定），`<外接卷>` 指承载部署根的外接卷挂载点（`/Volumes/<卷名>`），`<短测试临时目录>` 指该卷上的短路径临时目录。请按实际环境替换，不要把真实路径、主机名或账号写进公开仓库。
+
+### 原生部署从固定提交生成候选（每次发布）
+
+```sh
+cd src/server/paperclip
+npm ci --ignore-scripts
+./scripts/prepare.sh <部署根>/candidates/<候选名>          # 新目录：克隆固定提交并应用、核对三层叠加
+./scripts/check-upstream.sh <部署根>/candidates/<候选名>   # 先装上游依赖，再跑回归/类型检查/UI 构建/冒烟
+cd <部署根>/candidates/<候选名>
+npx -y pnpm@9.15.4 --filter @paperclipai/plugin-sdk ensure-build-deps
+npx -y pnpm@9.15.4 --filter @paperclipai/plugin-sdk build
+npx -y pnpm@9.15.4 --filter @paperclipai/shared build
+npx -y pnpm@9.15.4 --filter @paperclipai/ui build
+npx -y pnpm@9.15.4 --filter @paperclipai/server build
+cd -
+node scripts/apply-native-avatar-runtime.mjs apply <部署根>/candidates/<候选名>
+node scripts/apply-native-avatar-runtime.mjs verify <部署根>/candidates/<候选名>
+```
+
+候选验证通过后，先把生成结果固化到候选的本地 Git 分支并打标签（`git -C <候选> checkout -b leophone/<版本> && git add -A && git commit`），保证线上代码可复现，再切换。不要在线上目录直接修改源码。
+
+切换使用 `scripts/deploy-native-release.py`（在服务器上以服务用户运行）：
+
+```sh
+python3 scripts/deploy-native-release.py --root <部署根> --candidate <部署根>/candidates/<候选名> --dry-run
+python3 scripts/deploy-native-release.py --root <部署根> --candidate <部署根>/candidates/<候选名> --public-url https://<公网域名>
+```
+
+脚本依次：拒绝未提交的候选与有 running/queued 任务的实例 → 私有 `pg_dump -Fc` 并 `pg_restore --list` 校验 → 建立 `release/previous` → 保留旧散列静态资源 → 原子切换 `release/current` → 只发送 SIGTERM，等待上游优雅排空后由 launchd KeepAlive 拉起新版本（不用 `bootout`/`kickstart -k`，它们约 20 秒后强杀）→ 核对健康状态与回环/公网 index 哈希；任一步失败自动切回旧版本。证据写入 `<部署根>/backups/deploy/<时间>-<候选名>/`（0600）。
+
+### 数据库口令与库级认证
+
+共享 Homebrew PostgreSQL 集群默认对本机 trust。`scripts/harden-db-auth.py` 只针对本项目库：`rotate` 轮换口令（只向数据库发送 SCRAM-SHA-256 校验值，明文不进 SQL 或输出）并更新 `env/server.env` 与实例 `config.json`；随后重启服务使用新口令；`enforce` 在 `pg_hba.conf` 首条规则前为本项目库加 `scram-sha-256` 规则并 reload；`verify` 确认新口令可连、无口令（包括超级用户）被拒、其他库不受影响。三步的修改前副本保存在 `<部署根>/backups/db-auth/`。其他服务的数据库认证规则不变。
+
+### 日志轮转
+
+启动模板在每次启动时检查 `log/server.stdout.log` 与 `server.stderr.log`，超过 32 MiB 即压缩为 `.1.gz` 并顺延，保留 3 份；无需系统级 newsyslog。
+
+## 2. 构建前准备（Docker 可选路线，未验收）
 
 需要 Git、Node.js 24.11+、上游固定的 pnpm 9.15.4；镜像构建还需要支持当前 Dockerfile 语法的 Docker/BuildKit 和足够磁盘空间。上游包含 Rust Runner 编译，依其 `rust-toolchain.toml` 安装锁定工具链。首次依赖下载和镜像构建较大，请预留时间。
 
@@ -15,14 +58,14 @@ cd src/server/paperclip
 npm ci --ignore-scripts
 ./scripts/prepare.sh /srv/build/paperclip-zh
 ./scripts/check-upstream.sh /srv/build/paperclip-zh
-./scripts/build-image.sh /srv/build/paperclip-zh leophone-paperclip-zh:994d6ed
+./scripts/build-image.sh /srv/build/paperclip-zh leophone-paperclip-zh:994d6ed   # 构建前核对汉化、测试存储、原生三层叠加
 ```
 
 `prepare.sh` 从 MIT 上游的固定 Git 提交生成中文源码。源码依赖使用上游锁文件，中文化工具使用自己的 `package-lock.json`。**这保证源码转换可复现，不保证镜像字节完全相同**：上游 Dockerfile 仍包含系统软件包和部分 `@latest` CLI 安装。正式生产应记录构建产物镜像 digest，并对计划使用的 CLI 独立冻结版本与执行验收；不要直接滚动部署一个可变 tag。
 
 构建明确选择上游 `production` target，不会误用云托管专用 `cloud` target。
 
-## 3. 启动与网络
+## 3. 启动与网络（Docker 可选路线，未验收）
 
 `compose.example.yaml` 是需管理员审阅的模板，不会由构建脚本执行。它默认把端口只映射到宿主机 `127.0.0.1`，并启用认证模式。管理员应通过安全凭据入口设置两个互相独立的高熵签名密钥：`BETTER_AUTH_SECRET`、`PAPERCLIP_TOOL_ACTION_SIGNING_SECRET`。不要将密钥写入 Git、聊天记录、公开日志或客户端构建。
 
@@ -69,7 +112,7 @@ curl --fail http://127.0.0.1:3100/api/health
 
 `codex_local` 的 CLI 和登录状态归属运行服务的系统用户。浏览器“执行框架 / 运行环境 → 运行测试”会验证实际命令、认证以及最小模型响应；登录状态存在不代表网络或执行已经正常。配置页可以选择现有认证或托管连接，查看测试详情，不需要把 auth.json、密码或令牌复制到浏览器。
 
-原生 launchd 服务可使用 `scripts/start-native-server.sh` 模板。默认部署根为该服务用户的 `~/.leophoneagent/paperclip`，可用 `PAPERCLIP_DEPLOY_ROOT` 显式指定；模板保留项目锁定 Node 在 PATH 首位，同时包含该用户的 npm 全局 CLI 和 `~/.local/bin`。自定义 npm 前缀使用 `PAPERCLIP_CLI_BIN_DIR`。不要仅以 SSH 终端的 `command -v codex` 作为服务进程可用的证据。
+原生 launchd 服务可使用 `scripts/start-native-server.sh` 模板。默认部署根为该服务用户的 `~/.leophoneagent/paperclip`，可用 `PAPERCLIP_DEPLOY_ROOT` 显式指定。发行层 1.1.6 起，模板在加载 `<部署根>/env/server.env` 之前确认它是服务用户拥有、权限不宽于 0600 的普通文件（非符号链接），否则以退出码 78 拒绝启动，不会自动修改权限；模板保留项目锁定 Node 在 PATH 首位，同时包含该用户的 npm 全局 CLI 和 `~/.local/bin`。自定义 npm 前缀使用 `PAPERCLIP_CLI_BIN_DIR`。不要仅以 SSH 终端的 `command -v codex` 作为服务进程可用的证据。
 
 如果管理员的本机 CLI 已依赖本机代理，launchd 不会自动继承交互 shell 的代理变量。在私有 `env/server.env` 中显式配置同一个已验证代理，并排除本机 API/数据库地址，例如：
 
@@ -84,7 +127,7 @@ export no_proxy=localhost,127.0.0.1,::1
 
 示例端口必须按实际代理配置调整。启动模板不会擅自登录、改账号或设置代理；它只加载管理员已经保存的服务环境。先确认没有运行中/排队任务并保留旧配置，再重启服务；随后从远端浏览器执行连接测试及最小任务验收。执行引擎、模型和权限以管理员的智能体配置为准，不能为通过测试偷偷改成另一种引擎或降低权限要求。
 
-### Mac mini 原生 CLI 状态与网页授权
+### 原生 CLI 状态与网页授权
 
 网页入口仍使用现有公网 HTTPS 地址；能力取决于部署配置和执行环境，不取决于请求来自域名还是 IP 加端口。发行层 1.1.0 将原生主机授权与 sandbox 授权分别路由，不设置 `PAPERCLIP_TRUSTED_MCP_RUNTIME_HOST`，不伪装 sandbox，也不改变全局 CLI 账号。
 
@@ -105,14 +148,16 @@ Cloudflare 代理仍仅转发回环服务。Claude 授权的私有传输检查�
 ```sh
 node scripts/apply-native-avatar-runtime.mjs apply /physical/path/to/paperclip
 node scripts/apply-native-avatar-runtime.mjs verify /physical/path/to/paperclip
-node scripts/verify-native-avatar-worker.mjs fixed /physical/path/to/paperclip /Volumes/Leo-bubu/Mac-Offload/lpa-t
+node scripts/verify-native-avatar-worker.mjs fixed /physical/path/to/paperclip <外接卷>/<短测试临时目录>
 ```
+
+`verify-native-avatar-worker.mjs` 是**生产 Mac mini 专用**的运行态核对：它要求临时目录以 `/Volumes/` 开头且不超过 80 字节（外接盘短路径，避免 Unix socket 路径过长），在开发机或非外接盘环境会直接拒绝；开发机只运行 `apply-native-avatar-runtime.mjs apply/verify`。
 
 工具核对固定上游提交、相关源码 SHA、编译 worker SHA 和已构建 shared 模块，只原子替换 renderer import 为对应的 built JS 路径；拒绝未知构建或符号链接。上游重新构建会覆盖编译文件，须重新应用和验证。此修复与验证限定本次 macOS 原生部署，不宣称已验证 Docker 镜像。
 
 ### macOS 外接盘部署与缓存
 
-Mac mini 本次部署使用 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`；`~/.leophoneagent/paperclip` 仅作为兼容符号链接。源码、候选构建、Node/pnpm/Rust 运行时、工作空间、上传存储、配置、日志、数据库备份与旧版本归档均放在项目外接盘目录内。
+生产部署把 `<部署根>` 放在 `<外接卷>` 上的项目目录；`~/.leophoneagent/paperclip` 仅作为兼容符号链接。源码、候选构建、Node/pnpm/Rust 运行时、工作空间、上传存储、配置、日志、数据库备份与旧版本归档均放在项目外接盘目录内。
 
 外接盘需启用 macOS 文件所有权，项目目录只允许服务用户访问。文件所有权与 macOS 隐私授权是独立机制：SSH 能读取外接盘不代表 launchd 后台进程能读取。后台读取若返回 `Operation not permitted`，需由管理员在系统设置授予服务入口 `/bin/bash` 及该项目 Node 可执行文件适用的磁盘权限；配置也放在外接盘的现有 Cloudflare 隧道进程还需允许可移动磁盘访问，程序通常位于 Homebrew 的 `cloudflared` 安装目录；不要通过关闭系统隐私保护处理。LaunchAgent 使用系统 `/bin/bash` 入口、服务用户主目录作为初始工作目录；项目启动模板再进入实际工作目录，用户进程将日志重定向到外接盘，launchd 的初始标准输出使用 `/dev/null`。私有 `env/server.env` 设置 `PAPERCLIP_STORAGE_VOLUME` 和对应 `PAPERCLIP_STORAGE_VOLUME_UUID`。原生启动模板核对真实挂载点、卷 UUID、所有权和部署目录归属；验证失败则停止启动，不会在内置盘创建替代数据目录。
 
@@ -120,11 +165,19 @@ Mac mini 本次部署使用 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/papercl
 
 项目缓存环境按部署位置显式设置：`XDG_CACHE_HOME`、`npm_config_cache`/`NPM_CONFIG_CACHE`、`npm_config_store_dir`、`COREPACK_HOME`、`PYTHONPYCACHEPREFIX`、`CARGO_HOME` 和 `RUSTUP_HOME`。构建、测试与维护命令也须加载同一服务环境；仅设置 launchd 环境不会改变另一个 SSH shell 的缓存位置。已安装的共享 CLI 与账号认证保留其系统用户归属；不设置全局 `CODEX_HOME`，以免隐藏已登录账号。
 
-上游稳定测试脚本使用独立、固定源码指纹的 `apply-test-storage.mjs` 叠层，支持 `PAPERCLIP_TEST_TMPDIR`。Mac mini 使用外接盘的短路径 `/Volumes/Leo-bubu/Mac-Offload/lpa-t` 同时承载 `TMPDIR` 和测试临时根，避免嵌套路径过长影响 Unix socket。未配置该变量时，上游测试行为不变；显式配置但目录不存在时测试失败，不回退内置盘。`prepare.sh` 自动应用并核对这层修改，UI 汉化扫描范围仍限定原范围。
+上游稳定测试脚本使用独立、固定源码指纹的 `apply-test-storage.mjs` 叠层，支持 `PAPERCLIP_TEST_TMPDIR`。生产环境使用外接盘的短路径 `<外接卷>/<短测试临时目录>` 同时承载 `TMPDIR` 和测试临时根，避免嵌套路径过长影响 Unix socket。未配置该变量时，上游测试行为不变；显式配置但目录不存在时测试失败，不回退内置盘。`prepare.sh` 自动应用并核对这层修改，UI 汉化扫描范围仍限定原范围。
 
 共享 Homebrew PostgreSQL 集群和用户级 CLI 认证不是本项目缓存，不迁移其他服务的数据库或账号。此部署的 Paperclip 数据库仍使用既有集群，数据库备份产物放到外接盘；若要迁移数据库本体，应单独迁移独立实例并验证恢复，不能只搬整个共享集群目录。
 
 ## 5. 权限、预算与数据
+
+### 发行层 1.1.6 安全行为（无需新增环境变量）
+
+- **子进程环境**：原生 CLI 状态探测、网页授权 PTY、本地/远程智能体执行、看板对话、工作区准备命令与 Cursor 模型探测，均剔除继承自服务器的私密变量（`DATABASE_URL`、`DATABASE_MIGRATION_URL`、`BETTER_AUTH_SECRET`、`PG*`、`*DATABASE_URL`、名称含 SECRET/KEY/TOKEN/PASSWORD/PRIVATE/CREDENTIAL 的 `PAPERCLIP_*`/`BETTER_AUTH_*` 等）；PATH、HOME、LANG、代理和各 CLI 自身配置保留。智能体配置里显式提供的不同取值不受影响。CLI 若确实需要某个数据库连接串，请在智能体配置中显式设置独立凭据，不要依赖继承服务器的。
+- **响应头**：关闭 `X-Powered-By`；所有响应带 `X-Content-Type-Options: nosniff`、`Referrer-Policy: strict-origin-when-cross-origin`、`X-Frame-Options: SAMEORIGIN`；请求经 HTTPS（取决于 `TRUST_PROXY`）或 `PAPERCLIP_PUBLIC_URL` 为 https 时加 `Strict-Transport-Security: max-age=15552000`。未设置 CSP（未经逐页验收会破坏现有 UI）。
+- **请求日志**：只记录请求 id、method、url、状态码与耗时，不再序列化完整请求/响应头；成功的 `GET /api/issues*`、`/api/companies*`、`/api/auth/get-session`、`/api/health` 降为 debug（排查时设 `PAPERCLIP_LOG_LEVEL=debug`），4xx/5xx 与写请求保持原级别。日志轮转仍需在系统层（如 newsyslog）配置。
+- **CLI 状态接口**：同一服务环境下按适配器缓存 10 秒并合并并发请求；网页授权所用 CLI 路径按需解析（缓存 10 秒），运行期新装 CLI 无需重启。
+
 
 - 通过“成员”和“实例访问权限”授权，遵循最小权限
 - 新建智能体审批、预算强制停止仍按上游规则执行；中文按钮不会自动批准任何请求
@@ -134,6 +187,8 @@ Mac mini 本次部署使用 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/papercl
 - 上游可能包含遥测和 AI 反馈共享功能；部署前审阅上游隐私、遥测与实例设置，不应把中文化当作关闭这些功能的保证
 
 ## 6. 备份和回滚
+
+发行层 1.1.6 起，数据库恢复先把归档完整解压到**备份文件同目录**下的私有临时目录（`.paperclip-restore-*`，0700，结束即删除；该目录不可写时才退回系统临时目录），并限制解压后字节数为 max(压缩大小×200, 8 GiB)，超过即中止且不触碰数据库。恢复前请确认备份所在卷有足够空间。
 
 持久卷包含数据库、上传文件、工作空间和本地密钥材料。备份数据库时，必须同时保管恢复本地加密密钥所需的文件；单有数据库备份不足以保证密钥恢复。将备份存到访问受限的位置，按你的灾备策略验证恢复。
 

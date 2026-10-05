@@ -8,6 +8,7 @@ import { createLoginPtyTransport } from "@paperclipai/adapter-utils/login-pty-tr
 import type { AcquireLoginLeaseInput, LoginSessionRuntime } from "./device-login-service.js";
 import type { SetupTokenSandboxProvider } from "./setup-token-transport-binding.js";
 import { readLocalAiCredentialFile } from "./local-ai-credential-file.js";
+import { stripServerPrivateEnv } from "@paperclipai/adapter-utils/server-private-env";
 
 type LoginKey = "codex" | "grok" | "claude";
 export interface NativeProviderLoginFailure {
@@ -103,8 +104,9 @@ interface LeaseRecord extends NativeProviderLoginScope {
 export interface NativeProviderLoginOptions {
   /** Existing canonical private directory, validated by the storage-volume guard. */
   root: string;
-  /** Server-owned native CLI paths. Never use an agent/request command override. */
-  binaries: Record<LoginKey, string>;
+  /** Server-owned native CLI paths. Never use an agent/request command override.
+   * 1.1.6：也可为按需解析函数，使服务运行期间新安装的 CLI 无需重启即可识别。 */
+  binaries: Record<LoginKey, string> | ((key: LoginKey) => Promise<string>);
   /** Mandatory recheck of dedicated host capability, local environment and owner permission. */
   assertAuthorized(scope: NativeProviderLoginScope): Promise<void>;
   env?: NodeJS.ProcessEnv;
@@ -113,7 +115,9 @@ export interface NativeProviderLoginOptions {
 
 /** macOS script allocates the real terminal; /dev/null disables transcript storage. */
 function openNativePty(key: LoginKey, binary: string, args: readonly string[], home: string, env: NodeJS.ProcessEnv, deadline: number, onFailure?: NativeProviderLoginOptions["onFailure"]): LoginPtySession {
-  const childEnv: NodeJS.ProcessEnv = { ...env, CODEX_HOME: home, GROK_HOME: home, CLAUDE_CONFIG_DIR: home };
+  // 发行层 1.1.6：授权 PTY 运行第三方 CLI，剔除服务器私密变量（数据库、认证签名、主密钥、PG*），
+  // 保留 PATH/HOME/LANG/代理等 CLI 依赖的环境；同时移除可替代订阅授权的 API 密钥。
+  const childEnv: NodeJS.ProcessEnv = { ...stripServerPrivateEnv(env, env), CODEX_HOME: home, GROK_HOME: home, CLAUDE_CONFIG_DIR: home };
   for (const name of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "XAI_API_KEY", "GROK_API_KEY"]) delete childEnv[name];
   const child = spawn("/usr/bin/python3", ["-I", "-c", SCRIPT_PIPE_BRIDGE, String(deadline), binary, ...args], { cwd: home, env: childEnv, stdio: ["pipe", "pipe", "pipe"], detached: true });
   let listener: ((chunk: string) => void) | null = null;
@@ -186,7 +190,7 @@ export function createNativeProviderLoginRuntime(options: NativeProviderLoginOpt
     if (!scope.companyId || !scope.environmentId || !scope.startedByUserId || !ADAPTER_KEYS[scope.adapterType] || !UUID.test(sessionId) || !Number.isFinite(deadline) || deadline <= Date.now()) throw fail();
     await options.assertAuthorized(scope); await assertRoot();
     const key = ADAPTER_KEYS[scope.adapterType];
-    const configuredBinary = options.binaries[key];
+    const configuredBinary = typeof options.binaries === "function" ? await options.binaries(key) : options.binaries[key];
     if (!configuredBinary || !path.isAbsolute(configuredBinary)) throw fail();
     const binary = await realpath(configuredBinary); await access(binary, constants.X_OK);
     const id = randomUUID(); const home = homeFor(id);

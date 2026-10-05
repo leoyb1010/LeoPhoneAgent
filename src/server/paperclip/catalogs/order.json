@@ -1,0 +1,39 @@
+{
+  "_说明": "结构补丁 catalog 的显式应用顺序。localize.mjs 只按本清单顺序应用；目录中未登记、清单中缺失或重复的文件，以及违反 after 约束的顺序都会使构建失败。文件名前缀（zz-/zzzz-/zzzzz-）仅为历史命名，不再决定顺序。",
+  "structural": [
+    "agent-detail-navigation.structural.json",
+    "agent-runtime-controls.structural.json",
+    "browser-smoke.structural.json",
+    "calendar-display.structural.json",
+    "connections-chat.structural.json",
+    "connections-dynamic.structural.json",
+    "connections-tools.structural.json",
+    "core.structural.json",
+    "cursor-command-defaults.structural.json",
+    "extended-admin.structural.json",
+    "native-cli-auth.structural.json",
+    "native-cli-health.structural.json",
+    "navigation-dynamic.structural.json",
+    "opencode-provider-choice.structural.json",
+    "round1-draft-owner.structural.json",
+    "runtime-dynamic.structural.json",
+    "runtime-extra.structural.json",
+    "task-dialog-system-labels.structural.json",
+    "task-message-copy.structural.json",
+    "tasks-agents.structural.json",
+    "workflows-skills.structural.json",
+    "zz-costs-realtime.structural.json",
+    "zz-display-boundaries.structural.json",
+    "zz-round1-data.structural.json",
+    "zzzz-round1-ui.structural.json",
+    "zzzzz-round2-session.structural.json",
+    "zzzzz-round2-ui.structural.json"
+  ],
+  "after": [
+    {
+      "catalog": "zzzzz-round2-session.structural.json",
+      "after": "zz-round1-data.structural.json",
+      "reason": "round2 会话补丁的上下文（ui/src/api/client.ts 的 beginApiSessionChange、ui/src/api/auth.ts 的 import）由 round1 数据补丁生成；逐对交换验证只有这一处跨 catalog 依赖。"
+    }
+  ]
+}

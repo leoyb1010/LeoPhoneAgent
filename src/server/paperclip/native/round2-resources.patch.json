@@ -2,7 +2,7 @@
   {
     "file": "server/src/services/workspace-file-resources.ts",
     "from": "    const data = await handle.readFile();",
-    "to": "    // A stat is only a snapshot: cap actual reads even if a file grows concurrently.\n    const buffer = Buffer.alloc(maxBytes + 1);\n    let bytesRead = 0;\n    while (bytesRead < buffer.length) {\n      const chunk = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);\n      if (chunk.bytesRead === 0) break;\n      bytesRead += chunk.bytesRead;\n    }\n    if (bytesRead > maxBytes) throw unprocessable(\"Workspace file is too large to preview\", { code: \"too_large\" });\n    const data = buffer.subarray(0, bytesRead);",
+    "to": "    // A stat is only a snapshot: cap actual reads even if a file grows concurrently.\n    // 发行层 1.1.6：按 stat 大小分配（仍以 maxBytes 封顶），1KB 图片不再分配 10MiB；多读 1 字节用于\n    // 发现并发增长——读到超过 stat 大小即视为文件已变化，读取总量仍不超过 maxBytes + 1。\n    const buffer = Buffer.alloc(Math.min(before.size, maxBytes) + 1);\n    let bytesRead = 0;\n    while (bytesRead < buffer.length) {\n      const chunk = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);\n      if (chunk.bytesRead === 0) break;\n      bytesRead += chunk.bytesRead;\n    }\n    if (bytesRead > maxBytes) throw unprocessable(\"Workspace file is too large to preview\", { code: \"too_large\" });\n    if (bytesRead > before.size) throw unprocessable(\"Workspace file changed while being read\", { code: \"file_changed\" });\n    const data = buffer.subarray(0, bytesRead);",
     "expected": 1
   },
   {

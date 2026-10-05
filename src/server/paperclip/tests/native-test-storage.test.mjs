@@ -6,15 +6,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
-const source = process.env.PAPERCLIP_SOURCE;
-const candidate = process.env.PAPERCLIP_CANDIDATE;
+import { source, candidate, original as pinned } from './helpers/patched.mjs';
 const patch = JSON.parse(fs.readFileSync(new URL('../catalogs/native-test-storage.source-patch.json', import.meta.url)));
-function original() { return execFileSync('git', ['show', `HEAD:${patch.file}`], { cwd: source, encoding: 'utf8' }); }
+function original() { return pinned(patch.file); }
 function localized() {
   const text = original();
   assert.equal(crypto.createHash('sha256').update(text).digest('hex'), patch.sourceSha256);
   assert.equal(text.split(patch.from).length - 1, patch.expected);
-  return text.replace(patch.from, patch.to);
+  return text.split(patch.from).join(patch.to);
 }
 function runner(text, env, platform, parent) {
   const ast = ts.createSourceFile(patch.file, text, ts.ScriptTarget.Latest, true);
@@ -52,7 +51,7 @@ function check(text) {
       const normalize = ([command, args, options]) => {
         const root = path.dirname(options.env.PAPERCLIP_HOME);
         assert.equal(path.dirname(root), fs.realpathSync(platform === 'win32' ? realParent : '/tmp'));
-        return [command, args, { ...options, env: Object.fromEntries(Object.entries(options.env).map(([key, value]) => [key, typeof value === 'string' ? value.replace(root, '<fixture-root>') : value])) }];
+        return [command, args, { ...options, env: Object.fromEntries(Object.entries(options.env).map(([key, value]) => [key, typeof value === 'string' ? value.split(root).join('<fixture-root>') : value])) }];
       };
       assert.deepEqual(normalize(runner(text, environment, platform, realParent)), normalize(runner(original(), environment, platform, realParent)), 'default behavior is unchanged apart from random fixture names');
     }
@@ -60,7 +59,7 @@ function check(text) {
 }
 test('stable Vitest runner supports external test storage with canonical compact fixture paths', { skip: !source }, () => {
   const text = localized();
-  assert.equal(text.replace(patch.to, patch.from), original(), 'only the reviewed temp-parent line changes');
+  assert.equal(text.split(patch.to).join(patch.from), original(), 'only the reviewed temp-parent line changes');
   execFileSync(process.execPath, ['--check', '--input-type=module'], { input: text });
   check(text);
 });

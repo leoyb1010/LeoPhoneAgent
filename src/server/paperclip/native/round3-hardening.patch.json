@@ -1,0 +1,140 @@
+[
+ {
+  "file": "packages/adapter-utils/src/server-utils.ts",
+  "from": "import { sanitizeRemoteExecutionEnv } from \"./remote-execution-env.js\";",
+  "to": "import { sanitizeRemoteExecutionEnv } from \"./remote-execution-env.js\";\nimport { stripServerPrivateEnv } from \"./server-private-env.js\";",
+  "expected": 1
+ },
+ {
+  "file": "packages/adapter-utils/src/server-utils.ts",
+  "from": "        const childEnv = { ...mergedEnv, ...target.env };",
+  "to": "        // 发行层 1.1.6：所有本地适配器（claude/codex/cursor/gemini/grok/hermes/kimi/opencode/pi/process）\n        // 都经此派生智能体进程；部分适配器把 { ...process.env, ...config.env } 整体传入 opts.env，\n        // 绕过了上游只针对 PAPERCLIP_* 的继承清理。剔除继承来的数据库/认证/签名等服务器私密变量。\n        const childEnv = stripServerPrivateEnv({ ...mergedEnv, ...target.env }, process.env);",
+  "expected": 1
+ },
+ {
+  "file": "packages/adapter-utils/src/remote-execution-env.ts",
+  "from": "const REMOTE_EXECUTION_ENV_IDENTITY_KEYS = new Set([",
+  "to": "import { isServerPrivateEnvKey } from \"./server-private-env.js\";\n\nconst REMOTE_EXECUTION_ENV_IDENTITY_KEYS = new Set([",
+  "expected": 1
+ },
+ {
+  "file": "packages/adapter-utils/src/remote-execution-env.ts",
+  "from": "    const normalizedKey = key.toUpperCase();\n    if (!REMOTE_EXECUTION_ENV_IDENTITY_KEYS.has(normalizedKey)) {",
+  "to": "    const normalizedKey = key.toUpperCase();\n    // 发行层 1.1.6：继承自服务器的私密变量（数据库口令、认证签名密钥等）不发往 SSH/沙箱远端。\n    if (isServerPrivateEnvKey(normalizedKey) && readEnvValueCaseInsensitive(inheritedEnv, key) === value) continue;\n    if (!REMOTE_EXECUTION_ENV_IDENTITY_KEYS.has(normalizedKey)) {",
+  "expected": 1
+ },
+ {
+  "file": "server/src/services/native-runtime/native-codex-runner.ts",
+  "from": "import { runnerPrpCoordinator } from \"./runner-prp-coordinator.js\";",
+  "to": "import { runnerPrpCoordinator } from \"./runner-prp-coordinator.js\";\nimport { stripServerPrivateEnv } from \"@paperclipai/adapter-utils/server-private-env\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/services/native-runtime/native-codex-runner.ts",
+  "from": "    env: {\n      ...process.env,\n      ...input.environment,",
+  "to": "    // 发行层 1.1.6：原生 Codex runner 执行智能体任意命令，不继承服务器私密变量。\n    env: {\n      ...stripServerPrivateEnv(process.env),\n      ...input.environment,",
+  "expected": 1
+ },
+ {
+  "file": "server/src/routes/board-chat.ts",
+  "from": "import { spawn } from \"node:child_process\";",
+  "to": "import { spawn } from \"node:child_process\";\nimport { stripServerPrivateEnv } from \"@paperclipai/adapter-utils/server-private-env\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/routes/board-chat.ts",
+  "from": "      env: {\n        ...process.env,\n        PAPERCLIP_API_URL: apiUrl,",
+  "to": "      // 发行层 1.1.6：看板对话派生的 claude CLI 不继承服务器私密变量。\n      env: {\n        ...stripServerPrivateEnv(process.env),\n        PAPERCLIP_API_URL: apiUrl,",
+  "expected": 1
+ },
+ {
+  "file": "server/src/services/workspace-runtime.ts",
+  "from": "import type { AdapterRuntimeServiceReport } from \"@paperclipai/adapter-utils\";",
+  "to": "import type { AdapterRuntimeServiceReport } from \"@paperclipai/adapter-utils\";\nimport { stripServerPrivateEnv } from \"@paperclipai/adapter-utils/server-private-env\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/services/workspace-runtime.ts",
+  "from": "  const env: NodeJS.ProcessEnv = { ...process.env };\n  env.PAPERCLIP_WORKSPACE_CWD = input.worktreePath;",
+  "to": "  // 发行层 1.1.6：工作区准备/清理命令由智能体配置提供，不继承服务器私密变量。\n  const env: NodeJS.ProcessEnv = stripServerPrivateEnv({ ...process.env });\n  env.PAPERCLIP_WORKSPACE_CWD = input.worktreePath;",
+  "expected": 1
+ },
+ {
+  "file": "server/src/services/workspace-runtime.ts",
+  "from": "export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {\n  const env: NodeJS.ProcessEnv = { ...baseEnv };",
+  "to": "export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {\n  // 发行层 1.1.6：上游只删 PAPERCLIP_*/DATABASE_URL/BETTER_AUTH_URL；工作区运行服务同样不应继承\n  // BETTER_AUTH_SECRET、DATABASE_MIGRATION_URL、PG* 等服务器私密变量。\n  const env: NodeJS.ProcessEnv = stripServerPrivateEnv({ ...baseEnv }, baseEnv);",
+  "expected": 1
+ },
+ {
+  "file": "server/src/app.ts",
+  "from": "  const app = express();\n  app.locals.paperclipDb = db;",
+  "to": "  const app = express();\n  // 发行层 1.1.6：不暴露框架指纹，并为所有响应补基础安全头（审计：公网仅有 x-powered-by: Express）。\n  // 不设置 CSP：现有 UI、插件 iframe 与 Vite 产物依赖内联/动态资源，未经逐页验收的 CSP 会破坏界面。\n  app.disable(\"x-powered-by\");\n  app.use(nativeSecurityHeaders({ publicUrl: opts.authPublicBaseUrl ?? process.env.PAPERCLIP_PUBLIC_URL }));\n  app.locals.paperclipDb = db;",
+  "expected": 1
+ },
+ {
+  "file": "server/src/app.ts",
+  "from": "import { agentRoutes } from \"./routes/agents.js\";",
+  "to": "import { agentRoutes } from \"./routes/agents.js\";\nimport { nativeSecurityHeaders } from \"./services/security-headers.js\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/middleware/http-log-policy.ts",
+  "from": "export function shouldSilenceHttpSuccessLog(",
+  "to": "// 发行层 1.1.6：线上 26 小时 3.2 万行请求日志主要来自这些成功的 GET 轮询，降为 debug；\n// 失败（4xx/5xx）与所有写请求保持原级别。\nconst DEBUG_SUCCESS_API_PATHS = [\n  /^\\/api\\/issues(?:\\/|$)/,\n  /^\\/api\\/companies(?:\\/|$)/,\n  /^\\/api\\/auth\\/get-session(?:\\/|$)/,\n  /^\\/api\\/health(?:\\/|$)/,\n];\n\nexport function shouldDemoteHttpSuccessLog(\n  method: string | undefined,\n  url: string | undefined,\n  statusCode: number,\n): boolean {\n  if (statusCode >= 400 || !method || !url) return false;\n  if (!SILENCED_SUCCESS_METHODS.has(method.toUpperCase())) return false;\n  const pathname = normalizePath(url);\n  return DEBUG_SUCCESS_API_PATHS.some((pattern) => pattern.test(pathname));\n}\n\nexport function shouldSilenceHttpSuccessLog(",
+  "expected": 1
+ },
+ {
+  "file": "server/src/middleware/logger.ts",
+  "from": "  isSecretSensitiveHttpRequest,\n  shouldSilenceHttpSuccessLog,\n} from \"./http-log-policy.js\";",
+  "to": "  isSecretSensitiveHttpRequest,\n  shouldDemoteHttpSuccessLog,\n  shouldSilenceHttpSuccessLog,\n} from \"./http-log-policy.js\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/middleware/logger.ts",
+  "from": "        return {\n          ...req,\n          url:\n            typeof req.url === \"string\"\n              ? stripSecretBearingUrlParts(req.url)\n              : req.url,\n          // The URL policy intentionally drops all query parameters. The default\n          // serializer also exposes the parsed query separately, so omit that\n          // duplicate path instead of letting credentials bypass the URL scrub.\n          query: undefined,\n        };",
+  "to": "        // 发行层 1.1.6：封闭投影，只保留请求 id/method/url。完整 headers、remoteAddress、\n        // params 与 query 不再逐请求序列化（线上 3.2 万行含 headers）；脱敏规则仍保留作纵深防护。\n        return {\n          id: req.id,\n          method: req.method,\n          url:\n            typeof req.url === \"string\"\n              ? stripSecretBearingUrlParts(req.url)\n              : req.url,\n        };",
+  "expected": 1
+ },
+ {
+  "file": "server/src/middleware/logger.ts",
+  "from": "        return res.raw?.req && isPrivateWebhook(res.raw.req)\n          ? { statusCode: res.statusCode }\n          : res;",
+  "to": "        // 发行层 1.1.6：响应同样只记录状态码，不序列化响应头。\n        return { statusCode: res.statusCode };",
+  "expected": 1
+ },
+ {
+  "file": "server/src/middleware/logger.ts",
+  "from": "        return \"silent\";\n      }\n      if (err || res.statusCode >= 500) return \"error\";",
+  "to": "        return \"silent\";\n      }\n      if (!err && shouldDemoteHttpSuccessLog(_req.method, _req.url, res.statusCode)) {\n        return \"debug\";\n      }\n      if (err || res.statusCode >= 500) return \"error\";",
+  "expected": 1
+ },
+ {
+  "file": "server/src/__tests__/http-log-redaction.test.ts",
+  "from": "    expect(log.req.headers[\"x-paperclip-github-capability\"]).toBe(\"[Redacted]\");",
+  "to": "    // 发行层 1.1.6：请求日志不再序列化 headers，能力令牌既不出现原文也不出现字段。\n    expect(log.req.headers).toBeUndefined();",
+  "expected": 1
+ },
+ {
+  "file": "server/src/__tests__/http-log-redaction.test.ts",
+  "from": "    app.use(createHttpLogger(pino({ redact: [...HTTP_LOG_REDACT_PATHS] }, stream)));\n    app.get(\"/api/companies\", (_req, res, next) => {",
+  "to": "    // 发行层 1.1.6：成功的 GET /api/companies 轮询降为 debug，测试 logger 需打开 debug 才能观察。\n    app.use(createHttpLogger(pino({ level: \"debug\", redact: [...HTTP_LOG_REDACT_PATHS] }, stream)));\n    app.get(\"/api/companies\", (_req, res, next) => {",
+  "expected": 1
+ },
+ {
+  "file": "server/src/__tests__/http-log-redaction.test.ts",
+  "from": "      expect(log.req.headers[header.toLowerCase()]).toBe(\"[Redacted]\");",
+  "to": "      expect(log.req.headers?.[header.toLowerCase()]).toBeUndefined();",
+  "expected": 1
+ },
+ {
+  "file": "server/src/__tests__/http-log-redaction.test.ts",
+  "from": "    expect(log.level).toBe(status === 500 ? 50 : status === 403 ? 40 : 30);",
+  "to": "    expect(log.level).toBe(status === 500 ? 50 : status === 403 ? 40 : 20);",
+  "expected": 1
+ },
+ {
+  "file": "packages/adapters/cursor-local/src/index.ts",
+  "from": "- command (string, optional): defaults to \"agent\"",
+  "to": "- command (string, optional): defaults to \"cursor-agent\"",
+  "expected": 1
+ }
+]

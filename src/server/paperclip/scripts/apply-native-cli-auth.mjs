@@ -13,11 +13,15 @@ assert.equal(fs.realpathSync(root),root,'use physical upstream root');
 const lock=JSON.parse(fs.readFileSync(path.join(home,'upstream.lock.json')));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}).trim(),lock.commit,'unknown upstream commit');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json','round2-cli.patch.json','round2-resources.patch.json','round2-backup.patch.json'];
-const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))));
+const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json','round2-cli.patch.json','round2-resources.patch.json','round2-backup.patch.json','round3-hardening.patch.json','ui-test-assertions.patch.json'];
+const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))).map(patch=>({...patch,source:name})));
 const targets=new Map();
+// 1.1.6：上游 UI 测试断言补丁只允许改 ui/src 下的 *.test.ts(x)，且只能来自独立的断言补丁文件；
+// 后端白名单仅为本轮私密变量剔除与 Cursor 文档新增 3 个文件（adapter-utils 两个执行入口、cursor-local 文档）。
+const uiTestAssertion=patch=>patch.source==='ui-test-assertions.patch.json'&&/^ui\/src\/[A-Za-z0-9_./-]+\.test\.tsx?$/.test(patch.file);
 for (const patch of patches) {
- assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/backup-lib.ts','packages/adapters/hermes/src/server/test.ts','packages/adapters/opencode-local/src/server/test.ts','packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts','packages/adapters/cursor-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/execute.ts','packages/adapters/grok-local/src/server/test.ts','packages/adapters/grok-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
+ assert.ok(patch.source!=='ui-test-assertions.patch.json'||uiTestAssertion(patch),'ui test assertion scope');
+ assert.ok((uiTestAssertion(patch) || /^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/adapter-utils/src/server-utils.ts','packages/adapter-utils/src/remote-execution-env.ts','packages/adapters/cursor-local/src/index.ts','packages/db/src/backup-lib.ts','packages/adapters/hermes/src/server/test.ts','packages/adapters/opencode-local/src/server/test.ts','packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts','packages/adapters/cursor-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/execute.ts','packages/adapters/grok-local/src/server/test.ts','packages/adapters/grok-local/src/server/execute.test.ts','packages/adapters/grok-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
  if (!targets.has(patch.file))targets.set(patch.file,execFileSync('git',['show',`HEAD:${patch.file}`],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}));
  const input=targets.get(patch.file);assert.equal(input.split(patch.from).length-1,patch.expected ?? 1,`context mismatch: ${patch.file}`);
  targets.set(patch.file,input.split(patch.from).join(patch.to));
@@ -36,6 +40,12 @@ function modules(directory,relative='') {
  }
 }
 modules(path.join(home,'native/server'));
+// 1.1.6：adapter-utils 共享模块（私密变量剔除）及其测试，固定落在 packages/adapter-utils/src/。
+for (const entry of fs.readdirSync(path.join(home,'native/adapter-utils'),{withFileTypes:true})) {
+ assert.ok(entry.isFile() && !entry.isSymbolicLink() && /^[a-z0-9-]+(?:\.test)?\.ts$/.test(entry.name),'adapter-utils modules must be regular .ts files');
+ const target='packages/adapter-utils/src/'+entry.name;assert.ok(!targets.has(target),'duplicate target');
+ targets.set(target,fs.readFileSync(path.join(home,'native/adapter-utils',entry.name),'utf8'));added.push(target);
+}
 const fixtureModules = [
  ['native/db/round2-backup-faults.test.ts','packages/db/src/round2-backup-faults.test.ts'],
  ['tests/fixtures/round2-client-lease.ui.test.tsx','ui/src/lib/round2-client-lease.ui.test.tsx'],

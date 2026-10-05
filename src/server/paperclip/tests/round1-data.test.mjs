@@ -5,16 +5,12 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
-const source = process.env.PAPERCLIP_SOURCE;
+import { source, original as pinned, applyPatches } from './helpers/patched.mjs';
 const original = process.env.PAPERCLIP_TEST_ORIGINAL === 'true';
 const patches = JSON.parse(fs.readFileSync(new URL('../catalogs/zz-round1-data.structural.json', import.meta.url)));
 function text(file) {
-  let value = execFileSync('git', ['show', `HEAD:${file}`], { cwd: source, encoding: 'utf8', maxBuffer: 20e6 });
-  if (!original) for (const patch of patches.filter(p => p.file === file)) {
-    assert.equal(value.split(patch.from).length - 1, patch.expected, `pinned context ${file}`);
-    value = value.split(patch.from).join(patch.to);
-  }
-  return value;
+  const value = pinned(file);
+  return original ? value : applyPatches(value, patches, file, `pinned context ${file}`);
 }
 function load(file, requires, fetch) {
   const js = ts.transpileModule(text(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 } }).outputText;

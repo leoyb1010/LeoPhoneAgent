@@ -72,10 +72,35 @@ test("native factory receives fixed resolved absolute executables, not request c
     const controller = createNativeLoginController(db, { ...env, PAPERCLIP_HOME: base });
     const input = { companyId: "company", environmentId: "local", startedByUserId: "owner", adapterType: "codex_local", sessionId: "11111111-1111-4111-8111-111111111111", command: "/malicious" } as any;
     await controller.deviceRuntime({ acquireLoginLease: vi.fn() } as any).acquireLoginLease(input);
-    expect(mocks.factory).toHaveBeenCalledWith(expect.objectContaining({ binaries: { codex: "/trusted/bin/codex", grok: "/trusted/bin/grok", claude: "/trusted/bin/claude" } }));
+    // 1.1.6：CLI 路径改为按需解析（短缓存），仍只来自固定 profile 与可信 PATH。
+    const { binaries } = mocks.factory.mock.calls[0][0];
+    expect(typeof binaries).toBe("function");
+    expect(await binaries("codex")).toBe("/trusted/bin/codex");
+    expect(await binaries("grok")).toBe("/trusted/bin/grok");
+    expect(await binaries("claude")).toBe("/trusted/bin/claude");
+    expect(mocks.resolve).toHaveBeenCalledWith("codex_local", expect.anything());
     expect(mocks.native.device.acquireLoginLease).toHaveBeenCalledWith(input);
     expect(await controller.releaseNativeLease("11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(mocks.native.releaseById).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
     await controller.shutdown();
   } finally { await rm(base, { recursive: true, force: true }); }
+});
+// 1.1.6 回归：运行期新安装的 CLI 在缓存过期后可被识别，不需要重启服务。
+test("native CLI paths are resolved on demand with a short cache", async () => {
+  const base = await realpath(await mkdtemp(path.join(os.tmpdir(), "native-controller-")));
+  const instance = path.join(base, "instances", "default"); await mkdir(instance, { recursive: true });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    mocks.resolve.mockResolvedValue(null);
+    const controller = createNativeLoginController(db, { ...env, PAPERCLIP_HOME: base });
+    const input = { companyId: "company", environmentId: "local", startedByUserId: "owner", adapterType: "codex_local", sessionId: "11111111-1111-4111-8111-111111111111" } as any;
+    await controller.deviceRuntime({ acquireLoginLease: vi.fn() } as any).acquireLoginLease(input);
+    const { binaries } = mocks.factory.mock.calls[0][0];
+    expect(await binaries("codex")).toBe("");
+    mocks.resolve.mockResolvedValue("/trusted/bin/codex-installed-later");
+    expect(await binaries("codex")).toBe("");
+    vi.setSystemTime(Date.now() + 10_001);
+    expect(await binaries("codex")).toBe("/trusted/bin/codex-installed-later");
+    await controller.shutdown();
+  } finally { vi.useRealTimers(); await rm(base, { recursive: true, force: true }); }
 });

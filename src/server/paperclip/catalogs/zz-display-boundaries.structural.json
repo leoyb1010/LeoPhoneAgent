@@ -1,6 +1,7 @@
 [
   {"file":"ui/src/components/SidebarSection.tsx","from":"`Collapse ${label}`","to":"`收起${label}`","expected":1},
   {"file":"ui/src/components/SidebarSection.tsx","from":"`Expand ${label}`","to":"`展开${label}`","expected":1},
+  {"file":"ui/src/components/SidebarSection.tsx","from":"`${label} actions`","to":"`${label} 操作`","expected":1},
   {"file":"ui/src/components/side-panel/SidePanelTab.tsx","from":"`Close ${label}`","to":"`关闭${label}`","expected":1},
   {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Plan with ${agentName}…`","to":"`与 ${agentName} 一起规划…`","expected":1},
   {"file":"ui/src/components/task-chat/TaskChatComposer.tsx","from":"`Ask ${agentName}…`","to":"`向 ${agentName} 提问…`","expected":1},

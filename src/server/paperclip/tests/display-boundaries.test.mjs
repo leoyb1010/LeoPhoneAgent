@@ -2,17 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-import {execFileSync} from 'node:child_process';
-const source=process.env.PAPERCLIP_SOURCE;
+import { source, patched as patchedFile } from './helpers/patched.mjs';
 const patches=JSON.parse(fs.readFileSync(new URL('../catalogs/zz-display-boundaries.structural.json',import.meta.url)));
-function patched(file){
-  let text=execFileSync('git',['show',`HEAD:${file}`],{cwd:source,encoding:'utf8',maxBuffer:20e6});
-  for(const patch of patches.filter(p=>p.file===file)){
-    assert.equal(text.split(patch.from).length-1,patch.expected);
-    text=text.split(patch.from).join(patch.to);
-  }
-  return ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);
-}
+const patched=file=>ts.createSourceFile(file,patchedFile(file,patches),ts.ScriptTarget.Latest,true);
 function nodes(ast,predicate){const result=[];function visit(n){if(predicate(n))result.push(n);ts.forEachChild(n,visit);}visit(ast);return result;}
 const names=['English Name','未分配','Properties','<b>李用户</b>','A ${script}'];
 test('composer fixed copy is Chinese in all six modes while assignee names stay exact',{skip:!source},()=>{

@@ -2,7 +2,7 @@
   {
     "file": "packages/db/src/backup-lib.ts",
     "from": "import { open as openFile } from \"node:fs/promises\";",
-    "to": "import { open as openFile, mkdtemp, rm } from \"node:fs/promises\";\nimport { tmpdir } from \"node:os\";\nimport { join } from \"node:path\";",
+    "to": "import { open as openFile, mkdtemp, rm, stat as statFile } from \"node:fs/promises\";\nimport { tmpdir } from \"node:os\";\nimport { dirname, join } from \"node:path\";\nimport { Transform } from \"node:stream\";",
     "expected": 1
   },
   {
@@ -38,7 +38,7 @@
   {
     "file": "packages/db/src/backup-lib.ts",
     "from": "export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promise<void> {\n  const connectTimeout = Math.max(1, Math.trunc(opts.connectTimeoutSeconds ?? 5));",
-    "to": "export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promise<void> {\n  // Validate the entire compressed stream before any database mutation. A private\n  // on-disk snapshot bounds memory and prevents re-reading a changed archive.\n  const directory = await mkdtemp(join(tmpdir(), \"paperclip-restore-\"));\n  const backupFile = join(directory, \"validated.sql\");\n  try {\n    const output = createWriteStream(backupFile, { flags: \"wx\", mode: 0o600 });\n    if (opts.backupFile.endsWith(\".gz\")) {\n      await pipeline(createReadStream(opts.backupFile), createGunzip(), output);\n    } else {\n      await pipeline(createReadStream(opts.backupFile), output);\n    }\n    await restoreValidatedDatabase({ ...opts, backupFile }, basename(opts.backupFile));\n  } finally {\n    await rm(directory, { recursive: true, force: true });\n  }\n}\n\nasync function restoreValidatedDatabase(opts: RunDatabaseRestoreOptions, displayName: string): Promise<void> {\n  const connectTimeout = Math.max(1, Math.trunc(opts.connectTimeoutSeconds ?? 5));",
+    "to": "export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promise<void> {\n  // Validate the entire compressed stream before any database mutation. A private\n  // on-disk snapshot bounds memory and prevents re-reading a changed archive.\n  // 发行层 1.1.6：私有临时目录优先建在备份文件同目录（与外接盘部署一致，不占内置盘 tmp）；\n  // 该目录不可写（只读卷/权限）时才退回系统临时目录。mkdtemp 创建的目录权限为 0700。\n  const directory = await mkdtemp(join(dirname(opts.backupFile), \".paperclip-restore-\"))\n    .catch(error => {\n      if ([\"EACCES\", \"EPERM\", \"EROFS\"].includes((error as NodeJS.ErrnoException).code ?? \"\")) return mkdtemp(join(tmpdir(), \"paperclip-restore-\"));\n      throw error;\n    });\n  const backupFile = join(directory, \"validated.sql\");\n  try {\n    const output = createWriteStream(backupFile, { flags: \"wx\", mode: 0o600 });\n    if (opts.backupFile.endsWith(\".gz\")) {\n      // 发行层 1.1.6：解压字节上限，防止压缩炸弹写满外接盘。gzip 理论最大压缩比约 1032:1；\n      // pg_dump 纯文本实际一般 5–20 倍，取 200 倍留足余量，并以 8 GiB 为下限覆盖小归档；可显式配置。\n      const compressedBytes = (await statFile(opts.backupFile)).size;\n      const limit = opts.maxDecompressedBytes ?? Math.max(compressedBytes * 200, 8 * 1024 ** 3);\n      let written = 0;\n      const guard = new Transform({\n        transform(chunk: Buffer, _encoding, callback) {\n          written += chunk.length;\n          if (written > limit) {\n            const error = Object.assign(new Error(`Decompressed backup exceeds the ${limit}-byte restore limit`), { code: \"PAPERCLIP_RESTORE_TOO_LARGE\" });\n            callback(error);\n            return;\n          }\n          callback(null, chunk);\n        },\n      });\n      await pipeline(createReadStream(opts.backupFile), createGunzip(), guard, output);\n    } else {\n      await pipeline(createReadStream(opts.backupFile), output);\n    }\n    await restoreValidatedDatabase({ ...opts, backupFile }, basename(opts.backupFile));\n  } finally {\n    await rm(directory, { recursive: true, force: true });\n  }\n}\n\nasync function restoreValidatedDatabase(opts: RunDatabaseRestoreOptions, displayName: string): Promise<void> {\n  const connectTimeout = Math.max(1, Math.trunc(opts.connectTimeoutSeconds ?? 5));",
     "expected": 1
   },
   {
@@ -51,6 +51,12 @@
     "file": "packages/db/src/backup-lib.ts",
     "from": "`Failed to restore ${basename(opts.backupFile)}: ${sanitizeRestoreErrorMessage(error)}${statementPreview ? ` [statement: ${statementPreview.slice(0, 120)}]` : \"\"}${psqlMessage}`",
     "to": "`Failed to restore ${displayName}: ${sanitizeRestoreErrorMessage(error)}${statementPreview ? ` [statement: ${statementPreview.slice(0, 120)}]` : \"\"}${psqlMessage}`",
+    "expected": 1
+  },
+  {
+    "file": "packages/db/src/backup-lib.ts",
+    "from": "export type RunDatabaseRestoreOptions = {\n  connectionString: string;\n  backupFile: string;\n  connectTimeoutSeconds?: number;\n};",
+    "to": "export type RunDatabaseRestoreOptions = {\n  connectionString: string;\n  backupFile: string;\n  connectTimeoutSeconds?: number;\n  /** 发行层 1.1.6：解压后 SQL 字节上限；默认 max(压缩大小×200, 8 GiB)。 */\n  maxDecompressedBytes?: number;\n};",
     "expected": 1
   }
 ]

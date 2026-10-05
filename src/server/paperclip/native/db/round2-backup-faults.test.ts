@@ -27,7 +27,7 @@ describe("round-two backup IO and recovery boundaries", () => {
     if (directory) fs.rmSync(directory, { recursive: true, force: true });
   }, 30000);
 
-  async function probe(operation: string, workspace: string, binary?: string, connectionString = database.connectionString) {
+  async function probe(operation: string, workspace: string, binary?: string, connectionString = database.connectionString, maxBytes?: number) {
     const temporary = path.join(directory, `temporary-${operation}`);
     fs.mkdirSync(temporary, { recursive: true, mode: 0o700 });
     const script = path.join(directory, `probe-${operation}.mjs`);
@@ -45,16 +45,19 @@ describe("round-two backup IO and recovery boundaries", () => {
           await writer.close();
         } else {
           await runDatabaseRestore({connectionString:process.env.R2_FIXTURE_DATABASE_URL,
-            backupFile:path.join(workspace, operation === "missing" ? "missing.sql.gz" : "archive.sql.gz"),connectTimeoutSeconds:1});
+            backupFile:path.join(workspace, operation === "missing" ? "missing.sql.gz" : "archive.sql.gz"),connectTimeoutSeconds:1,
+            ...(process.env.R2_FIXTURE_MAX_BYTES ? { maxDecompressedBytes: Number(process.env.R2_FIXTURE_MAX_BYTES) } : {})});
         }
         console.log(JSON.stringify({caught:false}));
       } catch(error) { console.log(JSON.stringify({caught:true,code:error.code ?? null})); }
     `);
     const child = await run(process.execPath, ["--import", loader, script, operation, workspace], {
-      env: { ...process.env, TMPDIR: temporary, R2_FIXTURE_DATABASE_URL: connectionString, ...(binary ? { PAPERCLIP_PSQL_PATH: binary } : {}) },
+      env: { ...process.env, TMPDIR: temporary, R2_FIXTURE_DATABASE_URL: connectionString, ...(binary ? { PAPERCLIP_PSQL_PATH: binary } : {}), ...(maxBytes ? { R2_FIXTURE_MAX_BYTES: String(maxBytes) } : {}) },
       timeout: 15000,
     });
     expect(fs.readdirSync(temporary).filter(name => name.startsWith("paperclip-restore-"))).toEqual([]);
+    // 1.1.6：私有解压目录建在备份同目录，任何结果下都必须清理。
+    if (fs.existsSync(workspace)) expect(fs.readdirSync(workspace).filter(name => name.startsWith(".paperclip-restore-"))).toEqual([]);
     return child;
   }
 
@@ -99,6 +102,22 @@ describe("round-two backup IO and recovery boundaries", () => {
       fs.writeFileSync(path.join(workspace, "archive.sql.gz"), damaged);
       const child = await probe(kind, workspace, "/opt/homebrew/opt/postgresql@17/bin/psql");
       expect(JSON.parse(child.stdout.trim()).caught).toBe(true);
+      expect(await sql.unsafe("SELECT body FROM round2_restore_marker").then(rows => rows.map(row => row.body))).toEqual(["before"]);
+    } finally { await sql.end(); }
+  }, 30000);
+
+  // 1.1.6 故障回归：解压量超过上限立即中止，清理私有临时目录，且不改动数据库。
+  it("aborts an oversized decompression before any database change and cleans the private directory", async () => {
+    const sql = postgres(database.connectionString, { max: 1, onnotice: () => {} });
+    try {
+      await sql.unsafe("DROP TABLE IF EXISTS round2_restore_marker; CREATE TABLE round2_restore_marker (body text NOT NULL); INSERT INTO round2_restore_marker VALUES ('before')");
+      const workspace = path.join(directory, "bomb"); fs.mkdirSync(workspace);
+      fs.writeFileSync(path.join(workspace, "archive.sql.gz"), gzipSync(`UPDATE round2_restore_marker SET body='after';\n-- ${"0".repeat(4 * 1024 * 1024)}\n`));
+      const fakePsql = path.join(directory, "bomb-psql");
+      fs.writeFileSync(fakePsql, `#!/bin/sh\ntouch ${JSON.stringify(path.join(workspace, "psql-ran"))}\n/bin/cat >/dev/null\nexit 0\n`, { mode: 0o700 });
+      const child = await probe("bomb", workspace, fakePsql, database.connectionString, 64 * 1024);
+      expect(JSON.parse(child.stdout.trim())).toEqual({ caught: true, code: "PAPERCLIP_RESTORE_TOO_LARGE" });
+      expect(fs.existsSync(path.join(workspace, "psql-ran"))).toBe(false);
       expect(await sql.unsafe("SELECT body FROM round2_restore_marker").then(rows => rows.map(row => row.body))).toEqual(["before"]);
     } finally { await sql.end(); }
   }, 30000);

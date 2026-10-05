@@ -1,12 +1,13 @@
 {
   "name": "leophone-paperclip-zh-cn",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "private": true,
   "type": "module",
   "description": "Pinned source-level Simplified Chinese distribution overlay for Paperclip",
   "engines": { "node": ">=24.11.0" },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./scripts/test-skip-notice.mjs --test-reporter-destination=stderr tests/*.test.mjs",
+    "test:full": "PAPERCLIP_SOURCE=\"${PAPERCLIP_SOURCE:-.upstream}\" PAPERCLIP_CANDIDATE=\"${PAPERCLIP_CANDIDATE:-.upstream}\" npm test",
     "extract": "node scripts/localize.mjs extract",
     "apply": "node scripts/localize.mjs apply",
     "verify": "node scripts/localize.mjs verify",

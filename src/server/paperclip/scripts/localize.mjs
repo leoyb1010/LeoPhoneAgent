@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { extract, extractDynamic, transform, translationFor, sha256 } from './localization-engine.mjs';
-import { applyStructuralPatches } from './structural-patches.mjs';
+import { applyStructuralPatches, loadStructuralPatches } from './structural-patches.mjs';
 
 const home = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const lock = JSON.parse(fs.readFileSync(path.join(home, 'upstream.lock.json')));
@@ -32,7 +32,8 @@ const contextPath = path.join(home, "catalogs/contexts.json");
 const contexts = fs.existsSync(contextPath) ? JSON.parse(fs.readFileSync(contextPath)) : {};
 const preservePath = path.join(home, "catalogs/preserve.json");
 const preserve = fs.existsSync(preservePath) ? JSON.parse(fs.readFileSync(preservePath)) : {};
-const sourcePatches = fs.readdirSync(path.join(home, "catalogs")).filter(f => f.endsWith(".structural.json")).sort().flatMap(f => JSON.parse(fs.readFileSync(path.join(home, "catalogs", f))));
+// 1.1.6：按 catalogs/order.json 的显式顺序应用，缺失/未知/冲突即失败。
+const sourcePatches = loadStructuralPatches(path.join(home, "catalogs"));
 for (const patch of sourcePatches) {
   if (typeof patch.file !== "string" || !patch.file.startsWith("ui/src/") || patch.file.includes("..") || typeof patch.from !== "string" || !patch.from.length || typeof patch.to !== "string" || !Number.isInteger(patch.expected ?? 1) || (patch.expected ?? 1) < 1) throw new Error("无效结构补丁：必须有固定源码路径、非空上下文和正整数匹配次数");
 }
@@ -98,9 +99,18 @@ for (const file of Object.keys(previousState.files ?? {})) {
     changed.set(file, original);
   }
 }
-for (const [file, output] of changed) {
+// 1.1.6：与 apply-native-cli-auth 一致，目标文件及其最近的已存在父目录都必须是物理路径，
+// 防止通过符号链接父目录把写入导向固定源码树之外。
+function assertPhysicalDestination(file) {
   const dest = path.join(root, file);
   if (fs.existsSync(dest) && fs.lstatSync(dest).isSymbolicLink()) throw new Error(`拒绝通过符号链接写入：${file}`);
+  let parent = path.dirname(dest);
+  while (!fs.existsSync(parent)) parent = path.dirname(parent);
+  if (fs.realpathSync(parent) !== parent || !(parent === root || parent.startsWith(root + path.sep))) throw new Error(`拒绝通过符号链接父目录写入：${file}`);
+}
+for (const [file, output] of changed) {
+  const dest = path.join(root, file);
+  assertPhysicalDestination(file);
   const current = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : null;
   let original = null;
   try { original = execFileSync('git', ['show', `HEAD:${file}`], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], maxBuffer: 20_000_000 }); } catch {}
@@ -114,6 +124,8 @@ if (command === 'apply') {
 }
 fs.mkdirSync(reportDir, { recursive: true });
 fs.writeFileSync(path.join(reportDir, 'coverage.json'), JSON.stringify(report, null, 2) + '\n');
-fs.writeFileSync(path.join(reportDir, 'source-contract.json'), JSON.stringify(baseline, null, 2) + '\n');
+// 1.1.6：跟踪的根目录 source-contract.json 是唯一基线（本脚本读取它）；reports/ 不再写重复副本。
+// 仅在上游升级、根基线被删除后才输出候选到 reports/ 供人工审阅再复制回根目录。
+if (!Object.keys(known).length) fs.writeFileSync(path.join(reportDir, 'source-contract.json'), JSON.stringify(baseline, null, 2) + '\n');
 fs.writeFileSync(path.join(reportDir, 'extracted.json'), JSON.stringify(Object.fromEntries(Object.entries(report.files).map(([f, r]) => [f, r.remaining])), null, 2) + '\n');
 console.log(JSON.stringify({ command, changedFiles: changed.size, catalogEntries: report.catalogEntries, ...report.totals, reportDir }, null, 2));
