@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -85,9 +86,21 @@ def health():
         return None
 
 
-def index_hash(url):
+def fetch_index(url):
     with no_proxy_open(url, timeout=10) as r:
-        return hashlib.sha256(r.read()).hexdigest()
+        return r.read(), dict(r.headers.items())
+
+
+# Cloudflare Web Analytics 会在边缘向 HTML 注入 beacon 脚本；比对公网页面前去掉这一段，其余内容须逐字节一致。
+CF_BEACON = re.compile(rb'<script[^>]*static\.cloudflareinsights\.com/beacon[^>]*>\s*</script>\s*')
+
+
+def strip_edge_injection(body):
+    return CF_BEACON.sub(b"", body)
+
+
+def index_hash(url):
+    return hashlib.sha256(fetch_index(url)[0]).hexdigest()
 
 
 def swap_symlink(link, target):
@@ -199,9 +212,19 @@ def main():
             raise RuntimeError("loopback index hash mismatch")
         report["loopbackIndexSha256"] = loop_index
         if a.public_url:
-            pub = index_hash(a.public_url.rstrip("/") + "/")
-            report["publicIndexSha256"] = pub
-            if pub != expected_index:
+            body, headers = fetch_index(a.public_url.rstrip("/") + "/")
+            report["publicIndexSha256"] = hashlib.sha256(body).hexdigest()
+            report["publicEdgeInjectionStripped"] = strip_edge_injection(body) != body
+            pub = hashlib.sha256(strip_edge_injection(body)).hexdigest()
+            expected_stripped = hashlib.sha256(
+                strip_edge_injection((candidate / "ui/dist/index.html").read_bytes())).hexdigest()
+            if pub != expected_stripped:
+                # 保存两份页面与公网响应头，便于判断是边缘改写还是服务端按域名注入。
+                (evidence / "public-index.html").write_bytes(body)
+                (evidence / "public-index.headers.json").write_text(json.dumps(headers, indent=2))
+                loop_body, loop_headers = fetch_index("http://127.0.0.1:43871/")
+                (evidence / "loopback-index.html").write_bytes(loop_body)
+                (evidence / "loopback-index.headers.json").write_text(json.dumps(loop_headers, indent=2))
                 raise RuntimeError("public index hash mismatch")
         report["passed"] = True
         log("deploy verified")
