@@ -9,6 +9,16 @@ import { loadBuiltinProviderConfig } from "../../scripts/builtin-provider-config
 import { noticesFileName, stageElectronNotices } from "../../scripts/third-party-notices.mjs";
 import { resolveNativeSearchReleasePlan } from "../../scripts/native-search-tools-config.mjs";
 import { getBuildMetadata } from "./scripts/build-metadata.mjs";
+
+// 桌面端 Electron 版本的唯一来源：package.json 中精确锁定的 devDependencies.electron。
+function pinnedElectronVersion() {
+  const desktopPackage = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+  const version = desktopPackage.devDependencies?.electron;
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error(`electron must be pinned to an exact version in package.json, got ${version}`);
+  }
+  return version;
+}
 import { collectRuntimeModuleClosureEntries } from "./scripts/runtime-dependency-closure.mjs";
 import {
   resolvePackagedNodePtyPrebuildPath,
@@ -484,8 +494,10 @@ export default {
   electronLanguages: ["en-US", "zh-CN"],
   // pnpm workspace + semver range（如 ^41.0.3）下，electron-builder
   // 有时无法从依赖树里稳定推导出 Electron 版本，导致 bundle 直接中断。
-  // 显式写死当前桌面端使用的 Electron 版本，避免打包阶段再做不可靠的猜测。
-  electronVersion: "41.0.3",
+  // 因此显式传入版本；但不再单独写死字符串：曾因只升级 package.json 而此处仍是
+  // 41.0.3，安装包实际带着旧 Electron（安全修复未生效）。改为读取 package.json
+  // 中精确锁定的版本，升级只改一处。
+  electronVersion: pinnedElectronVersion(),
   electronDownload: {
     // ELECTRON_MIRROR 是 @electron/get 的全局环境变量，会覆盖 dmg-builder 等
     // generic artifact 自己传入的 mirrorOptions，导致 builder 辅助包被错误拼到 Electron runtime 镜像目录。
