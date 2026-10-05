@@ -43,7 +43,9 @@ def sha256(path):
 
 def no_proxy_open(url, timeout=5):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    return opener.open(url, timeout=timeout)
+    # Cloudflare 会以 403 拦截 Python 默认的 "Python-urllib" User-Agent（首次上线时因此误判失败并回滚）。
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (LeoPhoneAgent deploy check)"})
+    return opener.open(req, timeout=timeout)
 
 
 def db_env(root):
