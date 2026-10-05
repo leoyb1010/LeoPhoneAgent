@@ -15,8 +15,11 @@ class RepointManagedSkillLinks(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         base = Path(self.tmp.name).resolve()
         self.root, self.home = base / "deploy", base / "home"
-        for rel in ["old/skills/paperclip", "new/skills/paperclip", "old/skills/only-old"]:
+        nested = "server/dist/onboarding-assets/first-task/skills/first-task"
+        for rel in ["old/skills/paperclip", "new/skills/paperclip", "old/skills/only-old",
+                    f"candidates/old2/{nested}", f"new/{nested}", "old/.git", "candidates/old2/.git", "new/.git"]:
             (self.root / rel).mkdir(parents=True)
+        self.nested = nested
         (base / "user-skill").mkdir()
         self.new = self.root / "new"
 
@@ -36,10 +39,12 @@ class RepointManagedSkillLinks(unittest.TestCase):
         compat = self.link(".leophoneagent/paperclip", self.root)
         missing = self.link(".cursor/skills/only-old", self.root / "old/skills/only-old")
         current = self.link(".codex/skills/paperclip", self.root / "new/skills/paperclip")
+        onboarding = self.link(".claude/skills/first-task", self.root / "candidates/old2" / self.nested)
 
         changed = deploy.repoint_managed_skill_links(self.root, self.new, home=self.home)
 
-        self.assertEqual(sorted(c[0] for c in changed), sorted([str(hermes), str(pi)]))
+        self.assertEqual(sorted(c[0] for c in changed), sorted([str(hermes), str(pi), str(onboarding)]))
+        self.assertEqual(Path(os.readlink(onboarding)), self.new / self.nested)
         self.assertEqual(Path(os.readlink(hermes)), self.new / "skills/paperclip")
         self.assertEqual(Path(os.readlink(pi)), self.new / "skills/paperclip")
         self.assertEqual(Path(os.readlink(user)), Path(self.tmp.name).resolve() / "user-skill")

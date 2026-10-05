@@ -156,7 +156,7 @@ def repoint_managed_skill_links(root, release, home=None, max_depth=5):
     为什么需要：Paperclip 把技能以软链接装进 ~/.hermes/skills、~/.claude/skills 等目录，链接指向
     当时发布目录的物理路径。切换版本后旧目录仍保留（用于回滚），上游 Hermes 适配器发现链接指向
     另一个仍存在的目录时视为"他人安装"而拒绝启动（Cannot reconcile Hermes skill ... occupied），
-    其他 CLI 则静默读取旧版技能。只处理目标位于部署根内、且形如 <目录>/skills/<名称> 的链接；
+    其他 CLI 则静默读取旧版技能。只处理目标位于部署根内某个发布目录的 skills 子路径下的链接；
     用户自己安装的技能（目标不在部署根内）不动。返回 [(link, old, new)]。
     """
     home = Path(home or os.path.expanduser("~"))
@@ -183,9 +183,17 @@ def repoint_managed_skill_links(root, release, home=None, max_depth=5):
                 except ValueError:
                     continue
                 parts = rel.parts
-                if len(parts) < 3 or parts[-2] != "skills":
+                # 链接所在的旧发布目录 = 部署根下最近的、带 .git 的祖先（发布候选都是 Git 工作区）；
+                # 保留它在发布目录内的相对路径（如 skills/paperclip 或
+                # server/dist/onboarding-assets/first-task/skills/first-task），换到新发布目录下。
+                rest = None
+                for k in range(1, min(3, len(parts) - 1) + 1):
+                    if (root.joinpath(*parts[:k]) / ".git").exists():
+                        rest = parts[k:]
+                        break
+                if not rest or "skills" not in rest[:-1]:
                     continue
-                desired = release / "skills" / parts[-1]
+                desired = release.joinpath(*rest)
                 if target == desired or not desired.is_dir():
                     continue
                 tmp = Path(e.path + ".paperclip-swap")
