@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.53.1%20(146)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.53.2%20(147)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.5.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -21,7 +21,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
 
-## Paperclip 对话工作区（iOS 1.53.1 / Mac 1.5.0）
+## Paperclip 对话工作区（iOS 1.53.2 / Mac 1.5.1）
 
 吸收 [Paperclip](https://github.com/paperclipai/paperclip) 的公司、Agent、任务、审批与运行记录能力。服务器持有任务和执行状态，客户端通过原生工作区连接独立部署的 HTTPS 服务；管理员使用服务器的人类账号登录，不把 Agent API Key 当作个人登录凭据。
 
@@ -32,6 +32,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 部署使用上游独立服务器和数据库，建议仅监听回环地址并通过现有 HTTPS 入口访问；完成首位管理员设置后关闭公开注册。原生入口、隔离会话、权限边界与部署验证范围见 [Mac 工作区说明](src/mac/leophone/docs/specs/paperclip-server-workspace.md) 与 [iOS 原生测试说明](scripts/native-paperclip-audit/README.md)；本次完整验证范围、失败通道与实机边界见 [交付证据](docs/paperclip/DELIVERY_20261004.md)。
 
 Paperclip 发行层 1.1.0 接入 Mac 原生 CLI 状态与隔离网页授权：已有登录、重新授权与个人连接分别处理，管理员可通过现有 HTTPS 域名配置，无需切换端口地址。 实际提供商验收边界见 [原生 CLI 授权交付记录](docs/paperclip/NATIVE_CLI_AUTH_20261004.md)。
+
+Paperclip 发行层 1.1.6 依据全面审计加固：智能体与 CLI 子进程不继承服务器私密变量、安全响应头、日志降噪与轮转、优雅发布与自动回滚、库级口令认证；线上已部署，范围与剩余边界见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
 
 Paperclip 发行层 1.1.5 增加跨账号请求与草稿隔离、权限感知分页、唯一备份文件和真实模型自检；两轮全面审计的范围、各轮证据和剩余边界见 [两轮审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
 
@@ -182,7 +184,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.53.1 (146)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.53.2 (147)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；实机安装结果见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
 - 2026-10-04 体验升级：三轮均检查完整 17 模块，修复模型入口、草稿/资料保留和失败恢复。470 项主工程逻辑测试、隔离原生与故障回归、Release/签名通过；iPhone/iPad/Watch 已覆盖安装并启动 1.51.0（138），原配置标识和默认保留。iPhone 真实收发已验证；iPad 锁屏待补，CloudKit 五类查询错误仍待服务端核对，详见 [交付证据与限制](docs/ios-product-audit/DELIVERY_20261004.md)。
 - 2026-10-03 模型管理升级：模型选择、收藏排序与目录批量整理统一；470 项逻辑测试和原生模型/持久化、交互回归完成核验。iPhone/iPad/Watch 已安装 `1.50.0 (137)`，原配置标识与默认设置读回比对保留；手机/平板锁屏后的启动验收待补。
 - 2026-09-30 本机验证：470 项 iOS 逻辑测试通过，Release 构建与签名通过；iPhone 18 Pro Max、iPad Pro 13（M4）已覆盖安装并启动 `1.49.1 (135)`。此版要求 SSH 主机公钥显式核实，直连使用 Ed25519；CloudKit 环境保持 Development。
@@ -218,7 +221,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
 
-- 当前源码版本：`1.5.0`，主工程 `src/mac/leophone/`；本机 `/Applications/LeoPhoneAgent.app` 回读亦为 `1.5.0`。公开热更新版本以 `leocodebox-updates` 发布仓实际 Release 为准，不能由源码版本推断已发布。
+- 当前源码版本：`1.5.1`，主工程 `src/mac/leophone/`；本机 `/Applications/LeoPhoneAgent.app` 已安装经公证的 `1.5.1`（Electron 41.10.7）。公开热更新版本以 `leocodebox-updates` 发布仓实际 Release 为准，不能由源码版本推断已发布。
 - Leo Link：手机可经中继或已配置的 Tailscale HTTPS 直连同一 Mac Host/runtime，支持会话、审批、全自动、停止与事件续传。直连使用独立设备授权，支持一次性扫码与撤销。
 - 远控操作使用稳定请求编号和持久化回执，保留任务编号与 V4 输入 admission 对账；未知执行结果明确提示，不盲目重放。
 - 「连接手机」中可分别启用同步副本与藏宝阁访问。Tailscale Serve 的 HTTPS 转发需显式配置；不会自动覆盖现有规则。
