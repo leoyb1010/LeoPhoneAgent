@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Electron Builder config keeps related packaging hooks together so build order stays explicit. */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -636,6 +636,26 @@ export default {
     await runTimedAsync("afterPack:stripPackagedSourcemapReferences", () =>
       stripPackagedSourcemapReferences(context),
     );
+    // node-pty 的 spawn-helper 在 npm 预编译包里没有可执行位，electron-builder 拷贝 asar.unpacked
+    // 时也不会补上。缺执行位时内置终端 posix_spawn 失败，且下面按可执行位筛选的嵌套签名会漏签它，
+    // 导致公证 Invalid。这里直接对产物中的 spawn-helper 补 0755（Windows 无此文件）。
+    // 必须放在 sourcemap 清理之后：那一步会重新解包/打包 asar，把 app.asar.unpacked 重写回 0644。
+    if (context.electronPlatformName !== "win32") {
+      runTimedSync("afterPack:nodePtySpawnHelperExecutable", () => {
+        const prebuildsDir = resolve(
+          resolvePackagedResourcesDir(context),
+          "app.asar.unpacked",
+          "node_modules",
+          "node-pty",
+          "prebuilds",
+        );
+        if (!existsSync(prebuildsDir)) return;
+        for (const platformDir of readdirSync(prebuildsDir)) {
+          const helper = resolve(prebuildsDir, platformDir, "spawn-helper");
+          if (existsSync(helper)) chmodSync(helper, 0o755);
+        }
+      });
+    }
     runTimedSync("afterPack:assertPackagedNativeResourcePolicy", () =>
       assertPackagedNativeResourcePolicy(context),
     );
