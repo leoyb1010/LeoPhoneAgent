@@ -22,6 +22,19 @@ val appCustomization = Properties().apply {
 fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
+// Private relay endpoint and machine-name shortcuts. The public repository
+// ships empty values; a developer machine injects real ones from the
+// git-ignored `src/android/local.properties` or `~/.gradle/gradle.properties`
+// (gradle property wins). Keys: `leo.relayApiRoot`, `leo.fleetPresets`
+// (`Label|machine;Label|machine`). Empty values mean "未配置中继地址".
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.reader(Charsets.UTF_8).use { load(it) }
+}
+fun localValue(key: String): String =
+    (providers.gradleProperty(key).orNull ?: localProperties.getProperty(key) ?: "")
+        .trim().replace("\\", "\\\\").replace("\"", "\\\"")
+
 // Opt-in UI fixture only. Normal builds retain the shipping ARM64 ABI and
 // existing test runner; no fixture APK is a releasable distribution artifact.
 val auditUiFixture = providers.gradleProperty("leophone.auditUiFixture").orNull == "true"
@@ -58,6 +71,9 @@ android {
             "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT",
             "\"${customizationValue("ANTHROPIC_OAUTH_IDENTIFIER_PROMPT")}\""
         )
+
+        buildConfigField("String", "LEO_RELAY_API_ROOT", "\"${localValue("leo.relayApiRoot")}\"")
+        buildConfigField("String", "LEO_FLEET_PRESETS", "\"${localValue("leo.fleetPresets")}\"")
 
         ndk {
             abiFilters += if (auditUiFixture) listOf("x86_64") else listOf("arm64-v8a")

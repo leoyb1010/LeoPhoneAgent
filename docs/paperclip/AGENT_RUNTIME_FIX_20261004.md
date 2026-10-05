@@ -8,7 +8,7 @@
 - CLI 在 SSH 中存在，但 launchd 的 PATH 缺少服务用户 npm 全局命令目录，导致 ACP 执行器找不到 `codex`。原生启动模板保留锁定 Node 在 PATH 首位，同时纳入用户 CLI 路径，不更换智能体执行引擎或模型来规避失败。
 - PATH 修复后，模型测试仍超时。服务没有继承该主机 CLI 实际使用的代理环境；直接 OpenAI/ChatGPT 出站超时，已验证本机代理下出站正常。仅在项目私有服务环境中显式配置代理与本机直连例外。
 - 原生编译版头像 worker 错误加载 shared TypeScript 源码导出导致 503；固定源码/产物指纹的 postbuild 叠层改用 built JS renderer。真实 worker 对照复现失败，修复后候选与 live 均生成 64×64、3,531 字节有效 PNG；公网管理页实际加载的 256×256 头像已解码，naturalWidth/naturalHeight 均为 256。
-- Mac mini 项目外接盘目标为 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`，兼容入口保留 `~/.leophoneagent/paperclip`。缓存和测试临时根均显式配置到外接盘；短临时根 `/Volumes/Leo-bubu/Mac-Offload/lpa-t` 避免 Unix socket 路径过长。
+- Mac mini 项目外接盘目标为 `<部署根>`（外接盘上的项目目录），兼容入口保留 `~/.leophoneagent/paperclip`。缓存和测试临时根均显式配置到外接盘；短临时根 `<外接盘>/lpa-t` 避免 Unix socket 路径过长。
 - 原生启动保护核对真实挂载点、卷 UUID、文件所有权与项目目录所在卷，失败不创建内置盘替代目录。上游稳定测试 runner 的独立叠层只修改临时根选择一行，验证固定 Git 提交、全源码 SHA 与精确上下文。
 
 ## 源码与构建证据
@@ -40,6 +40,6 @@
 
 最终使用干净任务 `LEO-6`「外接盘迁移最终验收」证明正常执行链路：原 Codex 智能体在外接盘上实际执行，评论 `LEOPHONE_SSD_FINAL_OK` 并自行将任务完成；43 秒、3 次工具调用。验收人员未手动完成该任务。
 
-内部旧副本已通过 rsync 传输校验、完整文件/链接元数据清单核对后移到 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/rollback/paperclip-pre-ssd-20261004`，263,082 个非目录条目保留；内置盘仅留兼容符号链接和系统 LaunchAgent 元数据。运行配置、缓存、工作空间、日志、备份与回滚产物均实际落在外接盘，短临时根单独位于同一外接盘。共享 PostgreSQL 集群数据库本体仍在既有系统位置。
+内部旧副本已通过 rsync 传输校验、完整文件/链接元数据清单核对后移到 `<外接盘>/LeoPhoneAgent/rollback/paperclip-pre-ssd-20261004`，263,082 个非目录条目保留；内置盘仅留兼容符号链接和系统 LaunchAgent 元数据。运行配置、缓存、工作空间、日志、备份与回滚产物均实际落在外接盘，短临时根单独位于同一外接盘。共享 PostgreSQL 集群数据库本体仍在既有系统位置。
 
 回滚 UI/代码时优先保留当前已验证的物理路径配置。若切换整个部署根，必须同时重定位 env/config、当前智能体与会话路径，不能只将兼容符号链接改指旧归档；私有字段快照与数据库备份已保存在外接盘的受限目录中。上述验收覆盖本次 Codex 账号/默认 ACP、浏览器配置、头像 worker 与迁移后的任务闭环，不宣称全部第三方适配器或所有恢复分支已验证。

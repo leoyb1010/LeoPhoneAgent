@@ -7,6 +7,11 @@ bash "$ROOT/scripts/verify_harmony_release_notes.sh"
 if [[ ! -f "$APP/local.properties" ]]; then
   cp "$APP/local.properties.example" "$APP/local.properties"
 fi
+RELAY_LOCAL="$APP/entry/src/main/ets/net/RelayLocal.ets"
+if [[ ! -f "$RELAY_LOCAL" ]]; then
+  cp "$APP/entry/src/main/ets/net/RelayLocal.example.ets" "$RELAY_LOCAL"
+  echo "提示：未找到 RelayLocal.ets，已用空模板（App 内显示「未配置中继地址」）。"
+fi
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 rsync -a --delete --exclude '.hvigor' --exclude 'oh_modules' --exclude '*/build' "$APP/" "$STAGE/"

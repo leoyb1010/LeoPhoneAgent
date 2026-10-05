@@ -47,7 +47,7 @@ Mac mini 原生服务的 CLI 与登录状态属于服务器用户；远端浏览
 [「Android Agent 交接与发布铁律」](#android-agent-交接与发布铁律)。**
 
 - 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
-- 本机唯一开发入口：`/Users/leoyuan/Documents/日常 2/LeoPhoneAgent`。`/Users/leoyuan/leophone-mac` 已归档旧内容并改为指向此入口的兼容符号链接；两条路径对应同一仓库，不再维护旧工作副本。
+- 本机唯一开发入口：开发 Mac 上 `~/Documents/` 下的这一份 `LeoPhoneAgent` checkout。旧路径 `~/leophone-mac` 已归档旧内容并改为指向此入口的兼容符号链接；两条路径对应同一仓库，不再维护旧工作副本。
 - Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
   `src/mac/leophone/`（当前 1.x 主线）。`src/mac/leocodebox/` 是旧版桌面归档；
   `src/mac/leoagent/` 中 relay.py 仍在服务，其他部分是协议兼容/灰度回退，不是 Android UI 工程。
@@ -63,11 +63,12 @@ Mac mini 原生服务的 CLI 与登录状态属于服务器用户；远端浏览
   冲突/tombstone、Mac 主动工作台与三端 `treasury_search/get/save/update` 契约已落地；
   [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
   [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。Android alpha.27 已完成
-  固定签名、Fold8 API 35、Standard/Power 从 alpha.26 覆盖安装与公开附件门禁；Mac 1.84.0 已完成
-  Developer ID 签名、双仓热更新发布和本机安装；iPhone 1.34.0 (109) 已通过 Wi-Fi 真机覆盖安装并启动。
+  固定签名、Fold8 API 35、Standard/Power 从 alpha.26 覆盖安装与公开附件门禁；藏宝阁 Phase 5 交付当时的
+  Mac 版本（1.84.0，旧桌面线）已完成 Developer ID 签名、双仓热更新发布和本机安装，当时的 iPhone 版本
+  1.34.0 (109) 已通过 Wi-Fi 真机覆盖安装并启动（均为历史记录，当前版本见下文各端版本节）。
   iPad 真机与 Mac Apple 公证仍为 HOLD，不能把源码门禁等同于全部实机发版。
   最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
-  下一轮 iPhone / iPad / Apple Watch 体验升级计划（吸收开源项目经验 + iOS 27 新特性，只是计划、尚未施工）：
+  iPhone / iPad / Apple Watch 体验升级计划（吸收开源项目经验 + iOS 27 新特性；大部分已在 iOS 1.44.0 (126) 落地，见 CHANGELOG 与计划内「落地状态」）：
   [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
@@ -172,7 +173,7 @@ src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Wa
 src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
 src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
 src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
-src/mac/leocodebox/     旧版桌面 1.85 归档，不能替代当前 Mac 的构建/测试
+src/mac/leocodebox/     旧版桌面 2.2.13 归档，不能替代当前 Mac 的构建/测试
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
                         ※ 当前桌面主线为 leophone；leoagent 保留作灰度回退，relay.py 继续服役
@@ -204,7 +205,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
   保留多窗口、拖放附件与外接键盘快捷键
-- iPhone/iPad 通用设备目标已完成无签名构建，`MinisLogicTests` 337/337；iPhone 17 Pro Max
+- （历史，藏宝阁 Phase 5 当时版本）iPhone/iPad 通用设备目标已完成无签名构建，`MinisLogicTests` 337/337；iPhone 17 Pro Max
   已通过 Wi-Fi 覆盖安装 `1.34.0 (109)`，版本回读与主 App / Widget 启动通过；
   当前 iSH 静态库为 iPhoneOS arm64，主 App 模拟器需先重建 simulator 依赖，iPad 实机安装待设备在场后验收
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
@@ -461,7 +462,7 @@ pnpm --dir apps/zcode-cli build
 pnpm build:bootstrap
 ```
 
-`src/mac/leocodebox/` 是旧版 1.85 桌面归档。其历史安装包与热更新不能替代
+`src/mac/leocodebox/` 是旧版 2.2.13 桌面归档。其历史安装包与热更新不能替代
 当前 1.x 主线；下载前查看对应 [Release](https://github.com/leoyb1010/LeoPhoneAgent/releases)
 的版本、目标平台与验收说明。旧工程的 `npm` 构建命令仅用于维护该归档。
 
@@ -476,7 +477,7 @@ pnpm build:bootstrap
   保留 `upstream` remote;升级流程见 [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md))。
 - `src/mac/leocodebox/` 保留其 AGPL-3.0-or-later、NOTICE 与第三方归属;
   合并不改变该目录原有许可。
-- 已移除的 `src/mac/LeoAgentDesktop/`(Cindy/Apache-2.0 改造)见 git 历史,
+- LeoAgentDesktop(Cindy/Apache-2.0 改造)目录已从仓库移除,仅存于 git 历史,
   其 NOTICE 随历史保留;未使用其商标。
 - 第三方致谢与许可证文本:[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 

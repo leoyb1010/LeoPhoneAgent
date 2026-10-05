@@ -15,14 +15,14 @@ test('diagnostics report never contains plaintext provider secrets', () => {
 
   const report = buildDiagnosticsReport({
     appVersion: '1.40.0',
-    cliTools: [{ id: 'claude', installed: true, executablePath: '/Users/leoyuan/.local/bin/claude' }],
+    cliTools: [{ id: 'claude', installed: true, executablePath: '/Users/example/.local/bin/claude' }],
     switchProviders: [sanitizeProvider(provider)],
     activeByTarget: { claude: provider.id },
-  }, '/Users/leoyuan');
+  }, '/Users/example');
 
   const serialized = JSON.stringify(report);
   assert.ok(!serialized.includes(secret), 'plaintext API key leaked into diagnostics');
-  assert.ok(!serialized.includes('/Users/leoyuan'), 'home directory leaked into diagnostics');
+  assert.ok(!serialized.includes('/Users/example'), 'home directory leaked into diagnostics');
   assert.ok(serialized.includes('~/.local/bin/claude'), 'home paths should collapse to ~');
   assert.ok(serialized.includes('hasApiKey'), 'sanitized provider shape expected');
 });

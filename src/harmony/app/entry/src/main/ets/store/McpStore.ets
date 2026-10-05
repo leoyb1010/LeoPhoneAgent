@@ -85,7 +85,7 @@ export class McpStore {
     } catch (error) {
       this.rows = []; this.jsonLoadFailed = true;
       this.loaded = false;
-      throw error;
+      throw error as Error;
     }
     if (migrate && needsMigration) await this.persist(context, this.rows);
   }
@@ -113,7 +113,7 @@ export class McpStore {
       // 恢复不能等待正在执行本次迁移的 pendingLoad，否则会自等待。
       this.rows = []; this.jsonLoadFailed = false;
       await this.readDisk(context, false);
-      throw error;
+      throw error as Error;
     }
     for (let i = 0; i < previous.length; i++) {
       const old = previous[i];

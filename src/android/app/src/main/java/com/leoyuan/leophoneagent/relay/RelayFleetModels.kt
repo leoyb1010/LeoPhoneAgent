@@ -1,5 +1,6 @@
 package com.leoyuan.leophoneagent.relay
 
+import com.leoyuan.leophoneagent.BuildConfig
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -9,9 +10,13 @@ data class RelayFleetConfig(
     val machineName: String = "",
     val bodyEnabled: Boolean = false,
 ) {
+    /** False when neither the user nor the local build configured a relay endpoint. */
+    val isRelayConfigured: Boolean get() = relayApiBase.isNotBlank()
+
     companion object {
-        const val DEFAULT_RELAY_API_BASE =
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api"
+        /** Injected from git-ignored local config (`leo.relayApiRoot`); empty in the public repo. */
+        val DEFAULT_RELAY_API_BASE: String = BuildConfig.LEO_RELAY_API_ROOT
+        const val NOT_CONFIGURED_MESSAGE = "未配置中继地址"
     }
 }
 
@@ -70,11 +75,17 @@ data class RelayJoinResult(val accessKey: String, val machine: String)
 
 data class FleetPreset(val label: String, val machine: String)
 
-val LeoFleetPresets = listOf(
-    FleetPreset("MacBook Pro", "LeoyuandeMacBook-Pro-2"),
-    FleetPreset("Mac mini · cortex", "LeodeMac-mini-2"),
-    FleetPreset("Mac Studio", "LeoMac-Studio-2"),
-)
+/** Machine shortcuts injected from local config (`leo.fleetPresets`); empty in the public repo. */
+val LeoFleetPresets: List<FleetPreset> = parseFleetPresets(BuildConfig.LEO_FLEET_PRESETS)
+
+/** Parses `Label|machine;Label|machine`; malformed entries are skipped. */
+internal fun parseFleetPresets(raw: String): List<FleetPreset> =
+    raw.split(';').mapNotNull { entry ->
+        val parts = entry.split('|', limit = 2)
+        val label = parts.getOrNull(0)?.trim().orEmpty()
+        val machine = parts.getOrNull(1)?.trim().orEmpty()
+        if (label.isEmpty() || machine.isEmpty()) null else FleetPreset(label, machine)
+    }
 
 /** [status] is the HTTP status when the relay or the machine answered with an error. */
 open class RelayException(message: String, val status: Int? = null) : Exception(message)

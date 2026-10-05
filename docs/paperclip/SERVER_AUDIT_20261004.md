@@ -1,6 +1,6 @@
 # Paperclip 服务器审计与修复 · 2026-10-04
 
-发行层 1.1.3（包含 1.1.2 修复）；固定上游 `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`。服务器为 `LeodeMac-mini-2.local`、用户 `leo`，项目全部部署产物位于 `/Volumes/Leo-bubu/Mac-Offload/LeoPhoneAgent/paperclip`。入口 `https://paperclip.leoyuan.top`，仅监听回环 `43871`。本轮范围为服务器；iOS/Mac 原生客户端不发新版。
+发行层 1.1.3（包含 1.1.2 修复）；固定上游 `994d6edcdd4e15d5f9cc5cf8c135ac599104b86a`。服务器为 Mac mini 服务器（服务账号用户），项目全部部署产物位于 `<部署根>`（外接盘上的项目目录）。入口 `https://paperclip.leoyuan.top`，仅监听回环 `43871`。本轮范围为服务器；iOS/Mac 原生客户端不发新版。
 
 ## 已确认并修复
 

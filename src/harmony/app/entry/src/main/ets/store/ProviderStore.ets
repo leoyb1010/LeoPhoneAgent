@@ -242,7 +242,7 @@ export class ProviderStore {
       this.lastError = `${error}`;
       if (!this.loaded) { this.jsonLoadFailed = true; this.instances = []; this.keys.clear(); this.keyBindings.clear(); }
       this.loaded = false;
-      throw error;
+      throw error as Error;
     }
   }
 
@@ -292,7 +292,7 @@ export class ProviderStore {
     } catch (error) {
       // 包括 rename 后结果不确定：读回真实 metadata 和匹配代的钥匙，错误仍上抛。
       await this.recoverFromDisk(context);
-      throw error;
+      throw error as Error;
     }
     for (let i = 0; i < previous.length; i++) {
       const old = previous[i];

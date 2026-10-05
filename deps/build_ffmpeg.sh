@@ -201,7 +201,7 @@ configure_ffmpeg() {
 
     cd "$FFMPEG_DIR"
 
-    # Check for libmp3lame (built by build_lame.sh)
+    # Optional libmp3lame (LAME is no longer in the repo; see BUILDING.md)
     LAME_FLAGS=""
     if [ -f "$SCRIPT_DIR/lame-build/lib/libmp3lame.a" ]; then
         log_info "Found libmp3lame — enabling MP3 encoding"
@@ -210,7 +210,7 @@ configure_ffmpeg() {
         LAME_LDFLAGS="-L$SCRIPT_DIR/lame-build/lib"
     else
         log_warning "libmp3lame not found — MP3 encoding will be unavailable"
-        log_warning "Run ./build_lame.sh first to enable MP3 encoding"
+        log_warning "LAME is not in the repository (removed in bf424b99); provide deps/lame-build/{lib,include} to enable MP3 encoding"
         LAME_CFLAGS=""
         LAME_LDFLAGS=""
     fi

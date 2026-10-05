@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { DEFAULT_API_ROOT, requireHttpsRoot, sanitizeKey } from '../net/Protocol';
+import { DEFAULT_API_ROOT, RELAY_NOT_CONFIGURED, requireHttpsRoot, sanitizeKey } from '../net/Protocol';
 import { gatewayStore } from '../store/GatewayStore';
 import { NavBar } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
@@ -38,7 +38,7 @@ struct RelayPage {
           .fontColor(Tokens.muted)
           .width('100%')
           .padding({ bottom: 6 })
-        TextInput({ text: this.apiRoot })
+        TextInput({ text: this.apiRoot, placeholder: RELAY_NOT_CONFIGURED })
           .onChange((value: string) => {
             this.apiRoot = value;
           })

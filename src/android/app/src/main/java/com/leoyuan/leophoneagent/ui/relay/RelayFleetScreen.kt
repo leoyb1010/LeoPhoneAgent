@@ -140,6 +140,10 @@ fun RelayFleetScreen(onBack: () -> Unit) {
 
     fun refresh() {
         if (config.accessKey.length < 16 || loading) return
+        if (!config.isRelayConfigured) {
+            error = com.leoyuan.leophoneagent.relay.RelayFleetConfig.NOT_CONFIGURED_MESSAGE
+            return
+        }
         scope.launch {
             loading = true
             error = null
@@ -334,9 +338,17 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                         value = base,
                         onValueChange = { base = it },
                         label = { Text("中继 API 地址") },
+                        placeholder = { Text(com.leoyuan.leophoneagent.relay.RelayFleetConfig.NOT_CONFIGURED_MESSAGE) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (base.isBlank()) {
+                        Text(
+                            "${com.leoyuan.leophoneagent.relay.RelayFleetConfig.NOT_CONFIGURED_MESSAGE}：填入中继 HTTPS 地址，或粘贴配对码加入。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     OutlinedTextField(
                         value = key,
                         onValueChange = { key = it },

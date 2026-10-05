@@ -99,10 +99,10 @@ test('顶栏目录芯片只留最后一段', () => {
 test('窗口顶条不重复长会话标题,只写主控和目录', () => {
   assert.deepEqual(titlebarHomeCopy({ hasSession: false }), { title: '主控', sub: '' });
   assert.deepEqual(
-    titlebarHomeCopy({ hasSession: true, machineName: 'LeoyuandeMacBook-Pro-2.local', cwd: '/tmp/leo-codex-live' }),
-    { title: '主控', sub: 'LeoyuandeMacBook-Pro-2 · leo-codex-live' },
+    titlebarHomeCopy({ hasSession: true, machineName: 'Example-MacBook-Pro.local', cwd: '/tmp/leo-codex-live' }),
+    { title: '主控', sub: 'Example-MacBook-Pro · leo-codex-live' },
   );
-  assert.equal(machineChipLabel('LeoyuandeMacBook-Pro-2.local'), 'LeoyuandeMacBook-Pro-2');
+  assert.equal(machineChipLabel('Example-MacBook-Pro.local'), 'Example-MacBook-Pro');
   assert.equal(machineChipLabel('Fold'), 'Fold');
   const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
   assert.match(app, /titlebarHomeCopy/);

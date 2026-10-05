@@ -2,8 +2,8 @@
 
 ## 设计基准
 
-- 组合设计参考：`/Users/leoyuan/.codex/generated_images/019f44bd-17f1-7831-bf61-79bef22da52b/exec-12f73832-b199-42ad-8d65-a134b599c3ce.png`
-- 实机截图目录：`/Users/leoyuan/Desktop/leocodebox-ui-upgrade/`
+- 组合设计参考：`~/.codex/generated_images/019f44bd-17f1-7831-bf61-79bef22da52b/exec-12f73832-b199-42ad-8d65-a134b599c3ce.png`
+- 实机截图目录：`~/Desktop/leocodebox-ui-upgrade/`
 - 验证环境：macOS、Electron 43.1.0、系统/浅色/深色三种主题模式
 
 ## 已验证范围

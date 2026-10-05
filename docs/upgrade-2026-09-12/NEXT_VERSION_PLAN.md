@@ -32,9 +32,9 @@
 
 | 项目 | 本次确认 |
 |---|---|
-| 主机 | LeoyuandeMacBook-Pro-2.local |
-| 唯一产品仓 | `/Users/leoyuan/Documents/日常 2/LeoPhoneAgent` |
-| 任务与报告目录 | `/Users/leoyuan/Documents/ChatGPT/LeophoneAgent`；这里原先只有历史截图，不是产品源码仓 |
+| 主机 | 开发 Mac |
+| 唯一产品仓 | 本仓库主 checkout（开发 Mac `~/Documents/` 下） |
+| 任务与报告目录 | `~/Documents/ChatGPT/LeophoneAgent`；这里原先只有历史截图，不是产品源码仓 |
 | 最新 origin/main / HEAD | `094d4f8c97656366ec3a7858f9b0bd1b368ab7d2` |
 | 拉取 | `git fetch origin`、`git pull --ff-only --no-recurse-submodules origin main`，结果 Already up to date |
 | 产品源码版本 | iOS 1.34.0 (109)，Mac 1.84.0 |

@@ -1,6 +1,6 @@
 # LeoPhoneAgent 下一版：真实上游、可参考代码与吸收策略
 
-研究日期：2026-09-12（日期均按源站UTC记录；展示日不表示发布日期与提交日期相同）。项目根 `/Users/leoyuan/Documents/日常 2/LeoPhoneAgent`，基准 `094d4f8c97656366ec3a7858f9b0bd1b368ab7d2`。这是升级规划研究，不是实现或合并。通过本地源文件、`git fetch upstream --no-tags`、GitHub原始API、固定SHA源码和npm载荷检查取得证据；没有把stars或搜索摘要当质量保证。
+研究日期：2026-09-12（日期均按源站UTC记录；展示日不表示发布日期与提交日期相同）。项目根为本仓库主 checkout，基准 `094d4f8c97656366ec3a7858f9b0bd1b368ab7d2`。这是升级规划研究，不是实现或合并。通过本地源文件、`git fetch upstream --no-tags`、GitHub原始API、固定SHA源码和npm载荷检查取得证据；没有把stars或搜索摘要当质量保证。
 
 ## 一、结论与投入顺序
 

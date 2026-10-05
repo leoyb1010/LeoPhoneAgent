@@ -6,8 +6,10 @@ export type RelayDiscoveredMachine = {
   version: string | null
 }
 
-export const DEFAULT_API_ROOT =
-  "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api"
+// Real relay root and machine labels are local-only (app/entry/src/main/ets/net/RelayLocal.ets,
+// git-ignored). The reference model ships the public empty default.
+export const DEFAULT_API_ROOT = ""
+export const RELAY_NOT_CONFIGURED = "未配置中继地址"
 
 export function normalizeApiRoot(raw: string): string {
   return raw.trim().replace(/\/+$/, "")
@@ -19,6 +21,7 @@ export function sanitizeKey(raw: string): string {
 
 export function requireHttpsRoot(raw: string): string {
   const root = normalizeApiRoot(raw)
+  if (!root) throw new Error(RELAY_NOT_CONFIGURED)
   if (!root.toLowerCase().startsWith("https://")) {
     throw new Error("中继根必须是 https://")
   }
@@ -107,15 +110,7 @@ export function sanitizeMachine(raw: string): string | null {
   return name
 }
 
-export function displayName(machine: string): string {
-  switch (machine) {
-    case "LeoyuandeMacBook-Pro-2":
-      return "MacBook Pro"
-    case "LeodeMac-mini-2":
-      return "Mac mini · cortex"
-    case "LeoMac-Studio-2":
-      return "Mac Studio"
-    default:
-      return machine
-  }
+export function displayName(machine: string, labels: string[][] = []): string {
+  const row = labels.find((entry) => entry.length >= 2 && entry[0] === machine)
+  return row ? row[1] : machine
 }

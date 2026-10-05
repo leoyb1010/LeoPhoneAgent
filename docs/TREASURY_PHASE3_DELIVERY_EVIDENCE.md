@@ -170,7 +170,7 @@ npm run build
 - Android：Room schema/DAO/Repository、WorkManager、精确查询、Agent 安全边界、Compose 阅读/筛选/高亮 UI、三语言资源与测试。
 - iOS：CollectionStore、AttachmentImporter、NoteBodyStore、ArticleExtractor、CollectionsView 与逻辑测试。
 - Mac：数据库 schema/repository、Treasury route/service/capture policy、CollectionsMirror 与集成测试。
-- 许可与文档：`THIRD_PARTY_LICENSES.md`、本报告、总施工规范、README、CHANGELOG、Android 隐私说明与 `.ui-pipeline` 证据。
+- 许可与文档：`THIRD_PARTY_LICENSES.md`、本报告、总施工规范、README、CHANGELOG、Android 隐私说明与 UI 证据（`.ui-pipeline/` 截图为本机证据，未入库）。
 
 ## 下一阶段
 

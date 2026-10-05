@@ -1,11 +1,7 @@
 name: Android product UI fixture
+# Long macOS emulator fixture (up to 155 min per flavor): manual runs only.
+# Its former push trigger pointed at an audit branch already merged into main.
 on:
-  push:
-    branches: [audit/five-round-product-20261004]
-    paths:
-      - 'src/android/**'
-      - 'scripts/android-product-audit/**'
-      - '.github/workflows/android-product-ui.yml'
   workflow_dispatch:
 permissions:
   contents: read

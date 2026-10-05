@@ -91,7 +91,7 @@ object RelayBodyService {
     @Synchronized
     private fun restart(app: Context, store: RelayFleetStore, config: RelayFleetConfig) {
         val key = config.accessKey
-        val enabled = key.length >= 16 && config.bodyEnabled
+        val enabled = key.length >= 16 && config.bodyEnabled && config.isRelayConfigured
         // 隐私提级开关：远程可驱动本机 Agent 时，PRIVACY 组工具的有效等级
         // 强制提到 ASK_ONCE（见 OffloadPermissionManager.setRemoteBodyEnabled）。
         OffloadPermissionManager.setRemoteBodyEnabled(enabled)

@@ -9,9 +9,9 @@ class RelayOutboundCodecTest {
     @Test
     fun agentWsUrlRewritesRelayApiToAgent() {
         assertEquals(
-            "wss://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/agent",
+            "wss://relay-host.example.ts.net/leoagent-relay/relay/agent",
             RelayOutboundCodec.agentWsUrl(
-                "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api",
+                "https://relay-host.example.ts.net/leoagent-relay/relay/api",
             ),
         )
         assertEquals(

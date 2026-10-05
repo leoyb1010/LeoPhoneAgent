@@ -1,6 +1,6 @@
 import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
-import { encodePair, sanitizeKey, sanitizeMachine } from '../net/Protocol';
+import { RELAY_NOT_CONFIGURED, encodePair, normalizeApiRoot, sanitizeKey, sanitizeMachine } from '../net/Protocol';
 import { gatewayStore } from './GatewayStore';
 
 class BodyFile {
@@ -59,6 +59,9 @@ export class BodyStore {
   }
 
   canRegister(): string {
+    if (normalizeApiRoot(gatewayStore.apiRoot).length === 0) {
+      return RELAY_NOT_CONFIGURED;
+    }
     if (sanitizeKey(gatewayStore.key).length < 16) {
       return '先填中继钥匙';
     }

@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, audit/five-round-product-20261004]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

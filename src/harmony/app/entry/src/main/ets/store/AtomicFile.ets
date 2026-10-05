@@ -30,7 +30,7 @@ export function atomicWriteText(path: string, text: string): void {
     try { fileIo.fsyncSync(parent.fd); } finally { fileIo.closeSync(parent); }
   } catch (error) {
     if (renamed) throw new AtomicCommitUncertainError();
-    throw error;
+    throw error as Error;
   } finally {
     if (fileIo.accessSync(tmp)) {
       fileIo.unlinkSync(tmp);
@@ -68,7 +68,7 @@ export class AtomicTextFile {
           // 锁仍持有；记录实际可见版本以便同进程恢复，但原 durability 错误继续上抛。
           try { this.read(path); } catch (_readError) { this.unreadable.add(path); }
         }
-        throw error;
+        throw error as Error;
       }
     } finally {
       // 关闭句柄也释放系统锁，进程退出不会遗留永久锁。

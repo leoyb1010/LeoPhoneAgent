@@ -200,7 +200,7 @@ test('前台窗口绑定会落成系统行,摘要里的窗口也能读出来', (
   assert.equal(windowBoundLabel(boundWindowFromUnknown({ app: 'Safari', title: 'Inbox', snapshot_id: 'x' })), 'Safari · Inbox');
   assert.equal(windowBoundLabel(boundWindowFromUnknown(null)), '');
   assert.equal(boundWindowChipKind('local', 'Finder · Documents'), 'raise');
-  assert.equal(boundWindowChipKind('LeodeMac-mini-2', 'Finder · Documents'), 'label');
+  assert.equal(boundWindowChipKind('Example-Mac-mini', 'Finder · Documents'), 'label');
   assert.equal(boundWindowChipKind('local', ''), 'bind');
   assert.equal(boundWindowChipKind('fold', ''), 'none');
   const box = { left: 100, top: 50, width: 200, height: 100 };
@@ -347,8 +347,8 @@ test('没登录的失败要去设置,本机名带不带 .local 算同一台', ()
   assert.equal(sessionNeedsSettings(['失败:这个模型还没有登录或密钥 —— 到「设置」登录一个供应商后再试']), true);
   assert.equal(sessionNeedsSettings(['已停止。进程不在了']), false);
   assert.equal(sessionNeedsSettings(["Codex error: The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."]), false);
-  assert.equal(isSameMachineName('LeoyuandeMacBook-Pro-2.local', 'LeoyuandeMacBook-Pro-2'), true);
-  assert.equal(isSameMachineName('fold', 'LeoyuandeMacBook-Pro-2'), false);
+  assert.equal(isSameMachineName('Example-MacBook-Pro.local', 'Example-MacBook-Pro'), true);
+  assert.equal(isSameMachineName('fold', 'Example-MacBook-Pro'), false);
 });
 
 test('2.0 壳接上了从左栏拿掉', () => {

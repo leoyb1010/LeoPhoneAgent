@@ -157,4 +157,11 @@ class RelayFleetClientTest {
             RelayFleetStore.normalizeBase(" https://relay.example.com/relay/api/ "),
         )
     }
+
+    @Test fun blankBaseReportsNotConfigured() {
+        val rejected = runCatching { RelayFleetStore.normalizeBase("  ") }.exceptionOrNull()
+        assertTrue(rejected is IllegalArgumentException)
+        assertEquals(RelayFleetConfig.NOT_CONFIGURED_MESSAGE, rejected?.message)
+        assertTrue(!RelayFleetConfig(relayApiBase = "").isRelayConfigured)
+    }
 }

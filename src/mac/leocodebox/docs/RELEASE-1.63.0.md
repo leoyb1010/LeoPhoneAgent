@@ -33,7 +33,7 @@ POST /harness/sessions/{id}/stop               终止
 ## 验证(本机实测)
 
 - 新增 12 项单测(方言翻译 × 4、日志回放/续传、审批 id 铸造、召回、中继帧往返);服务端套件 349 项全过,typecheck/lint 全绿。
-- 实机烟测(LeoyuandeMacBook-Pro-2):协议创建 codex 会话 → 排队输入在 threadId 就绪后补发 → `message.delta: "PONG"` → `run.completed`;第二回合 steer → `"PING"`;`?after=N` 续传、stop、会话列表(含召回的 leoagent 历史会话)全部正确。
+- 实机烟测(开发 Mac):协议创建 codex 会话 → 排队输入在 threadId 就绪后补发 → `message.delta: "PONG"` → `run.completed`;第二回合 steer → `"PING"`;`?after=N` 续传、stop、会话列表(含召回的 leoagent 历史会话)全部正确。
 - claude 方言在本机报 OAuth 过期——对照实验(干净环境直接跑 `claude -p`)确认是本机 claude CLI 登录态过期,与模块无关,Python 版 leoagent 同样受影响。
 
 ## 升级路径

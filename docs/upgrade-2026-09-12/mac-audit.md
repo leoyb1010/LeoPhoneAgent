@@ -2,7 +2,7 @@
 
 ## 基线、范围与证据等级
 
-- 主机 `LeoyuandeMacBook-Pro-2.local`。审计项目根 `/Users/leoyuan/Documents/日常 2/LeoPhoneAgent`；用户任务产物根 `/Users/leoyuan/Documents/ChatGPT/LeophoneAgent/outputs/upgrade-2026-09-12`。二者分开，未引用其他项目记忆。
+- 主机为开发 Mac。审计项目根为本仓库主 checkout；用户任务产物根 `~/Documents/ChatGPT/LeophoneAgent/outputs/upgrade-2026-09-12`。二者分开，未引用其他项目记忆。
 - 主代理确认已 fetch：`main / origin/main = 094d4f8c97656366ec3a7858f9b0bd1b368ab7d2`，Mac 源码 `1.84.0`。本机安装 App 是 `1.74.2`，不可拿其截图证明本次源码效果。
 - 读取根 AGENTS、README、9 月 6 日三轮审计。保留未跟踪 `docs/AUDIT_THREE_ROUNDS_2026-09-06 2.md`；没有编辑、提交或发布产品源码。
 - 本专项采用 code-review-and-quality 的正确性/结构/安全/性能维度及 taste 中适用于产品 UI 的层级、可访问性检查。它是主任务多轮审计中的 Mac 专项输入，以下五个镜头并不冒充五遍完整独立安全扫描。
@@ -194,14 +194,14 @@ Mac 硬件不支持的 iPhone 能力（如后置闪光灯手电筒）应路由�
 
 ### 关键源码定位
 
-- [每轮 seq 清零](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/server/modules/websocket/services/chat-run-registry.service.ts:249>)
-- [客户端只增加游标](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/src/components/chat/hooks/useChatRealtimeHandlers.ts:104>)
-- [队列捕获旧连接](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/server/modules/websocket/services/chat-websocket.service.ts:180>)
-- [窗口动作只有内存更新](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/server/modules/leocodebox/exact-window.ts:94>)
-- [同步窗口枚举](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/server/modules/leocodebox/exact-window-macos.ts:32>)
-- [400行日志边界](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/src/components/workbench/RemoteSessionPanel.tsx:85>)
-- [通知设置IPC](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/electron/main.js:541>)
-- [同步日志与静默降级](</Users/leoyuan/Documents/日常 2/LeoPhoneAgent/src/mac/leocodebox/server/modules/leophone/harness-session.service.ts:165>)
+- [每轮 seq 清零](../../src/mac/leocodebox/server/modules/websocket/services/chat-run-registry.service.ts#L249)
+- 客户端只增加游标：`src/mac/leocodebox/src/components/chat/hooks/useChatRealtimeHandlers.ts:104`（文件已移除，仅存于 git 历史）
+- [队列捕获旧连接](../../src/mac/leocodebox/server/modules/websocket/services/chat-websocket.service.ts#L180)
+- [窗口动作只有内存更新](../../src/mac/leocodebox/server/modules/leocodebox/exact-window.ts#L94)
+- [同步窗口枚举](../../src/mac/leocodebox/server/modules/leocodebox/exact-window-macos.ts#L32)
+- 400行日志边界：`src/mac/leocodebox/src/components/workbench/RemoteSessionPanel.tsx:85`（文件已移除，仅存于 git 历史）
+- [通知设置IPC](../../src/mac/leocodebox/electron/main.js#L541)
+- [同步日志与静默降级](../../src/mac/leocodebox/server/modules/leophone/harness-session.service.ts#L165)
 
 ## 有界环境恢复与新增依赖证据
 

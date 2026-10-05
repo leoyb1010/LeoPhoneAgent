@@ -8,12 +8,12 @@ class RelayPairCodecTest {
     @Test
     fun roundTripKeepsRootAndName() {
         val encoded = RelayPairCodec.encode(
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/",
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api/",
             "LeoFold8",
         )
         val parsed = RelayPairCodec.decode(encoded)
         assertEquals(
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api",
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api",
             parsed?.apiRoot,
         )
         assertEquals("LeoFold8", parsed?.machine)

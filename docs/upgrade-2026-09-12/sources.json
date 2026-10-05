@@ -1,8 +1,8 @@
 {
   "scope": "LeoPhoneAgent iOS + macOS only; planning/research; no product mutation or merge",
   "as_of": "2026-09-12",
-  "host": "LeoyuandeMacBook-Pro-2.local",
-  "project_root": "/Users/leoyuan/Documents/日常 2/LeoPhoneAgent",
+  "host": "dev-mac",
+  "project_root": ".",
   "local_head": "094d4f8c97656366ec3a7858f9b0bd1b368ab7d2",
   "upstream_head": "4ef29002e88db1e20e462ec2ff46916e8a7dcb45",
   "upstream_graph_counts": {

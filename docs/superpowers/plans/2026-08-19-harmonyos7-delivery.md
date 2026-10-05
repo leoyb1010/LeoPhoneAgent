@@ -13,7 +13,7 @@
 - 目标系统：HarmonyOS 7，开发者 API **26.0.0**（Beta2 起；正式版跟 Mate90 秋季）。HarmonyOS 5/6 真机可作兼容回退，但验收机必须是 7。
 - 包名：`com.leoyuan.leophoneagent.harmony`（与 Android `com.leoyuan.leophoneagent` 分开，避免签名/商店冲突）。
 - 工程根：`src/harmony/`。禁止把 Kotlin/Java/APK 放进这个目录。
-- 默认中继根：`https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api`
+- 默认中继根：`https://<relay-host>.ts.net/leoagent-relay/relay/api`
 - 配对前缀：`leoagent-body:v1|`；码里只有 `apiRoot` + `machine`；钥匙永不进码。
 - 钥匙：≥16 字符，`Authorization: Bearer <key>`；复制残渣（尾部 `%` / 换行）必须剥掉。
 - HTTPS only。扫码加入时，QR 里的 `apiRoot` 必须等于本机已存中继根（大小写与尾斜杠不敏感），否则拒绝，避免把钥匙打到陌生 HTTPS。
@@ -154,12 +154,12 @@ import assert from "node:assert/strict";
 import { parseMachines, harnessURL, sameApiRoot, apiRootFromHarnessURL } from "./relayMachines.ts";
 import { encodePair, decodePair } from "./relayPair.ts";
 
-const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api";
+const ROOT = "https://<relay-host>.ts.net/leoagent-relay/relay/api";
 
 {
   const rows = parseMachines({
     machines: [
-      { name: "LeodeMac-mini-2", online: true, server: "leocodebox" },
+      { name: "example-mini", online: true, server: "leocodebox" },
       { name: "LeoFold8", online: true, platform: "android", server: "minis", version: "1.0.0-alpha.6" },
       { name: "LeoMate", online: true, platform: "harmony", server: "minis", version: "0.1.0-alpha.1" },
     ],
@@ -260,8 +260,8 @@ EOF
 import { agentWsUrl, registerFrame, parseSseData } from "./relayOutbound.ts";
 
 assert.equal(
-  agentWsUrl("https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api"),
-  "wss://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/agent",
+  agentWsUrl("https://<relay-host>.ts.net/leoagent-relay/relay/api"),
+  "wss://<relay-host>.ts.net/leoagent-relay/relay/agent",
 );
 const frame = registerFrame("LeoMate", "k".repeat(16), "0.1.0-alpha.1");
 assert.equal(frame.type, "register");

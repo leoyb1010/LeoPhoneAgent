@@ -2,7 +2,7 @@
 
 LeoPhoneAgent ships a full Linux sandbox inside the app, so a first build is not just
 "open the project and press Run": the native dependencies (iSH on iOS, PRoot on
-Android, FFmpeg, LAME) and the Alpine rootfs are **built from source by the
+Android, FFmpeg) and the Alpine rootfs are **built from source by the
 scripts in `deps/`**, not committed as binaries. Budget ~30–60 minutes for the
 first build; afterwards the artifacts are cached on disk and normal builds are
 fast.
@@ -66,11 +66,9 @@ of Watch and native sandbox artifacts.
 
 ### 1. Build the native dependencies
 
-Run these from the repository root, **in this order** — FFmpeg links against
-LAME, so LAME must exist first or MP3 encoding is silently dropped:
+Run these from the repository root, **in this order**:
 
 ```sh
-./deps/build_lame.sh          # → deps/lame-build/lib/libmp3lame.a
 ./deps/build_ffmpeg.sh        # → deps/frameworks/*.framework  (LGPL config)
 ./deps/build_ish.sh           # → deps/libs/*.a, deps/include/, deps/resources/
 ./deps/prepare_alpine_rootfs.sh   # → deps/resources/alpine-rootfs.zip
@@ -78,7 +76,14 @@ LAME, so LAME must exist first or MP3 encoding is silently dropped:
 
 What each produces:
 
-- **`build_lame.sh`** — LAME 3.100 as a static library for arm64.
+- **LAME (optional, not in the tree)** — `deps/build_lame.sh` and the vendored
+  `deps/lame-3.100` were removed in commit `bf424b99` (2026-08-10). A clean
+  checkout therefore builds FFmpeg **without** the `libmp3lame` encoder (no MP3
+  encoding; other audio formats are unaffected). `build_ffmpeg.sh` enables
+  `--enable-libmp3lame` only when `deps/lame-build/lib/libmp3lame.a` and
+  `deps/lame-build/include/` already exist; the former script can be recovered
+  with `git show bf424b99~1:deps/build_lame.sh`. FFmpeg frameworks built with
+  LAME carry LAME's LGPL obligations — see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 - **`build_ffmpeg.sh`** — FFmpeg 6.1.2 as per-library `.framework` bundles plus
   an umbrella `FFmpeg.framework`. Configured **LGPL**: do not add
   `--enable-gpl` or `--enable-nonfree` — see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
@@ -211,8 +216,10 @@ linking. Rerun `./deps/build_ffmpeg.sh` and build for a device destination.
 **iOS: `linking in object file built for 'iOS'` on a simulator build** — see
 the simulator note above.
 
-**iOS: MP3 encoding unavailable** — `build_lame.sh` did not run before
-`build_ffmpeg.sh`. Rerun both in order.
+**iOS: MP3 encoding unavailable** — expected on a clean checkout: LAME is no
+longer in the repository, so FFmpeg is built without `libmp3lame`. To enable it,
+place a LAME static library at `deps/lame-build/` (see the LAME note above) and
+rerun `./deps/build_ffmpeg.sh`.
 
 **Android: `Android NDK not found`** — set `ANDROID_NDK_HOME` to your NDK r28+
 installation, e.g.

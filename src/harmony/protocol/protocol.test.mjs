@@ -10,6 +10,7 @@ import {
   requireHttpsRoot,
   sanitizeKey,
   applyDiscovery,
+  displayName,
 } from "./relayMachines.ts";
 import { encodePair, decodePair } from "./relayPair.ts";
 import { resumeEnvelope, parseResumeEnvelope, applySeq, nextAfter } from "./resumeEnvelope.ts";
@@ -113,12 +114,12 @@ import {
   TOOL_IMAGE_CAPTION,
 } from "./codexResponses.ts";
 
-const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api";
+const ROOT = "https://relay-host.example.ts.net/leoagent-relay/relay/api";
 
 {
   const rows = parseMachines({
     machines: [
-      { name: "LeodeMac-mini-2", online: true, server: "leophoneagent" },
+      { name: "example-mini", online: true, server: "leophoneagent" },
       { name: "LeoFold8", online: true, platform: "android", server: "minis", version: "1.0.0-alpha.6" },
       { name: "LeoMate", online: true, platform: "harmony", server: "minis", version: "0.1.0-alpha.1" },
       { name: "" },
@@ -184,7 +185,7 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
 {
   assert.equal(
     agentWsUrl(ROOT),
-    "wss://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/agent",
+    "wss://relay-host.example.ts.net/leoagent-relay/relay/agent",
   );
   const frame = registerFrame("LeoMate", "k".repeat(16), "0.1.0-alpha.1");
   assert.equal(frame.type, "register");
@@ -266,6 +267,9 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
 {
   assert.equal(sanitizeKey("  abcdefghijklmnop%\n"), "abcdefghijklmnop");
   assert.equal(requireHttpsRoot(ROOT + "/"), ROOT);
+  assert.throws(() => requireHttpsRoot("  "), /未配置中继地址/);
+  assert.equal(displayName("example-mini", [["example-mini", "Mini"]]), "Mini");
+  assert.equal(displayName("other"), "other");
   assert.throws(() => requireHttpsRoot("http://evil.example/relay/api"));
   assert.throws(() => requireHttpsRoot("https://user:pass@evil.example/relay/api"));
   const next = applyDiscovery(

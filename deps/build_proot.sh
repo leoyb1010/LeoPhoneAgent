@@ -223,10 +223,13 @@ build_talloc() {
         -DHAVE_INTPTR_T=1
     )
 
+    # talloc's __location__ expands __FILE__; map the absolute checkout path
+    # to "deps/" so the binary does not embed the build machine's home path.
     "$CC" -c "$TALLOC_DIR/talloc.c" \
         -o "$BUILD_DIR/talloc-obj/talloc.o" \
         -I"$TALLOC_DIR" \
         -fPIC -O2 -Wall -std=gnu99 \
+        "-ffile-prefix-map=$SCRIPT_DIR/=deps/" \
         "${defines[@]}"
 
     "$AR" rcs "$out" "$BUILD_DIR/talloc-obj/talloc.o"

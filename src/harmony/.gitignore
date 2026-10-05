@@ -7,3 +7,5 @@ app/.preview/
 *.hap
 *.hsp
 *.app
+# 本机私有中继地址/机器名（模板：RelayLocal.example.ets）
+app/entry/src/main/ets/net/RelayLocal.ets

@@ -63,7 +63,7 @@ export class EnvStore {
       this.rows = [];
       this.jsonLoadFailed = true;
       this.loaded = false;
-      throw error;
+      throw error as Error;
     }
     if (migrate && needsMigration) await this.persist(context, this.rows);
   }
@@ -92,7 +92,7 @@ export class EnvStore {
       // 恢复不能等待正在执行本次迁移的 pendingLoad，否则会自等待。
       this.rows = []; this.jsonLoadFailed = false;
       await this.readDisk(context, false);
-      throw error;
+      throw error as Error;
     }
     // 只有 metadata 确认持久化以后才清理旧代；失败/过期写者绝不删除胜者的凭据。
     for (let i = 0; i < previous.length; i++) {

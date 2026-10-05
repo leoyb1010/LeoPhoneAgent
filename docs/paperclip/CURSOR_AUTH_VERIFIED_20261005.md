@@ -1,6 +1,6 @@
 # Cursor 服务器授权验收 · 2026-10-05
 
-用户完成 Mac mini 钥匙串解锁与 Cursor 浏览器授权后，使用 `/Users/leo/.local/bin/cursor-agent`，在与服务器一致的 gui/501 后台安全会话及代理环境验证。
+用户完成 Mac mini 钥匙串解锁与 Cursor 浏览器授权后，使用服务账号的 `~/.local/bin/cursor-agent`，在与服务器一致的 gui/501 后台安全会话及代理环境验证。
 
 ## 结果
 

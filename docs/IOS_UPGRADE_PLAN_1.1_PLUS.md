@@ -1,5 +1,7 @@
 # LeoPhoneAgent iOS 升级计划
 
+> 状态：已归档（历史规划），当前进度见 README / CHANGELOG。
+
 状态：1.1.0（Build 23）阶段目标已完成、已安装真机，后续进入 1.1.x 稳定优化
 范围：仅 iOS  
 基线：LeoPhoneAgent 1.0，提交 `5940de5`  

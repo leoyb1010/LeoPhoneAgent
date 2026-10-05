@@ -2,7 +2,7 @@
 
 > 上一会话完成了 1.40.0 蓝图全量落地 + 四个补丁版（1.40.1–1.40.4）。
 > 本文档是完整工作记忆：现状、每版做了什么、架构关键坐标、发布流水线、坑、下一步。
-> 仓库：`/Users/leoyuan/Documents/Codex/2026-07-09/chon/work/cloudcli-native-app`（main，工作区干净，全部已推送）
+> 仓库：`~/Documents/Codex/2026-07-09/chon/work/cloudcli-native-app`（main，工作区干净，全部已推送）
 
 ---
 

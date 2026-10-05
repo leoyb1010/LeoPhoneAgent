@@ -149,14 +149,14 @@ export class ScheduleStore {
       !scheduleDue(current.hour, current.minute, current.on, current.lastDay, Date.now())) return false;
     const root = context.filesDir + '/schedule-claims';
     try { fileIo.mkdirSync(root); } catch (err) {
-      if (!fileIo.accessSync(root)) throw err;
+      if (!fileIo.accessSync(root)) throw err as Error;
     }
     const rootStat = fileIo.lstatSync(root);
     if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('任务执行记录目录不安全');
     const slot = root + '/' + encodeURIComponent(row.rowId) + '-' + dayKeyOf(Date.now());
     try { fileIo.mkdirSync(slot); } catch (err) {
       if (fileIo.accessSync(slot)) return false;
-      throw err;
+      throw err as Error;
     }
     atomicWriteText(slot + '/claim.json', JSON.stringify({ rowId: row.rowId, attemptedAt: Date.now() }));
     // 刷父目录保证 claim 在开始网络/手机动作之前落盘；不支持时保守停止。

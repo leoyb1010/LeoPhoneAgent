@@ -51,7 +51,7 @@ internal class TreasurySyncClient(
         val config = RelayFleetStore.get(app).config.value
         val base = config.relayApiBase.trimEnd('/')
         val key = config.accessKey.trim().trimEnd('%').trim()
-        if (key.length < 16) return@withContext true
+        if (key.length < 16 || base.isBlank()) return@withContext true
         runCatching {
             val scope = sha256(base).take(24)
             upload(repository, base, key, scope)
@@ -81,7 +81,7 @@ internal class TreasurySyncClient(
         val config = RelayFleetStore.get(app).config.value
         val base = config.relayApiBase.trimEnd('/')
         val key = config.accessKey.trim().trimEnd('%').trim()
-        if (key.length < 16) return@withContext TreasuryAssetFetchResult("unavailable", item)
+        if (key.length < 16 || base.isBlank()) return@withContext TreasuryAssetFetchResult("unavailable", item)
         runCatching {
             val created = request(
                 base, key, "treasury/assets/requests", "POST",

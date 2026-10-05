@@ -75,7 +75,7 @@ export class SecretStore {
     } catch (error) {
       // 只有确定不存在才是空值；锁屏、服务/IPC/数据库错误不能触发空凭据迁移或清理。
       if ((error as BusinessError).code === asset.ErrorCode.NOT_FOUND) return '';
-      throw error;
+      throw error as Error;
     }
   }
 

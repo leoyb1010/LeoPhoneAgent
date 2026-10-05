@@ -67,6 +67,7 @@ class RelayFleetStore private constructor(context: Context) {
 
         internal fun normalizeBase(raw: String): String {
             val value = raw.trim().trimEnd('/')
+            require(value.isNotEmpty()) { RelayFleetConfig.NOT_CONFIGURED_MESSAGE }
             val url = java.net.URI(value)
             require(url.scheme.equals("https", ignoreCase = true) && !url.host.isNullOrBlank()) {
                 "中继地址必须是有效的 HTTPS URL"

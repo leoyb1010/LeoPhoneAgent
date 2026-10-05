@@ -9,7 +9,7 @@
 name: LeoPhoneAgent Quality
 on:
   push:
-    branches: [main, audit/five-round-product-20261004, fix/audit-hardening-20260930, fix/mobile-model-management-20261003, feat/paperclip-server-workspace]
+    branches: [main]
     # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
     # 否则改中继/发布脚本 CI 完全不看,等于没有。
     paths:
@@ -195,7 +195,8 @@ jobs:
   native-model-audit:
     name: Native model UI (${{ matrix.label }}, ${{ matrix.device }})
     # Test-only fixtures, no app signing, credentials, submodules, or releases.
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/fix/mobile-model-management-20261003' || github.ref == 'refs/heads/audit/five-round-product-20261004'
+    # Three macOS simulator legs (35-45 min each): run on demand only.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: ${{ matrix.timeout }}
     env:

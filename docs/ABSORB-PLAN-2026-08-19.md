@@ -1,5 +1,7 @@
 # 吸收方案（完整合并版）
 
+> 状态：已归档（历史规划），当前进度见 README / CHANGELOG。
+
 日期：2026-08-19  
 对象：自用 LeoPhoneAgent（iOS 1.23.1 / Android alpha.5 / Mac 1.73.0）  
 合并自：上游 OpenMinis 对账、民间高星补扫、上一版「只补缺口」

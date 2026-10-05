@@ -1,0 +1,48 @@
+#!/bin/sh
+# Tracked pre-commit hook. Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Only staged changes under src/mac/leophone/ run that project's lint
+# (`pnpm -C src/mac/leophone lint`, i.e. oxlint over the working tree).
+# Every other change passes straight through. A missing/broken pnpm or an
+# uninstalled src/mac/leophone/node_modules prints a warning and does not block.
+
+LEOPHONE_DIR="src/mac/leophone"
+
+if ! git diff --cached --name-only -- "$LEOPHONE_DIR" | grep -q .; then
+  exit 0
+fi
+
+# A working pnpm: prefer the newest nvm Node that ships one (leophone needs
+# Node >= 24), then whatever is on PATH. A broken shim (e.g. exit 126) is skipped.
+PNPM=""
+PNPM_PATH="$PATH"
+for bin in $(ls -1d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -rV 2>/dev/null); do
+  if [ -x "$bin/pnpm" ] && PATH="$bin:$PATH" "$bin/pnpm" --version >/dev/null 2>&1; then
+    PNPM="$bin/pnpm"
+    PNPM_PATH="$bin:$PATH"
+    break
+  fi
+done
+if [ -z "$PNPM" ]; then
+  candidate="$(command -v pnpm 2>/dev/null)"
+  if [ -n "$candidate" ] && "$candidate" --version >/dev/null 2>&1; then
+    PNPM="$candidate"
+  fi
+fi
+
+if [ -z "$PNPM" ]; then
+  echo "pre-commit: warning: no working pnpm found; skipped $LEOPHONE_DIR lint." >&2
+  exit 0
+fi
+if [ ! -d "$LEOPHONE_DIR/node_modules" ]; then
+  echo "pre-commit: warning: $LEOPHONE_DIR/node_modules missing (run pnpm install there); skipped lint." >&2
+  exit 0
+fi
+
+echo "pre-commit: staged changes in $LEOPHONE_DIR -> pnpm lint"
+if ! PATH="$PNPM_PATH" "$PNPM" -C "$LEOPHONE_DIR" lint; then
+  echo "pre-commit: $LEOPHONE_DIR lint failed; fix it or commit with --no-verify knowingly." >&2
+  exit 1
+fi
+exit 0

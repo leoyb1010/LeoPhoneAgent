@@ -2,7 +2,7 @@
 
 日期：2026-08-26  
 状态：分析稿，未授权写功能代码  
-基线 checkout：`/Users/leoyuan/Documents/日常 2/LeoPhoneAgent`  
+基线 checkout：开发 Mac 上的本仓库主 checkout  
 基线提交：`cc033829` `feat(android): ship alpha.13 CLI connection bridge`  
 远端：`origin/main` 对齐，ahead/behind `0/0`  
 对照输入：用户提供的「完整升级施工 Prompt」+ 仓库现况 + `docs/ABSORB-PLAN-2026-08-19.md` + `docs/ANDROID-OPTIMIZATION-PLAN-2026-08.md` + `docs/COPY-TABLE-2026-08-19.md`

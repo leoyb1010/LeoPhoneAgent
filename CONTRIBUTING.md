@@ -13,11 +13,18 @@ in the [LeoPhoneAgent repository](https://github.com/leoyb1010/LeoPhoneAgent).
 - Explain any new entitlement, background mode, external service or collected data.
 - For upstream imports, follow [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md).
 
+## Git hooks
+
+Enable the tracked hooks once per clone with `git config core.hooksPath .githooks`.
+`.githooks/pre-commit` runs `pnpm -C src/mac/leophone lint` only when staged
+changes touch `src/mac/leophone/`; other changes pass through, and a missing
+pnpm only prints a warning.
+
 ## Verification
 
 For iOS changes, build the generic device target and state whether signing was
-enabled. Changes that touch iSH, FFmpeg, LAME or the rootfs must rebuild the
-affected native artifacts. Include device/OS details for runtime bugs.
+enabled. Changes that touch iSH, FFmpeg or the rootfs must rebuild the affected
+native artifacts. Include device/OS details for runtime bugs.
 
 Android Standard and Power are active deliverables. Before changing or
 publishing them, read the root README's

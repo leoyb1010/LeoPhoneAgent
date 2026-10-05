@@ -150,7 +150,7 @@ npm run build
 - Android：`MinisApp.kt`、Room DAO/Repository、分享接收与暂存清理、Agent tool schema/executor、导航/首页入口、`ui/treasury`、WorkManager/capture/file/network policy、三语言资源和测试。
 - iOS：`Agent/Artifacts/ArtifactTrayView.swift`、`Views/CollectionsView.swift`。
 - Mac：`server/index.ts`、数据库导出、`treasury.routes.ts`、capture policy/test、`CollectionsMirror.tsx`。
-- 文档：本报告、总施工规范 Phase 2 证据链接、`.ui-pipeline` 三份 UI 证据。
+- 文档：本报告、总施工规范 Phase 2 证据链接、三份 UI 证据（`.ui-pipeline/` 截图为本机证据，未入库）。
 
 ## 下一阶段
 

@@ -1,3 +1,5 @@
+import { LOCAL_API_ROOT, LOCAL_MACHINE_LABELS } from './RelayLocal';
+
 export class RelayDiscoveredMachine {
   name: string = '';
   online: boolean = true;
@@ -18,8 +20,9 @@ export class HarnessKind {
   name: string = '';
 }
 
-export const DEFAULT_API_ROOT =
-  'https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api';
+/** 本机未跟踪配置注入（RelayLocal.ets）；公开仓库为空，即「未配置中继地址」。 */
+export const DEFAULT_API_ROOT: string = LOCAL_API_ROOT;
+export const RELAY_NOT_CONFIGURED = '未配置中继地址';
 export const PAIR_PREFIX = 'leoagent-body:v1|';
 export const PAIR_PREFIX_V2 = 'leoagent-body:v2|';
 
@@ -29,6 +32,9 @@ export function normalizeApiRoot(raw: string): string {
 
 export function requireHttpsRoot(raw: string): string {
   const root = normalizeApiRoot(raw);
+  if (root.length === 0) {
+    throw new Error(RELAY_NOT_CONFIGURED);
+  }
   if (!root.toLowerCase().startsWith('https://')) {
     throw new Error('中继根必须是 https://');
   }
@@ -75,14 +81,11 @@ export function sanitizeMachine(raw: string): string {
 }
 
 export function displayName(machine: string): string {
-  if (machine === 'LeoyuandeMacBook-Pro-2') {
-    return 'MacBook Pro';
-  }
-  if (machine === 'LeodeMac-mini-2') {
-    return 'Mac mini · cortex';
-  }
-  if (machine === 'LeoMac-Studio-2') {
-    return 'Mac Studio';
+  for (let i = 0; i < LOCAL_MACHINE_LABELS.length; i++) {
+    const row = LOCAL_MACHINE_LABELS[i];
+    if (row.length >= 2 && row[0] === machine) {
+      return row[1];
+    }
   }
   return machine;
 }
