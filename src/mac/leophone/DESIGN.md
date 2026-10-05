@@ -486,6 +486,15 @@ Depth rules:
 
 Desktop and wide Web workspace content uses independent conversation, bottom terminal, and Side Pane frames. The conversation frame contains WorkspaceHeader and conversation; the optional terminal has its own frame below it, and Side Pane owns its tab bar. Frames use their own background and border, with 4px resizable gaps matching the macOS outer inset. Resize handles keep a transparent 4px hit area and show a 2px tertiary foreground (`foreground-subtlest/50`) line on hover, focus or drag. The indicator extends along the panel edge, inset by the panel radius at both ends, with rounded ends and no mask. Layout frames do not count toward content radius levels. Mobile remote control retains its single-column and drawer presentation.
 
+## Paperclip workspace
+
+The Paperclip server workspace (`packages/ui/src/paperclip/`, styles in `workspace.css`) follows the upstream Paperclip layout: company navigation, a central conversation, and a task property inspector.
+
+- Reuse the shared semantic tokens (`--color-sidebar`, `--color-surface-hover`, `--color-selected`, `--color-input*`, `--color-foreground-subtle(st)`, `--color-success` / `--color-warning` / `--color-destructive` for status dots). The only local token is `--pc-human-fill` (a mix of `--color-icon-blue` and black) for the operator's own message bubbles; do not add others without a system reason.
+- Breakpoints: above 1180px the inspector is a fixed 276px side panel; at 1180px and below it is not mounted and opens on demand in a dialog (only one inspector instance exists at a time). At 800px and below the company navigation also moves into a closable, focus-trapped dialog so the conversation and composer keep the full width.
+- Copy is intentionally Simplified Chinese only and does not go through `ZCodeIntlProvider`: the workspace is a Chinese client for a self-hosted server and mirrors the iOS app's wording. Keep labels short enough for the narrow layouts above.
+- Motion is limited to panel, message, and button state changes and is disabled under `prefers-reduced-motion`.
+
 ## Responsive Behavior
 
 The product is desktop-first, but UI must remain functional on smaller screens.

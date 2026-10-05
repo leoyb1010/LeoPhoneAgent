@@ -8,6 +8,17 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const folder = await mkdtemp(join(tmpdir(), "paperclip-transport-"));
 try {
+  // 传输边界只依赖共享包中的 IPC channel 与无依赖的协议规则；用最小入口代替整个 shared 包。
+  const shared = join(folder, "shared.ts");
+  await writeFile(join(folder, "package.json"), '{"type":"module"}');
+  await writeFile(
+    shared,
+    [
+      `export * from ${JSON.stringify(resolve(root, "packages/shared/src/channels.ts"))};`,
+      `export * from ${JSON.stringify(resolve(root, "packages/shared/src/paperclipProtocol.ts"))};`,
+      "",
+    ].join("\n"),
+  );
   const config = join(folder, "tsconfig.json");
   await writeFile(
     config,
@@ -17,12 +28,13 @@ try {
         module: "nodenext",
         moduleResolution: "nodenext",
         noEmit: true,
+        allowImportingTsExtensions: true,
         strict: true,
         skipLibCheck: true,
         noUncheckedIndexedAccess: true,
         types: ["node"],
         typeRoots: [resolve(root, "node_modules/@types")],
-        paths: { "@zcode/shared": [resolve(root, "packages/shared/src/channels.ts")] },
+        paths: { "@zcode/shared": [shared] },
       },
       files: [resolve(root, "packages/desktop/src/main/paperclip/transport.ts")],
     }),

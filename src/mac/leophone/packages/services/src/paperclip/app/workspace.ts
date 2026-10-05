@@ -5,11 +5,7 @@ import type {
   PaperclipDetail,
   PaperclipSnapshot,
 } from "../contract.js";
-import {
-  creationRetryPermitted,
-  normalizePaperclipOrigin,
-  paperclipIdentityKey,
-} from "../domain/identity.js";
+import { normalizePaperclipOrigin, paperclipIdentityKey } from "../domain/identity.js";
 import { emptyPaperclipSnapshot, companySchema, sessionSchema } from "./responses.js";
 import {
   buildPaperclipMutation,
@@ -23,14 +19,16 @@ import {
   readBoundLog,
   downloadBoundAttachment,
 } from "./reads.js";
-import { receiptsFor, updateReceipt, pendingReceipt } from "./receipts.js";
-import { OperationError, requestPaperclip, assertPaperclipReady } from "./api.js";
+import { receiptsFor, updateReceipt, pendingReceipt, preSendRefusal } from "./receipts.js";
+import { OperationError, requestPaperclip, assertPaperclipReady, paperclipLog as log } from "./api.js";
 import { normalizeStatusCommand, readReconciliation } from "./reconcile.js";
+
 export class PaperclipWorkspace implements IPaperclipWorkspace {
   private state = emptyPaperclipSnapshot();
   private preferences: PaperclipPreferences = { origin: "", companies: {} };
   private listeners = new Set<() => void>();
   private loadedCount = 0;
+  private lastUser: { origin: string; userId: string } | null = null;
   constructor(private readonly port: NativePaperclipPort) {}
   getSnapshot = (): PaperclipSnapshot => this.state;
   subscribe = (listener: () => void): (() => void) => {
@@ -66,6 +64,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
         error instanceof OperationError &&
         error.kind === "signed-out"
       ) {
+        log.warn(undefined, "服务器会话已失效（401），清空当前身份投影");
         generation = this.reset();
       }
       this.publish(generation, {
@@ -108,6 +107,9 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     if (!session.success)
       throw new OperationError("尚未登录，请打开服务器网页登录。", "signed-out");
     const user = session.data.user;
+    if (this.lastUser?.origin === origin && this.lastUser.userId !== user.id)
+      log.info(undefined, "服务器账号已切换，旧账号回执与草稿保持隔离");
+    this.lastUser = { origin, userId: user.id };
     const companies = companySchema
       .array()
       .parse(await this.api("/api/companies?scope=accessible", "GET", undefined, user.id, origin));
@@ -131,6 +133,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
       if (generation !== this.state.generation) return;
       const result = await this.port.signIn({ serverUrl: this.state.origin });
       if (generation !== this.state.generation) return;
+      log.info(undefined, `登录窗口结束 completed=${result.completed}`);
       if (!result.completed) throw new OperationError("登录已取消，可重新打开登录窗口。");
       await this.connect(generation);
     });
@@ -138,6 +141,7 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
   async signOut(): Promise<void> {
     const origin = this.state.origin;
     const generation = this.reset();
+    log.info(undefined, "用户注销服务器会话");
     await this.action(generation, () => this.port.signOut({ serverUrl: origin }));
   }
   async selectCompany(companyId: string): Promise<void> {
@@ -231,25 +235,18 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     const identity = paperclipIdentityKey(origin, user.id, companyId);
     const receipts = { ...this.state.receipts, ...receiptsFor(this.preferences, identity) };
     const previous = receipts[id];
-    if (
-      Object.values(receipts).some((row) => row.state === "unknown") &&
-      !(
-        previous?.state === "unknown" &&
-        previous.kind === command.kind &&
-        "retry" in command &&
-        command.retry &&
-        (command.kind === "create" || previous.targetId === command.issueId)
-      )
-    )
-      throw new OperationError("原提交结果未知，需核对后手动重试。");
-    if (
-      command.kind === "create" &&
-      !creationRetryPermitted(previous?.submittedAt ?? command.firstSubmittedAt)
-    )
-      throw new OperationError(
-        "创建提交已超出 7 天去重窗口或缺少可信时间，请先核对任务列表。草稿已保留。",
-      );
     const receipt = pendingReceipt(command, identity, id, previous?.submittedAt);
+    // 修复审计 P2「发送前被拒锁草稿」：准入拒绝确定未发出，发布 rejected 回执让 UI 回滚 submitted
+    // 并保留原文与请求编号；原回执已是 unknown 的重试不改写，前置拒绝不能证明原提交未被接收。
+    const refusal = preSendRefusal(this.state.busy, receipts, command, previous);
+    if (refusal) {
+      log.warn(undefined, `提交在发送前被拒绝 kind=${command.kind} reason=${refusal.reason}`);
+      if (previous?.state !== "unknown") {
+        const rejected = { ...receipt, state: "rejected" as const, message: refusal.message };
+        this.publish(generation, { receipts: { ...this.state.receipts, [id]: rejected } });
+      }
+      throw new OperationError(refusal.message);
+    }
     await this.action(generation, async () => {
       let sent = false;
       try {

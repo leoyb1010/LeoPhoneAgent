@@ -1,4 +1,5 @@
 export { creationRetryPermitted, paperclipIdentityKey } from "./domain/identity.js";
+export { paperclipApprovalFingerprint } from "./domain/approval.js";
 export interface PaperclipUser {
   id: string;
   name?: string | null;

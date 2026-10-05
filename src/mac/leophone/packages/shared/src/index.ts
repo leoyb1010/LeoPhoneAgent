@@ -28,7 +28,16 @@ export type {
 } from "./protocol.js";
 export type { WorkspacePurpose } from "./workspacePurpose.js";
 export { DEFAULT_LOCALE } from "./protocol.js";
-export { paperclipPreferencesSchema } from "./paperclip.js";
+export {
+  paperclipPreferencesSchema,
+  parsePaperclipOrigin,
+  PAPERCLIP_ID_PATTERN,
+  isPaperclipId,
+  PAPERCLIP_ISSUE_STATUSES,
+  PAPERCLIP_ISSUE_PRIORITIES,
+  PAPERCLIP_CREATE_RETRY_WINDOW_DAYS,
+  paperclipCreateRetryPermitted,
+} from "./paperclip.js";
 export type { PaperclipPreferences, NativePaperclipPort } from "./paperclip.js";
 export { ZCODE_VERSION, ZCODE_COMMIT, ZCODE_BUILD_TIME } from "./version.js";
 export type { HelloMessage, HelloAckMessage } from "./handshake.js";

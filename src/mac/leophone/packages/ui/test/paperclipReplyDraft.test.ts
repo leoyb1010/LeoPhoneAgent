@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { paperclipIdentityKey } from "../../services/src/paperclip/domain/identity.js";
+import { paperclipIdentityKey } from "@zcode/services/paperclip";
 import { clearConfirmedPaperclipDraft } from "../src/paperclip/replyDraftConfirmation.js";
 const binding = { serverUrl: "https://server.example", companyId: "company-1", userId: "user-1" };
 const identity = paperclipIdentityKey(binding.serverUrl, binding.userId, binding.companyId);

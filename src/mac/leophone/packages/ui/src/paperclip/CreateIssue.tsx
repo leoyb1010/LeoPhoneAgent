@@ -4,6 +4,7 @@ import type { IPaperclipWorkspace, PaperclipSnapshot } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { Textarea } from "@/components/ui/textarea.js";
+import { PAPERCLIP_CREATE_RETRY_WINDOW_DAYS } from "@zcode/shared";
 import { usePaperclipDraft } from "./usePaperclipDraft.js";
 
 export function PaperclipCreateIssue({
@@ -142,7 +143,7 @@ export function PaperclipCreateIssue({
           >
             <p className="text-warning">
               {creationRetryAllowed
-                ? "提交结果待核对。重试会保留原请求编号；创建去重期限为首次提交后 7 天。"
+                ? `提交结果待核对。重试会保留原请求编号；首次提交后 ${PAPERCLIP_CREATE_RETRY_WINDOW_DAYS} 天内可以重试。`
                 : "原请求已超出去重期限或缺少可信时间，不能重发。任务内容已保留，请先核对服务器。"}
             </p>
             <div className="flex flex-wrap gap-2">

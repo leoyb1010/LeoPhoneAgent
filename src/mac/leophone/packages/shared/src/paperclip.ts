@@ -39,3 +39,14 @@ export interface NativePaperclipPort {
   getPreferences(): Promise<PaperclipPreferences>;
   setPreferences(input: PaperclipPreferences): Promise<void>;
 }
+
+// 协议规则（origin、标识、枚举、创建重试窗口）的唯一来源，见 paperclipProtocol.ts。
+export {
+  parsePaperclipOrigin,
+  PAPERCLIP_ID_PATTERN,
+  isPaperclipId,
+  PAPERCLIP_ISSUE_STATUSES,
+  PAPERCLIP_ISSUE_PRIORITIES,
+  PAPERCLIP_CREATE_RETRY_WINDOW_DAYS,
+  paperclipCreateRetryPermitted,
+} from "./paperclipProtocol.js";

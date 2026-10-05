@@ -1,5 +1,10 @@
 import { healthSchema } from "./responses.js";
 import type { NativePaperclipPort } from "@zcode/shared";
+import { createServiceLogger } from "../../logger/serviceLogger.js";
+
+// 工作台服务运行在 renderer：关闭依赖 Node 环境变量的 debug 判定。
+// 日志只记录事件、方法与错误类型，不含服务器地址、邮箱、正文、Cookie 或 token。
+export const paperclipLog = createServiceLogger("paperclip", { isDebugEnabled: false });
 export class OperationError extends Error {
   constructor(
     message: string,
@@ -26,7 +31,11 @@ export async function requestPaperclip(
       body,
       expectedUserId: path === "/api/health" ? undefined : userId,
     });
-  } catch {
+  } catch (error) {
+    paperclipLog.error(
+      undefined,
+      `原生传输异常 method=${method} error=${error instanceof Error ? error.name : typeof error}`,
+    );
     throw new OperationError(
       method === "GET"
         ? "无法连接服务器，请检查网络后刷新。"

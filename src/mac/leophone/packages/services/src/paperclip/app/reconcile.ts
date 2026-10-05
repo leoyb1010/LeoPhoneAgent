@@ -1,16 +1,12 @@
 import type { PaperclipMutationCommand } from "../contract.js";
-import type { PaperclipStoredReceipt } from "@zcode/shared";
+import { PAPERCLIP_ISSUE_STATUSES, type PaperclipStoredReceipt } from "@zcode/shared";
 import { paperclipId } from "../domain/identity.js";
 import { issueSchema } from "./responses.js";
 export function normalizeStatusCommand(
   command: PaperclipMutationCommand,
 ): PaperclipMutationCommand {
   if (command.kind !== "status") return command;
-  if (
-    !["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"].includes(
-      command.status,
-    )
-  )
+  if (!(PAPERCLIP_ISSUE_STATUSES as readonly string[]).includes(command.status))
     throw new Error("请选择有效任务状态。");
   if (command.status !== "blocked") return { ...command, unblockAction: undefined };
   const action = command.unblockAction?.trim();

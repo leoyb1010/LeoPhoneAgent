@@ -6,22 +6,24 @@ import {
 } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
-import { paperclipIssueStatuses, paperclipStatus } from "./labels.js";
+import { PAPERCLIP_ISSUE_STATUSES } from "@zcode/shared";
+import { paperclipPriority, paperclipStatus } from "./labels.js";
 export type PaperclipDecision = { title: string; command: PaperclipCommand; preview?: string };
 export function PaperclipInspector({
   service,
   snapshot,
   invoke,
   setDecision,
-  note,
+  notes,
   setNote,
 }: {
   service: IPaperclipWorkspace;
   snapshot: PaperclipSnapshot;
   invoke: (action: () => Promise<void>) => Promise<boolean>;
   setDecision: (decision: PaperclipDecision) => void;
-  note: string;
-  setNote: (note: string) => void;
+  /** 审批决定说明按审批 id 分开保存，避免一条审批的说明串到另一条。 */
+  notes: Record<string, string>;
+  setNote: (approvalId: string, note: string) => void;
 }) {
   const detail = snapshot.detail!;
   const assignee = snapshot.agents.find((agent) => agent.id === detail.issue.assigneeAgentId);
@@ -65,7 +67,7 @@ export function PaperclipInspector({
               })
             }
           >
-            {paperclipIssueStatuses.map((status) => (
+            {PAPERCLIP_ISSUE_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {paperclipStatus(status)}
               </option>
@@ -80,10 +82,7 @@ export function PaperclipInspector({
         </div>
         <div className="flex items-center gap-3">
           <span className="w-16 shrink-0 text-foreground-subtle">优先级</span>
-          <span>
-            {{ urgent: "紧急", high: "高", medium: "中", low: "低" }[detail.issue.priority] ||
-              detail.issue.priority}
-          </span>
+          <span>{paperclipPriority(detail.issue.priority)}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="w-16 shrink-0 text-foreground-subtle">任务编号</span>
@@ -113,9 +112,9 @@ export function PaperclipInspector({
                 <Input
                   aria-label="决定说明"
                   placeholder="决定说明（可选）"
-                  value={note}
+                  value={notes[approval.id] ?? ""}
                   disabled={snapshot.busy || snapshot.ready === false}
-                  onChange={(event) => setNote(event.target.value)}
+                  onChange={(event) => setNote(approval.id, event.target.value)}
                 />
                 <div className="flex gap-2">
                   {[true, false].map((approve) => (
@@ -132,7 +131,7 @@ export function PaperclipInspector({
                             issueId: detail.issue.id,
                             approvalId: approval.id,
                             approve,
-                            note,
+                            note: notes[approval.id] ?? "",
                             expectedApproval: paperclipApprovalFingerprint(approval),
                           },
                         })

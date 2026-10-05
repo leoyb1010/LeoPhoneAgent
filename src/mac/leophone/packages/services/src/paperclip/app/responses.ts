@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { PaperclipSnapshot } from "../contract.js";
 
 const id = z.string().min(1);
-export const userSchema = z.object({
+const userSchema = z.object({
   id,
   name: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
@@ -64,7 +64,6 @@ export const logSchema = z.object({
   content: z.string(),
   nextOffset: z.number().int().nonnegative().safe(),
 });
-export const cancelledRunSchema = z.object({ id, status: z.literal("cancelled") });
 
 export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({
   generation: 0,

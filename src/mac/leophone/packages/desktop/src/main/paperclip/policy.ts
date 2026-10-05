@@ -1,5 +1,7 @@
+import { parsePaperclipOrigin, PAPERCLIP_ID_PATTERN } from "@zcode/shared";
+
 /** Paperclip 原生边界：此处不读取 Cookie，也不允许 renderer 自定义认证头。 */
-export interface NativePaperclipRequest {
+interface NativePaperclipRequest {
   serverUrl: string;
   method: "GET" | "POST" | "PATCH";
   path: string;
@@ -7,34 +9,26 @@ export interface NativePaperclipRequest {
   expectedUserId?: string;
 }
 
+// origin 规则以 @zcode/shared 的协议真相源为准；此处只保留 Main 边界的长度限制与中文错误文案。
 export function canonicalPaperclipOrigin(value: unknown): string {
   if (typeof value !== "string" || value.length > 2048) throw new Error("请输入有效的服务器地址");
-  let url: URL;
-  try {
-    url = new URL(value.trim());
-  } catch {
-    throw new Error("服务器地址格式不正确");
-  }
-  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+  const parsed = parsePaperclipOrigin(value);
+  if ("origin" in parsed) return parsed.origin;
+  if (parsed.rejection === "malformed") throw new Error("服务器地址格式不正确");
+  if (parsed.rejection === "insecure")
     throw new Error("远程服务器必须使用 HTTPS；HTTP 仅限本机开发");
-  }
-  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
-    throw new Error("服务器地址只能包含协议、主机和端口，不能含凭据或子路径");
-  }
-  return url.origin;
+  throw new Error("服务器地址只能包含协议、主机和端口，不能含凭据或子路径");
 }
 
-const id = "[A-Za-z0-9_-]+";
+const id = PAPERCLIP_ID_PATTERN;
+// 白名单与 services/src/paperclip 实际发出的请求一一对应（审计 P3：原表多开放了 12 条未使用路由）。
+// 新增服务端调用时必须同步扩充此表与 policy.test.ts 中的路由清单。
 const getPaths = [
   /^\/api\/(health|companies|auth\/get-session)$/,
-  new RegExp(`^/api/companies/${id}/(issues|agents|approvals|heartbeat-runs|live-runs)$`),
-  new RegExp(
-    `^/api/issues/${id}(?:/(comments|runs|live-runs|active-run|execution|approvals|documents|attachments|work-products))?$`,
-  ),
-  new RegExp(`^/api/issues/${id}/documents/${id}$`),
-  new RegExp(`^/api/heartbeat-runs/${id}(?:/(log|events))?$`),
-  new RegExp(`^/api/approvals/${id}(?:/(comments|issues))?$`),
+  new RegExp(`^/api/companies/${id}/(issues|agents)$`),
+  new RegExp(`^/api/issues/${id}(?:/(comments|runs|approvals|attachments))?$`),
+  new RegExp(`^/api/heartbeat-runs/${id}(?:/log)?$`),
+  new RegExp(`^/api/approvals/${id}$`),
 ];
 const postPaths = [
   new RegExp(`^/api/companies/${id}/issues$`),

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { matchesPaperclipReplyConfirmation } from "./replyDraftConfirmation.js";
 import { createUuid } from "@zcode/shared";
+import { logger } from "@/logger.js";
 import {
   creationRetryPermitted,
   paperclipIdentityKey,
@@ -61,7 +62,12 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
     const value = fresh();
     current.current = value;
     setDraft(value);
-    localStorage.removeItem(key);
+    // 与 save 一致：存储不可用（隐私模式、配额、权限）时不能让清草稿抛错打断已确认的流程。
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* 存储不可用时仅清理当前窗口草稿。 */
+    }
   };
   const submit = () => {
     const value = {
@@ -74,7 +80,10 @@ export function usePaperclipDraft(snapshot: PaperclipSnapshot, issueId = "create
   };
   const rejected = (previouslySubmitted: boolean) => {
     // 重试被拒绝不证明原提交未被接收，不能解锁未知内容或延长首次计时。
-    if (!previouslySubmitted) update({ submitted: false, submittedAt: null });
+    if (previouslySubmitted) return;
+    // 首次提交在发送前被拒（服务层发布 rejected 回执）：回滚为可编辑，保留正文与请求编号。
+    logger.warn("[paperclip] 提交未发出，草稿已恢复为可编辑");
+    update({ submitted: false, submittedAt: null });
   };
   return {
     draft,

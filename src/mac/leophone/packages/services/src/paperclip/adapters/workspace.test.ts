@@ -130,10 +130,10 @@ test("a lost mutation response stays unknown and refresh never retries the write
   );
   assert.equal(item.writes(), 1);
 });
-test("creation replay cannot exceed the server's seven-day retention window", async () => {
+test("creation replay stays inside the six-day client window (server keeps keys 7 days)", async () => {
   const item = fixture();
   await item.workspace.configure("https://example.com");
-  for (const firstSubmittedAt of [NaN, Date.now() - 7 * 86400000, Date.now() + 100000]) {
+  for (const firstSubmittedAt of [NaN, Date.now() - 6 * 86400000, Date.now() + 100000]) {
     await assert.rejects(
       item.workspace.command({
         kind: "create",

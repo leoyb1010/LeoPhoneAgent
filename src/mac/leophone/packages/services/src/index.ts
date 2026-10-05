@@ -8,8 +8,11 @@ export type {
   PaperclipDetail,
 } from "./paperclip/contract.js";
 export { createPaperclipWorkspace } from "./paperclip/adapters/createWorkspace.js";
-export { creationRetryPermitted, paperclipIdentityKey } from "./paperclip/contract.js";
-export { paperclipApprovalFingerprint } from "./paperclip/domain/approval.js";
+export {
+  creationRetryPermitted,
+  paperclipIdentityKey,
+  paperclipApprovalFingerprint,
+} from "./paperclip/contract.js";
 export {
   IModelSelectionService,
   IProviderSettingsService,

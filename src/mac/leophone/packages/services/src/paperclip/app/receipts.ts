@@ -1,5 +1,40 @@
-import type { PaperclipPreferences, PaperclipStoredReceipt } from "@zcode/shared";
+import {
+  PAPERCLIP_CREATE_RETRY_WINDOW_DAYS,
+  type PaperclipPreferences,
+  type PaperclipStoredReceipt,
+} from "@zcode/shared";
 import type { PaperclipReceipt, PaperclipMutationCommand } from "../contract.js";
+import { creationRetryPermitted } from "../domain/identity.js";
+
+/**
+ * 发送前准入（无 IO）：返回的拒绝都发生在任何网络请求之前，调用方据此发布 rejected 回执。
+ * 未知回执阻止同身份的新写入，只有沿用原请求编号的手动重试可以通过；创建重试受客户端窗口限制。
+ */
+export function preSendRefusal(
+  busy: boolean,
+  receipts: Record<string, PaperclipReceipt>,
+  command: PaperclipMutationCommand,
+  previous: PaperclipReceipt | undefined,
+): { message: string; reason: "busy" | "unknown-pending" | "retry-window" } | null {
+  if (busy) return { message: "正在同步，请稍后重试。", reason: "busy" };
+  const retryingUnknown =
+    previous?.state === "unknown" &&
+    previous.kind === command.kind &&
+    "retry" in command &&
+    command.retry &&
+    (command.kind === "create" || previous.targetId === command.issueId);
+  if (Object.values(receipts).some((row) => row.state === "unknown") && !retryingUnknown)
+    return { message: "原提交结果未知，需核对后手动重试。", reason: "unknown-pending" };
+  if (
+    command.kind === "create" &&
+    !creationRetryPermitted(previous?.submittedAt ?? command.firstSubmittedAt)
+  )
+    return {
+      message: `创建提交已超出 ${PAPERCLIP_CREATE_RETRY_WINDOW_DAYS} 天重试窗口或缺少可信时间，请先核对任务列表。草稿已保留。`,
+      reason: "retry-window",
+    };
+  return null;
+}
 
 export function pendingReceipt(
   command: PaperclipMutationCommand,

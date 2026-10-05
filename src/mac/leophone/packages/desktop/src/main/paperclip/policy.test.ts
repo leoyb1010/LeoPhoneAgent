@@ -124,3 +124,55 @@ test("all writes require the task-bound human identity", () => {
     /操作者/,
   );
 });
+
+test("IPC route whitelist matches exactly the routes the paperclip service calls", () => {
+  const serverUrl = "https://example.com";
+  const allow = (method: "GET" | "POST" | "PATCH", path: string) =>
+    validatePaperclipRequest({
+      serverUrl,
+      method,
+      path,
+      ...(method === "GET" ? {} : { body: {}, expectedUserId: "u1" }),
+    });
+  // 与 services/src/paperclip/app 中 api()/requestPaperclip 的实际调用一一对应。
+  const used: Array<["GET" | "POST" | "PATCH", string]> = [
+    ["GET", "/api/health"],
+    ["GET", "/api/auth/get-session"],
+    ["GET", "/api/companies?scope=accessible"],
+    ["GET", "/api/companies/c1/issues?limit=100&offset=0"],
+    ["GET", "/api/companies/c1/agents"],
+    ["GET", "/api/issues/i1"],
+    ["GET", "/api/issues/i1/comments?order=asc"],
+    ["GET", "/api/issues/i1/runs"],
+    ["GET", "/api/issues/i1/approvals"],
+    ["GET", "/api/issues/i1/attachments"],
+    ["GET", "/api/heartbeat-runs/r1"],
+    ["GET", "/api/heartbeat-runs/r1/log?offset=0&limitBytes=64000"],
+    ["GET", "/api/approvals/a1"],
+    ["POST", "/api/companies/c1/issues"],
+    ["POST", "/api/issues/i1/comments"],
+    ["POST", "/api/heartbeat-runs/r1/cancel"],
+    ["POST", "/api/approvals/a1/approve"],
+    ["POST", "/api/approvals/a1/reject"],
+    ["PATCH", "/api/issues/i1"],
+  ];
+  for (const [method, path] of used) assert.doesNotThrow(() => allow(method, path), path);
+  // 旧白名单开放但服务层从未调用的路由必须被拒绝。
+  const unused: Array<["GET" | "POST" | "PATCH", string]> = [
+    ["GET", "/api/companies/c1/approvals"],
+    ["GET", "/api/companies/c1/heartbeat-runs"],
+    ["GET", "/api/companies/c1/live-runs"],
+    ["GET", "/api/issues/i1/live-runs"],
+    ["GET", "/api/issues/i1/active-run"],
+    ["GET", "/api/issues/i1/execution"],
+    ["GET", "/api/issues/i1/documents"],
+    ["GET", "/api/issues/i1/work-products"],
+    ["GET", "/api/issues/i1/documents/d1"],
+    ["GET", "/api/heartbeat-runs/r1/events"],
+    ["GET", "/api/approvals/a1/comments"],
+    ["GET", "/api/approvals/a1/issues"],
+    ["POST", "/api/issues/i1"],
+    ["PATCH", "/api/companies/c1/issues"],
+  ];
+  for (const [method, path] of unused) assert.throws(() => allow(method, path), /尚未开放/, path);
+});

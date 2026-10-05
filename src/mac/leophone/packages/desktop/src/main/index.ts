@@ -1943,7 +1943,7 @@ app.whenReady().then(async () => {
   installLeoSessionGuard();
   // [leo-link] 「连接手机」面板经主进程转发到本机 Leo 接口。
   registerLeoLinkIpc();
-  registerPaperclipIpc();
+  registerPaperclipIpc({ logger });
   registerPaperclipConfigIpc(mainSettingService);
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {

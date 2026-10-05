@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowUp, ArrowLeft, PanelRight, MessageSquare, Users, FileText } from "lucide-react";
 import type { IPaperclipWorkspace, PaperclipSnapshot } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
@@ -8,6 +8,15 @@ import { usePaperclipDraft } from "./usePaperclipDraft.js";
 import { paperclipStatus } from "./labels.js";
 import { useDialogFocusReturn } from "./useDialogFocusReturn.js";
 import { PaperclipInspector, type PaperclipDecision } from "./Inspector.js";
+
+// 与 workspace.css 中隐藏 .pc-inspector 的断点一致（max-width: 1180px）。
+const NARROW_INSPECTOR_QUERY = "(max-width: 1180px)";
+function subscribeNarrow(onChange: () => void): () => void {
+  const query = window.matchMedia(NARROW_INSPECTOR_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const isNarrow = () => window.matchMedia(NARROW_INSPECTOR_QUERY).matches;
 
 export function PaperclipIssueDetail({
   service,
@@ -26,9 +35,15 @@ export function PaperclipIssueDetail({
     detail.issue.id,
   );
   const [decision, setDecision] = useState<PaperclipDecision | null>(null);
-  const [note, setNote] = useState("");
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [unblockAction, setUnblockAction] = useState("");
   const [properties, setProperties] = useState(false);
+  // 修复审计 P3：窄窗时侧栏只被 CSS 隐藏仍挂载，与弹窗各渲染一份检查器（双份输入状态与焦点目标）。
+  // 现在按断点只挂载一份：宽窗用侧栏，窄窗只在打开弹窗时渲染。
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
+  useEffect(() => {
+    if (!narrow) setProperties(false);
+  }, [narrow]);
   const propertiesFocus = useDialogFocusReturn(
     "[data-pc-inspector-trigger], [data-pc-home-trigger]",
   );
@@ -65,8 +80,8 @@ export function PaperclipIssueDetail({
         setUnblockAction("");
         setDecision(value);
       }}
-      note={note}
-      setNote={setNote}
+      notes={notes}
+      setNote={(approvalId, value) => setNotes((current) => ({ ...current, [approvalId]: value }))}
     />
   );
   return (
@@ -251,13 +266,15 @@ export function PaperclipIssueDetail({
           </div>
         </footer>
       </section>
-      <aside
-        className="pc-inspector shrink-0 overflow-y-auto border-l border-border bg-background-alt px-5 py-5"
-        aria-label="任务属性与运行记录"
-      >
-        {inspector}
-      </aside>
-      <Dialog open={properties} onOpenChange={setProperties}>
+      {!narrow && (
+        <aside
+          className="pc-inspector shrink-0 overflow-y-auto border-l border-border bg-background-alt px-5 py-5"
+          aria-label="任务属性与运行记录"
+        >
+          {inspector}
+        </aside>
+      )}
+      <Dialog open={narrow && properties} onOpenChange={setProperties}>
         <DialogContent className="pc-inspector-dialog p-5" {...propertiesFocus}>
           <DialogTitle className="pr-8 text-ui-lg">任务详情</DialogTitle>
           <DialogDescription className="sr-only">状态、审批、运行记录与附件。</DialogDescription>

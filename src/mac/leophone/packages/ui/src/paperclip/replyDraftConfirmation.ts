@@ -1,6 +1,6 @@
 import type { PaperclipSnapshot } from "@zcode/services";
 type ReplyConfirmation = NonNullable<PaperclipSnapshot["confirmedReply"]>;
-export interface SubmittedPaperclipReply {
+interface SubmittedPaperclipReply {
   body: string;
   draft: string;
   receiptId?: string;

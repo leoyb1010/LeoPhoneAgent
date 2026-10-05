@@ -28,6 +28,7 @@ const deadline = setTimeout(() => {
 let authenticated = false;
 let currentUserId = "fixture-human";
 let attachmentRequests = 0;
+let sessionRequests = 0;
 let stallAttachment = false;
 let attachmentStarted;
 const server = createServer((request, response) => {
@@ -36,12 +37,16 @@ const server = createServer((request, response) => {
     response.setHeader("Set-Cookie", "fixture=pending; Path=/; HttpOnly");
     response.end('<button>Activate</button><script>window.onbeforeunload = (event) => { event.returnValue = false; return false; };</script>');
   } else if (request.url === "/api/auth/get-session") {
+    sessionRequests += 1;
     response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify(authenticated ? { user: { id: currentUserId } } : null));
   } else if (request.url === "/api/auth/sign-out") {
     authenticated = false;
     response.setHeader("Content-Type", "application/json");
     response.end("{}");
+  } else if (request.url === "/api/companies" || request.url === "/api/issues/fixture-issue/comments") {
+    response.setHeader("Content-Type", "application/json");
+    response.end(request.method === "GET" ? "[]" : "{}");
   } else if (request.url === "/api/attachments/fixture-artifact/content") {
     attachmentRequests += 1;
     if (stallAttachment) {
@@ -58,7 +63,9 @@ void app.whenReady().then(async () => {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const origin = "http://127.0.0.1:" + server.address().port;
-    registerPaperclipIpc();
+    const logs = [];
+    const record = (...args) => logs.push(args.map(String).join(" "));
+    registerPaperclipIpc({ logger: { info: record, warn: record, error: record } });
     const ownerPath = join(process.cwd(), "owner.html");
     const owner = new BrowserWindow({
       show: false,
@@ -111,8 +118,23 @@ void app.whenReady().then(async () => {
     assert.deepEqual(await second.completed, { completed: true });
     assert.equal(second.window.isDestroyed(), true, "successful login must also destroy the remote page");
     assert.equal(BrowserWindow.getAllWindows().length, 1);
+
+    // 身份确认合并：5 个并发绑定读取只向服务器查询一次会话；写请求必须新鲜确认。
+    stage = "identity coalescing";
+    const ipcRequest = (method, path) => owner.webContents.executeJavaScript(
+      "window.fixture.request(" + JSON.stringify({ serverUrl: origin, method, path, expectedUserId: "fixture-human", ...(method === "GET" ? {} : { body: {} }) }) + ")",
+    );
+    sessionRequests = 0;
+    await Promise.all([1, 2, 3, 4, 5].map(() => ipcRequest("GET", "/api/companies")));
+    assert.equal(sessionRequests, 1, "concurrent reads must share one identity query");
+    await ipcRequest("POST", "/api/issues/fixture-issue/comments");
+    assert.equal(sessionRequests, 2, "writes must confirm identity freshly");
     await signOut();
     assert.deepEqual(await isolated.cookies.get({ url: origin }), []);
+    sessionRequests = 0;
+    authenticated = true;
+    await ipcRequest("GET", "/api/companies");
+    assert.equal(sessionRequests, 1, "logout must invalidate the cached identity");
 
     // 只控制系统文件选择这一人工等待边界，其余身份、网络和保存均走真实 transport。
     const savedPath = join(process.cwd(), "artifact.txt");
@@ -172,6 +194,10 @@ void app.whenReady().then(async () => {
     await signOut();
     await interrupted;
     await assert.rejects(access(savedPath), { code: "ENOENT" });
+    // 日志可追溯生命周期，但不能出现服务器地址或 Cookie 值。
+    assert.ok(logs.some((line) => line.includes("登录窗口已创建")));
+    assert.ok(logs.some((line) => line.includes("开始注销")));
+    assert.ok(logs.every((line) => !line.includes(origin) && !line.includes("pending")));
     process.stdout.write("real Electron beforeunload, logout, cookies, login reentry and download isolation passed\n");
     clearTimeout(deadline);
     server.closeAllConnections();
@@ -194,9 +220,11 @@ test(
   async () => {
     const folder = await mkdtemp(join(tmpdir(), "paperclip-electron-regression-"));
     try {
-      for (const name of ["transport", "policy", "sessionScope", "channels"]) {
+      for (const name of ["transport", "policy", "sessionScope", "channels", "paperclipProtocol"]) {
         const sourceUrl = new URL(
-          name === "channels" ? "../../../../shared/src/channels.ts" : `./${name}.ts`,
+          ["channels", "paperclipProtocol"].includes(name)
+            ? `../../../../shared/src/${name}.ts`
+            : `./${name}.ts`,
           import.meta.url,
         );
         const source = await readFile(sourceUrl, "utf8");
@@ -205,9 +233,14 @@ test(
             fileName: fileURLToPath(sourceUrl),
             compilerOptions: { target: ts.ScriptTarget.ES2024, module: ts.ModuleKind.ESNext },
           })
-          .outputText.replace(/from ["']@zcode\/shared["']/g, 'from "./channels.js"');
+          .outputText.replace(/from ["']@zcode\/shared["']/g, 'from "./shared.js"');
         await writeFile(join(folder, `${name}.js`), output);
       }
+      // 只暴露边界源码实际使用的共享模块（IPC channel 与无依赖的协议规则），不加载整个 shared 包。
+      await writeFile(
+        join(folder, "shared.js"),
+        'export * from "./channels.js";\nexport * from "./paperclipProtocol.js";\n',
+      );
       await writeFile(join(folder, "package.json"), '{"type":"module"}');
       await writeFile(
         join(folder, "owner.html"),
@@ -219,6 +252,7 @@ test(
 contextBridge.exposeInMainWorld("fixture", {
   signIn: serverUrl => ipcRenderer.invoke("leo:paperclip:sign-in", { serverUrl }),
   signOut: serverUrl => ipcRenderer.invoke("leo:paperclip:sign-out", { serverUrl }),
+  request: input => ipcRenderer.invoke("leo:paperclip:request", input),
   download: serverUrl => ipcRenderer.invoke("leo:paperclip:download", {
     serverUrl, path: "/api/attachments/fixture-artifact/content",
     filename: "artifact.txt", expectedUserId: "fixture-human",

@@ -18,7 +18,24 @@ import {
   validatePaperclipRequest,
 } from "./policy.js";
 
-import { PaperclipSessionScope } from "./sessionScope.js";
+import { PAPERCLIP_DOWNLOAD_TIMEOUT_MS, PaperclipSessionScope } from "./sessionScope.js";
+
+/**
+ * Main 侧日志由调用方注入（index.ts 传入 main logger），本文件保持只依赖 Electron 与策略模块，
+ * 独立传输类型检查和真实 Electron 回归夹具无需加载整个 main 日志链。
+ * 日志只记录事件与状态码，绝不记录 Cookie、token、请求体、邮箱或服务器地址。
+ */
+interface PaperclipTransportLogger {
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+}
+const silentLogger: PaperclipTransportLogger = {
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
+let log: PaperclipTransportLogger = silentLogger;
 
 type Login = { window: BrowserWindow; result: Promise<{ completed: boolean }>; cancel: () => void };
 const logins = new Map<string, Login>();
@@ -64,6 +81,8 @@ function sessionFor(origin: string): Session {
   const isolated = session.fromPartition(partition);
   isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   isolated.setPermissionCheckHandler(() => false);
+  // Cookie 变化可能意味着登录、注销或切换账号；身份确认缓存必须立即失效。
+  isolated.cookies.on("changed", () => scopeFor(origin).invalidateIdentity());
   sessions.set(origin, isolated);
   return isolated;
 }
@@ -105,10 +124,12 @@ async function request(
 ) {
   const scope = scopeFor(origin);
   const epoch = scope.generation;
+  const pathname = new URL(path, origin).pathname;
   return scope.run(async (signal) => {
-    if (expectedUserId) await requireCurrentUser(origin, expectedUserId, epoch);
+    // 读请求可复用短缓存的身份确认；写请求必须新鲜确认（只可共享进行中的查询）。
+    if (expectedUserId) await requireCurrentUser(origin, expectedUserId, epoch, method !== "GET");
     // 请求单次发送：网络断开或5xx不能证明写入失败，由业务receipt保留未知结果。
-    const response = await sessionFor(origin).fetch(new URL(path, origin).href, {
+    const response = await fetchOnce(origin, new URL(path, origin).href, method, {
       method,
       credentials: "include",
       redirect: "manual",
@@ -121,8 +142,15 @@ async function request(
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal,
     });
-    if (response.status >= 300 && response.status < 400)
+    if (response.status >= 300 && response.status < 400) {
+      log.warn(`[paperclip] 已拦截服务器重定向 method=${method} status=${response.status}`);
       throw new Error("服务器重定向已阻止，请检查服务器地址与反向代理");
+    }
+    // 401 说明服务器会话已失效；get-session 自身的 401 是身份查询结果，不重复失效。
+    if (response.status === 401 && pathname !== "/api/auth/get-session") {
+      scope.invalidateIdentity();
+      log.warn(`[paperclip] 服务器返回 401，已失效身份确认缓存 method=${method}`);
+    }
     const bytes = await limitedBody(response, 8 * 1024 * 1024);
     const text = new TextDecoder().decode(bytes);
     let data: unknown = null;
@@ -135,27 +163,49 @@ async function request(
     }
     return {
       status: response.status,
-      data:
-        new URL(path, origin).pathname === "/api/auth/get-session"
-          ? publicPaperclipSession(data)
-          : data,
+      data: pathname === "/api/auth/get-session" ? publicPaperclipSession(data) : data,
     };
   }, allowSignOut);
 }
 
-async function requireCurrentUser(origin: string, expectedUserId: string, epoch: number) {
+/** 单次发送并记录传输异常；主动取消（注销、超时）属于预期中断，不按传输异常记录。 */
+async function fetchOnce(
+  origin: string,
+  url: string,
+  method: string,
+  init: NonNullable<Parameters<Session["fetch"]>[1]>,
+): Promise<Awaited<ReturnType<Session["fetch"]>>> {
+  try {
+    return await sessionFor(origin).fetch(url, init);
+  } catch (error) {
+    if (!init.signal?.aborted)
+      log.error(
+        `[paperclip] 服务器请求传输异常 method=${method} error=${error instanceof Error ? error.name : typeof error}`,
+      );
+    throw error;
+  }
+}
+
+async function requireCurrentUser(
+  origin: string,
+  expectedUserId: string,
+  epoch: number,
+  fresh: boolean,
+) {
   const scope = scopeFor(origin);
   // 对话框可能跨过整个注销/登录周期；先检查代际，旧操作不能在新会话里再发身份查询。
   if (scope.generation !== epoch || scope.signingOut)
     throw new Error("服务器会话已更改，请重新连接");
-  const identity = await request(origin, "/api/auth/get-session", "GET");
-  const current = identity.data as { user?: { id?: string } } | null;
-  if (
-    identity.status !== 200 ||
-    current?.user?.id !== expectedUserId ||
-    scope.generation !== epoch ||
-    scope.signingOut
-  ) {
+  // 身份绑定不能删除（账号隔离依赖它），只合并重复查询；见 PaperclipSessionScope.currentUser。
+  const currentUserId = await scope.currentUser(async () => {
+    const identity = await request(origin, "/api/auth/get-session", "GET");
+    const current = identity.data as { user?: { id?: unknown } } | null;
+    return identity.status === 200 && typeof current?.user?.id === "string"
+      ? current.user.id
+      : null;
+  }, fresh);
+  if (currentUserId !== expectedUserId || scope.generation !== epoch || scope.signingOut) {
+    log.warn("[paperclip] 登录身份与操作绑定不一致，请求未发送");
     throw new Error("登录身份已改变，请重新选择公司；本次操作未发送");
   }
 }
@@ -203,6 +253,9 @@ async function signIn(origin: string, owner: BrowserWindow): Promise<{ completed
       webSecurity: true,
     },
   });
+  // 登录窗口与工作台共享隔离会话；打开、完成、取消都可能改变登录者，确认缓存需失效。
+  scope.invalidateIdentity();
+  log.info("[paperclip] 登录窗口已创建");
   loginWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const permitNavigation = (event: Electron.Event, target: string) => {
     try {
@@ -240,6 +293,8 @@ async function signIn(origin: string, owner: BrowserWindow): Promise<{ completed
       // 远端页面可用 beforeunload 阻止 close；先强制销毁，避免注销后旧登录页继续写 Cookie。
       if (!loginWindow.isDestroyed()) loginWindow.destroy();
       logins.delete(origin);
+      scope.invalidateIdentity();
+      log.info(`[paperclip] 登录窗口已销毁 completed=${completed}`);
       resolve({ completed });
     };
     owner.once("closed", ownerClosed);
@@ -267,7 +322,8 @@ async function signIn(origin: string, owner: BrowserWindow): Promise<{ completed
   return result;
 }
 
-export function registerPaperclipIpc(): void {
+export function registerPaperclipIpc(options: { logger?: PaperclipTransportLogger } = {}): void {
+  log = options.logger ?? silentLogger;
   ipcMain.handle(PlatformChannels.PaperclipRequest, async (event, value: unknown) => {
     requireSender(event);
     const input = validatePaperclipRequest(value);
@@ -288,20 +344,25 @@ export function registerPaperclipIpc(): void {
     requireSender(event);
     const origin = canonicalPaperclipOrigin(value?.serverUrl);
     const scope = scopeFor(origin);
+    log.info("[paperclip] 开始注销服务器会话");
     // 先推进代际并取消旧IO，登录窗口关闭后的迟到探测不会恢复已注销会话。
     const drain = scope.beginSignOut();
     logins.get(origin)?.cancel();
     await drain;
     try {
       const response = await request(origin, "/api/auth/sign-out", "POST", {}, true);
-      if (response.status < 200 || response.status >= 300)
+      if (response.status < 200 || response.status >= 300) {
+        log.warn(`[paperclip] 服务器注销未确认 status=${response.status}，仍清理本机会话`);
         throw new Error("服务器注销未确认，本机登录信息已清理");
+      }
     } finally {
       try {
         await sessionFor(origin).clearStorageData();
         await sessionFor(origin).clearCache();
       } finally {
+        scope.invalidateIdentity();
         scope.finishSignOut();
+        log.info("[paperclip] 本机隔离会话已清理");
       }
     }
   });
@@ -330,21 +391,32 @@ export function registerPaperclipIpc(): void {
       });
       const selectedPath = selected.filePath;
       if (selected.canceled || !selectedPath) return;
-      await scope.run(async (signal) => {
-        await requireCurrentUser(origin, value.expectedUserId, epoch);
-        const response = await sessionFor(origin).fetch(url, {
-          credentials: "include",
-          redirect: "manual",
-          signal,
-        });
-        if (!response.ok) throw new Error(`下载未完成（HTTP ${response.status}），请检查登录状态`);
-        const data = await limitedBody(response, 64 * 1024 * 1024);
-        // 注销会取消网络和文件 IO；不能把旧响应移出 scope 后才写入本机。
-        if (scope.generation !== epoch || scope.signingOut)
-          throw new Error("服务器会话已更改，下载已取消；文件未保存");
-        signal.throwIfAborted();
-        await writeFile(selectedPath, data, { signal });
-      });
+      await scope.run(
+        async (signal) => {
+          // 下载属于敏感读取：必须新鲜确认身份，不复用读请求的短缓存。
+          await requireCurrentUser(origin, value.expectedUserId, epoch, true);
+          const response = await fetchOnce(origin, url, "GET", {
+            credentials: "include",
+            redirect: "manual",
+            signal,
+          });
+          if (response.status === 401) {
+            scope.invalidateIdentity();
+            log.warn("[paperclip] 附件下载返回 401，已失效身份确认缓存");
+          }
+          if (!response.ok)
+            throw new Error(`下载未完成（HTTP ${response.status}），请检查登录状态`);
+          const data = await limitedBody(response, 64 * 1024 * 1024);
+          // 注销会取消网络和文件 IO；不能把旧响应移出 scope 后才写入本机。
+          if (scope.generation !== epoch || scope.signingOut)
+            throw new Error("服务器会话已更改，下载已取消；文件未保存");
+          signal.throwIfAborted();
+          await writeFile(selectedPath, data, { signal });
+        },
+        false,
+        // 64 MB 附件在慢速网络下读不完 60 秒，下载使用独立超时；普通 API 仍为 60 秒。
+        PAPERCLIP_DOWNLOAD_TIMEOUT_MS,
+      );
     },
   );
 }
