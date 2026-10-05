@@ -29,42 +29,63 @@ final class ReadOnlyProductAuditUITests: XCTestCase {
         XCTFail("Missing audit surface: \(name)")
     }
 
+    private func dismissReleaseNotesIfVisible() {
+        if app.navigationBars["本次更新"].waitForExistence(timeout: 2) {
+            app.navigationBars["本次更新"].buttons["完成"].tap()
+        }
+    }
+
     func test01CurrentHomeAndModelPicker() {
         app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8))
+        dismissReleaseNotesIfVisible()
+        let local = app.buttons["本机"]
+        if local.exists && local.isHittable { local.tap(); settle() }
         capture("01-current-app-baseline")
-        let capsule = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "执行位置和模型")).firstMatch
-        guard capsule.waitForExistence(timeout: 3), capsule.isHittable else {
-            missing("02-home-capsule"); return
+        let model = app.buttons["home.model-picker"]
+        if !model.exists {
+            let back = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["返回", "Back", "首页", "LeoPhoneAgent"])).firstMatch
+            if back.exists && back.isHittable { back.tap(); settle() }
         }
-        capsule.tap()
-        settle()
-        capture("02-home-execution-model-menu")
-        let more = app.buttons["更多模型…"]
-        guard more.waitForExistence(timeout: 3), more.isHittable else {
-            missing("03-more-models-entry"); return
+        guard model.waitForExistence(timeout: 5), model.isHittable else {
+            missing("02-home-model-entry"); return
         }
-        more.tap()
-        settle()
+        let input = app.textFields["问 Leo,或直接说要做的事"]
+        if input.exists && input.isHittable {
+            input.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+            capture("02-real-home-software-keyboard")
+            let keyboard = app.keyboards.firstMatch
+            for id in ["home.add-attachment", "home.actions", "home.voice-input", "home.send"] {
+                let control = app.buttons[id]
+                if control.exists {
+                    XCTAssertTrue(control.isHittable)
+                    XCTAssertLessThanOrEqual(control.frame.maxY, keyboard.frame.minY + 1)
+                }
+            }
+        }
+        model.tap(); settle()
         capture("03-model-picker-initial")
+        let allModels = app.buttons["model-picker.all-models"]
+        if !allModels.isHittable, app.collectionViews.count > 0 { app.collectionViews.element(boundBy: app.collectionViews.count - 1).swipeUp() }
+        guard allModels.exists && allModels.isHittable else { missing("04-all-models-entry"); return }
+        allModels.tap(); settle()
         for (name, labels) in [("favorites", ["常用", "收藏", "Favorites"]),
                                ("providers", ["AI 服务商", "服务商", "供应商", "Providers"]),
                                ("groups", ["分组", "Groups"])] {
             let tab = app.segmentedControls.buttons.matching(NSPredicate(format: "label IN %@", labels)).firstMatch
-            guard tab.exists, tab.isHittable else { missing("04-model-tab-" + name); continue }
-            tab.tap()
-            settle()
-            capture("04-model-tab-" + name)
+            guard tab.exists && tab.isHittable else { missing("04-model-tab-" + name); continue }
+            tab.tap(); settle(); capture("04-model-tab-" + name)
         }
-        // Only the picker navigation bar's dismiss action, never a row action.
         let close = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["完成", "Done", "取消", "Cancel"])).firstMatch
-        if close.exists, close.isHittable { close.tap(); settle() }
+        if close.exists && close.isHittable { close.tap(); settle() }
         else { missing("05-model-picker-dismiss") }
         capture("05-home-after-model-inspection")
     }
 
     func test02ReadOnlySettingsRoutes() {
         app.activate()
+        dismissReleaseNotesIfVisible()
         // These routes are plain navigation in Shared/DeepLinkRouter.swift.
         // Deliberately omit new, voice, quick-task, environments/create_*, and selftest.
         let routes: [(String, String)] = [

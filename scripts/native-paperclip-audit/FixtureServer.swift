@@ -25,6 +25,14 @@ enum PaperclipAuditFixture {
                 return config
             })
         try! store.add(name: "原生测试服务器", address: "https://paperclip.fixture.invalid")
+        if ProcessInfo.processInfo.arguments.contains("--saved-draft-refresh-fixture"), let profile = store.selectedProfile {
+            for issueID in [nil, "issue-1"] as [String?] {
+                var draft = PaperclipDraft()
+                draft.title = "保留创建草稿"; draft.body = "保留回复草稿"
+                if ProcessInfo.processInfo.arguments.contains("--unknown-draft-refresh-fixture") { draft.markSubmitted() }
+                draft.save(key: PaperclipDraft.key(profile: profile, companyID: "company", userID: "human", issueID: issueID))
+            }
+        }
         return store
     }
 }
@@ -40,11 +48,16 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var statusPatchCount = 0
     nonisolated(unsafe) private static var comments: [[String: Any]] = []
     nonisolated(unsafe) private static var created: [[String: Any]] = []
+    nonisolated(unsafe) private static var listReads = 0
+    nonisolated(unsafe) private static var detailReads = 0
+    nonisolated(unsafe) private static var refreshDraftFixture = false
     static func reset() {
         lock.lock(); defer { lock.unlock() }
         status = "in_progress"; approvalStatus = "pending"; unblockDescriptor = nil; comments = []; created = []
         loseStatusReceipt = ProcessInfo.processInfo.arguments.contains("--status-receipt-unknown-fixture")
         statusPatchCount = 0
+        listReads = 0; detailReads = 0
+        refreshDraftFixture = ProcessInfo.processInfo.arguments.contains("--saved-draft-refresh-fixture")
     }
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "paperclip.fixture.invalid" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -90,7 +103,10 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
                 new["title"] = body["title"] ?? "新任务"; new["status"] = "backlog"
                 created = [new]; return new
             }
-            return [issue()] + created
+            listReads += 1
+            var row = issue()
+            if refreshDraftFixture && listReads > 1 { row["title"] = "列表已收到服务器更新" }
+            return [row] + created
         case "/api/issues/issue-2": return created.first ?? ["error": "尚未创建测试任务"]
         case "/api/issues/issue-2/comments", "/api/issues/issue-2/runs", "/api/issues/issue-2/approvals": return [] as [[String: Any]]
         case "/api/issues/issue-1":
@@ -106,7 +122,10 @@ private final class PaperclipFixtureProtocol: URLProtocol, @unchecked Sendable {
                 statusPatchCount += 1
                 if loseStatusReceipt { return PaperclipFixtureLostReceipt() }
             }
-            return issue()
+            if method == "GET" { detailReads += 1 }
+            var row = issue()
+            if refreshDraftFixture && detailReads > 1 { row["title"] = "详情已收到服务器更新" }
+            return row
         case "/api/issues/issue-1/comments":
             if method == "POST" {
                 let row: [String: Any] = ["id": "comment-1", "companyId": "company", "issueId": "issue-1", "authorUserId": "human",

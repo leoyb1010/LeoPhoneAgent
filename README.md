@@ -483,3 +483,5 @@ pnpm build:bootstrap
 LeoAgent 名称与图标仅标识本 fork。
 
 Paperclip 服务器发行层 1.1.5 的两轮审计、故障修复与实测边界见 [审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
+
+iOS 1.53.1（146）本次完整审计记录见 [验证范围与结果](docs/IOS_FULL_AUDIT_20261005.md)。

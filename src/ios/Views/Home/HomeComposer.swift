@@ -186,6 +186,7 @@ struct HomeComposerBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("添加照片或文件"))
+                .accessibilityIdentifier("home.add-attachment")
 
                 TextField("问 Leo,或直接说要做的事", text: $text, axis: .vertical)
                     .lineLimit(1...5)
@@ -202,6 +203,7 @@ struct HomeComposerBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("动作、技能和 MCP"))
+                .accessibilityIdentifier("home.actions")
 
                 trailingButton
             }
@@ -273,15 +275,19 @@ struct HomeComposerBar: View {
                         .font(.system(size: 12, weight: .bold))
                 }
                 .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("停止"))
+            .accessibilityIdentifier("home.stop")
         } else if trimmedEmpty {
             Button(action: onMic) {
                 circleIcon("mic", weight: .medium)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("语音输入"))
+            .accessibilityIdentifier("home.voice-input")
         } else {
             Button(action: onSubmit) {
                 ZStack {
@@ -291,10 +297,13 @@ struct HomeComposerBar: View {
                         .foregroundStyle(.white)
                 }
                 .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
             .accessibilityLabel(Text("发送"))
+            .accessibilityIdentifier("home.send")
             .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
     }
@@ -304,7 +313,8 @@ struct HomeComposerBar: View {
             .font(.system(size: 17, weight: weight))
             .foregroundStyle(.primary)
             .frame(width: 36, height: 36)
-            .contentShape(Circle())
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
             .hoverEffect(.highlight)
     }
 }
@@ -334,6 +344,7 @@ struct HomeResultBanner: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

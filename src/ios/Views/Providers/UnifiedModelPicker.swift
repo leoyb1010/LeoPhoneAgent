@@ -246,6 +246,11 @@ private enum ModelPickerText {
     static let secondary = Color(uiColor: UIColor { traits in
         UIColor(white: traits.userInterfaceStyle == .dark ? 0.74 : 0.28, alpha: 1)
     })
+    static let action = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.63, green: 0.82, blue: 1, alpha: 1)
+            : UIColor(red: 0.08, green: 0.27, blue: 0.54, alpha: 1)
+    })
 }
 
 // MARK: - UnifiedModelPicker
@@ -553,25 +558,26 @@ struct UnifiedModelPicker: View {
             selectionSummary
         }
         if !favoriteEntries.isEmpty {
-            Section("Favorites") {
+            Section {
                 ForEach(favoriteEntries.prefix(3)) { entry in entryRow(entry) }
                 Button("All favorites") { browseScope = .favorites; config.onExpand?() }
+                    .foregroundStyle(ModelPickerText.action)
                     .accessibilityIdentifier("model-picker.all-favorites")
-            }
+            } header: { Text("Favorites").foregroundStyle(ModelPickerText.secondary) }
         }
         if !quickRecentEntries.isEmpty {
-            Section("Recently used") {
+            Section {
                 ForEach(quickRecentEntries) { entry in entryRow(entry) }
-            }
+            } header: { Text("Recently used").foregroundStyle(ModelPickerText.secondary) }
         }
         if favoriteEntries.isEmpty && quickRecentEntries.isEmpty {
             let available = candidateEntries.filter { memberUnavailableReason($0.id) == nil }
             if available.isEmpty {
                 emptySection
             } else {
-                Section("Available models") {
+                Section {
                     ForEach(available.prefix(3)) { entry in entryRow(entry) }
-                }
+                } header: { Text("Available models").foregroundStyle(ModelPickerText.secondary) }
             }
         }
         Section {
@@ -580,27 +586,31 @@ struct UnifiedModelPicker: View {
                     Label("Use saved default", systemImage: "arrow.uturn.backward")
                         .frame(minHeight: 44)
                 }
+                .foregroundStyle(ModelPickerText.action)
                 .accessibilityIdentifier("model-picker.use-default")
             }
             Button { browseScope = .providers; config.onExpand?() } label: {
                 Label("All models", systemImage: "list.bullet")
                     .frame(minHeight: 44)
             }
+            .foregroundStyle(ModelPickerText.action)
             .accessibilityIdentifier("model-picker.all-models")
             if supportsGroups {
                 Button { browseScope = .groups; config.onExpand?() } label: {
                     Label("Groups", systemImage: "square.stack.3d.up")
                         .frame(minHeight: 44)
                 }
+                .foregroundStyle(ModelPickerText.action)
                 .accessibilityIdentifier("model-picker.all-groups")
             }
             Button { showModelLibrary = true } label: {
                 Label("Model Library", systemImage: "slider.horizontal.3")
                     .frame(minHeight: 44)
             }
+            .foregroundStyle(ModelPickerText.action)
             .accessibilityIdentifier("model-picker.library")
         } footer: {
-            if let note = config.headerNote { Text(note) }
+            if let note = config.headerNote { Text(note).foregroundStyle(ModelPickerText.secondary) }
         }
     }
 
@@ -791,7 +801,12 @@ struct UnifiedModelPicker: View {
                     .accessibilityIdentifier("model-picker.edit-favorites")
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { dismiss() } label: {
+                    Text("Done").frame(minWidth: 44, minHeight: 44)
+                        .foregroundStyle(ModelPickerText.action)
+                }.buttonStyle(.plain)
+            }
         }
     }
 

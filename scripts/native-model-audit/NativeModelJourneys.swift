@@ -741,9 +741,17 @@ final class NativeModelJourneys: XCTestCase {
 
     func test25QuickDefaultResetDoesNotCreateSession() {
         launch("draft", large: false)
+        XCTAssertTrue(app.navigationBars["Choose Model"].waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(app.collectionViews.count, 0)
+        // The presented sheet is the last collection; the audit root remains
+        // behind it. Offscreen SwiftUI List rows may not have AX nodes yet.
+        let list = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
         let reset = app.buttons["model-picker.use-default"]
+        for _ in 0..<6 {
+            if reset.exists && reset.isHittable { break }
+            list.swipeUp()
+        }
         XCTAssertTrue(reset.waitForExistence(timeout: 10))
-        for _ in 0..<4 where !reset.isHittable { app.swipeUp() }
         XCTAssertTrue(reset.isHittable)
         reset.tap()
         XCTAssertEqual(rootValue("audit.draft"), "none")
@@ -786,11 +794,33 @@ final class NativeModelJourneys: XCTestCase {
         }
     }
 
+    private func expandQuickPickerForCompleteContrastCoverage() {
+        // In medium presentation Groups extended past the sheet's bottom edge
+        // (text y941.9...967.3; sheet bottom948). Audit the complete controls
+        // after a real expansion gesture; never suppress a reported issue.
+        XCTAssertGreaterThan(app.collectionViews.count, 0)
+        let sheet = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: (sheet.frame.minY + 8 - app.frame.minY) / app.frame.height))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.10))
+        start.press(forDuration: 0.2, thenDragTo: end)
+        let groups = app.buttons["model-picker.all-groups"]
+        XCTAssertTrue(groups.waitForExistence(timeout: 10))
+        let visible = sheet.frame.union(app.navigationBars["Choose Model"].frame).intersection(app.frame)
+        for element in [app.staticTexts["Favorites"], app.buttons["model-picker.all-favorites"],
+                        app.buttons["model-picker.all-models"], groups, app.buttons["Done"]] {
+            XCTAssertTrue(element.exists)
+            XCTAssertFalse(element.frame.isEmpty)
+            XCTAssertTrue(visible.contains(element.frame), "Contrast coverage requires the whole control inside the visible sheet: \(element.debugDescription)")
+        }
+    }
+
     func test24ActualPickerLightContrastAudit() throws {
         continueAfterFailure = true
         launch("quick", large: false)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("48-picker-light-contrast")
+        expandQuickPickerForCompleteContrastCoverage()
+        capture("48-picker-light-contrast-complete-controls")
         try auditContrastWithDiagnostics()
     }
 
@@ -799,6 +829,8 @@ final class NativeModelJourneys: XCTestCase {
         launch("quick", large: false, dark: true)
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 15))
         capture("49-picker-dark-contrast")
+        expandQuickPickerForCompleteContrastCoverage()
+        capture("49-picker-dark-contrast-complete-controls")
         try auditContrastWithDiagnostics()
     }
 

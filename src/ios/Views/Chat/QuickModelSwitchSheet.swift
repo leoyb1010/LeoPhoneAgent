@@ -17,6 +17,8 @@ struct QuickModelSwitchSheet: View {
                                onExpand: { detent = .large })
         }
         .presentationDetents([.medium, .large], selection: $detent)
+        // Keep text contrast independent of content behind the compact sheet.
+        .presentationBackground(Color(uiColor: .systemGroupedBackground))
         .presentationDragIndicator(.visible)
     }
 }

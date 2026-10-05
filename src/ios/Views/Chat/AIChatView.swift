@@ -5773,6 +5773,7 @@ private struct MicButton: View {
     @State private var micPressed = false
 
     private static let diameter: CGFloat = 34
+    private static let hitDiameter: CGFloat = 44
 
     var body: some View {
         // NOT a Button: SwiftUI's Button has a generous system touch-slop / touch-
@@ -5790,6 +5791,7 @@ private struct MicButton: View {
             .clipShape(Circle())
             .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
             .scaleEffect(micPressed ? 0.9 : 1.0)
+            .frame(width: Self.hitDiameter, height: Self.hitDiameter)
             .contentShape(Circle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -5806,15 +5808,20 @@ private struct MicButton: View {
                         onTap()
                     }
             )
+            .accessibilityAction {
+                inputFocused = false
+                onTap()
+            }
+            .accessibilityIdentifier("chat.voice-input")
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(isVoiceActive
                 ? Text("Switch to text input", comment: "Mic button exits voice mode")
                 : Text("Voice input", comment: "Mic button opens voice panel"))
     }
 
-    /// Whether a point (in the button's local space) is within the visible circle.
+    /// Whether a point (in the button's local space) is within the expanded touch circle.
     private static func isInside(_ p: CGPoint) -> Bool {
-        let r = diameter / 2
+        let r = hitDiameter / 2
         let dx = p.x - r, dy = p.y - r
         return (dx * dx + dy * dy) <= r * r
     }

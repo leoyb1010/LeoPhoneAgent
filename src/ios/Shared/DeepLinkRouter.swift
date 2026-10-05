@@ -56,10 +56,12 @@ enum DeepLinkRouter {
 
         switch host {
         case "voice":
+            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
             QuickActionRouter.shared.startVoiceChat()
 
         // [T-widget-quick-tasks] Home Screen widget entries.
         case "new", "new_chat":
+            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
             QuickActionRouter.shared.startNewChat()
 
         case "quick-task", "quick_task":
@@ -114,6 +116,8 @@ enum DeepLinkRouter {
                     deepLinkLog.info("\(host) URL for unknown session — ignored")
                     return
                 }
+                // Select the destination workspace only after the session is admitted.
+                UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
                 NotificationNavigationStore.shared.setPending(id)
                 NotificationCenter.default.post(
                     name: .openSessionFromIntent,
@@ -123,6 +127,7 @@ enum DeepLinkRouter {
             }
 
         case "settings":
+            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
             handleSettings(url: url, coord: coord)
 
         default:

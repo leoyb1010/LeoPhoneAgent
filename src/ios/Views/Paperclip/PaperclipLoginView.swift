@@ -38,8 +38,30 @@ struct PaperclipLoginView: View {
     }
 }
 
+/// 原生未覆盖的管理操作明确交接给服务器网页，沿用此配置的隔离登录容器。
+struct PaperclipWebsiteView: View {
+    let profile: PaperclipProfile
+    @Environment(\.dismiss) private var dismiss
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Text("费用、运行管理及模型配置，请在服务器网页版操作。附件可在此查看，下载请使用浏览器。本页未提供附件下载。网页公司以网页当前选择为准，请先核对。")
+                    .font(.footnote).foregroundStyle(.secondary).padding()
+                Text(profile.origin.absoluteString).font(.caption).textSelection(.enabled).padding(.bottom, 8)
+                if let error { Text(error).foregroundStyle(.red).font(.footnote).padding() }
+                PaperclipLoginBrowser(profile: profile, workspace: true, error: $error)
+            }
+            .navigationTitle("服务器网页版").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
+
 private struct PaperclipLoginBrowser: UIViewRepresentable {
     let profile: PaperclipProfile
+    var workspace = false
     @Binding var error: String?
     func makeCoordinator() -> Coordinator { Coordinator(origin: profile.origin, profileID: profile.id, error: $error) }
     func makeUIView(context: Context) -> WKWebView {
@@ -48,7 +70,7 @@ private struct PaperclipLoginBrowser: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         view.allowsBackForwardNavigationGestures = true
-        let login = profile.origin.appendingPathComponent("auth")
+        let login = workspace ? profile.origin : profile.origin.appendingPathComponent("auth")
         var request = URLRequest(url: login)
         request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
         context.coordinator.healthTask = Task { @MainActor [weak view, weak coordinator = context.coordinator] in
@@ -87,17 +109,17 @@ private struct PaperclipLoginBrowser: UIViewRepresentable {
                      decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             // 994 的 /auth 同源表单登录无需外跳；不能在固定服务器标题下展示任意 HTTPS 登录页。
             guard let url = action.request.url, PaperclipProfile.sameOrigin(url, origin) else {
-                error = "已阻止离开当前服务器的登录导航。请使用此服务器的网页登录；外部登录流程尚未开放。"
+                error = "已阻止离开当前服务器的网页导航。外部网页流程尚未开放。"
                 decisionHandler(.cancel)
                 return
             }
             decisionHandler(.allow)
         }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            self.error = "登录页面加载失败，请检查网络后重新打开。"
+            self.error = "服务器页面加载失败，请检查网络后重新打开。"
         }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            self.error = "无法安全连接登录页面，请检查服务器地址和 HTTPS 证书。"
+            self.error = "无法安全连接服务器页面，请检查服务器地址和 HTTPS 证书。"
         }
     }
 }

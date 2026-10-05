@@ -98,7 +98,25 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertIn("statusSheetOpen: statusDecision != nil", view)
         self.assertIn("replyFocused: editingReply || editingDecision", view)
         self.assertIn(".focused($editingReply)", view)
-        self.assertIn("expandedApprovalIDs.isEmpty", view)
+        self.assertIn("expandedApprovalIDs.contains(approval.id)", view)
+        polling = view.split(".task(id: scenePhase)", 1)[1].split(".onDisappear", 1)[0]
+        self.assertNotIn("draft.body", polling)
+        self.assertNotIn("decisionNote", polling)
+        self.assertNotIn("expandedApprovalIDs", polling)
+        self.assertIn("!acknowledgeStatus", polling)
+
+    def test_website_handoff_keeps_profile_container_origin_and_health_gate(self):
+        login = (VIEWS / "PaperclipLoginView.swift").read_text()
+        workspace = (VIEWS / "PaperclipWorkspaceView.swift").read_text()
+        self.assertIn('accessibilityIdentifier("paperclip.openWebsite")', workspace)
+        self.assertIn("PaperclipWebsiteView(profile: profile)", workspace)
+        self.assertIn("onDismiss: { Task { await store.connect() } }", workspace)
+        self.assertIn("PaperclipLoginBrowser(profile: profile, workspace: true", login)
+        self.assertIn("workspace ? profile.origin : profile.origin.appendingPathComponent", login)
+        self.assertIn("websiteData(for: profile)", login)
+        self.assertIn("try await client.health()", login)
+        self.assertIn("PaperclipProfile.sameOrigin(url, origin)", login)
+        self.assertIn("网页公司以网页当前选择为准", login)
 
     def test_all_new_visible_literals_are_chinese(self):
         for path in VIEWS.glob("*.swift"):

@@ -151,12 +151,19 @@ struct PaperclipIssueDetailView: View {
                     Button("刷新消息", systemImage: "arrow.clockwise") { Task { await model.refresh() } }.disabled(model.busy)
                     Button("任务信息、运行与审批", systemImage: "sidebar.right") { details = true }
                     if let issue = model.issue {
-                        Menu("更改任务状态") {
-                            ForEach(PaperclipIssueStatus.allCases) { status in
-                                Button(status.title) { statusDecision = status }
-                                    .disabled(status.rawValue == issue.status)
-                            }
-                        }.disabled(model.busy || model.pendingStatus != nil)
+                        if model.pendingStatus != nil {
+                            // 嵌套系统 Menu 的 disabled 状态不能作为待核实写入的入口边界。
+                            Button("更改任务状态") {}.disabled(true)
+                        } else {
+                            Menu("更改任务状态") {
+                                ForEach(PaperclipIssueStatus.allCases) { status in
+                                    Button(status.title) {
+                                        guard !model.busy, model.pendingStatus == nil else { return }
+                                        statusDecision = status
+                                    }.disabled(status.rawValue == issue.status)
+                                }
+                            }.disabled(model.busy)
+                        }
                     }
                 } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("任务操作").accessibilityIdentifier("paperclip.taskActions")
@@ -199,9 +206,9 @@ struct PaperclipIssueDetailView: View {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if PaperclipPollingPolicy.canRefresh(active: visible, statusSheetOpen: statusDecision != nil, replyFocused: editingReply || editingDecision) && draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && decisionNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && pendingDecision == nil && statusDecision == nil && !discardReply && !details && expandedApprovalIDs.isEmpty {
+                // 失焦的草稿和已关闭信息页中的展开状态不能永久停止只读同步。
+                if PaperclipPollingPolicy.canRefresh(active: visible, statusSheetOpen: statusDecision != nil, replyFocused: editingReply || editingDecision)
+                    && pendingDecision == nil && !discardReply && !acknowledgeStatus && !details {
                     await model.refresh()
                 }
             }
@@ -395,6 +402,7 @@ private struct PaperclipStatusDecisionSheet: View {
                 if selected == .blocked {
                     Section("解除受阻所需操作") {
                         TextField("你需要完成什么，任务才能继续", text: $action, axis: .vertical).lineLimit(3...6)
+                            .accessibilityIdentifier("paperclip.unblockAction")
                         Text("责任人是当前登录用户；请填写真实解除条件。最多 2000 个字符。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }

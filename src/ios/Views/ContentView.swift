@@ -1294,7 +1294,7 @@ struct ContentView: View {
             // Open the SettingsSheet whenever a deep link sets a settings
             // target. SettingsSheet itself reads `deepLink.pendingSettingsTarget`
             // in onAppear/onChange to push the right destination, then clears it.
-            .onChange(of: deepLink.pendingSettingsTarget) { target in
+            .onChange(of: deepLink.pendingSettingsTarget, initial: true) { _, target in
                 guard target != nil, WindowRegistry.shared.isPrimary(windowId) else { return }
                 if activeToolSheet != .settings {
                     activeToolSheet = .settings

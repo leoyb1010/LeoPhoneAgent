@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.53.1",
+            date: "2026-10-05",
+            title: "触控与服务器同步改进",
+            highlights: [
+                "首页常用操作更容易点中，聊天语音按钮支持 VoiceOver 激活；模型选择文字在浅深色下更清楚。",
+                "服务器任务保留未发送草稿时，收起键盘后继续同步；待核实的提交仍保持锁定，不会自动重发。",
+                "服务器设置增加网页版入口，沿用当前配置的登录访问费用、运行管理和模型配置，返回后重新核实登录并同步。",
+                "从服务器工作区打开本机会话、设置或新聊天链接时，会进入正确页面，冷启动也能接续设置入口。"
+            ]
+        ),
+        LeoRelease(
             version: "1.53.0",
             date: "2026-10-04",
             title: "Paperclip 手机对话工作区",

@@ -136,7 +136,7 @@ final class PaperclipNativeJourneys: XCTestCase {
         let app = launchTaskFixture()
         openDetail(app)
         chooseStatus("受阻", app)
-        let action = app.textFields["你需要完成什么，任务才能继续"]
+        let action = app.textFields["paperclip.unblockAction"]
         scrollTo(action, app)
         let confirm = app.buttons["确认更改状态"]
         XCTAssertTrue(confirm.exists)
@@ -201,6 +201,34 @@ final class PaperclipNativeJourneys: XCTestCase {
         XCTAssertTrue(app.navigationBars.buttons.firstMatch.isHittable)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.staticTexts["fixture.localSessions"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSavedDraftsDoNotStopListOrDetailPolling() {
+        verifyDraftPolling(unknownReceipt: false)
+    }
+
+    @MainActor
+    func testUnknownDraftReceiptsPermitReadsWithoutUnlockingOrResending() {
+        verifyDraftPolling(unknownReceipt: true)
+    }
+
+    @MainActor
+    private func verifyDraftPolling(unknownReceipt: Bool) {
+        var arguments = ["--saved-draft-refresh-fixture"]
+        if unknownReceipt { arguments.append("--unknown-draft-refresh-fixture") }
+        let app = launchTaskFixture(extraArguments: arguments)
+        XCTAssertTrue(app.staticTexts["列表已收到服务器更新"].waitForExistence(timeout: 35), "未聚焦的持久创建草稿不能停止轮询")
+        let title = app.textFields["paperclip.taskTitle"]
+        XCTAssertEqual(title.value as? String, "保留创建草稿")
+        XCTAssertEqual(title.isEnabled, !unknownReceipt)
+        XCTAssertFalse(app.navigationBars["任务-2"].exists, "轮询不能重发待核对的创建操作")
+        openDetail(app)
+        XCTAssertTrue(app.staticTexts["详情已收到服务器更新"].waitForExistence(timeout: 35), "未聚焦的持久回复草稿不能停止轮询")
+        let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
+        XCTAssertEqual(reply.value as? String, "保留回复草稿")
+        XCTAssertEqual(reply.isEnabled, !unknownReceipt)
+        XCTAssertFalse(app.staticTexts["我"].exists, "轮询不能自动重发未知回复")
     }
 
     @MainActor

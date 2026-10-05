@@ -26,13 +26,50 @@ final class HomeComposerJourneys: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["home.execution-target"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["home.model-picker"].waitForExistence(timeout: 10))
+        waitForWindowOrientation(UIDevice.current.userInterfaceIdiom == .pad ? .landscapeLeft : .portrait)
     }
 
     private func capture(_ name: String) {
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
         let tree = XCTAttachment(string: app.debugDescription)
         tree.name = name + "-tree"; tree.lifetime = .keepAlways; add(tree)
+    }
+
+    private func waitForWindowOrientation(_ orientation: UIDeviceOrientation) {
+        let landscape = orientation.isLandscape
+        let settled = expectation(for: NSPredicate { _, _ in
+            let frame = self.app.windows.firstMatch.frame
+            return frame.width > 0 && frame.height > 0
+                && (landscape ? frame.width > frame.height : frame.height > frame.width)
+        }, evaluatedWith: app.windows.firstMatch)
+        wait(for: [settled], timeout: 8)
+    }
+
+    private func assertComposerAboveVisibleSoftwareKeyboard() {
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "This journey requires the visible software keyboard; hardware-only typing is insufficient evidence")
+        let identifiers = ["home.execution-target", "home.model-picker", "home.add-attachment", "home.actions", "home.send"]
+        let aligned = expectation(for: NSPredicate { _, _ in
+            let window = self.app.windows.firstMatch.frame
+            guard keyboard.exists, keyboard.frame.height > 0, keyboard.frame.intersects(window) else { return false }
+            return identifiers.allSatisfy { id in
+                let control = self.app.buttons[id]
+                return control.isHittable && control.frame.maxY <= keyboard.frame.minY + 0.5
+            }
+        }, evaluatedWith: keyboard)
+        wait(for: [aligned], timeout: 8)
+        let window = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(keyboard.frame.height, 0)
+        XCTAssertTrue(keyboard.frame.intersects(window))
+        for id in identifiers {
+            let control = app.buttons[id]
+            XCTAssertTrue(control.isHittable, id)
+            XCTAssertGreaterThanOrEqual(control.frame.width, 43.5, id)
+            XCTAssertGreaterThanOrEqual(control.frame.height, 43.5, id)
+            XCTAssertLessThanOrEqual(control.frame.maxY, keyboard.frame.minY + 0.5, id + " is obscured by the keyboard")
+        }
+        XCTAssertLessThanOrEqual(app.textFields.firstMatch.frame.maxY, keyboard.frame.minY + 0.5)
     }
 
     private func state() -> [String: String] {
@@ -78,6 +115,8 @@ final class HomeComposerJourneys: XCTestCase {
         input.tap()
         let draft = "Keep this Home draft while choosing a model."
         input.typeText(draft)
+        assertComposerAboveVisibleSoftwareKeyboard()
+        capture("home-composer-software-keyboard-" + String(Int(app.windows.firstMatch.frame.width)))
         app.buttons["home.model-picker"].tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 8))
         capture("home-model-sheet-native")
@@ -114,4 +153,41 @@ final class HomeComposerJourneys: XCTestCase {
         assertSeparateReachableControls()
         XCTAssertEqual(state()["model"], "relay-proxy/long-context-model")
     }
+    func test03ComposerActionTargetsAreReachableAtMinimumTouchSize() {
+        launch()
+        for identifier in ["home.add-attachment", "home.actions", "home.voice-input"] {
+            let control = app.buttons[identifier]
+            XCTAssertTrue(control.waitForExistence(timeout: 5))
+            XCTAssertTrue(control.isHittable)
+            XCTAssertGreaterThanOrEqual(control.frame.width, 43.5, identifier)
+            XCTAssertGreaterThanOrEqual(control.frame.height, 43.5, identifier)
+        }
+        let input = app.textFields.firstMatch
+        input.tap()
+        input.typeText("Fixture unsent prompt")
+        let send = app.buttons["home.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertTrue(send.isHittable)
+        XCTAssertGreaterThanOrEqual(send.frame.width, 43.5)
+        XCTAssertGreaterThanOrEqual(send.frame.height, 43.5)
+        XCTAssertEqual(state()["text"], "Fixture unsent prompt")
+    }
+
+    func test04PadPortraitAndLandscapeKeepComposerReachable() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad orientation coverage") }
+        launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            waitForWindowOrientation(orientation)
+            assertSeparateReachableControls()
+            for id in ["home.add-attachment", "home.actions", "home.voice-input"] {
+                let button = app.buttons[id]
+                XCTAssertTrue(button.isHittable)
+                XCTAssertGreaterThanOrEqual(button.frame.width, 43.5)
+                XCTAssertGreaterThanOrEqual(button.frame.height, 43.5)
+            }
+            capture(orientation == .portrait ? "home-ipad-portrait" : "home-ipad-landscape")
+        }
+    }
+
 }

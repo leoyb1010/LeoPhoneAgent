@@ -231,6 +231,7 @@ private struct PaperclipServerSettingsView: View {
     @State private var addProfile = false
     @State private var login = false
     @State private var clearLogin = false
+    @State private var website = false
 
     var body: some View {
         NavigationStack {
@@ -258,6 +259,14 @@ private struct PaperclipServerSettingsView: View {
                         }
                     }
                 }
+                if store.selectedProfile != nil {
+                    Section("更多服务器能力") {
+                        Button("打开服务器网页版", systemImage: "globe") { website = true }
+                            .disabled(store.busy).accessibilityIdentifier("paperclip.openWebsite")
+                        Text("费用、运行管理及模型配置由服务器网页提供。附件仅供查看，下载请使用浏览器。返回后会重新验证登录并同步任务。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 if let error = store.error {
                     Section("连接提示") {
                         Text(error).font(.footnote).foregroundStyle(.red).textSelection(.enabled)
@@ -275,6 +284,9 @@ private struct PaperclipServerSettingsView: View {
             .sheet(isPresented: $addProfile) { PaperclipAddProfileView(store: store) }
             .sheet(isPresented: $login) {
                 if let profile = store.selectedProfile { PaperclipLoginView(profile: profile) { await store.connect() } }
+            }
+            .sheet(isPresented: $website, onDismiss: { Task { await store.connect() } }) {
+                if let profile = store.selectedProfile { PaperclipWebsiteView(profile: profile) }
             }
             .confirmationDialog("清除这台设备上此服务器配置的登录？", isPresented: $clearLogin, titleVisibility: .visible) {
                 Button("清除本机登录", role: .destructive) { Task { await store.clearLogin() } }
@@ -389,6 +401,7 @@ private struct PaperclipCreateIssueView: View {
         .onChange(of: draft.agentID) { _, _ in draft.save(key: draftKey) }
         .onChange(of: showDetails) { _, _ in updateComposing() }
         .onChange(of: showReceipt) { _, _ in updateComposing() }
+        .onChange(of: busy) { _, _ in updateComposing() }
         .onDisappear { if !draft.title.isEmpty || !draft.body.isEmpty { draft.save(key: draftKey) }; composing = false }
         .sheet(isPresented: $showDetails) {
             NavigationStack {
@@ -439,7 +452,8 @@ private struct PaperclipCreateIssueView: View {
         }
     }
     private func updateComposing() {
-        composing = focused || showDetails || showReceipt || busy || draft.submitted || !draft.title.isEmpty || !draft.body.isEmpty
+        // 保存的草稿或待核对回执不是编辑焦点；只读同步不会修改或重发它们。
+        composing = busy || !PaperclipPollingPolicy.canRefresh(active: true, statusSheetOpen: showDetails || showReceipt, replyFocused: focused)
     }
     private func submit() async {
         guard !busy, draft.canRetryCreate() else { return }

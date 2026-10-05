@@ -59,6 +59,28 @@ final class PaperclipContractTests: XCTestCase {
         }
     }
 
+    func testReadPollingPreservesSavedDraftAndUnknownReceiptAcrossCompanyKeys() throws {
+        let suite = "paperclip.polling-test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
+        let firstKey = PaperclipDraft.key(profile: profile, companyID: "first", userID: "human", issueID: "issue")
+        let otherKey = PaperclipDraft.key(profile: profile, companyID: "other", userID: "human", issueID: "issue")
+        var draft = PaperclipDraft()
+        draft.title = "保留标题"; draft.body = "保留回复"
+        draft.markSubmitted(now: Date(timeIntervalSince1970: 1_800_000_000))
+        draft.save(key: firstKey, defaults: defaults)
+        let original = try XCTUnwrap(defaults.data(forKey: firstKey))
+        XCTAssertTrue(PaperclipPollingPolicy.canRefresh(active: true, statusSheetOpen: false, replyFocused: false))
+        XCTAssertEqual(defaults.data(forKey: firstKey), original)
+        let restored = PaperclipDraft.load(key: firstKey, defaults: defaults)
+        XCTAssertEqual(restored.requestID, draft.requestID)
+        XCTAssertEqual(restored.body, draft.body)
+        XCTAssertEqual(restored.firstSubmittedAt, draft.firstSubmittedAt)
+        XCTAssertTrue(restored.submitted, "只读刷新不能解除未知写入或重新生成请求编号")
+        XCTAssertFalse(PaperclipDraft.load(key: otherKey, defaults: defaults).submitted)
+    }
+
     func testCommentAuthorUsesValidUserAgentOrUnknown() throws {
         let cases: [([String: String], String)] = [
             ([:], "未知作者"),
