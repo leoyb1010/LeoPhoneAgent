@@ -61,3 +61,11 @@ bash scripts/native-paperclip-audit/run.sh
 - 公司级实时通道 `wss://<同源>/api/companies/{id}/events/ws`：建连前用同一 Cookie 快照新鲜确认身份，Cookie 经同一过滤后手写到握手头；每条事件校验 companyId，不符即断开；1/2/4/8/15 秒退避，断线期间回退轮询，重连后全量补拉；401/403 再确认身份后停止。
 - 固定接口宿主用脚本化 WebSocket（`--showcase-fixture`）驱动运行中卡片、实时日志与实时评论；其余旅程模拟服务器拒绝实时通道（403）验证轮询回退。URLProtocol 无法承载 WebSocket，真实握手需真实部署联调。
 - `testDesignShowcaseLight/Dark` 生成列表、详情、运行中卡片、内联审批、属性面板的浅/深色截图。独立宿主用原生 Markdown 回退渲染；主 App 注入端侧 `SelectableMarkdownView`。
+
+## 1.53.4 审计回归
+
+- 真实 `URLSessionWebSocketTask`（生产 `PaperclipURLSessionLiveSocket`）对本机回环 WebSocket 服务器（Network 框架）握手：手写 Cookie/Origin 头确实发出、服务器 ping 自动回 pong、cancel 结束挂起的 receive、被拒握手能拿到 4xx 状态码。回环只能用 ws://，wss 的 TLS 握手仍需真实部署联调。
+- 实时通道：401/403 复核期间 stop()+start() 不会被旧循环改写状态或产生两条循环；身份复核周期可注入，覆盖“到期重连并新鲜确认、身份变化即停止”。
+- 运行日志：NDJSON 记录与实时片段共用 seq，按 seq 去重并在 REST 补齐后重放读取期间漏掉的片段；日志 404 降级为“暂无日志”；reset 后迟到结果不回写。
+- 工作区（`Tests/PaperclipWorkspaceLiveTests.swift`）：列表不可见时实时事件不触发列表刷新，返回列表补做一次。
+- 详情页模型（`Tests/PaperclipDetailModelTests.swift`，只在独立宿主编译）：同步中再请求刷新会排队执行；全量结果不冲掉读取开始后刚发出的回复；身份失效后迟到结果不回写；无实时通道且运行中时两次全量之间只读评论增量与运行中 run；“停在底部”判断扣除输入栏与键盘内边距。

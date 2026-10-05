@@ -109,8 +109,8 @@ struct PaperclipWorkspaceView: View {
                 }
             }
             .refreshable { await refresh() }
-            .onAppear { listVisible = true }
-            .onDisappear { listVisible = false }
+            .onAppear { listVisible = true; store.setListVisible(true) }
+            .onDisappear { listVisible = false; store.setListVisible(false) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("本机", systemImage: "iphone") { onReturnToLocal() }

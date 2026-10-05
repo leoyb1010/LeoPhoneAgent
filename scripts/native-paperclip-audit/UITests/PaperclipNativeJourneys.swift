@@ -318,6 +318,30 @@ final class PaperclipNativeJourneys: XCTestCase {
         let approve = app.buttons["批准"]
         scrollTo(approve, app)
         screenshot("设计_内联审批_\(suffix)", app)
+        // 滚到底：最后一张卡片（内联审批）必须完整显示在输入栏上方，不被遮挡。
+        let composerTop = app.descendants(matching: .any).matching(identifier: "paperclip.appendHint").firstMatch
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertTrue(composerTop.exists)
+        XCTAssertLessThanOrEqual(approve.frame.maxY, composerTop.frame.minY - 8, "滚动到底时审批按钮被输入栏遮挡")
+        screenshot("设计_滚动到底_\(suffix)", app)
+        // 键盘弹出时同样不能遮挡最后一张卡片。
+        let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
+        reply.tap()
+        dismissObservedKeyboardGuide(app, waitForAppearance: true)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        for _ in 0..<3 { app.swipeUp() }
+        XCTAssertLessThanOrEqual(approve.frame.maxY, composerTop.frame.minY - 8, "键盘弹出后审批按钮被输入栏遮挡")
+        let keyboard = app.keyboards.firstMatch.frame
+        if keyboard.minY < app.frame.maxY {
+            XCTAssertLessThanOrEqual(composerTop.frame.maxY, keyboard.minY, "输入栏必须位于键盘上方")
+        } else {
+            // 模拟器连接了硬件键盘时软键盘停在屏幕外，只能核对聚焦后的布局，如实记录。
+            let note = XCTAttachment(string: "软键盘未上屏（硬件键盘已连接），键盘帧：\(keyboard)")
+            note.name = "键盘遮挡核对_硬件键盘"
+            note.lifetime = .keepAlways
+            add(note)
+        }
+        screenshot("设计_键盘弹出到底_\(suffix)", app)
         openTaskInformation(app)
         screenshot("设计_属性面板_\(suffix)", app)
     }

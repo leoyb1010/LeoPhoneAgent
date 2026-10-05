@@ -51,12 +51,14 @@ struct PaperclipStatusCapsule: View {
 
 // MARK: - 头像
 
-/// 头像内存缓存：按配置与路径键控，失败的路径本次运行内不再重试。
+/// 头像内存缓存：按配置与路径键控；失败的路径 5 分钟内不重试。
+/// 以前失败后整个运行期都不再重试，一次网络抖动就让头像一直显示占位字母。
 @MainActor
 final class PaperclipAvatarCache {
     static let shared = PaperclipAvatarCache()
     private var images: [String: UIImage] = [:]
-    private var failed: Set<String> = []
+    private var failed: [String: Date] = [:]
+    static let failureRetryInterval: TimeInterval = 300
     private var inflight: [String: Task<UIImage?, Never>] = [:]
 
     func cached(client: PaperclipClient, path: String) -> UIImage? { images[key(client, path)] }
@@ -64,7 +66,7 @@ final class PaperclipAvatarCache {
     func image(client: PaperclipClient, path: String) async -> UIImage? {
         let key = key(client, path)
         if let image = images[key] { return image }
-        if failed.contains(key) { return nil }
+        if let at = failed[key], Date().timeIntervalSince(at) < Self.failureRetryInterval { return nil }
         if let running = inflight[key] { return await running.value }
         let task = Task { @MainActor () -> UIImage? in
             guard let data = try? await client.avatarData(path: path) else { return nil }
@@ -76,7 +78,8 @@ final class PaperclipAvatarCache {
         if let image {
             if images.count > 200 { images.removeAll() }
             images[key] = image
-        } else { failed.insert(key) }
+            failed[key] = nil
+        } else { failed[key] = Date() }
         return image
     }
 

@@ -305,6 +305,15 @@ struct PaperclipLogConsole: View {
     let log: PaperclipRunStream.LogState?
     let live: Bool
     var height: CGFloat? = nil
+    /// 跟随动态字体：以前固定 11pt，大字号下日志仍很小。
+    @ScaledMetric(relativeTo: .caption2) private var fontSize: CGFloat = 11
+
+    private var placeholder: String {
+        if log?.loading == true { return "正在读取日志…" }
+        if let error = log?.error { return error }
+        if log?.missing == true { return "暂无日志：运行尚未开始输出，或服务器已清理此运行的日志。" }
+        return "暂无日志输出"
+    }
 
     var body: some View {
         let lines = log?.parser.lines ?? []
@@ -312,7 +321,7 @@ struct PaperclipLogConsole: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     if lines.isEmpty {
-                        Text(log?.loading == true ? "正在读取日志…" : (log?.error ?? "暂无日志输出"))
+                        Text(placeholder)
                             .foregroundStyle(.secondary)
                     }
                     ForEach(lines) { line in
@@ -326,12 +335,12 @@ struct PaperclipLogConsole: View {
                     }
                     Color.clear.frame(height: 1).id("paperclip.log.end")
                 }
-                .font(.system(size: 11, design: .monospaced))
+                .font(.system(size: fontSize, design: .monospaced))
                 .textSelection(.enabled)
                 .padding(10)
             }
             // 内联时随内容增高，最多到给定高度，避免几行日志下面留出大片空白。
-            .frame(height: height.map { min($0, CGFloat(max(lines.count, 1)) * 16 + 28) })
+            .frame(height: height.map { min($0, CGFloat(max(lines.count, 1)) * (fontSize * 1.45) + 28) })
             .frame(maxHeight: height == nil ? .infinity : nil)
             .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
             .onAppear { proxy.scrollTo("paperclip.log.end", anchor: .bottom) }
@@ -422,5 +431,36 @@ struct PaperclipResolvedApprovalRow: View {
         .padding(.vertical, 9)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 运行中卡片容器
+
+/// 运行中卡片的观察容器：进度与日志的高频变化只重绘卡片本身。
+/// 以前运行模型的每次变化都转发给整个详情页，全部评论（Markdown）与线程排序随每条日志片段重算，滚动卡顿。
+struct PaperclipLiveRunCard: View {
+    @ObservedObject var stream: PaperclipRunStream
+    let run: PaperclipActiveRunDisplay
+    let client: PaperclipClient
+    /// 最近输出变化时回调；详情页据此在用户停在底部时跟随。
+    let onActivity: () -> Void
+
+    var body: some View {
+        PaperclipRunCard(run: run, progress: stream.progress[run.id], log: stream.logs[run.id],
+                         expanded: stream.expandedLogRunIDs.contains(run.id),
+                         telemetryAvailable: !stream.telemetryForbidden, client: client,
+                         onToggleLog: { stream.toggleLog(run.id) })
+            .onChange(of: stream.progress[run.id]?.lastAssistantSnippet) { _, _ in onActivity() }
+    }
+}
+
+// MARK: - 滚动位置
+
+enum PaperclipScrollPosition {
+    /// 是否停在底部附近。可见底边要扣除底部内边距（输入栏 safeAreaInset 与键盘）：
+    /// 以前直接用容器高度，键盘弹出时即使往上翻了几百点也被当作“在底部”，新消息会强制跳到底。
+    static func isNearBottom(offsetY: CGFloat, containerHeight: CGFloat, bottomInset: CGFloat,
+                             contentHeight: CGFloat, threshold: CGFloat = 140) -> Bool {
+        offsetY + containerHeight - bottomInset >= contentHeight - threshold
     }
 }

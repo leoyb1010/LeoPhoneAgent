@@ -7,8 +7,8 @@ final class PaperclipIssueDetailModel: ObservableObject {
     let reference: PaperclipTaskReference
     let runStream: PaperclipRunStream
     @Published var issue: PaperclipIssue?
-    @Published var comments: [PaperclipComment] = []
-    @Published var runs: [PaperclipRun] = []
+    @Published var comments: [PaperclipComment] = [] { didSet { threadCache = nil } }
+    @Published var runs: [PaperclipRun] = [] { didSet { threadCache = nil } }
     @Published var approvals: [PaperclipApproval] = []
     /// 写请求（回复、状态、审批）进行中；只有它会暂停只读刷新。
     @Published var busy = false
@@ -25,6 +25,18 @@ final class PaperclipIssueDetailModel: ObservableObject {
     private var followups: Set<PaperclipRunStream.Followup> = []
     private var followupTask: Task<Void, Never>?
     private var pollCount = 0
+    /// 同步进行中又收到的刷新请求（值为是否全量）。以前直接丢弃：发送后紧跟的刷新、重连后的全量补拉
+    /// 若撞上正在进行的轮询就不会执行，刚发出的消息可能被旧的全量结果覆盖后消失到下一轮。
+    private var queuedRefresh: Bool?
+    /// 身份失效（record 清空数据）时递增；迟到的网络结果发现代际变化即丢弃，不把旧账号数据写回。
+    private var epoch = 0
+    /// 本机插入评论（发送回执、增量合并）的时间；全量结果不含它们时，晚于该次读取开始的保留，
+    /// 早于读取开始的视为已删除。
+    private var localInsertions: [String: Date] = [:]
+    /// 线程条目缓存：评论或运行变化时失效。以前详情页每次重绘都对全部评论解析日期并排序。
+    private var threadCache: (activeRunIDs: Set<String>, entries: [PaperclipThreadEntry])?
+    /// 无实时通道且运行中时 3 秒轻量轮询，每 15 秒才做一次全量（任务、运行、审批）。
+    private var lastHeavyPoll = Date.distantPast
 
     init(client: PaperclipClient, reference: PaperclipTaskReference) {
         self.client = client; self.reference = reference
@@ -32,11 +44,23 @@ final class PaperclipIssueDetailModel: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "leo.paperclip.status.v1." + reference.id) {
             pendingStatus = try? JSONDecoder().decode(PaperclipStatusExpectation.self, from: data)
         }
-        // 运行模型的变化同样刷新详情页。
-        forwardRunStream = runStream.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        // 只转发影响页面结构的低频变化（运行列表、权限、日志展开）；进度与日志片段由运行卡片自行观察，
+        // 不再让整页随每条实时片段重绘。
+        forwardRunStream = Publishers.Merge3(runStream.$liveRuns.map { _ in () },
+                                             runStream.$telemetryForbidden.map { _ in () },
+                                             runStream.$expandedLogRunIDs.map { _ in () })
+            .dropFirst(3)
+            .sink { [weak self] in self?.objectWillChange.send() }
     }
 
     var liveOpen: Bool { liveState == .open }
+
+    func threadEntries(activeRunIDs: Set<String>) -> [PaperclipThreadEntry] {
+        if let cache = threadCache, cache.activeRunIDs == activeRunIDs { return cache.entries }
+        let entries = PaperclipThread.entries(comments: comments, runs: runs, activeRunIDs: activeRunIDs)
+        threadCache = (activeRunIDs, entries)
+        return entries
+    }
 
     func changeStatus(_ expected: PaperclipStatusExpectation) async {
         guard !busy, pendingStatus == nil else { return }
@@ -72,11 +96,23 @@ final class PaperclipIssueDetailModel: ObservableObject {
     /// 只读刷新：任务、评论、运行、审批、运行中 run 五个请求并行，各自独立更新，
     /// 一个失败不连累其他（以前串行，任一失败整次作废）。评论默认按最后一条增量读取。
     func refresh(full: Bool = false) async {
-        guard !syncing else { return }
+        guard !syncing else { queuedRefresh = (queuedRefresh ?? false) || full; return }
         syncing = true
         defer { syncing = false }
+        var nextFull = full
+        while true {
+            await performRefresh(full: nextFull)
+            guard let queued = queuedRefresh, !Task.isCancelled else { break }
+            queuedRefresh = nil
+            nextFull = queued
+        }
+    }
+
+    private func performRefresh(full: Bool) async {
         let client = client, reference = reference, runStream = runStream
+        let stamp = epoch
         let after = full ? nil : comments.last?.id
+        let started = Date()
         async let issueResult = Self.capture { try await client.issue(reference) }
         async let commentResult = Self.capture { try await client.comments(reference, after: after) }
         async let runResult = Self.capture { try await client.runs(reference) }
@@ -84,14 +120,15 @@ final class PaperclipIssueDetailModel: ObservableObject {
         async let liveResult = Self.capture { try await runStream.reloadLiveRuns() }
         let (nextIssue, nextComments, nextRuns, nextApprovals, nextLive) =
             await (issueResult, commentResult, runResult, approvalResult, liveResult)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, stamp == epoch else { return }
+        lastHeavyPoll = started
         var failure: Error?
         switch nextIssue {
         case .success(let value): issue = value
         case .failure(let error): failure = error
         }
         switch nextComments {
-        case .success(let rows): comments = after == nil ? rows : PaperclipCommentMerge.merge(comments, rows)
+        case .success(let rows): applyComments(rows, after: after, fetchStarted: started)
         case .failure(let error): failure = failure ?? error
         }
         switch nextRuns {
@@ -107,14 +144,63 @@ final class PaperclipIssueDetailModel: ObservableObject {
     }
 
     /// 周期轮询：评论增量合并，每 8 轮全量校准一次（反映编辑与删除）；无实时通道时补拉展开的日志。
-    func poll() async {
-        pollCount += 1
-        await refresh(full: pollCount.isMultiple(of: 8))
+    /// 无实时通道且运行中（3 秒节奏）时，两次全量之间只读评论增量与运行中 run：
+    /// 以前每 3 秒并发 5 个请求（任务、评论、运行、审批、运行中），约 100 次/分钟。
+    func poll(now: Date = Date()) async {
+        if !liveOpen, runStream.hasActiveRun, now.timeIntervalSince(lastHeavyPoll) < PaperclipPollingPolicy.baseInterval {
+            await lightRefresh()
+        } else {
+            pollCount += 1
+            await refresh(full: pollCount.isMultiple(of: 8))
+        }
         if !liveOpen { await runStream.refreshExpandedLogs() }
+    }
+
+    /// 轻量刷新：评论增量 + 运行中 run；运行集合变化（结束或新开始）时补读运行历史与任务状态。
+    private func lightRefresh() async {
+        guard !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        let client = client, reference = reference, runStream = runStream
+        let stamp = epoch
+        let after = comments.last?.id
+        let started = Date()
+        let before = Set(runStream.activeRuns.map(\.id))
+        async let commentResult = Self.capture { try await client.comments(reference, after: after) }
+        async let liveResult = Self.capture { try await runStream.reloadLiveRuns() }
+        let (nextComments, nextLive) = await (commentResult, liveResult)
+        guard !Task.isCancelled, stamp == epoch else { return }
+        var failure: Error?
+        switch nextComments {
+        case .success(let rows): applyComments(rows, after: after, fetchStarted: started)
+        case .failure(let error): failure = error
+        }
+        if case .failure(let error) = nextLive { failure = failure ?? error }
+        if let failure { record(failure); return }
+        if Set(runStream.activeRuns.map(\.id)) != before {
+            await reloadIssue(if: true)
+            await reloadRuns(if: true, includeLive: false)
+        }
+        error = nil; lastRefreshed = Date()
+    }
+
+    /// 增量结果按 id 合并；全量结果替换，但保留读取开始之后本机插入、全量里还没有的评论（刚发出的回复）。
+    private func applyComments(_ rows: [PaperclipComment], after: String?, fetchStarted: Date) {
+        if after != nil {
+            let known = Set(comments.map(\.id))
+            for row in rows where !known.contains(row.id) { localInsertions[row.id] = Date() }
+            comments = PaperclipCommentMerge.merge(comments, rows)
+            return
+        }
+        let fetched = Set(rows.map(\.id))
+        let newer = comments.filter { !fetched.contains($0.id) && (localInsertions[$0.id] ?? .distantPast) >= fetchStarted }
+        localInsertions = localInsertions.filter { $0.value >= fetchStarted }
+        comments = rows + newer
     }
 
     /// 回复成功后立即显示，不等下一轮同步。
     func appendSent(_ comment: PaperclipComment) {
+        localInsertions[comment.id] = Date()
         comments = PaperclipCommentMerge.merge(comments, [comment])
     }
 
@@ -132,7 +218,9 @@ final class PaperclipIssueDetailModel: ObservableObject {
         // 预检包装的登录过期/身份变化同样要清掉旧账号内容。
         let reason = (error as? PaperclipError)?.underlying
         if reason == .signedOut || reason == .identityChanged {
+            epoch += 1
             issue = nil; comments = []; runs = []; approvals = []
+            localInsertions = [:]
             runStream.reset()
             detachLive()
         }
@@ -196,29 +284,45 @@ final class PaperclipIssueDetailModel: ObservableObject {
         _ = await (issueDone, commentsDone, runsDone, approvalsDone)
     }
 
+    // 事件补拉：每个结果写回前核对代际，身份失效后迟到的结果不写回。
     private func reloadIssue(if needed: Bool) async {
         guard needed else { return }
-        do { issue = try await client.issue(reference) } catch { recordIfIdentity(error) }
+        let stamp = epoch
+        do {
+            let value = try await client.issue(reference)
+            if stamp == epoch { issue = value }
+        } catch { if stamp == epoch { recordIfIdentity(error) } }
     }
 
     private func reloadComments(if needed: Bool, full: Bool) async {
         guard needed else { return }
+        let stamp = epoch
         let after = full ? nil : comments.last?.id
+        let started = Date()
         do {
             let rows = try await client.comments(reference, after: after)
-            comments = after == nil ? rows : PaperclipCommentMerge.merge(comments, rows)
-        } catch { recordIfIdentity(error) }
+            if stamp == epoch { applyComments(rows, after: after, fetchStarted: started) }
+        } catch { if stamp == epoch { recordIfIdentity(error) } }
     }
 
-    private func reloadRuns(if needed: Bool) async {
+    private func reloadRuns(if needed: Bool, includeLive: Bool = true) async {
         guard needed else { return }
-        do { runs = try await client.runs(reference) } catch { recordIfIdentity(error) }
-        do { try await runStream.reloadLiveRuns() } catch { recordIfIdentity(error) }
+        let stamp = epoch
+        do {
+            let rows = try await client.runs(reference)
+            if stamp == epoch { runs = rows }
+        } catch { if stamp == epoch { recordIfIdentity(error) } }
+        guard includeLive, stamp == epoch else { return }
+        do { try await runStream.reloadLiveRuns() } catch { if stamp == epoch { recordIfIdentity(error) } }
     }
 
     private func reloadApprovals(if needed: Bool) async {
         guard needed else { return }
-        do { approvals = try await client.approvals(reference) } catch { recordIfIdentity(error) }
+        let stamp = epoch
+        do {
+            let rows = try await client.approvals(reference)
+            if stamp == epoch { approvals = rows }
+        } catch { if stamp == epoch { recordIfIdentity(error) } }
     }
 
     /// 事件补拉失败只处理身份类错误；网络抖动交给下一轮同步，不打断阅读。
@@ -299,37 +403,13 @@ struct PaperclipIssueDetailView: View {
         return result
     }
 
-    private var entries: [PaperclipThreadEntry] {
-        PaperclipThread.entries(comments: model.comments, runs: model.runs, activeRunIDs: Set(activeRuns.map(\.id)))
-    }
-
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    thread
-                    Color.clear.frame(height: 1).id("paperclip.latest")
-                }
-                .padding(.horizontal, LeoTheme.Spacing.md)
-                .padding(.bottom, LeoTheme.Spacing.md)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
-            }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 140
-            } action: { _, value in nearBottom = value }
-            .onChange(of: stream.progress.values.compactMap(\.lastAssistantSnippet).joined()) { _, _ in
-                if positionedConversation && nearBottom { followLatest(proxy) }
-            }
-            .onChange(of: model.issue?.id) { _, _ in revealConversation(using: proxy) }
-            .onChange(of: model.comments.map(\.id)) { _, _ in revealConversation(using: proxy) }
-            .onChange(of: revealID) { _, _ in revealConversation(using: proxy) }
-            .onChange(of: activeRuns.map(\.id)) { _, ids in
-                // 新运行开始时滚到运行卡片，让过程立刻可见。
-                if let id = ids.last { revealID = "run-card-" + id }
-            }
+        // 每次重绘只计算一次运行中卡片（以前一次重绘里重复计算五六次，每次都解析头像地址与时间）。
+        let active = activeRuns
+        return ScrollViewReader { proxy in
+            conversation(active: active, proxy: proxy)
             .background(LeoTheme.ColorToken.background)
-            .safeAreaInset(edge: .bottom, spacing: 0) { if model.issue != nil { replySection } }
+            .safeAreaInset(edge: .bottom, spacing: 0) { if model.issue != nil { replySection(active: active) } }
             .navigationTitle(model.issue?.identifier ?? "任务对话")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
@@ -339,7 +419,10 @@ struct PaperclipIssueDetailView: View {
             .sheet(isPresented: $details) { propertiesPanel }
             .sheet(item: $statusDecision) { status in PaperclipStatusDecisionSheet(model: model, selected: status) }
             .sheet(item: $logRun) { run in
-                NavigationStack { PaperclipRunLogPage(stream: stream, run: run, agentName: agent(run.agentId)?.name ?? "智能体") }
+                NavigationStack {
+                    PaperclipRunLogPage(stream: stream, run: run, agentName: agent(run.agentId)?.name ?? "智能体",
+                                        livePush: { [model = model] in model.liveOpen })
+                }
             }
             .refreshable { await model.refresh(full: true) }
             .task(id: scenePhase) { await pollLoop() }
@@ -367,6 +450,44 @@ struct PaperclipIssueDetailView: View {
         }
     }
 
+    /// 对话滚动区与自动跟随逻辑（从 body 拆出，避免类型检查超时）。
+    private func conversation(active: [PaperclipActiveRunDisplay], proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                thread(active: active, proxy: proxy)
+                Color.clear.frame(height: 1).id("paperclip.latest")
+            }
+            .padding(.horizontal, LeoTheme.Spacing.md)
+            // 输入栏通过 safeAreaInset 计入滚动安全区（随其实际高度与键盘变化）；再留出呼吸空间，最后一张卡片不贴着输入栏。
+            .padding(.bottom, LeoTheme.Spacing.lg)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+        }
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            PaperclipScrollPosition.isNearBottom(offsetY: geometry.contentOffset.y, containerHeight: geometry.containerSize.height,
+                                                 bottomInset: geometry.contentInsets.bottom, contentHeight: geometry.contentSize.height)
+        } action: { _, value in nearBottom = value }
+        .onChange(of: model.issue?.id) { _, _ in revealConversation(using: proxy) }
+        // 新评论只追加在末尾：比较最后一条与条数，不再每次重绘复制全部 id。
+        .onChange(of: model.comments.last?.id) { _, _ in revealConversation(using: proxy) }
+        .onChange(of: model.comments.count) { _, _ in revealConversation(using: proxy) }
+        .onChange(of: revealID) { _, _ in revealConversation(using: proxy) }
+        .onChange(of: active.map(\.id)) { old, ids in
+            // 新运行开始时滚到运行卡片；只针对新出现的运行，且仅当用户停在底部（往上翻阅时不打扰）。
+            if let id = ids.last(where: { !old.contains($0) }), nearBottom || !positionedConversation {
+                revealID = "run-card-" + id
+            }
+        }
+        .onChange(of: editingReply) { _, focused in
+            // 键盘弹出会缩小可见区：原本停在底部时，待键盘动画结束后跟随到底，最后一条不被输入栏遮住。
+            guard focused, nearBottom, positionedConversation else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                followLatest(proxy)
+            }
+        }
+    }
+
     /// 前台时：立即刷新一次（以前先睡 15 秒），然后按节奏轮询。
     /// 只在写请求进行中暂停；输入框聚焦、面板打开都不再暂停只读刷新。
     private func pollLoop() async {
@@ -389,8 +510,9 @@ struct PaperclipIssueDetailView: View {
 
     // MARK: 线程
 
-    @ViewBuilder private var thread: some View {
+    @ViewBuilder private func thread(active activeRuns: [PaperclipActiveRunDisplay], proxy: ScrollViewProxy) -> some View {
         if let issue = model.issue {
+            let entries = model.threadEntries(activeRunIDs: Set(activeRuns.map(\.id)))
             PaperclipIssueHeader(issue: issue, assignee: agent(issue.assigneeAgentId), client: model.client,
                                  liveState: model.liveState, runActive: !activeRuns.isEmpty)
                 .padding(.bottom, LeoTheme.Spacing.md)
@@ -413,10 +535,9 @@ struct PaperclipIssueDetailView: View {
                 entryView(entry)
             }
             ForEach(activeRuns) { run in
-                PaperclipRunCard(run: run, progress: stream.progress[run.id], log: stream.logs[run.id],
-                                 expanded: stream.expandedLogRunIDs.contains(run.id),
-                                 telemetryAvailable: !stream.telemetryForbidden, client: model.client,
-                                 onToggleLog: { stream.toggleLog(run.id) })
+                PaperclipLiveRunCard(stream: stream, run: run, client: model.client) {
+                    if positionedConversation && nearBottom { followLatest(proxy) }
+                }
                     .id("run-card-" + run.id)
                     .padding(.top, LeoTheme.Spacing.sm)
                     .padding(.bottom, LeoTheme.Spacing.md)
@@ -574,7 +695,8 @@ struct PaperclipIssueDetailView: View {
                     if model.runs.isEmpty { Text("尚无运行记录。任务已创建不代表智能体已经开始执行。").foregroundStyle(.secondary) }
                     ForEach(model.runs.sorted { ($0.createdAt ?? $0.startedAt ?? "") > ($1.createdAt ?? $1.startedAt ?? "") }) { run in
                         NavigationLink {
-                            PaperclipRunLogPage(stream: stream, run: run, agentName: agent(run.agentId)?.name ?? "智能体")
+                            PaperclipRunLogPage(stream: stream, run: run, agentName: agent(run.agentId)?.name ?? "智能体",
+                                                livePush: { [model = model] in model.liveOpen })
                         } label: {
                             HStack(spacing: 10) {
                                 Circle().fill(PaperclipStatusStyle.color(run.status)).frame(width: 8, height: 8)
@@ -619,7 +741,7 @@ struct PaperclipIssueDetailView: View {
         }
     }
 
-    private var replySection: some View {
+    private func replySection(active activeRuns: [PaperclipActiveRunDisplay]) -> some View {
         PaperclipComposerBar(
             text: $draft.body, focus: $editingReply,
             placeholder: activeRuns.isEmpty ? "回复任务或补充要求…" : "补充要求，智能体会在对话中看到…",
@@ -734,6 +856,8 @@ private struct PaperclipRunLogPage: View {
     @ObservedObject var stream: PaperclipRunStream
     let run: PaperclipRun
     let agentName: String
+    /// 实时通道是否在推送日志片段；推送时不再每 3 秒请求 REST。
+    let livePush: () -> Bool
 
     private var active: Bool { stream.activeRuns.contains { $0.id == run.runId } }
     private var duration: String? {
@@ -771,10 +895,10 @@ private struct PaperclipRunLogPage: View {
         }
         .task {
             if stream.logs[run.runId]?.restOffset == nil { await stream.loadLog(runID: run.runId) }
-            // 运行中每 3 秒增量拉取（有实时通道时实时片段会先到）。
+            // 运行中每 3 秒增量拉取；实时通道已连接时片段由事件推送（缺序或截断自动补齐），不再重复请求。
             while active && !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(PaperclipPollingPolicy.activeRunInterval)) } catch { return }
-                await stream.loadLog(runID: run.runId)
+                if !livePush() { await stream.loadLog(runID: run.runId) }
             }
         }
     }

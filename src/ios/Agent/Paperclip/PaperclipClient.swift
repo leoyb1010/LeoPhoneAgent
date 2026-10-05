@@ -285,7 +285,7 @@ final class PaperclipClient {
         }
     }
 
-    private func authenticated<T: Decodable>(_ path: String, method: String = "GET",
+    private func authenticated<T: Decodable & Sendable>(_ path: String, method: String = "GET",
                                             body: [String: Any]? = nil, userID: String) async throws -> T {
         // 同一 Cookie 快照用于身份校验和实际请求，切换账号不会改变进行中的请求归属。
         // health 已在 connect() 完成，不再每次请求重复。
@@ -335,11 +335,17 @@ final class PaperclipClient {
         confirmedIdentity = (fingerprint, identity.user.id, Date())
     }
 
-    private func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil,
+    private func request<T: Decodable & Sendable>(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                                       cookies: [HTTPCookie]) async throws -> T {
         let data = try await raw(path, method: method, body: body, cookies: cookies)
-        do { return try JSONDecoder().decode(T.self, from: data) }
-        catch { throw method == "GET" ? PaperclipError.invalidResponse : PaperclipError.uncertain }
+        // 评论、任务列表可达数 MB：以前在主线程解码，轮询时会卡顿滚动；改到后台线程，结果回主线程使用。
+        let decoded = await Self.decodeInBackground(T.self, data)
+        guard let value = decoded else { throw method == "GET" ? PaperclipError.invalidResponse : PaperclipError.uncertain }
+        return value
+    }
+
+    nonisolated private static func decodeInBackground<T: Decodable & Sendable>(_ type: T.Type, _ data: Data) async -> T? {
+        await Task.detached(priority: .userInitiated) { try? JSONDecoder().decode(type, from: data) }.value
     }
 
     private func raw(_ path: String, method: String = "GET", body: [String: Any]? = nil,

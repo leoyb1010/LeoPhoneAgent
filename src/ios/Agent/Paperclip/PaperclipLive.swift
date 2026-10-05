@@ -28,6 +28,12 @@ struct PaperclipLiveEvent: Decodable, Sendable, Equatable {
         return try? JSONDecoder().decode(PaperclipLiveEvent.self, from: Data(text.utf8))
     }
 
+    /// 在后台线程解码：通道推送整个公司的事件（含每秒数条、最大 8KB 的日志片段），
+    /// 以前逐帧在主线程解析 JSON，事件密集时会拖慢详情页滚动。按到达顺序逐帧等待，顺序不变。
+    static func decodeInBackground(_ text: String) async -> PaperclipLiveEvent? {
+        await Task.detached(priority: .userInitiated) { decode(text) }.value
+    }
+
     func string(_ key: String) -> String? {
         if case .string(let value)? = payload[key] { return value }
         return nil
@@ -129,6 +135,9 @@ struct PaperclipRunLogParser: Equatable, Sendable {
     private var pendingRecord = ""
     /// 最后一行是否尚未以换行结束（下一个同流片段接在后面）。
     private var lastLineOpen = false
+    /// 已解析 NDJSON 记录里的最大 seq。服务器每条日志记录都带单调递增的 seq（与实时
+    /// heartbeat.run.log 事件同一序号），用于把实时片段与 REST 读取结果去重、补齐。
+    private(set) var maxSeq: Int?
     var maxLines = 1_500
 
     var isEmpty: Bool { lines.isEmpty }
@@ -187,6 +196,7 @@ struct PaperclipRunLogParser: Equatable, Sendable {
             appendChunk(record + "\n", stream: "stdout")
             return
         }
+        if let seq = (object["seq"] as? NSNumber)?.intValue { maxSeq = max(maxSeq ?? seq, seq) }
         appendChunk(chunk, stream: object["stream"] as? String)
     }
 

@@ -16,6 +16,16 @@ final class PaperclipRunStream: ObservableObject {
         var error: String?
         /// 本次读取因分段上限停止，服务器还有更多内容。
         var hasMore = false
+        /// restSnapshot 之后追加的实时片段（带 seq）；REST 补齐后据 seq 重放尚未包含的部分。
+        var liveTail: [LiveChunk] = []
+        /// 日志接口 404：运行尚未产生日志或日志已被清理。不是错误，不再显示状态码。
+        var missing = false
+    }
+
+    struct LiveChunk: Equatable {
+        let seq: Int?
+        let chunk: String
+        let stream: String?
     }
 
     /// 需要由详情页执行的补拉。
@@ -30,6 +40,8 @@ final class PaperclipRunStream: ObservableObject {
     @Published private(set) var telemetryForbidden = false
     @Published var expandedLogRunIDs: Set<String> = []
     private var resyncTasks: [String: Task<Void, Never>] = [:]
+    /// reset() 时递增；迟到的网络结果发现代际变化即丢弃，不把旧账号数据写回。
+    private var generation = 0
 
     init(client: PaperclipClient, reference: PaperclipTaskReference) {
         self.client = client
@@ -40,6 +52,7 @@ final class PaperclipRunStream: ObservableObject {
     var hasActiveRun: Bool { liveRuns.contains(where: \.isActive) }
 
     func reset() {
+        generation += 1
         for task in resyncTasks.values { task.cancel() }
         resyncTasks = [:]
         liveRuns = []; progress = [:]; logs = [:]; expandedLogRunIDs = []
@@ -48,10 +61,13 @@ final class PaperclipRunStream: ObservableObject {
     /// 重新读取运行中的 run。身份类错误抛给详情页统一处理；403 降级为只显示评论。
     func reloadLiveRuns() async throws {
         guard !telemetryForbidden else { return }
+        let stamp = generation
         do {
             let rows = try await client.liveRuns(reference)
+            guard stamp == generation else { return }
             apply(rows)
         } catch let error as PaperclipError {
+            guard stamp == generation else { return }
             switch error.underlying {
             case .forbidden: telemetryForbidden = true; liveRuns = []
             case .signedOut, .identityChanged: throw error
@@ -121,6 +137,8 @@ final class PaperclipRunStream: ObservableObject {
     private func appendLiveLog(runID: String, event: PaperclipLiveEvent) {
         guard var state = logs[runID], state.restOffset != nil else { return }
         let seq = event.int("seq")
+        // 修复重复：服务器先写日志再推事件，REST 读取可能已包含这条片段；seq 不大于已读最大序号即丢弃。
+        if let seq, let restSeq = (state.restSnapshot ?? state.parser).maxSeq, seq <= restSeq { return }
         let truncated = event.bool("truncated") ?? false
         if truncated || (seq != nil && state.lastSeq != nil && seq != state.lastSeq! + 1) {
             if let seq { state.lastSeq = seq }
@@ -128,10 +146,25 @@ final class PaperclipRunStream: ObservableObject {
             scheduleResync(runID)
             return
         }
-        if state.restSnapshot == nil { state.restSnapshot = state.parser }
-        state.parser.appendChunk(event.string("chunk") ?? "", stream: event.string("stream"))
+        if state.restSnapshot == nil { state.restSnapshot = state.parser; state.liveTail = [] }
+        let chunk = LiveChunk(seq: seq, chunk: event.string("chunk") ?? "", stream: event.string("stream"))
+        state.parser.appendChunk(chunk.chunk, stream: chunk.stream)
+        state.liveTail.append(chunk)
         if let seq { state.lastSeq = seq }
         logs[runID] = state
+    }
+
+    /// REST 补齐后重放尚未包含在读取内容中的实时片段（seq 大于已读最大序号）。
+    /// 修复丢失：读取进行中到达的片段若晚于服务器读取时刻，以前会被 REST 结果整体覆盖、直到运行结束才出现。
+    /// 旧服务器记录不带 seq 时无法判断，沿用原行为（以 REST 为准）。
+    static func reconcile(_ fetched: PaperclipRunLogParser, liveTail: [LiveChunk])
+        -> (parser: PaperclipRunLogParser, snapshot: PaperclipRunLogParser?, tail: [LiveChunk], lastSeq: Int?) {
+        guard let restSeq = fetched.maxSeq else { return (fetched, nil, [], nil) }
+        let pending = liveTail.filter { ($0.seq ?? Int.min) > restSeq }
+        guard !pending.isEmpty else { return (fetched, nil, [], restSeq) }
+        var parser = fetched
+        for chunk in pending { parser.appendChunk(chunk.chunk, stream: chunk.stream) }
+        return (parser, fetched, pending, max(restSeq, pending.compactMap(\.seq).max() ?? restSeq))
     }
 
     private func scheduleResync(_ runID: String) {
@@ -148,6 +181,7 @@ final class PaperclipRunStream: ObservableObject {
     func loadLog(runID: String) async {
         var state = logs[runID] ?? LogState()
         guard !state.loading else { return }
+        let stamp = generation
         state.loading = true
         logs[runID] = state
         var offset: Int
@@ -165,6 +199,7 @@ final class PaperclipRunStream: ObservableObject {
             var pages = 0
             while pages < 4 {
                 let chunk = try await client.runLog(reference, runID: runID, offset: offset)
+                guard stamp == generation else { return }
                 parser.feedNDJSON(chunk.content, startsMidRecord: startsMidRecord && pages == 0)
                 pages += 1
                 guard let next = chunk.nextOffset, next > offset else {
@@ -177,15 +212,28 @@ final class PaperclipRunStream: ObservableObject {
             }
             if !hasActiveRun || !liveRuns.contains(where: { $0.id == runID && $0.isActive }) { parser.flush() }
             state = logs[runID] ?? state
-            state.parser = parser
-            state.restSnapshot = nil
+            let merged = Self.reconcile(parser, liveTail: state.liveTail)
+            state.parser = merged.parser
+            state.restSnapshot = merged.snapshot
+            state.liveTail = merged.tail
+            if let seq = merged.lastSeq { state.lastSeq = max(state.lastSeq ?? seq, seq) }
             state.restOffset = offset
             state.hasMore = hasMore
             state.error = nil
+            state.missing = false
         } catch {
+            // reset() 之后迟到的失败同样不写回。
+            guard stamp == generation else { return }
             state = logs[runID] ?? state
             let reason = (error as? PaperclipError)?.underlying
-            state.error = reason == .forbidden ? "当前账号没有查看运行日志的权限。" : PaperclipLabels.error(error)
+            if reason == .http(404) {
+                // 日志接口 404：运行尚未开始输出或日志已清理。降级为“暂无日志”，从头接收实时片段，运行中轮询会再试。
+                state.missing = true
+                state.error = nil
+                if state.restOffset == nil { state.restOffset = 0 }
+            } else {
+                state.error = reason == .forbidden ? "当前账号没有查看运行日志的权限。" : PaperclipLabels.error(error)
+            }
         }
         state.loading = false
         logs[runID] = state

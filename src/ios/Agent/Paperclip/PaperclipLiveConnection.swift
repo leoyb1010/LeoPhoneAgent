@@ -91,6 +91,7 @@ final class PaperclipLiveConnection: ObservableObject {
     let reconnected = PassthroughSubject<Void, Never>()
     static let identityRefreshInterval: Double = 600
 
+    private let identityRefreshInterval: Double
     private let makeRequest: @MainActor () async throws -> URLRequest
     private let makeSocket: @MainActor (URLRequest) -> PaperclipLiveSocket
     private let sleep: @MainActor (Double) async throws -> Void
@@ -106,7 +107,9 @@ final class PaperclipLiveConnection: ObservableObject {
     init(profile: PaperclipProfile, companyID: String, userID: String,
          makeRequest: @escaping @MainActor () async throws -> URLRequest,
          makeSocket: @escaping @MainActor (URLRequest) -> PaperclipLiveSocket = { PaperclipURLSessionLiveSocket(request: $0) },
-         sleep: @escaping @MainActor (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
+         sleep: @escaping @MainActor (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+         identityRefreshInterval: Double = PaperclipLiveConnection.identityRefreshInterval) {
+        self.identityRefreshInterval = identityRefreshInterval
         self.profile = profile
         self.companyID = companyID
         self.userID = userID
@@ -191,7 +194,10 @@ final class PaperclipLiveConnection: ObservableObject {
                 reconnected.send()
                 while !Task.isCancelled {
                     let text = try await socket.receiveText()
-                    guard let event = PaperclipLiveEvent.decode(text) else { continue }
+                    let decoded = await PaperclipLiveEvent.decodeInBackground(text)
+                    // 后台解码期间可能已被 stop()：已取消的循环不得再分发事件。
+                    guard !Task.isCancelled else { return }
+                    guard let event = decoded else { continue }
                     // 每条事件都校验公司；不符说明通道归属异常，丢弃并断开，不再自动重连。
                     guard event.companyId == companyID else { finish(.protocolViolation); return }
                     events.send(event)
@@ -206,8 +212,14 @@ final class PaperclipLiveConnection: ObservableObject {
                 case 401?, 403?:
                     // 刚新鲜确认过身份仍被拒：再新鲜确认一次。身份失效则停止并提示重新登录；
                     // 否则是此服务器、代理或账号不提供实时通道，停止重连，页面保持轮询。
-                    do { _ = try await makeRequest(); finish(.unavailable) }
-                    catch { finish(Self.terminalReason(error) ?? .unavailable) }
+                    // 修复竞态：复核期间若被 stop()（进入后台、切换公司）并已 start() 新循环，
+                    // 旧循环醒来后不能再 finish()——那会断开新连接、把状态写成 stopped 并清掉新循环引用，
+                    // 之后再 start() 就会出现两条并行循环。
+                    let reason: StopReason
+                    do { _ = try await makeRequest(); reason = .unavailable }
+                    catch { reason = Self.terminalReason(error) ?? .unavailable }
+                    guard !Task.isCancelled else { return }
+                    finish(reason)
                     return
                 case 404?, 400?: finish(.unavailable); return
                 default:
@@ -221,7 +233,7 @@ final class PaperclipLiveConnection: ObservableObject {
     private func scheduleIdentityRefresh() {
         refreshTimer?.cancel()
         refreshTimer = Task { @MainActor [weak self] in
-            do { try await Task.sleep(for: .seconds(Self.identityRefreshInterval)) } catch { return }
+            do { try await Task.sleep(for: .seconds(self?.identityRefreshInterval ?? Self.identityRefreshInterval)) } catch { return }
             guard let self, !Task.isCancelled, self.state == .open else { return }
             self.identityRefreshDue = true
             self.socket?.cancel()

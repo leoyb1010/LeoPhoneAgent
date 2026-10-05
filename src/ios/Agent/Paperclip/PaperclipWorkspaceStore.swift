@@ -23,6 +23,10 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private var foreground = true
     private var liveSubscriptions: Set<AnyCancellable> = []
     private var listRefreshTask: Task<Void, Never>?
+    /// 任务列表是否在屏幕上。进入详情页后列表不可见：事件带来的列表刷新推迟到返回列表时做一次，
+    /// 以前详情页打开期间公司内每条评论、运行状态都会触发一次三请求的列表刷新。
+    private var listVisible = true
+    private var listStale = false
     private let makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)?
     private var revision = UUID()
     private var nextOffset = 0
@@ -362,12 +366,25 @@ final class PaperclipWorkspaceStore: ObservableObject {
         }
     }
 
+    func setListVisible(_ visible: Bool) {
+        listVisible = visible
+        guard visible, listStale else { return }
+        listStale = false
+        scheduleListRefresh()
+    }
+
     /// 事件风暴合并为一次列表刷新。
     private func scheduleListRefresh() {
+        guard listVisible else { listStale = true; return }
         guard listRefreshTask == nil else { return }
         listRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(1_200))
             guard let self, !Task.isCancelled else { return }
+            // 修复丢更新：以前撞上进行中的刷新时 refresh() 因 busy 直接返回，事件带来的变化要等 60 秒兜底轮询。
+            while self.busy {
+                try? await Task.sleep(for: .milliseconds(200))
+                if Task.isCancelled { return }
+            }
             self.listRefreshTask = nil
             await self.refresh()
         }

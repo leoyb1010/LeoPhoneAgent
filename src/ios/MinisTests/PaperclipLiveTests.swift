@@ -1,4 +1,6 @@
+import Combine
 import Foundation
+import Network
 import XCTest
 
 /// 实时通道、运行模型与解析的单测（不连网：URLProtocol 固定响应 + 脚本化 WebSocket）。
@@ -6,13 +8,20 @@ private final class PaperclipLiveTestProtocol: URLProtocol, @unchecked Sendable 
     static let lock = NSLock()
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) throws -> (Int, String, String))?
     nonisolated(unsafe) static var requests: [String] = []
+    /// 路径包含此前缀的请求在后台线程阻塞，直到测试放行（模拟“请求进行中”的竞态窗口）。
+    nonisolated(unsafe) static var gate: (prefix: String, semaphore: DispatchSemaphore)?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.lock.lock()
         let handler = Self.handler
         Self.requests.append((request.httpMethod ?? "GET") + " " + (request.url?.path ?? "") + (request.url?.query.map { "?" + $0 } ?? ""))
+        let gate = Self.gate
         Self.lock.unlock()
+        if let gate, (request.url?.path ?? "").hasPrefix(gate.prefix) {
+            Self.lock.lock(); Self.gate = nil; Self.lock.unlock()
+            gate.semaphore.wait()
+        }
         do {
             let result = try handler!(request)
             let response = HTTPURLResponse(url: request.url!, statusCode: result.0, httpVersion: nil, headerFields: ["Content-Type": result.2])!
@@ -23,7 +32,13 @@ private final class PaperclipLiveTestProtocol: URLProtocol, @unchecked Sendable 
     }
     override func stopLoading() {}
     static func install(_ handler: @escaping @Sendable (URLRequest) throws -> (Int, String, String)) {
-        lock.lock(); self.handler = handler; requests = []; lock.unlock()
+        lock.lock(); self.handler = handler; requests = []; gate = nil; lock.unlock()
+    }
+    /// 下一次匹配前缀的请求阻塞，返回用于放行的信号量。
+    static func hold(_ prefix: String) -> DispatchSemaphore {
+        let semaphore = DispatchSemaphore(value: 0)
+        lock.lock(); gate = (prefix, semaphore); lock.unlock()
+        return semaphore
     }
     static var ledger: [String] { lock.lock(); defer { lock.unlock() }; return requests }
 }
@@ -412,5 +427,299 @@ final class PaperclipLiveTests: XCTestCase {
         XCTAssertEqual(PaperclipLabels.runError("adapter_failed"), "智能体执行器出错")
         XCTAssertEqual(PaperclipLabels.runError("future_code"), "运行异常结束")
         XCTAssertNil(PaperclipLabels.runError(nil))
+    }
+
+    // MARK: 审计回归（1.53.4）
+
+    /// 生产 URLSessionWebSocketTask：手写的 Cookie/Origin 头真的随握手发出、服务器 ping 自动回 pong、
+    /// cancel 能结束挂起的 receive、握手被拒时能拿到状态码。用本机 Network 框架的 WebSocket 服务器验证
+    /// （ws://127.0.0.1；生产只允许 wss，TLS 握手本身不在此覆盖）。
+    func testURLSessionSocketSendsManualCookieAndOriginAnswersPingAndEndsReceiveOnCancel() async throws {
+        let server = try LoopbackWebSocketServer()
+        defer { server.stop() }
+        var request = URLRequest(url: URL(string: "ws://127.0.0.1:\(try await server.port())/api/companies/company/events/ws")!)
+        request.httpShouldHandleCookies = false
+        request.setValue("https://example.com", forHTTPHeaderField: "Origin")
+        request.setValue("paperclip.session_token=fixture", forHTTPHeaderField: "Cookie")
+        let socket = PaperclipURLSessionLiveSocket(request: request)
+        socket.resume()
+        try await socket.waitUntilOpen()
+        XCTAssertEqual(socket.handshakeStatus, 101)
+        let headers = server.headers
+        XCTAssertEqual(headers["cookie"], "paperclip.session_token=fixture", "iOS 不能剥离手写的 Cookie 头，否则服务器只会 403")
+        XCTAssertEqual(headers["origin"], "https://example.com")
+        XCTAssertNil(headers["authorization"])
+        server.sendPingThenText(#"{"companyId":"company","type":"activity.logged","payload":{}}"#)
+        let text = try await socket.receiveText()
+        XCTAssertTrue(text.contains("activity.logged"))
+        let ponged = await server.waitForPong()
+        XCTAssertTrue(ponged, "服务器每 30 秒 ping，客户端必须自动回 pong，否则会被判定断线")
+        let pending = Task { @MainActor in try await socket.receiveText() }
+        try await Task.sleep(for: .milliseconds(100))
+        socket.cancel()
+        do { _ = try await pending.value; XCTFail("cancel 后挂起的 receive 必须结束") } catch {}
+
+        let refusing = try LoopbackRefusingServer()
+        defer { refusing.stop() }
+        let denied = PaperclipURLSessionLiveSocket(request: URLRequest(url: URL(string: "ws://127.0.0.1:\(try await refusing.port())/x")!))
+        denied.resume()
+        do { try await denied.waitUntilOpen(); XCTFail("握手被拒必须报错") } catch {}
+        XCTAssertEqual(denied.handshakeStatus, 403, "握手被拒时必须拿到状态码，才能区分 401/403 与网络错误")
+        denied.cancel()
+    }
+
+    /// 回归：401/403 复核身份期间 stop() 并重新 start()，旧循环醒来不能断开新连接、改写状态或清掉新循环。
+    func testStopDuringForbiddenReverifyDoesNotClobberNewLoop() async throws {
+        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
+        var calls = 0
+        var gate: CheckedContinuation<Void, Never>?
+        var sockets: [ScriptedLiveSocket] = []
+        let url = URL(string: "wss://example.com/api/companies/company/events/ws")!
+        let live = PaperclipLiveConnection(profile: profile, companyID: "company", userID: "human",
+            makeRequest: {
+                calls += 1
+                if calls == 2 { await withCheckedContinuation { gate = $0 } } // 第一次 403 后的复核挂起
+                return URLRequest(url: url)
+            },
+            makeSocket: { _ in
+                let socket = sockets.isEmpty
+                    ? ScriptedLiveSocket(messages: [], openError: URLError(.badServerResponse), handshakeStatus: 403)
+                    : ScriptedLiveSocket(messages: [], holdOpen: true)
+                sockets.append(socket)
+                return socket
+            },
+            sleep: { _ in })
+        live.start()
+        await waitUntil { gate != nil }
+        live.stop()
+        live.start()
+        await waitUntil { live.isOpen }
+        XCTAssertTrue(live.isOpen)
+        gate?.resume(); gate = nil
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(live.state, .open, "旧循环不得把新连接改写为 stopped")
+        XCTAssertEqual(sockets.count, 2)
+        XCTAssertFalse(sockets[1].cancelled, "旧循环不得断开新连接")
+        live.start()
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(sockets.count, 2, "不能出现第二条并行循环")
+        live.stop()
+    }
+
+    /// 连上满一个复核周期后主动重连并新鲜确认身份；身份变化即停止，不再重连。
+    func testIdentityRefreshReconnectsWithFreshVerificationAndStopsWhenIdentityChanged() async throws {
+        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
+        var verifications = 0
+        var sockets: [ScriptedLiveSocket] = []
+        var opens = 0
+        let live = PaperclipLiveConnection(profile: profile, companyID: "company", userID: "human",
+            makeRequest: {
+                verifications += 1
+                if verifications >= 3 { throw PaperclipError.identityChanged }
+                return URLRequest(url: URL(string: "wss://example.com/api/companies/company/events/ws")!)
+            },
+            makeSocket: { _ in let socket = ScriptedLiveSocket(messages: [], holdOpen: true); sockets.append(socket); return socket },
+            sleep: { _ in XCTFail("身份复核重连不走退避") },
+            identityRefreshInterval: 0.1)
+        let token = live.reconnected.sink { opens += 1 }
+        live.start()
+        await waitUntil({ live.isStopped }, timeout: 5)
+        XCTAssertEqual(live.state, .stopped(.identityChanged))
+        XCTAssertEqual(verifications, 3, "每个复核周期都重新新鲜确认身份")
+        XCTAssertEqual(opens, 2)
+        XCTAssertTrue(sockets.allSatisfy(\.cancelled), "复核时旧连接必须断开")
+        token.cancel()
+    }
+
+    // MARK: 日志实时与 REST 合并
+
+    private static let runRows = #"[{"id":"run-1","status":"running","agentId":"a","logBytes":10}]"#
+    private func logRecord(_ seq: Int, _ text: String) -> String {
+        #"{"ts":"t","stream":"stdout","chunk":"\#(text)\n","seq":\#(seq)}"# + "\n"
+    }
+    private func logEvent(_ seq: Int, _ text: String) -> PaperclipLiveEvent {
+        PaperclipLiveEvent.decode(event(type: "heartbeat.run.log", payload: ["runId": "run-1", "issueId": "issue", "seq": seq, "stream": "stdout", "chunk": text + "\n"]))!
+    }
+    private func installLogServer(_ content: @escaping @Sendable (Int) -> (Int, String)) {
+        let session = Self.session, issue = Self.issue, runs = Self.runRows
+        PaperclipLiveTestProtocol.install { request in
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/runs": return (200, #"[{"runId":"run-1","status":"running","agentId":"a"}]"#, "application/json")
+            case "/api/issues/issue/live-runs": return (200, runs, "application/json")
+            case "/api/heartbeat-runs/run-1/log":
+                let offset = Int(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "offset" }!.value!)!
+                let (status, body) = content(offset)
+                if status != 200 { return (status, #"{"error":"Run log not found"}"#, "application/json") }
+                let json = String(decoding: try JSONSerialization.data(withJSONObject: ["runId": "run-1", "content": body]), as: UTF8.self)
+                return (200, json, "application/json")
+            default: return (404, "{}", "application/json")
+            }
+        }
+    }
+
+    /// 回归：REST 已包含的实时片段（seq 不大于已读序号）不重复显示；读取进行中到达、REST 未包含的片段不丢失。
+    func testLiveLogDedupesBySeqAndReplaysChunksTheRestReadMissed() async throws {
+        let first = logRecord(1, "一") + logRecord(2, "二")
+        let firstBytes = first.utf8.count
+        let third = logRecord(3, "三")
+        installLogServer { offset in offset == 0 ? (200, first) : (200, third) }
+        let client = try client()
+        let stream = PaperclipRunStream(client: client, reference: reference(client))
+        try await stream.reloadLiveRuns()
+        await stream.loadLog(runID: "run-1")
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["一", "二"])
+        XCTAssertEqual(stream.logs["run-1"]?.restOffset, firstBytes)
+        stream.handle(logEvent(2, "二"))
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["一", "二"], "REST 已含的片段不得重复")
+        stream.handle(logEvent(3, "三"))
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["一", "二", "三"])
+        // 补齐读取进行中又到达 seq 4；服务器这次读取只含到 seq 3。
+        let release = PaperclipLiveTestProtocol.hold("/api/heartbeat-runs/run-1/log")
+        let load = Task { @MainActor in await stream.loadLog(runID: "run-1") }
+        await waitUntil { stream.logs["run-1"]?.loading == true }
+        stream.handle(logEvent(4, "四"))
+        release.signal()
+        await load.value
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["一", "二", "三", "四"], "读取期间到达且 REST 未含的片段不得丢失，也不得重复")
+        XCTAssertEqual(stream.logs["run-1"]?.lastSeq, 4)
+        stream.handle(logEvent(5, "五"))
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.last?.text, "五", "补齐后序号连续，继续直接追加")
+    }
+
+    /// 日志接口 404（尚未输出或已清理）降级为“暂无日志”，不显示状态码错误，并开始接收实时片段。
+    func testRunLogNotFoundDegradesToEmptyAndStillAcceptsLiveChunks() async throws {
+        installLogServer { _ in (404, "") }
+        let client = try client()
+        let stream = PaperclipRunStream(client: client, reference: reference(client))
+        try await stream.reloadLiveRuns()
+        await stream.loadLog(runID: "run-1")
+        let state = try XCTUnwrap(stream.logs["run-1"])
+        XCTAssertNil(state.error)
+        XCTAssertTrue(state.missing)
+        XCTAssertEqual(state.restOffset, 0)
+        stream.handle(logEvent(1, "开始"))
+        XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["开始"])
+    }
+
+    /// 回归：身份失效 reset() 之后，迟到的日志结果不能把旧账号数据写回。
+    func testResetDuringLogLoadDropsLateResult() async throws {
+        installLogServer { _ in (200, "") }
+        let client = try client()
+        let stream = PaperclipRunStream(client: client, reference: reference(client))
+        try await stream.reloadLiveRuns()
+        installLogServer { _ in (200, #"{"ts":"t","stream":"stdout","chunk":"旧数据\n","seq":1}"# + "\n") }
+        let release = PaperclipLiveTestProtocol.hold("/api/heartbeat-runs/run-1/log")
+        let load = Task { @MainActor in await stream.loadLog(runID: "run-1") }
+        await waitUntil { stream.logs["run-1"]?.loading == true }
+        stream.reset()
+        release.signal()
+        await load.value
+        XCTAssertNil(stream.logs["run-1"], "reset 后不得回写日志")
+        XCTAssertTrue(stream.liveRuns.isEmpty)
+    }
+}
+
+/// 与服务器 rejectUpgrade 相同：读到升级请求后直接回 HTTP 403 并关闭。
+private final class LoopbackRefusingServer: @unchecked Sendable {
+    private let listener: NWListener
+    init() throws {
+        let queue = DispatchQueue(label: "paperclip.loopback.refuse")
+        listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: queue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
+                let response = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nforbidden"
+                connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        listener.start(queue: queue)
+    }
+    func port() async throws -> UInt16 {
+        for _ in 0..<200 {
+            if listener.state == .ready, let port = listener.port, port.rawValue != 0 { return port.rawValue }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw URLError(.cannotConnectToHost)
+    }
+    func stop() { listener.cancel() }
+}
+
+/// 本机回环 WebSocket 服务器（Network 框架）：记录握手头，可发 ping 并等待 pong。
+private final class LoopbackWebSocketServer: @unchecked Sendable {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var headers: [String: String] = [:]
+        var connection: NWConnection?
+        var ponged = false
+    }
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "paperclip.loopback.ws")
+    private let state: State
+
+    init() throws {
+        let state = State()
+        let queue = queue
+        let options = NWProtocolWebSocket.Options()
+        options.autoReplyPing = true
+        options.setClientRequestHandler(queue) { _, headers in
+            state.lock.withLock { for header in headers { state.headers[header.name.lowercased()] = header.value } }
+            return NWProtocolWebSocket.Response(status: .accept, subprotocol: nil)
+        }
+        let parameters = NWParameters.tcp
+        parameters.defaultProtocolStack.applicationProtocols.insert(options, at: 0)
+        let listener = try NWListener(using: parameters, on: .any)
+        listener.newConnectionHandler = { connection in
+            state.lock.withLock { state.connection = connection }
+            connection.start(queue: queue)
+            // 与 ws 库一样持续读取：控制帧（pong）只有在读取时才会被处理。
+            func receive() {
+                connection.receiveMessage { _, _, _, error in if error == nil { receive() } }
+            }
+            receive()
+        }
+        listener.start(queue: queue)
+        self.listener = listener
+        self.state = state
+    }
+
+    func port() async throws -> UInt16 {
+        for _ in 0..<200 {
+            if listener.state == .ready, let port = listener.port, port.rawValue != 0 { return port.rawValue }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw URLError(.cannotConnectToHost)
+    }
+
+    var headers: [String: String] { state.lock.withLock { state.headers } }
+
+    func sendPingThenText(_ text: String) {
+        let state = state, queue = queue
+        queue.async {
+            guard let connection = state.lock.withLock({ state.connection }) else { return }
+            let ping = NWProtocolWebSocket.Metadata(opcode: .ping)
+            ping.setPongHandler(queue) { error in
+                if error == nil { state.lock.withLock { state.ponged = true } }
+            }
+            connection.send(content: Data(), contentContext: NWConnection.ContentContext(identifier: "ping", metadata: [ping]),
+                            isComplete: true, completion: .idempotent)
+            let message = NWProtocolWebSocket.Metadata(opcode: .text)
+            connection.send(content: Data(text.utf8), contentContext: NWConnection.ContentContext(identifier: "text", metadata: [message]),
+                            isComplete: true, completion: .idempotent)
+        }
+    }
+
+    func waitForPong() async -> Bool {
+        for _ in 0..<300 {
+            if state.lock.withLock({ state.ponged }) { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+
+    func stop() {
+        state.lock.withLock { state.connection?.cancel() }
+        listener.cancel()
     }
 }
