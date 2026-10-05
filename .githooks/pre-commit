@@ -3,7 +3,7 @@
 #   git config core.hooksPath .githooks
 #
 # Only staged changes under src/mac/leophone/ run that project's lint
-# (`pnpm -C src/mac/leophone lint`, i.e. oxlint over the working tree).
+# (oxlint --quiet over that project, i.e. `pnpm lint` errors only).
 # Every other change passes straight through. A missing/broken pnpm or an
 # uninstalled src/mac/leophone/node_modules prints a warning and does not block.
 
@@ -40,8 +40,8 @@ if [ ! -d "$LEOPHONE_DIR/node_modules" ]; then
   exit 0
 fi
 
-echo "pre-commit: staged changes in $LEOPHONE_DIR -> pnpm lint"
-if ! PATH="$PNPM_PATH" "$PNPM" -C "$LEOPHONE_DIR" lint; then
+echo "pre-commit: staged changes in $LEOPHONE_DIR -> oxlint (errors only)"
+if ! PATH="$PNPM_PATH" "$PNPM" -C "$LEOPHONE_DIR" exec oxlint --quiet; then
   echo "pre-commit: $LEOPHONE_DIR lint failed; fix it or commit with --no-verify knowingly." >&2
   exit 1
 fi
