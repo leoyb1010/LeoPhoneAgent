@@ -416,6 +416,62 @@ extension AIChatViewModel {
             ))
         }
 
+        // [T-cursor-cloud] 填了 Cursor API Key 才注册:把编码任务派给 Cursor 云端 Agent,花用户的 Cursor 额度。
+        if CursorCloudClient.hasKey {
+            let titleParam = AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user.")
+            tools.append(AgentToolDefinition(
+                name: "cursor_agent_launch",
+                description: "Start a Cursor Cloud Agent on the user's own Cursor plan. It runs on a Cursor-hosted VM against a repository the user connected to Cursor, edits code, pushes a cursor/... branch and can open a PR. Use it for repo-scale coding work the user asks to hand to Cursor; it costs the user's Cursor quota, so launch once per request and never retry blindly. Returns agent_id and run_id immediately — follow up with cursor_agent_status (wait_seconds) instead of launching again.",
+                parameters: [
+                    "tool_title": titleParam,
+                    "prompt": AgentToolParam(type: .string, description: "Fully self-contained task for Cursor (it cannot see this conversation). State the goal, constraints and how to verify."),
+                    "repo": AgentToolParam(type: .string, description: "Repository: full URL, 'owner/repo', or a repo name the user connected to Cursor. Omit only for a task that needs no repository."),
+                    "ref": AgentToolParam(type: .string, description: "Starting branch or commit (default: the repo's default branch)."),
+                    "model": AgentToolParam(type: .string, description: "Optional Cursor model id (e.g. composer-2.5). Omit to use the user's Cursor default."),
+                    "auto_create_pr": AgentToolParam(type: .boolean, description: "Open a pull request when the run finishes (default true)."),
+                    "mode": AgentToolParam(type: .string, description: "'agent' implements directly (default); 'plan' only explores and drafts a plan.", enumValues: ["agent", "plan"]),
+                ],
+                required: ["tool_title", "prompt"],
+                propertyOrdering: ["tool_title", "prompt", "repo", "ref", "model", "auto_create_pr", "mode"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "cursor_agent_followup",
+                description: "Send a follow-up instruction to an existing Cursor Cloud Agent (same conversation and workspace). Only one run per agent can be active: wait for the previous run to finish first. Costs the user's Cursor quota.",
+                parameters: [
+                    "tool_title": titleParam,
+                    "agent_id": AgentToolParam(type: .string, description: "Agent id from cursor_agent_launch (bc-...)."),
+                    "prompt": AgentToolParam(type: .string, description: "The follow-up instruction."),
+                    "mode": AgentToolParam(type: .string, description: "Optional mode override for this run.", enumValues: ["agent", "plan"]),
+                ],
+                required: ["tool_title", "agent_id", "prompt"],
+                propertyOrdering: ["tool_title", "agent_id", "prompt", "mode"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "cursor_agent_status",
+                description: "Read Cursor Cloud Agents. With agent_id: the agent, its latest (or given) run status, pushed branches / PR links and, once finished, Cursor's final reply. Set wait_seconds to block until the run finishes (polls every 5 s) instead of calling this repeatedly. Without agent_id: list the user's recent agents.",
+                parameters: [
+                    "tool_title": titleParam,
+                    "agent_id": AgentToolParam(type: .string, description: "Agent id (bc-...). Omit to list recent agents."),
+                    "run_id": AgentToolParam(type: .string, description: "Specific run id (default: the agent's latest run)."),
+                    "wait_seconds": AgentToolParam(type: .integer, description: "Wait up to this many seconds for the run to finish, 0-600 (default 0)."),
+                    "limit": AgentToolParam(type: .integer, description: "When listing, how many agents to return, 1-50 (default 10)."),
+                ],
+                required: ["tool_title"],
+                propertyOrdering: ["tool_title", "agent_id", "run_id", "wait_seconds", "limit"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "cursor_agent_cancel",
+                description: "Cancel the active run of a Cursor Cloud Agent. Use when the user asks to stop it.",
+                parameters: [
+                    "tool_title": titleParam,
+                    "agent_id": AgentToolParam(type: .string, description: "Agent id (bc-...)."),
+                    "run_id": AgentToolParam(type: .string, description: "Run id (default: the agent's latest run)."),
+                ],
+                required: ["tool_title", "agent_id"],
+                propertyOrdering: ["tool_title", "agent_id", "run_id"]
+            ))
+        }
+
         return tools
     }
 

@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.53.4%20(149)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.54.0%20(150)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -186,7 +186,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.53.4 (149)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.54.0 (150)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-06 1.54.0：ChatGPT 登录可用 GPT-6.1 Sol；新增 Cursor 云端 Agent（设置里填 Cursor API Key，用账号额度在云端仓库编码，启动与追加需审批）；同资源工具调用分道串行，提示缓存键按会话派生；563 项逻辑测试通过。
 - 2026-10-05 1.53.4：实时通道竞态、日志去重、刷新排队与运行中页面提速；537 项逻辑测试、Paperclip 宿主 91 项、Release 构建与发版闸门通过。
 - 2026-10-05 任务过程实时可见：运行中卡片、实时日志、对话线程式新界面，修复发送后卡住；531 项逻辑测试、Paperclip 宿主 79 项与 Release 构建通过，iPhone 18 Pro Max、iPad Pro 13（M4）已安装并回读 `1.53.3 (148)`。
 - 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；iPhone 18 Pro Max、iPad Pro 13（M4）已无线覆盖安装并回读 `1.53.2 (147)`，详见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。

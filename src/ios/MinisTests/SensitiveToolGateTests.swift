@@ -79,9 +79,29 @@ final class SensitiveToolGateTests: XCTestCase {
     /// 锁屏 / Siri 派发时 agent 循环必须还能跑:本机和远程的命令、写文件
     /// 都发通知等批准,不后台硬拒,否则「手机休眠后任务继续执行」直接失效。
     func testExecutionIsNotHardDeniedInBackground() {
-        for category: SensitiveToolGate.Category in [.shell, .fileWrite, .remoteShell, .remoteAgent] {
+        for category: SensitiveToolGate.Category in [.shell, .fileWrite, .remoteShell, .remoteAgent, .cursorCloud] {
             XCTAssertEqual(category.backgroundPolicy, .notifyAndWait, "\(category.rawValue)")
         }
+    }
+
+    /// Cursor 云端:启动和追加花额度、推分支,要确认;查询和取消不需要。
+    func testCursorLaunchAndFollowUpNeedApprovalButReadsDoNot() {
+        XCTAssertEqual(SensitiveToolGate.Category.forToolName("cursor_agent_launch"), .cursorCloud)
+        XCTAssertEqual(SensitiveToolGate.Category.forToolName("cursor_agent_followup"), .cursorCloud)
+        XCTAssertNil(SensitiveToolGate.Category.forToolName("cursor_agent_status"))
+        XCTAssertNil(SensitiveToolGate.Category.forToolName("cursor_agent_cancel"))
+        XCTAssertFalse(SensitiveToolGate.Category.cursorCloud.allowsSmartApproval)
+
+        let launch = SensitiveToolGate.Category.grantScope(
+            tool: "cursor_agent_launch", args: ["repo": "a/b", "prompt": "x"])
+        let follow = SensitiveToolGate.Category.grantScope(
+            tool: "cursor_agent_followup", args: ["agent_id": "bc-1", "prompt": "y"])
+        XCTAssertEqual(launch, follow)
+        XCTAssertNotEqual(launch, SensitiveToolGate.Category.grantScope(tool: "shell_execute", args: [:]))
+
+        let hint = SensitiveToolGate.Category.hostHint(
+            tool: "cursor_agent_launch", args: ["repo": "leoyb1010/LeoPhoneAgent", "prompt": "fix build"])
+        XCTAssertEqual(hint, "Cursor · leoyb1010/LeoPhoneAgent · fix build")
     }
 
     /// 浏览器凭证读写后台仍然硬拒(要前台的页面)。

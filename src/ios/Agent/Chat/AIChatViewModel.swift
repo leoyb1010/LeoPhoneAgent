@@ -5630,43 +5630,54 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // Anthropic requires tool_result blocks in the same order as
             // the originating tool_use blocks, so we tag each child task
             // with its source index and stitch results back in order after
-            // every task completes.
+            // every task completes. Calls that write the same file (or drive
+            // the same Cursor agent) share a lane and run in model order.
             let toolsSnapshot = tools
             var outcomesByIndex: [Int: ToolExecOutcome] = [:]
-            await withTaskGroup(of: (Int, ToolExecOutcome).self) { group in
+            let lanes = ToolExecutionLanes.plan(toolEntries.map { .init(name: $0.name, args: $0.args) })
+            await withTaskGroup(of: [(Int, ToolExecOutcome)].self) { group in
                 var added = 0
                 var harvested = 0
-                for (idx, tu) in toolEntries.enumerated() {
+                for lane in lanes {
                     // Rate-limit: hold here until we're below the in-flight cap.
                     while added - harvested >= Self.maxConcurrentTools {
-                        if let pair = await group.next() {
-                            outcomesByIndex[pair.0] = pair.1
+                        if let pairs = await group.next() {
+                            for pair in pairs { outcomesByIndex[pair.0] = pair.1 }
                             harvested += 1
                         } else {
                             break
                         }
                     }
-                    logger.info("[ToolLifecycle] DISPATCHED toolId=\(tu.id.prefix(20)) tool=\(tu.name) sid=\(self.sessionId?.prefix(8) ?? "nil") appState=\(UIApplication.shared.applicationState == .active ? "fg" : "bg") suspended=\(self.streamingUIUpdatesSuspended) isProcessing=\(self.isProcessing)")
+                    for idx in lane {
+                        let tu = toolEntries[idx]
+                        logger.info("[ToolLifecycle] DISPATCHED toolId=\(tu.id.prefix(20)) tool=\(tu.name) lane=\(lane.first ?? idx)/\(lane.count) sid=\(self.sessionId?.prefix(8) ?? "nil") appState=\(UIApplication.shared.applicationState == .active ? "fg" : "bg") suspended=\(self.streamingUIUpdatesSuspended) isProcessing=\(self.isProcessing)")
+                    }
                     group.addTask { [weak self] in
-                        guard let self else {
-                            // Self torn down mid-batch: synthesize a cancelled outcome
-                            let cancelMsg = "<system-reminder>The session was torn down before this tool could execute.</system-reminder>"
-                            return (idx, ToolExecOutcome(
-                                toolId: tu.id, toolName: tu.name,
-                                resultPart: .toolResult(id: tu.id, name: tu.name, content: cancelMsg, isError: true),
-                                snapshotEntry: nil, snapshotItem: nil, cancelled: true
-                            ))
+                        var pairs: [(Int, ToolExecOutcome)] = []
+                        for idx in lane {
+                            let tu = toolEntries[idx]
+                            guard let self else {
+                                // Self torn down mid-batch: synthesize a cancelled outcome
+                                let cancelMsg = "<system-reminder>The session was torn down before this tool could execute.</system-reminder>"
+                                pairs.append((idx, ToolExecOutcome(
+                                    toolId: tu.id, toolName: tu.name,
+                                    resultPart: .toolResult(id: tu.id, name: tu.name, content: cancelMsg, isError: true),
+                                    snapshotEntry: nil, snapshotItem: nil, cancelled: true
+                                )))
+                                continue
+                            }
+                            let outcome = await self.executeSingleToolUse(
+                                tu: tu, msgIdx: msgIdx, tools: toolsSnapshot, batchBudget: imageBudgetActor
+                            )
+                            pairs.append((idx, outcome))
                         }
-                        let outcome = await self.executeSingleToolUse(
-                            tu: tu, msgIdx: msgIdx, tools: toolsSnapshot, batchBudget: imageBudgetActor
-                        )
-                        return (idx, outcome)
+                        return pairs
                     }
                     added += 1
                 }
                 // Drain the remainder.
-                for await pair in group {
-                    outcomesByIndex[pair.0] = pair.1
+                for await pairs in group {
+                    for pair in pairs { outcomesByIndex[pair.0] = pair.1 }
                     harvested += 1
                 }
             }

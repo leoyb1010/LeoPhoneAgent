@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.54.0",
+            date: "2026-10-06",
+            title: "GPT-6.1 Sol 与 Cursor 云端 Agent",
+            highlights: [
+                "用 ChatGPT 账号登录 OpenAI 后可以选择 GPT-6.1 Sol：模型列表按新版客户端读取，旧缓存会自动失效。",
+                "新增「Cursor 云端 Agent」：在设置里填入 Cursor API Key 后，可以让智能体用你的 Cursor 额度在云端仓库写代码、续聊、查进度或取消；每次启动或追加任务都会先请你确认。",
+                "同一轮里对同一个文件的多次编辑会按顺序执行，不再出现后一次覆盖前一次的情况；只读和互不相关的工具仍然并行。",
+                "同一会话的请求会复用 OpenAI 提示缓存，长对话响应更快、更省额度。"
+            ]
+        ),
+        LeoRelease(
             version: "1.53.4",
             date: "2026-10-05",
             title: "服务器任务更顺滑、更可靠",

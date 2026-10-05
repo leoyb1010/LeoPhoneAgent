@@ -108,6 +108,7 @@ final class CapabilitySelfTest: ObservableObject {
             list.append(Check(id: "mac-\(host.id)", group: "模型与连接", title: "Mac:\(host.name)", command: nil))
         }
         list.append(Check(id: "jev", group: "模型与连接", title: "Jev 快速判断", command: nil))
+        list.append(Check(id: "cursor", group: "模型与连接", title: "Cursor 云端 Agent", command: nil))
         chatTargets = [:]
         if includeChat {
             for instance in ProviderConfigStore.shared.instances where instance.isEnabled {
@@ -201,6 +202,16 @@ final class CapabilitySelfTest: ObservableObject {
             do {
                 let yes = try await JevClient.ping()
                 return (.passed, "判断\"是\"的概率 \(String(format: "%.2f", yes))")
+            } catch {
+                return (.failed, error.localizedDescription)
+            }
+        }
+        if check.id == "cursor" {
+            guard CursorCloudClient.hasKey else { return (.skipped, "没填 Key(设置 → Agent → Cursor 云端 Agent)") }
+            do {
+                let me = try await CursorCloudClient.me()
+                let models = try await CursorCloudClient.modelIds()
+                return (.passed, "\(me["userEmail"] as? String ?? "已连接") · \(models.count) 个模型")
             } catch {
                 return (.failed, error.localizedDescription)
             }

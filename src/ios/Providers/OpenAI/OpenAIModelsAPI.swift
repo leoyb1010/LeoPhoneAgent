@@ -59,7 +59,8 @@ enum OpenAIModelsAPI {
     /// catalog-only models and prune them from groups.
     static func fetchModelsCodexOAuth(instanceId: String, forceRefresh: Bool = false,
                                       instanceHasModels: Bool = true) async throws -> [LLMModel] {
-        let cacheKey = "codex-oauth-\(instanceId)"
+        // 目录内容随 client_version 变,版本进缓存键:升级后旧目录立即失效,不再等 7 天。
+        let cacheKey = "codex-oauth-\(instanceId)-v\(OpenAIProvider.codexClientVersion)"
         if !forceRefresh, let cached = OpenAIModelsCache.load(credential: cacheKey) {
             logger.info("Returning \(cached.count) cached Codex catalog models")
             return cached

@@ -44,8 +44,9 @@ private let streamingSession: URLSession = {
 ///   - API Key: Standard Chat Completions API at api.openai.com
 ///   - OAuth (Codex): Responses API at chatgpt.com/backend-api/codex/responses
 final class OpenAIProvider: LLMProvider {
-    /// Codex 目录按客户端版本放模型(GPT-6 要求 ≥0.153.0);与本机实测能列出 GPT-6 的 Codex CLI 对齐。
-    static let codexClientVersion = "0.155.0"
+    /// Codex 目录按客户端版本放模型:GPT-6 要求 ≥0.153.0,GPT-6.1 Sol 要求 ≥0.159.0(2026-10-06 实测
+    /// 0.158.0 不返回、0.159.0 起返回)。与本机能列出全部模型的 Codex CLI 对齐。
+    static let codexClientVersion = "0.160.0"
 
     /// [T-codex-fast-mode] UserDefaults key for the Codex Fast Mode toggle.
     /// Read at request-build time (not cached at init) so flipping the "..."

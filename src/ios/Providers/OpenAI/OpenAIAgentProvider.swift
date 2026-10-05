@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 import os.log
 
 private let logger = AppLogger(category: "OpenAIAgent")
@@ -25,13 +24,16 @@ final class OpenAIAgentProvider: AgentProvider {
     static let responsesAPIProviderKind: String = "openai-responses"
 
     let provider: OpenAIProvider
+    /// The conversation this provider serves; keys the Responses prompt cache.
+    let sessionId: String?
 
     var name: String { provider.name }
     var model: LLMModel { provider.model }
     var defaultMaxTokens: Int { provider.usesChatCompletionsAPI ? 16_384 : 32_768 }
 
-    init(provider: OpenAIProvider) {
+    init(provider: OpenAIProvider, sessionId: String? = nil) {
         self.provider = provider
+        self.sessionId = sessionId
     }
 
     func streamAgentMessageClamped(
@@ -410,13 +412,10 @@ final class OpenAIAgentProvider: AgentProvider {
             "store": false,
             "parallel_tool_calls": true,
             "input": inputMessages,
-            // Stable per-conversation key so the Responses API can hit prompt cache
-            // across turns. Codex CLI sets this to its conversation_id; we don't have
-            // one at this layer, so we derive a stable hash from the first user
-            // message's text, which is prepended every turn of the same chat.
             // Required for custom/third-party endpoints (e.g. sub2api) that do not
             // synthesize a fallback key server-side — see Wei-Shaw/sub2api#1134.
-            "prompt_cache_key": Self.derivePromptCacheKey(from: messages),
+            "prompt_cache_key": PromptCacheKey.derive(sessionId: sessionId,
+                                                      firstUserText: Self.firstUserText(in: messages)),
         ]
         // Thinking level → Responses API `reasoning.effort`.
         // Applies to every Responses flavor (Codex OAuth + forceResponsesAPI +
@@ -784,28 +783,13 @@ final class OpenAIAgentProvider: AgentProvider {
 
     // MARK: - Prompt Cache Key
 
-    /// Derives a stable per-conversation `prompt_cache_key` for the Responses API.
-    ///
-    /// The Responses API hits prompt cache by matching stable prefixes keyed on
-    /// `prompt_cache_key`. Codex CLI sets this to its `conversation_id`; at this
-    /// layer we don't have one, so we hash the first user message's text, which
-    /// is re-sent verbatim on every turn of the same chat and therefore stable
-    /// across turns while differing between chats.
-    ///
-    /// Falls back to a random UUID when there is no user text yet (first turn
-    /// with an empty placeholder, tool-only input, etc.) — cache miss that turn
-    /// is fine.
-    private static func derivePromptCacheKey(from messages: [AgentMessage]) -> String {
+    private static func firstUserText(in messages: [AgentMessage]) -> String? {
         for msg in messages where msg.role == .user {
             for part in msg.parts {
-                if case .text(let t) = part, !t.isEmpty {
-                    let digest = SHA256.hash(data: Data(t.utf8))
-                    let hex = digest.map { String(format: "%02x", $0) }.joined()
-                    return "minis-\(hex.prefix(32))"
-                }
+                if case .text(let t) = part, !t.isEmpty { return t }
             }
         }
-        return "minis-\(UUID().uuidString.lowercased())"
+        return nil
     }
 
     // MARK: - Thinking Config

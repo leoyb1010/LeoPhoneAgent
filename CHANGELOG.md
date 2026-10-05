@@ -1,5 +1,12 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.54.0 (150) · GPT-6.1 Sol、Cursor 云端 Agent 与工具分道执行 - 2026-10-06
+
+- OpenAI（ChatGPT 账号登录）：Codex 模型目录接口按客户端版本过滤，GPT-6.1 Sol 要求 0.159.0 及以上；客户端版本从旧值升到 0.160.0，模型缓存键带上版本号，内置列表补上 `gpt-6.1-sol`（272K 上下文）。
+- Cursor 云端 Agent：通过 Cursor Cloud Agents API v1 使用账号额度。API Key 只存在本机钥匙串（仅本设备、不同步）；新增 `cursor_agent_launch / followup / status / cancel` 四个工具，launch 和 followup 走敏感操作审批（会话内可一次授权），status 支持等待运行结束；设置页可测试连通性，能力自检新增 Cursor 项。
+- Agent 循环：同一批工具调用按资源分道，同一路径的写入/编辑/读取、同一 Cursor agent 的追加/取消/查询串行，其余仍并行；OpenAI `prompt_cache_key` 改为按会话 ID 派生，同一会话跨轮命中缓存。
+- 测试：新增 35 项逻辑测试（Cursor API 15、分道 7、缓存键 4、审批 9），分道测试经变异验证能抓出合道失效；全量 563 项逻辑测试通过。
+
 ## iOS 1.53.4 (149) · 实时通道竞态修复与运行中页面提速 - 2026-10-05
 
 - 实时通道：身份复核期间断开重连不再出现两条连接互相关闭；运行日志按序号去重，读取期间到达的实时片段不再丢失，暂无日志时显示「暂无日志」。

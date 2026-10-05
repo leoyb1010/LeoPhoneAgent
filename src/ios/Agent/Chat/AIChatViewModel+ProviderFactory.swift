@@ -33,25 +33,25 @@ extension AIChatViewModel {
         case .gemini:
             return GeminiAgentProvider(provider: LLMProviderFactory.makeGeminiProvider(instance: instance, model: entry.model))
         case .openAI:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model))
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model), sessionId: sessionId)
         case .openCodeGo:
             switch LLMProviderFactory.makeOpenCodeGoProvider(instance: instance, model: entry.model, sessionId: sessionId) {
             case let anthropic as AnthropicProvider:
                 return AnthropicAgentProvider(provider: anthropic)
             case let openAI as OpenAIProvider:
-                return OpenAIAgentProvider(provider: openAI)
+                return OpenAIAgentProvider(provider: openAI, sessionId: sessionId)
             default:
                 logger.error("Unexpected OpenCode Go provider type; returning placeholder")
                 return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))
             }
         case .openRouter:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model))
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model), sessionId: sessionId)
         case .openAIResponses:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model))
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model), sessionId: sessionId)
         case .xAI:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model))
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model), sessionId: sessionId)
         case .kimiCode:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model))
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model), sessionId: sessionId)
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))
