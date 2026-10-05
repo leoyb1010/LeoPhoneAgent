@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.53.3%20(148)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.53.4%20(149)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -21,7 +21,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
 
-## Paperclip 对话工作区（iOS 1.53.3 / Mac 1.5.1）
+## Paperclip 对话工作区（iOS 1.53.4 / Mac 1.5.1）
 
 吸收 [Paperclip](https://github.com/paperclipai/paperclip) 的公司、Agent、任务、审批与运行记录能力。服务器持有任务和执行状态，客户端通过原生工作区连接独立部署的 HTTPS 服务；管理员使用服务器的人类账号登录，不把 Agent API Key 当作个人登录凭据。
 
@@ -186,7 +186,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.53.3 (148)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.53.4 (149)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-05 1.53.4：实时通道竞态、日志去重、刷新排队与运行中页面提速；537 项逻辑测试、Paperclip 宿主 91 项、Release 构建与发版闸门通过。
 - 2026-10-05 任务过程实时可见：运行中卡片、实时日志、对话线程式新界面，修复发送后卡住；531 项逻辑测试、Paperclip 宿主 79 项与 Release 构建通过，iPhone 18 Pro Max、iPad Pro 13（M4）已安装并回读 `1.53.3 (148)`。
 - 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；iPhone 18 Pro Max、iPad Pro 13（M4）已无线覆盖安装并回读 `1.53.2 (147)`，详见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
 - 2026-10-04 体验升级：三轮均检查完整 17 模块，修复模型入口、草稿/资料保留和失败恢复。470 项主工程逻辑测试、隔离原生与故障回归、Release/签名通过；iPhone/iPad/Watch 已覆盖安装并启动 1.51.0（138），原配置标识和默认保留。iPhone 真实收发已验证；iPad 锁屏待补，CloudKit 五类查询错误仍待服务端核对，详见 [交付证据与限制](docs/ios-product-audit/DELIVERY_20261004.md)。
