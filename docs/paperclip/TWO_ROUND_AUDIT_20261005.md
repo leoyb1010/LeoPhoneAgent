@@ -59,3 +59,5 @@ Cursor 仅在空目录重核一次，仍 AuthenticationRequired；Gemini 的既�
 第二轮会话新反例 22 项、备份故障及正常恢复 8 项、UI/DB 类型检查通过。数据 UI 的 12 个既有套件为 223 通过 / 40 失败；与只读第一轮基线逐条比较，失败名称完全一致，新增失败 0。失败分布：CompanyContext 2（第一轮缓存隔离契约改变）、LiveUpdatesProvider.hook 2、Costs 1、IssueDetail 32、IssueAttachmentsSection 3（中文显示/选择器等 stock 断言）。这 40 项未算通过，也没有通过跳过或削弱断言来抹去失败。
 
 第二轮统一发行层 67 项通过，2776 条结构规则、2880 处上下文与类型 AST 检查通过；服务端编译、UI 类型检查、生产构建、协议检查与原生头像 worker 通过。新产物位于 Mini 外接盘，发布前保留私有数据库备份及前一发行指向。
+
+发布与线上复核：主仓 `96c3cb79` 已 push，Mini `release/current` 已切至 `audit-round2-candidate-20261005`。切换前活动/排队运行数为 0；已保存 `pre-round2.dump`（0600）及前一指向。本机/公网健康通过，公网 index 与新构建 SHA256 相同。启动窗口首次浏览器资源加载失败，服务恢复后点重新加载，任务/模型选择/费用及八个业务入口实际内容正常，控制台无捕获到的 error。模型完整 ID 回车与方向键现场通过，未发送新任务。五类尺寸均读取实际 innerWidth 并检查无水平溢出；首批错误控制到另一标签的截图不计入通过，以 `r2-responsive-verified.json` 和 `r2-costs-verified-*.jpg` 为准。
