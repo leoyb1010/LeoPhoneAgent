@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.53.2",
+            date: "2026-10-05",
+            title: "服务器任务更稳更省电",
+            highlights: [
+                "离线或服务器暂时不可用时发送任务或回复，草稿不再被误锁为待核对，可以直接修改后重发；已发出但结果未知的提交仍保持锁定。",
+                "服务器任务减少重复请求，同步失败时自动拉长重试间隔，后台更省电。",
+                "从通知、Siri、快捷指令、主屏快捷操作、小组件和链接打开会话或新对话，会自动切回本机工作区。",
+                "服务器设置可退出登录（同时通知服务器结束会话），也可以删除不再使用的服务器配置。",
+                "任务时间按系统语言和地区显示，运行记录时间改为易读格式。"
+            ]
+        ),
+        LeoRelease(
             version: "1.53.1",
             date: "2026-10-05",
             title: "触控与服务器同步改进",

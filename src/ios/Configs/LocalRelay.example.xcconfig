@@ -1,0 +1,9 @@
+// 复制为同目录的 LocalRelay.xcconfig 后填写（该文件被 .gitignore 忽略，不会提交）。
+// xcconfig 中 `//` 是注释，URL 里的双斜杠写成 `https:/$()/`。
+//
+// 中继 API 根地址（必须 https），例如 https:/$()/relay-host.example.ts.net/leoagent-relay/relay/api
+LEO_RELAY_API_ROOT =
+// 一键添加的设备预设：`显示名=机器名;显示名=机器名`，留空则只显示中继发现的设备。
+LEO_RELAY_FLEET =
+// 取中继密钥命令的 SSH 目标（user@host），留空则不显示"复制取密钥命令"。
+LEO_RELAY_SSH_TARGET =

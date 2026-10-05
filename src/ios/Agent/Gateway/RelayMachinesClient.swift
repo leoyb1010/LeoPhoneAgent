@@ -28,8 +28,47 @@ enum RelayDiscoveryError: Error {
     case malformed
 }
 
+/// 自营中继地址与机器预设不进公开源码：本机构建由未跟踪的 Configs/LocalRelay.xcconfig 注入 Info.plist。
+/// 未配置时 apiRoot 为 nil，界面显示"未配置中继地址"，不会发出任何中继请求。
+enum LeoRelayConfig {
+    struct Machine: Equatable, Sendable {
+        let name: String
+        let machine: String
+    }
+    static var apiRoot: String? { normalizedApiRoot(info("LeoRelayApiRoot")) }
+    static var fleet: [Machine] { parseFleet(info("LeoRelayFleet")) }
+    /// 取密钥命令的 SSH 目标（形如 user@host），为空则不提供复制命令。
+    static var sshTarget: String? {
+        let value = info("LeoRelaySSHTarget").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !value.contains("$("), value.rangeOfCharacter(from: CharacterSet(charactersIn: "\"'`;|&$<> ")) == nil else { return nil }
+        return value
+    }
+
+    private static func info(_ key: String) -> String {
+        Bundle.main.object(forInfoDictionaryKey: key) as? String ?? ""
+    }
+
+    /// 只接受 https；未展开的 $(...) 占位或空值都视为未配置。
+    static func normalizedApiRoot(_ raw: String) -> String? {
+        let root = RelayMachinesClient.normalizeApiRoot(raw)
+        guard !root.isEmpty, !root.contains("$("), root.lowercased().hasPrefix("https://"),
+              URLComponents(string: root)?.host?.isEmpty == false else { return nil }
+        return root
+    }
+
+    /// 格式：`显示名=机器名;显示名=机器名`，机器名必须通过 sanitizeMachine。
+    static func parseFleet(_ raw: String) -> [Machine] {
+        guard !raw.contains("$(") else { return [] }
+        return raw.split(separator: ";").compactMap { entry in
+            let parts = entry.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard parts.count == 2, !parts[0].isEmpty,
+                  let machine = RelayMachinesClient.sanitizeMachine(parts[1]) else { return nil }
+            return Machine(name: parts[0], machine: machine)
+        }
+    }
+}
+
 enum RelayMachinesClient {
-    static let defaultApiRoot = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api"
 
     static func parse(_ data: Data) throws -> [RelayDiscoveredMachine] {
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -86,7 +125,7 @@ enum RelayMachinesClient {
         return (key, obj["machine"] as? String ?? "")
     }
 
-    static func list(apiRoot: String = defaultApiRoot, key: String) async throws -> [RelayDiscoveredMachine] {
+    static func list(apiRoot: String, key: String) async throws -> [RelayDiscoveredMachine] {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 16 else { throw RelayDiscoveryError.unauthorized }
         guard var parts = URLComponents(string: apiRoot.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -110,7 +149,7 @@ enum RelayMachinesClient {
         return try parse(data)
     }
 
-    static func harnessURL(for machine: String, apiRoot: String = defaultApiRoot) -> String {
+    static func harnessURL(for machine: String, apiRoot: String) -> String {
         let root = normalizeApiRoot(apiRoot)
         return root + "/m/" + machine
     }
@@ -139,13 +178,9 @@ enum RelayMachinesClient {
         return name
     }
 
-    static func displayName(for machine: String) -> String {
-        switch machine {
-        case "LeoyuandeMacBook-Pro-2": return "MacBook Pro"
-        case "LeodeMac-mini-2": return "Mac mini · cortex"
-        case "LeoMac-Studio-2": return "Mac Studio"
-        default: return machine
-        }
+    /// 机器名到显示名的映射来自本机构建配置（LeoRelayFleet），源码不含真实机器名。
+    static func displayName(for machine: String, fleet: [LeoRelayConfig.Machine] = LeoRelayConfig.fleet) -> String {
+        fleet.first { $0.machine == machine }?.name ?? machine
     }
 
     /// [T-relay-key-fallback] 去重判据是「中继根 + 密钥」,不再是「中继根」。
@@ -185,8 +220,9 @@ enum RelayMachinesClient {
     }
 
     /// Match a stored host to a relay machine id. Display names like
-    /// "MacBook Pro" must not win over the real hostname `LeoyuandeMacBook-Pro-2`.
-    static func hostMatches(hostId: String, displayName: String, machine: String) -> Bool {
+    /// "MacBook Pro" must not win over the real machine hostname.
+    static func hostMatches(hostId: String, displayName: String, machine: String,
+                            fleet: [LeoRelayConfig.Machine] = LeoRelayConfig.fleet) -> Bool {
         let needle = machine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return false }
         let lower = needle.lowercased()
@@ -195,7 +231,7 @@ enum RelayMachinesClient {
             return true
         }
         if displayName == needle || displayName.lowercased() == lower { return true }
-        if Self.displayName(for: needle) == displayName { return true }
+        if Self.displayName(for: needle, fleet: fleet) == displayName { return true }
         return false
     }
 
@@ -203,13 +239,14 @@ enum RelayMachinesClient {
         hostIds: [String],
         displayNames: [String],
         hostId: String,
-        machine: String
+        machine: String,
+        fleet: [LeoRelayConfig.Machine] = LeoRelayConfig.fleet
     ) -> Int? {
         if !hostId.isEmpty, let i = hostIds.firstIndex(where: { $0 == hostId }) {
             return i
         }
         for i in hostIds.indices {
-            if hostMatches(hostId: hostIds[i], displayName: displayNames[i], machine: machine) {
+            if hostMatches(hostId: hostIds[i], displayName: displayNames[i], machine: machine, fleet: fleet) {
                 return i
             }
         }

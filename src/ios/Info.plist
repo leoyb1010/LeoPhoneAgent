@@ -6,6 +6,12 @@
 	<array>
 		<string>com.leoyuan.leophoneagent.agent.*</string>
 	</array>
+	<key>LeoRelayApiRoot</key>
+	<string>$(LEO_RELAY_API_ROOT)</string>
+	<key>LeoRelayFleet</key>
+	<string>$(LEO_RELAY_FLEET)</string>
+	<key>LeoRelaySSHTarget</key>
+	<string>$(LEO_RELAY_SSH_TARGET)</string>
 	<key>CFBundleDisplayName</key>
 	<string>LeoPhoneAgent</string>
 	<key>CFBundleDocumentTypes</key>

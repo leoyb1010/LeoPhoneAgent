@@ -394,7 +394,11 @@ final class NotificationNavigationStore {
     /// A Mac session tapped in a notification (host + the Mac's session id).
     private var pendingMac: (target: [String: String], at: Date)?
 
-    func setPendingMac(_ target: [String: String]) { pendingMac = (target, Date()) }
+    func setPendingMac(_ target: [String: String]) {
+        // Mac 控制台也在本机工作区里呈现；冷启动缓冲时一并切回本机。
+        IOSExecutionBackend.selectLocal()
+        pendingMac = (target, Date())
+    }
 
     /// Cold-launch consume, same 30 s rule as `takePending()`.
     func takePendingMac() -> [String: String]? {
@@ -405,6 +409,8 @@ final class NotificationNavigationStore {
 
     /// Buffer a tap target (called from didReceive before posting the event).
     func setPending(_ sessionId: String) {
+        // 推送、Spotlight、Siri 打开会话的冷启动缓冲点：持久化本机工作区，避免落在隐藏的服务器页。
+        IOSExecutionBackend.selectLocal()
         pendingSessionId = sessionId
         pendingSetAt = Date()
     }

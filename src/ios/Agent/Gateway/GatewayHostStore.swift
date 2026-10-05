@@ -19,7 +19,7 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     /// Display name, e.g. "cortex".
     var name: String
     /// Full base URL of the agent ENGINE including scheme and port, e.g.
-    /// `https://mac-mini-cortex.tail23de22.ts.net:8645`.
+    /// `https://host.example.ts.net:8645`.
     ///
     /// Must be reached by HOSTNAME: the gateway is fronted by Tailscale's TLS
     /// terminator, which selects its certificate by SNI — connecting to the
@@ -96,7 +96,7 @@ final class GatewayHostStore: ObservableObject {
     }
 
     func upsertDiscovered(_ machines: [RelayDiscoveredMachine], key: String,
-                          apiRoot: String = RelayMachinesClient.defaultApiRoot, explicit: Bool = false) {
+                          apiRoot: String, explicit: Bool = false) {
         var changed = false
         for machine in machines {
             guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }

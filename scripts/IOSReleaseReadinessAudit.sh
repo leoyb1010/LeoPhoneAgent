@@ -23,8 +23,9 @@ detected_build=$(sed -n 's/.*CURRENT_PROJECT_VERSION = \([^;]*\);/\1/p' "$projec
 expected_version=${1:-$detected_version}
 expected_build=${2:-$detected_build}
 
-# grep -c 无匹配时退出码为 1,set -e 下会直接终止且不给上下文,统一兜 0。
-count() { grep -c -F -- "$1" "$2" 2>/dev/null || echo 0; }
+# grep -c 无匹配时退出码为 1,set -e 下会直接终止且不给上下文。它此时已输出 0,
+# 只吞掉退出码;原来再 echo 0 会得到两行 "0",后面的 [ -eq ] 报 integer expression expected。
+count() { grep -c -F -- "$1" "$2" 2>/dev/null || :; }
 
 version_count=$(count "MARKETING_VERSION = ${expected_version};" "$project")
 build_count=$(count "CURRENT_PROJECT_VERSION = ${expected_build};" "$project")

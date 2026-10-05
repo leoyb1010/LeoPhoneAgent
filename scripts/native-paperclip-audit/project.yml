@@ -1,7 +1,8 @@
 name: PaperclipNativeAudit
 options:
+  # 与主 App 的 IPHONEOS_DEPLOYMENT_TARGET 保持一致（src/ios/LeoPhoneAgent.xcodeproj）。
   deploymentTarget:
-    iOS: "26.2"
+    iOS: "26.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"

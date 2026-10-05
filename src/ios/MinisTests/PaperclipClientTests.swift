@@ -83,7 +83,11 @@ final class PaperclipClientTests: XCTestCase {
         do {
             _ = try await client().create(companyID: "company", userID: "other", title: "任务", description: "", agentID: nil, requestID: UUID())
             XCTFail("不同用户不得提交")
-        } catch { XCTAssertEqual(error as? PaperclipError, .identityChanged) }
+        } catch {
+            // 身份预检失败时写请求未发出：包装为预检错误，原因仍是身份变化。
+            XCTAssertEqual(error as? PaperclipError, .preflightFailed(.identityChanged))
+            XCTAssertEqual((error as? PaperclipError)?.underlying, .identityChanged)
+        }
     }
     func testCreateTimeoutIsUncertainAndIsNotRetried() async throws {
         let session = Self.session
@@ -323,21 +327,218 @@ final class PaperclipClientTests: XCTestCase {
         catch { XCTAssertEqual(error as? PaperclipError, .identityChanged) }
     }
 
-    func testRefreshRetainsLoadedPagesAndPublishesUpdatedRows() async throws {
-        let session = Self.session
-        let first = (0..<100).map { #"{"id":"issue-\#($0)","companyId":"company","title":"已更新","status":"todo","priority":"medium"}"# }.joined(separator: ",")
-        let second = (100..<137).map { #"{"id":"issue-\#($0)","companyId":"company","title":"后续页","status":"todo","priority":"medium"}"# }.joined(separator: ",")
-        PaperclipTestProtocol.install { request in
-            if request.url!.path == "/api/auth/get-session" { return (200, session, "application/json") }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            XCTAssertEqual(query.first { $0.name == "limit" }?.value, "100")
-            let offset = query.first { $0.name == "offset" }?.value
-            XCTAssertTrue(offset == "0" || offset == "100")
-            return (200, "[\(offset == "0" ? first : second)]", "application/json")
+    func testListRefreshMergesFirstPageAndKeepsLaterPages() throws {
+        func rows(_ range: Range<Int>, title: String) throws -> [PaperclipIssue] {
+            let json = "[" + range.map { #"{"id":"issue-\#($0)","companyId":"company","title":"\#(title)","status":"todo","priority":"medium"}"# }.joined(separator: ",") + "]"
+            return try JSONDecoder().decode([PaperclipIssue].self, from: Data(json.utf8))
         }
-        let rows = try await client().refreshedIssues(companyID: "company", userID: "human", loadedCount: 200)
-        XCTAssertEqual(rows.count, 137)
-        XCTAssertEqual(rows.first?.title, "已更新")
-        XCTAssertEqual(rows.last?.id, "issue-136")
+        let loaded = try rows(0..<137, title: "旧")
+        // 第一页：issue-136 被更新移到最前，其余 99 条照旧。
+        let firstPage = try rows(136..<137, title: "已更新") + rows(0..<99, title: "已更新")
+        let merged = PaperclipPollingPolicy.merge(firstPage: firstPage, into: loaded)
+        XCTAssertEqual(merged.count, 137)
+        XCTAssertEqual(merged.first?.id, "issue-136")
+        XCTAssertEqual(merged.first?.title, "已更新")
+        XCTAssertEqual(Set(merged.map(\.id)).count, 137, "合并后不得出现重复任务")
+        XCTAssertEqual(merged.last?.title, "旧", "已加载的后续页必须保留")
+        // 只加载了一页时整体替换，服务器删除的任务会消失。
+        XCTAssertEqual(PaperclipPollingPolicy.merge(firstPage: try rows(0..<3, title: "新"), into: try rows(0..<50, title: "旧")).count, 3)
+    }
+
+    func testPollingBacksOffExponentiallyAndResetsOnSuccess() {
+        var interval = PaperclipPollingPolicy.baseInterval
+        var seen: [Double] = []
+        for _ in 0..<5 { interval = PaperclipPollingPolicy.nextInterval(after: interval, succeeded: false); seen.append(interval) }
+        XCTAssertEqual(seen, [30, 60, 120, 120, 120])
+        XCTAssertEqual(PaperclipPollingPolicy.nextInterval(after: interval, succeeded: true), 15)
+    }
+
+    // MARK: - 预检失败与草稿解锁
+
+    private func reference(_ client: PaperclipClient) -> PaperclipTaskReference {
+        PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                               companyID: "company", userID: "human", issueID: "issue")
+    }
+
+    func testReplyPreflightReadFailureNeverPostsAndUnlocksDraftKeepingRequestID() async throws {
+        let session = Self.session
+        for failure in ["offline", "503"] {
+            let ledger = PaperclipRequestLedger()
+            PaperclipTestProtocol.install { request in
+                ledger.append((request.httpMethod ?? "") + " " + request.url!.path)
+                switch request.url!.path {
+                case "/api/auth/get-session": return (200, session, "application/json")
+                case "/api/issues/issue":
+                    if failure == "offline" { throw URLError(.notConnectedToInternet) }
+                    return (503, "{}", "application/json")
+                default: XCTFail("预检失败后不得发出回复"); return (500, "{}", "application/json")
+                }
+            }
+            let client = try client()
+            var draft = PaperclipDraft()
+            draft.body = "离线时写的回复"
+            let requestID = draft.requestID
+            draft.markSubmitted()
+            do { _ = try await client.reply(reference(client), body: draft.body, requestID: draft.requestID); XCTFail("预检失败不能成功") }
+            catch {
+                let error = try XCTUnwrap(error as? PaperclipError)
+                XCTAssertEqual(error.underlying, failure == "offline" ? .unavailable : .http(503))
+                XCTAssertEqual(error, .preflightFailed(error.underlying))
+                draft.recordFailure(error, wasPreviouslySubmitted: false)
+            }
+            XCTAssertFalse(ledger.values.contains { $0.hasPrefix("POST") }, failure)
+            XCTAssertFalse(draft.submitted, "写请求未发出，草稿必须可编辑：\(failure)")
+            XCTAssertNil(draft.firstSubmittedAt)
+            XCTAssertEqual(draft.requestID, requestID, "解锁后沿用原请求编号")
+            XCTAssertEqual(draft.body, "离线时写的回复")
+        }
+    }
+
+    func testCreateIdentityPreflightOfflineUnlocksDraft() async throws {
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append(request.httpMethod ?? "")
+            throw URLError(.notConnectedToInternet)
+        }
+        var draft = PaperclipDraft()
+        draft.title = "离线创建"
+        let requestID = draft.requestID
+        draft.markSubmitted()
+        do {
+            _ = try await client().create(companyID: "company", userID: "human", title: draft.title, description: "", agentID: nil, requestID: requestID)
+            XCTFail("离线不能创建成功")
+        } catch {
+            XCTAssertEqual(error as? PaperclipError, .preflightFailed(.unavailable))
+            draft.recordFailure(error, wasPreviouslySubmitted: false)
+        }
+        XCTAssertEqual(ledger.values, ["GET"], "只发出身份预检，创建 POST 未发出")
+        XCTAssertFalse(draft.submitted)
+        XCTAssertEqual(draft.requestID, requestID)
+    }
+
+    func testPostTimeoutStaysUncertainAndKeepsDraftLocked() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            default: throw URLError(.timedOut)
+            }
+        }
+        let client = try client()
+        var draft = PaperclipDraft()
+        draft.body = "可能已送达"
+        draft.markSubmitted()
+        do { _ = try await client.reply(reference(client), body: draft.body, requestID: draft.requestID); XCTFail("超时不能成功") }
+        catch {
+            XCTAssertEqual(error as? PaperclipError, .uncertain)
+            draft.recordFailure(error, wasPreviouslySubmitted: false)
+        }
+        XCTAssertTrue(draft.submitted, "写请求发出后超时必须保持待核对")
+        XCTAssertNotNil(draft.firstSubmittedAt)
+        // 未知提交的重试即使预检失败也不能解锁：原请求可能已生效。
+        draft.recordFailure(PaperclipError.preflightFailed(.unavailable), wasPreviouslySubmitted: true)
+        XCTAssertTrue(draft.submitted)
+    }
+
+    // MARK: - 请求放大
+
+    func testDetailRefreshSharesOneIdentityCheckAndSkipsHealth() async throws {
+        let session = Self.session; let issue = Self.issue
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install(defaultHealth: false) { request in
+            ledger.append(request.url!.path)
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/approvals", "/api/issues/issue/runs", "/api/issues/issue/comments": return (200, "[]", "application/json")
+            default: XCTFail("意外请求 \(request.url!.path)"); return (404, "{}", "application/json")
+            }
+        }
+        let client = try client()
+        let ref = reference(client)
+        // 与 PaperclipIssueDetailModel.refresh 相同的四次读取：以前每次都附带 health + get-session，共 12 个请求。
+        _ = try await client.issue(ref)
+        _ = try await client.comments(ref)
+        _ = try await client.runs(ref)
+        _ = try await client.approvals(ref)
+        XCTAssertEqual(ledger.values.filter { $0 == "/api/health" }.count, 0)
+        XCTAssertEqual(ledger.values.filter { $0 == "/api/auth/get-session" }.count, 1)
+        XCTAssertEqual(ledger.values.count, 5)
+    }
+
+    func testConcurrentReadsShareInFlightIdentityCheck() async throws {
+        let session = Self.session; let issue = Self.issue
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append(request.url!.path)
+            return request.url!.path == "/api/auth/get-session" ? (200, session, "application/json")
+                : request.url!.path == "/api/issues/issue" ? (200, issue, "application/json") : (200, "[]", "application/json")
+        }
+        let client = try client()
+        let ref = reference(client)
+        async let a = client.issue(ref)
+        async let b = client.comments(ref)
+        async let c = client.runs(ref)
+        _ = try await (a, b, c)
+        XCTAssertEqual(ledger.values.filter { $0 == "/api/auth/get-session" }.count, 1)
+    }
+
+    func testMutationAlwaysRevalidatesIdentityAndCookieChangeInvalidatesCache() async throws {
+        let session = Self.session; let issue = Self.issue
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append((request.httpMethod ?? "") + " " + request.url!.path)
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/comments":
+                let body = try PaperclipTestProtocol.body(request)
+                let row: [String: Any] = ["id": "c1", "companyId": "company", "issueId": "issue", "body": body["body"] ?? "",
+                                          "authorUserId": "human", "clientRequestId": body["clientRequestId"] ?? ""]
+                return (201, String(decoding: try JSONSerialization.data(withJSONObject: row), as: UTF8.self), "application/json")
+            default: return (200, "[]", "application/json")
+            }
+        }
+        final class CookieBox { var value = "first" }
+        let box = CookieBox()
+        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [PaperclipTestProtocol.self]
+        let client = PaperclipClient(profile: profile, configuration: config, readCookies: {
+            [HTTPCookie(properties: [.domain: "example.com", .path: "/", .name: "paperclip-test.session_token", .value: box.value, .secure: "TRUE"])!]
+        })
+        let ref = reference(client)
+        _ = try await client.issue(ref)
+        _ = try await client.reply(ref, body: "继续", requestID: UUID())
+        // GET 确认 1 次；回复的任务预检复用缓存；POST 前强制新鲜确认 1 次。
+        XCTAssertEqual(ledger.values, ["GET /api/auth/get-session", "GET /api/issues/issue", "GET /api/issues/issue",
+                                       "GET /api/auth/get-session", "POST /api/issues/issue/comments"])
+        box.value = "second"
+        _ = try await client.issue(ref)
+        XCTAssertEqual(ledger.values.suffix(2), ["GET /api/auth/get-session", "GET /api/issues/issue"], "Cookie 变化后必须重新确认身份")
+    }
+
+    func testCachedIdentityStillRejectsDifferentUser() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            request.url!.path == "/api/auth/get-session" ? (200, session, "application/json") : (200, "[\(issue)]", "application/json")
+        }
+        let client = try client()
+        _ = try await client.issues(companyID: "company", userID: "human")
+        do { _ = try await client.issues(companyID: "company", userID: "other"); XCTFail("缓存身份不能放行其他用户") }
+        catch { XCTAssertEqual(error as? PaperclipError, .identityChanged) }
+    }
+
+    func testSignOutIsBestEffortAndNeverThrows() async throws {
+        let ledger = PaperclipRequestLedger()
+        PaperclipTestProtocol.install { request in
+            ledger.append((request.httpMethod ?? "") + " " + request.url!.path)
+            XCTAssertNotNil(request.value(forHTTPHeaderField: "Cookie"))
+            throw URLError(.notConnectedToInternet)
+        }
+        let client = try client()
+        await client.signOut()
+        XCTAssertEqual(ledger.values, ["POST /api/auth/sign-out"])
     }
 }

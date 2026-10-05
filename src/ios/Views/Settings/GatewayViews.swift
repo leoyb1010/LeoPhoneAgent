@@ -32,14 +32,8 @@ final class GatewayEditorCoordinator: ObservableObject {
     func end() { draft = nil }
 }
 
-/// 我的三台 Mac,经自营中继(跑在常开的 cortex 上)从任何网络可达。
-/// 个人版:写死没有任何问题,新机器进舰队时加一行。
-private let FLEET_PRESETS: [(name: String, machine: String)] = [
-    ("MacBook Pro", "LeoyuandeMacBook-Pro-2"),
-    ("Mac mini · cortex", "LeodeMac-mini-2"),
-    ("Mac Studio", "LeoMac-Studio-2"),
-]
-private let RELAY_BASE = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/m/"
+// 自营中继地址与机器预设原先写死在源码里（公开仓库会泄露私有 tailnet 主机名），
+// 改由本机未跟踪的 Configs/LocalRelay.xcconfig 注入；未配置时一键添加显示明确状态，不发请求。
 
 struct GatewaySettingsView: View {
     @StateObject private var store = GatewayHostStore.shared
@@ -165,18 +159,20 @@ struct GatewaySettingsView: View {
         .refreshable { await refresh() }
         .sheet(isPresented: $showQuickSetup) {
             QuickFleetSetupSheet { key, machines in
+                // 表单在未配置中继地址时禁用了确认按钮；这里再兜底一次，绝不拼出空地址。
+                guard let apiRoot = LeoRelayConfig.apiRoot else { showQuickSetup = false; return }
                 if machines.isEmpty {
-                    for preset in FLEET_PRESETS {
+                    for preset in LeoRelayConfig.fleet {
                         let host = GatewayHost(
                             id: preset.machine.lowercased(),
                             name: preset.name,
                             baseURL: "",
-                            harnessURL: RELAY_BASE + preset.machine)
+                            harnessURL: RelayMachinesClient.harnessURL(for: preset.machine, apiRoot: apiRoot))
                         GatewayHostStore.saveAccessKey(key, hostId: host.id)
                         store.upsert(host)
                     }
                 } else {
-                    store.upsertDiscovered(machines, key: key, explicit: true)
+                    store.upsertDiscovered(machines, key: key, apiRoot: apiRoot, explicit: true)
                 }
                 showQuickSetup = false
                 Task { await refresh() }
@@ -304,7 +300,7 @@ struct GatewaySettingsView: View {
     }
 }
 
-/// 一键添加:三台机器内置,只收一次密钥。
+/// 一键添加:中继地址与机器预设来自本机构建配置,只收一次密钥。
 private struct QuickFleetSetupSheet: View {
     let onDone: (String, [RelayDiscoveredMachine]) -> Void
     let onCancel: () -> Void
@@ -313,33 +309,48 @@ private struct QuickFleetSetupSheet: View {
     @State private var result: String?
     @State private var copiedCommand = false
     @State private var discovered: [RelayDiscoveredMachine] = []
+    private let apiRoot = LeoRelayConfig.apiRoot
+    private let fleet = LeoRelayConfig.fleet
+    private let sshTarget = LeoRelayConfig.sshTarget
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    ForEach(FLEET_PRESETS, id: \.machine) { preset in
-                        Label(preset.name, systemImage: "desktopcomputer")
+                if apiRoot == nil {
+                    Section {
+                        Label("未配置中继地址", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    } footer: {
+                        Text("此版本构建时没有写入自营中继地址，一键添加与中继发现不可用。可用扫码配对或手动添加设备。")
                     }
-                } header: {
-                    Text("找不到中继列表时，可一键填这三台 Mac")
-                } footer: {
-                    Text("列表来自中继上在线的机器；预设只是快捷填充。")
+                }
+                if !fleet.isEmpty {
+                    Section {
+                        ForEach(fleet, id: \.machine) { preset in
+                            Label(preset.name, systemImage: "desktopcomputer")
+                        }
+                    } header: {
+                        Text("找不到中继列表时，可一键填入以下 \(fleet.count) 台设备")
+                    } footer: {
+                        Text("列表来自中继上在线的机器；预设只是快捷填充。")
+                    }
                 }
                 Section {
                     SecureField("粘贴密钥", text: $key)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Button {
-                        UIPasteboard.general.string = "ssh leo@mac-mini-cortex \"cat ~/.leoagent/key\""
-                        copiedCommand = true
-                        LeoHaptics.notification(.success)
-                    } label: {
-                        Label(copiedCommand ? "已复制取密钥命令" : "复制取密钥命令",
-                              systemImage: copiedCommand ? "checkmark.circle.fill" : "doc.on.doc")
+                    if let sshTarget {
+                        Button {
+                            UIPasteboard.general.string = "ssh \(sshTarget) \"cat ~/.leoagent/key\""
+                            copiedCommand = true
+                            LeoHaptics.notification(.success)
+                        } label: {
+                            Label(copiedCommand ? "已复制取密钥命令" : "复制取密钥命令",
+                                  systemImage: copiedCommand ? "checkmark.circle.fill" : "doc.on.doc")
+                        }
                     }
                 } header: {
-                    Text("中继密钥(三台共用一把)")
+                    Text("中继密钥(所有设备共用一把)")
                 } footer: {
                     VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
                         Text("把复制的命令粘贴到 Mac 终端，再把返回的密钥粘贴到上方。")
@@ -352,10 +363,11 @@ private struct QuickFleetSetupSheet: View {
                         testing = true
                         Task {
                             do {
-                                let rows = try await RelayMachinesClient.list(key: key)
+                                guard let apiRoot else { throw RelayDiscoveryError.badURL }
+                                let rows = try await RelayMachinesClient.list(apiRoot: apiRoot, key: key)
                                 discovered = rows
                                 result = rows.isEmpty
-                                    ? "中继已通，但现在没有在线机器。仍可一键填三台 Mac。"
+                                    ? (fleet.isEmpty ? "中继已通，但现在没有在线机器。" : "中继已通，但现在没有在线机器。仍可一键填入预设设备。")
                                     : "发现 \(rows.count) 台：\(rows.map(\.name).joined(separator: "、"))"
                             } catch {
                                 discovered = []
@@ -366,7 +378,7 @@ private struct QuickFleetSetupSheet: View {
                     } label: {
                         HStack { Text("从中继发现机器"); Spacer(); if testing { ProgressView() } }
                     }
-                    .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
+                    .disabled(apiRoot == nil || key.trimmingCharacters(in: .whitespaces).count < 16)
                     if let result {
                         Text(result).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
@@ -377,10 +389,11 @@ private struct QuickFleetSetupSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { onCancel() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(discovered.isEmpty ? "添加三台 Mac" : "添加发现的机器") {
+                    Button(discovered.isEmpty ? "添加预设设备" : "添加发现的机器") {
                         onDone(key, discovered)
                     }
-                    .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
+                    .disabled(apiRoot == nil || (discovered.isEmpty && fleet.isEmpty)
+                              || key.trimmingCharacters(in: .whitespaces).count < 16)
                 }
             }
         }
@@ -560,7 +573,7 @@ private struct GatewayHostEditor: View {
                 }
 
                 Section {
-                    TextField("https://主机名.tail23de22.ts.net:8645(可留空)", text: $draft.baseURL)
+                    TextField("https://主机名.example.ts.net:8645(可留空)", text: $draft.baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .font(.system(size: 14, design: .monospaced))

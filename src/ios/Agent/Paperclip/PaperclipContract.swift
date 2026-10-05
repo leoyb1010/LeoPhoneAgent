@@ -6,6 +6,12 @@ enum IOSExecutionBackend: String, CaseIterable, Codable {
     case local
     case paperclip
     var title: String { self == .local ? "本机" : "Paperclip 服务器" }
+    static let storageKey = "leo.ios.executionBackend.v1"
+    /// 通知、Siri、快捷操作、深链等外部入口都要显示本机内容；统一走这一处写入，
+    /// @AppStorage 观察同一键，会把隐藏的服务器任务页切回本机。
+    static func selectLocal(_ defaults: UserDefaults = .standard) {
+        defaults.set(IOSExecutionBackend.local.rawValue, forKey: storageKey)
+    }
 }
 
 struct PaperclipProfile: Codable, Hashable, Identifiable, Sendable {
@@ -88,12 +94,24 @@ struct PaperclipSession: Decodable, Sendable {
     let user: PaperclipUser
 
     static func decode(_ data: Data) throws -> PaperclipSession {
-        let decoder = JSONDecoder()
-        struct Envelope: Decodable { let data: PaperclipSession? }
-        let direct = try? decoder.decode(PaperclipSession.self, from: data)
-        let wrapped = try? decoder.decode(Envelope.self, from: data)
-        guard let value = direct ?? wrapped?.data,
-              !value.user.id.isEmpty, !value.session.id.isEmpty,
+        // 只有空会话（null、{"data":null}、无 session/user）才算未登录；
+        // HTTP 200 但结构变了是服务器版本不兼容，不能误报成"登录过期"。
+        guard let root = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
+            throw PaperclipError.invalidResponse
+        }
+        var body: Any = root
+        if let object = root as? [String: Any], object["session"] == nil, object["user"] == nil, object.keys.contains("data") {
+            body = object["data"] ?? NSNull()
+        }
+        if body is NSNull { throw PaperclipError.signedOut }
+        guard let object = body as? [String: Any] else { throw PaperclipError.invalidResponse }
+        func empty(_ value: Any?) -> Bool { value == nil || value is NSNull }
+        if empty(object["session"]) && empty(object["user"]) { throw PaperclipError.signedOut }
+        guard let normalized = try? JSONSerialization.data(withJSONObject: object),
+              let value = try? JSONDecoder().decode(PaperclipSession.self, from: normalized) else {
+            throw PaperclipError.invalidResponse
+        }
+        guard !value.user.id.isEmpty, !value.session.id.isEmpty,
               value.session.userId == value.user.id else { throw PaperclipError.signedOut }
         return value
     }
@@ -212,8 +230,20 @@ enum PaperclipIssueStatus: String, Codable, CaseIterable, Identifiable {
     var title: String { PaperclipLabels.status(rawValue) }
 }
 enum PaperclipPollingPolicy {
+    static let baseInterval: Double = 15
+    static let maximumInterval: Double = 120
     static func canRefresh(active: Bool, statusSheetOpen: Bool, replyFocused: Bool) -> Bool {
         active && !statusSheetOpen && !replyFocused
+    }
+    /// 离线或服务器故障时每 15 秒重试会持续耗电；失败按 2 倍退避到 2 分钟，成功后复位。
+    static func nextInterval(after current: Double, succeeded: Bool) -> Double {
+        succeeded ? baseInterval : min(max(current, baseInterval) * 2, maximumInterval)
+    }
+    /// 轮询只重读第一页：一页以内整体替换；已加载多页时按 id 合并，保留后续页。
+    static func merge(firstPage: [PaperclipIssue], into loaded: [PaperclipIssue]) -> [PaperclipIssue] {
+        guard loaded.count > 100 else { return firstPage }
+        let fresh = Set(firstPage.map(\.id))
+        return firstPage + loaded.filter { !fresh.contains($0.id) }
     }
 }
 
@@ -264,11 +294,20 @@ enum PaperclipLabels {
         (error as? PaperclipError)?.errorDescription ?? "连接失败，请检查网络和服务器地址后重试。不会转为本机执行。"
     }
 }
-enum PaperclipError: LocalizedError, Equatable {
+indirect enum PaperclipError: LocalizedError, Equatable {
     case invalidAddress, signedOut, forbidden, identityChanged, invalidResponse, unavailable, cancelled
     case http(Int), uncertain, unblockActionRequired, statusNotConfirmed
+    /// 写操作前的健康/身份/任务读取失败：写请求确定没有发出，草稿可以安全解锁。
+    case preflightFailed(PaperclipError)
+    /// 预检包装只说明"未发出"，登录过期、身份变化等处理仍看原始原因。
+    var underlying: PaperclipError {
+        if case .preflightFailed(let error) = self { return error.underlying }
+        return self
+    }
     var errorDescription: String? {
         switch self {
+        case .preflightFailed(let error):
+            return (error.errorDescription ?? "") + "操作尚未发送到服务器，可以修改后重新提交。"
         case .invalidAddress: return "请输入独立服务器的 HTTPS 根地址，不包含账号、密码、路径、查询参数或片段。"
         case .signedOut: return "登录已过期或尚未登录，请打开服务器登录页，用你的人类用户账号登录。"
         case .forbidden: return "当前用户没有执行此操作的权限，请联系服务器管理员。"

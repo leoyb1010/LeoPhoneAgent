@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// 不跟随重定向，防止登录 Cookie 发送到代理、登录页或其他服务器。
@@ -17,6 +18,10 @@ final class PaperclipClient {
     private var invalidated = false
     private let readCookies: @MainActor () async -> [HTTPCookie]
     private let saveCookies: @MainActor ([HTTPCookie]) async -> Void
+    /// 只读请求在短时间内复用同一份 Cookie 的身份确认，避免每个 GET 都附带 get-session。
+    static let identityReuseInterval: TimeInterval = 10
+    private var confirmedIdentity: (fingerprint: String, userID: String, at: Date)?
+    private var identityCheck: (fingerprint: String, task: Task<PaperclipSession, Error>)?
 
     init(profile: PaperclipProfile, configuration: URLSessionConfiguration = .ephemeral,
          readCookies: @escaping @MainActor () async -> [HTTPCookie],
@@ -56,11 +61,17 @@ final class PaperclipClient {
         return result
     }
 
+    /// health 只在 connect() 时做一次；这里不再重复探测。
     func humanSession() async throws -> PaperclipSession {
-        _ = try await health()
         let cookies = await readCookies()
         let data = try await raw("/api/auth/get-session", cookies: cookies)
         return try PaperclipSession.decode(data)
+    }
+
+    /// 尽力撤销服务器会话；失败、超时都不抛出，不阻塞本机清理。
+    func signOut() async {
+        let cookies = await readCookies()
+        _ = try? await raw("/api/auth/sign-out", method: "POST", body: [:], cookies: cookies, timeout: 8)
     }
 
     func companies(userID: String) async throws -> [PaperclipCompany] {
@@ -78,17 +89,6 @@ final class PaperclipClient {
         let id = try PaperclipProfile.component(companyID)
         let rows: [PaperclipIssue] = try await authenticated("/api/companies/\(id)/issues?limit=100&offset=\(max(0, offset))", userID: userID)
         guard rows.allSatisfy({ $0.companyId == companyID }) else { throw PaperclipError.identityChanged }
-        return rows
-    }
-
-    func refreshedIssues(companyID: String, userID: String, loadedCount: Int) async throws -> [PaperclipIssue] {
-        // 官方列表按 100 条分页；重读已加载窗口，让前台轮询更新内容且不截掉后续页。
-        var rows: [PaperclipIssue] = []
-        repeat {
-            let page = try await issues(companyID: companyID, userID: userID, offset: rows.count)
-            rows += page
-            if page.count < 100 { break }
-        } while rows.count < max(100, loadedCount)
         return rows
     }
 
@@ -132,7 +132,8 @@ final class PaperclipClient {
     }
 
     func reply(_ ref: PaperclipTaskReference, body: String, requestID: UUID) async throws -> PaperclipComment {
-        _ = try await issue(ref)
+        // 预检读取失败时回复确定未发出，包装成 .preflightFailed 让草稿解锁。
+        try await preflight { _ = try await issue(ref) }
         let row: PaperclipComment = try await authenticated(try issuePath(ref) + "/comments", method: "POST",
             body: ["body": body, "clientRequestId": requestID.uuidString], userID: ref.userID)
         guard row.companyId == ref.companyID, row.issueId == ref.issueID, !row.id.isEmpty,
@@ -145,7 +146,7 @@ final class PaperclipClient {
         let expected = try PaperclipStatusExpectation(status: status, userID: ref.userID, unblockAction: unblockAction)
         var body: [String: Any] = ["status": status.rawValue]
         if let action = expected.unblockAction { body["unblockDescriptor"] = ["owner": ["userId": ref.userID], "action": action] }
-        _ = try await issue(ref)
+        try await preflight { _ = try await issue(ref) }
         let row: PaperclipIssue = try await authenticated(try issuePath(ref), method: "PATCH", body: body, userID: ref.userID)
         try verify(row, ref)
         guard expected.matches(row) else { throw PaperclipError.uncertain }
@@ -154,8 +155,10 @@ final class PaperclipClient {
 
     func resolve(_ ref: PaperclipTaskReference, approval: PaperclipApproval, approve: Bool, note: String) async throws -> PaperclipApproval {
         // 在提交前重新验证此审批确实属于当前任务，不能拿公司级列表误审批其他任务。
-        _ = try await issue(ref)
-        let current = try await approvals(ref)
+        let current = try await preflight { () async throws -> [PaperclipApproval] in
+            _ = try await issue(ref)
+            return try await approvals(ref)
+        }
         guard approval.companyId == ref.companyID, approval.status == "pending",
               current.contains(where: { $0 == approval }) else { throw PaperclipError.http(409) }
         let approvalID = approval.id
@@ -186,14 +189,63 @@ final class PaperclipClient {
         guard issue.id == ref.issueID, issue.companyId == ref.companyID else { throw PaperclipError.identityChanged }
     }
 
+    /// 写请求之前的读取失败一律标记为"未发出"；已是预检错误的不重复包装。
+    private func preflight<T>(_ work: () async throws -> T) async throws -> T {
+        do { return try await work() }
+        catch let error as PaperclipError {
+            if case .preflightFailed = error { throw error }
+            throw PaperclipError.preflightFailed(error)
+        }
+    }
+
     private func authenticated<T: Decodable>(_ path: String, method: String = "GET",
                                             body: [String: Any]? = nil, userID: String) async throws -> T {
         // 同一 Cookie 快照用于身份校验和实际请求，切换账号不会改变进行中的请求归属。
-        _ = try await health()
+        // health 已在 connect() 完成，不再每次请求重复。
         let cookies = await readCookies()
-        let identity = try PaperclipSession.decode(try await raw("/api/auth/get-session", cookies: cookies))
-        guard identity.user.id == userID else { throw PaperclipError.identityChanged }
+        let mutation = method != "GET"
+        if mutation {
+            // 写操作必须新鲜确认身份；确认失败时写请求尚未发出。
+            try await preflight { try await confirmIdentity(cookies: cookies, userID: userID, fresh: true) }
+        } else {
+            try await confirmIdentity(cookies: cookies, userID: userID, fresh: false)
+        }
         return try await request(path, method: method, body: body, cookies: cookies)
+    }
+
+    /// 身份确认按 Cookie 指纹缓存 10 秒，并发读取共享同一个进行中的 get-session。
+    /// Cookie 变化（重新登录、换账号、服务器轮换）指纹即变化，必定重新确认。
+    private func confirmIdentity(cookies: [HTTPCookie], userID: String, fresh: Bool) async throws {
+        let url = try profile.url("/api/auth/get-session")
+        let header = HTTPCookie.requestHeaderFields(with: Self.cookies(cookies, for: url))["Cookie"] ?? ""
+        let fingerprint = SHA256.hash(data: Data(header.utf8)).map { String(format: "%02x", $0) }.joined()
+        if !fresh, let confirmed = confirmedIdentity, confirmed.fingerprint == fingerprint,
+           Date().timeIntervalSince(confirmed.at) < Self.identityReuseInterval {
+            guard confirmed.userID == userID else { throw PaperclipError.identityChanged }
+            return
+        }
+        let task: Task<PaperclipSession, Error>
+        if !fresh, let running = identityCheck, running.fingerprint == fingerprint {
+            task = running.task
+        } else {
+            task = Task { @MainActor in
+                try PaperclipSession.decode(try await self.raw("/api/auth/get-session", cookies: cookies))
+            }
+            identityCheck = (fingerprint, task)
+        }
+        let identity: PaperclipSession
+        do { identity = try await task.value }
+        catch {
+            if identityCheck?.task == task { identityCheck = nil }
+            confirmedIdentity = nil
+            throw error
+        }
+        if identityCheck?.task == task { identityCheck = nil }
+        guard identity.user.id == userID else {
+            confirmedIdentity = nil
+            throw PaperclipError.identityChanged
+        }
+        confirmedIdentity = (fingerprint, identity.user.id, Date())
     }
 
     private func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil,
@@ -204,12 +256,13 @@ final class PaperclipClient {
     }
 
     private func raw(_ path: String, method: String = "GET", body: [String: Any]? = nil,
-                     cookies: [HTTPCookie]) async throws -> Data {
+                     cookies: [HTTPCookie], timeout: TimeInterval? = nil) async throws -> Data {
         guard !invalidated else { throw PaperclipError.signedOut }
         let url = try profile.url(path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpShouldHandleCookies = false
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(profile.origin.absoluteString, forHTTPHeaderField: "Origin")
         request.setValue(profile.origin.absoluteString + "/", forHTTPHeaderField: "Referer")

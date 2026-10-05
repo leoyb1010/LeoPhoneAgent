@@ -18,8 +18,8 @@ struct IOSWorkspaceRootView<LocalContent: View>: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tag(IOSExecutionBackend.local.rawValue)
                 .tabItem { Label("本机", systemImage: "iphone") }
+            // 不再强制 zh_Hans_CN：日期、数字跟随用户当前语言区域；中文文案本身是字面量。
             PaperclipWorkspaceView(onReturnToLocal: { selected = IOSExecutionBackend.local.rawValue }, makeStore: makeStore)
-                .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
                 .toolbar(.hidden, for: .tabBar)
                 .tag(IOSExecutionBackend.paperclip.rawValue)
                 .tabItem { Label("服务器任务", systemImage: "network") }
@@ -93,7 +93,7 @@ struct PaperclipWorkspaceView: View {
                                     .accessibilityIdentifier("paperclip.search")
                                 if !query.isEmpty {
                                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                                        .buttonStyle(.borderless).accessibilityLabel("清除搜索")
+                                        .buttonStyle(.borderless).accessibilityLabel(Text(verbatim: "清除搜索"))
                                 }
                             }
                         }
@@ -177,9 +177,14 @@ struct PaperclipWorkspaceView: View {
         .task(id: store.selectedID) { if store.selectedProfile != nil { await store.connect() } }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            var interval = PaperclipPollingPolicy.baseInterval
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                if listVisible && !settings && !composing && !searching && store.user != nil { await store.refresh() }
+                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
+                if listVisible && !settings && !composing && !searching && store.user != nil {
+                    await store.refresh()
+                    // 失败指数退避（上限 2 分钟），成功复位，避免离线时持续耗电。
+                    interval = PaperclipPollingPolicy.nextInterval(after: interval, succeeded: store.error == nil)
+                }
             }
         }
     }
@@ -231,6 +236,7 @@ private struct PaperclipServerSettingsView: View {
     @State private var addProfile = false
     @State private var login = false
     @State private var clearLogin = false
+    @State private var removeProfile = false
     @State private var website = false
 
     var body: some View {
@@ -244,7 +250,9 @@ private struct PaperclipServerSettingsView: View {
                         Text(profile.origin.absoluteString).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         Button(store.user == nil ? "网页登录" : "重新登录") { login = true }.disabled(store.busy)
                             .accessibilityIdentifier("paperclip.login")
-                        if store.user != nil { Button("清除本机登录", role: .destructive) { clearLogin = true }.disabled(store.busy) }
+                        if store.user != nil { Button("退出登录", role: .destructive) { clearLogin = true }.disabled(store.busy) }
+                        Button("删除此服务器", role: .destructive) { removeProfile = true }.disabled(store.busy)
+                            .accessibilityIdentifier("paperclip.removeProfile")
                     } else {
                         Text("先添加已独立部署的 Paperclip HTTPS 服务器，再用网页账号登录。")
                     }
@@ -288,10 +296,16 @@ private struct PaperclipServerSettingsView: View {
             .sheet(isPresented: $website, onDismiss: { Task { await store.connect() } }) {
                 if let profile = store.selectedProfile { PaperclipWebsiteView(profile: profile) }
             }
-            .confirmationDialog("清除这台设备上此服务器配置的登录？", isPresented: $clearLogin, titleVisibility: .visible) {
-                Button("清除本机登录", role: .destructive) { Task { await store.clearLogin() } }
-                Button("取消", role: .cancel) {}
-            } message: { Text("这会清除此配置的浏览器登录数据，服务器上的任务和本机会话不会删除。") }
+            .confirmationDialog("退出此服务器的登录？", isPresented: $clearLogin, titleVisibility: .visible) {
+                Button("退出登录", role: .destructive) { Task { await store.clearLogin() } }
+                Button("取消" as String, role: .cancel) {}
+            } message: { Text("会尝试通知服务器结束本次登录，然后清除此配置的浏览器登录数据。服务器上的任务和本机会话不会删除。") }
+            .confirmationDialog("删除此服务器配置？", isPresented: $removeProfile, titleVisibility: .visible) {
+                if let profile = store.selectedProfile {
+                    Button("删除此服务器", role: .destructive) { Task { await store.remove(profile.id) } }
+                }
+                Button("取消" as String, role: .cancel) {}
+            } message: { Text("会先退出服务器登录，再删除本机保存的地址、登录数据和此服务器的草稿记录。服务器上的任务不会删除。") }
         }
     }
 }
@@ -315,7 +329,7 @@ private struct PaperclipAddProfileView: View {
             .navigationTitle("添加服务器")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("取消" as String) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
                         do { try store.add(name: name, address: address); dismiss() }
@@ -344,6 +358,7 @@ private struct PaperclipCreateIssueView: View {
     @State private var lastChecked: PaperclipDraft?
     @State private var showDetails = false
     @State private var showReceipt = false
+    @State private var saveTask: Task<Void, Never>?
     private let draftKey: String
 
     init(client: PaperclipClient, companyID: String, userID: String, agents: [PaperclipAgent],
@@ -396,13 +411,18 @@ private struct PaperclipCreateIssueView: View {
         .onAppear { updateComposing() }
         .onChange(of: focusRequest) { _, _ in focused = true }
         .onChange(of: focused) { _, _ in updateComposing() }
-        .onChange(of: draft.title) { _, _ in draft.save(key: draftKey); updateComposing() }
-        .onChange(of: draft.body) { _, _ in draft.save(key: draftKey); updateComposing() }
-        .onChange(of: draft.agentID) { _, _ in draft.save(key: draftKey) }
+        .onChange(of: draft.title) { _, _ in scheduleDraftSave(); updateComposing() }
+        .onChange(of: draft.body) { _, _ in scheduleDraftSave(); updateComposing() }
+        .onChange(of: draft.agentID) { _, _ in scheduleDraftSave() }
         .onChange(of: showDetails) { _, _ in updateComposing() }
         .onChange(of: showReceipt) { _, _ in updateComposing() }
         .onChange(of: busy) { _, _ in updateComposing() }
-        .onDisappear { if !draft.title.isEmpty || !draft.body.isEmpty { draft.save(key: draftKey) }; composing = false }
+        .onDisappear {
+            let pending = saveTask != nil
+            saveTask?.cancel(); saveTask = nil
+            if pending || !draft.title.isEmpty || !draft.body.isEmpty { draft.save(key: draftKey) }
+            composing = false
+        }
         .sheet(isPresented: $showDetails) {
             NavigationStack {
                 Form {
@@ -446,7 +466,7 @@ private struct PaperclipCreateIssueView: View {
                     draft = PaperclipDraft()
                     error = nil
                 }
-                Button("取消", role: .cancel) {}
+                Button("取消" as String, role: .cancel) {}
             } message: { Text("操作可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送；新任务需要你再次明确提交。") }
             }
         }
@@ -455,8 +475,18 @@ private struct PaperclipCreateIssueView: View {
         // 保存的草稿或待核对回执不是编辑焦点；只读同步不会修改或重发它们。
         composing = busy || !PaperclipPollingPolicy.canRefresh(active: true, statusSheetOpen: showDetails || showReceipt, replyFocused: focused)
     }
+    /// 每次按键写 UserDefaults 太频繁：停顿 0.5 秒后保存；离开页面、提交前仍立即保存。
+    private func scheduleDraftSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            draft.save(key: draftKey)
+            saveTask = nil
+        }
+    }
     private func submit() async {
         guard !busy, draft.canRetryCreate() else { return }
+        saveTask?.cancel(); saveTask = nil
         busy = true
         let wasPreviouslySubmitted = draft.submitted
         draft.markSubmitted()

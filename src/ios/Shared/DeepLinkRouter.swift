@@ -54,14 +54,17 @@ enum DeepLinkRouter {
         }
         let coord = DeepLinkCoordinator.shared
 
+        // 以下每个入口打开的都是本机内容（对话、分享、闹钟、终端、藏宝阁、网页应用、设置）；
+        // 若停在服务器任务页，内容会在隐藏的本机页里打开，看起来像"没反应"。
+        // 只在参数有效、确实要导航时切回本机，无效链接不改变工作区。
         switch host {
         case "voice":
-            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
+            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startVoiceChat()
 
         // [T-widget-quick-tasks] Home Screen widget entries.
         case "new", "new_chat":
-            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
+            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startNewChat()
 
         case "quick-task", "quick_task":
@@ -70,17 +73,20 @@ enum DeepLinkRouter {
                 deepLinkLog.info("quick-task URL missing id")
                 return
             }
+            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startQuickTask(id: id)
 
         case "share":
             // Funnel through ShareCoordinator so any leftover
             // fullScreenCover (gallery / WebApp / camera) is dismissed
             // before the share UI tries to surface.
+            IOSExecutionBackend.selectLocal()
             shareCoordinator.raisePendingShare()
 
         case "views":
             // Only one view route today; future ones land here.
             if url.path == "/alarm" {
+                IOSExecutionBackend.selectLocal()
                 coord.showAlarmList = true
             }
 
@@ -89,13 +95,15 @@ enum DeepLinkRouter {
             // 只预填、不执行:去掉换行和其它控制字符,链接里的 %0A 不能替你按回车。
             coord.terminalInitCommand = components?.queryItems?.first(where: { $0.name == "init_command" })?.value
                 .map { String(String.UnicodeScalarView($0.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) })) }
+            IOSExecutionBackend.selectLocal()
             coord.showTerminal = true
 
         case "collections", "treasury":
+            IOSExecutionBackend.selectLocal()
             coord.pendingCollections = true
 
         case "open":
-            handleWebAppLauncherReturn(url: url)
+            if handleWebAppLauncherReturn(url: url) { IOSExecutionBackend.selectLocal() }
 
         case "session", "sessions":
             // `session/<id>` (legacy singular) and `sessions/<id>` (canonical,
@@ -117,7 +125,7 @@ enum DeepLinkRouter {
                     return
                 }
                 // Select the destination workspace only after the session is admitted.
-                UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
+                IOSExecutionBackend.selectLocal()
                 NotificationNavigationStore.shared.setPending(id)
                 NotificationCenter.default.post(
                     name: .openSessionFromIntent,
@@ -127,7 +135,7 @@ enum DeepLinkRouter {
             }
 
         case "settings":
-            UserDefaults.standard.set(IOSExecutionBackend.local.rawValue, forKey: "leo.ios.executionBackend.v1")
+            IOSExecutionBackend.selectLocal()
             handleSettings(url: url, coord: coord)
 
         default:
@@ -273,14 +281,15 @@ enum DeepLinkRouter {
     /// Builds a transient `WebAppShortcut` (no persistence) and posts
     /// `.openWebAppDeepLink` so the SwiftUI root presents the immersive
     /// WebView screen.
-    @MainActor
-    private static func handleWebAppLauncherReturn(url: URL) {
+    /// 返回 true 表示链接有效、已发出打开网页应用的导航。
+    @MainActor @discardableResult
+    private static func handleWebAppLauncherReturn(url: URL) -> Bool {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let session = components?.queryItems?.first(where: { $0.name == "session" })?.value
         guard let rawPath = components?.queryItems?.first(where: { $0.name == "path" })?.value,
               !rawPath.isEmpty else {
             deepLinkLog.warning("leophoneagent://open missing path")
-            return
+            return false
         }
 
         let scope: WebAppPathScope
@@ -290,7 +299,7 @@ enum DeepLinkRouter {
         if rawPath.hasPrefix("attachments/") {
             guard let sid = session, !sid.isEmpty else {
                 deepLinkLog.warning("leophoneagent://open path=attachments/… missing session")
-                return
+                return false
             }
             scope = .sessionAttachment
             ctx = sid
@@ -298,7 +307,7 @@ enum DeepLinkRouter {
         } else if rawPath.hasPrefix("workspace/") {
             guard let sid = session, !sid.isEmpty else {
                 deepLinkLog.warning("leophoneagent://open path=workspace/… missing session")
-                return
+                return false
             }
             scope = .sessionWorkspace
             ctx = sid
@@ -312,14 +321,14 @@ enum DeepLinkRouter {
             let rest = rawPath.dropFirst("mount:".count)
             guard let slash = rest.firstIndex(of: "/") else {
                 deepLinkLog.warning("leophoneagent://open path=mount:… missing /<rest>")
-                return
+                return false
             }
             scope = .mount
             ctx = String(rest[..<slash])
             htmlPath = String(rest[rest.index(after: slash)...])
         } else {
             deepLinkLog.warning("leophoneagent://open unknown path prefix in \(rawPath)")
-            return
+            return false
         }
 
         let title = url.fragment.flatMap { $0.removingPercentEncoding } ?? ""
@@ -351,5 +360,6 @@ enum DeepLinkRouter {
                 userInfo: ["shortcut": shortcut]
             )
         }
+        return true
     }
 }

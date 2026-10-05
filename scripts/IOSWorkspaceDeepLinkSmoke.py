@@ -2,6 +2,13 @@
 """Run unchanged production URL dispatch and settings presentation handlers.
 Only external services/storage are in-memory adapters. No user defaults, DB,
 simulator, device, authorization, network or live account is accessed.
+
+Compiled verbatim from production: DeepLinkRouter.handle / handleSettings /
+handleWebAppLauncherReturn, QuickActionRouter.postNewChat,
+NotificationNavigationStore.setPending / setPendingMac (cold-launch buffer used by
+notification taps, Spotlight, Siri/App Intents) and IOSExecutionBackend.selectLocal.
+ContentView's warm-path receivers live in a SwiftUI body and are checked as
+source assertions instead.
 """
 from pathlib import Path
 import importlib.util
@@ -12,33 +19,64 @@ spec = importlib.util.spec_from_file_location('audit_generator', root/'scripts/n
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 router = (root/'src/ios/Shared/DeepLinkRouter.swift').read_text()
-methods = '\n'.join(module.extract_swift_method(router, name) for name in ['handle', 'handleSettings'])
+methods = '\n'.join(module.extract_swift_method(router, name)
+                    for name in ['handle', 'handleSettings', 'handleWebAppLauncherReturn'])
+quick = (root/'src/ios/Shared/QuickActionRouter.swift').read_text()
+post_new_chat = module.extract_swift_method(quick, 'postNewChat')
+intents = (root/'src/ios/Agent/Intents/SendPromptIntent.swift').read_text()
+pending_methods = '\n'.join(module.extract_swift_method(intents, name) for name in ['setPending', 'setPendingMac'])
+contract = (root/'src/ios/Agent/Paperclip/PaperclipContract.swift').read_text()
+backend_start = contract.index('enum IOSExecutionBackend')
+backend = contract[backend_start:contract.index('\n}\n', backend_start) + 3]
 content = (root/'src/ios/Views/ContentView.swift').read_text()
+# SwiftUI 接收器不能脱离视图编译：用源码断言确认热启动路径在导航前先切回本机。
+local_write = 'executionBackend = IOSExecutionBackend.local.rawValue'
+receiver = content[content.index('.onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent))'):]
+assert local_write in receiver[:receiver.index('macSessionId')], 'openSessionFromIntent receiver does not select local first'
+new_chat = module.extract_swift_method(content, 'handleNewChatRequest')
+assert local_write in new_chat[:new_chat.index('makeNewSessionId')], 'quick action new-chat handler does not select local'
 start = content.index('.onChange(of: deepLink.pendingSettingsTarget')
 end = content.index('.onChange(of: deepLink.pendingCollections', start)
 observer = content[start:end]
 swift = r'''
 import Foundation
-struct AppLogger { func info(_ message: String) {} }
+struct AppLogger { func info(_ message: String) {}; func warning(_ message: String) {} }
 let deepLinkLog = AppLogger()
-enum IOSExecutionBackend: String { case local, paperclip }
+let logger = AppLogger()
 final class UserDefaults {
  static let standard = UserDefaults(); var values: [String: String] = [:]
  func set(_ value: String, forKey key: String) { values[key] = value }
  func string(forKey key: String) -> String? { values[key] }
 }
-@MainActor final class ShareCoordinator { func raisePendingShare() {} }
+''' + backend + r'''
+@MainActor final class ShareCoordinator { var raised = 0; func raisePendingShare() { raised += 1 } }
 @MainActor final class QuickActionRouter {
- static let shared = QuickActionRouter(); var newCalls = 0; var voiceCalls = 0
- func startVoiceChat() { voiceCalls += 1 }
- func startNewChat() { newCalls += 1 }
- func startQuickTask(id: String) {}
+ static let shared = QuickActionRouter(); var newCalls = 0; var voiceCalls = 0; var quickTasks: [String] = []
+ var newChatTrigger = 0
+ func startVoiceChat() { voiceCalls += 1; postNewChat() }
+ func startNewChat() { newCalls += 1; postNewChat() }
+ func startQuickTask(id: String) { quickTasks.append(id); postNewChat() }
+''' + post_new_chat + r'''
+}
+enum WebAppPathScope: String { case sessionAttachment, sessionWorkspace, shared, mount }
+enum WebAppIconRef { case preset(String) }
+struct WebAppShortcut {
+ init(id: String, htmlPath: String, pathScope: WebAppPathScope, scopeContext: String?, title: String,
+      iconRef: WebAppIconRef, iconCachePath: String?, createdAt: Date, sourceSessionId: String?) {}
+}
+extension Notification.Name {
+ static let dismissAllImmersivePresentations = Notification.Name("fixture-dismiss")
+ static let openWebAppDeepLink = Notification.Name("fixture-webapp")
 }
 enum OffloadPermissionManager { static func isReservedSessionId(_ id: String) -> Bool { id.hasPrefix("__") } }
 actor ChatStore { static let shared = ChatStore(); func sessionExists(id: String) -> Bool { id == "known-session" } }
 @MainActor final class NotificationNavigationStore {
- static let shared = NotificationNavigationStore(); var pending: String?
- func setPending(_ id: String) { pending = id }
+ static let shared = NotificationNavigationStore()
+ private var pendingSessionId: String?; private var pendingSetAt: Date?
+ private var pendingMac: (target: [String: String], at: Date)?
+ var pending: String? { get { pendingSessionId } set { pendingSessionId = newValue; pendingMac = nil } }
+ var mac: [String: String]? { pendingMac?.target }
+''' + pending_methods + r'''
 }
 extension Notification.Name { static let openSessionFromIntent = Notification.Name("fixture-open") }
 @MainActor final class DeepLinkCoordinator {
@@ -56,7 +94,6 @@ extension Notification.Name { static let openSessionFromIntent = Notification.Na
  func setFocus(rawQueryValue: String?) {}
 }
 @MainActor enum DeepLinkRouter {
- static func handleWebAppLauncherReturn(url: URL) {}
 ''' + methods + r'''
 }
 @MainActor final class WindowRegistry {
@@ -112,7 +149,33 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   let noTarget = SettingsHost(); noTarget.attach()
   expect(noTarget.activeToolSheet == nil, "no pending settings target still opened a sheet")
   expect(QuickActionRouter.shared.newCalls == 2 && QuickActionRouter.shared.voiceCalls == 1, "explicit entry did not invoke its original action exactly once")
-  print("PASS production deep links: 14 routes + cold initial target, window ownership, empty target, original actions")
+  // 1.53.2：其余显示本机内容的深链入口同样切回本机，原动作照常执行。
+  let share = ShareCoordinator()
+  let localRoutes = ["leophoneagent://quick-task/fixture-task", "leophoneagent://quick_task/fixture-task", "leophoneagent://share",
+                     "leophoneagent://views/alarm", "leophoneagent://open_terminal?init_command=ls", "leophoneagent://collections",
+                     "leophoneagent://treasury", "leophoneagent://open?path=shared:index.html",
+                     "leophoneagent://open?session=s1&path=workspace/app/index.html"]
+  for value in localRoutes {
+   reset(); DeepLinkRouter.handle(url: URL(string: value)!, shareCoordinator: share)
+   expect(UserDefaults.standard.string(forKey: key) == "local", value + " stayed in hidden Paperclip workspace")
+  }
+  expect(QuickActionRouter.shared.quickTasks == ["fixture-task", "fixture-task"], "quick task action lost")
+  expect(share.raised == 1, "share route did not raise pending share")
+  expect(DeepLinkCoordinator.shared.showAlarmList && DeepLinkCoordinator.shared.showTerminal && DeepLinkCoordinator.shared.pendingCollections, "local presentation flags not set")
+  expect(DeepLinkCoordinator.shared.terminalInitCommand == "ls", "terminal command not prefilled")
+  for value in ["leophoneagent://quick-task/", "leophoneagent://views/other", "leophoneagent://open",
+                "leophoneagent://open?path=unknown/x", "leophoneagent://open?path=attachments/x.html"] {
+   reset(); route(value)
+   expect(UserDefaults.standard.string(forKey: key) == "paperclip", "invalid " + value + " changed workspace")
+  }
+  // 冷启动缓冲：通知点击、Spotlight、Siri/App Intents 经 setPending/setPendingMac；快捷操作、小组件、控制中心经 postNewChat。
+  reset(); NotificationNavigationStore.shared.setPending("notification-session")
+  expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.pending == "notification-session", "notification/Spotlight/Siri cold buffer stayed hidden")
+  reset(); NotificationNavigationStore.shared.setPendingMac(["macSessionId": "m1"])
+  expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.mac?["macSessionId"] == "m1", "Mac session notification stayed hidden")
+  reset(); let before = QuickActionRouter.shared.newChatTrigger; QuickActionRouter.shared.startNewChat()
+  expect(UserDefaults.standard.string(forKey: key) == "local" && QuickActionRouter.shared.newChatTrigger == before + 1, "home screen quick action stayed hidden")
+  print("PASS production deep links: 18 local routes + 10 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
  }
 }
 '''

@@ -161,6 +161,8 @@ final class QuickActionRouter: ObservableObject {
         // run twice with two different fresh session ids — the
         // workflow's attached target then doesn't match the AIChatView
         // that actually ends up visible.
+        // 冷启动时 ContentView 还没挂载：先持久化本机工作区选择，挂载后直接落在本机。
+        IOSExecutionBackend.selectLocal()
         newChatTrigger &+= 1
         logger.info("postNewChat trigger=\(newChatTrigger)")
     }

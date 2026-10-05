@@ -793,6 +793,8 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent)) { note in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                // 通知、Siri/快捷指令、Spotlight、时间线打开的都是本机会话；停留在隐藏的服务器任务页等于没打开。
+                executionBackend = IOSExecutionBackend.local.rawValue
                 if let mac = note.userInfo as? [String: String], mac["macSessionId"] != nil {
                     NotificationNavigationStore.shared.markHandled()
                     // The console is a presentation too: let a closing sheet finish first.
@@ -2644,6 +2646,8 @@ struct ContentView: View {
     ///      so voice / camera fires *inside* the new chat — never inside
     ///      the previous one.
     private func handleNewChatRequest() {
+        // 快捷操作/小组件/控制中心的新对话在本机工作区打开，先切回本机。
+        executionBackend = IOSExecutionBackend.local.rawValue
         let newId = Self.makeNewSessionId()
         // Clear any stale flags left over from a prior quick-action
         // request that didn't run to completion (user backgrounded the

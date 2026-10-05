@@ -21,7 +21,7 @@ struct PaperclipLoginView: View {
             .navigationTitle("登录 Paperclip")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(checking) }
+                ToolbarItem(placement: .cancellationAction) { Button("取消" as String) { dismiss() }.disabled(checking) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(checking ? "正在验证" : "完成登录并验证") {
                         checking = true

@@ -35,6 +35,8 @@ struct PaperclipDraft: Codable {
         try values.encode(submitted, forKey: .submitted)
         try values.encodeIfPresent(firstSubmittedAt, forKey: .firstSubmittedAt)
     }
+    /// 小于服务端创建幂等键保留期（7 天），过期前停止复用同一请求编号。
+    static let createRetryWindow: TimeInterval = 6 * 24 * 60 * 60
     mutating func markSubmitted(now: Date = Date()) {
         if !submitted { firstSubmittedAt = now }
         submitted = true
@@ -43,13 +45,16 @@ struct PaperclipDraft: Codable {
         guard submitted else { return true }
         guard let firstSubmittedAt else { return false }
         let age = now.timeIntervalSince(firstSubmittedAt)
-        return age >= 0 && age < 6 * 24 * 60 * 60
+        // 服务端 ISSUE_CREATE_IDEMPOTENCY_KEY_RETENTION_DAYS = 7；客户端取 6 天，留出时钟偏差与排队余量。
+        return age >= 0 && age < Self.createRetryWindow
     }
     mutating func recordFailure(_ error: Error, wasPreviouslySubmitted: Bool) {
         // 重试被拒绝不能证明原提交未生效；仅首次明确拒绝恢复编辑，保留未知提交和首次时间。
         guard !wasPreviouslySubmitted, let error = error as? PaperclipError else { return }
         switch error {
-        case .invalidAddress, .signedOut, .forbidden, .identityChanged, .http(400), .http(422):
+        // .preflightFailed：预检读取失败（离线、5xx、超时）时写请求根本没发出，必须解锁；
+        // 写请求发出后的超时/断网/5xx 一律是 .uncertain，不在此集合，保持锁定。
+        case .invalidAddress, .signedOut, .forbidden, .identityChanged, .http(400), .http(422), .preflightFailed:
             submitted = false
             firstSubmittedAt = nil
         default: break

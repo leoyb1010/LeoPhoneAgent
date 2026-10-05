@@ -8,7 +8,21 @@ if [[ "$(uname -s)" != Darwin ]]; then
 fi
 command -v xcodegen >/dev/null || { echo '请先安装 xcodegen：brew install xcodegen' >&2; exit 2; }
 OUTPUT="${PAPERCLIP_AUDIT_OUTPUT:-$ROOT/native-paperclip-audit-results}"
+# DerivedData 不放在仓库内：仓库目录的扩展属性会让签名步骤失败，也避免产物混入工作树。
+DERIVED="${PAPERCLIP_AUDIT_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-paperclip-audit}"
 mkdir -p "$OUTPUT"
+# 不写死设备名和系统版本：显式传入，或从本机模拟器白名单策略取固定 iPhone 的 UDID。
+if [[ -n "${PAPERCLIP_TEST_DESTINATION:-}" ]]; then
+  DESTINATION="$PAPERCLIP_TEST_DESTINATION"
+else
+  POLICY="$HOME/.config/apple-simulator-policy/simulators.py"
+  if [[ ! -f "$POLICY" ]]; then
+    echo '请用 PAPERCLIP_TEST_DESTINATION 显式指定模拟器，例如 PAPERCLIP_TEST_DESTINATION="id=<UDID>"。' >&2
+    exit 2
+  fi
+  python3 "$POLICY" check >/dev/null || { echo '本机模拟器策略检查未通过，先处理后再运行。' >&2; exit 2; }
+  DESTINATION="id=$(python3 "$POLICY" id iphone)"
+fi
 xcodegen generate --spec scripts/native-paperclip-audit/project.yml --project scripts/native-paperclip-audit
 # 每次使用新结果路径，避免覆盖上一次测试证据。
 RESULT="$OUTPUT/Paperclip-$(date +%Y%m%d-%H%M%S).xcresult"
@@ -17,11 +31,11 @@ xcrun simctl list devices available > "$OUTPUT/simulators.txt"
 set +e
 xcodebuild test -project scripts/native-paperclip-audit/PaperclipNativeAudit.xcodeproj \
   -scheme PaperclipNativeAudit \
-  -destination "${PAPERCLIP_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5}" \
-  -parallel-testing-enabled NO \
+  -destination "$DESTINATION" \
+  -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 240 -maximum-test-execution-time-allowance 300 \
   -resultBundlePath "$RESULT" \
-  -derivedDataPath "$OUTPUT/DerivedData" \
+  -derivedDataPath "$DERIVED" \
   CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$OUTPUT/xcodebuild.log"
 STATUS=${PIPESTATUS[0]}
 set -e

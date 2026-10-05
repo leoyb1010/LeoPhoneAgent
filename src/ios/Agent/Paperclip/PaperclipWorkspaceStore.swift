@@ -18,6 +18,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private var revision = UUID()
     private var nextOffset = 0
     private var cookieVaults: [UUID: PaperclipCookieVault] = [:]
+    private var connectTask: (token: UUID, task: Task<Bool, Never>)?
     private let makeConfiguration: @MainActor () -> URLSessionConfiguration
     private let defaults: UserDefaults
     private let makeCookieVault: @MainActor (PaperclipProfile) -> PaperclipCookieVault
@@ -54,6 +55,31 @@ final class PaperclipWorkspaceStore: ObservableObject {
         select(profile.id)
     }
 
+    /// 删除服务器配置：先尽力撤销服务器会话，再清除并释放此配置的浏览器容器与本机记录。
+    func remove(_ id: UUID) async {
+        guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        if selectedID == id { resetConnection() }
+        busy = true
+        let vault = vault(for: profile)
+        await signOut(profile: profile, vault: vault)
+        await vault.clear()
+        busy = false
+        cookieVaults[id] = nil
+        PaperclipCookieVault.forget(id)
+        profiles.removeAll { $0.id == id }
+        defaults.set(try? JSONEncoder().encode(profiles), forKey: Self.profilesKey)
+        // 草稿、待核实状态、公司选择都以配置编号为键，配置删除后不再可核对，一并清除。
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("leo.paperclip.") && key.contains(id.uuidString) {
+            defaults.removeObject(forKey: key)
+        }
+        if selectedID == id {
+            if let next = profiles.first { select(next.id) }
+            else { selectedID = nil; defaults.removeObject(forKey: Self.selectionKey) }
+        }
+        // WebKit 仍有视图使用该容器时会拒绝删除；数据已清空，失败不影响配置删除。
+        try? await WKWebsiteDataStore.remove(forIdentifier: id)
+    }
+
     func select(_ id: UUID) {
         guard profiles.contains(where: { $0.id == id }) else { return }
         resetConnection()
@@ -64,6 +90,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private func resetConnection() {
         revision = UUID()
         busy = false
+        connectTask = nil
         client?.invalidate()
         client = nil
         user = nil
@@ -81,14 +108,44 @@ final class PaperclipWorkspaceStore: ObservableObject {
         resetConnection()
         let stamp = revision
         busy = true
-        await vault(for: profile).clear()
+        let vault = vault(for: profile)
+        // 先尽力撤销服务器会话（失败不阻塞），再清本机 Cookie；否则服务器端会话仍可被复用。
+        await signOut(profile: profile, vault: vault)
+        await vault.clear()
         guard stamp == revision, selectedID == profile.id else { return }
         busy = false
     }
 
+    private func signOut(profile: PaperclipProfile, vault: PaperclipCookieVault) async {
+        let generation = vault.generation
+        // 独立临时客户端：工作区客户端已失效；不写回服务器下发的过期 Cookie。
+        let client = PaperclipClient(profile: profile, configuration: makeConfiguration(), readCookies: {
+            await vault.read(generation: generation)
+        })
+        await client.signOut()
+        client.invalidate()
+    }
+
+    /// 并发调用（登录页验证与工作区自动连接）共享同一次连接，返回它的真实结果，不再因 busy 误报失败。
     @discardableResult
     func connect() async -> Bool {
-        guard !busy, let profile = selectedProfile else { return false }
+        if let running = connectTask { return await running.task.value }
+        // 刷新或清除登录进行中：等它结束再连接，不与之并发改写列表状态。
+        while busy && connectTask == nil {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+        }
+        if let running = connectTask { return await running.task.value }
+        guard selectedProfile != nil else { return false }
+        let token = UUID()
+        let task = Task { @MainActor in await self.performConnect() }
+        connectTask = (token, task)
+        let result = await task.value
+        if connectTask?.token == token { connectTask = nil }
+        return result
+    }
+
+    private func performConnect() async -> Bool {
+        guard let profile = selectedProfile else { return false }
         let stamp = revision
         busy = true
         error = nil
@@ -147,18 +204,24 @@ final class PaperclipWorkspaceStore: ObservableObject {
         let offset = loadMore ? nextOffset : 0
         busy = true
         do {
-            let rows = try await (loadMore
-                ? client.issues(companyID: company, userID: user.id, offset: offset)
-                : client.refreshedIssues(companyID: company, userID: user.id, loadedCount: nextOffset))
+            // 刷新只重读第一页（以前每 15 秒重拉全部已加载页）；后续页保留，按 id 合并。
+            let rows = try await client.issues(companyID: company, userID: user.id, offset: offset)
             let people = try await client.agents(companyID: company, userID: user.id)
             guard stamp == revision else { return }
             if loadMore {
                 let known = Set(issues.map(\.id))
                 issues += rows.filter { !known.contains($0.id) }
-            } else { issues = rows }
+                nextOffset = offset + rows.count
+                hasMore = !rows.isEmpty && rows.count.isMultiple(of: 100)
+            } else if issues.count > 100 {
+                issues = PaperclipPollingPolicy.merge(firstPage: rows, into: issues)
+                nextOffset = max(nextOffset, rows.count)
+            } else {
+                issues = rows
+                nextOffset = rows.count
+                hasMore = !rows.isEmpty && rows.count.isMultiple(of: 100)
+            }
             agents = people
-            nextOffset = offset + rows.count
-            hasMore = !rows.isEmpty && rows.count.isMultiple(of: 100)
             error = nil
         } catch {
             guard stamp == revision else { return }
@@ -216,6 +279,8 @@ final class PaperclipCookieVault {
         sharedVaults[profile.id] = vault
         return vault
     }
+    /// 删除配置后释放对 WKWebsiteDataStore 的引用，WebKit 才能删除该容器。
+    static func forget(_ id: UUID) { sharedVaults[id] = nil }
     private(set) var generation = UUID()
     private let storage: any PaperclipCookieStorage
     private var pending: Task<Void, Never>?

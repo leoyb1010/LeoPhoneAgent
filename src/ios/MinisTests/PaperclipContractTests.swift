@@ -43,6 +43,21 @@ final class PaperclipContractTests: XCTestCase {
             XCTAssertThrowsError(try PaperclipSession.decode(Data(bad.utf8)))
         }
     }
+    func testSessionDecodeSeparatesSignedOutFromIncompatibleResponse() {
+        func error(_ body: String) -> PaperclipError? {
+            do { _ = try PaperclipSession.decode(Data(body.utf8)); return nil } catch { return error as? PaperclipError }
+        }
+        // 未登录：空会话。
+        for signedOut in ["null", "{}", #"{"data":null}"#, #"{"session":null,"user":null}"#,
+                          #"{"session":{"id":"","userId":"human"},"user":{"id":"human"}}"#] {
+            XCTAssertEqual(error(signedOut), .signedOut, signedOut)
+        }
+        // HTTP 200 但结构不兼容：不能误报为登录过期。
+        for incompatible in ["<html>", "[]", "\"text\"", #"{"session":{"sessionId":"s"},"user":{"uid":"human"}}"#,
+                             #"{"session":"s","user":"human"}"#, #"{"data":{"session":1,"user":2}}"#] {
+            XCTAssertEqual(error(incompatible), .invalidResponse, incompatible)
+        }
+    }
     func testPinnedHistoricalRunsUseRunIDNotLiveRunID() throws {
         let fixture = #"[{"runId":"run-1","status":"succeeded","agentId":"agent","startedAt":null,"finishedAt":null}]"#
         XCTAssertEqual(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.utf8)).first?.id, "run-1")
@@ -101,6 +116,11 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(IOSExecutionBackend.local.title, "本机")
         XCTAssertEqual(PaperclipLabels.status("future_status"), "未知状态")
         for status in PaperclipIssueStatus.allCases { XCTAssertNotEqual(status.title, status.rawValue) }
+    }
+    func testCreateRetryWindowStaysInsideServerSevenDayRetention() {
+        // 服务端 ISSUE_CREATE_IDEMPOTENCY_KEY_RETENTION_DAYS = 7；客户端必须更短。
+        XCTAssertEqual(PaperclipDraft.createRetryWindow, 6 * 24 * 60 * 60)
+        XCTAssertLessThan(PaperclipDraft.createRetryWindow, 7 * 24 * 60 * 60)
     }
     func testCreateRetryStopsBeforeServerSevenDayKeyExpiry() {
         let now = Date(timeIntervalSince1970: 2_000_000)

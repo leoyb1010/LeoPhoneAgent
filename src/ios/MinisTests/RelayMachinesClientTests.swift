@@ -4,7 +4,7 @@ final class RelayMachinesClientTests: XCTestCase {
     func testParseListsAndroidWithoutRepoString() throws {
         let data = """
         {"machines":[
-          {"name":"LeodeMac-mini-2","online":true,"server":"leocodebox"},
+          {"name":"fixture-mac-mini","online":true,"server":"leocodebox"},
           {"name":"LeoFold8","online":true,"platform":"android","server":"minis","version":"1.0.0-alpha.6"}
         ]}
         """.data(using: .utf8)!
@@ -12,8 +12,29 @@ final class RelayMachinesClientTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         XCTAssertFalse(rows[0].isAndroidBody)
         XCTAssertTrue(rows[1].isAndroidBody)
-        XCTAssertTrue(RelayMachinesClient.harnessURL(for: "LeoFold8").contains("/m/LeoFold8"))
-        XCTAssertEqual(RelayMachinesClient.displayName(for: "LeodeMac-mini-2"), "Mac mini · cortex")
+        XCTAssertEqual(RelayMachinesClient.harnessURL(for: "LeoFold8", apiRoot: "https://relay.example/api/"),
+                       "https://relay.example/api/m/LeoFold8")
+        XCTAssertEqual(RelayMachinesClient.displayName(for: "fixture-mac-mini", fleet: Self.fleet), "Mac mini")
+        XCTAssertEqual(RelayMachinesClient.displayName(for: "unlisted-box", fleet: Self.fleet), "unlisted-box")
+    }
+
+    static let fleet = LeoRelayConfig.parseFleet("MacBook Pro=fixture-macbook-pro;Mac mini=fixture-mac-mini")
+
+    /// 中继地址与机器名不进源码：未注入或占位未展开时视为未配置，界面不发请求。
+    func testRelayConfigRejectsMissingPlaceholderAndInsecureValues() {
+        XCTAssertNil(LeoRelayConfig.normalizedApiRoot(""))
+        XCTAssertNil(LeoRelayConfig.normalizedApiRoot("$(LEO_RELAY_API_ROOT)"))
+        XCTAssertNil(LeoRelayConfig.normalizedApiRoot("http://relay.example/api"))
+        XCTAssertNil(LeoRelayConfig.normalizedApiRoot("https://"))
+        XCTAssertEqual(LeoRelayConfig.normalizedApiRoot(" https://relay.example/api/ "), "https://relay.example/api")
+        XCTAssertEqual(Self.fleet, [.init(name: "MacBook Pro", machine: "fixture-macbook-pro"),
+                                    .init(name: "Mac mini", machine: "fixture-mac-mini")])
+        XCTAssertEqual(LeoRelayConfig.parseFleet("坏=../etc;=empty;没有等号;好 = ok-box ;"), [.init(name: "好", machine: "ok-box")])
+        XCTAssertTrue(LeoRelayConfig.parseFleet("$(LEO_RELAY_FLEET)").isEmpty)
+        // 逻辑测试包没有注入构建配置：必须是"未配置"，而不是回落到任何写死的主机。
+        XCTAssertNil(LeoRelayConfig.apiRoot)
+        XCTAssertTrue(LeoRelayConfig.fleet.isEmpty)
+        XCTAssertNil(LeoRelayConfig.sshTarget)
     }
 
     func testParseReadsNestedInfoPlatformForAndroidBody() throws {
@@ -31,21 +52,21 @@ final class RelayMachinesClientTests: XCTestCase {
     }
 
     func testHostMatchPrefersMachineIdOverDisplayName() {
-        let ids = ["leoyuandemacbook-pro-2", "leodemac-mini-2"]
-        let names = ["MacBook Pro", "Mac mini · cortex"]
+        let ids = ["fixture-macbook-pro", "fixture-mac-mini"]
+        let names = ["MacBook Pro", "Mac mini"]
         XCTAssertEqual(
             RelayMachinesClient.pickHostIndex(
-                hostIds: ids, displayNames: names, hostId: "", machine: "LeoyuandeMacBook-Pro-2"),
+                hostIds: ids, displayNames: names, hostId: "", machine: "fixture-macbook-pro", fleet: Self.fleet),
             0
         )
         XCTAssertEqual(
             RelayMachinesClient.pickHostIndex(
-                hostIds: ids, displayNames: names, hostId: "", machine: "LeodeMac-mini-2"),
+                hostIds: ids, displayNames: names, hostId: "", machine: "fixture-mac-mini", fleet: Self.fleet),
             1
         )
         XCTAssertNil(
             RelayMachinesClient.pickHostIndex(
-                hostIds: ids, displayNames: names, hostId: "", machine: "unknown-box")
+                hostIds: ids, displayNames: names, hostId: "", machine: "unknown-box", fleet: Self.fleet)
         )
     }
 
@@ -78,7 +99,7 @@ final class RelayMachinesClientTests: XCTestCase {
 
     func testPairPayloadRoundTripOmitsKey() throws {
         let payload = RelayPairPayload(
-            apiRoot: "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/",
+            apiRoot: "https://relay-host.example.ts.net/leoagent-relay/relay/api/",
             machine: "LeoFold8",
             join: nil,
             exp: nil)
@@ -93,13 +114,13 @@ final class RelayMachinesClientTests: XCTestCase {
         XCTAssertNil(obj["token"])
         let parsed = RelayPairPayload.parse(encoded)
         XCTAssertEqual(parsed?.machine, "LeoFold8")
-        XCTAssertEqual(parsed?.apiRoot, "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api")
+        XCTAssertEqual(parsed?.apiRoot, "https://relay-host.example.ts.net/leoagent-relay/relay/api")
         XCTAssertTrue(parsed?.harnessURL.contains("/m/LeoFold8") == true)
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"http://x\",\"machine\":\"y\"}"))
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"https://ok\",\"machine\":\"../etc\"}"))
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"https://ok\",\"machine\":\"a/b\"}"))
         let v2 = RelayPairPayload(
-            apiRoot: "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api",
+            apiRoot: "https://relay-host.example.ts.net/leoagent-relay/relay/api",
             machine: "LeoFold8",
             join: "join-short",
             exp: 1_800_000_000
@@ -113,14 +134,14 @@ final class RelayMachinesClientTests: XCTestCase {
 
     func testApiRootPinningAndMachineSanitize() {
         XCTAssertTrue(RelayMachinesClient.sameApiRoot(
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/",
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api"))
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api/",
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api"))
         XCTAssertFalse(RelayMachinesClient.sameApiRoot(
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api",
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api",
             "https://attacker.example/relay/api"))
         XCTAssertEqual(
-            RelayMachinesClient.apiRoot(fromHarnessURL: "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/m/LeoFold8"),
-            "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api")
+            RelayMachinesClient.apiRoot(fromHarnessURL: "https://relay-host.example.ts.net/leoagent-relay/relay/api/m/LeoFold8"),
+            "https://relay-host.example.ts.net/leoagent-relay/relay/api")
         XCTAssertEqual(RelayMachinesClient.sanitizeMachine("LeoFold8"), "LeoFold8")
         XCTAssertNil(RelayMachinesClient.sanitizeMachine("foo/bar"))
     }

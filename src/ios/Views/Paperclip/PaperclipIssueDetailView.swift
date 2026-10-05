@@ -67,7 +67,9 @@ final class PaperclipIssueDetailModel: ObservableObject {
     }
     func record(_ error: Error) {
         self.error = PaperclipLabels.error(error)
-        if error as? PaperclipError == .signedOut || error as? PaperclipError == .identityChanged {
+        // 预检包装的登录过期/身份变化同样要清掉旧账号内容。
+        let reason = (error as? PaperclipError)?.underlying
+        if reason == .signedOut || reason == .identityChanged {
             issue = nil; comments = []; runs = []; approvals = []
         }
     }
@@ -87,17 +89,19 @@ struct PaperclipIssueDetailView: View {
     @State private var positionedConversation = false
     @State private var revealCommentID: String?
     @State private var expandedApprovalIDs: Set<String> = []
+    @State private var saveTask: Task<Void, Never>?
     @FocusState private var editingReply: Bool
     @FocusState private var editingDecision: Bool
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let draftKey: String
+    // 只用于审批决定。状态修改走 PaperclipStatusDecisionSheet → changeStatus 的 pendingStatus 状态机；
+    // 原先未使用的 status 分支会绕过待核实记录，已删除。
     private struct Decision: Identifiable {
         let id = UUID()
-        let status: PaperclipIssueStatus?
-        let approval: PaperclipApproval?
+        let approval: PaperclipApproval
         let approve: Bool
-        var title: String { if let status { return "将任务设为「\(status.title)」？" }; return approve ? "确认批准此请求？" : "确认拒绝此请求？" }
+        var title: String { approve ? "确认批准此请求？" : "确认拒绝此请求？" }
     }
 
     init(client: PaperclipClient, reference: PaperclipTaskReference) {
@@ -204,21 +208,29 @@ struct PaperclipIssueDetailView: View {
         .task { await model.refresh() }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            var interval = PaperclipPollingPolicy.baseInterval
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
                 // 失焦的草稿和已关闭信息页中的展开状态不能永久停止只读同步。
                 if PaperclipPollingPolicy.canRefresh(active: visible, statusSheetOpen: statusDecision != nil, replyFocused: editingReply || editingDecision)
                     && pendingDecision == nil && !discardReply && !acknowledgeStatus && !details {
                     await model.refresh()
+                    // 失败指数退避（上限 2 分钟），成功复位。
+                    interval = PaperclipPollingPolicy.nextInterval(after: interval, succeeded: model.error == nil)
                 }
             }
         }
-        .onDisappear { visible = false; if !draft.body.isEmpty { draft.save(key: draftKey) } }
-        .onChange(of: draft.body) { _, _ in draft.save(key: draftKey) }
+        .onDisappear {
+            visible = false
+            let pending = saveTask != nil
+            saveTask?.cancel(); saveTask = nil
+            if pending || !draft.body.isEmpty { draft.save(key: draftKey) }
+        }
+        .onChange(of: draft.body) { _, _ in scheduleDraftSave() }
         .alert(item: Binding(get: { details ? nil : pendingDecision }, set: { pendingDecision = $0 })) { decisionAlert($0) }
         .confirmationDialog("解除只保存人工核对记录，不会撤销或重发服务器操作", isPresented: $acknowledgeStatus, titleVisibility: .visible) {
             Button("已核对，解除待核实状态", role: .destructive) { model.acknowledgeStatus() }
-            Button("取消", role: .cancel) {}
+            Button("取消" as String, role: .cancel) {}
         }
         .confirmationDialog("放弃草稿不会撤销服务器可能已接收的回复", isPresented: $discardReply, titleVisibility: .visible) {
             Button("已核对，解除待提交状态", role: .destructive) {
@@ -227,7 +239,7 @@ struct PaperclipIssueDetailView: View {
                 draft = PaperclipDraft()
                 model.error = nil
             }
-            Button("取消", role: .cancel) {}
+            Button("取消" as String, role: .cancel) {}
         } message: { Text("回复可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送。") }
         }
     }
@@ -243,10 +255,8 @@ struct PaperclipIssueDetailView: View {
         }
     }
     private func decisionAlert(_ decision: Decision) -> Alert {
-        Alert(title: Text(decision.title), message: Text(decision.approval == nil
-            ? "这会修改服务器上的任务状态，并可能影响服务器调度。"
-            : "请先阅读完整审批内容。此决定将以当前人类用户身份发送到绑定的服务器。"),
-            primaryButton: .default(Text("确认")) { Task { await apply(decision) } }, secondaryButton: .cancel(Text("取消")))
+        Alert(title: Text(decision.title), message: Text("请先阅读完整审批内容。此决定将以当前人类用户身份发送到绑定的服务器。"),
+            primaryButton: .default(Text("确认")) { Task { await apply(decision) } }, secondaryButton: .cancel(Text(verbatim: "取消")))
     }
     private var commentsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -274,12 +284,29 @@ struct PaperclipIssueDetailView: View {
             if !mine { Spacer(minLength: 24) }
         }.frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
     }
-    private func displayTime(_ value: String) -> String {
+    // 每个气泡都新建 ISO8601DateFormatter 代价高，提为静态复用；日期按用户当前语言区域显示。
+    private static let fractionalISO: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) { return date.formatted(date: .abbreviated, time: .shortened) }
+        return formatter
+    }()
+    private static let plainISO: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)?.formatted(date: .abbreviated, time: .shortened) ?? value
+        return formatter
+    }()
+    private func displayTime(_ value: String) -> String {
+        let date = Self.fractionalISO.date(from: value) ?? Self.plainISO.date(from: value)
+        return date?.formatted(date: .abbreviated, time: .shortened) ?? value
+    }
+    /// 每次按键写 UserDefaults 太频繁：停顿 0.5 秒后保存；离开页面、提交前仍立即保存。
+    private func scheduleDraftSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            draft.save(key: draftKey)
+            saveTask = nil
+        }
     }
     private var replySection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -320,8 +347,8 @@ struct PaperclipIssueDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(PaperclipLabels.status(run.status)).font(.headline)
                         Text("运行编号：\(run.runId)").font(.caption).lineLimit(2)
-                        if let time = run.startedAt { Text("开始时间：\(time)").font(.caption).foregroundStyle(.secondary) }
-                        if let time = run.finishedAt { Text("结束时间：\(time)").font(.caption).foregroundStyle(.secondary) }
+                        if let time = run.startedAt { Text("开始时间：\(displayTime(time))").font(.caption).foregroundStyle(.secondary) }
+                        if let time = run.finishedAt { Text("结束时间：\(displayTime(time))").font(.caption).foregroundStyle(.secondary) }
                     }
                 }
             }
@@ -345,8 +372,8 @@ struct PaperclipIssueDetailView: View {
                     if let note = approval.decisionNote { Text("决定说明：\(note)") }
                     if approval.status == "pending" {
                         TextField("决定说明（可选）", text: $decisionNote, axis: .vertical).focused($editingDecision).disabled(model.busy)
-                        Button("批准") { pendingDecision = Decision(status: nil, approval: approval, approve: true) }.disabled(model.busy)
-                        Button("拒绝", role: .destructive) { pendingDecision = Decision(status: nil, approval: approval, approve: false) }.disabled(model.busy)
+                        Button("批准") { pendingDecision = Decision(approval: approval, approve: true) }.disabled(model.busy)
+                        Button("拒绝" as String, role: .destructive) { pendingDecision = Decision(approval: approval, approve: false) }.disabled(model.busy)
                     }
                 }
             }
@@ -354,6 +381,7 @@ struct PaperclipIssueDetailView: View {
     }
     private func reply() async {
         guard !model.busy, model.pendingStatus == nil else { return }
+        saveTask?.cancel(); saveTask = nil
         model.busy = true
         let wasPreviouslySubmitted = draft.submitted
         draft.markSubmitted()
@@ -378,11 +406,8 @@ struct PaperclipIssueDetailView: View {
         guard !model.busy else { return }
         model.busy = true
         do {
-            if let status = decision.status { _ = try await model.client.setStatus(model.reference, status: status) }
-            if let approval = decision.approval {
-                _ = try await model.client.resolve(model.reference, approval: approval, approve: decision.approve, note: decisionNote)
-                decisionNote = ""
-            }
+            _ = try await model.client.resolve(model.reference, approval: decision.approval, approve: decision.approve, note: decisionNote)
+            decisionNote = ""
             model.error = nil
         } catch { model.record(error); model.busy = false; return }
         model.busy = false
@@ -418,7 +443,7 @@ private struct PaperclipStatusDecisionSheet: View {
                     }
                 }.disabled(model.busy || (selected == .blocked && PaperclipUnblockAction.normalized(action) == nil))
             }.navigationTitle("确认状态")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(model.busy) } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消" as String) { dismiss() }.disabled(model.busy) } }
         }
     }
 }
