@@ -63,3 +63,5 @@ Cursor 仅在空目录重核一次，仍 AuthenticationRequired；Gemini 的既�
 发布与线上复核：主仓 `96c3cb79` 已 push，Mini `release/current` 已切至 `audit-round2-candidate-20261005`。切换前活动/排队运行数为 0；已保存 `pre-round2.dump`（0600）及前一指向。本机/公网健康通过，公网 index 与新构建 SHA256 相同。启动窗口首次浏览器资源加载失败，服务恢复后点重新加载，任务/模型选择/费用及八个业务入口实际内容正常，控制台无捕获到的 error。模型完整 ID 回车与方向键现场通过，未发送新任务。五类尺寸均读取实际 innerWidth 并检查无水平溢出；首批错误控制到另一标签的截图不计入通过，以 `r2-responsive-verified.json` 和 `r2-costs-verified-*.jpg` 为准。
 
 追加的 iOS 一轮审计、修复及实机安装已单独完成记录，见 [iOS 完整审计](../IOS_FULL_AUDIT_20261005.md)；其中真机自动点击未执行成功的限制明确保留。
+
+Cursor 后续授权验收已完成：Composer/Fable 真实响应通过，LeoCursor 使用 Fable 5.1 原生登录；Opus 目录存在而单次超时，详见 [授权验收](CURSOR_AUTH_VERIFIED_20261005.md)。审计当时的授权失败保留为历史证据。
