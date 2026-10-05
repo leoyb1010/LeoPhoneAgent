@@ -1,0 +1,20 @@
+[
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "  const backgroundSaveInFlightRef = useRef(false);\n",
+    "to": "  const backgroundSaveInFlightRef = useRef(false);\n  const foregroundSaveOverlayRef = useRef<AgentConfigOverlay | null>(null);\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "        const persisted = backgroundSaveOverlayRef.current;\n        backgroundSaveOverlayRef.current = null;\n        setOverlay((prev) =>\n          persisted ? subtractPersistedOverlay(prev, persisted) : { ...emptyOverlay },\n        );",
+    "to": "        // LeoPhoneAgent：只有本表单刚提交的保存，才从编辑层扣除已保存的字段。运行中的智能体会因\n        // 状态/心跳实时事件被频繁重新获取，旧逻辑在任何一次刷新时清空整个编辑层，用户尚未保存的\n        // 修改会被\"自动刷新\"掉。与保存无关的刷新现在保留编辑层。\n        const persisted = backgroundSaveOverlayRef.current ?? foregroundSaveOverlayRef.current;\n        backgroundSaveOverlayRef.current = null;\n        foregroundSaveOverlayRef.current = null;\n        if (persisted) setOverlay((prev) => subtractPersistedOverlay(prev, persisted));",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentConfigForm.tsx",
+    "from": "    if (!isOverlayDirty(nextOverlay)) return;\n    await props.onSave(buildAgentUpdatePatch(props.agent, nextOverlay));\n  }, [isCreate, isDirty, overlay, props]);",
+    "to": "    if (!isOverlayDirty(nextOverlay)) return;\n    foregroundSaveOverlayRef.current = nextOverlay;\n    try {\n      await props.onSave(buildAgentUpdatePatch(props.agent, nextOverlay));\n    } catch (error) {\n      // 保存失败时不应在之后的刷新里扣除这些字段，否则未保存的修改会被清掉。\n      foregroundSaveOverlayRef.current = null;\n      throw error;\n    }\n  }, [isCreate, isDirty, overlay, props]);",
+    "expected": 1
+  }
+]

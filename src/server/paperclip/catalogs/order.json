@@ -27,7 +27,8 @@
     "zz-round1-data.structural.json",
     "zzzz-round1-ui.structural.json",
     "zzzzz-round2-session.structural.json",
-    "zzzzz-round2-ui.structural.json"
+    "zzzzz-round2-ui.structural.json",
+    "agent-config-unsaved-edits.structural.json"
   ],
   "after": [
     {
