@@ -185,7 +185,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 ## 当前 iOS 版本
 
 - 当前源码版本/构建:`1.53.2 (147)`;Bundle ID `com.leoyuan.leophoneagent`
-- 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；实机安装结果见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
+- 2026-10-05 审计整改：离线发送不再误锁草稿、服务器任务请求量下降、外部入口切回本机、可退出服务器登录与删除服务器；中继地址改由本机未跟踪的 `src/ios/Configs/LocalRelay.xcconfig` 注入（模板 `LocalRelay.example.xcconfig`）。517 项逻辑测试、Paperclip 宿主 61 项与 Release 构建通过；iPhone 18 Pro Max、iPad Pro 13（M4）已无线覆盖安装并回读 `1.53.2 (147)`，详见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
 - 2026-10-04 体验升级：三轮均检查完整 17 模块，修复模型入口、草稿/资料保留和失败恢复。470 项主工程逻辑测试、隔离原生与故障回归、Release/签名通过；iPhone/iPad/Watch 已覆盖安装并启动 1.51.0（138），原配置标识和默认保留。iPhone 真实收发已验证；iPad 锁屏待补，CloudKit 五类查询错误仍待服务端核对，详见 [交付证据与限制](docs/ios-product-audit/DELIVERY_20261004.md)。
 - 2026-10-03 模型管理升级：模型选择、收藏排序与目录批量整理统一；470 项逻辑测试和原生模型/持久化、交互回归完成核验。iPhone/iPad/Watch 已安装 `1.50.0 (137)`，原配置标识与默认设置读回比对保留；手机/平板锁屏后的启动验收待补。
 - 2026-09-30 本机验证：470 项 iOS 逻辑测试通过，Release 构建与签名通过；iPhone 18 Pro Max、iPad Pro 13（M4）已覆盖安装并启动 `1.49.1 (135)`。此版要求 SSH 主机公钥显式核实，直连使用 Ed25519；CloudKit 环境保持 Development。
