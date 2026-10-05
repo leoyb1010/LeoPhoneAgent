@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// 不跟随重定向，防止登录 Cookie 发送到代理、登录页或其他服务器。
-private final class PaperclipNoRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+final class PaperclipNoRedirect: NSObject, URLSessionTaskDelegate, Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,
@@ -19,9 +19,15 @@ final class PaperclipClient {
     private let readCookies: @MainActor () async -> [HTTPCookie]
     private let saveCookies: @MainActor ([HTTPCookie]) async -> Void
     /// 只读请求在短时间内复用同一份 Cookie 的身份确认，避免每个 GET 都附带 get-session。
-    static let identityReuseInterval: TimeInterval = 10
+    /// 以前 10 秒小于 15 秒轮询节奏，几乎每轮都多一次 get-session；改为与轮询匹配的 30 秒。
+    /// Cookie 指纹变化仍立即失效，写操作仍每次新鲜确认。
+    static let identityReuseInterval: TimeInterval = 30
     private var confirmedIdentity: (fingerprint: String, userID: String, at: Date)?
     private var identityCheck: (fingerprint: String, task: Task<PaperclipSession, Error>)?
+    /// 已确认属于某任务的运行（键含配置、公司、用户、任务）；运行日志分段读取不再每段重查任务与运行列表。
+    private var verifiedRuns: Set<String> = []
+    /// 已通过 issue(ref) 校验属于绑定公司的任务；只有它们的运行才会记入 verifiedRuns。
+    private var verifiedIssues: Set<String> = []
 
     init(profile: PaperclipProfile, configuration: URLSessionConfiguration = .ephemeral,
          readCookies: @escaping @MainActor () async -> [HTTPCookie],
@@ -101,17 +107,40 @@ final class PaperclipClient {
         let path = try issuePath(ref)
         let value: PaperclipIssue = try await authenticated(path, userID: ref.userID)
         try verify(value, ref)
+        verifiedIssues.insert(ref.id)
         return value
     }
 
-    func comments(_ ref: PaperclipTaskReference) async throws -> [PaperclipComment] {
-        let rows: [PaperclipComment] = try await authenticated(try issuePath(ref) + "/comments?order=asc", userID: ref.userID)
+    /// - Parameter after: 已有的最后一条评论 id；提供时只增量读取其后的评论，nil 时全量读取。
+    func comments(_ ref: PaperclipTaskReference, after: String? = nil) async throws -> [PaperclipComment] {
+        let query = try after.map { "/comments?after=\(try PaperclipProfile.component($0))&order=asc" } ?? "/comments?order=asc"
+        let rows: [PaperclipComment] = try await authenticated(try issuePath(ref) + query, userID: ref.userID)
         guard rows.allSatisfy({ $0.companyId == ref.companyID && $0.issueId == ref.issueID }) else { throw PaperclipError.identityChanged }
         return rows
     }
 
     func runs(_ ref: PaperclipTaskReference) async throws -> [PaperclipRun] {
-        try await authenticated(try issuePath(ref) + "/runs", userID: ref.userID)
+        let rows: [PaperclipRun] = try await authenticated(try issuePath(ref) + "/runs", userID: ref.userID)
+        if verifiedIssues.contains(ref.id) { for row in rows { verifiedRuns.insert(ref.id + "/" + row.runId) } }
+        return rows
+    }
+
+    /// 任务当前排队/运行中的 run（带当前工具、最近输出）。接口行不含公司编号，
+    /// 由任务路径限定归属：任务本身已通过 issue(ref) 校验属于绑定公司。
+    func liveRuns(_ ref: PaperclipTaskReference) async throws -> [PaperclipLiveRun] {
+        if !verifiedIssues.contains(ref.id) { _ = try await issue(ref) }
+        let rows: [PaperclipLiveRun] = try await authenticated(try issuePath(ref) + "/live-runs", userID: ref.userID)
+        guard rows.allSatisfy({ $0.issueId == nil || $0.issueId == ref.issueID }) else { throw PaperclipError.identityChanged }
+        for row in rows { verifiedRuns.insert(ref.id + "/" + row.id) }
+        return rows
+    }
+
+    /// 公司内正在运行的 run，用于列表的“运行中”标识；每行都必须属于当前公司。
+    func companyLiveRuns(companyID: String, userID: String) async throws -> [PaperclipLiveRun] {
+        let id = try PaperclipProfile.component(companyID)
+        let rows: [PaperclipLiveRun] = try await authenticated("/api/companies/\(id)/live-runs", userID: userID)
+        guard rows.allSatisfy({ $0.companyId == companyID }) else { throw PaperclipError.identityChanged }
+        return rows.filter(\.isActive)
     }
 
     func approvals(_ ref: PaperclipTaskReference) async throws -> [PaperclipApproval] {
@@ -172,13 +201,71 @@ final class PaperclipClient {
     }
 
     func runLog(_ ref: PaperclipTaskReference, runID: String, offset: Int = 0) async throws -> PaperclipRunLogChunk {
-        _ = try await issue(ref)
-        let linked = try await runs(ref)
-        guard linked.contains(where: { $0.runId == runID }) else { throw PaperclipError.identityChanged }
+        // 运行与任务归属确认一次后缓存：以前每读一段都重新请求 issue + runs。
+        let key = ref.id + "/" + runID
+        if !verifiedRuns.contains(key) {
+            _ = try await issue(ref)
+            let linked = try await runs(ref)
+            if !linked.contains(where: { $0.runId == runID }) {
+                // 刚开始的运行可能只出现在 live-runs 中。
+                let live = try await liveRuns(ref)
+                guard live.contains(where: { $0.id == runID }) else { throw PaperclipError.identityChanged }
+            }
+            guard verifiedRuns.contains(key) else { throw PaperclipError.identityChanged }
+        }
         let id = try PaperclipProfile.component(runID)
         let log: PaperclipRunLogChunk = try await authenticated("/api/heartbeat-runs/\(id)/log?offset=\(max(0, offset))&limitBytes=64000", userID: ref.userID)
         guard log.runId == runID else { throw PaperclipError.identityChanged }
         return log
+    }
+
+    /// 实时通道握手请求。建连前用同一份 Cookie 快照新鲜确认身份（比对 userID），
+    /// 再用同一快照经同一 Cookie 过滤写入 Cookie 头；地址只由已校验的 https 配置同源派生为 wss。
+    func liveSocketRequest(companyID: String, userID: String) async throws -> URLRequest {
+        guard !invalidated else { throw PaperclipError.signedOut }
+        let id = try PaperclipProfile.component(companyID)
+        let httpsURL = try profile.url("/api/companies/\(id)/events/ws")
+        let cookies = await readCookies()
+        try await confirmIdentity(cookies: cookies, userID: userID, fresh: true)
+        guard !invalidated else { throw PaperclipError.signedOut }
+        guard var parts = URLComponents(url: httpsURL, resolvingAgainstBaseURL: false) else { throw PaperclipError.invalidAddress }
+        parts.scheme = "wss"
+        guard let url = parts.url, Self.liveSameOrigin(url, profile.origin) else { throw PaperclipError.invalidAddress }
+        var request = URLRequest(url: url)
+        request.httpShouldHandleCookies = false
+        request.timeoutInterval = 25
+        request.setValue(profile.origin.absoluteString, forHTTPHeaderField: "Origin")
+        for (key, value) in HTTPCookie.requestHeaderFields(with: Self.cookies(cookies, for: httpsURL)) {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        return request
+    }
+
+    /// wss 地址必须与 https 配置同主机同端口。
+    static func liveSameOrigin(_ url: URL, _ origin: URL) -> Bool {
+        url.scheme?.lowercased() == "wss" && origin.scheme?.lowercased() == "https" &&
+        url.host?.lowercased() == origin.host?.lowercased() && (url.port ?? 443) == (origin.port ?? 443)
+    }
+
+    /// 智能体头像（服务器预设 PNG）。只允许同源 /api/agent-avatars/ 路径，带同一 Cookie 过滤，
+    /// 不跟随重定向、不写回 Cookie；响应必须是同源 PNG 且不超过 2MB。
+    func avatarData(path: String) async throws -> Data {
+        guard !invalidated else { throw PaperclipError.signedOut }
+        guard path.hasPrefix("/api/agent-avatars/") else { throw PaperclipError.invalidAddress }
+        let url = try profile.url(path)
+        var request = URLRequest(url: url)
+        request.httpShouldHandleCookies = false
+        request.timeoutInterval = 20
+        request.setValue("image/png", forHTTPHeaderField: "Accept")
+        let cookies = await readCookies()
+        for (key, value) in HTTPCookie.requestHeaderFields(with: Self.cookies(cookies, for: url)) { request.setValue(value, forHTTPHeaderField: key) }
+        let result: (Data, URLResponse)
+        do { result = try await session.data(for: request) } catch { throw PaperclipError.unavailable }
+        guard let http = result.1 as? HTTPURLResponse, http.statusCode == 200,
+              let responseURL = http.url, PaperclipProfile.sameOrigin(responseURL, profile.origin),
+              http.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("image/png") == true,
+              !result.0.isEmpty, result.0.count <= 2_000_000 else { throw PaperclipError.invalidResponse }
+        return result.0
     }
 
     private func issuePath(_ ref: PaperclipTaskReference) throws -> String {
@@ -213,7 +300,7 @@ final class PaperclipClient {
         return try await request(path, method: method, body: body, cookies: cookies)
     }
 
-    /// 身份确认按 Cookie 指纹缓存 10 秒，并发读取共享同一个进行中的 get-session。
+    /// 身份确认按 Cookie 指纹缓存 30 秒，并发读取共享同一个进行中的 get-session。
     /// Cookie 变化（重新登录、换账号、服务器轮换）指纹即变化，必定重新确认。
     private func confirmIdentity(cookies: [HTTPCookie], userID: String, fresh: Bool) async throws {
         let url = try profile.url("/api/auth/get-session")

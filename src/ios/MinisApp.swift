@@ -164,6 +164,10 @@ struct MinisApp: App {
         WindowGroup {
             ZStack {
                 IOSWorkspaceRootView { ContentView() }
+                    // 服务器任务对话复用端侧同款 Markdown 渲染（独立验证宿主不含此组件，使用原生回退）。
+                    .environment(\.paperclipMarkdownRenderer, PaperclipMarkdownRenderer { markdown, streaming in
+                        AnyView(SelectableMarkdownView(markdown: markdown, isStreaming: streaming))
+                    })
                     .overlay(alignment: .top) {
                         BackgroundInterruptionBanner()
                     }

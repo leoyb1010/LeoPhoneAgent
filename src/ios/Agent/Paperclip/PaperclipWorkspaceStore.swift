@@ -14,7 +14,16 @@ final class PaperclipWorkspaceStore: ObservableObject {
     @Published var error: String?
     @Published private(set) var companyID = ""
     @Published private(set) var hasMore = false
+    /// 公司内有运行中 run 的任务（列表“运行中”标识）。
+    @Published private(set) var liveIssueIDs: Set<String> = []
+    /// 当前公司的实时通道；身份或公司变化时一律断开并置空。
+    @Published private(set) var live: PaperclipLiveConnection?
+    @Published private(set) var liveState: PaperclipLiveConnection.State = .idle
     private(set) var client: PaperclipClient?
+    private var foreground = true
+    private var liveSubscriptions: Set<AnyCancellable> = []
+    private var listRefreshTask: Task<Void, Never>?
+    private let makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)?
     private var revision = UUID()
     private var nextOffset = 0
     private var cookieVaults: [UUID: PaperclipCookieVault] = [:]
@@ -28,7 +37,9 @@ final class PaperclipWorkspaceStore: ObservableObject {
     init(defaults: UserDefaults = .standard,
          makeCookieVault: @escaping @MainActor (PaperclipProfile) -> PaperclipCookieVault = {
              PaperclipCookieVault.shared(for: $0)
-         }, makeConfiguration: @escaping @MainActor () -> URLSessionConfiguration = { .ephemeral }) {
+         }, makeConfiguration: @escaping @MainActor () -> URLSessionConfiguration = { .ephemeral },
+         makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)? = nil) {
+        self.makeLiveSocket = makeLiveSocket
         self.defaults = defaults
         self.makeCookieVault = makeCookieVault
         self.makeConfiguration = makeConfiguration
@@ -88,6 +99,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     }
 
     private func resetConnection() {
+        stopLive()
         revision = UUID()
         busy = false
         connectTask = nil
@@ -101,6 +113,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
         error = nil
         hasMore = false
         nextOffset = 0
+        liveIssueIDs = []
     }
 
     func clearLogin() async {
@@ -167,12 +180,16 @@ final class PaperclipWorkspaceStore: ObservableObject {
             let preferred = defaults.string(forKey: companyKey(profile: profile, user: session.user.id))
             companyID = available.first(where: { $0.id == preferred })?.id ?? available.first?.id ?? ""
             busy = false
-            if !companyID.isEmpty { await refresh() }
+            if !companyID.isEmpty {
+                await refresh()
+                startLive()
+            }
             return user != nil
         } catch {
             guard stamp == revision else { return false }
             self.error = PaperclipLabels.error(error)
             if error as? PaperclipError == .signedOut || error as? PaperclipError == .identityChanged {
+                stopLive()
                 client?.invalidate()
                 client = nil
                 user = nil
@@ -186,15 +203,19 @@ final class PaperclipWorkspaceStore: ObservableObject {
 
     func selectCompany(_ id: String) async {
         guard companies.contains(where: { $0.id == id }), let profile = selectedProfile, let user else { return }
+        // 公司变化：旧公司的实时通道立即断开，事件不能落到新公司页面。
+        stopLive()
         revision = UUID()
         busy = false
         issues = []
         agents = []
+        liveIssueIDs = []
         companyID = id
         nextOffset = 0
         hasMore = false
         defaults.set(id, forKey: companyKey(profile: profile, user: user.id))
         await refresh()
+        startLive()
     }
 
     func refresh(loadMore: Bool = false) async {
@@ -203,11 +224,16 @@ final class PaperclipWorkspaceStore: ObservableObject {
         let company = companyID
         let offset = loadMore ? nextOffset : 0
         busy = true
-        do {
-            // 刷新只重读第一页（以前每 15 秒重拉全部已加载页）；后续页保留，按 id 合并。
-            let rows = try await client.issues(companyID: company, userID: user.id, offset: offset)
-            let people = try await client.agents(companyID: company, userID: user.id)
-            guard stamp == revision else { return }
+        // 三个读请求并行、各自独立更新：以前串行且任一失败整次作废。
+        // 刷新只重读第一页；后续页保留，按 id 合并。
+        async let issueRows = Self.capture { try await client.issues(companyID: company, userID: user.id, offset: offset) }
+        async let agentRows = Self.capture { try await client.agents(companyID: company, userID: user.id) }
+        async let runRows = Self.capture { try await client.companyLiveRuns(companyID: company, userID: user.id) }
+        let (issuesResult, agentsResult, runsResult) = await (issueRows, agentRows, runRows)
+        guard stamp == revision else { return }
+        var failure: Error?
+        switch issuesResult {
+        case .success(let rows):
             if loadMore {
                 let known = Set(issues.map(\.id))
                 issues += rows.filter { !known.contains($0.id) }
@@ -221,21 +247,130 @@ final class PaperclipWorkspaceStore: ObservableObject {
                 nextOffset = rows.count
                 hasMore = !rows.isEmpty && rows.count.isMultiple(of: 100)
             }
-            agents = people
-            error = nil
-        } catch {
-            guard stamp == revision else { return }
-            self.error = PaperclipLabels.error(error)
+        case .failure(let error): failure = error
+        }
+        switch agentsResult {
+        case .success(let rows): agents = rows
+        case .failure(let error): failure = failure ?? error
+        }
+        switch runsResult {
+        case .success(let rows): liveIssueIDs = Set(rows.compactMap(\.issueId))
+        case .failure(let error):
+            // 运行遥测需要额外权限；403 只是不显示“运行中”标识，不算同步失败。
+            if (error as? PaperclipError)?.underlying != .forbidden { failure = failure ?? error }
+        }
+        if let failure {
+            self.error = PaperclipLabels.error(failure)
             // 过期或切换账号后不继续显示旧账号内容。
-            if error as? PaperclipError == .signedOut || error as? PaperclipError == .identityChanged {
-                self.user = nil
-                self.client?.invalidate()
-                self.client = nil
-                issues = []
-                agents = []
-            }
+            let reason = (failure as? PaperclipError)?.underlying
+            if reason == .signedOut || reason == .identityChanged { invalidateSession() }
+        } else {
+            error = nil
         }
         if stamp == revision { busy = false }
+    }
+
+    private static func capture<T>(_ work: @MainActor () async throws -> T) async -> Result<T, Error> {
+        do { return .success(try await work()) } catch { return .failure(error) }
+    }
+
+    /// 登录失效或身份变化：断开实时通道、作废客户端并清掉旧账号内容。
+    private func invalidateSession() {
+        stopLive()
+        user = nil
+        client?.invalidate()
+        client = nil
+        issues = []
+        agents = []
+        liveIssueIDs = []
+    }
+
+    // MARK: - 实时通道
+
+    /// 前后台切换：离开前台主动断开；回到前台重新确认身份、连接并全量补拉。
+    func setForeground(_ active: Bool) async {
+        guard active != foreground else { return }
+        foreground = active
+        if active {
+            await refresh()
+            startLive()
+        } else {
+            live?.stop()
+        }
+    }
+
+    private func startLive() {
+        guard foreground, let client, let user, let profile = selectedProfile, !companyID.isEmpty,
+              client.profile.id == profile.id else { return }
+        if let live, live.companyID == companyID, live.userID == user.id, live.profile.id == profile.id {
+            live.resumeFromBackground()
+            return
+        }
+        stopLive()
+        let company = companyID
+        let userID = user.id
+        let connection: PaperclipLiveConnection
+        if let makeLiveSocket {
+            connection = PaperclipLiveConnection(profile: profile, companyID: company, userID: userID,
+                makeRequest: { try await client.liveSocketRequest(companyID: company, userID: userID) },
+                makeSocket: makeLiveSocket)
+        } else {
+            connection = PaperclipLiveConnection(profile: profile, companyID: company, userID: userID,
+                makeRequest: { try await client.liveSocketRequest(companyID: company, userID: userID) })
+        }
+        let stamp = revision
+        connection.$state.sink { [weak self] state in
+            guard let self, self.revision == stamp, self.live === connection else { return }
+            self.liveState = state
+            if case .stopped(let reason) = state, reason == .signedOut || reason == .identityChanged {
+                // 身份确认来自新鲜 get-session：与 REST 失效同样处理，提示重新登录。
+                self.error = PaperclipLabels.error(reason == .signedOut ? PaperclipError.signedOut : PaperclipError.identityChanged)
+                self.invalidateSession()
+            }
+        }.store(in: &liveSubscriptions)
+        connection.events.sink { [weak self] event in
+            guard let self, self.revision == stamp, self.live === connection else { return }
+            self.handle(event)
+        }.store(in: &liveSubscriptions)
+        connection.reconnected.dropFirst().sink { [weak self] in
+            guard let self, self.revision == stamp, self.live === connection else { return }
+            // 服务器不重放断线期间的事件：重连后全量补拉。
+            Task { await self.refresh() }
+        }.store(in: &liveSubscriptions)
+        live = connection
+        connection.start()
+    }
+
+    private func stopLive() {
+        listRefreshTask?.cancel(); listRefreshTask = nil
+        liveSubscriptions.removeAll()
+        live?.stop()
+        live = nil
+        liveState = .idle
+    }
+
+    private func handle(_ event: PaperclipLiveEvent) {
+        switch event.type {
+        case "heartbeat.run.queued", "heartbeat.run.status":
+            if let issue = event.issueID, let status = event.string("status"), status == "queued" || status == "running" {
+                liveIssueIDs.insert(issue)
+            }
+            scheduleListRefresh()
+        case "activity.logged":
+            if event.string("entityType") == "issue" { scheduleListRefresh() }
+        default: break
+        }
+    }
+
+    /// 事件风暴合并为一次列表刷新。
+    private func scheduleListRefresh() {
+        guard listRefreshTask == nil else { return }
+        listRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1_200))
+            guard let self, !Task.isCancelled else { return }
+            self.listRefreshTask = nil
+            await self.refresh()
+        }
     }
 
     private func vault(for profile: PaperclipProfile) -> PaperclipCookieVault {

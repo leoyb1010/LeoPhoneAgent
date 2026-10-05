@@ -63,15 +63,31 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.utf8)).first?.id, "run-1")
         XCTAssertThrowsError(try JSONDecoder().decode([PaperclipRun].self, from: Data(fixture.replacingOccurrences(of: "runId", with: "id").utf8)))
     }
-    func testBackgroundPollingStopsDuringStatusSheetReplyEditingOrBackground() {
+    func testReadPollingPausesOnlyForWritesNotFocusOrPanels() {
+        // 新语义：只读刷新只在写请求进行中暂停；输入框聚焦、面板打开不再暂停（以前键盘不收起就永远不刷新）。
         for active in [false, true] {
-            for sheetOpen in [false, true] {
-                for replyFocused in [false, true] {
-                    let actual = PaperclipPollingPolicy.canRefresh(active: active, statusSheetOpen: sheetOpen, replyFocused: replyFocused)
-                    XCTAssertEqual(actual, active && !sheetOpen && !replyFocused)
-                }
+            for mutating in [false, true] {
+                XCTAssertEqual(PaperclipPollingPolicy.canRefresh(active: active, mutating: mutating), active && !mutating)
             }
         }
+        XCTAssertEqual(PaperclipPollingPolicy.detailInterval(liveOpen: true, runActive: true), 60)
+        XCTAssertEqual(PaperclipPollingPolicy.detailInterval(liveOpen: false, runActive: true), 3)
+        XCTAssertEqual(PaperclipPollingPolicy.detailInterval(liveOpen: false, runActive: false), 15)
+    }
+
+    func testSendReleasesComposerFocusUnlessDraftIsEditableAgain() {
+        // 发送成功收起键盘；结果未知（草稿锁定待核对）也收起；明确拒绝、草稿已解锁时保留焦点方便修改。
+        XCTAssertFalse(PaperclipSendOutcome.sent.keepsComposerFocus)
+        var draft = PaperclipDraft()
+        draft.body = "补充要求"
+        draft.markSubmitted()
+        draft.recordFailure(PaperclipError.preflightFailed(.unavailable), wasPreviouslySubmitted: false)
+        XCTAssertEqual(PaperclipSendOutcome.failure(draftAfterFailure: draft), .rejectedEditable)
+        XCTAssertTrue(PaperclipSendOutcome.failure(draftAfterFailure: draft).keepsComposerFocus)
+        draft.markSubmitted()
+        draft.recordFailure(PaperclipError.uncertain, wasPreviouslySubmitted: false)
+        XCTAssertEqual(PaperclipSendOutcome.failure(draftAfterFailure: draft), .uncertain)
+        XCTAssertFalse(PaperclipSendOutcome.failure(draftAfterFailure: draft).keepsComposerFocus)
     }
 
     func testReadPollingPreservesSavedDraftAndUnknownReceiptAcrossCompanyKeys() throws {
@@ -86,7 +102,7 @@ final class PaperclipContractTests: XCTestCase {
         draft.markSubmitted(now: Date(timeIntervalSince1970: 1_800_000_000))
         draft.save(key: firstKey, defaults: defaults)
         let original = try XCTUnwrap(defaults.data(forKey: firstKey))
-        XCTAssertTrue(PaperclipPollingPolicy.canRefresh(active: true, statusSheetOpen: false, replyFocused: false))
+        XCTAssertTrue(PaperclipPollingPolicy.canRefresh(active: true, mutating: false))
         XCTAssertEqual(defaults.data(forKey: firstKey), original)
         let restored = PaperclipDraft.load(key: firstKey, defaults: defaults)
         XCTAssertEqual(restored.requestID, draft.requestID)

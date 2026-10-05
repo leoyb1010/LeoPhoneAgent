@@ -81,3 +81,17 @@ struct PaperclipDraft: Codable {
     }
     static func clear(key: String, defaults: UserDefaults = .standard) { defaults.removeObject(forKey: key) }
 }
+
+/// 发送（创建或回复）后的输入框焦点。
+/// 修复「发送后一直卡住」：以前回复成功后不收起键盘，输入框保持聚焦，只读刷新随之一直暂停。
+/// 成功或结果未知（草稿锁定待核对）时收起键盘；服务器明确拒绝、草稿已解锁可编辑时保留焦点。
+enum PaperclipSendOutcome: Equatable {
+    case sent, rejectedEditable, uncertain
+
+    var keepsComposerFocus: Bool { self == .rejectedEditable }
+
+    /// - Parameter draftAfterFailure: 已执行 recordFailure 之后的草稿。
+    static func failure(draftAfterFailure: PaperclipDraft) -> PaperclipSendOutcome {
+        draftAfterFailure.submitted ? .uncertain : .rejectedEditable
+    }
+}

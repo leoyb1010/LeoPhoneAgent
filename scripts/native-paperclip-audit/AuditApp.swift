@@ -18,6 +18,8 @@ struct PaperclipAuditApp: App {
             IOSWorkspaceRootView(makeStore: {
                 taskFixture ? PaperclipAuditFixture.makeStore() : PaperclipWorkspaceStore()
             }) { LocalWorkspaceFixture() }
+            // 截图旅程用：强制深色外观，验证深色对比度。
+            .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--dark-fixture") ? .dark : nil)
         }
     }
 }

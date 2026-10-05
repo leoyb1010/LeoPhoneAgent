@@ -14,7 +14,7 @@ class IOSPaperclipContractAudit(unittest.TestCase):
     def test_all_new_production_sources_are_app_members_and_native_harness_inputs(self):
         project = (IOS / "LeoPhoneAgent.xcodeproj/project.pbxproj").read_text()
         source_paths = sorted([*CORE.glob("*.swift"), *VIEWS.glob("*.swift")])
-        self.assertEqual(len(source_paths), 7)
+        self.assertEqual(len(source_paths), 13)
         for path in source_paths:
             self.assertIn(f"path = {path.relative_to(IOS)};", project)
             self.assertGreaterEqual(project.count(f"/* {path.name} in Sources */"), 2)
@@ -71,9 +71,10 @@ class IOSPaperclipContractAudit(unittest.TestCase):
 
     def test_swift_unit_tests_are_in_test_target_and_native_logs_preserve_failures(self):
         project = (IOS / "LeoPhoneAgent.xcodeproj/project.pbxproj").read_text()
-        for source in ["PaperclipContract.swift", "PaperclipClient.swift", "PaperclipDraft.swift"]:
+        for source in ["PaperclipContract.swift", "PaperclipClient.swift", "PaperclipDraft.swift",
+                       "PaperclipLive.swift", "PaperclipLiveConnection.swift", "PaperclipRunStream.swift"]:
             self.assertEqual(project.count(f"/* {source} in Sources */"), 4)
-        for name in ["PaperclipContractTests.swift", "PaperclipClientTests.swift"]:
+        for name in ["PaperclipContractTests.swift", "PaperclipClientTests.swift", "PaperclipLiveTests.swift"]:
             self.assertTrue((IOS / "MinisTests" / name).is_file())
         script = (ROOT / "scripts/native-paperclip-audit/run.sh").read_text()
         self.assertIn("set -euo pipefail", script)
@@ -91,19 +92,40 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertIn('"核实状态（不会重新发送）"', view)
         self.assertIn("model.pendingStatus != nil", view)
 
-    def test_editing_pauses_background_refresh_and_approval_ids_are_local(self):
+    def test_reads_pause_only_for_writes_and_send_releases_focus(self):
+        # 新语义：输入框聚焦、面板打开不再暂停只读刷新；只有写请求进行中暂停。
         view = (VIEWS / "PaperclipIssueDetailView.swift").read_text()
+        workspace = (VIEWS / "PaperclipWorkspaceView.swift").read_text()
         self.assertIn(".task(id: scenePhase)", view)
-        self.assertIn("PaperclipPollingPolicy.canRefresh(active: visible", view)
-        self.assertIn("statusSheetOpen: statusDecision != nil", view)
-        self.assertIn("replyFocused: editingReply || editingDecision", view)
-        self.assertIn(".focused($editingReply)", view)
-        self.assertIn("expandedApprovalIDs.contains(approval.id)", view)
-        polling = view.split(".task(id: scenePhase)", 1)[1].split(".onDisappear", 1)[0]
-        self.assertNotIn("draft.body", polling)
-        self.assertNotIn("decisionNote", polling)
-        self.assertNotIn("expandedApprovalIDs", polling)
-        self.assertIn("!acknowledgeStatus", polling)
+        self.assertIn("PaperclipPollingPolicy.canRefresh(active: visible, mutating: model.busy)", view)
+        self.assertIn("PaperclipPollingPolicy.canRefresh(active: true, mutating: creating)", workspace)
+        self.assertIn("focus: $editingReply", view)
+        self.assertIn("editingReply = outcome.keepsComposerFocus", view)
+        polling = view.split("private func pollLoop()", 1)[1].split("// MARK: 线程", 1)[0]
+        for forbidden in ["draft.body", "decisionNote", "editingReply", "details", "statusDecision"]:
+            self.assertNotIn(forbidden, polling)
+        # 回到前台先刷新一次，再进入周期。
+        self.assertLess(polling.index("await model.refresh(full: true)"), polling.index("Task.sleep"))
+
+    def test_live_channel_keeps_identity_cookie_and_company_isolation(self):
+        client = (CORE / "PaperclipClient.swift").read_text()
+        live = (CORE / "PaperclipLiveConnection.swift").read_text()
+        store = (CORE / "PaperclipWorkspaceStore.swift").read_text()
+        handshake = client.split("func liveSocketRequest(", 1)[1].split("static func liveSameOrigin", 1)[0]
+        self.assertIn("confirmIdentity(cookies: cookies, userID: userID, fresh: true)", handshake)
+        self.assertIn("Self.cookies(cookies, for: httpsURL)", handshake)
+        self.assertIn('parts.scheme = "wss"', handshake)
+        self.assertIn("Self.liveSameOrigin(url, profile.origin)", handshake)
+        self.assertNotIn("Authorization", handshake)
+        for marker in ["configuration.httpShouldSetCookies = false", "configuration.httpCookieStorage = nil",
+                       "PaperclipNoRedirect()", "event.companyId == companyID", "finish(.protocolViolation)",
+                       "PaperclipClient.liveSameOrigin(url, profile.origin)", "identityRefreshInterval: Double = 600"]:
+            self.assertIn(marker, live)
+        reset = store.split("private func resetConnection()", 1)[1].split("func clearLogin()", 1)[0]
+        self.assertIn("stopLive()", reset)
+        select_company = store.split("func selectCompany(", 1)[1].split("func refresh(", 1)[0]
+        self.assertLess(select_company.index("stopLive()"), select_company.index("companyID = id"))
+        self.assertIn("setForeground", store)
 
     def test_website_handoff_keeps_profile_container_origin_and_health_gate(self):
         login = (VIEWS / "PaperclipLoginView.swift").read_text()

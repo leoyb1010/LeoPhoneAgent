@@ -70,10 +70,15 @@ final class PaperclipNativeJourneys: XCTestCase {
         XCTAssertTrue(app.navigationBars["服务器任务"].waitForExistence(timeout: 5))
         openDetail(app)
         XCTAssertTrue(app.staticTexts["修复登录流程"].isHittable)
-        XCTAssertFalse(app.staticTexts["用户编号：human"].exists, "技术归属应默认收起，并保留展开入口")
+        // 主线程不出现“编号：”等调试式文案；绑定的服务器地址收进属性面板，仍可查看。
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "编号：")).count, 0)
+        XCTAssertFalse(app.staticTexts["https://paperclip.fixture.invalid"].exists)
         openTaskInformation(app)
-        XCTAssertTrue(app.staticTexts["用户编号：human"].waitForExistence(timeout: 5))
-        screenshot("真实生产任务归属_独立信息页", app)
+        XCTAssertTrue(app.staticTexts["运行历史"].waitForExistence(timeout: 5))
+        let origin = app.staticTexts["https://paperclip.fixture.invalid"]
+        scrollTo(origin, app)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "用户编号")).count, 0)
+        screenshot("真实生产任务属性面板", app)
         app.buttons["完成"].tap()
         XCTAssertTrue(app.navigationBars["任务-1"].waitForExistence(timeout: 5))
         screenshot("真实生产任务对话_模拟接口", app)
@@ -104,8 +109,11 @@ final class PaperclipNativeJourneys: XCTestCase {
         send.tap()
         let receipt = app.staticTexts["请补充验证结果"]
         XCTAssertTrue(receipt.waitForExistence(timeout: 10))
+        // 发送成功后收起键盘：以前焦点留在输入框，只读刷新随之一直暂停。
+        let keyboardGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.keyboards.firstMatch)
+        XCTAssertEqual(XCTWaiter.wait(for: [keyboardGone], timeout: 5), .completed, "发送成功后必须释放输入焦点")
+        XCTAssertEqual(reply.value as? String ?? "", "", "发送成功后草稿清空")
         scrollTo(receipt, app)
-        XCTAssertTrue(app.staticTexts["我"].exists)
         screenshot("真实生产回复回执_模拟接口", app)
     }
 
@@ -113,13 +121,12 @@ final class PaperclipNativeJourneys: XCTestCase {
     func testProductionApprovalWithFixtureAPI() {
         let app = launchTaskFixture()
         openDetail(app)
-        openTaskInformation(app)
-        let approval = app.buttons["聘用代理 · 待审批"]
-        scrollTo(approval, app)
-        approval.tap()
-        XCTAssertTrue(app.staticTexts["审批编号：approval-1"].exists)
-        XCTAssertTrue(app.staticTexts["申请者：agent"].exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "验证智能体")).firstMatch.exists)
+        // 待处理审批是对话里的内联卡片：完整内容与申请者直接可见。
+        let card = app.descendants(matching: .any).matching(identifier: "paperclip.approval.approval-1").firstMatch
+        scrollTo(card, app)
+        XCTAssertTrue(app.staticTexts["聘用代理"].exists)
+        XCTAssertTrue(app.staticTexts["申请者：验证智能体"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "执行界面回归")).firstMatch.exists)
         let approve = app.buttons["批准"]
         scrollTo(approve, app)
         screenshot("真实生产审批内容_模拟接口", app)
@@ -228,14 +235,97 @@ final class PaperclipNativeJourneys: XCTestCase {
         let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
         XCTAssertEqual(reply.value as? String, "保留回复草稿")
         XCTAssertEqual(reply.isEnabled, !unknownReceipt)
-        XCTAssertFalse(app.staticTexts["我"].exists, "轮询不能自动重发未知回复")
+        XCTAssertFalse(app.staticTexts["保留回复草稿"].exists, "轮询不能自动重发未知回复")
+    }
+
+    @MainActor
+    func testFocusedReplyNoLongerPausesDetailPolling() {
+        // 修复根因：以前输入框聚焦时只读轮询暂停，键盘不收起就一直看不到进展。
+        let app = launchTaskFixture(extraArguments: ["--saved-draft-refresh-fixture"])
+        openDetail(app)
+        let reply = app.descendants(matching: .any).matching(identifier: "paperclip.replyBody").firstMatch
+        scrollTo(reply, app)
+        reply.tap()
+        dismissObservedKeyboardGuide(app, waitForAppearance: true)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["详情已收到服务器更新"].waitForExistence(timeout: 35), "输入框聚焦时仍要继续同步")
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "同步不能抢走正在编辑的焦点")
+        XCTAssertEqual(reply.value as? String, "保留回复草稿", "只读同步不改写草稿")
+        screenshot("聚焦输入时仍继续同步", app)
+    }
+
+    @MainActor
+    func testLiveRunCardStreamsProgressLogAndComments() {
+        let app = launchTaskFixture(extraArguments: ["--showcase-fixture"])
+        // 卡片整体是一个可点按元素，运行中标识合并进它的朗读标签。
+        let running = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "运行中"), object: taskLink(app))
+        XCTAssertEqual(XCTWaiter.wait(for: [running], timeout: 10), .completed, "列表需显示运行中标识")
+        openDetail(app)
+        let card = app.descendants(matching: .any).matching(identifier: "paperclip.runCard.run-live").firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "进入详情立即显示运行中卡片")
+        let activity = app.staticTexts.matching(identifier: "paperclip.runActivity").firstMatch
+        XCTAssertTrue(activity.waitForExistence(timeout: 5))
+        XCTAssertTrue((activity.label).hasPrefix("执行中"))
+        // 实时事件推动卡片更新：当前工具变化。
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "执行中 · 编辑文件"), object: activity)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 20), .completed, "当前工具需随实时事件更新")
+        // 智能体评论实时出现。
+        let liveComment = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "已定位问题")).firstMatch
+        XCTAssertTrue(liveComment.waitForExistence(timeout: 20), "新评论需实时出现")
+        // 展开实时日志：解析后的可读文本，不显示原始 NDJSON。
+        let toggle = app.buttons["paperclip.toggleLog"]
+        scrollTo(toggle, app)
+        toggle.tap()
+        let parsed = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "正在编译项目")).firstMatch
+        XCTAssertTrue(parsed.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "\"stream\"")).count, 0, "不能显示原始 NDJSON")
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "[36m")).count, 0, "不能显示 ANSI 控制码")
+        screenshot("运行中卡片_实时日志", app)
+        // 已结束运行的摘要：成功显示耗时，失败显示中文原因。
+        let failed = app.descendants(matching: .any).matching(identifier: "paperclip.runSummary.run-0").firstMatch
+        scrollTo(failed, app)
+        XCTAssertTrue(failed.label.contains("智能体执行器出错"), failed.label)
+        let done = app.descendants(matching: .any).matching(identifier: "paperclip.runSummary.run-1").firstMatch
+        XCTAssertTrue(done.label.hasPrefix("已完成 · "), done.label)
+    }
+
+    @MainActor
+    func testDesignShowcaseLight() { captureDesignShowcase(dark: false) }
+
+    @MainActor
+    func testDesignShowcaseDark() { captureDesignShowcase(dark: true) }
+
+    @MainActor
+    private func captureDesignShowcase(dark: Bool) {
+        var arguments = ["--showcase-fixture"]
+        if dark { arguments.append("--dark-fixture") }
+        let app = launchTaskFixture(extraArguments: arguments)
+        let suffix = dark ? "深色" : "浅色"
+        let running = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "运行中"), object: taskLink(app))
+        XCTAssertEqual(XCTWaiter.wait(for: [running], timeout: 10), .completed)
+        screenshot("设计_列表_\(suffix)", app)
+        openDetail(app)
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "paperclip.runCard.run-live").firstMatch.waitForExistence(timeout: 10))
+        // 等实时事件带来第一条进度。
+        _ = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "已定位问题")).firstMatch.waitForExistence(timeout: 15)
+        app.swipeDown(); app.swipeDown()
+        screenshot("设计_详情顶部_\(suffix)", app)
+        let toggle = app.buttons["paperclip.toggleLog"]
+        scrollTo(toggle, app)
+        toggle.tap()
+        _ = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "正在编译项目")).firstMatch.waitForExistence(timeout: 10)
+        screenshot("设计_运行中卡片_\(suffix)", app)
+        let approve = app.buttons["批准"]
+        scrollTo(approve, app)
+        screenshot("设计_内联审批_\(suffix)", app)
+        openTaskInformation(app)
+        screenshot("设计_属性面板_\(suffix)", app)
     }
 
     @MainActor
     private func openTaskInformation(_ app: XCUIApplication) {
-        app.buttons["paperclip.taskActions"].tap()
-        app.buttons["任务信息、运行与审批"].tap()
-        XCTAssertTrue(app.navigationBars["任务信息"].waitForExistence(timeout: 5))
+        app.buttons["paperclip.properties"].tap()
+        XCTAssertTrue(app.navigationBars["任务属性"].waitForExistence(timeout: 5))
     }
 
     @MainActor

@@ -125,8 +125,10 @@ struct PaperclipAgent: Decodable, Identifiable, Hashable, Sendable {
     let companyId: String
     let name: String
     let status: String
+    /// 服务器预设头像（同源 /api/agent-avatars/...png）；旧版本没有此字段。
+    let avatarUrl: String?
 }
-struct PaperclipIssue: Decodable, Identifiable, Sendable {
+struct PaperclipIssue: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let companyId: String
     let identifier: String?
@@ -142,7 +144,7 @@ struct PaperclipUnblockDescriptor: Decodable, Equatable, Sendable {
     let owner: PaperclipJSON
     let action: String
 }
-struct PaperclipComment: Decodable, Identifiable, Sendable {
+struct PaperclipComment: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let companyId: String
     let issueId: String
@@ -159,13 +161,16 @@ struct PaperclipComment: Decodable, Identifiable, Sendable {
         return "未知作者"
     }
 }
-struct PaperclipRun: Decodable, Identifiable, Sendable {
+struct PaperclipRun: Decodable, Identifiable, Sendable, Equatable {
     let runId: String
     let status: String
     let agentId: String
     let startedAt: String?
     let finishedAt: String?
+    let createdAt: String?
+    let errorCode: String?
     var id: String { runId }
+    var isActive: Bool { status == "queued" || status == "running" }
 }
 struct PaperclipRunLogChunk: Decodable, Sendable {
     let runId: String
@@ -232,8 +237,20 @@ enum PaperclipIssueStatus: String, Codable, CaseIterable, Identifiable {
 enum PaperclipPollingPolicy {
     static let baseInterval: Double = 15
     static let maximumInterval: Double = 120
-    static func canRefresh(active: Bool, statusSheetOpen: Bool, replyFocused: Bool) -> Bool {
-        active && !statusSheetOpen && !replyFocused
+    /// 没有实时通道、且有运行中的任务时的轮询间隔。
+    static let activeRunInterval: Double = 3
+    /// 实时通道已连接时只做低频兜底（事件驱动刷新为主）。
+    static let liveSafetyInterval: Double = 60
+    /// 修复「发送后一直卡住」：只读刷新从不改写草稿、焦点或面板状态，
+    /// 以前因输入框聚焦、面板打开而暂停，键盘不收起就永远看不到进展。
+    /// 现在只在写请求（创建、回复、状态、审批）进行中暂停。
+    static func canRefresh(active: Bool, mutating: Bool) -> Bool {
+        active && !mutating
+    }
+    /// 详情页轮询节奏：实时通道已连接时 60 秒兜底；否则运行中 3 秒、空闲 15 秒。
+    static func detailInterval(liveOpen: Bool, runActive: Bool) -> Double {
+        if liveOpen { return liveSafetyInterval }
+        return runActive ? activeRunInterval : baseInterval
     }
     /// 离线或服务器故障时每 15 秒重试会持续耗电；失败按 2 倍退避到 2 分钟，成功后复位。
     static func nextInterval(after current: Double, succeeded: Bool) -> Double {
@@ -289,6 +306,20 @@ enum PaperclipLabels {
     }
     static func priority(_ value: String) -> String {
         ["critical": "紧急", "high": "高", "medium": "中", "low": "低"][value] ?? "未指定"
+    }
+    /// 运行失败原因的中文摘要；未知代码统一显示，不把原始枚举值直接抛给用户。
+    static func runError(_ code: String?) -> String? {
+        guard let code = code?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else { return nil }
+        return ["adapter_failed": "智能体执行器出错", "process_lost": "执行进程意外中断",
+                "timeout": "运行超时", "cancelled": "运行已取消", "operator_interrupted": "已被手动中断",
+                "server_shutdown_interrupted": "服务器重启中断了运行", "provider_quota": "模型服务额度不足",
+                "provider_transport_failed": "连接模型服务失败", "issue_reassigned": "任务已改派给其他智能体",
+                "workspace_restore_failed": "工作区恢复失败", "workspace_validation_failed": "工作区校验失败",
+                "agent_not_invokable": "智能体当前不可调用", "adapter_engine_unavailable": "执行引擎不可用",
+                "ai_connection_busy": "模型连接繁忙", "turn_limit_exhausted": "已达到对话轮次上限",
+                "tool_not_found": "找不到所需工具", "tool_execution_failed": "工具执行失败",
+                "invalid_response": "模型返回格式无效", "setup_failed": "运行准备失败",
+                "execution_finalization_deadline_exceeded": "收尾超时"][code] ?? "运行异常结束"
     }
     static func error(_ error: Error) -> String {
         (error as? PaperclipError)?.errorDescription ?? "连接失败，请检查网络和服务器地址后重试。不会转为本机执行。"

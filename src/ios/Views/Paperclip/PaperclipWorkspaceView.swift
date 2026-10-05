@@ -54,7 +54,7 @@ struct PaperclipWorkspaceView: View {
         _store = StateObject(wrappedValue: makeStore())
     }
     @State private var settings = false
-    @State private var composing = false
+    @State private var creating = false
     @State private var focusRequest = 0
     @State private var createdReference: PaperclipTaskReference?
     @State private var query = ""
@@ -68,79 +68,34 @@ struct PaperclipWorkspaceView: View {
             $0.title.localizedCaseInsensitiveContains(value) || ($0.identifier?.localizedCaseInsensitiveContains(value) ?? false)
         }
     }
+
+    private func grouped(_ issues: [PaperclipIssue]) -> [(PaperclipIssueGroup, [PaperclipIssue])] {
+        let buckets = Dictionary(grouping: issues) { PaperclipIssueGroup.group($0, running: store.liveIssueIDs.contains($0.id)) }
+        return PaperclipIssueGroup.allCases.compactMap { group in
+            guard let rows = buckets[group], !rows.isEmpty else { return nil }
+            return (group, rows)
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                workspaceSummary
-                if let error = store.error {
-                    Section {
-                        DisclosureGroup {
-                            Text(error).font(.footnote).textSelection(.enabled)
-                        } label: {
-                            Label(store.user == nil ? "连接未完成" : "同步失败，保留已加载任务", systemImage: "exclamationmark.triangle")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Button(store.user == nil ? "检查服务器连接" : "重试同步") { Task { await refresh() } }.disabled(store.busy)
-                    }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    content
                 }
-                if let user = store.user, let client = store.client {
-                    if !store.companyID.isEmpty {
-                        Section {
-                            HStack {
-                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                                TextField("搜索已加载的任务", text: $query)
-                                    .focused($searching).submitLabel(.search)
-                                    .accessibilityIdentifier("paperclip.search")
-                                if !query.isEmpty {
-                                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                                        .buttonStyle(.borderless).accessibilityLabel(Text(verbatim: "清除搜索"))
-                                }
-                            }
-                        }
-                        Section("任务会话") {
-                            if filtered.isEmpty {
-                                if store.busy { ProgressView("正在加载任务…") }
-                                else if !query.isEmpty { Text("没有匹配任务，试试其他关键词。").foregroundStyle(.secondary) }
-                                else {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        Text("想让服务器帮你做什么？").font(.headline)
-                                        Text("在下方输入要求，发送后创建一个服务器任务。").font(.subheadline).foregroundStyle(.secondary)
-                                        Button("开始新任务", systemImage: "plus") { focusRequest += 1 }
-                                            .accessibilityIdentifier("paperclip.createEmpty")
-                                    }.padding(.vertical, 8)
-                                }
-                            }
-                            ForEach(filtered) { issue in
-                                NavigationLink {
-                                    PaperclipIssueDetailView(client: client, reference: client.reference(for: issue, userID: user.id))
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(issue.title).font(.headline)
-                                        if let description = issue.description, !description.isEmpty {
-                                            Text(description).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                                        }
-                                        HStack {
-                                            if let identifier = issue.identifier { Text(identifier) }
-                                            Text(PaperclipLabels.status(issue.status))
-                                            Text("优先级：\(PaperclipLabels.priority(issue.priority))")
-                                        }.font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }.accessibilityIdentifier("paperclip.issue.\(issue.id)")
-                            }
-                            if store.hasMore {
-                                Button("加载更多任务") { Task { await store.refresh(loadMore: true) } }.disabled(store.busy)
-                            }
-                        }
-                    }
-                }
+                .padding(.horizontal, LeoTheme.Spacing.md)
+                .padding(.bottom, LeoTheme.Spacing.lg)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
+            .background(LeoTheme.ColorToken.groupedBackground)
             .navigationTitle("服务器任务")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let client = store.client, let user = store.user, !store.companyID.isEmpty {
                     PaperclipCreateIssueView(client: client, companyID: store.companyID, userID: user.id,
-                        agents: store.agents, focusRequest: focusRequest, composing: $composing) { issue in
+                        agents: store.agents, focusRequest: focusRequest, creating: $creating) { issue in
                             guard store.client === client, store.user?.id == user.id, store.companyID == issue.companyId else { return }
                             createdReference = client.reference(for: issue, userID: user.id)
                             await store.refresh()
@@ -150,7 +105,7 @@ struct PaperclipWorkspaceView: View {
             }
             .navigationDestination(item: $createdReference) { reference in
                 if let client = store.client {
-                    PaperclipIssueDetailView(client: client, reference: reference)
+                    detail(client: client, reference: reference)
                 }
             }
             .refreshable { await refresh() }
@@ -164,7 +119,7 @@ struct PaperclipWorkspaceView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { settings = true } label: { Label("服务器设置", systemImage: "gearshape") }
                         .accessibilityIdentifier("paperclip.settings")
-                    Button { searching = false; focusRequest += 1 } label: { Label("新建任务", systemImage: "plus") }
+                    Button { searching = false; focusRequest += 1 } label: { Label("新建任务", systemImage: "square.and.pencil") }
                         .disabled(store.user == nil || store.companyID.isEmpty)
                         .accessibilityIdentifier("paperclip.create")
                 }
@@ -176,56 +131,113 @@ struct PaperclipWorkspaceView: View {
         // 连接任务放在重置导航路径的 id 之外，退出登录不会意外触发重新登录。
         .task(id: store.selectedID) { if store.selectedProfile != nil { await store.connect() } }
         .task(id: scenePhase) {
+            // 进入后台主动断开实时通道；回到前台立即刷新、重新确认身份并连接，再进入周期（以前先睡 15 秒）。
+            // 短暂的 inactive（下拉通知中心、多任务切换）不断开，避免反复重连。
+            if scenePhase == .background { await store.setForeground(false) }
             guard scenePhase == .active else { return }
-            var interval = PaperclipPollingPolicy.baseInterval
+            await store.setForeground(true)
+            var lastPoll = Date()
+            var failureInterval: Double?
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
-                if listVisible && !settings && !composing && !searching && store.user != nil {
-                    await store.refresh()
-                    // 失败指数退避（上限 2 分钟），成功复位，避免离线时持续耗电。
-                    interval = PaperclipPollingPolicy.nextInterval(after: interval, succeeded: store.error == nil)
-                }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                let interval = failureInterval ?? (store.liveState == .open ? PaperclipPollingPolicy.liveSafetyInterval : PaperclipPollingPolicy.baseInterval)
+                guard Date().timeIntervalSince(lastPoll) >= interval else { continue }
+                // 只在创建请求进行中暂停；搜索、输入、设置页打开都不再暂停只读同步。
+                guard listVisible, store.user != nil,
+                      PaperclipPollingPolicy.canRefresh(active: true, mutating: creating) else { continue }
+                await store.refresh()
+                lastPoll = Date()
+                // 失败指数退避（上限 2 分钟），成功复位，避免离线时持续耗电。
+                failureInterval = store.error == nil ? nil : PaperclipPollingPolicy.nextInterval(after: failureInterval ?? interval, succeeded: false)
             }
         }
+    }
+
+    private func detail(client: PaperclipClient, reference: PaperclipTaskReference) -> some View {
+        PaperclipIssueDetailView(client: client, reference: reference, agents: store.agents,
+                                 live: store.live, userLabel: store.user?.label)
     }
 
     private func refresh() async {
         if store.user == nil { await store.connect() } else { await store.refresh() }
     }
 
-    private var workspaceSummary: some View {
-        Section {
-            if store.user != nil {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if store.companies.count > 1 {
-                            Picker("公司", selection: Binding(get: { store.companyID }, set: { id in Task { await store.selectCompany(id) } })) {
-                                ForEach(store.companies) { Text($0.name).tag($0.id) }
-                            }.labelsHidden().disabled(store.busy)
-                        } else {
-                            Text(store.companies.first?.name ?? "尚未加入公司").font(.headline)
-                        }
-                        Text(store.selectedProfile?.name ?? "服务器").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if store.busy { ProgressView().accessibilityLabel("正在同步") }
-                    else {
-                        Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }
-                            .buttonStyle(.borderless).accessibilityLabel("刷新任务")
-                    }
-                }
-                if store.companies.isEmpty {
-                    Text("当前账号尚无可访问的公司，请在服务器网页完成公司设置。").font(.footnote).foregroundStyle(.secondary)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(store.selectedProfile?.name ?? "连接你的 Paperclip 服务器").font(.headline)
-                    Text(store.busy ? "正在验证连接…" : "登录后即可查看和处理服务器任务。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Button(store.selectedProfile == nil ? "添加服务器" : "登录与连接", systemImage: "network") { settings = true }
-                        .accessibilityIdentifier("paperclip.openConnection")
-                }.padding(.vertical, 6)
+    @ViewBuilder private var content: some View {
+        if let user = store.user, let client = store.client {
+            PaperclipListToolbar(store: store, query: $query, searching: $searching)
+                .padding(.top, LeoTheme.Spacing.xs)
+                .padding(.bottom, LeoTheme.Spacing.md)
+            if let error = store.error {
+                PaperclipNotice(text: "同步失败，保留已加载任务。" + error, actionTitle: "重试") { Task { await refresh() } }
+                    .padding(.bottom, LeoTheme.Spacing.md)
             }
+            if store.companies.isEmpty {
+                PaperclipNotice(text: "当前账号尚无可访问的公司，请在服务器网页完成公司设置。", systemImage: "building.2", tint: .secondary)
+            } else if filtered.isEmpty {
+                emptyState
+            } else {
+                ForEach(grouped(filtered), id: \.0) { group, rows in
+                    HStack(spacing: 6) {
+                        Text(group.title).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("\(rows.count)").font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Color.primary.opacity(0.06), in: Capsule())
+                    }
+                    .padding(.top, LeoTheme.Spacing.sm)
+                    .padding(.bottom, LeoTheme.Spacing.xs)
+                    .padding(.leading, 4)
+                    .accessibilityAddTraits(.isHeader)
+                    ForEach(rows) { issue in
+                        NavigationLink {
+                            detail(client: client, reference: client.reference(for: issue, userID: user.id))
+                        } label: {
+                            PaperclipIssueCard(issue: issue, assignee: store.agents.first { $0.id == issue.assigneeAgentId },
+                                               running: store.liveIssueIDs.contains(issue.id), client: client)
+                        }
+                        .buttonStyle(LeoSquishButtonStyle())
+                        .padding(.bottom, 10)
+                        .accessibilityIdentifier("paperclip.issue.\(issue.id)")
+                    }
+                }
+                if store.hasMore {
+                    Button { Task { await store.refresh(loadMore: true) } } label: {
+                        Text("加载更多任务").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).frame(minHeight: 40)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(store.busy)
+                }
+            }
+        } else {
+            if let error = store.error {
+                PaperclipNotice(text: error, actionTitle: store.selectedProfile == nil ? nil : "检查连接") { Task { await refresh() } }
+                    .padding(.top, LeoTheme.Spacing.md)
+            }
+            PaperclipConnectCard(title: store.selectedProfile?.name ?? "连接你的 Paperclip 服务器", busy: store.busy,
+                                 hasProfile: store.selectedProfile != nil) { settings = true }
+                .padding(.top, LeoTheme.Spacing.lg)
+        }
+    }
+
+    @ViewBuilder private var emptyState: some View {
+        if store.busy && store.issues.isEmpty {
+            HStack(spacing: 10) { ProgressView(); Text("正在加载任务…").foregroundStyle(.secondary) }
+                .frame(maxWidth: .infinity).padding(.top, 60)
+        } else if !query.isEmpty {
+            Text("没有匹配任务，试试其他关键词。").font(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity).padding(.top, 40)
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "sparkles.rectangle.stack").font(.largeTitle).foregroundStyle(LeoTheme.ColorToken.accent)
+                Text("想让服务器帮你做什么？").font(.title3.weight(.semibold))
+                Text("在下方输入要求，发送后创建一个服务器任务，执行过程会实时显示。")
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button("开始新任务", systemImage: "plus") { focusRequest += 1 }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("paperclip.createEmpty")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 48)
         }
     }
 }
@@ -347,10 +359,10 @@ private struct PaperclipCreateIssueView: View {
     let userID: String
     let agents: [PaperclipAgent]
     let focusRequest: Int
-    @Binding var composing: Bool
+    /// 创建请求进行中（只读同步只在此期间暂停）。
+    @Binding var creating: Bool
     let onCreated: (PaperclipIssue) async -> Void
     @FocusState private var focused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draft: PaperclipDraft
     @State private var busy = false
     @State private var error: String?
@@ -362,66 +374,83 @@ private struct PaperclipCreateIssueView: View {
     private let draftKey: String
 
     init(client: PaperclipClient, companyID: String, userID: String, agents: [PaperclipAgent],
-         focusRequest: Int, composing: Binding<Bool>, onCreated: @escaping (PaperclipIssue) async -> Void) {
+         focusRequest: Int, creating: Binding<Bool>, onCreated: @escaping (PaperclipIssue) async -> Void) {
         self.client = client; self.companyID = companyID; self.userID = userID; self.agents = agents
-        self.focusRequest = focusRequest; _composing = composing; self.onCreated = onCreated
+        self.focusRequest = focusRequest; _creating = creating; self.onCreated = onCreated
         let key = PaperclipDraft.key(profile: client.profile, companyID: companyID, userID: userID)
         draftKey = key
         _draft = State(initialValue: PaperclipDraft.load(key: key))
         _lastChecked = State(initialValue: PaperclipDraft.lastChecked(key: key))
     }
+
+    private var assignee: PaperclipAgent? { agents.first { $0.id == draft.agentID } }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Menu {
-                    Picker("执行者", selection: $draft.agentID) {
-                        Text("暂不分配 · 待规划").tag("")
-                        ForEach(agents.filter { $0.status != "terminated" }) { Text($0.name).tag($0.id) }
+        PaperclipComposerBar(
+            text: $draft.title, focus: $focused, placeholder: "发消息，创建服务器任务…",
+            fieldIdentifier: "paperclip.taskTitle", sendIdentifier: "paperclip.submitTask",
+            sendLabel: draft.submitted ? "重试同一提交" : "发送并创建服务器任务",
+            busy: busy,
+            canSend: !busy && draft.canRetryCreate() && !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            retry: draft.submitted, fieldDisabled: busy || draft.submitted,
+            onSend: { Task { await submit() } }
+        ) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Menu {
+                        Picker("执行者", selection: $draft.agentID) {
+                            Text("暂不分配 · 待规划").tag("")
+                            ForEach(agents.filter { $0.status != "terminated" }) { Text($0.name).tag($0.id) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if let assignee {
+                                PaperclipAvatar(client: client, path: PaperclipAvatarPath.normalized(assignee.avatarUrl, origin: client.profile.origin),
+                                                name: assignee.name, size: 18)
+                            } else {
+                                Image(systemName: "person.crop.circle").font(.system(size: 13, weight: .semibold))
+                            }
+                            Text(assignee?.name ?? "暂不分配 · 待规划").font(.footnote.weight(.semibold)).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 32)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                        .contentShape(Capsule())
                     }
-                } label: {
-                    Label(agents.first(where: { $0.id == draft.agentID })?.name ?? "暂不分配 · 待规划", systemImage: "person.crop.circle")
-                        .font(.subheadline).lineLimit(1)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                }.disabled(busy || draft.submitted)
-                Spacer()
-                Button { showDetails = true } label: { Image(systemName: "slider.horizontal.3") }
+                    .disabled(busy || draft.submitted)
+                    .accessibilityLabel(Text("执行者：\(assignee?.name ?? "暂不分配")"))
+                    Button { showDetails = true } label: {
+                        PaperclipChip(title: draft.body.isEmpty ? "补充说明" : "已补充说明", systemImage: "text.badge.plus",
+                                      tint: draft.body.isEmpty ? .primary : LeoTheme.ColorToken.accent)
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("任务补充说明与提交目标")
-                if draft.submitted || lastChecked != nil {
-                    Button(draft.submitted ? "待核对" : "核对记录") { showReceipt = true }.font(.caption)
+                    Spacer(minLength: 0)
+                    if draft.submitted || lastChecked != nil {
+                        Button { showReceipt = true } label: {
+                            PaperclipChip(title: draft.submitted ? "待核对" : "核对记录", systemImage: "clock.badge.questionmark",
+                                          tint: draft.submitted ? LeoTheme.ColorToken.warning : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if let error {
+                    Text(error).font(.caption).foregroundStyle(LeoTheme.ColorToken.destructive).lineLimit(2)
                 }
             }
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("发消息，创建服务器任务…", text: $draft.title, axis: .vertical)
-                    .font(.body).lineSpacing(4).lineLimit(1...5).focused($focused)
-                    .disabled(busy || draft.submitted).accessibilityIdentifier("paperclip.taskTitle")
-                Button { Task { await submit() } } label: {
-                    if busy { ProgressView() }
-                    else { Image(systemName: draft.submitted ? "arrow.clockwise.circle.fill" : "arrow.up.circle.fill").font(.title) }
-                }
-                .disabled(busy || !draft.canRetryCreate() || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel(draft.submitted ? "重试同一提交" : "发送并创建服务器任务")
-                .accessibilityIdentifier("paperclip.submitTask")
-                .tint(.primary)
-            }
-            if let error { Text(error).font(.caption).foregroundStyle(.red).lineLimit(2) }
         }
-        .modifier(PaperclipComposerPanel())
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: busy)
-        .onAppear { updateComposing() }
         .onChange(of: focusRequest) { _, _ in focused = true }
-        .onChange(of: focused) { _, _ in updateComposing() }
-        .onChange(of: draft.title) { _, _ in scheduleDraftSave(); updateComposing() }
-        .onChange(of: draft.body) { _, _ in scheduleDraftSave(); updateComposing() }
+        .onChange(of: draft.title) { _, _ in scheduleDraftSave() }
+        .onChange(of: draft.body) { _, _ in scheduleDraftSave() }
         .onChange(of: draft.agentID) { _, _ in scheduleDraftSave() }
-        .onChange(of: showDetails) { _, _ in updateComposing() }
-        .onChange(of: showReceipt) { _, _ in updateComposing() }
-        .onChange(of: busy) { _, _ in updateComposing() }
+        .onChange(of: busy) { _, value in creating = value }
         .onDisappear {
             let pending = saveTask != nil
             saveTask?.cancel(); saveTask = nil
             if pending || !draft.title.isEmpty || !draft.body.isEmpty { draft.save(key: draftKey) }
-            composing = false
+            creating = false
         }
         .sheet(isPresented: $showDetails) {
             NavigationStack {
@@ -433,7 +462,6 @@ private struct PaperclipCreateIssueView: View {
                     Section("提交目标") {
                         Text(client.profile.name)
                         Text(client.profile.origin.absoluteString).font(.caption).textSelection(.enabled)
-                        Text("公司编号：\(companyID)").font(.caption)
                         Text("指定执行者后创建待处理任务，由服务器调度；未分配的任务保留在待规划列表。").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -471,10 +499,6 @@ private struct PaperclipCreateIssueView: View {
             }
         }
     }
-    private func updateComposing() {
-        // 保存的草稿或待核对回执不是编辑焦点；只读同步不会修改或重发它们。
-        composing = busy || !PaperclipPollingPolicy.canRefresh(active: true, statusSheetOpen: showDetails || showReceipt, replyFocused: focused)
-    }
     /// 每次按键写 UserDefaults 太频繁：停顿 0.5 秒后保存；离开页面、提交前仍立即保存。
     private func scheduleDraftSave() {
         saveTask?.cancel()
@@ -487,6 +511,8 @@ private struct PaperclipCreateIssueView: View {
     private func submit() async {
         guard !busy, draft.canRetryCreate() else { return }
         saveTask?.cancel(); saveTask = nil
+        // 发送即收起键盘；仅在服务器明确拒绝、草稿可编辑时恢复焦点。
+        focused = false
         busy = true
         let wasPreviouslySubmitted = draft.submitted
         draft.markSubmitted()
@@ -496,31 +522,21 @@ private struct PaperclipCreateIssueView: View {
                 title: draft.title, description: draft.body, agentID: draft.agentID.isEmpty ? nil : draft.agentID, requestID: draft.requestID)
             PaperclipDraft.clear(key: draftKey)
             draft = PaperclipDraft()
-            focused = false
+            focused = PaperclipSendOutcome.sent.keepsComposerFocus
+            LeoHaptics.notification(.success)
+            busy = false
             await onCreated(issue)
+            return
         } catch {
             draft.recordFailure(error, wasPreviouslySubmitted: wasPreviouslySubmitted)
             draft.save(key: draftKey)
             self.error = PaperclipLabels.error(error)
+            focused = PaperclipSendOutcome.failure(draftAfterFailure: draft).keepsComposerFocus
+            LeoHaptics.notification(.error)
         }
         busy = false
-        updateComposing()
     }
 }
-
-/// 首页与任务对话共用原生输入面板，随系统外观与键盘安全区适配。
-struct PaperclipComposerPanel: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
-            .overlay { RoundedRectangle(cornerRadius: 22).strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5) }
-            .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Color(.systemGroupedBackground))
-    }
-}
-
 
 struct PaperclipCheckedDraftView: View {
     let draft: PaperclipDraft

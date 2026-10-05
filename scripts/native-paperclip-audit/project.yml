@@ -16,6 +16,10 @@ targets:
     sources:
       - path: ../../src/ios/Agent/Paperclip
       - path: ../../src/ios/Views/Paperclip
+      # 新界面使用的端侧设计系统（无其他依赖，可独立编译）。
+      - path: ../../src/ios/Shared/LeoDesignSystem.swift
+      - path: ../../src/ios/Shared/LeoMotionEffects.swift
+      - path: ../../src/ios/Views/Chat/ChatColors.swift
       - path: AuditApp.swift
       - path: FixtureServer.swift
     settings:
@@ -29,8 +33,12 @@ targets:
     sources:
       - path: ../../src/ios/Agent/Paperclip
       - path: ../../src/ios/Views/Paperclip
+      - path: ../../src/ios/Shared/LeoDesignSystem.swift
+      - path: ../../src/ios/Shared/LeoMotionEffects.swift
+      - path: ../../src/ios/Views/Chat/ChatColors.swift
       - path: ../../src/ios/MinisTests/PaperclipContractTests.swift
       - path: ../../src/ios/MinisTests/PaperclipClientTests.swift
+      - path: ../../src/ios/MinisTests/PaperclipLiveTests.swift
       - path: Tests
     settings:
       base:
