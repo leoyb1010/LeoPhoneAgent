@@ -33,6 +33,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 
 Paperclip 发行层 1.1.0 接入 Mac 原生 CLI 状态与隔离网页授权：已有登录、重新授权与个人连接分别处理，管理员可通过现有 HTTPS 域名配置，无需切换端口地址。 实际提供商验收边界见 [原生 CLI 授权交付记录](docs/paperclip/NATIVE_CLI_AUTH_20261004.md)。
 
+Paperclip 发行层 1.1.4 增加跨账号请求与草稿隔离、权限感知分页、唯一备份文件和真实模型自检；两轮全面审计的范围、各轮证据和剩余边界见 [两轮审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
+
 Paperclip 发行层 1.1.3 完成服务器配置、任务、实时更新、费用、权限与存储审计：修复 Cursor 模型发现阻塞和非法模型重试、OpenCode Go 默认授权与隐藏密钥残留、Hermes 默认模型覆盖、成本提交后的刷新及未定价显示，以及 macOS 内置数据库启动。具体实测、待本人授权与依赖风险边界见 [服务器审计记录](docs/paperclip/SERVER_AUDIT_20261004.md)。
 
 Paperclip 发行层 1.1.1 修复 OpenCode 新建配置自动绑定 OpenRouter 的问题：CLI 与模型提供商独立选择，OpenRouter 连接管理需明确选择。Mini 已补齐九种 CLI 的可执行入口；Gemini 网页 OAuth 成功后仍收到 Google 服务资格拒绝，不能视为模型连接成功。验证范围见 [CLI 安装与提供商选择交付记录](docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。

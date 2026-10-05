@@ -1,0 +1,16 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+vi.mock('./detect-model.js',()=>({detectModel:async()=>null,resolveProvider:()=>({provider:'auto',resolvedFrom:'auto'}),inferProviderFromModel:()=>undefined}));
+import { testEnvironment } from './test.js';
+async function fixture(body:string){const root=await fs.mkdtemp(path.join(os.tmpdir(),'hermes-audit-'));const command=path.join(root,'hermes');await fs.writeFile(command,`#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'Fixture Hermes 1.0'; exit 0; fi\n${body}\n`,{mode:0o700});return{root,command};}
+async function run(command:string,root:string,env:Record<string,string>={}){return testEnvironment({companyId:'fixture',adapterType:'hermes_local',config:{command,cwd:root,env:{OPENAI_API_KEY:'fixture-only',...env}}});}
+describe('Hermes self-test validates its actual model invocation',()=>{
+ it('does not report pass when version succeeds but chat fails',async()=>{const{root,command}=await fixture("echo 'model invocation failed' >&2; exit 42");try{expect((await run(command,root)).status).toBe('fail');}finally{await fs.rm(root,{recursive:true,force:true});}});
+ it('does not count a command or prompt echo containing hello as the model response',async()=>{const{root,command}=await fixture('printf \'%s\\n\' \"$*\"; exit 0');try{const result=await run(command,root);expect(result.status).not.toBe('pass');expect(result.checks.some(c=>c.code==='hermes_hello_probe_passed')).toBe(false);}finally{await fs.rm(root,{recursive:true,force:true});}});
+ it('requires the response itself to contain hello',async()=>{const{root,command}=await fixture("echo 'goodbye'; exit 0");try{const result=await run(command,root);expect(result.status).not.toBe('pass');expect(result.checks.some(c=>c.code==='hermes_hello_probe_passed')).toBe(false);}finally{await fs.rm(root,{recursive:true,force:true});}});
+ it('passes only after a real child returns hello and records probe success',async()=>{const{root,command}=await fixture("echo hello; exit 0");try{const result=await run(command,root);expect(result.status).toBe('pass');expect(result.checks.some(c=>c.code==='hermes_hello_probe_passed')).toBe(true);}finally{await fs.rm(root,{recursive:true,force:true});}});
+ it('detects spawn permission failures instead of treating the CLI as installed',async()=>{const{root,command}=await fixture('echo hello');await fs.chmod(command,0o600);try{const result=await run(command,root);expect(result.status).toBe('fail');expect(result.checks.some(c=>c.code==='hermes_cli_unexecutable')).toBe(true);}finally{await fs.rm(root,{recursive:true,force:true});}});
+ it('passes the same agent-scoped environment to the hello child',async()=>{const{root,command}=await fixture('if [ "$HERMES_AUDIT_SENTINEL" != "fixture-only" ]; then exit 42; fi; echo hello');try{const result=await run(command,root,{HERMES_AUDIT_SENTINEL:'fixture-only'});expect(result.checks.some(c=>c.code==='hermes_hello_probe_passed')).toBe(true);}finally{await fs.rm(root,{recursive:true,force:true});}});
+});

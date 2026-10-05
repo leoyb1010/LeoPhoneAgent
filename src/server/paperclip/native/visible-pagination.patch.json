@@ -1,0 +1,98 @@
+[
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "import { createHash, randomUUID } from \"node:crypto\";",
+    "to": "import { createHash, randomUUID } from \"node:crypto\";\nimport { authorizedIssuePage } from \"../services/authorized-issue-page.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "import { retainBacklogHumanAssignment } from \"../services/human-directed-work.js\";",
+    "to": "import { retainBacklogHumanAssignment, withHumanDirectedWork } from \"../services/human-directed-work.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "      updatedSince: rawUpdatedSince,\n    };\n    const requestKey = issueListRequestKey({",
+    "to": "      updatedSince: rawUpdatedSince,\n    };\n    // 权限先下推 SQL，再应用 limit/offset/afterId；隐藏任务不能制造假末页。\n    const companyWideRead = await actorCanReadCompanyScope(req, companyId);\n    if (!companyWideRead) {\n      if (req.actor.type !== \"agent\" || !req.actor.agentId) throw forbidden(\"Company issue list is outside this actor's authorization boundary\");\n      if (req.actor.keyScope?.kind === \"skill_test\") {\n        listFilters.lowTrustBoundary = { mode: \"low_trust_review\", companyId, issueIds: [req.actor.keyScope.issueId] };\n      } else {\n        let trust = await resolveAgentTrustForIssue({ agentId: req.actor.agentId, runId: req.actor.runId }, companyId, null);\n        if (!trust || trust.kind !== \"low_trust_review\") throw forbidden(\"Company issue list is outside this actor's authorization boundary\");\n        if (req.actor.runId) trust = await withHumanDirectedWork(db, trust, { companyId, agentId: req.actor.agentId, runId: req.actor.runId });\n        if (trust.kind !== \"low_trust_review\") throw forbidden(\"Company issue list is outside this actor's authorization boundary\");\n        listFilters.lowTrustBoundary = {\n          ...trust.boundary,\n          issueIds: [...new Set([...(trust.boundary.issueIds ?? []), ...(trust.humanDirectedIssueId ? [trust.humanDirectedIssueId] : [])])],\n        };\n        listFilters.lowTrustMentionAgentId = req.actor.agentId;\n      }\n    }\n    const requestKey = issueListRequestKey({",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "        const rawResult = await svc.list(companyId, listFilters);\n        const result = (await actorCanReadCompanyScope(req, companyId))\n          ? rawResult\n          : await filterIssuesForActor(req, rawResult);\n        const issueIds = result.map((issue) => issue.id);",
+    "to": "        if (!companyWideRead && listFilters.afterId !== undefined && offset !== 0) {\n          throw unprocessable(\"afterId requires a UUID, ascending ID order and no offset\");\n        }\n        // 原始游标只在本次请求内部推进；offset 对应可见序列，超预算不返回部分页。\n        const result = companyWideRead\n          ? await svc.list(companyId, listFilters)\n          : await authorizedIssuePage({\n              limit, offset, afterId: listFilters.afterId,\n              keyset: listFilters.sortField === \"id\" && listFilters.sortDir === \"asc\",\n              read: (cursor) => svc.list(companyId, { ...listFilters, ...cursor }),\n              authorize: (rows) => filterIssuesForActor(req, rows),\n            });\n        const issueIds = result.map((issue) => issue.id);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "import { visibleIssueCondition } from \"./issue-visibility.js\";",
+    "to": "import { visibleIssueCondition } from \"./issue-visibility.js\";\nimport { LOW_TRUST_ISSUE_ANCESTRY_MAX_DEPTH } from \"./trust-preset-resolver.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "  lowTrustBoundary?: LowTrustBoundary & { companyId: string };",
+    "to": "  lowTrustBoundary?: LowTrustBoundary & { companyId: string };\n  /** Internal authorization candidate scope; never read from caller query fields. */\n  lowTrustMentionAgentId?: string;",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "  boundary: (LowTrustBoundary & { companyId: string }) | null | undefined,\n) {",
+    "to": "  boundary: (LowTrustBoundary & { companyId: string }) | null | undefined,\n  mentionAgentId?: string,\n) {",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "        WITH RECURSIVE descendants(id) AS (\n          SELECT ${issues.id}\n          FROM ${issues}\n          WHERE ${issues.companyId} = ${companyId}\n            AND ${issues.id} = ${boundary.rootIssueId}\n          UNION\n          SELECT ${issues.id}\n          FROM ${issues}\n          JOIN descendants ON ${issues.parentId} = descendants.id\n          WHERE ${issues.companyId} = ${companyId}\n        )",
+    "to": "        WITH RECURSIVE descendants(id, depth) AS (\n          SELECT ${issues.id}, 0\n          FROM ${issues}\n          WHERE ${issues.companyId} = ${companyId}\n            AND ${issues.id} = ${boundary.rootIssueId}\n          UNION\n          SELECT ${issues.id}, descendants.depth + 1\n          FROM ${issues}\n          JOIN descendants ON ${issues.parentId} = descendants.id\n          WHERE ${issues.companyId} = ${companyId}\n            AND descendants.depth < ${LOW_TRUST_ISSUE_ANCESTRY_MAX_DEPTH - 1}\n        )",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "  if (clauses.length === 0) return sql<boolean>`false`;\n  return or(...clauses);\n}",
+    "to": "  if (mentionAgentId) {\n    // 目标策略可能新增 actor 基础边界未设置的维度，保留这些候选交给原授权器。\n    clauses.push(sql<boolean>`(\n      ${issues.executionPolicy}->'authorizationPolicy'->'trustBoundary' IS NOT NULL\n      OR EXISTS (\n        SELECT 1 FROM projects policy_project\n        WHERE policy_project.id = ${issues.projectId} AND policy_project.company_id = ${companyId}\n          AND policy_project.execution_workspace_policy->'authorizationPolicy'->'trustBoundary' IS NOT NULL\n      )\n    )`);\n    // 与授权器的 mention 候选范围相同；Markdown/URL 的最终解析仍交给 decide。\n    clauses.push(sql<boolean>`EXISTS (\n      SELECT 1 FROM issue_comments mention\n      WHERE mention.company_id = ${companyId} AND mention.issue_id = ${issues.id}\n        AND mention.deleted_at IS NULL AND mention.body LIKE ${\"%agent://\" + mentionAgentId + \"%\"}\n        AND (\n          (mention.author_agent_id IS NOT NULL AND mention.author_agent_id <> ${mentionAgentId}::uuid\n            AND mention.author_agent_id = ${issues.assigneeAgentId})\n          OR (mention.author_agent_id IS NULL AND mention.author_user_id IS NOT NULL AND EXISTS (\n            SELECT 1 FROM company_memberships membership\n            WHERE membership.company_id = ${companyId} AND membership.principal_type = 'user'\n              AND membership.principal_id = mention.author_user_id AND membership.status = 'active'\n          ))\n        )\n    )`);\n  }\n  if (clauses.length === 0) return sql<boolean>`false`;\n  return or(...clauses);\n}",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "    filters?.lowTrustBoundary,\n  );",
+    "to": "    filters?.lowTrustBoundary,\n    filters?.lowTrustMentionAgentId,\n  );",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/issues.ts",
+    "from": "        filters?.lowTrustBoundary,\n      );",
+    "to": "        filters?.lowTrustBoundary,\n        filters?.lowTrustMentionAgentId,\n      );",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "  allowTtlCache: boolean;\n  diagnostics?: IssueListDiagnostics;",
+    "to": "  allowTtlCache: boolean;\n  scopedRead?: boolean;\n  diagnostics?: IssueListDiagnostics;",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "  const existing = issueListInflight.get(input.requestKey.key);",
+    "to": "  const existing = input.scopedRead ? undefined : issueListInflight.get(input.requestKey.key);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "  issueListInflight.set(input.requestKey.key, inflightEntry);",
+    "to": "  if (!input.scopedRead) issueListInflight.set(input.requestKey.key, inflightEntry);",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "        ...listFilters,\n        view: compactView ? \"compact\" : undefined,",
+    "to": "        ...listFilters,\n        authorizationScope: companyWideRead ? undefined : { runId: req.actor.runId, keyScope: req.actor.keyScope },\n        view: compactView ? \"compact\" : undefined,",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "      allowTtlCache: compactView,",
+    "to": "      // 逐实体授权依赖动态策略与 mention，限定身份不复用共享缓存/在途投影。\n      allowTtlCache: compactView && companyWideRead,\n      scopedRead: !companyWideRead,",
+    "expected": 1
+  }
+]

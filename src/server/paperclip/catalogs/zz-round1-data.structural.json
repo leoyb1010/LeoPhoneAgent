@@ -1,0 +1,56 @@
+[
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "const inflightGets = new Map<string, InflightGet>();",
+    "to": "const inflightGets = new Map<string, InflightGet>();\nlet sessionChangeDepth = 0;\n\n/** Fence HTTP coalescing, not just query caches, across uncertain cookie changes. */\nexport function beginApiSessionChange(): () => void {\n  sessionChangeDepth += 1;\n  inflightGets.clear();\n  let finished = false;\n  return () => {\n    if (finished) return;\n    finished = true;\n    sessionChangeDepth -= 1;\n    // A failed/lost auth response may still have installed a new cookie.\n    // Never restore the detached session's requests.\n    inflightGets.clear();\n  };\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "from": "  if (signal?.aborted) return Promise.reject(abortError());\n\n  let entry = inflightGets.get(path);",
+    "to": "  if (signal?.aborted) return Promise.reject(abortError());\n  // Cookie headers can arrive before the auth body. Do not share during this gap.\n  if (sessionChangeDepth > 0) return request<T>(path, {\n    method: \"GET\", signal, ...(options?.cache ? { cache: options.cache } : {}),\n  });\n\n  let entry = inflightGets.get(path);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "import { readApiJson } from \"./response\";",
+    "to": "import { readApiJson } from \"./response\";\nimport { beginApiSessionChange } from \"./client\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "async function authPost(path: string, body: Record<string, unknown>): Promise<unknown> {\n  let res: Response;\n  try {\n    res = await fetch(`/api/auth${path}`, {\n      method: \"POST\",\n      credentials: \"include\",\n      headers: { \"Content-Type\": \"application/json\" },\n      body: JSON.stringify(body),\n    });\n  } catch (networkError) {\n    logAuthNetworkFailure(\"POST\", path, networkError);\n    throw networkError;\n  }\n  const payload = await res.json().catch(() => null);\n  if (!res.ok) {\n    const recovery = tenantSessionRecovery.recoverIfNeeded(res.status, payload);\n    if (recovery) return recovery;\n    logAuthHttpError(\"POST\", path, res.status, res.statusText, payload);\n    throw extractAuthError(payload as AuthErrorBody, res.status);\n  }\n  return payload;\n}\n",
+    "to": "async function authPost(path: string, body: Record<string, unknown>): Promise<unknown> {\n  const finishSessionChange = [\"/sign-in/email\", \"/sign-up/email\", \"/sign-out\"].includes(path) ? beginApiSessionChange() : null;\n  try {\n    let res: Response;\n    try {\n      res = await fetch(`/api/auth${path}`, {\n        method: \"POST\",\n        credentials: \"include\",\n        headers: { \"Content-Type\": \"application/json\" },\n        body: JSON.stringify(body),\n      });\n    } catch (networkError) {\n      logAuthNetworkFailure(\"POST\", path, networkError);\n      throw networkError;\n    }\n    const payload = await res.json().catch(() => null);\n    if (!res.ok) {\n      const recovery = tenantSessionRecovery.recoverIfNeeded(res.status, payload);\n      if (recovery) return recovery;\n      logAuthHttpError(\"POST\", path, res.status, res.statusText, payload);\n      throw extractAuthError(payload as AuthErrorBody, res.status);\n    }\n    return payload;\n  } finally {\n    finishSessionChange?.();\n  }\n}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/api/auth.ts",
+    "from": "    return nested;\n  },\n\n  signInEmail:",
+    "to": "    if (nested) return nested;\n    if (payload === null || (typeof payload === \"object\" && payload !== null && \"data\" in payload && payload.data === null)) return null;\n    throw new AuthApiError(\"无法确认当前登录状态，请重试。\", 502, null, \"auth_session_response_invalid\");\n  },\n\n  signInEmail:",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/CompanyContext.tsx",
+    "from": "  useEffect,",
+    "to": "  useEffect,\n  useLayoutEffect,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/CompanyContext.tsx",
+    "from": "import { queryKeys } from \"../lib/queryKeys\";",
+    "to": "import { queryKeys } from \"../lib/queryKeys\";\nimport { beginApiSessionChange } from \"../api/client\";\nimport { isAccountScopedQueryKey } from \"../hooks/useSignOut\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/CompanyContext.tsx",
+    "from": "  useEffect(() => {\n    // Until the session settles the account is unknown, not changed.",
+    "to": "  useLayoutEffect(() => {\n    // Until the session settles the account is unknown, not changed.",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/context/CompanyContext.tsx",
+    "from": "    setSelectedCompanyIdState(null);\n    setSelectionSource(\"bootstrap\");\n  }, [isSessionSettled, sessionUserId]);",
+    "to": "    const finishHttpBoundary = beginApiSessionChange();\n    finishHttpBoundary();\n    // Keep the authoritative session and instance health; clear old-account data\n    // before paint, including late requests started before another tab signed in.\n    void queryClient.resetQueries({\n      predicate: (query) => isAccountScopedQueryKey(query.queryKey) &&\n        !(query.queryKey[0] === queryKeys.auth.session[0] && query.queryKey[1] === queryKeys.auth.session[1]),\n    });\n    setSelectedCompanyIdState(null);\n    setSelectionSource(\"bootstrap\");\n  }, [isSessionSettled, sessionUserId, queryClient]);",
+    "expected": 1
+  }
+]

@@ -1,0 +1,128 @@
+[
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "import { resolveHermesCommand } from \"./execute.js\";",
+    "to": "import { resolveHermesCommand, parseHermesOutput, resolveHermesModelProvider, buildHermesBaseEnv } from \"./execute.js\";\nimport { ensurePathInEnv, ensureAbsoluteDirectory, runChildProcess } from \"@paperclipai/adapter-utils/server-utils\";",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "    // Command exists but --version might have failed for some reason\n    // Still consider it installed\n    return null;",
+    "to": "    if ([\"EACCES\", \"EPERM\", \"ENOEXEC\"].includes(String(e.code))) {\n      return { level: \"error\", message: \"Hermes CLI is present but cannot be executed.\", code: \"hermes_cli_unexecutable\" };\n    }\n    return null;",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "  // Determine overall status\n  const hasErrors = checks.some((c) => c.level === \"error\");",
+    "to": "  // Metadata alone cannot confirm that the selected model/provider can execute.\n  if (!checks.some(check => check.level === \"error\")) {\n    const runtimeEnv = invocation.env;\n    try {\n      await ensureAbsoluteDirectory(cwd, { createIfMissing: false });\n      const args = [\"chat\", \"-q\", \"Respond exactly with the single word hello. Do not use tools.\", \"-Q\", \"--max-turns\", \"1\", \"-t\", \"none\", \"--source\", \"tool\"];\n      const { model, resolvedProvider } = await resolveHermesModelProvider(config);\n      if (model && model !== \"auto\") args.push(\"-m\", model);\n      if (resolvedProvider !== \"auto\") args.push(\"--provider\", resolvedProvider);\n      // Preserve explicit model/provider overrides without granting tool or approval flags.\n      const extraArgs = Array.isArray(config.extraArgs) ? config.extraArgs.filter((value): value is string => typeof value === \"string\") : [];\n      for (let i = 0; i < extraArgs.length; i++) {\n        const flag = extraArgs[i];\n        if ([\"-m\", \"--model\", \"--provider\"].includes(flag) && extraArgs[i + 1]) { args.push(flag, extraArgs[++i]); }\n        else if (/^--(?:model|provider)=/.test(flag)) args.push(flag);\n      }\n      const probe = await runChildProcess(`hermes-envtest-${Date.now()}-${Math.random().toString(16).slice(2)}`, command, args, { cwd, env: runtimeEnv, timeoutSec: 45, graceSec: 1, onLog: async () => {} });\n      if (probe.timedOut) {\n        checks.push({ code: \"hermes_hello_probe_timed_out\", level: \"warn\", message: \"Hermes model response was not verified: the hello probe timed out.\" });\n      } else if (probe.exitCode !== 0) {\n        checks.push({ code: \"hermes_hello_probe_failed\", level: \"error\", message: `Hermes hello probe failed (exit ${probe.exitCode ?? \"unknown\"}). Verify the CLI model/provider configuration.` });\n      } else {\n        // Quiet output is parsed by the same response parser as real execution.\n        const response = parseHermesOutput(probe.stdout, probe.stderr).response?.trim().toLowerCase();\n        const passed = response === \"hello\";\n        checks.push({ code: passed ? \"hermes_hello_probe_passed\" : \"hermes_hello_probe_unexpected_output\", level: passed ? \"info\" : \"warn\", message: passed ? \"Hermes model returned hello successfully.\" : \"Hermes did not return the requested hello response; model access was not verified.\" });\n        if (passed) {\n          const keyCheck = checks.find(check => check.code === \"hermes_no_api_keys\");\n          if (keyCheck) { keyCheck.level = \"info\"; keyCheck.message = \"No built-in API key was detected in environment; the real CLI hello response verified provider access.\"; delete keyCheck.hint; }\n        }\n      }\n    } catch {\n      checks.push({ code: \"hermes_hello_probe_failed\", level: \"error\", message: \"Could not execute the Hermes model probe in its configured working directory.\" });\n    }\n  }\n\n  // Determine overall status\n  const hasErrors = checks.some((c) => c.level === \"error\");",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "function parseHermesOutput(stdout: string, stderr: string): ParsedOutput {",
+    "to": "export function parseHermesOutput(stdout: string, stderr: string): ParsedOutput {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/opencode-local/src/server/test.ts",
+    "from": "code: \"opencode_hello_probe_model_unavailable\",\n            level: \"warn\",",
+    "to": "code: \"opencode_hello_probe_model_unavailable\",\n            level: \"error\",",
+    "expected": 3
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "export async function execute(",
+    "to": "export async function resolveHermesModelProvider(config: Record<string, unknown>) {\n  const model = cfgString(config.model) || DEFAULT_MODEL;\n  const configuredProvider = cfgString(config.provider);\n  if (configuredProvider && !(VALID_PROVIDERS as readonly string[]).includes(configuredProvider)) return { model, resolvedProvider: \"auto\", resolvedFrom: \"invalid\", providerInvalid: true };\n  let detectedConfig: Awaited<ReturnType<typeof detectModel>> | null = null;\n  const explicitProvider = cfgString(config.provider);\n\n  if (!explicitProvider) {\n    try {\n      detectedConfig = await detectModel();\n    } catch {\n      // Non-fatal — detection failure shouldn't block execution\n    }\n  }\n\n  const { provider: resolvedProvider, resolvedFrom } = resolveProvider({\n    explicitProvider,\n    detectedProvider: detectedConfig?.provider,\n    detectedModel: detectedConfig?.model,\n    detectedBaseUrl: detectedConfig?.baseUrl,\n    detectedHasApiKey: detectedConfig?.hasApiKey,\n    detectedApiMode: detectedConfig?.apiMode,\n    model,\n  });\n\n  return { model, resolvedProvider, resolvedFrom, providerInvalid: false };\n}\n\nexport function buildHermesBaseEnv(config: Record<string, unknown>): Record<string, string> {\n  const configured = typeof config.env === \"object\" && config.env !== null ? config.env as Record<string, unknown> : {};\n  const env = Object.fromEntries(Object.entries({ ...process.env, ...configured }).filter((entry): entry is [string, string] => typeof entry[1] === \"string\"));\n  delete env.PAPERCLIP_API_KEY;\n  delete env.PAPERCLIP_WAKE_PAYLOAD_JSON;\n  return env;\n}\n\nexport async function execute(",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  const model = cfgString(config.model) || DEFAULT_MODEL;\n  const timeoutSec =",
+    "to": "  const { model, resolvedProvider, resolvedFrom, providerInvalid } = await resolveHermesModelProvider(config);\n  if (providerInvalid) return { exitCode: 1, signal: null, timedOut: false, errorCode: \"configuration_incomplete\", errorMessage: \"Hermes provider override is not supported by the adapter schema. Choose a supported provider or leave auto/empty to use the existing CLI configuration.\" };\n  const timeoutSec =",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  // This ensures that even if the agent was created before provider tracking\n  // was added, or if the model was changed without updating provider, the\n  // correct provider is still used.\n  let detectedConfig: Awaited<ReturnType<typeof detectModel>> | null = null;\n  const explicitProvider = cfgString(config.provider);\n\n  if (!explicitProvider) {\n    try {\n      detectedConfig = await detectModel();\n    } catch {\n      // Non-fatal — detection failure shouldn't block execution\n    }\n  }\n\n  const { provider: resolvedProvider, resolvedFrom } = resolveProvider({\n    explicitProvider,\n    detectedProvider: detectedConfig?.provider,\n    detectedModel: detectedConfig?.model,\n    detectedBaseUrl: detectedConfig?.baseUrl,\n    detectedHasApiKey: detectedConfig?.hasApiKey,\n    detectedApiMode: detectedConfig?.apiMode,\n    model,\n  });\n",
+    "to": "  // Model/provider routing is shared with the environment probe above.\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/execute.ts",
+    "from": "  const userEnv = config.env as Record<string, string> | undefined;\n  const env: Record<string, string> = {\n    ...(process.env as Record<string, string>),\n    ...(userEnv && typeof userEnv === \"object\" ? userEnv : {}),\n",
+    "to": "  const env: Record<string, string> = {\n    ...buildHermesBaseEnv(config),\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "import { readFileSync } from \"node:fs\";",
+    "to": "import { readFileSync } from \"node:fs\";\nimport path from \"node:path\";",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "  const model = asString(config.model);\n  if (!model) return null;\n\n  const explicitProvider = asString(config.provider);",
+    "to": "  const model = asString(config.model)?.trim();\n  const explicitProvider = asString(config.provider)?.trim();\n  if (explicitProvider && !(VALID_PROVIDERS as readonly string[]).includes(explicitProvider.trim())) return { code: \"hermes_provider_invalid\", level: \"error\", message: \"Hermes provider override is not supported by the adapter schema. Choose a supported provider or leave auto/empty to use the existing CLI configuration.\" };\n  if (!model) return null;",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/recovery/service.ts",
+    "from": "const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([",
+    "to": "const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([\n  \"configuration_incomplete\",",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "  command: string,\n): Promise<AdapterEnvironmentCheck | null> {",
+    "to": "  command: string,\n  invocation: { cwd: string; env: Record<string, string> },\n): Promise<AdapterEnvironmentCheck | null> {",
+    "expected": 2
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "{ timeout: 10_000 });",
+    "to": "{ timeout: 10_000, ...invocation });",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "      timeout: 10_000,\n    });",
+    "to": "      timeout: 10_000,\n      ...invocation,\n    });",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "async function checkPython(): Promise<AdapterEnvironmentCheck | null> {",
+    "to": "async function checkPython(invocation: { cwd: string; env: Record<string, string> }): Promise<AdapterEnvironmentCheck | null> {",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "      timeout: 5_000,\n    });",
+    "to": "      timeout: 5_000,\n      ...invocation,\n    });",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "  const command = resolveHermesCommand(config);\n  const checks: AdapterEnvironmentCheck[] = [];",
+    "to": "  const command = resolveHermesCommand(config);\n  const checks: AdapterEnvironmentCheck[] = [];\n  const cwd = path.resolve(asString(config.cwd)?.trim() || asString(config.workspaceDir)?.trim() || \".\");\n  const env = Object.fromEntries(Object.entries(ensurePathInEnv(buildHermesBaseEnv(config))).filter((entry): entry is [string, string] => typeof entry[1] === \"string\"));\n  const invocation = { cwd, env };",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "await checkCliInstalled(command);",
+    "to": "await checkCliInstalled(command, invocation);",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "await checkCliVersion(command);",
+    "to": "await checkCliVersion(command, invocation);",
+    "expected": 1
+  },
+  {
+    "file": "packages/adapters/hermes/src/server/test.ts",
+    "from": "await checkPython();",
+    "to": "await checkPython(invocation);",
+    "expected": 1
+  }
+]

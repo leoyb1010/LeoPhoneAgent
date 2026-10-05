@@ -13,11 +13,11 @@ assert.equal(fs.realpathSync(root),root,'use physical upstream root');
 const lock=JSON.parse(fs.readFileSync(path.join(home,'upstream.lock.json')));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}).trim(),lock.commit,'unknown upstream commit');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json'];
+const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json'];
 const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))));
 const targets=new Map();
 for (const patch of patches) {
- assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
+ assert.ok((/^(server\/src\/|packages\/shared\/src\/)/.test(patch.file) || ['packages/db/src/backup-lib.ts','packages/adapters/hermes/src/server/test.ts','packages/adapters/opencode-local/src/server/test.ts','packages/db/src/embedded-postgres-native.ts','packages/adapters/hermes/src/server/execute.ts','packages/adapters/cursor-local/src/server/execute.ts','packages/adapters/cursor-local/src/server/test.ts','packages/adapters/cursor-local/src/server/test.test.ts'].includes(patch.file)) && !patch.file.split('/').includes('..'),'closed backend patch scope');
  if (!targets.has(patch.file))targets.set(patch.file,execFileSync('git',['show',`HEAD:${patch.file}`],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}));
  const input=targets.get(patch.file);assert.equal(input.split(patch.from).length-1,patch.expected ?? 1,`context mismatch: ${patch.file}`);
  targets.set(patch.file,input.split(patch.from).join(patch.to));
@@ -36,11 +36,20 @@ function modules(directory,relative='') {
  }
 }
 modules(path.join(home,'native/server'));
-const dbTest='packages/db/src/embedded-postgres-darwin.test.ts';
-const dbTestSource=path.join(home,'native/db/embedded-postgres-darwin.test.ts');
-assert.ok(fs.lstatSync(dbTestSource).isFile() && !fs.lstatSync(dbTestSource).isSymbolicLink(),'db test must be a regular file');
-assert.ok(!targets.has(dbTest),'duplicate target');
-targets.set(dbTest,fs.readFileSync(dbTestSource,'utf8'));added.push(dbTest);
+const fixtureModules = [
+ ['native/db/embedded-postgres-darwin.test.ts','packages/db/src/embedded-postgres-darwin.test.ts'],
+ ['native/db/backup-collision.test.ts','packages/db/src/backup-collision.test.ts'],
+ ['tests/fixtures/round1-hermes-probe.test.ts','packages/adapters/hermes/src/server/round1-hermes-probe.test.ts'],
+ ['tests/fixtures/round1-hermes-route-consistency.test.ts','packages/adapters/hermes/src/server/round1-hermes-route-consistency.test.ts'],
+ ['tests/fixtures/round1-opencode-model-rejection.test.ts','packages/adapters/opencode-local/src/server/round1-opencode-model-rejection.test.ts'],
+ ['tests/fixtures/round1-draft-privacy.ui.test.tsx','ui/src/pages/round1-draft-privacy.ui.test.tsx'],
+];
+for (const [source, target] of fixtureModules) {
+ const file=path.join(home,source);
+ assert.ok(fs.lstatSync(file).isFile() && !fs.lstatSync(file).isSymbolicLink(),'fixture must be a regular file');
+ assert.ok(!targets.has(target),'duplicate target');
+ targets.set(target,fs.readFileSync(file,'utf8'));added.push(target);
+}
 const state={commit:lock.commit,files:{}};
 const statePath=path.join(root,'.leophone-native-cli-auth.json');
 const previous=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath)):null;

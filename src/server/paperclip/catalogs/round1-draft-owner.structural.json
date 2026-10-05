@@ -1,0 +1,20 @@
+[
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "  draftKey: string;",
+    "to": "  draftKey?: string;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "key={conversationMode ? draftKey : issueId}",
+    "to": "key={draftKey ?? `paperclip:draft-disabled:${issueId}`}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "draftKey={conversationAgent ? `paperclip:agent-chat-draft:${issue.companyId}:${currentUserId}:${conversationAgent.id}` : `paperclip:issue-comment-draft:${issue.id}`}",
+    "to": "draftKey={sessionResolved && currentUserId ? (conversationAgent ? `paperclip:agent-chat-draft:${issue.companyId}:${currentUserId}:${conversationAgent.id}` : `paperclip:issue-comment-draft:${issue.companyId}:${currentUserId}:${issue.id}`) : undefined}",
+    "expected": 1
+  }
+]

@@ -1,0 +1,164 @@
+[
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "<div className=\"grid gap-3 lg:grid-cols-4\">",
+    "to": "<div className=\"grid gap-3 sm:grid-cols-2 2xl:grid-cols-4\">",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "                  : \"Open\"",
+    "to": "                  : \"不限额\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Costs.tsx",
+    "from": "      <div className=\"flex items-center justify-between gap-3\">\n        <div className=\"min-w-0\">\n          <div className=\"text-(length:--text-micro) uppercase tracking-(--tracking-eyebrow) text-muted-foreground\">{label}</div>\n          <div className=\"mt-2 text-2xl font-semibold tabular-nums\">{value}</div>\n          <div className=\"mt-1 text-xs leading-5 text-muted-foreground\">{subtitle}</div>\n        </div>\n        <div className=\"flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border\">\n          <Icon className=\"h-4 w-4 text-muted-foreground\" />\n        </div>\n      </div>",
+    "to": "      <div className=\"flex items-start justify-between gap-3\">\n        <div className=\"text-(length:--text-micro) uppercase tracking-(--tracking-eyebrow) text-muted-foreground\">{label}</div>\n        <Icon className=\"h-4 w-4 shrink-0 text-muted-foreground\" aria-hidden=\"true\" />\n      </div>\n      <div className=\"mt-3 break-words text-2xl font-semibold leading-snug tabular-nums\">{value}</div>\n      <div className=\"mt-1 text-xs leading-5 text-muted-foreground\">{subtitle}</div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/NewAgentSetup.tsx",
+    "from": "    connect: \"Connect\",\n    runtime: \"Configure\",\n    saved: \"Confirmation\",",
+    "to": "    connect: \"连接\",\n    runtime: \"配置\",\n    saved: \"确认\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.created\": \"created\",",
+    "to": "  \"issue.created\": \"创建了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.updated\": \"updated\",",
+    "to": "  \"issue.updated\": \"更新了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.read_marked\": \"read\",",
+    "to": "  \"issue.read_marked\": \"阅读了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.read_unmarked\": \"marked unread\",",
+    "to": "  \"issue.read_unmarked\": \"标记为未读：\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.comment_added\": \"commented on\",",
+    "to": "  \"issue.comment_added\": \"回复了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"issue.commented\": \"commented on\",",
+    "to": "  \"issue.commented\": \"回复了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"agent.created\": \"created\",",
+    "to": "  \"agent.created\": \"创建了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"agent.updated\": \"updated\",",
+    "to": "  \"agent.updated\": \"更新了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"agent.paused\": \"paused\",",
+    "to": "  \"agent.paused\": \"暂停了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"agent.resumed\": \"resumed\",",
+    "to": "  \"agent.resumed\": \"恢复了\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  \"cost.recorded\": \"recorded cost for\",",
+    "to": "  \"cost.recorded\": \"记录了费用：\",\n  \"environment.lease_acquired\": \"取得了运行环境\",\n  \"environment.lease_released\": \"释放了运行环境\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "  return value.replace(/_/g, \" \");",
+    "to": "  const labels: Record<string, string> = {\n    backlog: \"待安排\", todo: \"待办\", in_progress: \"进行中\", in_review: \"审核中\",\n    idle: \"空闲\", done: \"已完成\", blocked: \"受阻\", cancelled: \"已取消\",\n    urgent: \"紧急\", high: \"高\", medium: \"中\", low: \"低\", none: \"无\",\n  };\n  return labels[value] ?? value.replace(/_/g, \" \");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "`changed status from ${humanizeValue(from)} to ${to} on`",
+    "to": "`将状态从${humanizeValue(from)}改为${to}：`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "`changed status to ${to} on`",
+    "to": "`将状态改为${to}：`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "`changed priority from ${humanizeValue(from)} to ${humanizeValue(details.priority)} on`",
+    "to": "`将优先级从${humanizeValue(from)}改为${humanizeValue(details.priority)}：`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/activity-format.ts",
+    "from": "`changed priority to ${humanizeValue(details.priority)} on`",
+    "to": "`将优先级改为${humanizeValue(details.priority)}：`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "  const viewTitle = installedView ? \"Installed skills\" : \"Discover skills\";",
+    "to": "  const viewTitle = installedView ? \"已安装的技能\" : \"发现技能\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Inbox.tsx",
+    "from": "ariaLabel=\"Inbox controls\"",
+    "to": "ariaLabel=\"收件箱操作\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/recovery-display.ts",
+    "from": "label: \"Recovery needed\",",
+    "to": "label: \"需要恢复\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/recovery-display.ts",
+    "from": "label: \"Recovery in progress\",",
+    "to": "label: \"正在恢复\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/recovery-display.ts",
+    "from": "label: \"Observing active run\",",
+    "to": "label: \"正在观察运行\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/recovery-display.ts",
+    "from": "label: \"Recovery escalated\",",
+    "to": "label: \"恢复已升级处理\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/recovery-lineage.ts",
+    "from": "parts.push(\"retries used up\");",
+    "to": "parts.push(\"重试次数已用尽\");",
+    "expected": 1
+  }
+]
