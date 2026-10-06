@@ -219,7 +219,7 @@ struct InlineVoiceInputView: View {
                             viewModel.setTranscript(joined)
                             if !expanded {
                                 VoiceLog.log("paste → expand")
-                                withAnimation(.easeInOut(duration: 0.28)) { expanded = true }
+                                withAnimation(LeoMotion.panelEase()) { expanded = true }
                             }
                             VoiceLog.log("voice panel paste: +\(text.count) chars")
                         } label: {
@@ -318,17 +318,17 @@ struct InlineVoiceInputView: View {
                 if dy > 0 {
                     if expanded {
                         VoiceLog.log("drag down → collapse")
-                        withAnimation(.easeInOut(duration: 0.28)) { expanded = false }
+                        withAnimation(LeoMotion.panelEase()) { expanded = false }
                     }
                 } else {
                     if !expanded {
                         VoiceLog.log("drag up → expand")
-                        withAnimation(.easeInOut(duration: 0.28)) { expanded = true }
+                        withAnimation(LeoMotion.panelEase()) { expanded = true }
                     }
                 }
             }
         ))
-        .animation(.easeInOut(duration: 0.28), value: expanded)
+        .animation(LeoMotion.panelEase(), value: expanded)
         // [T-ios-geometry-observer-crash] Writing state from
         // onChange(of: geo.frame) is the v1.8b13 SIGTRAP pattern.
         .onGeometryChange(for: CGRect.self) { proxy in
@@ -471,7 +471,7 @@ struct InlineVoiceInputView: View {
                 VoiceLog.log("external input → transcript sync: \"\(newValue.prefix(40))\"")
                 if !expanded, !newValue.isEmpty {
                     VoiceLog.log("external input → expand (text=\(newValue.count) chars)")
-                    withAnimation(.easeInOut(duration: 0.28)) { expanded = true }
+                    withAnimation(LeoMotion.panelEase()) { expanded = true }
                 }
             }
         }
@@ -487,7 +487,7 @@ struct InlineVoiceInputView: View {
             // path won't re-expand.)
             if !expanded, !newValue.isEmpty {
                 VoiceLog.log("transcript change → expand (text=\(newValue.count) chars)")
-                withAnimation(.easeInOut(duration: 0.28)) { expanded = true }
+                withAnimation(LeoMotion.panelEase()) { expanded = true }
             }
         }
         .onChange(of: viewModel.collapseAfterSendToken) { _ in
@@ -497,7 +497,7 @@ struct InlineVoiceInputView: View {
             // SAME gesture sequence) can't win the race and leave it expanded.
             VoiceLog.log("collapseAfterSendToken → collapse to compact")
             DispatchQueue.main.async {
-                withAnimation(.easeInOut(duration: 0.28)) { expanded = false }
+                withAnimation(LeoMotion.panelEase()) { expanded = false }
             }
         }
         .onChange(of: voiceSelection.inputEntryId) { _ in
@@ -568,8 +568,8 @@ struct InlineVoiceInputView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: viewModel.state)
-            .animation(.easeInOut(duration: 0.2), value: viewModel.isEditingTranscript)
+            .animation(LeoMotion.standardEase(), value: viewModel.state)
+            .animation(LeoMotion.standardEase(), value: viewModel.isEditingTranscript)
 
             // Absorbs spare vertical space so the controls below are pushed to the
             // bottom of the panel. When transcript text grows, this spacer shrinks
@@ -659,7 +659,7 @@ struct InlineVoiceInputView: View {
     /// Compact↔expand toggle. Mirrors the globe's pill styling.
     private var expandCollapseButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.28)) { expanded.toggle() }
+            withAnimation(LeoMotion.panelEase()) { expanded.toggle() }
         } label: {
             Image(systemName: expanded ? "chevron.down" : "chevron.up")
                 .font(.system(size: 14, weight: .semibold))
@@ -939,7 +939,7 @@ struct InlineVoiceInputView: View {
                 }
                 if suggestion.hasChange {
                     VoiceLog.log("[VoiceCorrection] manual applied: \(suggestion.diffSummary)")
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(LeoMotion.standardEase()) {
                         viewModel.setTranscript(suggestion.corrected)
                     }
                     inputText = suggestion.corrected
@@ -1117,7 +1117,7 @@ private final class DeleteButtonState: ObservableObject {
     func startHoldTimer(after seconds: TimeInterval) {
         stopHoldTimer()
         let t = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in
-            withAnimation(.easeInOut(duration: 0.2)) { self?.canClearAll = true }
+            withAnimation(LeoMotion.standardEase()) { self?.canClearAll = true }
         }
         RunLoop.main.add(t, forMode: .common)
         holdTimer = t
@@ -1168,7 +1168,7 @@ private struct VoiceDeleteButton: View {
                     },
                     onEnded: { [state] in
                         state.reset()
-                        withAnimation(.easeInOut(duration: 0.15)) { pressing = false }
+                        withAnimation(LeoMotion.quickEase()) { pressing = false }
                     }
                 )
             )

@@ -121,11 +121,23 @@ struct PaperclipAvatar: View {
         return trimmed.first.map { String($0).uppercased() } ?? "?"
     }
 
-    static func tint(for name: String) -> Color {
-        let palette: [Color] = [.blue, .indigo, .purple, .pink, .orange, .teal, .green, .cyan]
+    /// [F6] 青绿与灰阶的哈希配色：同一个名字永远同一个颜色，整体落在本机会话
+    /// 列表的色系里，不再是一套彩虹色（看起来像另一个产品）。
+    static let palette: [Color] = [
+        LeoTheme.ColorToken.accent,
+        Color(uiColor: .systemTeal),
+        Color(uiColor: .systemGray),
+        Color(uiColor: .systemGray2),
+        LeoTheme.ColorToken.accent.opacity(0.7),
+        Color(uiColor: .secondaryLabel)
+    ]
+
+    static func paletteIndex(for name: String) -> Int {
         let sum = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
-        return palette[sum % palette.count]
+        return sum % palette.count
     }
+
+    static func tint(for name: String) -> Color { palette[paletteIndex(for: name)] }
 }
 
 // MARK: - Markdown
@@ -242,33 +254,8 @@ struct PaperclipFallbackMarkdown: View {
 
 // MARK: - 动效
 
-/// 运行中卡片的对角流光（与端侧 ShimmerOverlay 同一做法：稳定渐变 + 位移动画）。
-struct PaperclipShimmer: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var offsetX: CGFloat = -1
-
-    var body: some View {
-        GeometryReader { geo in
-            let peak = colorScheme == .light ? 0.55 : 0.12
-            Rectangle()
-                .fill(LinearGradient(stops: [
-                    .init(color: .white.opacity(0), location: 0.25),
-                    .init(color: .white.opacity(peak), location: 0.5),
-                    .init(color: .white.opacity(0), location: 0.75)
-                ], startPoint: UnitPoint(x: 0, y: 1), endPoint: UnitPoint(x: 1, y: 0)))
-                .frame(width: geo.size.width + geo.size.height, height: geo.size.height)
-                .offset(x: offsetX * geo.size.width)
-                .onAppear {
-                    guard !reduceMotion else { offsetX = 0; return }
-                    withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { offsetX = 1 }
-                }
-        }
-        .clipped()
-        .allowsHitTesting(false)
-        .opacity(reduceMotion ? 0 : 1)
-    }
-}
+/// 运行中卡片的对角流光：已提升为全 App 共用的 LeoShimmer（Views/Components/LeoShimmer.swift）。
+typealias PaperclipShimmer = LeoShimmer
 
 /// 实时状态的小圆点：实时通道已连接时呼吸，轮询时静止灰色。
 struct PaperclipLiveBadge: View {
@@ -321,7 +308,7 @@ enum PaperclipTimeText {
 
 // MARK: - 输入栏
 
-/// 与端侧首页输入栏同款的玻璃输入栏（无业务依赖）：左侧附加控件、多行输入、圆形发送键。
+/// 与端侧首页、对话同一个外壳（LeoComposerChrome，无业务依赖）：上方附加控件、多行输入、圆形发送键。
 struct PaperclipComposerBar<Accessory: View>: View {
     @Binding var text: String
     var focus: FocusState<Bool>.Binding
@@ -351,31 +338,15 @@ struct PaperclipComposerBar<Accessory: View>: View {
                     .padding(.leading, 6)
                     .frame(minHeight: 36)
                     .accessibilityIdentifier(fieldIdentifier)
-                Button(action: onSend) {
-                    ZStack {
-                        Circle().fill(canSend ? LeoTheme.ColorToken.accent : Color.primary.opacity(0.12))
-                        if busy {
-                            ProgressView().controlSize(.small).tint(.white)
-                        } else {
-                            Image(systemName: retry ? "arrow.clockwise" : "arrow.up")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(canSend ? Color.white : Color.secondary)
-                        }
-                    }
-                    .frame(width: 36, height: 36)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(LeoSquishButtonStyle())
-                .disabled(!canSend)
-                .accessibilityLabel(Text(sendLabel))
-                .accessibilityIdentifier(sendIdentifier)
+                LeoComposerSendButton(canSend: canSend, busy: busy,
+                                      systemImage: retry ? "arrow.clockwise" : "arrow.up",
+                                      label: Text(sendLabel), identifier: sendIdentifier, action: onSend)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 26, style: .continuous))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, LeoComposerMetrics.horizontalPadding)
+        .padding(.vertical, LeoComposerMetrics.verticalPadding)
+        .leoComposerChrome()
+        .padding(.horizontal, LeoComposerMetrics.outerPadding)
         .padding(.bottom, 6)
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
@@ -398,7 +369,8 @@ struct PaperclipChip: View {
         .foregroundStyle(tint)
         .padding(.horizontal, 10)
         .frame(minHeight: 32)
-        .background(Color.primary.opacity(0.06), in: Capsule())
+        // [F6] 底色走 LeoTheme.surface，与本机状态卡、设置卡片同一个 token。
+        .background(LeoTheme.ColorToken.surface, in: Capsule())
         .contentShape(Capsule())
     }
 }

@@ -172,35 +172,16 @@ struct MCPIntegrationsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary)
-            Text("No MCP Servers")
-                .font(.headline)
-            Text("Add an MCP server to give the agent extra tools. Tap + to add one manually or import a JSON config.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            // Custom-drawn capsule instead of .borderedProminent: system
-            // button styles render unreliably inside a clear-background
-            // List row (stretched/ghosted fill on iOS 26 glass material).
-            Button {
-                showCatalog = true
-            } label: {
-                Label(String(localized: "Browse recommended MCP servers"), systemImage: "square.grid.2x2")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
+        // [F3] Shared LeoEmptyState; Chinese on the main path.
+        LeoEmptyState(
+            systemImage: "puzzlepiece.extension",
+            title: "还没有 MCP 服务器",
+            message: "添加 MCP 服务器，给 Agent 更多工具。点右上角 + 手动添加，或导入 JSON 配置。",
+            actionTitle: "浏览推荐的 MCP 服务器",
+            actionSystemImage: "square.grid.2x2"
+        ) {
+            showCatalog = true
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .listRowBackground(Color.clear)
     }
 
     private func row(for server: MCPServerConfig) -> some View {

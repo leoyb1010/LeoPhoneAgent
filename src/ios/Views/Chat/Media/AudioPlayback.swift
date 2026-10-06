@@ -266,7 +266,7 @@ struct AudioPiPCapsule: View {
                                     x: current.x + value.translation.width,
                                     y: current.y + value.translation.height
                                 )
-                                withAnimation(.spring(response: 0.3)) {
+                                withAnimation(LeoMotion.spring()) {
                                     position = clamp(raw, in: geo.size)
                                     dragOffset = .zero
                                 }

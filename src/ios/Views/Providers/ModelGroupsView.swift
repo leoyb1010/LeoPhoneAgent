@@ -151,7 +151,7 @@ struct ModelGroupsView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3), value: forceSyncToast)
+        .animation(LeoMotion.spring(), value: forceSyncToast)
 
         .alert("Model organization", isPresented: $saveFailed) {
             Button("OK", role: .cancel) {}

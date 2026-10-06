@@ -332,6 +332,8 @@ struct AIChatView: View {
     /// [T-session-inspector] Read-only diagnostics for this session.
     @State private var showSessionInspector = false
     @State private var showSessionMemory = false
+    /// [F8] Set on iPad (ChatDetailContainer): 用量 / 记忆 open in the inspector column.
+    @Environment(\.chatInspectorRoute) private var inspectorRoute
     @State private var showEnhancedCacheAlert = false
     @State private var showTokenUsage = false
     // [T-ios-json-open-provider-import-prompt] A shared/opened JSON file that
@@ -539,7 +541,7 @@ struct AIChatView: View {
                 .simultaneousGesture(
                     TapGesture().onEnded {
                         if vm.speakEnabled && vm.speechPlayerExpanded {
-                            withAnimation(.easeInOut(duration: 0.16)) {
+                            withAnimation(LeoMotion.quickEase()) {
                                 vm.speechPlayerExpanded = false
                             }
                         }
@@ -1723,9 +1725,13 @@ struct AIChatView: View {
             onExportPDF: { vm.exportSession(format: .pdf) },
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
-            onInspector: { showSessionInspector = true },
+            onInspector: {
+                if let inspectorRoute { inspectorRoute.open(.usage) } else { showSessionInspector = true }
+            },
             onDistillSkill: { distillCurrentSessionToSkill() },
-            onMemories: { showSessionMemory = true },
+            onMemories: {
+                if let inspectorRoute { inspectorRoute.open(.memory) } else { showSessionMemory = true }
+            },
             setSpeakEnabled: { enabled in
                 cached.vm.speakEnabled = enabled
                 // Keep the persisted "Read replies" preference in lockstep.
@@ -2199,23 +2205,23 @@ struct AIChatView: View {
                     }
                     return
                 }
-                withAnimation(.easeInOut(duration: LeoMotion.emphasis)) {
+                withAnimation(LeoMotion.emphasisEase()) {
                     fallbackPulseOpacity = 1
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + LeoMotion.emphasis) {
-                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
+                    withAnimation(LeoMotion.emphasisEase()) { fallbackPulseOpacity = 0 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 1 }
+                    withAnimation(LeoMotion.emphasisEase()) { fallbackPulseOpacity = 1 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
-                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
+                    withAnimation(LeoMotion.emphasisEase()) { fallbackPulseOpacity = 0 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 1 }
+                    withAnimation(LeoMotion.emphasisEase()) { fallbackPulseOpacity = 1 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.75) {
-                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
+                    withAnimation(LeoMotion.emphasisEase()) { fallbackPulseOpacity = 0 }
                 }
             }
         }
@@ -2377,40 +2383,19 @@ struct AIChatView: View {
     // MARK: - Error Banner
 
     private func errorBanner(_ error: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.caption)
-                .foregroundStyle(.red)
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-                .lineLimit(2)
-            Spacer()
-            if case .unavailable = vm.errorBannerRetry {} else {
-                Button {
-                    performTypedRetry()
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-                .disabled(vm.isProcessing)
-            }
-            Button { vm.errorMessage = nil } label: {
-                Image(systemName: "xmark")
-                    .font(.caption)
-                    .foregroundStyle(ChatColors.secondaryText)
-            }
-        }
-        .contentShape(Rectangle())
-        .onLongPressGesture {
-            UIPasteboard.general.string = error
-            LeoHaptics.notification(.success)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color.red.opacity(0.12))
+        // [F3] Same component as every other inline failure (LeoInlineError):
+        // Retry only when there is something to redo in place; long-press copies.
+        let canRetry: Bool = {
+            if case .unavailable = vm.errorBannerRetry { return false }
+            return true
+        }()
+        return LeoInlineError(
+            message: error,
+            retryDisabled: vm.isProcessing,
+            onRetry: canRetry ? { performTypedRetry() } : nil,
+            onDismiss: { vm.errorMessage = nil },
+            style: .banner
+        )
     }
 
     /// [#12] The error banner's Retry and the status card's Retry redo the
@@ -2632,9 +2617,9 @@ struct AIChatView: View {
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
                 .padding(.horizontal, 12)
                 .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12))
-                .animation(.easeInOut(duration: 0.2), value: vm.isNearBottom)
-                .animation(.easeInOut(duration: 0.2), value: vm.isAtFirstTurn)
-                .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
+                .animation(LeoMotion.standardEase(), value: vm.isNearBottom)
+                .animation(LeoMotion.standardEase(), value: vm.isAtFirstTurn)
+                .animation(LeoMotion.standardEase(), value: hasFloatingPreview)
                 // The capsule must not cover these floating scroll-jump buttons.
                 .capsuleProtectedFrame("scrollButtons")
             }
@@ -2683,7 +2668,7 @@ struct AIChatView: View {
             .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
             .padding(.horizontal, 12)
             .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12) + 92)
-            .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
+            .animation(LeoMotion.standardEase(), value: hasFloatingPreview)
             .capsuleProtectedFrame("downloadButton")
         }
     }
@@ -3321,7 +3306,8 @@ struct AIChatView: View {
             }
         } label: {
             Image(systemName: mode == .stop ? "stop.circle.fill" : "arrow.up.circle.fill")
-                .font(.system(size: 34))
+                // [F2] 36pt like the home / Paperclip send disc.
+                .font(.system(size: LeoComposerMetrics.control))
                 .foregroundStyle(mode == .stop ? Color.red
                                  : (mode == .send && !canSend ? ChatColors.sendButtonDisabled : ChatColors.sendButton))
                 .contentTransition(.symbolEffect(.replace))
@@ -3820,7 +3806,7 @@ struct AIChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 20))
+            .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
             .onTapGesture { inputFocused = true }
             .onReceive(speechManager.$recognizedText) { text in
                 guard speechManager.state == .recording || !text.isEmpty else { return }
@@ -3854,27 +3840,19 @@ struct AIChatView: View {
                     .padding(.trailing, 10)
                 }
             }
-            // [T-popup-white-patch 7a0e3d62] Paint the composer fill INSIDE
-            // a rounded shape rather than as a rectangular background +
-            // clipShape. With the previous `.background(.white).clipShape(...)`
-            // pair, the host CALayer carried a rectangular white backing
-            // color that the system text-selection / edit-menu pop
-            // animation snapshotted before the SwiftUI mask applied —
-            // exposing a white rectangle around the rounded corners during
-            // the animation. Filling the rounded shape directly leaves the
-            // host layer's backgroundColor at .clear, so the snapshot is
-            // already-rounded and the corners stay clean. clipShape is
-            // kept so any child views (text view, attachments) still get
-            // clipped to the rounded rect.
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(ChatColors.inputBg)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 2)
-            .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.5) : UIColor(white: 0, alpha: 0) }), radius: 8, x: 0, y: -4)
+            // [T-popup-white-patch 7a0e3d62] Never a rectangular fill behind
+            // the composer: the edit-menu pop animation snapshots the host
+            // layer before the SwiftUI mask applies, so a rectangular backing
+            // color showed as a white box around the corners. The glass is
+            // drawn in the rounded shape itself, so the host layer stays
+            // clear. clipShape keeps children (text view, attachments)
+            // inside the rounded rect.
+            // [F2] Same shell as home and Paperclip (LeoComposerChrome):
+            // 26pt corner, regular glass, and no more double shadow.
+            .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
+            .leoComposerChrome()
             .frame(maxWidth: maxContentWidth)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, LeoComposerMetrics.outerPadding)
             .padding(.vertical, 8)
             // [T-ios-geometry-observer-crash] onGeometryChange replaces the
             // GeometryReader scaffold (async-renderer SIGTRAP — see the
@@ -4504,7 +4482,7 @@ struct AIChatView: View {
             loadingVideoCount: vm.loadingVideoCount,
             onRemove: { attachment in vm.removeAttachment(attachment) },
             onMove: { fromID, toID in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(LeoMotion.standardEase()) {
                     vm.moveAttachment(fromID: fromID, toID: toID)
                 }
             }

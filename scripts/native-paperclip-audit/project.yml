@@ -20,6 +20,8 @@ targets:
       - path: ../../src/ios/Shared/LeoDesignSystem.swift
       - path: ../../src/ios/Shared/LeoMotionEffects.swift
       - path: ../../src/ios/Views/Chat/ChatColors.swift
+      # F 统一外壳/空状态/流光（只依赖 SwiftUI + LeoDesignSystem）。
+      - path: ../../src/ios/Views/Components
       - path: AuditApp.swift
       - path: FixtureServer.swift
     settings:
@@ -36,6 +38,7 @@ targets:
       - path: ../../src/ios/Shared/LeoDesignSystem.swift
       - path: ../../src/ios/Shared/LeoMotionEffects.swift
       - path: ../../src/ios/Views/Chat/ChatColors.swift
+      - path: ../../src/ios/Views/Components
       - path: ../../src/ios/MinisTests/PaperclipContractTests.swift
       - path: ../../src/ios/MinisTests/PaperclipClientTests.swift
       - path: ../../src/ios/MinisTests/PaperclipLiveTests.swift

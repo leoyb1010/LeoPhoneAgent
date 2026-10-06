@@ -761,26 +761,13 @@ struct CollectionsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "shippingbox")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(.linearGradient(colors: [.orange, .pink],
-                                                 startPoint: .topLeading,
-                                                 endPoint: .bottomTrailing))
-                .symbolEffect(.bounce, options: .nonRepeating)
-            Text("藏宝阁还是空的")
-                .font(.system(size: 17, weight: .semibold))
-            // 不放按钮:入口已经有右上角「+」和剪贴板条,这里再放一对
-    // 就是重复;空状态只负责指路,页面属于内容本身。
-            Text("在任意 app 分享给 LeoPhoneAgent\n或用上方四种方式开始")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
-        .listRowSeparator(.hidden)
+        // [F3] Shared LeoEmptyState. 不放按钮:入口已经有右上角「+」和剪贴板条,
+        // 空状态只负责指路。
+        LeoEmptyState(
+            systemImage: "shippingbox",
+            title: "藏宝阁还是空的",
+            message: "在任意 App 里分享给 LeoPhoneAgent，或用上方四种方式开始。"
+        )
     }
 
     private var sourceFilter: some View {
@@ -796,7 +783,7 @@ struct CollectionsView: View {
     private func filterChip(_ source: String?, label: String) -> some View {
         let selected = filterSource == source
         return Button {
-            withAnimation(.snappy(duration: 0.25)) { filterSource = source }
+            withAnimation(LeoMotion.snappy()) { filterSource = source }
             LeoHaptics.selection()
         } label: {
             Text(label)
@@ -979,7 +966,7 @@ struct CollectionsView: View {
         if let selectedReadingItemID, ids.contains(selectedReadingItemID) {
             self.selectedReadingItemID = nil
         }
-        withAnimation(.spring(duration: 0.35, bounce: 0.25)) { pendingDeletion = ids }
+        withAnimation(LeoMotion.spring(dampingFraction: 0.75)) { pendingDeletion = ids }
         reload()
         pendingDeletionTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -1189,7 +1176,7 @@ struct CollectionsView: View {
         let id = UUID()
         toastID = id
         toastIsError = isError
-        withAnimation(.spring(duration: 0.35, bounce: 0.25)) { toast = message }
+        withAnimation(LeoMotion.spring(dampingFraction: 0.75)) { toast = message }
         UIAccessibility.post(notification: .announcement, argument: message)
         guard autoHide else { return }
         Task {

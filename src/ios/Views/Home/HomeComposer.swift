@@ -208,11 +208,10 @@ struct HomeComposerBar: View {
                 trailingButton
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 26, style: .continuous))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, LeoComposerMetrics.horizontalPadding)
+        .padding(.vertical, LeoComposerMetrics.verticalPadding)
+        .leoComposerChrome()
+        .padding(.horizontal, LeoComposerMetrics.outerPadding)
         .padding(.bottom, 6)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: trimmedEmpty)
         .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isBusy)
@@ -274,8 +273,8 @@ struct HomeComposerBar: View {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 12, weight: .bold))
                 }
-                .frame(width: 36, height: 36)
-                .frame(width: 44, height: 44)
+                .frame(width: LeoComposerMetrics.control, height: LeoComposerMetrics.control)
+                .frame(width: LeoComposerMetrics.hitTarget, height: LeoComposerMetrics.hitTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -289,22 +288,8 @@ struct HomeComposerBar: View {
             .accessibilityLabel(Text("语音输入"))
             .accessibilityIdentifier("home.voice-input")
         } else {
-            Button(action: onSubmit) {
-                ZStack {
-                    Circle().fill(canSend ? Color.accentColor : Color.primary.opacity(0.15))
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 36, height: 36)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .accessibilityLabel(Text("发送"))
-            .accessibilityIdentifier("home.send")
-            .transition(.scale(scale: 0.6).combined(with: .opacity))
+            LeoComposerSendButton(canSend: canSend, label: Text("发送"), identifier: "home.send", action: onSubmit)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -312,8 +297,8 @@ struct HomeComposerBar: View {
         Image(systemName: name)
             .font(.system(size: 17, weight: weight))
             .foregroundStyle(.primary)
-            .frame(width: 36, height: 36)
-            .frame(width: 44, height: 44)
+            .frame(width: LeoComposerMetrics.control, height: LeoComposerMetrics.control)
+            .frame(width: LeoComposerMetrics.hitTarget, height: LeoComposerMetrics.hitTarget)
             .contentShape(Rectangle())
             .hoverEffect(.highlight)
     }

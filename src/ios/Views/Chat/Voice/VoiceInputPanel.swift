@@ -414,7 +414,7 @@ final class VoiceInputViewModel: ObservableObject {
                 self?.tipCycleTimer?.invalidate()
                 return
             }
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(LeoMotion.panelEase()) {
                 self.recordingTipIndex += 1
             }
         }
@@ -428,7 +428,7 @@ final class VoiceInputViewModel: ObservableObject {
                 self?.tipCycleTimer?.invalidate()
                 return
             }
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(LeoMotion.panelEase()) {
                 self.resultTipIndex += 1
             }
         }

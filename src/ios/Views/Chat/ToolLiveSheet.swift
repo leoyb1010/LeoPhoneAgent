@@ -244,7 +244,7 @@ struct FloatingToolBar: View {
             }
         }
         // .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: -4)
-        .animation(.easeInOut(duration: 0.15), value: displayedIdx)
+        .animation(LeoMotion.quickEase(), value: displayedIdx)
         .sheet(isPresented: $expanded) {
             ToolLiveSheet(
                 toolBlocks: toolBlocks,
@@ -273,7 +273,7 @@ private struct CopyableURLCapsule: View {
             .padding(.vertical, 5)
             .background(showCopied ? Color.green : Color(white: 0.85))
             .clipShape(Capsule())
-            .animation(.easeInOut(duration: 0.2), value: showCopied)
+            .animation(LeoMotion.standardEase(), value: showCopied)
             .onTapGesture {
                 UIPasteboard.general.string = url
                 showCopied = true
