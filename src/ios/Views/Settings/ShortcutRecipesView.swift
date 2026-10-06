@@ -14,7 +14,7 @@ struct ShortcutRecipesView: View {
     var body: some View {
         List {
             Section {
-                Text("把 LeoPhoneAgent 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。")
+                Text("把 LOBE 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Button {

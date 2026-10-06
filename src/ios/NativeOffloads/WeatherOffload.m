@@ -107,7 +107,7 @@ static CLLocation *get_location_sync(int argc, char **argv, NSError **outError) 
                                userInfo:@{NSLocalizedDescriptionKey:
                                    @"Location access denied. To grant access, open "
                                     "Settings > Privacy & Security > Location Services "
-                                    "and enable LeoPhoneAgent."}];
+                                    "and enable LOBE."}];
             dispatch_semaphore_signal(delegate.semaphore);
         }
     });

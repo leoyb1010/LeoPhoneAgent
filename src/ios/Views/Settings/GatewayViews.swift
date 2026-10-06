@@ -1041,7 +1041,7 @@ struct HarnessLauncherView: View {
                 } header: {
                     Text("Mac 上的会话")
                 } footer: {
-                    Text("正在跑的,和最近在 Mac 上开的 LeoPhoneAgent 任务。点进去即可查看、审批、接着下指令。")
+                    Text("正在跑的,和最近在 Mac 上开的 LOBE 任务。点进去即可查看、审批、接着下指令。")
                 }
             }
 
@@ -1299,8 +1299,8 @@ struct ComposerMacTarget: Identifiable {
 
     /// 这台机器能开的任务类型:Android 机身只有它自己的 Agent;升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
     static func clis(for host: GatewayHost) -> [(String, String)] {
-        if host.isAndroidBody { return [("minis", "LeoPhoneAgent")] }
-        return host.runsLeoPhoneAgent ? [("zcode", "LeoPhoneAgent")] + clis : clis
+        if host.isAndroidBody { return [("minis", "LOBE")] }
+        return host.runsLeoPhoneAgent ? [("zcode", "LOBE")] + clis : clis
     }
     let host: GatewayHost
     let cliKey: String

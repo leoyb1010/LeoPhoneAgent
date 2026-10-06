@@ -12,15 +12,15 @@ private let logger = AppLogger(category: "AskMinisIntent")
 /// existing `.openSessionFromIntent` navigation path — no separate agent logic.
 /// New session when `session` is nil; follow-up when a `SessionEntity` is given.
 struct AskMinisIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask LeoPhoneAgent"
-    static var description = IntentDescription("Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.")
+    static var title: LocalizedStringResource = "Ask LOBE"
+    static var description = IntentDescription("Opens LOBE, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.")
 
     // Open the app and land in the conversation (the Siri experience). The send
     // itself still goes through the normal in-app pipeline.
     static var openAppWhenRun = true
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
-    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
+    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LOBE?")
     var prompt: String
 
     @Parameter(title: "Session", description: "Existing session to continue. Leave empty to start a new session.")
@@ -104,6 +104,6 @@ struct AskMinisIntent: AppIntent {
             )
         }
 
-        return .result(dialog: "On it — opening LeoPhoneAgent.")
+        return .result(dialog: "On it — opening LOBE.")
     }
 }

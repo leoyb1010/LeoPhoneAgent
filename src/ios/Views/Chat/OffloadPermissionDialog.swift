@@ -126,7 +126,7 @@ private struct OffloadPermissionDialogContent: View {
                         Text("Allow \(request.displayLabel)?")
                             .font(.title3.bold())
 
-                        Text("LeoPhoneAgent needs this device capability for the current task.")
+                        Text("LOBE needs this device capability for the current task.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

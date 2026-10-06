@@ -444,7 +444,7 @@ export class LinkBridge {
           artifacts: false,
           exact_window: false,
         },
-        harnesses: [{ key: ZCODE, name: "LeoPhoneAgent", executable: "LeoPhoneAgent" }, ...legacy],
+        harnesses: [{ key: ZCODE, name: "LOBE", executable: "LOBE" }, ...legacy],
       },
     };
   }
@@ -456,7 +456,7 @@ export class LinkBridge {
     const desktop = (await this.listDesktopTasks()).map((task) => ({
       session_id: task.taskId,
       harness: ZCODE,
-      name: "LeoPhoneAgent",
+      name: "LOBE",
       cwd: task.cwd,
       status: task.status,
       title: task.title,

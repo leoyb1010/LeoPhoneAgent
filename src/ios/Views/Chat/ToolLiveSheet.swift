@@ -491,7 +491,7 @@ struct ToolLiveSheet: View {
                 // out to the step pill's trailing column (under the
                 // elapsed-duration "5s" text) so it lives next to where the
                 // user is already scanning timing info.
-                Text("LeoPhoneAgent Computer")
+                Text("LOBE Computer")
                     .font(.system(size: 15, weight: .semibold))
 
                 Spacer()
@@ -1896,7 +1896,7 @@ struct ToolLiveSheet: View {
         case .browserTool: return AgentToolPresentation.displayName(for: "browser")
         case .readImageTool: return AgentToolPresentation.displayName(for: "read_image")
         case .memoryTool: return AgentToolPresentation.displayName(for: "memory")
-        case .info, .text, .thinking: return "LeoPhoneAgent"
+        case .info, .text, .thinking: return "LOBE"
         }
     }
 

@@ -17,7 +17,7 @@ export function OnboardingWelcomeView(props: { onStart: () => void; onOpenMigrat
 
           <div className="space-y-2">
             {/* [leo] 我们的图标自带底色与圆角,直接铺满,不再外套一层深色方块。 */}
-            <div className="relative size-14 shadow-lg/20" aria-label="LeoPhoneAgent" role="img">
+            <div className="relative size-14 shadow-lg/20" aria-label="LOBE" role="img">
               <ZCodeAboutLogo className="size-full" />
             </div>
             <div className="text-4xl font-bold tracking-tight text-foreground">

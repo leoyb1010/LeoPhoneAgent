@@ -1527,7 +1527,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
 
   return (
     <DesktopWindowFrame
-      title={`LeoPhoneAgent / ${getPathLeaf(workspaceAbsPath)}`}
+      title={`LOBE / ${getPathLeaf(workspaceAbsPath)}`}
       showHeader
       isDesktop={isDesktop}
       isMacDesktop={isMacDesktop}

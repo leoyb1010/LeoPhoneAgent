@@ -18,7 +18,7 @@ enum OpenRouterModelsAPI {
         request.httpMethod = "GET"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("https://github.com/leoyb1010/LeoPhoneAgent", forHTTPHeaderField: "HTTP-Referer")
-        request.setValue("LeoPhoneAgent App", forHTTPHeaderField: "X-Title")
+        request.setValue("LOBE App", forHTTPHeaderField: "X-Title")
         logger.info("Fetching OpenRouter models")
 
         let (data, response) = try await URLSession.shared.data(for: request)

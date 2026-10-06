@@ -161,7 +161,7 @@ static BOOL requestCalendarAccess(NSString **outError) {
         NSString *reason = authError.localizedDescription ?: @"Calendar access not granted";
         *outError = [NSString stringWithFormat:
             @"%@. To grant access, open Settings > Privacy & Security > Calendars "
-             "and enable LeoPhoneAgent.", reason];
+             "and enable LOBE.", reason];
     }
     return granted;
 }
@@ -196,7 +196,7 @@ static BOOL requestRemindersAccess(NSString **outError) {
         NSString *reason = authError.localizedDescription ?: @"Reminders access not granted";
         *outError = [NSString stringWithFormat:
             @"%@. To grant access, open Settings > Privacy & Security > Reminders "
-             "and enable LeoPhoneAgent.", reason];
+             "and enable LOBE.", reason];
     }
     return granted;
 }

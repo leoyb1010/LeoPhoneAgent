@@ -1,5 +1,14 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.58.0 (156) + Mac 1.7.0 · 改名 LOBE - 2026-10-06
+
+- 产品改名 LOBE（只改用户可见部分）：iOS 显示名、手表、分享扩展「Share to LOBE」、文件 App「LOBE Files」、App Intents、通知、Live Activity、Spotlight、设置、21 条权限说明、7 种语言 InfoPlist.strings、xcstrings、系统提示词身份；Mac 应用名 LOBE.app、菜单 / Dock / 关于 / 窗口标题、界面语言包、OAuth 登录页、提示词与内置子智能体、手机端看到的 Mac 名称、中继提示。
+- 保留全部内部标识以覆盖升级、保留数据：iOS Bundle ID、App Group、iCloud 容器、钥匙串、UserDefaults 键、文件路径、数据库名、target / scheme / 产物名；Mac bundle id `com.leoyuan.leocodebox`、`~/.leophoneagent`、`~/.leoagent`、launchd 标签、端口、`/api/leo`、更新源；Electron userData 目录名固定为 `LeoPhoneAgent`（隔离环境实测：旧版写入的数据新版可读，未生成新目录）。
+- URL scheme：新增 `lobe://`，DeepLinkRouter / 快捷指令回调同时接受 `lobe://` 与 `leophoneagent://`，生成链接仍用 `leophoneagent://`。
+- 新图标：iOS 浅色 / 深色两套（深色走 AppIcon 的 dark 外观），手表用深色版，Mac 用浅色版的 macOS 圆角图标（icon.icns / icon_installer.icns / build/icons），应用内 LeoMark 标志换成新 L。
+- Siri 别名 LPA → LB（INAlternativeAppNames）。
+- 验证：iOS 逻辑测试 695 项、25 个冒烟脚本、契约审计、发版闸门通过；新旧安装包 5 个 bundle 的签名权限逐项一致；Mac 各包测试与 Python 中继 76 项通过，签名身份要求与 1.6.1 相同。
+
 ## iOS 1.57.1 (155) + Mac 1.6.0 / 1.6.1 · 全面审计修复 - 2026-10-06
 
 五路并行审计（Mac 产品层、Mac 渲染界面、Mac 主进程/服务/中继、iOS 界面、iOS 核心），P0–P2 全部修复，P3 大部分修复。

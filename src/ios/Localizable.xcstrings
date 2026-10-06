@@ -327,12 +327,12 @@
         }
       }
     },
-    "A privacy-aware task snapshot is stored in the LeoPhoneAgent App Group. Live Activity content follows Task Status Privacy.": {
+    "A privacy-aware task snapshot is stored in the LOBE App Group. Live Activity content follows Task Status Privacy.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "任务快照(已按隐私设置处理)存在 LeoPhoneAgent 的 App Group 里;实时活动显示什么跟随「任务状态隐私模式」。"
+            "value": "任务快照(已按隐私设置处理)存在 LOBE 的 App Group 里;实时活动显示什么跟随「任务状态隐私模式」。"
           }
         }
       }
@@ -2519,12 +2519,12 @@
         }
       }
     },
-    "Recovered after LeoPhoneAgent stopped unexpectedly": {
+    "Recovered after LOBE stopped unexpectedly": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 意外退出后已恢复"
+            "value": "LOBE 意外退出后已恢复"
           }
         }
       }
@@ -2619,12 +2619,12 @@
         }
       }
     },
-    "Return to LeoPhoneAgent to continue": {
+    "Return to LOBE to continue": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "回到 LeoPhoneAgent 继续"
+            "value": "回到 LOBE 继续"
           }
         }
       }
@@ -2909,12 +2909,12 @@
         }
       }
     },
-    "Task state remains device-local. iOS can still stop work under resource pressure; LeoPhoneAgent preserves a recovery state.": {
+    "Task state remains device-local. iOS can still stop work under resource pressure; LOBE preserves a recovery state.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "任务状态只存在本机。系统资源紧张时 iOS 仍可能停掉任务,LeoPhoneAgent 会留好恢复点。"
+            "value": "任务状态只存在本机。系统资源紧张时 iOS 仍可能停掉任务,LOBE 会留好恢复点。"
           }
         }
       }
@@ -4540,7 +4540,7 @@
       }
     },
     "%@ is thinking": {
-      "comment": "Streaming indicator shown while the assistant is composing a reply. {name} is the Soul-customized assistant name (default 'LeoPhoneAgent').",
+      "comment": "Streaming indicator shown while the assistant is composing a reply. {name} is the Soul-customized assistant name (default 'LOBE').",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -7985,48 +7985,48 @@
         }
       }
     },
-    "1. Open the verification page\n2. Enter this code to authorize LeoPhoneAgent": {
+    "1. Open the verification page\n2. Enter this code to authorize LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. Öffnen Sie die Verifizierungsseite\n2. Geben Sie diesen Code ein, um LeoPhoneAgent zu autorisieren"
+            "value": "1. Öffnen Sie die Verifizierungsseite\n2. Geben Sie diesen Code ein, um LOBE zu autorisieren"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. Ouvrez la page de vérification\n2. Entrez ce code pour autoriser LeoPhoneAgent"
+            "value": "1. Ouvrez la page de vérification\n2. Entrez ce code pour autoriser LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. 認証ページを開く\n2. このコードを入力して LeoPhoneAgent を認証します"
+            "value": "1. 認証ページを開く\n2. このコードを入力して LOBE を認証します"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. 인증 페이지 열기\n2. LeoPhoneAgent을(를) 인증하려면 이 코드를 입력하세요."
+            "value": "1. 인증 페이지 열기\n2. LOBE을(를) 인증하려면 이 코드를 입력하세요."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. Откройте страницу проверки\n2. Введите этот код для авторизации LeoPhoneAgent."
+            "value": "1. Откройте страницу проверки\n2. Введите этот код для авторизации LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "1.打开验证页面\n2. 输入此代码以授权LeoPhoneAgent"
+            "value": "1.打开验证页面\n2. 输入此代码以授权LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "1.開啟驗證頁面\n2. 輸入此代碼以授權LeoPhoneAgent"
+            "value": "1.開啟驗證頁面\n2. 輸入此代碼以授權LOBE"
           }
         }
       }
@@ -9275,54 +9275,54 @@
         }
       }
     },
-    "A Shortcut sent to LeoPhoneAgent may not have finished. Open the session to check.": {
+    "A Shortcut sent to LOBE may not have finished. Open the session to check.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein an LeoPhoneAgent gesendeter Kurzbefehl wurde möglicherweise nicht abgeschlossen. Öffne die Sitzung, um dies zu prüfen."
+            "value": "Ein an LOBE gesendeter Kurzbefehl wurde möglicherweise nicht abgeschlossen. Öffne die Sitzung, um dies zu prüfen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A Shortcut sent to LeoPhoneAgent may not have finished. Open the session to check."
+            "value": "A Shortcut sent to LOBE may not have finished. Open the session to check."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un raccourci envoyé à LeoPhoneAgent n’est peut-être pas terminé. Ouvre la session pour vérifier."
+            "value": "Un raccourci envoyé à LOBE n’est peut-être pas terminé. Ouvre la session pour vérifier."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent に送信されたショートカットが完了していない可能性があります。セッションを開いて確認してください。"
+            "value": "LOBE に送信されたショートカットが完了していない可能性があります。セッションを開いて確認してください。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent로 보낸 단축어가 완료되지 않았을 수 있습니다. 세션을 열어 확인하세요."
+            "value": "LOBE로 보낸 단축어가 완료되지 않았을 수 있습니다. 세션을 열어 확인하세요."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Быстрая команда, отправленная в LeoPhoneAgent, возможно, не завершилась. Откройте сессию, чтобы проверить."
+            "value": "Быстрая команда, отправленная в LOBE, возможно, не завершилась. Откройте сессию, чтобы проверить."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发送给 LeoPhoneAgent 的快捷指令可能尚未完成。请打开会话查看。"
+            "value": "发送给 LOBE 的快捷指令可能尚未完成。请打开会话查看。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "傳送給 LeoPhoneAgent 的捷徑可能尚未完成。請開啟工作階段查看。"
+            "value": "傳送給 LOBE 的捷徑可能尚未完成。請開啟工作階段查看。"
           }
         }
       }
@@ -9484,54 +9484,54 @@
         }
       }
     },
-    "About LeoPhoneAgent": {
+    "About LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Über LeoPhoneAgent"
+            "value": "Über LOBE"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About LeoPhoneAgent"
+            "value": "About LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À propos de LeoPhoneAgent"
+            "value": "À propos de LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent について"
+            "value": "LOBE について"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 정보"
+            "value": "LOBE 정보"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "О LeoPhoneAgent"
+            "value": "О LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关于 LeoPhoneAgent"
+            "value": "关于 LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "關於 LeoPhoneAgent"
+            "value": "關於 LOBE"
           }
         }
       }
@@ -12036,54 +12036,54 @@
         }
       }
     },
-    "All LeoPhoneAgent data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone.": {
+    "All LOBE data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alle LeoPhoneAgent-Daten wurden aus iCloud entfernt. Dieses Gerät lädt jetzt seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
+            "value": "Alle LOBE-Daten wurden aus iCloud entfernt. Dieses Gerät lädt jetzt seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "All LeoPhoneAgent data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone."
+            "value": "All LOBE data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toutes les données LeoPhoneAgent ont été supprimées d'iCloud. Cet appareil téléverse maintenant son contenu local dans une nouvelle zone iCloud."
+            "value": "Toutes les données LOBE ont été supprimées d'iCloud. Cet appareil téléverse maintenant son contenu local dans une nouvelle zone iCloud."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべての LeoPhoneAgent データを iCloud から削除しました。このデバイスは、ローカルのコンテンツを新しい iCloud ゾーンに再アップロードしています。"
+            "value": "すべての LOBE データを iCloud から削除しました。このデバイスは、ローカルのコンテンツを新しい iCloud ゾーンに再アップロードしています。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "모든 LeoPhoneAgent 데이터가 iCloud에서 제거되었습니다. 이 기기는 이제 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드하고 있습니다."
+            "value": "모든 LOBE 데이터가 iCloud에서 제거되었습니다. 이 기기는 이제 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드하고 있습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Все данные LeoPhoneAgent удалены из iCloud. Это устройство сейчас повторно загружает своё локальное содержимое в новую зону iCloud."
+            "value": "Все данные LOBE удалены из iCloud. Это устройство сейчас повторно загружает своё локальное содержимое в новую зону iCloud."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "所有 LeoPhoneAgent 数据已从 iCloud 中移除。本设备正在将其本地内容重新上传到新的 iCloud 区域。"
+            "value": "所有 LOBE 数据已从 iCloud 中移除。本设备正在将其本地内容重新上传到新的 iCloud 区域。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "所有 LeoPhoneAgent 數據已從 iCloud 中移除。本設備正在將其本地內容重新上傳到新的 iCloud 區域。"
+            "value": "所有 LOBE 數據已從 iCloud 中移除。本設備正在將其本地內容重新上傳到新的 iCloud 區域。"
           }
         }
       }
@@ -14288,54 +14288,54 @@
         }
       }
     },
-    "Ask LeoPhoneAgent": {
+    "Ask LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent fragen"
+            "value": "LOBE fragen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ask LeoPhoneAgent"
+            "value": "Ask LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demander à LeoPhoneAgent"
+            "value": "Demander à LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent に聞く"
+            "value": "LOBE に聞く"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent에게 묻기"
+            "value": "LOBE에게 묻기"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Спросить LeoPhoneAgent"
+            "value": "Спросить LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "询问 LeoPhoneAgent"
+            "value": "询问 LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "詢問 LeoPhoneAgent"
+            "value": "詢問 LOBE"
           }
         }
       }
@@ -20996,54 +20996,54 @@
         }
       }
     },
-    "Clearing cookies will sign you out of all websites in the LeoPhoneAgent browser.": {
+    "Clearing cookies will sign you out of all websites in the LOBE browser.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Löschen der Cookies meldet Sie von allen Websites im LeoPhoneAgent-Browser ab."
+            "value": "Das Löschen der Cookies meldet Sie von allen Websites im LOBE-Browser ab."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clearing cookies will sign you out of all websites in the LeoPhoneAgent browser."
+            "value": "Clearing cookies will sign you out of all websites in the LOBE browser."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La suppression des cookies vous déconnectera de tous les sites dans le navigateur LeoPhoneAgent."
+            "value": "La suppression des cookies vous déconnectera de tous les sites dans le navigateur LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cookie をクリアすると、LeoPhoneAgent ブラウザのすべてのウェブサイトからログアウトされます。"
+            "value": "Cookie をクリアすると、LOBE ブラウザのすべてのウェブサイトからログアウトされます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "쿠키를 지우면 LeoPhoneAgent 브라우저의 모든 웹사이트에서 로그아웃됩니다."
+            "value": "쿠키를 지우면 LOBE 브라우저의 모든 웹사이트에서 로그아웃됩니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Удаление файлов cookie приведёт к выходу из всех сайтов в браузере LeoPhoneAgent."
+            "value": "Удаление файлов cookie приведёт к выходу из всех сайтов в браузере LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "清除 Cookie 将退出 LeoPhoneAgent 浏览器中所有网站的登录。"
+            "value": "清除 Cookie 将退出 LOBE 浏览器中所有网站的登录。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "清除 Cookie 將退出 LeoPhoneAgent 瀏覽器中所有網站的登錄。"
+            "value": "清除 Cookie 將退出 LOBE 瀏覽器中所有網站的登錄。"
           }
         }
       }
@@ -21389,54 +21389,54 @@
         }
       }
     },
-    "CloudKit built-in zone. Not used by LeoPhoneAgent.": {
+    "CloudKit built-in zone. Not used by LOBE.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Integrierte CloudKit-Zone. Wird von LeoPhoneAgent nicht verwendet."
+            "value": "Integrierte CloudKit-Zone. Wird von LOBE nicht verwendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "CloudKit built-in zone. Not used by LeoPhoneAgent."
+            "value": "CloudKit built-in zone. Not used by LOBE."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zone intégrée CloudKit. Non utilisée par LeoPhoneAgent."
+            "value": "Zone intégrée CloudKit. Non utilisée par LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "CloudKit の組み込みゾーン。LeoPhoneAgent では使用されません。"
+            "value": "CloudKit の組み込みゾーン。LOBE では使用されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "CloudKit 기본 제공 영역. LeoPhoneAgent에서 사용하지 않음."
+            "value": "CloudKit 기본 제공 영역. LOBE에서 사용하지 않음."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Встроенная зона CloudKit. LeoPhoneAgent не использует."
+            "value": "Встроенная зона CloudKit. LOBE не использует."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "CloudKit 内置区域。LeoPhoneAgent 未使用。"
+            "value": "CloudKit 内置区域。LOBE 未使用。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "CloudKit 內建區域。LeoPhoneAgent 未使用。"
+            "value": "CloudKit 內建區域。LOBE 未使用。"
           }
         }
       }
@@ -23643,48 +23643,48 @@
         }
       }
     },
-    "Controls LeoPhoneAgent action feedback. System alerts and keyboard haptics are unchanged.": {
+    "Controls LOBE action feedback. System alerts and keyboard haptics are unchanged.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Steuert das Aktions-Feedback von LeoPhoneAgent. Systemwarnungen und Tastaturhaptik bleiben unverändert."
+            "value": "Steuert das Aktions-Feedback von LOBE. Systemwarnungen und Tastaturhaptik bleiben unverändert."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contrôle le retour d'action LeoPhoneAgent. Les alertes système et l’haptique du clavier restent inchangées."
+            "value": "Contrôle le retour d'action LOBE. Les alertes système et l’haptique du clavier restent inchangées."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent アクションのフィードバックを制御します。システム アラートとキーボードの触覚は変更されません。"
+            "value": "LOBE アクションのフィードバックを制御します。システム アラートとキーボードの触覚は変更されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 작업 피드백을 제어합니다. 시스템 경고 및 키보드 촉각은 변경되지 않습니다."
+            "value": "LOBE 작업 피드백을 제어합니다. 시스템 경고 및 키보드 촉각은 변경되지 않습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Управляет обратной связью по действию LeoPhoneAgent. Системные оповещения и тактильные ощущения клавиатуры не изменились."
+            "value": "Управляет обратной связью по действию LOBE. Системные оповещения и тактильные ощущения клавиатуры не изменились."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "控制 LeoPhoneAgent 动作反馈。系统警报和键盘触觉保持不变。"
+            "value": "控制 LOBE 动作反馈。系统警报和键盘触觉保持不变。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "控制 LeoPhoneAgent 動作回饋。系統警報和鍵盤觸覺保持不變。"
+            "value": "控制 LOBE 動作回饋。系統警報和鍵盤觸覺保持不變。"
           }
         }
       }
@@ -33140,54 +33140,54 @@
         }
       }
     },
-    "Every zone LeoPhoneAgent has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.": {
+    "Every zone LOBE has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Zone, die LeoPhoneAgent in deiner privaten iCloud-Datenbank erstellt hat. **V2** enthält die Daten der aktuellen Sync-Engine; **V1** enthält ältere gerätebezogene Backups aus früheren Builds. Das Löschen einer Zone ist endgültig und entfernt alles darin (Datensätze + Assets). Nutze dies, um nach Abschluss der Migration Speicher freizugeben."
+            "value": "Jede Zone, die LOBE in deiner privaten iCloud-Datenbank erstellt hat. **V2** enthält die Daten der aktuellen Sync-Engine; **V1** enthält ältere gerätebezogene Backups aus früheren Builds. Das Löschen einer Zone ist endgültig und entfernt alles darin (Datensätze + Assets). Nutze dies, um nach Abschluss der Migration Speicher freizugeben."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every zone LeoPhoneAgent has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes."
+            "value": "Every zone LOBE has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque zone créée par LeoPhoneAgent dans ta base de données privée iCloud. **V2** contient les données du moteur de synchronisation actuel ; **V1** contient les anciennes sauvegardes par appareil des versions antérieures. La suppression d’une zone est définitive et supprime tout ce qu’elle contient (enregistrements + ressources). Utilise ceci pour récupérer de l’espace une fois la migration terminée."
+            "value": "Chaque zone créée par LOBE dans ta base de données privée iCloud. **V2** contient les données du moteur de synchronisation actuel ; **V1** contient les anciennes sauvegardes par appareil des versions antérieures. La suppression d’une zone est définitive et supprime tout ce qu’elle contient (enregistrements + ressources). Utilise ceci pour récupérer de l’espace une fois la migration terminée."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent が iCloud プライベートデータベースに作成したすべてのゾーン。**V2** は現在の同期エンジンのデータを保持し、**V1** は古いビルドのデバイスごとのレガシーバックアップを保持します。ゾーンの削除は取り消せず、その中のすべて（レコード + アセット）が削除されます。移行完了後に容量を取り戻すために使用します。"
+            "value": "LOBE が iCloud プライベートデータベースに作成したすべてのゾーン。**V2** は現在の同期エンジンのデータを保持し、**V1** は古いビルドのデバイスごとのレガシーバックアップを保持します。ゾーンの削除は取り消せず、その中のすべて（レコード + アセット）が削除されます。移行完了後に容量を取り戻すために使用します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 iCloud 개인 데이터베이스에 만든 모든 영역입니다. **V2**는 현재 동기화 엔진의 데이터를, **V1**은 이전 빌드의 기기별 레거시 백업을 담고 있습니다. 영역 삭제는 영구적이며 내부의 모든 것(레코드 + 자산)을 제거합니다. 마이그레이션 완료 후 공간을 확보하는 데 사용하세요."
+            "value": "LOBE가 iCloud 개인 데이터베이스에 만든 모든 영역입니다. **V2**는 현재 동기화 엔진의 데이터를, **V1**은 이전 빌드의 기기별 레거시 백업을 담고 있습니다. 영역 삭제는 영구적이며 내부의 모든 것(레코드 + 자산)을 제거합니다. 마이그레이션 완료 후 공간을 확보하는 데 사용하세요."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Каждая зона, созданная LeoPhoneAgent в вашей приватной базе данных iCloud. **V2** содержит данные текущего движка синхронизации; **V1** содержит устаревшие резервные копии по устройствам из старых сборок. Удаление зоны необратимо и удаляет всё внутри (записи + объекты). Используйте это, чтобы освободить место после завершения миграции."
+            "value": "Каждая зона, созданная LOBE в вашей приватной базе данных iCloud. **V2** содержит данные текущего движка синхронизации; **V1** содержит устаревшие резервные копии по устройствам из старых сборок. Удаление зоны необратимо и удаляет всё внутри (записи + объекты). Используйте это, чтобы освободить место после завершения миграции."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 在你的 iCloud 私有数据库中创建的所有区域。**V2** 保存当前同步引擎的数据；**V1** 保存旧版本按设备的遗留备份。删除区域是永久操作，会移除其中的所有内容（记录 + 资源）。可在迁移完成后用它来释放空间。"
+            "value": "LOBE 在你的 iCloud 私有数据库中创建的所有区域。**V2** 保存当前同步引擎的数据；**V1** 保存旧版本按设备的遗留备份。删除区域是永久操作，会移除其中的所有内容（记录 + 资源）。可在迁移完成后用它来释放空间。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 在你的 iCloud 私人資料庫中建立的所有區域。**V2** 保存目前同步引擎的資料；**V1** 保存舊版本按裝置的舊備份。刪除區域是永久操作，會移除其中的所有內容（記錄 + 資源）。可在遷移完成後用它來釋放空間。"
+            "value": "LOBE 在你的 iCloud 私人資料庫中建立的所有區域。**V2** 保存目前同步引擎的資料；**V1** 保存舊版本按裝置的舊備份。刪除區域是永久操作，會移除其中的所有內容（記錄 + 資源）。可在遷移完成後用它來釋放空間。"
           }
         }
       }
@@ -36830,55 +36830,55 @@
         }
       }
     },
-    "Friendly name shown to your other LeoPhoneAgent devices.": {
+    "Friendly name shown to your other LOBE devices.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anzeigename, der Ihren anderen LeoPhoneAgent-Geräten angezeigt wird."
+            "value": "Anzeigename, der Ihren anderen LOBE-Geräten angezeigt wird."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Friendly name shown to your other LeoPhoneAgent devices."
+            "value": "Friendly name shown to your other LOBE devices."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom convivial affiché sur vos autres appareils LeoPhoneAgent."
+            "value": "Nom convivial affiché sur vos autres appareils LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "他の LeoPhoneAgent デバイスに表示されるフレンドリ名。"
+            "value": "他の LOBE デバイスに表示されるフレンドリ名。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "다른 LeoPhoneAgent 장치에 표시되는 친숙한 이름입니다."
+            "value": "다른 LOBE 장치에 표시되는 친숙한 이름입니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Понятное имя, отображаемое на других ваших устройствах LeoPhoneAgent."
+            "value": "Понятное имя, отображаемое на других ваших устройствах LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在你其他 LeoPhoneAgent 设备上显示的友好名称。"
+            "value": "在你其他 LOBE 设备上显示的友好名称。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "顯示給您的其他 LeoPhoneAgent 裝置的友善名稱。"
+            "value": "顯示給您的其他 LOBE 裝置的友善名稱。"
           }
         }
       }
@@ -37146,54 +37146,54 @@
         }
       }
     },
-    "Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call.": {
+    "Gets the current status of a LOBE session, including whether the agent is still running, the latest message, and last tool call.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruft den aktuellen Status einer LeoPhoneAgent-Sitzung ab, einschließlich ob der Agent noch läuft, die letzte Nachricht und den letzten Tool-Aufruf."
+            "value": "Ruft den aktuellen Status einer LOBE-Sitzung ab, einschließlich ob der Agent noch läuft, die letzte Nachricht und den letzten Tool-Aufruf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call."
+            "value": "Gets the current status of a LOBE session, including whether the agent is still running, the latest message, and last tool call."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Obtient l'état actuel d'une session LeoPhoneAgent, y compris si l'agent est encore en cours d'exécution, le dernier message et le dernier appel d'outil."
+            "value": "Obtient l'état actuel d'une session LOBE, y compris si l'agent est encore en cours d'exécution, le dernier message et le dernier appel d'outil."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent セッションの現在の状態を取得します。エージェントがまだ実行中か、最新のメッセージ、最後のツール呼び出しを含みます。"
+            "value": "LOBE セッションの現在の状態を取得します。エージェントがまだ実行中か、最新のメッセージ、最後のツール呼び出しを含みます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 세션의 현재 상태를 가져옵니다. 에이전트 실행 여부, 최신 메시지, 마지막 도구 호출 포함."
+            "value": "LOBE 세션의 현재 상태를 가져옵니다. 에이전트 실행 여부, 최신 메시지, 마지막 도구 호출 포함."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Получает текущий статус сессии LeoPhoneAgent, включая то, выполняется ли ещё Agent, последнее сообщение и последний вызов инструмента."
+            "value": "Получает текущий статус сессии LOBE, включая то, выполняется ли ещё Agent, последнее сообщение и последний вызов инструмента."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "获取 LeoPhoneAgent 会话的当前状态，包括 Agent 是否仍在运行、最新消息和最后的工具调用。"
+            "value": "获取 LOBE 会话的当前状态，包括 Agent 是否仍在运行、最新消息和最后的工具调用。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "獲取 LeoPhoneAgent 會話的當前狀態，包括代理是否仍在運行、最新消息和最後的工具調用。"
+            "value": "獲取 LOBE 會話的當前狀態，包括代理是否仍在運行、最新消息和最後的工具調用。"
           }
         }
       }
@@ -38912,54 +38912,54 @@
         }
       }
     },
-    "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LeoPhoneAgent setting, not part of the MCP protocol.": {
+    "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LOBE setting, not part of the MCP protocol.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wie lange auf das erste Initialisieren dieses Servers gewartet wird. Für langsam startende Server (z. B. uvx) erhöhen. Leer lassen für den Standard (60 s). LeoPhoneAgent-Einstellung, nicht Teil des MCP-Protokolls."
+            "value": "Wie lange auf das erste Initialisieren dieses Servers gewartet wird. Für langsam startende Server (z. B. uvx) erhöhen. Leer lassen für den Standard (60 s). LOBE-Einstellung, nicht Teil des MCP-Protokolls."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LeoPhoneAgent setting, not part of the MCP protocol."
+            "value": "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LOBE setting, not part of the MCP protocol."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Durée d'attente de la première initialisation de ce serveur. Augmentez-la pour les serveurs lents à démarrer (p. ex. uvx). Laissez vide pour la valeur par défaut (60 s). Réglage LeoPhoneAgent, ne fait pas partie du protocole MCP."
+            "value": "Durée d'attente de la première initialisation de ce serveur. Augmentez-la pour les serveurs lents à démarrer (p. ex. uvx). Laissez vide pour la valeur par défaut (60 s). Réglage LOBE, ne fait pas partie du protocole MCP."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このサーバーの初回初期化を待つ時間。起動の遅いサーバー（例: uvx）では長くしてください。空欄でデフォルト（60秒）。LeoPhoneAgent の設定であり、MCP プロトコルの一部ではありません。"
+            "value": "このサーバーの初回初期化を待つ時間。起動の遅いサーバー（例: uvx）では長くしてください。空欄でデフォルト（60秒）。LOBE の設定であり、MCP プロトコルの一部ではありません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 서버의 첫 초기화를 기다리는 시간입니다. 시작이 느린 서버(예: uvx)는 값을 늘리세요. 비워 두면 기본값(60초). LeoPhoneAgent 설정이며 MCP 프로토콜의 일부가 아닙니다."
+            "value": "이 서버의 첫 초기화를 기다리는 시간입니다. 시작이 느린 서버(예: uvx)는 값을 늘리세요. 비워 두면 기본값(60초). LOBE 설정이며 MCP 프로토콜의 일부가 아닙니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сколько ждать первой инициализации этого сервера. Увеличьте для медленно запускающихся серверов (например, uvx). Оставьте пустым для значения по умолчанию (60 с). Настройка LeoPhoneAgent, не часть протокола MCP."
+            "value": "Сколько ждать первой инициализации этого сервера. Увеличьте для медленно запускающихся серверов (например, uvx). Оставьте пустым для значения по умолчанию (60 с). Настройка LOBE, не часть протокола MCP."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "等待该服务器首次 initialize 的时长。启动较慢的服务器（如 uvx）可调大。留空则用默认值（60 秒）。这是 LeoPhoneAgent 配置，并非 MCP 协议的一部分。"
+            "value": "等待该服务器首次 initialize 的时长。启动较慢的服务器（如 uvx）可调大。留空则用默认值（60 秒）。这是 LOBE 配置，并非 MCP 协议的一部分。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "等待此伺服器首次 initialize 的時間。啟動較慢的伺服器（如 uvx）可調大。留空則用預設值（60 秒）。這是 LeoPhoneAgent 設定，並非 MCP 協定的一部分。"
+            "value": "等待此伺服器首次 initialize 的時間。啟動較慢的伺服器（如 uvx）可調大。留空則用預設值（60 秒）。這是 LOBE 設定，並非 MCP 協定的一部分。"
           }
         }
       }
@@ -44175,1135 +44175,1135 @@
         }
       }
     },
-    "LeoPhoneAgent": {
+    "LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent"
+            "value": "LOBE"
           }
         }
       }
     },
-    "LeoPhoneAgent can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions.": {
+    "LOBE can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions.": {
       "comment": "One-time prompt body: correction data collection",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann Ihre Transkript-Korrekturen (Original → korrigiert) und angenommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Sie können dies jederzeit unter Einstellungen → Berechtigungen ändern oder die Daten löschen."
+            "value": "LOBE kann Ihre Transkript-Korrekturen (Original → korrigiert) und angenommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Sie können dies jederzeit unter Einstellungen → Berechtigungen ändern oder die Daten löschen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions."
+            "value": "LOBE can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent peut enregistrer vos corrections de transcription (paires original → corrigé) et les corrections IA acceptées dans une base de données locale sur l'appareil afin d'améliorer les futures corrections vocales. Rien n'est envoyé en ligne. Vous pouvez modifier ce réglage ou effacer les données à tout moment dans Réglages → Autorisations."
+            "value": "LOBE peut enregistrer vos corrections de transcription (paires original → corrigé) et les corrections IA acceptées dans une base de données locale sur l'appareil afin d'améliorer les futures corrections vocales. Rien n'est envoyé en ligne. Vous pouvez modifier ce réglage ou effacer les données à tout moment dans Réglages → Autorisations."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent は文字起こしの修正内容(修正前→修正後のペア)と採用された AI 修正を端末内のローカルデータベースに保存し、今後の音声修正の精度向上に役立てることができます。データはアップロードされません。設定 → 権限からいつでも変更・消去できます。"
+            "value": "LOBE は文字起こしの修正内容(修正前→修正後のペア)と採用された AI 修正を端末内のローカルデータベースに保存し、今後の音声修正の精度向上に役立てることができます。データはアップロードされません。設定 → 権限からいつでも変更・消去できます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent는 음성 인식 수정 내용(원본 → 수정 쌍)과 채택된 AI 교정을 기기 내 로컬 데이터베이스에 저장하여 향후 음성 교정을 더 똑똑하게 만들 수 있습니다. 어떤 데이터도 업로드되지 않습니다. 설정 → 권한에서 언제든지 변경하거나 데이터를 지울 수 있습니다."
+            "value": "LOBE는 음성 인식 수정 내용(원본 → 수정 쌍)과 채택된 AI 교정을 기기 내 로컬 데이터베이스에 저장하여 향후 음성 교정을 더 똑똑하게 만들 수 있습니다. 어떤 데이터도 업로드되지 않습니다. 설정 → 권한에서 언제든지 변경하거나 데이터를 지울 수 있습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent может сохранять ваши правки транскрипции (пары «оригинал → исправлено») и принятые ИИ-коррекции в локальной базе данных на устройстве, чтобы улучшать будущие голосовые коррекции. Ничего не загружается в сеть. Изменить настройку или удалить данные можно в любой момент в «Настройки → Разрешения»."
+            "value": "LOBE может сохранять ваши правки транскрипции (пары «оригинал → исправлено») и принятые ИИ-коррекции в локальной базе данных на устройстве, чтобы улучшать будущие голосовые коррекции. Ничего не загружается в сеть. Изменить настройку или удалить данные можно в любой момент в «Настройки → Разрешения»."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 可以将你对语音转录的修改(原文 → 修正对)以及被采纳的 AI 纠错保存到设备本地数据库,用于让后续语音纠错更聪明。数据不会上传。你可以随时在 设置 → 权限 中更改或清除这些数据。"
+            "value": "LOBE 可以将你对语音转录的修改(原文 → 修正对)以及被采纳的 AI 纠错保存到设备本地数据库,用于让后续语音纠错更聪明。数据不会上传。你可以随时在 设置 → 权限 中更改或清除这些数据。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 可以將你對語音轉錄的修改(原文 → 修正對)以及被採納的 AI 糾錯儲存到裝置本機資料庫,用於讓後續語音糾錯更聰明。資料不會上傳。你可以隨時在 設定 → 權限 中更改或清除這些資料。"
+            "value": "LOBE 可以將你對語音轉錄的修改(原文 → 修正對)以及被採納的 AI 糾錯儲存到裝置本機資料庫,用於讓後續語音糾錯更聰明。資料不會上傳。你可以隨時在 設定 → 權限 中更改或清除這些資料。"
           }
         }
       }
     },
-    "LeoPhoneAgent can’t open the page because it can’t connect to the server.": {
+    "LOBE can’t open the page because it can’t connect to the server.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann die Seite nicht öffnen, da keine Verbindung zum Server hergestellt werden kann."
+            "value": "LOBE kann die Seite nicht öffnen, da keine Verbindung zum Server hergestellt werden kann."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can’t open the page because it can’t connect to the server."
+            "value": "LOBE can’t open the page because it can’t connect to the server."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ne peut pas ouvrir la page car il ne parvient pas à se connecter au serveur."
+            "value": "LOBE ne peut pas ouvrir la page car il ne parvient pas à se connecter au serveur."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "サーバーに接続できないため、LeoPhoneAgent はページを開けません。"
+            "value": "サーバーに接続できないため、LOBE はページを開けません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서버에 연결할 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
+            "value": "서버에 연결할 수 없어 LOBE가 페이지를 열 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не может открыть страницу, так как не удаётся подключиться к серверу."
+            "value": "LOBE не может открыть страницу, так как не удаётся подключиться к серверу."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 无法打开该页面，因为无法连接到服务器。"
+            "value": "LOBE 无法打开该页面，因为无法连接到服务器。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 無法開啟該頁面，因為無法連線到伺服器。"
+            "value": "LOBE 無法開啟該頁面，因為無法連線到伺服器。"
           }
         }
       }
     },
-    "LeoPhoneAgent can’t open the page because it can’t find the server “%@”.": {
+    "LOBE can’t open the page because it can’t find the server “%@”.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann die Seite nicht öffnen, da der Server „%@“ nicht gefunden werden kann."
+            "value": "LOBE kann die Seite nicht öffnen, da der Server „%@“ nicht gefunden werden kann."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can’t open the page because it can’t find the server “%@”."
+            "value": "LOBE can’t open the page because it can’t find the server “%@”."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ne peut pas ouvrir la page car il ne trouve pas le serveur « %@ »."
+            "value": "LOBE ne peut pas ouvrir la page car il ne trouve pas le serveur « %@ »."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "サーバー「%@」が見つからないため、LeoPhoneAgent はページを開けません。"
+            "value": "サーバー「%@」が見つからないため、LOBE はページを開けません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서버 “%@”을(를) 찾을 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
+            "value": "서버 “%@”을(를) 찾을 수 없어 LOBE가 페이지를 열 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не может открыть страницу, так как не удаётся найти сервер «%@»."
+            "value": "LOBE не может открыть страницу, так как не удаётся найти сервер «%@»."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 无法打开该页面，因为找不到服务器“%@”。"
+            "value": "LOBE 无法打开该页面，因为找不到服务器“%@”。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 無法開啟該頁面，因為找不到伺服器「%@」。"
+            "value": "LOBE 無法開啟該頁面，因為找不到伺服器「%@」。"
           }
         }
       }
     },
-    "LeoPhoneAgent can’t open the page because it can’t find the server.": {
+    "LOBE can’t open the page because it can’t find the server.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann die Seite nicht öffnen, da der Server nicht gefunden werden kann."
+            "value": "LOBE kann die Seite nicht öffnen, da der Server nicht gefunden werden kann."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can’t open the page because it can’t find the server."
+            "value": "LOBE can’t open the page because it can’t find the server."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ne peut pas ouvrir la page car il ne trouve pas le serveur."
+            "value": "LOBE ne peut pas ouvrir la page car il ne trouve pas le serveur."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "サーバーが見つからないため、LeoPhoneAgent はページを開けません。"
+            "value": "サーバーが見つからないため、LOBE はページを開けません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서버를 찾을 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
+            "value": "서버를 찾을 수 없어 LOBE가 페이지를 열 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не может открыть страницу, так как не удаётся найти сервер."
+            "value": "LOBE не может открыть страницу, так как не удаётся найти сервер."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 无法打开该页面，因为找不到服务器。"
+            "value": "LOBE 无法打开该页面，因为找不到服务器。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 無法開啟該頁面，因為找不到伺服器。"
+            "value": "LOBE 無法開啟該頁面，因為找不到伺服器。"
           }
         }
       }
     },
-    "LeoPhoneAgent can’t verify the identity of the server “%@”.": {
+    "LOBE can’t verify the identity of the server “%@”.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann die Identität des Servers „%@“ nicht überprüfen."
+            "value": "LOBE kann die Identität des Servers „%@“ nicht überprüfen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can’t verify the identity of the server “%@”."
+            "value": "LOBE can’t verify the identity of the server “%@”."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ne peut pas vérifier l’identité du serveur « %@ »."
+            "value": "LOBE ne peut pas vérifier l’identité du serveur « %@ »."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はサーバー「%@」の識別情報を確認できません。"
+            "value": "LOBE はサーバー「%@」の識別情報を確認できません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 서버 “%@”의 신원을 확인할 수 없습니다."
+            "value": "LOBE가 서버 “%@”의 신원을 확인할 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не может проверить подлинность сервера «%@»."
+            "value": "LOBE не может проверить подлинность сервера «%@»."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 无法验证服务器“%@”的身份。"
+            "value": "LOBE 无法验证服务器“%@”的身份。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 無法驗證伺服器「%@」的身分。"
+            "value": "LOBE 無法驗證伺服器「%@」的身分。"
           }
         }
       }
     },
-    "LeoPhoneAgent can’t verify the identity of the server.": {
+    "LOBE can’t verify the identity of the server.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent kann die Identität des Servers nicht überprüfen."
+            "value": "LOBE kann die Identität des Servers nicht überprüfen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent can’t verify the identity of the server."
+            "value": "LOBE can’t verify the identity of the server."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ne peut pas vérifier l’identité du serveur."
+            "value": "LOBE ne peut pas vérifier l’identité du serveur."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はサーバーの識別情報を確認できません。"
+            "value": "LOBE はサーバーの識別情報を確認できません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 서버의 신원을 확인할 수 없습니다."
+            "value": "LOBE가 서버의 신원을 확인할 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не может проверить подлинность сервера."
+            "value": "LOBE не может проверить подлинность сервера."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 无法验证服务器的身份。"
+            "value": "LOBE 无法验证服务器的身份。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 無法驗證伺服器的身分。"
+            "value": "LOBE 無法驗證伺服器的身分。"
           }
         }
       }
     },
-    "LeoPhoneAgent Computer": {
+    "LOBE Computer": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Computer"
+            "value": "LOBE Computer"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Computer"
+            "value": "LOBE Computer"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Computer"
+            "value": "LOBE Computer"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent コンピュータ"
+            "value": "LOBE コンピュータ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 컴퓨터"
+            "value": "LOBE 컴퓨터"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Computer"
+            "value": "LOBE Computer"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 电脑"
+            "value": "LOBE 电脑"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 電腦"
+            "value": "LOBE 電腦"
           }
         }
       }
     },
-    "LeoPhoneAgent does not operate an application server. Your data stays on your device unless you enable iCloud Sync, choose an AI provider, or invoke a device capability that communicates with another service.": {
+    "LOBE does not operate an application server. Your data stays on your device unless you enable iCloud Sync, choose an AI provider, or invoke a device capability that communicates with another service.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent betreibt keinen Anwendungsserver. Ihre Daten bleiben auf Ihrem Gerät, es sei denn, Sie aktivieren iCloud Sync, wählen einen KI-Anbieter aus oder rufen eine Gerätefunktion auf, die mit einem anderen Dienst kommuniziert."
+            "value": "LOBE betreibt keinen Anwendungsserver. Ihre Daten bleiben auf Ihrem Gerät, es sei denn, Sie aktivieren iCloud Sync, wählen einen KI-Anbieter aus oder rufen eine Gerätefunktion auf, die mit einem anderen Dienst kommuniziert."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent n'exploite pas de serveur d'applications. Vos données restent sur votre appareil, sauf si vous activez iCloud Sync, choisissez un fournisseur d'IA ou invoquez une fonctionnalité de l'appareil qui communique avec un autre service."
+            "value": "LOBE n'exploite pas de serveur d'applications. Vos données restent sur votre appareil, sauf si vous activez iCloud Sync, choisissez un fournisseur d'IA ou invoquez une fonctionnalité de l'appareil qui communique avec un autre service."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はアプリケーション サーバーを動作させません。 iCloud 同期を有効にしたり、AI プロバイダーを選択したり、別のサービスと通信するデバイス機能を呼び出したりしない限り、データはデバイス上に残ります。"
+            "value": "LOBE はアプリケーション サーバーを動作させません。 iCloud 同期を有効にしたり、AI プロバイダーを選択したり、別のサービスと通信するデバイス機能を呼び出したりしない限り、データはデバイス上に残ります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent은 애플리케이션 서버를 운영하지 않습니다. iCloud 동기화를 활성화하거나 AI 공급자를 선택하거나 다른 서비스와 통신하는 장치 기능을 호출하지 않는 한 데이터는 장치에 유지됩니다."
+            "value": "LOBE은 애플리케이션 서버를 운영하지 않습니다. iCloud 동기화를 활성화하거나 AI 공급자를 선택하거나 다른 서비스와 통신하는 장치 기능을 호출하지 않는 한 데이터는 장치에 유지됩니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не управляет сервером приложений. Ваши данные останутся на вашем устройстве, пока вы не включите синхронизацию iCloud, не выберете поставщика искусственного интеллекта или не активируете функцию устройства, которая взаимодействует с другой службой."
+            "value": "LOBE не управляет сервером приложений. Ваши данные останутся на вашем устройстве, пока вы не включите синхронизацию iCloud, не выберете поставщика искусственного интеллекта или не активируете функцию устройства, которая взаимодействует с другой службой."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 不运行应用程序服务器。除非您启用 iCloud 同步、选择 AI 提供商或调用与其他服务通信的设备功能，否则您的数据将保留在您的设备上。"
+            "value": "LOBE 不运行应用程序服务器。除非您启用 iCloud 同步、选择 AI 提供商或调用与其他服务通信的设备功能，否则您的数据将保留在您的设备上。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 不運行應用程式伺服器。除非您啟用 iCloud 同步、選擇 AI 提供者或呼叫與其他服務通訊的裝置功能，否則您的資料將保留在您的裝置上。"
+            "value": "LOBE 不運行應用程式伺服器。除非您啟用 iCloud 同步、選擇 AI 提供者或呼叫與其他服務通訊的裝置功能，否則您的資料將保留在您的裝置上。"
           }
         }
       }
     },
-    "LeoPhoneAgent does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device.": {
+    "LOBE does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device.": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent betreibt keinen Server und erhebt, speichert oder verarbeitet keine Ihrer persönlichen Daten. Alle Daten verbleiben auf Ihrem Gerät."
+            "value": "LOBE betreibt keinen Server und erhebt, speichert oder verarbeitet keine Ihrer persönlichen Daten. Alle Daten verbleiben auf Ihrem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device."
+            "value": "LOBE does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent n'exploite aucun serveur et ne collecte, stocke ou traite aucune de vos données personnelles. Toutes les données restent sur votre appareil."
+            "value": "LOBE n'exploite aucun serveur et ne collecte, stocke ou traite aucune de vos données personnelles. Toutes les données restent sur votre appareil."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はサーバーを運営しておらず、個人データの収集、保存、処理を一切行いません。すべてのデータはお使いのデバイスに保存されます。"
+            "value": "LOBE はサーバーを運営しておらず、個人データの収集、保存、処理を一切行いません。すべてのデータはお使いのデバイスに保存されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent는 서버를 운영하지 않으며 개인 데이터를 수집, 저장 또는 처리하지 않습니다. 모든 데이터는 기기에 보관됩니다."
+            "value": "LOBE는 서버를 운영하지 않으며 개인 데이터를 수집, 저장 또는 처리하지 않습니다. 모든 데이터는 기기에 보관됩니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent не использует серверы и не собирает, не хранит и не обрабатывает ваши личные данные. Все данные остаются на вашем устройстве."
+            "value": "LOBE не использует серверы и не собирает, не хранит и не обрабатывает ваши личные данные. Все данные остаются на вашем устройстве."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 不运营任何服务器，不会收集、存储或处理您的任何个人数据。所有数据都保存在您的设备上。"
+            "value": "LOBE 不运营任何服务器，不会收集、存储或处理您的任何个人数据。所有数据都保存在您的设备上。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 不運營任何服務器，不會收集、存儲或處理您的任何個人數據。所有數據都保存在您的設備上。"
+            "value": "LOBE 不運營任何服務器，不會收集、存儲或處理您的任何個人數據。所有數據都保存在您的設備上。"
           }
         }
       }
     },
-    "LeoPhoneAgent Files": {
+    "LOBE Files": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent-Dateien"
+            "value": "LOBE-Dateien"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Files"
+            "value": "LOBE Files"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fichiers LeoPhoneAgent"
+            "value": "Fichiers LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ファイル"
+            "value": "LOBE ファイル"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 파일"
+            "value": "LOBE 파일"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Файлы LeoPhoneAgent"
+            "value": "Файлы LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 文件"
+            "value": "LOBE 文件"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 檔案"
+            "value": "LOBE 檔案"
           }
         }
       }
     },
-    "LeoPhoneAgent is browsing": {
+    "LOBE is browsing": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent durchsucht das Web"
+            "value": "LOBE durchsucht das Web"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent is browsing"
+            "value": "LOBE is browsing"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent navigue"
+            "value": "LOBE navigue"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent がブラウジング中"
+            "value": "LOBE がブラウジング中"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 탐색 중"
+            "value": "LOBE가 탐색 중"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent просматривает"
+            "value": "LOBE просматривает"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 正在浏览"
+            "value": "LOBE 正在浏览"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 正在瀏覽"
+            "value": "LOBE 正在瀏覽"
           }
         }
       }
     },
-    "LeoPhoneAgent is built on the shoulders of these open source projects. Thank you to all contributors.": {
+    "LOBE is built on the shoulders of these open source projects. Thank you to all contributors.": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent basiert auf diesen Open-Source-Projekten. Vielen Dank an alle Mitwirkenden."
+            "value": "LOBE basiert auf diesen Open-Source-Projekten. Vielen Dank an alle Mitwirkenden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent is built on the shoulders of these open source projects. Thank you to all contributors."
+            "value": "LOBE is built on the shoulders of these open source projects. Thank you to all contributors."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent est construit grâce à ces projets open source. Merci à tous les contributeurs."
+            "value": "LOBE est construit grâce à ces projets open source. Merci à tous les contributeurs."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はこれらのオープンソースプロジェクトを基盤としています。すべての貢献者に感謝します。"
+            "value": "LOBE はこれらのオープンソースプロジェクトを基盤としています。すべての貢献者に感謝します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent는 이러한 오픈 소스 프로젝트를 기반으로 합니다. 모든 기여자에게 감사드립니다."
+            "value": "LOBE는 이러한 오픈 소스 프로젝트를 기반으로 합니다. 모든 기여자에게 감사드립니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent построен на основе этих проектов с открытым исходным кодом. Спасибо всем участникам."
+            "value": "LOBE построен на основе этих проектов с открытым исходным кодом. Спасибо всем участникам."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 构建于这些开源项目之上。感谢所有贡献者。"
+            "value": "LOBE 构建于这些开源项目之上。感谢所有贡献者。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 構建於這些開源項目之上。感謝所有貢獻者。"
+            "value": "LOBE 構建於這些開源項目之上。感謝所有貢獻者。"
           }
         }
       }
     },
-    "LeoPhoneAgent is Locked": {
+    "LOBE is Locked": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ist gesperrt"
+            "value": "LOBE ist gesperrt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent is Locked"
+            "value": "LOBE is Locked"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent est verrouillé"
+            "value": "LOBE est verrouillé"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はロックされています"
+            "value": "LOBE はロックされています"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 잠김"
+            "value": "LOBE가 잠김"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent заблокирован"
+            "value": "LOBE заблокирован"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已锁定"
+            "value": "LOBE 已锁定"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已鎖定"
+            "value": "LOBE 已鎖定"
           }
         }
       }
     },
-    "LeoPhoneAgent is thinking": {
+    "LOBE is thinking": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent denkt nach"
+            "value": "LOBE denkt nach"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent is thinking"
+            "value": "LOBE is thinking"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent réfléchit"
+            "value": "LOBE réfléchit"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent が考えています"
+            "value": "LOBE が考えています"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 생각하는 중"
+            "value": "LOBE가 생각하는 중"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent думает"
+            "value": "LOBE думает"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 正在思考"
+            "value": "LOBE 正在思考"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 正在思考"
+            "value": "LOBE 正在思考"
           }
         }
       }
     },
-    "LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent.": {
+    "LOBE is Your Fully Local, Fully Private On-Device Agent.": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ist Ihr vollständig lokaler, vollständig privater Agent auf dem Gerät."
+            "value": "LOBE ist Ihr vollständig lokaler, vollständig privater Agent auf dem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent."
+            "value": "LOBE is Your Fully Local, Fully Private On-Device Agent."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent est votre agent embarqué, entièrement local et entièrement privé."
+            "value": "LOBE est votre agent embarqué, entièrement local et entièrement privé."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent は、完全にローカルで完全にプライベートなオンデバイスエージェントです。"
+            "value": "LOBE は、完全にローカルで完全にプライベートなオンデバイスエージェントです。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent는 완전히 로컬이고 완전히 비공개인 온디바이스 에이전트입니다."
+            "value": "LOBE는 완전히 로컬이고 완전히 비공개인 온디바이스 에이전트입니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent — это полностью локальный, полностью приватный агент на вашем устройстве."
+            "value": "LOBE — это полностью локальный, полностью приватный агент на вашем устройстве."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 是您完全本地、完全私密的设备端 Agent。"
+            "value": "LOBE 是您完全本地、完全私密的设备端 Agent。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 是您完全本機、完全私密的裝置端代理。"
+            "value": "LOBE 是您完全本機、完全私密的裝置端代理。"
           }
         }
       }
     },
-    "LeoPhoneAgent needs this device capability for the current task.": {
+    "LOBE needs this device capability for the current task.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent benötigt diese Gerätefunktion für die aktuelle Aufgabe."
+            "value": "LOBE benötigt diese Gerätefunktion für die aktuelle Aufgabe."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent a besoin de cette capacité de périphérique pour la tâche en cours."
+            "value": "LOBE a besoin de cette capacité de périphérique pour la tâche en cours."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent は、現在のタスクにこのデバイス機能を必要とします。"
+            "value": "LOBE は、現在のタスクにこのデバイス機能を必要とします。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent에는 현재 작업을 위해 이 장치 기능이 필요합니다."
+            "value": "LOBE에는 현재 작업을 위해 이 장치 기능이 필요합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent нуждается в этой возможности устройства для текущей задачи."
+            "value": "LOBE нуждается в этой возможности устройства для текущей задачи."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 需要此设备功能来执行当前任务。"
+            "value": "LOBE 需要此设备功能来执行当前任务。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 需要此設備功能來執行目前任務。"
+            "value": "LOBE 需要此設備功能來執行目前任務。"
           }
         }
       }
     },
-    "LeoPhoneAgent Shell": {
+    "LOBE Shell": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Shell"
+            "value": "LOBE Shell"
           }
         }
       }
     },
-    "LeoPhoneAgent Skills": {
+    "LOBE Skills": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent-Fähigkeiten"
+            "value": "LOBE-Fähigkeiten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent Skills"
+            "value": "LOBE Skills"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compétences LeoPhoneAgent"
+            "value": "Compétences LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent スキル"
+            "value": "LOBE スキル"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 스킬"
+            "value": "LOBE 스킬"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Навыки LeoPhoneAgent"
+            "value": "Навыки LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 技能"
+            "value": "LOBE 技能"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 技能"
+            "value": "LOBE 技能"
           }
         }
       }
     },
-    "LeoPhoneAgent will create folders for this conversation": {
+    "LOBE will create folders for this conversation": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent erstellt für diese Unterhaltung folgende Ordner"
+            "value": "LOBE erstellt für diese Unterhaltung folgende Ordner"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent will create folders for this conversation"
+            "value": "LOBE will create folders for this conversation"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent créera ces dossiers pour cette conversation"
+            "value": "LOBE créera ces dossiers pour cette conversation"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はこの会話のために次のフォルダを作成します"
+            "value": "LOBE はこの会話のために次のフォルダを作成します"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 이 대화를 위해 다음 폴더를 생성합니다"
+            "value": "LOBE가 이 대화를 위해 다음 폴더를 생성합니다"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent создаст папки для этого разговора"
+            "value": "LOBE создаст папки для этого разговора"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 会为本次会话创建以下目录"
+            "value": "LOBE 会为本次会话创建以下目录"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 會為本次會話建立以下目錄"
+            "value": "LOBE 會為本次會話建立以下目錄"
           }
         }
       }
     },
-    "LeoPhoneAgent will use shared across all conversations": {
+    "LOBE will use shared across all conversations": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent nutzt diese Ordner gemeinsam in allen Unterhaltungen"
+            "value": "LOBE nutzt diese Ordner gemeinsam in allen Unterhaltungen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent will use shared across all conversations"
+            "value": "LOBE will use shared across all conversations"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent utilisera ces dossiers partagés dans toutes les conversations"
+            "value": "LOBE utilisera ces dossiers partagés dans toutes les conversations"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent はすべての会話で次のフォルダを共有して使用します"
+            "value": "LOBE はすべての会話で次のフォルダを共有して使用します"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent가 모든 대화에서 공유하여 사용하는 폴더"
+            "value": "LOBE가 모든 대화에서 공유하여 사용하는 폴더"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent будет использовать общие для всех разговоров"
+            "value": "LOBE будет использовать общие для всех разговоров"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 会在所有会话间共享使用以下目录"
+            "value": "LOBE 会在所有会话间共享使用以下目录"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 會在所有會話間共用以下目錄"
+            "value": "LOBE 會在所有會話間共用以下目錄"
           }
         }
       }
     },
-    "LeoPhoneAgent 已更新": {
+    "LOBE 已更新": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 새로운 소식"
+            "value": "LOBE 새로운 소식"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 已更新"
+            "value": "LOBE 已更新"
           }
         }
       }
@@ -45879,54 +45879,54 @@
         }
       }
     },
-    "Lists all LeoPhoneAgent chat sessions with their titles and IDs.": {
+    "Lists all LOBE chat sessions with their titles and IDs.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Listet alle LeoPhoneAgent-Chatsitzungen mit Titeln und IDs auf."
+            "value": "Listet alle LOBE-Chatsitzungen mit Titeln und IDs auf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lists all LeoPhoneAgent chat sessions with their titles and IDs."
+            "value": "Lists all LOBE chat sessions with their titles and IDs."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Liste toutes les sessions de chat LeoPhoneAgent avec leurs titres et identifiants."
+            "value": "Liste toutes les sessions de chat LOBE avec leurs titres et identifiants."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべての LeoPhoneAgent チャットセッションとそのタイトル・IDを一覧表示します。"
+            "value": "すべての LOBE チャットセッションとそのタイトル・IDを一覧表示します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "모든 LeoPhoneAgent 채팅 세션과 제목 및 ID를 나열합니다."
+            "value": "모든 LOBE 채팅 세션과 제목 및 ID를 나열합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Перечисляет все сессии чата LeoPhoneAgent с их названиями и ID."
+            "value": "Перечисляет все сессии чата LOBE с их названиями и ID."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出所有 LeoPhoneAgent 聊天会话及其标题和 ID。"
+            "value": "列出所有 LOBE 聊天会话及其标题和 ID。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出所有 LeoPhoneAgent 聊天會話及其標題和 ID。"
+            "value": "列出所有 LOBE 聊天會話及其標題和 ID。"
           }
         }
       }
@@ -49176,7 +49176,7 @@
       }
     },
     "Message %@ (@ to mention files)": {
-      "comment": "Chat input placeholder. %@ is the Soul-customized assistant name (default 'LeoPhoneAgent'). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker.",
+      "comment": "Chat input placeholder. %@ is the Soul-customized assistant name (default 'LOBE'). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker.",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -49228,55 +49228,55 @@
         }
       }
     },
-    "Message LeoPhoneAgent": {
+    "Message LOBE": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nachricht an LeoPhoneAgent"
+            "value": "Nachricht an LOBE"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Message LeoPhoneAgent"
+            "value": "Message LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Message à LeoPhoneAgent"
+            "value": "Message à LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent にメッセージ"
+            "value": "LOBE にメッセージ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent에게 메시지 보내기"
+            "value": "LOBE에게 메시지 보내기"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Написать LeoPhoneAgent"
+            "value": "Написать LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 LeoPhoneAgent 发消息"
+            "value": "向 LOBE 发消息"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 LeoPhoneAgent 發消息"
+            "value": "向 LOBE 發消息"
           }
         }
       }
@@ -53206,55 +53206,55 @@
         }
       }
     },
-    "No data is shared with LeoPhoneAgent or any other party beyond the provider you select": {
+    "No data is shared with LOBE or any other party beyond the provider you select": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Es werden keine Daten mit LeoPhoneAgent oder anderen Parteien außer dem von Ihnen gewählten KI-Anbieter geteilt"
+            "value": "Es werden keine Daten mit LOBE oder anderen Parteien außer dem von Ihnen gewählten KI-Anbieter geteilt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No data is shared with LeoPhoneAgent or any other party beyond the provider you select"
+            "value": "No data is shared with LOBE or any other party beyond the provider you select"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune donnée n'est partagée avec LeoPhoneAgent ou toute autre partie au-delà du fournisseur AI que vous sélectionnez"
+            "value": "Aucune donnée n'est partagée avec LOBE ou toute autre partie au-delà du fournisseur AI que vous sélectionnez"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent や選択したAIプロバイダー以外の第三者とデータが共有されることはありません"
+            "value": "LOBE や選択したAIプロバイダー以外の第三者とデータが共有されることはありません"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "선택한 AI 공급자 외에 LeoPhoneAgent나 다른 당사자와 데이터가 공유되지 않습니다"
+            "value": "선택한 AI 공급자 외에 LOBE나 다른 당사자와 데이터가 공유되지 않습니다"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Никакие данные не передаются LeoPhoneAgent или другим сторонам, кроме выбранного вами провайдера"
+            "value": "Никакие данные не передаются LOBE или другим сторонам, кроме выбранного вами провайдера"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "除您选择的 AI 服务商外，数据不会与 LeoPhoneAgent 或任何其他方共享"
+            "value": "除您选择的 AI 服务商外，数据不会与 LOBE 或任何其他方共享"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "除您選擇的 AI 服務商外，數據不會與 LeoPhoneAgent 或任何其他方共享"
+            "value": "除您選擇的 AI 服務商外，數據不會與 LOBE 或任何其他方共享"
           }
         }
       }
@@ -53462,48 +53462,48 @@
         }
       }
     },
-    "No LeoPhoneAgent files": {
+    "No LOBE files": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine LeoPhoneAgent-Dateien"
+            "value": "Keine LOBE-Dateien"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun fichier LeoPhoneAgent"
+            "value": "Aucun fichier LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ファイルがありません"
+            "value": "LOBE ファイルがありません"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 파일 없음"
+            "value": "LOBE 파일 없음"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Нет файлов LeoPhoneAgent"
+            "value": "Нет файлов LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有 LeoPhoneAgent 文件"
+            "value": "没有 LOBE 文件"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "沒有 LeoPhoneAgent 文件"
+            "value": "沒有 LOBE 文件"
           }
         }
       }
@@ -53983,7 +53983,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine LeoPhoneAgent-Dateien"
+            "value": "Keine LOBE-Dateien"
           }
         },
         "en": {
@@ -53995,19 +53995,19 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun fichier LeoPhoneAgent"
+            "value": "Aucun fichier LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ファイルなし"
+            "value": "LOBE ファイルなし"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 파일 없음"
+            "value": "LOBE 파일 없음"
           }
         },
         "ru": {
@@ -54019,13 +54019,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无 LeoPhoneAgent 文件"
+            "value": "无 LOBE 文件"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "無 LeoPhoneAgent 文件"
+            "value": "無 LOBE 文件"
           }
         }
       }
@@ -56503,54 +56503,54 @@
         }
       }
     },
-    "On it — opening LeoPhoneAgent.": {
+    "On it — opening LOBE.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erledige ich – LeoPhoneAgent wird geöffnet."
+            "value": "Erledige ich – LOBE wird geöffnet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On it — opening LeoPhoneAgent."
+            "value": "On it — opening LOBE."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est parti — ouverture de LeoPhoneAgent."
+            "value": "C’est parti — ouverture de LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "了解しました — LeoPhoneAgent を開きます。"
+            "value": "了解しました — LOBE を開きます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "알겠습니다 — LeoPhoneAgent를 엽니다."
+            "value": "알겠습니다 — LOBE를 엽니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выполняю — открываю LeoPhoneAgent."
+            "value": "Выполняю — открываю LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "好的 — 正在打开 LeoPhoneAgent。"
+            "value": "好的 — 正在打开 LOBE。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "好的 — 正在開啟 LeoPhoneAgent。"
+            "value": "好的 — 正在開啟 LOBE。"
           }
         }
       }
@@ -57275,106 +57275,106 @@
         }
       }
     },
-    "Opens a LeoPhoneAgent chat session in the app.": {
+    "Opens a LOBE chat session in the app.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffnet eine LeoPhoneAgent-Chatsitzung in der App."
+            "value": "Öffnet eine LOBE-Chatsitzung in der App."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens a LeoPhoneAgent chat session in the app."
+            "value": "Opens a LOBE chat session in the app."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre une session de chat LeoPhoneAgent dans l'application."
+            "value": "Ouvre une session de chat LOBE dans l'application."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリで LeoPhoneAgent チャットセッションを開きます。"
+            "value": "アプリで LOBE チャットセッションを開きます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱에서 LeoPhoneAgent 채팅 세션을 엽니다."
+            "value": "앱에서 LOBE 채팅 세션을 엽니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает сессию чата LeoPhoneAgent в приложении."
+            "value": "Открывает сессию чата LOBE в приложении."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在应用中打开一个 LeoPhoneAgent 聊天会话。"
+            "value": "在应用中打开一个 LOBE 聊天会话。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在應用中打開一個 LeoPhoneAgent 聊天會話。"
+            "value": "在應用中打開一個 LOBE 聊天會話。"
           }
         }
       }
     },
-    "Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.": {
+    "Opens LOBE, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffnet LeoPhoneAgent, sendet deine Eingabe und zeigt die Unterhaltung an. Startet eine neue Sitzung oder setzt eine bestehende fort, wenn du eine Sitzung auswählst."
+            "value": "Öffnet LOBE, sendet deine Eingabe und zeigt die Unterhaltung an. Startet eine neue Sitzung oder setzt eine bestehende fort, wenn du eine Sitzung auswählst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session."
+            "value": "Opens LOBE, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre LeoPhoneAgent, envoie ton invite et affiche la conversation. Démarre une nouvelle session, ou en poursuit une existante si tu choisis une session."
+            "value": "Ouvre LOBE, envoie ton invite et affiche la conversation. Démarre une nouvelle session, ou en poursuit une existante si tu choisis une session."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent を開いてプロンプトを送信し、会話を表示します。新しいセッションを開始するか、セッションを選ぶと既存のものを続行します。"
+            "value": "LOBE を開いてプロンプトを送信し、会話を表示します。新しいセッションを開始するか、セッションを選ぶと既存のものを続行します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent를 열어 프롬프트를 보내고 대화를 표시합니다. 새 세션을 시작하거나, 세션을 선택하면 기존 세션을 이어갑니다."
+            "value": "LOBE를 열어 프롬프트를 보내고 대화를 표시합니다. 새 세션을 시작하거나, 세션을 선택하면 기존 세션을 이어갑니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открывает LeoPhoneAgent, отправляет ваш запрос и показывает диалог. Начинает новую сессию или продолжает существующую, если вы выберете сессию."
+            "value": "Открывает LOBE, отправляет ваш запрос и показывает диалог. Начинает новую сессию или продолжает существующую, если вы выберете сессию."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent，发送你的提示词并显示对话。开始新会话，或在你选择某个会话时继续该会话。"
+            "value": "打开 LOBE，发送你的提示词并显示对话。开始新会话，或在你选择某个会话时继续该会话。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "開啟 LeoPhoneAgent，傳送你的提示詞並顯示對話。開始新工作階段，或在你選擇某個工作階段時繼續該工作階段。"
+            "value": "開啟 LOBE，傳送你的提示詞並顯示對話。開始新工作階段，或在你選擇某個工作階段時繼續該工作階段。"
           }
         }
       }
@@ -58400,54 +58400,54 @@
         }
       }
     },
-    "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\").": {
+    "Override the User-Agent header sent to this endpoint. Leave empty to use the LOBE default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\").": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Überschreibe den an diesen Endpunkt gesendeten User-Agent-Header. Leer lassen, um den LeoPhoneAgent-Standard zu verwenden. Nützlich für Relays, die nur bestimmte Clients akzeptieren (z. B. „my-relay-client/1.0“)."
+            "value": "Überschreibe den an diesen Endpunkt gesendeten User-Agent-Header. Leer lassen, um den LOBE-Standard zu verwenden. Nützlich für Relays, die nur bestimmte Clients akzeptieren (z. B. „my-relay-client/1.0“)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."
+            "value": "Override the User-Agent header sent to this endpoint. Leave empty to use the LOBE default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Remplace l’en-tête User-Agent envoyé à ce point de terminaison. Laisse vide pour utiliser la valeur par défaut de LeoPhoneAgent. Utile pour les relais qui n’acceptent que certains clients (par ex. « my-relay-client/1.0 »)."
+            "value": "Remplace l’en-tête User-Agent envoyé à ce point de terminaison. Laisse vide pour utiliser la valeur par défaut de LOBE. Utile pour les relais qui n’acceptent que certains clients (par ex. « my-relay-client/1.0 »)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このエンドポイントに送信される User-Agent ヘッダーを上書きします。空欄にすると LeoPhoneAgent のデフォルトを使用します。特定のクライアントのみを受け付けるリレー（例：「my-relay-client/1.0」）に便利です。"
+            "value": "このエンドポイントに送信される User-Agent ヘッダーを上書きします。空欄にすると LOBE のデフォルトを使用します。特定のクライアントのみを受け付けるリレー（例：「my-relay-client/1.0」）に便利です。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 엔드포인트로 전송되는 User-Agent 헤더를 재정의합니다. 비워 두면 LeoPhoneAgent 기본값을 사용합니다. 특정 클라이언트만 허용하는 릴레이(예: \"my-relay-client/1.0\")에 유용합니다."
+            "value": "이 엔드포인트로 전송되는 User-Agent 헤더를 재정의합니다. 비워 두면 LOBE 기본값을 사용합니다. 특정 클라이언트만 허용하는 릴레이(예: \"my-relay-client/1.0\")에 유용합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Переопределяет заголовок User-Agent, отправляемый на этот эндпойнт. Оставьте пустым, чтобы использовать значение LeoPhoneAgent по умолчанию. Полезно для реле, принимающих только определённых клиентов (напр. «my-relay-client/1.0»)."
+            "value": "Переопределяет заголовок User-Agent, отправляемый на этот эндпойнт. Оставьте пустым, чтобы использовать значение LOBE по умолчанию. Полезно для реле, принимающих только определённых клиентов (напр. «my-relay-client/1.0»)."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "覆盖发送到此接口的 User-Agent 头。留空则使用 LeoPhoneAgent 默认值。适用于仅接受特定客户端的中继（例如“my-relay-client/1.0”）。"
+            "value": "覆盖发送到此接口的 User-Agent 头。留空则使用 LOBE 默认值。适用于仅接受特定客户端的中继（例如“my-relay-client/1.0”）。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "覆寫傳送到此端點的 User-Agent 標頭。留空則使用 LeoPhoneAgent 預設值。適用於僅接受特定用戶端的中繼（例如「my-relay-client/1.0」）。"
+            "value": "覆寫傳送到此端點的 User-Agent 標頭。留空則使用 LOBE 預設值。適用於僅接受特定用戶端的中繼（例如「my-relay-client/1.0」）。"
           }
         }
       }
@@ -59707,54 +59707,54 @@
         }
       }
     },
-    "Permanently erase all LeoPhoneAgent data from iCloud. Local data on this device is not affected.": {
+    "Permanently erase all LOBE data from iCloud. Local data on this device is not affected.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alle LeoPhoneAgent-Daten dauerhaft aus iCloud löschen. Lokale Daten auf diesem Gerät sind nicht betroffen."
+            "value": "Alle LOBE-Daten dauerhaft aus iCloud löschen. Lokale Daten auf diesem Gerät sind nicht betroffen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permanently erase all LeoPhoneAgent data from iCloud. Local data on this device is not affected."
+            "value": "Permanently erase all LOBE data from iCloud. Local data on this device is not affected."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Effacer définitivement toutes les données LeoPhoneAgent d'iCloud. Les données locales sur cet appareil ne sont pas affectées."
+            "value": "Effacer définitivement toutes les données LOBE d'iCloud. Les données locales sur cet appareil ne sont pas affectées."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent のすべてのデータを iCloud から完全に削除します。このデバイスのローカルデータは影響を受けません。"
+            "value": "LOBE のすべてのデータを iCloud から完全に削除します。このデバイスのローカルデータは影響を受けません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "iCloud의 모든 LeoPhoneAgent 데이터를 영구적으로 삭제합니다. 이 기기의 로컬 데이터에는 영향을 미치지 않습니다."
+            "value": "iCloud의 모든 LOBE 데이터를 영구적으로 삭제합니다. 이 기기의 로컬 데이터에는 영향을 미치지 않습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Безвозвратно удалить все данные LeoPhoneAgent из iCloud. Локальные данные на этом устройстве не затрагиваются."
+            "value": "Безвозвратно удалить все данные LOBE из iCloud. Локальные данные на этом устройстве не затрагиваются."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "永久从 iCloud 中删除所有 LeoPhoneAgent 数据。本设备上的本地数据不受影响。"
+            "value": "永久从 iCloud 中删除所有 LOBE 数据。本设备上的本地数据不受影响。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "永久從 iCloud 中刪除所有 LeoPhoneAgent 數據。本設備上的本地數據不受影響。"
+            "value": "永久從 iCloud 中刪除所有 LOBE 數據。本設備上的本地數據不受影響。"
           }
         }
       }
@@ -60294,13 +60294,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "選択したフォルダは /var/minis/mounts/<name> にバインドマウントされます。ファイルブラウザから参照でき、LeoPhoneAgent Shell からも /var/minis/shared と同じように読み書きできます。同時に最大 10 個までマウントできます。"
+            "value": "選択したフォルダは /var/minis/mounts/<name> にバインドマウントされます。ファイルブラウザから参照でき、LOBE Shell からも /var/minis/shared と同じように読み書きできます。同時に最大 10 個までマウントできます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "선택한 폴더는 /var/minis/mounts/<name>에 바인드 마운트됩니다. 파일 브라우저에서 탐색할 수 있고 LeoPhoneAgent Shell에서 /var/minis/shared처럼 직접 읽고 쓸 수 있습니다. 동시에 최대 10개의 폴더를 마운트할 수 있습니다."
+            "value": "선택한 폴더는 /var/minis/mounts/<name>에 바인드 마운트됩니다. 파일 브라우저에서 탐색할 수 있고 LOBE Shell에서 /var/minis/shared처럼 직접 읽고 쓸 수 있습니다. 동시에 최대 10개의 폴더를 마운트할 수 있습니다."
           }
         },
         "ru": {
@@ -60312,13 +60312,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "所选文件夹将以 bind 方式挂载到 /var/minis/mounts/<name>。您可以在“浏览文件”中查看，也可以直接在 LeoPhoneAgent Shell 中读写，就像 /var/minis/shared 一样。最多可同时挂载 10 个文件夹。"
+            "value": "所选文件夹将以 bind 方式挂载到 /var/minis/mounts/<name>。您可以在“浏览文件”中查看，也可以直接在 LOBE Shell 中读写，就像 /var/minis/shared 一样。最多可同时挂载 10 个文件夹。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "所選文件夾將以 bind 方式掛載到 /var/minis/mounts/<name>。您可以在“瀏覽文件”中查看，也可以直接在 LeoPhoneAgent Shell 中讀寫，就像 /var/minis/shared 一樣。最多可同時掛載 10 個文件夾。"
+            "value": "所選文件夾將以 bind 方式掛載到 /var/minis/mounts/<name>。您可以在“瀏覽文件”中查看，也可以直接在 LOBE Shell 中讀寫，就像 /var/minis/shared 一樣。最多可同時掛載 10 個文件夾。"
           }
         }
       }
@@ -66503,54 +66503,54 @@
         }
       }
     },
-    "Require %@ to open LeoPhoneAgent.": {
+    "Require %@ to open LOBE.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ zum Öffnen von LeoPhoneAgent erforderlich."
+            "value": "%@ zum Öffnen von LOBE erforderlich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Require %@ to open LeoPhoneAgent."
+            "value": "Require %@ to open LOBE."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exiger %@ pour ouvrir LeoPhoneAgent."
+            "value": "Exiger %@ pour ouvrir LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent を開くのに %@ を要求します。"
+            "value": "LOBE を開くのに %@ を要求します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent를 열려면 %@가 필요합니다."
+            "value": "LOBE를 열려면 %@가 필요합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Требовать %@ для открытия LeoPhoneAgent."
+            "value": "Требовать %@ для открытия LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 需要 %@。"
+            "value": "打开 LOBE 需要 %@。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "開啟 LeoPhoneAgent 需要 %@。"
+            "value": "開啟 LOBE 需要 %@。"
           }
         }
       }
@@ -70017,147 +70017,147 @@
         }
       }
     },
-    "Runs a LeoPhoneAgent quick task from your editable task library.": {
+    "Runs a LOBE quick task from your editable task library.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Führt eine LeoPhoneAgent-Schnellaufgabe aus Ihrer bearbeitbaren Aufgabenbibliothek aus."
+            "value": "Führt eine LOBE-Schnellaufgabe aus Ihrer bearbeitbaren Aufgabenbibliothek aus."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exécute une tâche rapide LeoPhoneAgent à partir de votre bibliothèque de tâches modifiables."
+            "value": "Exécute une tâche rapide LOBE à partir de votre bibliothèque de tâches modifiables."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "編集可能なタスク ライブラリから LeoPhoneAgent クイック タスクを実行します。"
+            "value": "編集可能なタスク ライブラリから LOBE クイック タスクを実行します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "편집 가능한 작업 라이브러리에서 LeoPhoneAgent 빠른 작업을 실행합니다."
+            "value": "편집 가능한 작업 라이브러리에서 LOBE 빠른 작업을 실행합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запускает быструю задачу LeoPhoneAgent из вашей редактируемой библиотеки задач."
+            "value": "Запускает быструю задачу LOBE из вашей редактируемой библиотеки задач."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从可编辑任务库运行 LeoPhoneAgent 快速任务。"
+            "value": "从可编辑任务库运行 LOBE 快速任务。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "從可編輯任務庫執行 LeoPhoneAgent 快速任務。"
+            "value": "從可編輯任務庫執行 LOBE 快速任務。"
           }
         }
       }
     },
-    "Runs a predefined LeoPhoneAgent task like sleep analysis, weather check, or morning briefing.": {
+    "Runs a predefined LOBE task like sleep analysis, weather check, or morning briefing.": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Führt eine vordefinierte LeoPhoneAgent-Aufgabe wie Schlafanalyse, Wettercheck oder Morgenbriefing aus."
+            "value": "Führt eine vordefinierte LOBE-Aufgabe wie Schlafanalyse, Wettercheck oder Morgenbriefing aus."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Runs a predefined LeoPhoneAgent task like sleep analysis, weather check, or morning briefing."
+            "value": "Runs a predefined LOBE task like sleep analysis, weather check, or morning briefing."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exécute une tâche LeoPhoneAgent prédéfinie comme l'analyse du sommeil, la météo ou le briefing matinal."
+            "value": "Exécute une tâche LOBE prédéfinie comme l'analyse du sommeil, la météo ou le briefing matinal."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "睡眠分析、天気確認、朝のブリーフィングなど、事前定義された LeoPhoneAgent タスクを実行します。"
+            "value": "睡眠分析、天気確認、朝のブリーフィングなど、事前定義された LOBE タスクを実行します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수면 분석, 날씨 확인, 아침 브리핑 등 사전 정의된 LeoPhoneAgent 작업을 실행합니다."
+            "value": "수면 분석, 날씨 확인, 아침 브리핑 등 사전 정의된 LOBE 작업을 실행합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запускает предопределённую задачу LeoPhoneAgent, например анализ сна, проверку погоды или утреннюю сводку."
+            "value": "Запускает предопределённую задачу LOBE, например анализ сна, проверку погоды или утреннюю сводку."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行预定义的 LeoPhoneAgent 任务，如睡眠分析、天气查看或早间简报。"
+            "value": "运行预定义的 LOBE 任务，如睡眠分析、天气查看或早间简报。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "運行預定義的 LeoPhoneAgent 任務，如睡眠分析、天氣查看或早間簡報。"
+            "value": "運行預定義的 LOBE 任務，如睡眠分析、天氣查看或早間簡報。"
           }
         }
       }
     },
-    "Runs a quick task saved by an earlier LeoPhoneAgent version. New shortcuts should use Quick Task.": {
+    "Runs a quick task saved by an earlier LOBE version. New shortcuts should use Quick Task.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Führt eine Schnellaufgabe aus, die von einer früheren LeoPhoneAgent-Version gespeichert wurde. Neue Verknüpfungen sollten Quick Task verwenden."
+            "value": "Führt eine Schnellaufgabe aus, die von einer früheren LOBE-Version gespeichert wurde. Neue Verknüpfungen sollten Quick Task verwenden."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exécute une tâche rapide enregistrée par une version antérieure de LeoPhoneAgent. Les nouveaux raccourcis doivent utiliser Quick Task."
+            "value": "Exécute une tâche rapide enregistrée par une version antérieure de LOBE. Les nouveaux raccourcis doivent utiliser Quick Task."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "以前の LeoPhoneAgent バージョンで保存されたクイック タスクを実行します。新しいショートカットではクイック タスクを使用する必要があります。"
+            "value": "以前の LOBE バージョンで保存されたクイック タスクを実行します。新しいショートカットではクイック タスクを使用する必要があります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이전 LeoPhoneAgent 버전으로 저장된 빠른 작업을 실행합니다. 새로운 바로가기는 빠른 작업을 사용해야 합니다."
+            "value": "이전 LOBE 버전으로 저장된 빠른 작업을 실행합니다. 새로운 바로가기는 빠른 작업을 사용해야 합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Запускает быструю задачу, сохраненную в более ранней версии LeoPhoneAgent. Новые ярлыки должны использовать быструю задачу."
+            "value": "Запускает быструю задачу, сохраненную в более ранней версии LOBE. Новые ярлыки должны использовать быструю задачу."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行由早期 LeoPhoneAgent 版本保存的快速任务。新的快捷方式应使用“快速任务”。"
+            "value": "运行由早期 LOBE 版本保存的快速任务。新的快捷方式应使用“快速任务”。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "運行由早期 LeoPhoneAgent 版本保存的快速任務。新的快捷方式應使用“快速任務”。"
+            "value": "運行由早期 LOBE 版本保存的快速任務。新的快捷方式應使用“快速任務”。"
           }
         }
       }
@@ -71807,106 +71807,106 @@
         }
       }
     },
-    "Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent.": {
+    "Sends a follow-up prompt to an existing LOBE session, continuing the conversation with the AI agent.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sendet einen Folgeprompt an eine bestehende LeoPhoneAgent-Sitzung und setzt das Gespräch mit dem KI-Agenten fort."
+            "value": "Sendet einen Folgeprompt an eine bestehende LOBE-Sitzung und setzt das Gespräch mit dem KI-Agenten fort."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent."
+            "value": "Sends a follow-up prompt to an existing LOBE session, continuing the conversation with the AI agent."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoie un prompt de suivi à une session LeoPhoneAgent existante, poursuivant la conversation avec l'agent IA."
+            "value": "Envoie un prompt de suivi à une session LOBE existante, poursuivant la conversation avec l'agent IA."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "既存の LeoPhoneAgent セッションにフォローアッププロンプトを送信し、AIエージェントとの会話を続けます。"
+            "value": "既存の LOBE セッションにフォローアッププロンプトを送信し、AIエージェントとの会話を続けます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "기존 LeoPhoneAgent 세션에 후속 프롬프트를 보내 AI 에이전트와의 대화를 계속합니다."
+            "value": "기존 LOBE 세션에 후속 프롬프트를 보내 AI 에이전트와의 대화를 계속합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Отправляет дополнительный запрос в существующую сессию LeoPhoneAgent, продолжая диалог с AI-агентом."
+            "value": "Отправляет дополнительный запрос в существующую сессию LOBE, продолжая диалог с AI-агентом."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向现有 LeoPhoneAgent 会话发送跟进提示，继续与 AI Agent 的对话。"
+            "value": "向现有 LOBE 会话发送跟进提示，继续与 AI Agent 的对话。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "向現有 LeoPhoneAgent 會話發送跟進提示，繼續與 AI 代理的對話。"
+            "value": "向現有 LOBE 會話發送跟進提示，繼續與 AI 代理的對話。"
           }
         }
       }
     },
-    "Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background.": {
+    "Sends a prompt to the LOBE AI agent. Returns session info immediately while the task runs in the background.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sendet einen Prompt an den LeoPhoneAgent-KI-Agenten. Gibt Sitzungsinformationen sofort zurück, während die Aufgabe im Hintergrund läuft."
+            "value": "Sendet einen Prompt an den LOBE-KI-Agenten. Gibt Sitzungsinformationen sofort zurück, während die Aufgabe im Hintergrund läuft."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background."
+            "value": "Sends a prompt to the LOBE AI agent. Returns session info immediately while the task runs in the background."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoie un prompt à l'agent IA LeoPhoneAgent. Retourne les informations de session immédiatement pendant que la tâche s'exécute en arrière-plan."
+            "value": "Envoie un prompt à l'agent IA LOBE. Retourne les informations de session immédiatement pendant que la tâche s'exécute en arrière-plan."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent AI エージェントにプロンプトを送信します。タスクがバックグラウンドで実行される間、セッション情報を即座に返します。"
+            "value": "LOBE AI エージェントにプロンプトを送信します。タスクがバックグラウンドで実行される間、セッション情報を即座に返します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent AI 에이전트에 프롬프트를 보냅니다. 작업이 백그라운드에서 실행되는 동안 세션 정보를 즉시 반환합니다."
+            "value": "LOBE AI 에이전트에 프롬프트를 보냅니다. 작업이 백그라운드에서 실행되는 동안 세션 정보를 즉시 반환합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Отправляет запрос AI-агенту LeoPhoneAgent. Сразу возвращает информацию о сессии, пока задача выполняется в фоне."
+            "value": "Отправляет запрос AI-агенту LOBE. Сразу возвращает информацию о сессии, пока задача выполняется в фоне."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 LeoPhoneAgent AI Agent 发送提示。任务在后台运行时立即返回会话信息。"
+            "value": "向 LOBE AI Agent 发送提示。任务在后台运行时立即返回会话信息。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 LeoPhoneAgent AI 代理發送提示。任務在後臺運行時立即返回會話信息。"
+            "value": "向 LOBE AI 代理發送提示。任務在後臺運行時立即返回會話信息。"
           }
         }
       }
@@ -77830,48 +77830,48 @@
         }
       }
     },
-    "Status checks never request access. LeoPhoneAgent asks only when you use a capability. Health read access is selected per data type and cannot be fully queried by apps.": {
+    "Status checks never request access. LOBE asks only when you use a capability. Health read access is selected per data type and cannot be fully queried by apps.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Statusprüfungen fordern niemals Zugriff an. LeoPhoneAgent fragt nur, wenn Sie eine Funktion verwenden. Der Integritätslesezugriff wird pro Datentyp ausgewählt und kann von Apps nicht vollständig abgefragt werden."
+            "value": "Statusprüfungen fordern niemals Zugriff an. LOBE fragt nur, wenn Sie eine Funktion verwenden. Der Integritätslesezugriff wird pro Datentyp ausgewählt und kann von Apps nicht vollständig abgefragt werden."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les contrôles de statut ne demandent jamais d’accès. LeoPhoneAgent vous demande uniquement lorsque vous utilisez une fonctionnalité. L’accès en lecture de santé est sélectionné par type de données et ne peut pas être entièrement interrogé par les applications."
+            "value": "Les contrôles de statut ne demandent jamais d’accès. LOBE vous demande uniquement lorsque vous utilisez une fonctionnalité. L’accès en lecture de santé est sélectionné par type de données et ne peut pas être entièrement interrogé par les applications."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ステータス チェックではアクセスが要求されることはありません。 LeoPhoneAgent は、機能を使用する場合にのみ尋ねます。ヘルス読み取りアクセスはデータの種類ごとに選択され、アプリで完全にクエリすることはできません。"
+            "value": "ステータス チェックではアクセスが要求されることはありません。 LOBE は、機能を使用する場合にのみ尋ねます。ヘルス読み取りアクセスはデータの種類ごとに選択され、アプリで完全にクエリすることはできません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "상태 확인에서는 액세스를 요청하지 않습니다. LeoPhoneAgent은 기능을 사용할 때만 묻습니다. 상태 읽기 액세스는 데이터 유형별로 선택되며 앱에서 완전히 쿼리할 수 없습니다."
+            "value": "상태 확인에서는 액세스를 요청하지 않습니다. LOBE은 기능을 사용할 때만 묻습니다. 상태 읽기 액세스는 데이터 유형별로 선택되며 앱에서 완전히 쿼리할 수 없습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Проверки статуса никогда не запрашивают доступ. LeoPhoneAgent спрашивает только тогда, когда вы используете возможность. Доступ на чтение данных о работоспособности выбирается для каждого типа данных и не может быть полностью запрошен приложениями."
+            "value": "Проверки статуса никогда не запрашивают доступ. LOBE спрашивает только тогда, когда вы используете возможность. Доступ на чтение данных о работоспособности выбирается для каждого типа данных и не может быть полностью запрошен приложениями."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "状态检查从不请求访问。 LeoPhoneAgent 仅在您使用功能时询问。运行状况读取访问权限是根据数据类型选择的，并且应用程序无法完全查询。"
+            "value": "状态检查从不请求访问。 LOBE 仅在您使用功能时询问。运行状况读取访问权限是根据数据类型选择的，并且应用程序无法完全查询。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "狀態檢查從不請求存取。 LeoPhoneAgent 僅在您使用功能時詢問。運行狀況讀取存取權限是根據資料類型選擇的，並且應用程式無法完全查詢。"
+            "value": "狀態檢查從不請求存取。 LOBE 僅在您使用功能時詢問。運行狀況讀取存取權限是根據資料類型選擇的，並且應用程式無法完全查詢。"
           }
         }
       }
@@ -82528,54 +82528,54 @@
         }
       }
     },
-    "The Shortcut sent to LeoPhoneAgent may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably.": {
+    "The Shortcut sent to LOBE may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der an LeoPhoneAgent gesendete Kurzbefehl wurde im Hintergrund möglicherweise nicht fertig ausgeführt. Aktiviere „Hintergrund aktiv halten“ in den Einstellungen, damit Automatisierungen zuverlässig abgeschlossen werden können."
+            "value": "Der an LOBE gesendete Kurzbefehl wurde im Hintergrund möglicherweise nicht fertig ausgeführt. Aktiviere „Hintergrund aktiv halten“ in den Einstellungen, damit Automatisierungen zuverlässig abgeschlossen werden können."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Shortcut sent to LeoPhoneAgent may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably."
+            "value": "The Shortcut sent to LOBE may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le raccourci envoyé à LeoPhoneAgent n’a peut-être pas fini de s’exécuter en arrière-plan. Active « Maintien en arrière-plan » dans Réglages pour que les automatisations puissent se terminer de manière fiable."
+            "value": "Le raccourci envoyé à LOBE n’a peut-être pas fini de s’exécuter en arrière-plan. Active « Maintien en arrière-plan » dans Réglages pour que les automatisations puissent se terminer de manière fiable."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent に送信されたショートカットがバックグラウンドで完了していない可能性があります。オートメーションを確実に完了させるには、設定で「バックグラウンド動作の維持」をオンにしてください。"
+            "value": "LOBE に送信されたショートカットがバックグラウンドで完了していない可能性があります。オートメーションを確実に完了させるには、設定で「バックグラウンド動作の維持」をオンにしてください。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent로 보낸 단축어가 백그라운드에서 실행을 마치지 못했을 수 있습니다. 자동화가 안정적으로 완료되도록 설정에서 백그라운드 유지를 켜세요."
+            "value": "LOBE로 보낸 단축어가 백그라운드에서 실행을 마치지 못했을 수 있습니다. 자동화가 안정적으로 완료되도록 설정에서 백그라운드 유지를 켜세요."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Быстрая команда, отправленная в LeoPhoneAgent, возможно, не завершила работу в фоне. Включите «Сохранение активности в фоне» в Настройках, чтобы автоматизации надёжно завершались."
+            "value": "Быстрая команда, отправленная в LOBE, возможно, не завершила работу в фоне. Включите «Сохранение активности в фоне» в Настройках, чтобы автоматизации надёжно завершались."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发送给 LeoPhoneAgent 的快捷指令可能未在后台运行完成。请在“设置”中开启“后台保活”，以便自动化能够可靠地完成。"
+            "value": "发送给 LOBE 的快捷指令可能未在后台运行完成。请在“设置”中开启“后台保活”，以便自动化能够可靠地完成。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "傳送給 LeoPhoneAgent 的捷徑可能未在背景執行完成。請在「設定」中開啟「背景保活」，以便自動化能夠可靠地完成。"
+            "value": "傳送給 LOBE 的捷徑可能未在背景執行完成。請在「設定」中開啟「背景保活」，以便自動化能夠可靠地完成。"
           }
         }
       }
@@ -82938,54 +82938,54 @@
         }
       }
     },
-    "These directories appear in iOS Files under On My iPhone → LeoPhoneAgent. Tap a row to see details, browse, or toggle visibility.": {
+    "These directories appear in iOS Files under On My iPhone → LOBE. Tap a row to see details, browse, or toggle visibility.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Verzeichnisse erscheinen in der iOS-App „Dateien“ unter „Auf meinem iPhone“ → LeoPhoneAgent. Tippen Sie auf einen Eintrag, um Details anzuzeigen, zu durchsuchen oder die Sichtbarkeit umzuschalten."
+            "value": "Diese Verzeichnisse erscheinen in der iOS-App „Dateien“ unter „Auf meinem iPhone“ → LOBE. Tippen Sie auf einen Eintrag, um Details anzuzeigen, zu durchsuchen oder die Sichtbarkeit umzuschalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "These directories appear in iOS Files under On My iPhone → LeoPhoneAgent. Tap a row to see details, browse, or toggle visibility."
+            "value": "These directories appear in iOS Files under On My iPhone → LOBE. Tap a row to see details, browse, or toggle visibility."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ces dossiers apparaissent dans l'app Fichiers d'iOS sous Sur mon iPhone → LeoPhoneAgent. Touchez une ligne pour voir les détails, parcourir ou activer/désactiver la visibilité."
+            "value": "Ces dossiers apparaissent dans l'app Fichiers d'iOS sous Sur mon iPhone → LOBE. Touchez une ligne pour voir les détails, parcourir ou activer/désactiver la visibilité."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "これらのディレクトリは iOS の「ファイル」App の「この iPhone 内」→ LeoPhoneAgent に表示されます。行をタップすると詳細の確認、ブラウズ、表示/非表示の切り替えができます。"
+            "value": "これらのディレクトリは iOS の「ファイル」App の「この iPhone 内」→ LOBE に表示されます。行をタップすると詳細の確認、ブラウズ、表示/非表示の切り替えができます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 디렉터리는 iOS 파일 앱의 내 iPhone → LeoPhoneAgent에 표시됩니다. 행을 탭하여 세부 정보 보기, 탐색 또는 표시 여부를 전환할 수 있습니다."
+            "value": "이 디렉터리는 iOS 파일 앱의 내 iPhone → LOBE에 표시됩니다. 행을 탭하여 세부 정보 보기, 탐색 또는 표시 여부를 전환할 수 있습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Эти папки отображаются в «Файлах» iOS в разделе «На моём iPhone» → LeoPhoneAgent. Нажмите строку, чтобы посмотреть сведения, просмотреть содержимое или изменить видимость."
+            "value": "Эти папки отображаются в «Файлах» iOS в разделе «На моём iPhone» → LOBE. Нажмите строку, чтобы посмотреть сведения, просмотреть содержимое или изменить видимость."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这些目录会显示在 iOS“文件”App 的“我的 iPhone → LeoPhoneAgent”下。轻点某一行可查看详情、浏览内容或切换可见性。"
+            "value": "这些目录会显示在 iOS“文件”App 的“我的 iPhone → LOBE”下。轻点某一行可查看详情、浏览内容或切换可见性。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這些目錄會顯示在 iOS“文件”App 的“我的 iPhone → LeoPhoneAgent”下。輕點某一行可查看詳情、瀏覽內容或切換可見性。"
+            "value": "這些目錄會顯示在 iOS“文件”App 的“我的 iPhone → LOBE”下。輕點某一行可查看詳情、瀏覽內容或切換可見性。"
           }
         }
       }
@@ -83146,54 +83146,54 @@
         }
       }
     },
-    "This action cannot be undone. All LeoPhoneAgent data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe.": {
+    "This action cannot be undone. All LOBE data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Aktion kann nicht rückgängig gemacht werden. Alle in iCloud gespeicherten LeoPhoneAgent-Daten werden sofort gelöscht. Andere Geräte, die mit demselben iCloud-Konto angemeldet sind, verlieren bei der nächsten Synchronisation ihre synchronisierten Kopien.\n\nLokale Daten auf diesem Gerät sind sicher."
+            "value": "Diese Aktion kann nicht rückgängig gemacht werden. Alle in iCloud gespeicherten LOBE-Daten werden sofort gelöscht. Andere Geräte, die mit demselben iCloud-Konto angemeldet sind, verlieren bei der nächsten Synchronisation ihre synchronisierten Kopien.\n\nLokale Daten auf diesem Gerät sind sicher."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This action cannot be undone. All LeoPhoneAgent data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe."
+            "value": "This action cannot be undone. All LOBE data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette action est irréversible. Toutes les données LeoPhoneAgent stockées dans iCloud seront effacées immédiatement. Les autres appareils connectés au même compte iCloud perdront leurs copies synchronisées lors de la prochaine synchronisation.\n\nLes données locales sur cet appareil sont en sécurité."
+            "value": "Cette action est irréversible. Toutes les données LOBE stockées dans iCloud seront effacées immédiatement. Les autres appareils connectés au même compte iCloud perdront leurs copies synchronisées lors de la prochaine synchronisation.\n\nLes données locales sur cet appareil sont en sécurité."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この操作は取り消せません。iCloud に保存されているすべての LeoPhoneAgent データは直ちに削除されます。同じ iCloud アカウントにサインインしている他のデバイスは、次回の同期時に同期されたコピーを失います。\n\nこのデバイスのローカルデータは安全です。"
+            "value": "この操作は取り消せません。iCloud に保存されているすべての LOBE データは直ちに削除されます。同じ iCloud アカウントにサインインしている他のデバイスは、次回の同期時に同期されたコピーを失います。\n\nこのデバイスのローカルデータは安全です。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 작업은 취소할 수 없습니다. iCloud에 저장된 모든 LeoPhoneAgent 데이터가 즉시 삭제됩니다. 동일한 iCloud 계정에 로그인된 다른 기기는 다음 동기화 시 동기화된 복사본을 잃게 됩니다.\n\n이 기기의 로컬 데이터는 안전합니다."
+            "value": "이 작업은 취소할 수 없습니다. iCloud에 저장된 모든 LOBE 데이터가 즉시 삭제됩니다. 동일한 iCloud 계정에 로그인된 다른 기기는 다음 동기화 시 동기화된 복사본을 잃게 됩니다.\n\n이 기기의 로컬 데이터는 안전합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это действие нельзя отменить. Все данные LeoPhoneAgent, хранящиеся в iCloud, будут немедленно удалены. Другие устройства, выполнившие вход в тот же аккаунт iCloud, потеряют свои синхронизированные копии при следующей синхронизации.\n\nЛокальные данные на этом устройстве в безопасности."
+            "value": "Это действие нельзя отменить. Все данные LOBE, хранящиеся в iCloud, будут немедленно удалены. Другие устройства, выполнившие вход в тот же аккаунт iCloud, потеряют свои синхронизированные копии при следующей синхронизации.\n\nЛокальные данные на этом устройстве в безопасности."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此操作无法撤销。iCloud 中存储的所有 LeoPhoneAgent 数据将立即被删除。登录同一 iCloud 账户的其他设备将在下次同步时失去已同步的副本。\n\n本设备上的本地数据是安全的。"
+            "value": "此操作无法撤销。iCloud 中存储的所有 LOBE 数据将立即被删除。登录同一 iCloud 账户的其他设备将在下次同步时失去已同步的副本。\n\n本设备上的本地数据是安全的。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此操作無法撤銷。iCloud 中存儲的所有 LeoPhoneAgent 數據將立即被刪除。登錄同一 iCloud 賬戶的其他設備將在下次同步時失去已同步的副本。\n\n本設備上的本地數據是安全的。"
+            "value": "此操作無法撤銷。iCloud 中存儲的所有 LOBE 數據將立即被刪除。登錄同一 iCloud 賬戶的其他設備將在下次同步時失去已同步的副本。\n\n本設備上的本地數據是安全的。"
           }
         }
       }
@@ -83407,54 +83407,54 @@
         }
       }
     },
-    "This folder appears in Files → On My iPhone → LeoPhoneAgent.": {
+    "This folder appears in Files → On My iPhone → LOBE.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Ordner erscheint in „Dateien“ → „Auf meinem iPhone“ → LeoPhoneAgent."
+            "value": "Dieser Ordner erscheint in „Dateien“ → „Auf meinem iPhone“ → LOBE."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This folder appears in Files → On My iPhone → LeoPhoneAgent."
+            "value": "This folder appears in Files → On My iPhone → LOBE."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce dossier apparaît dans Fichiers → Sur mon iPhone → LeoPhoneAgent."
+            "value": "Ce dossier apparaît dans Fichiers → Sur mon iPhone → LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このフォルダは「ファイル」→「この iPhone 内」→ LeoPhoneAgent に表示されます。"
+            "value": "このフォルダは「ファイル」→「この iPhone 内」→ LOBE に表示されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 폴더는 파일 → 내 iPhone → LeoPhoneAgent에 표시됩니다."
+            "value": "이 폴더는 파일 → 내 iPhone → LOBE에 표시됩니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Эта папка отображается в «Файлах» → «На моём iPhone» → LeoPhoneAgent."
+            "value": "Эта папка отображается в «Файлах» → «На моём iPhone» → LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此文件夹会显示在“文件”→“我的 iPhone”→ LeoPhoneAgent 中。"
+            "value": "此文件夹会显示在“文件”→“我的 iPhone”→ LOBE 中。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此文件夾會顯示在“文件”→“我的 iPhone”→ LeoPhoneAgent 中。"
+            "value": "此文件夾會顯示在“文件”→“我的 iPhone”→ LOBE 中。"
           }
         }
       }
@@ -85163,54 +85163,54 @@
         }
       }
     },
-    "This will permanently delete everything LeoPhoneAgent has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone.": {
+    "This will permanently delete everything LOBE has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dadurch werden alle Daten, die LeoPhoneAgent in dein iCloud-Konto hochgeladen hat, auf ALLEN deinen Geräten dauerhaft gelöscht:\n\n• Chat-Sitzungen & Nachrichten\n• Sitzungsdateien & Anhänge\n• Skills\n• Anbieter-Konfigurationen\n• Umgebungsvariablen\n\nDie lokalen Daten dieses Geräts werden NICHT gelöscht – nur die Kopie in der Cloud. Nach dem Löschen lädt dieses Gerät seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
+            "value": "Dadurch werden alle Daten, die LOBE in dein iCloud-Konto hochgeladen hat, auf ALLEN deinen Geräten dauerhaft gelöscht:\n\n• Chat-Sitzungen & Nachrichten\n• Sitzungsdateien & Anhänge\n• Skills\n• Anbieter-Konfigurationen\n• Umgebungsvariablen\n\nDie lokalen Daten dieses Geräts werden NICHT gelöscht – nur die Kopie in der Cloud. Nach dem Löschen lädt dieses Gerät seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This will permanently delete everything LeoPhoneAgent has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone."
+            "value": "This will permanently delete everything LOBE has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cela supprimera définitivement tout ce que LeoPhoneAgent a téléversé vers votre compte iCloud, sur TOUS vos appareils :\n\n• Sessions & messages de chat\n• Fichiers de session & pièces jointes\n• Compétences\n• Configurations de fournisseurs\n• Variables d'environnement\n\nLes données locales de cet appareil ne seront PAS supprimées — seule la copie dans le cloud. Après l'effacement, cet appareil téléversera son contenu local dans une nouvelle zone iCloud."
+            "value": "Cela supprimera définitivement tout ce que LOBE a téléversé vers votre compte iCloud, sur TOUS vos appareils :\n\n• Sessions & messages de chat\n• Fichiers de session & pièces jointes\n• Compétences\n• Configurations de fournisseurs\n• Variables d'environnement\n\nLes données locales de cet appareil ne seront PAS supprimées — seule la copie dans le cloud. Après l'effacement, cet appareil téléversera son contenu local dans une nouvelle zone iCloud."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この操作により、LeoPhoneAgent が iCloud アカウントにアップロードしたすべてのデータが、すべてのデバイスで永久に削除されます：\n\n• チャットセッションとメッセージ\n• セッションファイルと添付ファイル\n• スキル\n• プロバイダー設定\n• 環境変数\n\nこのデバイスのローカルデータは削除されません。クラウドのコピーのみが削除されます。削除後、このデバイスはローカルのコンテンツを新しい iCloud ゾーンに再アップロードします。"
+            "value": "この操作により、LOBE が iCloud アカウントにアップロードしたすべてのデータが、すべてのデバイスで永久に削除されます：\n\n• チャットセッションとメッセージ\n• セッションファイルと添付ファイル\n• スキル\n• プロバイダー設定\n• 環境変数\n\nこのデバイスのローカルデータは削除されません。クラウドのコピーのみが削除されます。削除後、このデバイスはローカルのコンテンツを新しい iCloud ゾーンに再アップロードします。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 작업은 LeoPhoneAgent가 iCloud 계정에 업로드한 모든 데이터를 모든 기기에서 영구적으로 삭제합니다:\n\n• 채팅 세션 및 메시지\n• 세션 파일 및 첨부파일\n• 스킬\n• 공급자 구성\n• 환경 변수\n\n이 기기의 로컬 데이터는 삭제되지 않으며, 클라우드 복사본만 삭제됩니다. 삭제 후, 이 기기는 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드합니다."
+            "value": "이 작업은 LOBE가 iCloud 계정에 업로드한 모든 데이터를 모든 기기에서 영구적으로 삭제합니다:\n\n• 채팅 세션 및 메시지\n• 세션 파일 및 첨부파일\n• 스킬\n• 공급자 구성\n• 환경 변수\n\n이 기기의 로컬 데이터는 삭제되지 않으며, 클라우드 복사본만 삭제됩니다. 삭제 후, 이 기기는 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это безвозвратно удалит всё, что LeoPhoneAgent загрузил в ваш аккаунт iCloud, на ВСЕХ ваших устройствах:\n\n• Сессии чатов и сообщения\n• Файлы и вложения сессий\n• Навыки\n• Конфигурации провайдеров\n• Переменные окружения\n\nЛокальные данные на этом устройстве НЕ будут удалены — только облачная копия. После очистки это устройство заново загрузит своё локальное содержимое в новую зону iCloud."
+            "value": "Это безвозвратно удалит всё, что LOBE загрузил в ваш аккаунт iCloud, на ВСЕХ ваших устройствах:\n\n• Сессии чатов и сообщения\n• Файлы и вложения сессий\n• Навыки\n• Конфигурации провайдеров\n• Переменные окружения\n\nЛокальные данные на этом устройстве НЕ будут удалены — только облачная копия. После очистки это устройство заново загрузит своё локальное содержимое в новую зону iCloud."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此操作将永久删除 LeoPhoneAgent 上传到您 iCloud 账户中的所有内容，跨您所有的设备：\n\n• 聊天会话和消息\n• 会话文件和附件\n• 技能\n• 服务商配置\n• 环境变量\n\n本设备上的本地数据不会被删除 —— 仅删除云端副本。删除后，本设备将把其本地内容重新上传到新的 iCloud 区域。"
+            "value": "此操作将永久删除 LOBE 上传到您 iCloud 账户中的所有内容，跨您所有的设备：\n\n• 聊天会话和消息\n• 会话文件和附件\n• 技能\n• 服务商配置\n• 环境变量\n\n本设备上的本地数据不会被删除 —— 仅删除云端副本。删除后，本设备将把其本地内容重新上传到新的 iCloud 区域。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此操作將永久刪除 LeoPhoneAgent 上傳到您 iCloud 賬戶中的所有內容，跨您所有的設備：\n\n• 聊天會話和消息\n• 會話文件和附件\n• 技能\n• 服務商配置\n• 環境變量\n\n本設備上的本地數據不會被刪除 —— 僅刪除雲端副本。刪除後，本設備將把其本地內容重新上傳到新的 iCloud 區域。"
+            "value": "此操作將永久刪除 LOBE 上傳到您 iCloud 賬戶中的所有內容，跨您所有的設備：\n\n• 聊天會話和消息\n• 會話文件和附件\n• 技能\n• 服務商配置\n• 環境變量\n\n本設備上的本地數據不會被刪除 —— 僅刪除雲端副本。刪除後，本設備將把其本地內容重新上傳到新的 iCloud 區域。"
           }
         }
       }
@@ -85319,54 +85319,54 @@
         }
       }
     },
-    "This will remove all cookies and website data from the LeoPhoneAgent browser.": {
+    "This will remove all cookies and website data from the LOBE browser.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dies entfernt alle Cookies und Website-Daten aus dem LeoPhoneAgent-Browser."
+            "value": "Dies entfernt alle Cookies und Website-Daten aus dem LOBE-Browser."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This will remove all cookies and website data from the LeoPhoneAgent browser."
+            "value": "This will remove all cookies and website data from the LOBE browser."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cela supprimera tous les cookies et données de sites web du navigateur LeoPhoneAgent."
+            "value": "Cela supprimera tous les cookies et données de sites web du navigateur LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent ブラウザからすべての Cookie とウェブサイトデータが削除されます。"
+            "value": "LOBE ブラウザからすべての Cookie とウェブサイトデータが削除されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 브라우저에서 모든 쿠키와 웹사이트 데이터가 삭제됩니다."
+            "value": "LOBE 브라우저에서 모든 쿠키와 웹사이트 데이터가 삭제됩니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это удалит все файлы cookie и данные сайтов из браузера LeoPhoneAgent."
+            "value": "Это удалит все файлы cookie и данные сайтов из браузера LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这将从 LeoPhoneAgent 浏览器中删除所有 Cookie 和网站数据。"
+            "value": "这将从 LOBE 浏览器中删除所有 Cookie 和网站数据。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這將從 LeoPhoneAgent 瀏覽器中刪除所有 Cookie 和網站數據。"
+            "value": "這將從 LOBE 瀏覽器中刪除所有 Cookie 和網站數據。"
           }
         }
       }
@@ -86260,54 +86260,54 @@
         }
       }
     },
-    "Toggles play/pause on LeoPhoneAgent audio narration from the Live Activity.": {
+    "Toggles play/pause on LOBE audio narration from the Live Activity.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schaltet die Audio-Erzählung von LeoPhoneAgent über die Live-Aktivität zwischen Wiedergabe und Pause um."
+            "value": "Schaltet die Audio-Erzählung von LOBE über die Live-Aktivität zwischen Wiedergabe und Pause um."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toggles play/pause on LeoPhoneAgent audio narration from the Live Activity."
+            "value": "Toggles play/pause on LOBE audio narration from the Live Activity."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Active/désactive la lecture/pause de la narration audio de LeoPhoneAgent depuis l’activité en direct."
+            "value": "Active/désactive la lecture/pause de la narration audio de LOBE depuis l’activité en direct."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ライブアクティビティから LeoPhoneAgent の音声ナレーションの再生／一時停止を切り替えます。"
+            "value": "ライブアクティビティから LOBE の音声ナレーションの再生／一時停止を切り替えます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "실시간 활동에서 LeoPhoneAgent 오디오 내레이션의 재생/일시정지를 전환합니다."
+            "value": "실시간 활동에서 LOBE 오디오 내레이션의 재생/일시정지를 전환합니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Переключает воспроизведение/паузу аудиоозвучивания LeoPhoneAgent из Live Activity."
+            "value": "Переключает воспроизведение/паузу аудиоозвучивания LOBE из Live Activity."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从实时活动切换 LeoPhoneAgent 音频朗读的播放/暂停。"
+            "value": "从实时活动切换 LOBE 音频朗读的播放/暂停。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "從即時動態切換 LeoPhoneAgent 音訊朗讀的播放/暫停。"
+            "value": "從即時動態切換 LOBE 音訊朗讀的播放/暫停。"
           }
         }
       }
@@ -88177,54 +88177,54 @@
         }
       }
     },
-    "Unlock LeoPhoneAgent": {
+    "Unlock LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent entsperren"
+            "value": "LOBE entsperren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unlock LeoPhoneAgent"
+            "value": "Unlock LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Déverrouiller LeoPhoneAgent"
+            "value": "Déverrouiller LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent のロックを解除"
+            "value": "LOBE のロックを解除"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 잠금 해제"
+            "value": "LOBE 잠금 해제"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Разблокировать LeoPhoneAgent"
+            "value": "Разблокировать LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "解锁 LeoPhoneAgent"
+            "value": "解锁 LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "解鎖 LeoPhoneAgent"
+            "value": "解鎖 LOBE"
           }
         }
       }
@@ -92558,54 +92558,54 @@
         }
       }
     },
-    "Welcome to LeoPhoneAgent": {
+    "Welcome to LOBE": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Willkommen bei LeoPhoneAgent"
+            "value": "Willkommen bei LOBE"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Welcome to LeoPhoneAgent"
+            "value": "Welcome to LOBE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bienvenue dans LeoPhoneAgent"
+            "value": "Bienvenue dans LOBE"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent へようこそ"
+            "value": "LOBE へようこそ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent에 오신 것을 환영합니다"
+            "value": "LOBE에 오신 것을 환영합니다"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Добро пожаловать в LeoPhoneAgent"
+            "value": "Добро пожаловать в LOBE"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "欢迎使用 LeoPhoneAgent"
+            "value": "欢迎使用 LOBE"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "歡迎使用 LeoPhoneAgent"
+            "value": "歡迎使用 LOBE"
           }
         }
       }
@@ -92708,88 +92708,88 @@
         }
       }
     },
-    "What should LeoPhoneAgent do?": {
+    "What should LOBE do?": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was soll LeoPhoneAgent tun?"
+            "value": "Was soll LOBE tun?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Que doit faire LeoPhoneAgent ?"
+            "value": "Que doit faire LOBE ?"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent は何をすべきですか?"
+            "value": "LOBE は何をすべきですか?"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent은 무엇을 해야 합니까?"
+            "value": "LOBE은 무엇을 해야 합니까?"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Что должен делать LeoPhoneAgent?"
+            "value": "Что должен делать LOBE?"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 应该做什么？"
+            "value": "LOBE 应该做什么？"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 應該做什麼？"
+            "value": "LOBE 應該做什麼？"
           }
         }
       }
     },
-    "What would you like to ask LeoPhoneAgent?": {
+    "What would you like to ask LOBE?": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was möchten Sie LeoPhoneAgent fragen?"
+            "value": "Was möchten Sie LOBE fragen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "What would you like to ask LeoPhoneAgent?"
+            "value": "What would you like to ask LOBE?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Que souhaitez-vous demander à LeoPhoneAgent ?"
+            "value": "Que souhaitez-vous demander à LOBE ?"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent に何を聞きたいですか？"
+            "value": "LOBE に何を聞きたいですか？"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent에게 무엇을 물어보시겠어요?"
+            "value": "LOBE에게 무엇을 물어보시겠어요?"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "О чём вы хотите спросить LeoPhoneAgent?"
+            "value": "О чём вы хотите спросить LOBE?"
           }
         },
         "zh-Hans": {
@@ -93269,48 +93269,48 @@
         }
       }
     },
-    "When iCloud Sync is enabled, LeoPhoneAgent syncs supported conversations, files, settings, and provider configuration through your private iCloud account. Provider credentials may be encoded in synchronized configuration; encoding is not encryption provided by LeoPhoneAgent.": {
+    "When iCloud Sync is enabled, LOBE syncs supported conversations, files, settings, and provider configuration through your private iCloud account. Provider credentials may be encoded in synchronized configuration; encoding is not encryption provided by LOBE.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn iCloud Sync aktiviert ist, synchronisiert LeoPhoneAgent unterstützte Konversationen, Dateien, Einstellungen und Anbieterkonfiguration über Ihr privates iCloud-Konto. Anbieteranmeldeinformationen können in der synchronisierten Konfiguration codiert werden; Bei der Kodierung handelt es sich nicht um die von LeoPhoneAgent bereitgestellte Verschlüsselung."
+            "value": "Wenn iCloud Sync aktiviert ist, synchronisiert LOBE unterstützte Konversationen, Dateien, Einstellungen und Anbieterkonfiguration über Ihr privates iCloud-Konto. Anbieteranmeldeinformationen können in der synchronisierten Konfiguration codiert werden; Bei der Kodierung handelt es sich nicht um die von LOBE bereitgestellte Verschlüsselung."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lorsque iCloud Sync est activé, LeoPhoneAgent synchronise les conversations, les fichiers, les paramètres et la configuration du fournisseur pris en charge via votre compte privé iCloud. Les informations d'identification du fournisseur peuvent être codées dans une configuration synchronisée ; l'encodage n'est pas un cryptage fourni par LeoPhoneAgent."
+            "value": "Lorsque iCloud Sync est activé, LOBE synchronise les conversations, les fichiers, les paramètres et la configuration du fournisseur pris en charge via votre compte privé iCloud. Les informations d'identification du fournisseur peuvent être codées dans une configuration synchronisée ; l'encodage n'est pas un cryptage fourni par LOBE."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "iCloud 同期が有効になっている場合、LeoPhoneAgent は、プライベート iCloud アカウントを通じて、サポートされている会話、ファイル、設定、プロバイダー構成を同期します。プロバイダーの資格情報は、同期された構成でエンコードされる場合があります。エンコーディングは、LeoPhoneAgent によって提供される暗号化ではありません。"
+            "value": "iCloud 同期が有効になっている場合、LOBE は、プライベート iCloud アカウントを通じて、サポートされている会話、ファイル、設定、プロバイダー構成を同期します。プロバイダーの資格情報は、同期された構成でエンコードされる場合があります。エンコーディングは、LOBE によって提供される暗号化ではありません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "iCloud 동기화가 활성화되면 LeoPhoneAgent은 개인 iCloud 계정을 통해 지원되는 대화, 파일, 설정 및 공급자 구성을 동기화합니다. 공급자 자격 증명은 동기화된 구성으로 인코딩될 수 있습니다. 인코딩은 LeoPhoneAgent에서 제공하는 암호화가 아닙니다."
+            "value": "iCloud 동기화가 활성화되면 LOBE은 개인 iCloud 계정을 통해 지원되는 대화, 파일, 설정 및 공급자 구성을 동기화합니다. 공급자 자격 증명은 동기화된 구성으로 인코딩될 수 있습니다. 인코딩은 LOBE에서 제공하는 암호화가 아닙니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Когда синхронизация iCloud включена, LeoPhoneAgent синхронизирует поддерживаемые разговоры, файлы, настройки и конфигурацию поставщика через вашу личную учетную запись iCloud. Учетные данные поставщика могут быть закодированы в синхронизированной конфигурации; кодировка не является шифрованием, предоставляемым LeoPhoneAgent."
+            "value": "Когда синхронизация iCloud включена, LOBE синхронизирует поддерживаемые разговоры, файлы, настройки и конфигурацию поставщика через вашу личную учетную запись iCloud. Учетные данные поставщика могут быть закодированы в синхронизированной конфигурации; кодировка не является шифрованием, предоставляемым LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "启用 iCloud 同步后，LeoPhoneAgent 通过您的私人 iCloud 帐户同步支持的对话、文件、设置和提供商配置。提供者凭证可以在同步配置中进行编码；编码不是 LeoPhoneAgent 提供的加密。"
+            "value": "启用 iCloud 同步后，LOBE 通过您的私人 iCloud 帐户同步支持的对话、文件、设置和提供商配置。提供者凭证可以在同步配置中进行编码；编码不是 LOBE 提供的加密。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "啟用 iCloud 同步後，LeoPhoneAgent 透過您的私人 iCloud 帳戶同步支援的對話、檔案、設定和提供者設定。提供者憑證可以在同步配置中進行編碼；編碼不是 LeoPhoneAgent 提供的加密。"
+            "value": "啟用 iCloud 同步後，LOBE 透過您的私人 iCloud 帳戶同步支援的對話、檔案、設定和提供者設定。提供者憑證可以在同步配置中進行編碼；編碼不是 LOBE 提供的加密。"
           }
         }
       }
@@ -93391,13 +93391,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "オフにすると、LeoPhoneAgent Shell と AI ツールはこのマウント内のファイルを作成・編集・削除できません。"
+            "value": "オフにすると、LOBE Shell と AI ツールはこのマウント内のファイルを作成・編集・削除できません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "꺼져 있으면 LeoPhoneAgent Shell과 AI 도구는 이 마운트의 파일을 만들거나 편집하거나 삭제할 수 없습니다."
+            "value": "꺼져 있으면 LOBE Shell과 AI 도구는 이 마운트의 파일을 만들거나 편집하거나 삭제할 수 없습니다."
           }
         },
         "ru": {
@@ -93409,13 +93409,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭后，LeoPhoneAgent Shell 和 AI 工具将无法在此挂载中创建、编辑或删除文件。"
+            "value": "关闭后，LOBE Shell 和 AI 工具将无法在此挂载中创建、编辑或删除文件。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "關閉後，LeoPhoneAgent Shell 和 AI 工具將無法在此掛載中創建、編輯或刪除文件。"
+            "value": "關閉後，LOBE Shell 和 AI 工具將無法在此掛載中創建、編輯或刪除文件。"
           }
         }
       }
@@ -94179,13 +94179,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 工作目录结构"
+            "value": "LOBE 工作目录结构"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 工作目錄結構"
+            "value": "LOBE 工作目錄結構"
           }
         }
       }
@@ -97688,18 +97688,18 @@
         }
       }
     },
-    "For the action, search LeoPhoneAgent and pick “Run Due Scheduled Tasks”": {
+    "For the action, search LOBE and pick “Run Due Scheduled Tasks”": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "操作里搜索 LeoPhoneAgent 的「Run Due Scheduled Tasks」"
+            "value": "操作里搜索 LOBE 的「Run Due Scheduled Tasks」"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "操作裡搜尋 LeoPhoneAgent 的「Run Due Scheduled Tasks」"
+            "value": "操作裡搜尋 LOBE 的「Run Due Scheduled Tasks」"
           }
         }
       }
@@ -99666,53 +99666,53 @@
         }
       }
     },
-    "Open LeoPhoneAgent and start voice input.": {
+    "Open LOBE and start voice input.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并开始语音输入。"
+            "value": "打开 LOBE 并开始语音输入。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "開啟 LeoPhoneAgent 並開始語音輸入。"
+            "value": "開啟 LOBE 並開始語音輸入。"
           }
         }
       }
     },
-    "Start a new chat in LeoPhoneAgent.": {
+    "Start a new chat in LOBE.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 LeoPhoneAgent 中开始一个新对话。"
+            "value": "在 LOBE 中开始一个新对话。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 LeoPhoneAgent 中開始一個新對話。"
+            "value": "在 LOBE 中開始一個新對話。"
           }
         }
       }
     },
-    "Open LeoPhoneAgent and open the camera.": {
+    "Open LOBE and open the camera.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并唤起相机。"
+            "value": "打开 LOBE 并唤起相机。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "開啟 LeoPhoneAgent 並喚起相機。"
+            "value": "開啟 LOBE 並喚起相機。"
           }
         }
       }
@@ -100709,19 +100709,19 @@
         }
       }
     },
-    "LeoPhoneAgent conversation": {
+    "LOBE conversation": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 会话"
+            "value": "LOBE 会话"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 對話"
+            "value": "LOBE 對話"
           }
         }
       }
@@ -106317,24 +106317,24 @@
         }
       }
     },
-    "Cancels every running LeoPhoneAgent task.": {
+    "Cancels every running LOBE task.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cancels every running LeoPhoneAgent task."
+            "value": "Cancels every running LOBE task."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "取消所有正在运行的 LeoPhoneAgent 任务。"
+            "value": "取消所有正在运行的 LOBE 任务。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "取消所有正在執行的 LeoPhoneAgent 任務。"
+            "value": "取消所有正在執行的 LOBE 任務。"
           }
         }
       }
@@ -106361,90 +106361,90 @@
         }
       }
     },
-    "Runs a LeoPhoneAgent quick task in the background.": {
+    "Runs a LOBE quick task in the background.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Runs a LeoPhoneAgent quick task in the background."
+            "value": "Runs a LOBE quick task in the background."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在后台运行一个 LeoPhoneAgent 快捷任务。"
+            "value": "在后台运行一个 LOBE 快捷任务。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在背景執行一個 LeoPhoneAgent 快捷任務。"
+            "value": "在背景執行一個 LOBE 快捷任務。"
           }
         }
       }
     },
-    "Opens LeoPhoneAgent on a new conversation.": {
+    "Opens LOBE on a new conversation.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens LeoPhoneAgent on a new conversation."
+            "value": "Opens LOBE on a new conversation."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并新建对话。"
+            "value": "打开 LOBE 并新建对话。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打開 LeoPhoneAgent 並新建對話。"
+            "value": "打開 LOBE 並新建對話。"
           }
         }
       }
     },
-    "Opens LeoPhoneAgent and starts voice input.": {
+    "Opens LOBE and starts voice input.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens LeoPhoneAgent and starts voice input."
+            "value": "Opens LOBE and starts voice input."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并开始语音输入。"
+            "value": "打开 LOBE 并开始语音输入。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打開 LeoPhoneAgent 並開始語音輸入。"
+            "value": "打開 LOBE 並開始語音輸入。"
           }
         }
       }
     },
-    "Opens LeoPhoneAgent with the camera ready.": {
+    "Opens LOBE with the camera ready.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens LeoPhoneAgent with the camera ready."
+            "value": "Opens LOBE with the camera ready."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并准备好相机。"
+            "value": "打开 LOBE 并准备好相机。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打開 LeoPhoneAgent 並準備好相機。"
+            "value": "打開 LOBE 並準備好相機。"
           }
         }
       }
@@ -106515,24 +106515,24 @@
         }
       }
     },
-    "LeoPhoneAgent %@": {
+    "LOBE %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent %@"
+            "value": "LOBE %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent %@"
+            "value": "LOBE %@"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent %@"
+            "value": "LOBE %@"
           }
         }
       }
@@ -108231,46 +108231,46 @@
         }
       }
     },
-    "智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LeoPhoneAgent Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。": {
+    "智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LOBE Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Smart approve lets read-only steps that touch no personal data run on their own (viewing files, git status, weather, maps and the like); anything that changes something asks first, and the prompt flags high-risk commands such as deletes, force-pushes and sudo. Full Auto asks nothing, including for tasks sent to a LeoPhoneAgent Mac; capabilities set to “Not Allowed” still never run. System prompts for Photos, Location and similar are controlled by iOS and no app can skip them — grant them all at once here."
+            "value": "Smart approve lets read-only steps that touch no personal data run on their own (viewing files, git status, weather, maps and the like); anything that changes something asks first, and the prompt flags high-risk commands such as deletes, force-pushes and sudo. Full Auto asks nothing, including for tasks sent to a LOBE Mac; capabilities set to “Not Allowed” still never run. System prompts for Photos, Location and similar are controlled by iOS and no app can skip them — grant them all at once here."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LeoPhoneAgent Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。"
+            "value": "智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LOBE Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "智慧批准直接放行唯讀、不碰個人資料的操作（查看檔案、git status、天氣、地圖這類）；會改動的先問你，審批框上會標出刪除、強推、sudo 這類高風險指令。全自動下什麼都不再問，發給 LeoPhoneAgent Mac 的任務也一樣；你設成「不允許」的能力仍然不執行；相簿、定位這類系統彈窗由 iOS 控制，任何 App 都跳不過，可以在這裡一次授完。"
+            "value": "智慧批准直接放行唯讀、不碰個人資料的操作（查看檔案、git status、天氣、地圖這類）；會改動的先問你，審批框上會標出刪除、強推、sudo 這類高風險指令。全自動下什麼都不再問，發給 LOBE Mac 的任務也一樣；你設成「不允許」的能力仍然不執行；相簿、定位這類系統彈窗由 iOS 控制，任何 App 都跳不過，可以在這裡一次授完。"
           }
         }
       }
     },
-    "只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LeoPhoneAgent 里打开。": {
+    "只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LOBE 里打开。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only permissions you haven’t decided yet will prompt. Turn on the ones you denied in System Settings → LeoPhoneAgent."
+            "value": "Only permissions you haven’t decided yet will prompt. Turn on the ones you denied in System Settings → LOBE."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LeoPhoneAgent 里打开。"
+            "value": "只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LOBE 里打开。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "只會彈出還沒決定過的項目。已拒絕的項目請到 系統設定 → LeoPhoneAgent 裡打開。"
+            "value": "只會彈出還沒決定過的項目。已拒絕的項目請到 系統設定 → LOBE 裡打開。"
           }
         }
       }
@@ -108957,24 +108957,24 @@
         }
       }
     },
-    "打开 LeoPhoneAgent 并开始语音提问。": {
+    "打开 LOBE 并开始语音提问。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens LeoPhoneAgent and starts a spoken question."
+            "value": "Opens LOBE and starts a spoken question."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开 LeoPhoneAgent 并开始语音提问。"
+            "value": "打开 LOBE 并开始语音提问。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打開 LeoPhoneAgent 並開始語音提問。"
+            "value": "打開 LOBE 並開始語音提問。"
           }
         }
       }
@@ -110519,24 +110519,24 @@
         }
       }
     },
-    "Runs any LeoPhoneAgent scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs.": {
+    "Runs any LOBE scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Runs any LeoPhoneAgent scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
+            "value": "Runs any LOBE scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行所有到点的 LeoPhoneAgent 定时任务。在快捷指令里给它建一个个人自动化，定时运行更可靠。"
+            "value": "运行所有到点的 LOBE 定时任务。在快捷指令里给它建一个个人自动化，定时运行更可靠。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "執行所有到點的 LeoPhoneAgent 定時任務。在捷徑裡給它建一個個人自動化，定時執行更可靠。"
+            "value": "執行所有到點的 LOBE 定時任務。在捷徑裡給它建一個個人自動化，定時執行更可靠。"
           }
         }
       }
@@ -110855,18 +110855,18 @@
         }
       }
     },
-    "This page wants to open a %@ link outside LeoPhoneAgent.": {
+    "This page wants to open a %@ link outside LOBE.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个网页想在 LeoPhoneAgent 之外打开一个 %@ 链接。"
+            "value": "这个网页想在 LOBE 之外打开一个 %@ 链接。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這個網頁想在 LeoPhoneAgent 之外開啟一個 %@ 連結。"
+            "value": "這個網頁想在 LOBE 之外開啟一個 %@ 連結。"
           }
         }
       }
@@ -116243,24 +116243,24 @@
         }
       }
     },
-    "把一个 LeoPhoneAgent 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。": {
+    "把一个 LOBE 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Export a LeoPhoneAgent conversation as a Markdown or plain-text file, ready for Save File or Share."
+            "value": "Export a LOBE conversation as a Markdown or plain-text file, ready for Save File or Share."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "把一个 LeoPhoneAgent 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。"
+            "value": "把一个 LOBE 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "把一個 LeoPhoneAgent 會話匯出成 Markdown 或純文字檔案，可接「儲存檔案」或「分享」。"
+            "value": "把一個 LOBE 會話匯出成 Markdown 或純文字檔案，可接「儲存檔案」或「分享」。"
           }
         }
       }
@@ -116287,24 +116287,24 @@
         }
       }
     },
-    "专注开启时告诉 LeoPhoneAgent 你在什么模式，是否静默非紧急通知。": {
+    "专注开启时告诉 LOBE 你在什么模式，是否静默非紧急通知。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When this Focus turns on, tell LeoPhoneAgent which mode you're in and whether to silence non-urgent notifications."
+            "value": "When this Focus turns on, tell LOBE which mode you're in and whether to silence non-urgent notifications."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专注开启时告诉 LeoPhoneAgent 你在什么模式，是否静默非紧急通知。"
+            "value": "专注开启时告诉 LOBE 你在什么模式，是否静默非紧急通知。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "專注開啟時告訴 LeoPhoneAgent 你在什麼模式，是否靜音非緊急通知。"
+            "value": "專注開啟時告訴 LOBE 你在什麼模式，是否靜音非緊急通知。"
           }
         }
       }
@@ -116397,24 +116397,24 @@
         }
       }
     },
-    "把一句话写进 LeoPhoneAgent 的记忆，以后对话里会自动想起。不会读出已有记忆。": {
+    "把一句话写进 LOBE 的记忆，以后对话里会自动想起。不会读出已有记忆。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save a sentence to LeoPhoneAgent's memory so later conversations recall it. Existing memories are not read out."
+            "value": "Save a sentence to LOBE's memory so later conversations recall it. Existing memories are not read out."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "把一句话写进 LeoPhoneAgent 的记忆，以后对话里会自动想起。不会读出已有记忆。"
+            "value": "把一句话写进 LOBE 的记忆，以后对话里会自动想起。不会读出已有记忆。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "把一句話寫進 LeoPhoneAgent 的記憶，以後對話裡會自動想起。不會讀出已有記憶。"
+            "value": "把一句話寫進 LOBE 的記憶，以後對話裡會自動想起。不會讀出已有記憶。"
           }
         }
       }
@@ -116441,24 +116441,24 @@
         }
       }
     },
-    "在 LeoPhoneAgent 的记忆里找和问题最相关的 3 条，返回文本。": {
+    "在 LOBE 的记忆里找和问题最相关的 3 条，返回文本。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Find the 3 memories in LeoPhoneAgent most relevant to the question and return them as text."
+            "value": "Find the 3 memories in LOBE most relevant to the question and return them as text."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 LeoPhoneAgent 的记忆里找和问题最相关的 3 条，返回文本。"
+            "value": "在 LOBE 的记忆里找和问题最相关的 3 条，返回文本。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 LeoPhoneAgent 的記憶裡找和問題最相關的 3 條，返回文字。"
+            "value": "在 LOBE 的記憶裡找和問題最相關的 3 條，返回文字。"
           }
         }
       }
@@ -116485,24 +116485,24 @@
         }
       }
     },
-    "告诉 LeoPhoneAgent 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。": {
+    "告诉 LOBE 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tell LeoPhoneAgent your current context (home, leaving, in the car…) and let automation rules handle it. Works on the Lock Screen."
+            "value": "Tell LOBE your current context (home, leaving, in the car…) and let automation rules handle it. Works on the Lock Screen."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "告诉 LeoPhoneAgent 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。"
+            "value": "告诉 LOBE 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "告訴 LeoPhoneAgent 你現在的情境(到家、出門、上車……),交給自動化規則處理。鎖定畫面也能執行。"
+            "value": "告訴 LOBE 你現在的情境(到家、出門、上車……),交給自動化規則處理。鎖定畫面也能執行。"
           }
         }
       }
@@ -116595,24 +116595,24 @@
         }
       }
     },
-    "列出 LeoPhoneAgent 里的定时任务和开关状态。": {
+    "列出 LOBE 里的定时任务和开关状态。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "List LeoPhoneAgent's scheduled tasks and whether each is on."
+            "value": "List LOBE's scheduled tasks and whether each is on."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出 LeoPhoneAgent 里的定时任务和开关状态。"
+            "value": "列出 LOBE 里的定时任务和开关状态。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出 LeoPhoneAgent 裡的定時任務和開關狀態。"
+            "value": "列出 LOBE 裡的定時任務和開關狀態。"
           }
         }
       }
@@ -118047,24 +118047,24 @@
         }
       }
     },
-    "把 LeoPhoneAgent 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。": {
+    "把 LOBE 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hook LeoPhoneAgent's actions into system automations: get home, get in the car, press a button, and things just happen. Each recipe takes the three steps below — under a minute."
+            "value": "Hook LOBE's actions into system automations: get home, get in the car, press a button, and things just happen. Each recipe takes the three steps below — under a minute."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "把 LeoPhoneAgent 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。"
+            "value": "把 LOBE 的动作接到系统自动化上：到家、上车、按一下按钮，事情就自己发生。每个配方照下面三步做，一分钟内建好。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "把 LeoPhoneAgent 的動作接到系統自動化上：到家、上車、按一下按鈕，事情就自己發生。每個配方照下面三步做，一分鐘內建好。"
+            "value": "把 LOBE 的動作接到系統自動化上：到家、上車、按一下按鈕，事情就自己發生。每個配方照下面三步做，一分鐘內建好。"
           }
         }
       }

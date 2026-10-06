@@ -55,7 +55,7 @@ struct ScheduledTaskEntityQuery: EntityStringQuery {
 
 struct ListScheduledTasksIntent: AppIntent {
     static var title: LocalizedStringResource = "列出定时任务"
-    static var description = IntentDescription("列出 LeoPhoneAgent 里的定时任务和开关状态。")
+    static var description = IntentDescription("列出 LOBE 里的定时任务和开关状态。")
     static var openAppWhenRun: Bool = false
     static var supportedModes: IntentModes = .background
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication

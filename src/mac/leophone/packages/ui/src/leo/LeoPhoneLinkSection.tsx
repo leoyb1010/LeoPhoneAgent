@@ -154,7 +154,7 @@ function LeoPhoneLinkSectionBody({
       <div className="flex items-start gap-2">
         <Smartphone className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="text-ui-base font-medium text-foreground">LeoPhoneAgent 手机 App</div>
+          <div className="text-ui-base font-medium text-foreground">LOBE 手机 App</div>
           <p className="flex items-center gap-1.5 text-ui-caption text-foreground-subtle">
             <span
               aria-hidden="true"
@@ -183,7 +183,7 @@ function LeoPhoneLinkSectionBody({
           <div className="min-w-0 space-y-2 text-ui-caption text-foreground-subtle">
             <p className="text-ui-base text-foreground">用手机扫这个码</p>
             <p>
-              手机上打开 LeoPhoneAgent → 设置 → 远程机器 → 扫码添加机器。每台手机领到自己的钥匙，
+              手机上打开 LOBE → 设置 → 远程机器 → 扫码添加机器。每台手机领到自己的钥匙，
               丢了一台不影响其他。
             </p>
             <p className="tabular-nums">{formatRemaining(remaining)} 后失效 · 只能用一次</p>

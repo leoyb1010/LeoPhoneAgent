@@ -20,7 +20,7 @@ struct AppLockOverlay: View {
                         .font(.system(size: 48))
                         .foregroundStyle(.secondary)
 
-                    Text("LeoPhoneAgent is Locked")
+                    Text("LOBE is Locked")
                         .font(.title2.bold())
 
                     Text("Tap to unlock with \(BiometricAuth.biometryDisplayName)")
@@ -55,7 +55,7 @@ struct AppLockOverlay: View {
         isAuthenticating = true
         Self.promptInFlight = true
         Task { @MainActor in
-            let reason = String(localized: "Unlock LeoPhoneAgent")
+            let reason = String(localized: "Unlock LOBE")
             let ok = await BiometricAuth.authenticate(reason: reason)
             if ok {
                 withAnimation(.easeOut(duration: 0.25)) {

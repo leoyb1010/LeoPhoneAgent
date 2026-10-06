@@ -27,7 +27,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
                 "Talk to \(.applicationName)",
                 "New \(.applicationName) chat",
             ],
-            shortTitle: "Ask LeoPhoneAgent",
+            shortTitle: "Ask LOBE",
             systemImageName: "sparkles"
         )
         AppShortcut(
@@ -92,7 +92,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             // [T-local-first] 只保留**明确点名 Mac** 的说法。
             //
-            // 之前把"让LPA干活"这种通用说法也挂在这里,结果随口一句
+            // 之前把"让LB干活"这种通用说法也挂在这里,结果随口一句
             // 简单任务就被派到远端 Mac 上跑——违反"本机优先、明确指令
             // 才上 Mac"的预期。通用说法现在归 SendPromptIntent(本机后台)。
             intent: CommandMacIntent(),

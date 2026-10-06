@@ -64,7 +64,7 @@ static NSString *const HELP_TEXT =
      "  apple-alarm cancel --all\n"
      "\n"
      "DEEP LINK:\n"
-     "  leophoneagent://views/alarm              Open the alarm management page in LeoPhoneAgent\n";
+     "  leophoneagent://views/alarm              Open the alarm management page in LOBE\n";
 
 // ── Duration parsing ──
 
@@ -164,10 +164,10 @@ static BOOL ensureAuthorization(int stdout_fd, NSString *action, BOOL compact, B
     if (!authorized) {
         NSString *msg = authError
             ? [NSString stringWithFormat:@"AlarmKit authorization failed: %@. "
-                "To grant access, open Settings > Privacy & Security > Alarms and enable LeoPhoneAgent.",
+                "To grant access, open Settings > Privacy & Security > Alarms and enable LOBE.",
                 authError.localizedDescription]
             : @"AlarmKit authorization denied. "
-               "To grant access, open Settings > Privacy & Security > Alarms and enable LeoPhoneAgent.";
+               "To grant access, open Settings > Privacy & Security > Alarms and enable LOBE.";
         NSDictionary *err = noff_json_error(TOOL_NAME, action,
                                              NOFF_ERR_AUTHORIZATION_DENIED, msg);
         noff_emit_json(stdout_fd, err, compact, quiet);
@@ -240,7 +240,7 @@ static int cmd_set_alarmkit(int argc, char **argv, int stdout_fd,
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"time"] = noff_format_date(fireDate);
         data[@"view_url"] = @"leophoneagent://views/alarm";
-        data[@"hint"] = @"Alarm is now visible on the LeoPhoneAgent home screen. Open leophoneagent://views/alarm to manage alarms.";
+        data[@"hint"] = @"Alarm is now visible on the LOBE home screen. Open leophoneagent://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"set", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }
@@ -310,7 +310,7 @@ static int cmd_timer_alarmkit(int argc, char **argv, int stdout_fd,
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"fires_at"] = noff_format_date([NSDate dateWithTimeIntervalSinceNow:duration]);
         data[@"view_url"] = @"leophoneagent://views/alarm";
-        data[@"hint"] = @"Timer is now visible on the LeoPhoneAgent home screen. Open leophoneagent://views/alarm to manage alarms.";
+        data[@"hint"] = @"Timer is now visible on the LOBE home screen. Open leophoneagent://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"timer", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }

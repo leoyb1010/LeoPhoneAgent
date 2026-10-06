@@ -67,7 +67,7 @@ static NSDictionary *check_denied(NSString *action) {
     if (status == CMAuthorizationStatusDenied || status == CMAuthorizationStatusRestricted) {
         return noff_json_error(TOOL_NAME, action, NOFF_ERR_AUTHORIZATION_DENIED,
                                @"Motion & Fitness access is denied. Enable it in "
-                                "设置 → 隐私与安全性 → 运动与健身 → LeoPhoneAgent.");
+                                "设置 → 隐私与安全性 → 运动与健身 → LOBE.");
     }
     return nil;
 }

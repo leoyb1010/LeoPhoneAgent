@@ -7,7 +7,7 @@ private let logger = AppLogger(category: "FollowUpIntent")
 /// Sends a follow-up prompt to an existing session, continuing the conversation.
 struct FollowUpSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Follow Up Session"
-    static var description = IntentDescription("Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent.")
+    static var description = IntentDescription("Sends a follow-up prompt to an existing LOBE session, continuing the conversation with the AI agent.")
     static var openAppWhenRun = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
@@ -113,7 +113,7 @@ struct FollowUpSessionIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-followup-\(sid)",
-            title: String(localized: "LeoPhoneAgent：追问已发送"),
+            title: String(localized: "LOBE：追问已发送"),
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -121,7 +121,7 @@ struct FollowUpSessionIntent: AppIntent {
         if waitForResult {
             let settled = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LeoPhoneAgent 追问"), notificationId: "shortcut-followup-done")
+                title: String(localized: "LOBE 追问"), notificationId: "shortcut-followup-done")
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -147,7 +147,7 @@ struct FollowUpSessionIntent: AppIntent {
         Task { @MainActor in
             _ = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LeoPhoneAgent 追问"), notificationId: "shortcut-followup-done")
+                title: String(localized: "LOBE 追问"), notificationId: "shortcut-followup-done")
         }
 
         let result = SendPromptResult(

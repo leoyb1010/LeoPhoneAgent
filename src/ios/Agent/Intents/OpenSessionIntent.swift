@@ -4,7 +4,7 @@ import Foundation
 /// Opens a specific chat session in the LeoPhoneAgent app.
 struct OpenSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Open Session"
-    static var description = IntentDescription("Opens a LeoPhoneAgent chat session in the app.")
+    static var description = IntentDescription("Opens a LOBE chat session in the app.")
     static var openAppWhenRun = true
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 

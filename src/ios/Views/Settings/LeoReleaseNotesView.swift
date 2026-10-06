@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.58.0",
+            date: "2026-10-06",
+            title: "改名 LOBE",
+            highlights: [
+                "LeoPhoneAgent 正式改名 LOBE：主屏幕、手表、通知、灵动岛、快捷指令、Siri、文件 App、设置与权限说明里的名字全部换成 LOBE。",
+                "新图标：浅色模式是米白底深蓝 L，深色模式自动换成深蓝底米白 L；手表同步换新。",
+                "Siri 简称改为「LB」：说「问LB」「让LB干活」「LB汇报」即可；原有快捷指令照常可用。",
+                "这是覆盖升级，聊天记录、设置、登录状态、iCloud 同步数据全部保留；新增 lobe:// 链接，旧的 leophoneagent:// 链接继续可用。"
+            ]
+        ),
+        LeoRelease(
             version: "1.57.1",
             date: "2026-10-06",
             title: "全面审计修复",
@@ -1058,7 +1069,7 @@ struct LeoReleaseNotesView: View {
                                 .font(.system(size: 34, weight: .semibold))
                                 .foregroundStyle(.tint)
                                 .accessibilityHidden(true)
-                            Text("LeoPhoneAgent 已更新")
+                            Text("LOBE 已更新")
                                 .font(.title2.bold())
                             Text("版本 \(LeoReleaseCatalog.currentVersion)")
                                 .font(.subheadline)

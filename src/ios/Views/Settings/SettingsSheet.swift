@@ -330,7 +330,7 @@ struct SettingsSheet: View {
         |-------|-------|
         | Platform | iOS |
         | OS Version | iOS \(iosVersion) |
-        | LeoPhoneAgent Version | \(appVersion) (build \(build)) |
+        | LOBE Version | \(appVersion) (build \(build)) |
         | Device Model | \(device) |
 
         ## 🔁 Steps to Reproduce

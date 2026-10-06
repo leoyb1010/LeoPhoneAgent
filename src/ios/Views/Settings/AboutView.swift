@@ -23,7 +23,7 @@ struct AboutView: View {
                                     .stroke(Color(UIColor.separator), lineWidth: 0.5)
                             )
                     }
-                    Text("LeoPhoneAgent")
+                    Text("LOBE")
                         .font(.title2.bold())
                     Text("Version \(appVersion)")
                         .font(.subheadline)
@@ -97,7 +97,7 @@ struct LeoPrivacyView: View {
             }
 
             Section("iCloud Sync") {
-                Text("When iCloud Sync is enabled, LeoPhoneAgent syncs supported conversations, files, settings, and provider configuration through your private iCloud account. Provider credentials may be encoded in synchronized configuration; encoding is not encryption provided by LeoPhoneAgent.")
+                Text("When iCloud Sync is enabled, LOBE syncs supported conversations, files, settings, and provider configuration through your private iCloud account. Provider credentials may be encoded in synchronized configuration; encoding is not encryption provided by LOBE.")
             }
 
             Section("AI Providers") {

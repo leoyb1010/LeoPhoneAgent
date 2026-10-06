@@ -19,6 +19,17 @@ spec = importlib.util.spec_from_file_location('audit_generator', root/'scripts/n
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 router = (root/'src/ios/Shared/DeepLinkRouter.swift').read_text()
+# 改名 LOBE：lobe:// 是 leophoneagent:// 的别名，handle 入口先规范化；规范化函数逐字取自生产代码。
+scheme_start = router.index('enum AppURLScheme')
+app_scheme = router[scheme_start:router.index('\n}\n', scheme_start) + 3]
+app_entry = (root/'src/ios/AppDelegate.swift').read_text()
+open_body = app_entry[app_entry.index('    static func open(_ url: URL, source: String) {'):]
+assert open_body.index('AppURLScheme.canonicalize(url)') < open_body.index('ShortcutCallbackStore.shared.handle(url: url)'), 'AppURLEntry does not canonicalize lobe:// before shortcut callbacks/routing'
+chat_view = (root/'src/ios/Views/Chat/AIChatView.swift').read_text()
+tap = chat_view[chat_view.index('    private func handleMinisURLTap(_ url: URL)'):]
+assert tap.index('AppURLScheme.canonicalize(url)') < tap.index('guard url.scheme == "leophoneagent"'), 'chat link taps do not accept lobe://'
+info = (root/'src/ios/Info.plist').read_text()
+assert '<string>leophoneagent</string>' in info and '<string>lobe</string>' in info, 'Info.plist must register both URL schemes'
 methods = '\n'.join(module.extract_swift_method(router, name)
                     for name in ['handle', 'handleSettings', 'handleWebAppLauncherReturn'])
 quick = (root/'src/ios/Shared/QuickActionRouter.swift').read_text()
@@ -56,7 +67,7 @@ final class UserDefaults {
  func set(_ value: String, forKey key: String) { values[key] = value }
  func string(forKey key: String) -> String? { values[key] }
 }
-''' + backend + r'''
+''' + backend + app_scheme + r'''
 enum PaperclipError: Error { case invalidResponse }
 enum PaperclipProfile {
 ''' + component + r'''
@@ -136,6 +147,27 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   let key = "leo.ios.executionBackend.v1"
   func reset() { UserDefaults.standard.set("paperclip", forKey: key); NotificationNavigationStore.shared.pending = nil; DeepLinkCoordinator.shared.pendingSettingsTarget = nil }
   func route(_ value: String) { DeepLinkRouter.handle(url: URL(string: value)!, shareCoordinator: ShareCoordinator()) }
+  // 别名：lobe:// 与 LOBE:// 规范化成 leophoneagent://，其余 scheme 原样不动。
+  expect(AppURLScheme.canonicalize(URL(string: "lobe://settings/providers?x=1")!).absoluteString == "leophoneagent://settings/providers?x=1", "lobe alias not canonicalized")
+  expect(AppURLScheme.canonicalize(URL(string: "LOBE://new")!).absoluteString == "leophoneagent://new", "uppercase LOBE alias not canonicalized")
+  expect(AppURLScheme.canonicalize(URL(string: "leophoneagent://new")!).absoluteString == "leophoneagent://new", "legacy scheme changed")
+  expect(AppURLScheme.canonicalize(URL(string: "https://lobe.example/x")!).absoluteString == "https://lobe.example/x", "foreign scheme rewritten")
+  for scheme in ["leophoneagent://", "lobe://"] {
+   for routeName in ["settings", "settings/providers", "new", "voice"] {
+    reset(); route(scheme + routeName)
+    expect(UserDefaults.standard.string(forKey: key) == "local", scheme + routeName + " did not route")
+   }
+   reset(); route(scheme + "sessions/known-session")
+   for _ in 0..<30 { if NotificationNavigationStore.shared.pending != nil { break }; try? await Task.sleep(nanoseconds: 1_000_000) }
+   expect(NotificationNavigationStore.shared.pending == "known-session", scheme + " session link lost")
+   reset(); route(scheme + "unknown"); try? await Task.sleep(nanoseconds: 5_000_000)
+   expect(UserDefaults.standard.string(forKey: key) == "paperclip", scheme + "unknown changed workspace")
+   UserDefaults.standard.set("local", forKey: key); PaperclipNavigationInbox.shared.pending = nil
+   route(scheme + "paperclip/issue/issue-9?company=c9")
+   expect(PaperclipNavigationInbox.shared.pending == PaperclipDeepLink.Target(issueID: "issue-9", companyID: "c9"), scheme + " paperclip link lost")
+  }
+  PaperclipNavigationInbox.shared.pending = nil; DeepLinkCoordinator.shared.pendingSettingsTarget = nil
+  QuickActionRouter.shared.newCalls = 0; QuickActionRouter.shared.voiceCalls = 0
   for routeName in ["settings", "settings/providers", "settings/model-groups", "settings/not-real"] {
    reset(); route("leophoneagent://" + routeName)
    expect(UserDefaults.standard.string(forKey: key) == "local", "settings remained in hidden Paperclip workspace")
@@ -207,7 +239,7 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.mac?["macSessionId"] == "m1", "Mac session notification stayed hidden")
   reset(); let before = QuickActionRouter.shared.newChatTrigger; QuickActionRouter.shared.startNewChat()
   expect(UserDefaults.standard.string(forKey: key) == "local" && QuickActionRouter.shared.newChatTrigger == before + 1, "home screen quick action stayed hidden")
-  print("PASS production deep links: 18 local routes + 10 rejected, 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
+  print("PASS production deep links (leophoneagent:// + lobe:// alias): 18 local routes + 10 rejected, 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
  }
 }
 '''

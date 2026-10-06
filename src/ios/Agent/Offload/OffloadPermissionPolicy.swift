@@ -216,7 +216,7 @@ enum OffloadPermissionDecision: Equatable, Sendable {
         case .disabled: return OffloadPermissionPolicy.disabledDenial(command: command)
         case .denied: return OffloadPermissionPolicy.declinedDenial(command: command)
         case .timedOut: return OffloadPermissionPolicy.timeoutDenial(command: command)
-        case .needsForeground: return "需要在前台解锁 LeoPhoneAgent 后确认「\(command)」权限，请打开应用后重试。"
+        case .needsForeground: return "需要在前台解锁 LOBE 后确认「\(command)」权限，请打开应用后重试。"
         case .cancelled: return "已取消「\(command)」授权，设备操作没有执行。"
         case .busy: return "等待授权的设备操作过多，请先处理当前请求后重试。"
         case .unknownCapability: return "设备能力「\(command)」尚未登记授权策略，操作未执行。"

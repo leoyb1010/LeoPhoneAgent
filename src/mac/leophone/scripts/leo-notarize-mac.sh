@@ -3,7 +3,7 @@
 # 不出现在命令行、不进仓库。用法:bash scripts/leo-notarize-mac.sh <dmg>
 set -euo pipefail
 PROFILE="${LEO_NOTARY_PROFILE:-leocodebox}"
-DMG="${1:?用法: leo-notarize-mac.sh <path/to/LeoPhoneAgent-*.dmg>}"
+DMG="${1:?用法: leo-notarize-mac.sh <path/to/LOBE-*.dmg>}"
 [ -f "$DMG" ] || { echo "找不到 DMG: $DMG" >&2; exit 1; }
 
 # --wait 是一条长连接,代理或网络抖一下就断(HTTPClientError.connectTimeout),

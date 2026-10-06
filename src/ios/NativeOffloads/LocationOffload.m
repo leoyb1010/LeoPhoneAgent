@@ -113,7 +113,7 @@ static int cmd_current(int argc, char **argv, int stdout_fd, BOOL compact, BOOL 
             // [A4] 后台(锁屏、快捷指令、定时任务)弹不出系统授权框:立刻给出明确原因,不空等 15 秒。
             delegate.error = [NSError errorWithDomain:@"NativeOffload" code:3
                                userInfo:@{NSLocalizedDescriptionKey:
-                                   @"首次使用定位需要在前台授权:请打开 LeoPhoneAgent 允许定位后再试。"}];
+                                   @"首次使用定位需要在前台授权:请打开 LOBE 允许定位后再试。"}];
             dispatch_semaphore_signal(delegate.semaphore);
         } else if (status == kCLAuthorizationStatusNotDetermined) {
             [manager requestWhenInUseAuthorization];
@@ -130,7 +130,7 @@ static int cmd_current(int argc, char **argv, int stdout_fd, BOOL compact, BOOL 
                                userInfo:@{NSLocalizedDescriptionKey:
                                    @"Location access denied. To grant access, open "
                                     "Settings > Privacy & Security > Location Services "
-                                    "and enable LeoPhoneAgent."}];
+                                    "and enable LOBE."}];
             dispatch_semaphore_signal(delegate.semaphore);
         }
     });

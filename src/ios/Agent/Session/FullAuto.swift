@@ -316,7 +316,7 @@ struct FullAutoSettingsSection: View {
                 Button("一次授完系统权限") { showSystemPermissions = true }
             }
         } footer: {
-            Text("智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LeoPhoneAgent Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。")
+            Text("智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LOBE Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。")
         }
         .sheet(isPresented: $showSystemPermissions) {
             SystemPermissionsSheet()
@@ -346,7 +346,7 @@ struct SystemPermissionsSheet: View {
                         }
                     }
                 } footer: {
-                    Text("只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LeoPhoneAgent 里打开。")
+                    Text("只会弹出还没决定过的项。已拒绝的项请到 系统设置 → LOBE 里打开。")
                 }
             }
             .navigationTitle("系统权限")

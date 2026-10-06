@@ -53,15 +53,15 @@ enum HarnessFullAuto {
     /// [A3] 中继 0.2 之前认不出这台 iPhone 时的修复步骤;新中继会在 403 里自己带步骤。
     static let fallbackSteps = [
         "在运行中继的那台 Mac 上,把中继(relay.py)更新到 0.2 或更新版本并重启中继。",
-        "在这台 Mac 上把 LeoPhoneAgent(或 leoagent)更新到最新版,确认它重新连上了中继。",
+        "在这台 Mac 上把 LOBE(或 leoagent)更新到最新版,确认它重新连上了中继。",
         "回到手机点「恢复全自动」,或重发这个任务。",
     ]
 
     /// [A3] 403 回退时写进会话的说明:优先用 Mac 给的原因与步骤,没给就用本机的具体步骤。
     static func refusedNote(serverMessage: String?, status: Int = 403) -> String {
         if status == 400 {
-            return "这台 Mac 上的 LeoPhoneAgent 桌面端版本较旧,还不支持这个 CLI 的全自动,这次改为逐项审批。"
-                + "把 Mac 上的 LeoPhoneAgent 更新到最新版后,点「恢复全自动」或重发任务即可。"
+            return "这台 Mac 上的 LOBE 桌面端版本较旧,还不支持这个 CLI 的全自动,这次改为逐项审批。"
+                + "把 Mac 上的 LOBE 更新到最新版后,点「恢复全自动」或重发任务即可。"
         }
         let head = "这台 Mac 没认出这台 iPhone,全自动这次没生效,改为逐项审批。按下面做完即可恢复:"
         let server = serverMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

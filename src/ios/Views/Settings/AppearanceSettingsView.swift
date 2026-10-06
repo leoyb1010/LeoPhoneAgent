@@ -175,7 +175,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Interaction")
             } footer: {
-                Text("Controls LeoPhoneAgent action feedback. System alerts and keyboard haptics are unchanged.")
+                Text("Controls LOBE action feedback. System alerts and keyboard haptics are unchanged.")
             }
 
             Section {

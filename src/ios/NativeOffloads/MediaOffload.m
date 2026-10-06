@@ -86,7 +86,7 @@ static BOOL requestMediaAccess(NSString **outError) {
         if (outError) {
             *outError = @"Media library access not granted. "
                          "To grant access, open Settings > Privacy & Security > Media & Apple Music "
-                         "and enable LeoPhoneAgent.";
+                         "and enable LOBE.";
         }
         return NO;
     }

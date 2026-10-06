@@ -304,7 +304,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     }
 
     func noteMicUnavailable() {
-        lastActionMessage = "麦克风不可用。请在手表的「设置 › 隐私与安全性 › 麦克风」里允许 LeoPhoneAgent。"
+        lastActionMessage = "麦克风不可用。请在手表的「设置 › 隐私与安全性 › 麦克风」里允许 LOBE。"
     }
 
     private func begin(_ text: String?, route: WatchAskRoute) -> String {

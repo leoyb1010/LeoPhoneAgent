@@ -157,7 +157,7 @@ private struct AgentStatusWidgetView: View {
                 }
             }
         }
-        .accessibilityLabel("LeoPhoneAgent \(entry.snapshot.primaryText)")
+        .accessibilityLabel("LOBE \(entry.snapshot.primaryText)")
     }
 
     private var accessoryRectangularView: some View {
@@ -235,7 +235,7 @@ private struct AgentStatusWidgetView: View {
         HStack(spacing: 6) {
             Image(systemName: "sparkles")
                 .foregroundStyle(Color.accentColor)
-            Text("LeoPhoneAgent")
+            Text("LOBE")
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -372,7 +372,7 @@ struct AgentLiveActivityWidget: Widget {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
                             .font(.caption2)
-                        Text(context.state.soulName.isEmpty ? "LeoPhoneAgent" : context.state.soulName)
+                        Text(context.state.soulName.isEmpty ? "LOBE" : context.state.soulName)
                             .font(.caption.bold())
                     }
                     .padding(.horizontal, 6)
@@ -608,7 +608,7 @@ struct AgentSmallActivityView: View {
         if state.activeSessionCount > 1, waiting == nil {
             return String(localized: "\(state.activeSessionCount) 个任务在跑")
         }
-        return s?.title ?? "LeoPhoneAgent"
+        return s?.title ?? "LOBE"
     }
 
     private func line(_ s: LiveSessionSnapshot?) -> String {
@@ -712,7 +712,7 @@ struct AgentLockScreenView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "sparkles")
                         .font(.caption2)
-                    Text(state.soulName.isEmpty ? "LeoPhoneAgent" : state.soulName)
+                    Text(state.soulName.isEmpty ? "LOBE" : state.soulName)
                         .font(.caption.bold())
                 }
                 .padding(.horizontal, 6)
@@ -1082,7 +1082,7 @@ private struct QuickTasksSmallView: View {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(Color.accentColor)
-                Text("LeoPhoneAgent")
+                Text("LOBE")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
@@ -2117,7 +2117,7 @@ struct NewChatControl: ControlWidget {
             }
         }
         .displayName("New Chat")
-        .description("Start a new chat in LeoPhoneAgent.")
+        .description("Start a new chat in LOBE.")
     }
 }
 
@@ -2130,7 +2130,7 @@ struct VoiceChatControl: ControlWidget {
             }
         }
         .displayName("Voice Chat")
-        .description("Open LeoPhoneAgent and start voice input.")
+        .description("Open LOBE and start voice input.")
     }
 }
 
@@ -2143,7 +2143,7 @@ struct CameraChatControl: ControlWidget {
             }
         }
         .displayName("Camera Chat")
-        .description("Open LeoPhoneAgent and open the camera.")
+        .description("Open LOBE and open the camera.")
     }
 }
 

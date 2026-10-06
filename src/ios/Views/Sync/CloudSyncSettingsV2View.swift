@@ -285,7 +285,7 @@ struct CloudSyncSettingsV2View: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Friendly name shown to your other LeoPhoneAgent devices.")
+            Text("Friendly name shown to your other LOBE devices.")
         }
     }
 

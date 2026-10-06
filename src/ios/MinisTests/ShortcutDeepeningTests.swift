@@ -48,6 +48,16 @@ final class ShortcutDeepeningTests: XCTestCase {
         XCTAssertEqual(cancel.status, .cancel)
     }
 
+    func testCallbackAcceptsLobeAliasButKeepsGeneratingLegacyScheme() throws {
+        XCTAssertTrue(ShortcutCallbackStore.callbackURL(runId: "r9", status: .success).hasPrefix("leophoneagent://"))
+        let parsed = try XCTUnwrap(ShortcutCallbackStore.parse(
+            XCTUnwrap(URL(string: "lobe://shortcut-result?run=r9&status=cancel&result=ok"))))
+        XCTAssertEqual(parsed.runId, "r9")
+        XCTAssertEqual(parsed.status, .cancel)
+        XCTAssertEqual(parsed.result, "ok")
+        XCTAssertNil(ShortcutCallbackStore.parse(try XCTUnwrap(URL(string: "lobe://settings?run=r9"))))
+    }
+
     func testRejectsForeignHostsAndUnsafeRunIds() throws {
         XCTAssertNil(ShortcutCallbackStore.parse(try XCTUnwrap(URL(string: "leophoneagent://settings?run=r1"))))
         XCTAssertNil(ShortcutCallbackStore.parse(try XCTUnwrap(URL(string: "other://shortcut-result?run=r1"))))

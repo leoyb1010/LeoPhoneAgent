@@ -760,7 +760,7 @@ struct CollectionsView: View {
         LeoEmptyState(
             systemImage: "shippingbox",
             title: "藏宝阁还是空的",
-            message: "在任意 App 里分享给 LeoPhoneAgent，或用上方四种方式开始。"
+            message: "在任意 App 里分享给 LOBE，或用上方四种方式开始。"
         )
     }
 

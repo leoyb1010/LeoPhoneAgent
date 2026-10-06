@@ -58,10 +58,16 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // e2e 运行的是生产构建，默认会和本机正式版 ZCode 共用 app name / userData，
 // 触发 Electron 单实例锁后只激活已有窗口，Chromedriver 无法接管测试进程。
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
+const runtimeApplicationNameOverride = readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME");
+// [leo] 对用户显示的应用名 = LOBE(macOS 菜单栏、Dock、关于窗口、进程名)。
 export const runtimeApplicationName =
-  readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
-  // [leo] 正式包的应用名 = LeoPhoneAgent:它同时决定 macOS 菜单栏标题和
-  // `~/Library/Application Support/<name>` 这个 userData 目录。
+  runtimeApplicationNameOverride ??
+  (isLocalDevelopmentRuntime ? "LOBE Dev" : isPreviewPackagedRuntime ? "LOBE Preview" : "LOBE");
+// [leo] userData 目录名钉在改名前的 LeoPhoneAgent,不跟显示名走:
+// `~/Library/Application Support/LeoPhoneAgent` 里有 localStorage(含工作区模式)、
+// Paperclip 会话 Cookie、窗口状态和单实例锁,改名升级后必须原样接上。
+const runtimeDataDirName =
+  runtimeApplicationNameOverride ??
   (isLocalDevelopmentRuntime
     ? "LeoPhoneAgent Dev"
     : isPreviewPackagedRuntime
@@ -78,7 +84,7 @@ export const runtimeUserDataPath =
   readRuntimeEnvOverride("ZCODE_DESKTOP_USER_DATA_DIR") ??
   (shouldUseElectronDefaultUserDataPath
     ? undefined
-    : join(getElectronAppPath("appData"), runtimeApplicationName));
+    : join(getElectronAppPath("appData"), runtimeDataDirName));
 export const runtimeSessionDataPath =
   readRuntimeEnvOverride("ZCODE_DESKTOP_SESSION_DATA_DIR") ??
   (runtimeUserDataPath ? join(runtimeUserDataPath, "session") : undefined);

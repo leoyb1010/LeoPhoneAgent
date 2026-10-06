@@ -135,7 +135,7 @@ export function createHostApiNetworkTransport(
     // [leo] DNS 层的独立性闸门管不到代理:走 HTTP 代理时目标域名只出现在 CONNECT 里,
     // 本机根本不解析它。这里按 URL 再拦一次。
     if (isLeoBlockedHost(safeHostname(requestUrl))) {
-      throw new TypeError(`[leo] ${safeHostname(requestUrl)} 属于官方服务,LeoPhoneAgent 不连接`);
+      throw new TypeError(`[leo] ${safeHostname(requestUrl)} 属于官方服务,LOBE 不连接`);
     }
     const route = resolveHostProxyForUrl(requestUrl, options);
     if (route.kind === "invalid") {

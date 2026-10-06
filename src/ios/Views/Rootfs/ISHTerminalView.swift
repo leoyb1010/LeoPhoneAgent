@@ -213,7 +213,7 @@ struct ISHTerminalView: View {
            let session = shellSessions.first(where: { $0.id == sid }) {
             return SessionLockStore.shared.isLocked(session.id) ? "Shell" : session.title ?? "Shell"
         }
-        return "LeoPhoneAgent Shell"
+        return "LOBE Shell"
     }
 
     private func switchShell(to session: ChatSession) {

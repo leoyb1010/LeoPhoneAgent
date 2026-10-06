@@ -30,8 +30,8 @@ html[data-leo-skin].theme-zai-dark {
   --leo-brand: #2e9c9c;
   --leo-brand-soft: rgba(46, 156, 156, 0.14);
   --leo-attention: #f0b86e;
-  --leo-mark-from: #a8f1e2;
-  --leo-mark-to: #4dd9d9;
+  --leo-mark-from: #f5f1e8;
+  --leo-mark-to: #9fb9d2;
   --leo-shadow-composer:
     inset 0 1px 0 rgba(255, 250, 240, 0.035), 0 14px 36px -16px rgba(0, 0, 0, 0.7);
   --leo-shadow-card: 0 18px 48px -20px rgba(0, 0, 0, 0.75);
@@ -82,8 +82,8 @@ html[data-leo-skin].theme-zai-light {
   --leo-brand: #2a8282;
   --leo-brand-soft: rgba(42, 130, 130, 0.1);
   --leo-attention: #b86e12;
-  --leo-mark-from: #3cc9b4;
-  --leo-mark-to: #2a8282;
+  --leo-mark-from: #1d3349;
+  --leo-mark-to: #9fb9d2;
   --leo-shadow-composer:
     0 1px 2px rgba(40, 32, 20, 0.04), 0 12px 30px -16px rgba(40, 32, 20, 0.22);
   --leo-shadow-card: 0 18px 44px -22px rgba(40, 32, 20, 0.28);

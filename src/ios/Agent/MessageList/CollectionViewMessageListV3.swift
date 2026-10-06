@@ -252,7 +252,7 @@ private struct BridgedAssistantHeaderV3: View {
                         endPoint: .bottomTrailing
                     )
                 )
-            Text(soulMeta.name.isEmpty ? "LeoPhoneAgent" : soulMeta.name)
+            Text(soulMeta.name.isEmpty ? "LOBE" : soulMeta.name)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(ChatColors.primaryText)
         }

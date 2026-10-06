@@ -273,7 +273,7 @@ struct SessionStorageDetailView: View {
 
     var body: some View {
         List {
-            Section("LeoPhoneAgent Files") {
+            Section("LOBE Files") {
                 if currentMinisSize > 0, lockStore.isVisuallyLocked(session.id) {
                     Button {
                         Task {
@@ -301,7 +301,7 @@ struct SessionStorageDetailView: View {
                         }
                     }
                 } else {
-                    Text("No LeoPhoneAgent files")
+                    Text("No LOBE files")
                         .foregroundStyle(.secondary)
                 }
             }

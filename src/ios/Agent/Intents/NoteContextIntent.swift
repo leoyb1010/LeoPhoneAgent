@@ -38,7 +38,7 @@ enum ContextSignalOption: String, AppEnum {
 
 struct NoteContextIntent: AppIntent {
     static var title: LocalizedStringResource = "记下此刻"
-    static var description = IntentDescription("告诉 LeoPhoneAgent 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。")
+    static var description = IntentDescription("告诉 LOBE 你现在的情境(到家、出门、上车……),交给自动化规则处理。锁屏也能跑。")
     static var openAppWhenRun: Bool = false
     /// 和「记一条笔记」一样在 App 进程内后台执行:只写本机情境队列,不读、不念任何已有内容。
     static var supportedModes: IntentModes = .background

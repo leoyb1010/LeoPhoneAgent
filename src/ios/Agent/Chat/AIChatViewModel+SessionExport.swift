@@ -98,7 +98,7 @@ extension AIChatViewModel {
         var out: [String] = []
         let header = DateFormatter()
         header.dateFormat = "yyyy-MM-dd HH:mm"
-        out.append("# LeoPhoneAgent Session")
+        out.append("# LOBE Session")
         out.append("")
         out.append("_Exported \(header.string(from: Date()))_")
         for message in messages {

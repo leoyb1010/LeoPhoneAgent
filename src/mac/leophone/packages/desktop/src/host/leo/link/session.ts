@@ -457,7 +457,7 @@ export class LinkSession {
     return {
       session_id: this.sessionId,
       harness: "zcode",
-      name: "LeoPhoneAgent",
+      name: "LOBE",
       cwd: this.cwd,
       status: this.reportedStatus(),
       title: this.title,

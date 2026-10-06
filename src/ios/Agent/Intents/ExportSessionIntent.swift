@@ -23,7 +23,7 @@ enum SessionExportFileFormat: String, AppEnum {
 
 struct ExportSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "导出会话"
-    static var description = IntentDescription("把一个 LeoPhoneAgent 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。")
+    static var description = IntentDescription("把一个 LOBE 会话导出成 Markdown 或纯文本文件，可接「存储文件」或「共享」。")
     static var openAppWhenRun: Bool = false
     static var supportedModes: IntentModes = .background
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication

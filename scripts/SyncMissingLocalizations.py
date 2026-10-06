@@ -29,7 +29,7 @@ LOCALES = {
 }
 
 KEEP_TERMS = [
-    "LeoPhoneAgent", "Token", "tokens", "token", "iOS", "iCloud", "CloudKit",
+    "LeoPhoneAgent", "LOBE", "Token", "tokens", "token", "iOS", "iCloud", "CloudKit",
     "HomeKit", "HealthKit", "WeatherKit", "App Store", "App Group", "Keychain",
     "Siri", "OAuth", "PKCE", "API",
     "JSON", "HTTP", "HTTPS", "URL", "MCP", "CKAsset", "SHA-256", "NFC",

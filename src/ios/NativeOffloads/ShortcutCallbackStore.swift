@@ -90,7 +90,8 @@ final class ShortcutCallbackStore: NSObject, @unchecked Sendable {
 
     /// 解析回调 URL;不是本类回调或 runId 不合法时返回 nil。
     static func parse(_ url: URL) -> Callback? {
-        guard url.scheme == "leophoneagent", url.host == callbackHost,
+        // 生成仍用 leophoneagent://(已发出的 x-callback 都是它);改名后 lobe:// 也接受。
+        guard ["leophoneagent", "lobe"].contains(url.scheme?.lowercased() ?? ""), url.host == callbackHost,
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
         func value(_ name: String) -> String? { items.first(where: { $0.name == name })?.value }
         guard let runId = value("run"), isValidRunId(runId) else { return nil }

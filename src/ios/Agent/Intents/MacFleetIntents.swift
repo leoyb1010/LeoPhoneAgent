@@ -75,7 +75,7 @@ enum MacCLIOption: String, AppEnum {
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "编码 CLI")
     static var caseDisplayRepresentations: [MacCLIOption: DisplayRepresentation] = [
-        .claude: "Claude Code", .codex: "Codex", .grok: "Grok", .zcode: "LeoPhoneAgent",
+        .claude: "Claude Code", .codex: "Codex", .grok: "Grok", .zcode: "LOBE",
     ]
 
     var displayName: String {
@@ -83,7 +83,7 @@ enum MacCLIOption: String, AppEnum {
         case .claude: return "Claude Code"
         case .codex: return "Codex"
         case .grok: return "Grok"
-        case .zcode: return "LeoPhoneAgent"
+        case .zcode: return "LOBE"
         }
     }
 }

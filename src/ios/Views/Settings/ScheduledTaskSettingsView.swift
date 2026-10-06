@@ -81,7 +81,7 @@ struct ScheduledTaskSettingsView: View {
             Section {
                 stepRow(1, String(localized: "Open the Shortcuts app → Automation → New"))
                 stepRow(2, String(localized: "Choose “Time of Day” and set the time you want (e.g. 08:00 daily)"))
-                stepRow(3, String(localized: "For the action, search LeoPhoneAgent and pick “Run Due Scheduled Tasks”"))
+                stepRow(3, String(localized: "For the action, search LOBE and pick “Run Due Scheduled Tasks”"))
                 stepRow(4, String(localized: "Turn off “Ask Before Running” and save"))
             } header: {
                 Text("Make it fire on time (recommended)")

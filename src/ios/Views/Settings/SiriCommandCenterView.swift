@@ -15,23 +15,23 @@ struct SiriCommandCenterView: View {
         var id: String { say }
     }
 
-    // 别名 LPA 已注册(INAlternativeAppNames):短语里的 app 名说「LPA」
+    // 别名 LB 已注册(INAlternativeAppNames):短语里的 app 名说「LB」
     // 即可,全名 LeoPhoneAgent 同样有效。
     private let fleetPhrases: [Phrase] = [
-        Phrase(say: "让LPA在Mac上跑", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
-        Phrase(say: "让LPA用我的Mac", does: "同上,另一种说法"),
-        Phrase(say: "LPA汇报", does: "念出三台 Mac 进行中任务与待审批"),
-        Phrase(say: "LPA批准", does: "念出最近一条待审批,确认后批准(需解锁,高风险不经 Siri)"),
-        Phrase(say: "LPA停止任务", does: "停掉指定 Mac 上正在跑的任务(多个时先问)"),
+        Phrase(say: "让LB在Mac上跑", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
+        Phrase(say: "让LB用我的Mac", does: "同上,另一种说法"),
+        Phrase(say: "LB汇报", does: "念出三台 Mac 进行中任务与待审批"),
+        Phrase(say: "LB批准", does: "念出最近一条待审批,确认后批准(需解锁,高风险不经 Siri)"),
+        Phrase(say: "LB停止任务", does: "停掉指定 Mac 上正在跑的任务(多个时先问)"),
     ]
 
     private let chatPhrases: [Phrase] = [
-        Phrase(say: "问LPA", does: "打开 app 进入对话"),
-        Phrase(say: "让LPA干活", does: "在\(LeoDeviceNouns.thisDevice())上后台跑,不上 Mac"),
-        Phrase(say: "给LPA发送提示", does: "后台跑一个任务,Siri 念结果"),
-        Phrase(say: "运行LPA快捷任务", does: "执行你配置的快捷任务"),
-        Phrase(say: "查看LPA任务", does: "播报会话状态"),
-        Phrase(say: "LPA收藏", does: "把一段文字/链接存进收藏(可接剪贴板)"),
+        Phrase(say: "问LB", does: "打开 app 进入对话"),
+        Phrase(say: "让LB干活", does: "在\(LeoDeviceNouns.thisDevice())上后台跑,不上 Mac"),
+        Phrase(say: "给LB发送提示", does: "后台跑一个任务,Siri 念结果"),
+        Phrase(say: "运行LB快捷任务", does: "执行你配置的快捷任务"),
+        Phrase(say: "查看LB任务", does: "播报会话状态"),
+        Phrase(say: "LB收藏", does: "把一段文字/链接存进收藏(可接剪贴板)"),
     ]
 
     var body: some View {
@@ -68,7 +68,7 @@ struct SiriCommandCenterView: View {
                     Text("小红书这类 app 只给「复制链接」,没有系统分享。配一条快捷指令后,复制完按一下侧键或顶部按钮就存进收藏:")
                     Text("1. 快捷指令 App → 新建快捷指令")
                     Text("2. 加动作「获取剪贴板」")
-                    Text("3. 加动作「收藏到 LPA」(搜 LeoPhoneAgent)")
+                    Text("3. 加动作「收藏到 LB」(搜 LOBE)")
                     Text("4. 命名为「收藏」,再到 系统设置 → 操作按钮 → 快捷指令 里选它")
                     Text("也可以直接在收藏页用剪贴板条 / 右上角「粘贴链接收藏」。")
                         .foregroundStyle(.tertiary)
@@ -79,7 +79,7 @@ struct SiriCommandCenterView: View {
             Section("把「问 Leo」绑到操作按钮(本机有的话)") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("1. 系统设置 → 操作按钮(部分机型才有)")
-                    Text("2. 滑到「快捷指令」,选「Ask LeoPhoneAgent」")
+                    Text("2. 滑到「快捷指令」,选「Ask LOBE」")
                     Text("3. 之后实体键一按即语音下任务——比嘿 Siri 更快。没有操作按钮时用嘿 Siri 或快捷指令即可。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
@@ -93,7 +93,7 @@ struct SiriCommandCenterView: View {
                     Text("• 「充电时 + 23:00」→ 指挥一台 Mac:跑夜间批处理")
                     Text("• 「到达家」→ Mac 任务汇报")
                     Text("• 「离开公司」→ Mac 任务汇报")
-                    Text("快捷指令 App → 自动化 → 新建,动作里搜 LeoPhoneAgent。")
+                    Text("快捷指令 App → 自动化 → 新建,动作里搜 LOBE。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
             }

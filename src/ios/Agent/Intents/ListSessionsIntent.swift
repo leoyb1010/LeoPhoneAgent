@@ -5,7 +5,7 @@ import Foundation
 /// directly into follow-up LeoPhoneAgent actions.
 struct ListSessionsIntent: AppIntent {
     static var title: LocalizedStringResource = "List Sessions"
-    static var description = IntentDescription("Lists all LeoPhoneAgent chat sessions with their titles and IDs.")
+    static var description = IntentDescription("Lists all LOBE chat sessions with their titles and IDs.")
     static var openAppWhenRun = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 

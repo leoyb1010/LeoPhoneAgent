@@ -17,7 +17,7 @@ export function isLeoBlockedHost(hostname: string | null | undefined): boolean {
 
 function blockedError(hostname: string): NodeJS.ErrnoException {
   const error: NodeJS.ErrnoException = new Error(
-    `[leo] ${hostname} 属于官方服务,LeoPhoneAgent 不连接`,
+    `[leo] ${hostname} 属于官方服务,LOBE 不连接`,
   );
   error.code = "ENOTFOUND";
   return error;

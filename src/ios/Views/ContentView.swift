@@ -282,7 +282,7 @@ struct ContentView: View {
     /// Soul name shown as the sidebar title. Sourced from SOUL.md, falls
     /// back to "LeoPhoneAgent". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "LeoPhoneAgent" : SoulStore.cachedMetadata.name
+        ? "LOBE" : SoulStore.cachedMetadata.name
     /// Subtitle state shown under the "LeoPhoneAgent" sidebar title. nil hides the
     /// row; otherwise it renders as small capsules per type or a single
     /// status string. Refreshed by a 5s timer.
@@ -1877,7 +1877,7 @@ struct ContentView: View {
         // and can't drop a .soulMdChanged notification arriving during reconstruction.
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
             let n = SoulStore.cachedMetadata.name
-            soulName = n.isEmpty ? "LeoPhoneAgent" : n
+            soulName = n.isEmpty ? "LOBE" : n
         }
     }
 
@@ -4760,7 +4760,7 @@ struct ContentView: View {
                 done += 1
                 if msg.isToolResultOnly { continue }
 
-                let role = msg.role == .user ? "User" : "LeoPhoneAgent"
+                let role = msg.role == .user ? "User" : "LOBE"
                 let time = timeFmt.string(from: msg.createdAt)
                 var parts: [String] = []
                 for part in msg.parts {

@@ -63,9 +63,9 @@ static NSString *const HELP_TEXT =
      "  1. If the Shortcuts app passes the shortcut's output on x-success, it is\n"
      "     returned as `output` (output_source=callback).\n"
      "  2. Otherwise end the shortcut with \"Save File\" (Ask Where to Save: off,\n"
-     "     Overwrite: on) to Files > LeoPhoneAgent > shared > ShortcutResults/<name>.txt\n"
+     "     Overwrite: on) to Files > LOBE > shared > ShortcutResults/<name>.txt\n"
      "     (or <run_id>.txt). It is read when the callback arrives or when\n"
-     "     LeoPhoneAgent returns to the foreground (output_source=file).\n"
+     "     LOBE returns to the foreground (output_source=file).\n"
      "  No callback within the timeout -> status=timeout (the shortcut may still run).\n"
      "\n"
      "NOTE: iOS provides no API to enumerate the user's shortcuts library.\n"
@@ -170,8 +170,8 @@ static int emit_open_failure(NSString *action, UIApplicationState appState, int 
                              BOOL compact, BOOL quiet) {
     NSString *hint = appState == UIApplicationStateActive
         ? @"iOS declined to open the Shortcuts URL. Is the Shortcuts app installed?"
-        : @"iOS declined to open the Shortcuts URL — LeoPhoneAgent is in the background. "
-           "Ask the user to bring LeoPhoneAgent to the foreground and retry.";
+        : @"iOS declined to open the Shortcuts URL — LOBE is in the background. "
+           "Ask the user to bring LOBE to the foreground and retry.";
     noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, NOFF_ERR_NOT_AVAILABLE, hint),
                    compact, quiet);
     return NOFF_EXIT_NOT_AVAILABLE;
@@ -287,7 +287,7 @@ static int cmd_run(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL com
         data[@"output"] = [NSNull null];
         data[@"note"] = [NSString stringWithFormat:
             @"The shortcut finished but returned no text. To get its output, end the shortcut with "
-             "'Save File' to Files > LeoPhoneAgent > shared > ShortcutResults/%@.txt.", name];
+             "'Save File' to Files > LOBE > shared > ShortcutResults/%@.txt.", name];
     } else {
         data[@"note"] = [NSString stringWithFormat:
             @"No callback within %.0f s; the shortcut may still be running. If it saves "

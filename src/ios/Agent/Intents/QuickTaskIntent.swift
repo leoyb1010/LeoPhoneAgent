@@ -28,7 +28,7 @@ enum QuickTaskIntentError: LocalizedError {
 /// AppEnum parameter and continue running.
 struct QuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task (Compatibility)"
-    static var description = IntentDescription("Runs a quick task saved by an earlier LeoPhoneAgent version. New shortcuts should use Quick Task.")
+    static var description = IntentDescription("Runs a quick task saved by an earlier LOBE version. New shortcuts should use Quick Task.")
     static var openAppWhenRun = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
@@ -184,7 +184,7 @@ struct QuickTaskIntent: AppIntent {
         let taskName = definition.name
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: "LeoPhoneAgent: \(taskName)",
+            title: "LOBE: \(taskName)",
             body: "\(modelName) is working on it…",
             sessionId: sid
         )
@@ -192,7 +192,7 @@ struct QuickTaskIntent: AppIntent {
         if waitForResult {
             let settled = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: "LeoPhoneAgent: \(taskName)", notificationId: "shortcut-done")
+                title: "LOBE: \(taskName)", notificationId: "shortcut-done")
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -213,7 +213,7 @@ struct QuickTaskIntent: AppIntent {
         Task { @MainActor in
             _ = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: "LeoPhoneAgent: \(taskName)", notificationId: "shortcut-done")
+                title: "LOBE: \(taskName)", notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(
@@ -235,7 +235,7 @@ struct QuickTaskIntent: AppIntent {
 /// stable while the task names and prompts can be edited in the app.
 struct RunQuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task"
-    static var description = IntentDescription("Runs a LeoPhoneAgent quick task from your editable task library.")
+    static var description = IntentDescription("Runs a LOBE quick task from your editable task library.")
     static var openAppWhenRun = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]

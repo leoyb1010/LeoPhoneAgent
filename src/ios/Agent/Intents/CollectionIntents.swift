@@ -5,7 +5,7 @@
 //  [T-collections] 收藏进 Siri / 快捷指令 / 操作按钮。
 //
 //  为什么需要它:小红书这类 app 只给"复制链接"、不给系统分享面板。
-//  有了这个 intent,一条「获取剪贴板 → 收藏到 LPA」的快捷指令就能绑到
+//  有了这个 intent,一条「获取剪贴板 → 收藏到 LB」的快捷指令就能绑到
 //  侧边操作按钮或控制中心——复制完按一下键,内容进收藏,连 app 都不用开。
 //
 //  openAppWhenRun = false:后台完成,不打断当前正在刷的 app。
@@ -82,7 +82,7 @@ struct SearchTreasuryIntent: AppIntent {
 @available(iOS 16.0, *)
 struct OpenTreasuryIntent: AppIntent {
     static let title: LocalizedStringResource = "打开藏宝阁"
-    static let description = IntentDescription("打开 LeoPhoneAgent 的藏宝阁。")
+    static let description = IntentDescription("打开 LOBE 的藏宝阁。")
     static let openAppWhenRun = true
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 

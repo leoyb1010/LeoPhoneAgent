@@ -157,7 +157,7 @@ final class WatchStandaloneClient: ObservableObject {
     func askStreaming(_ text: String, history: [(question: String, answer: String)],
                       onEvent: @escaping (WatchAgentEvent) -> Void) async throws -> String {
         guard let config, let key = Self.loadKey() else {
-            throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LeoPhoneAgent 同步。")
+            throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LOBE 同步。")
         }
         let servers = Self.loadServers()
         let tools = await availableTools(servers)
@@ -208,7 +208,7 @@ final class WatchStandaloneClient: ObservableObject {
     private func makeRequest(_ text: String,
                              history: [(question: String, answer: String)]) throws -> (WatchStandaloneConfig, URLRequest) {
         guard let config, let key = Self.loadKey(), let url = URL(string: config.endpoint) else {
-            throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LeoPhoneAgent 同步。")
+            throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LOBE 同步。")
         }
         var turns: [[String: String]] = []
         for pair in history {

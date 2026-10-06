@@ -8,8 +8,8 @@ const WORKFLOW_NAME = "Open in LeoPhoneAgent.workflow";
 const WORKFLOW_BUNDLE_ID = "dev.zcode.app.finder-open-workflow";
 const WORKFLOW_VERSION = "5";
 const SERVICES_MENU_LABELS: Record<Locale, string> = {
-  "zh-CN": "在 LeoPhoneAgent 中打开",
-  "en-US": "Open in LeoPhoneAgent",
+  "zh-CN": "在 LOBE 中打开",
+  "en-US": "Open in LOBE",
 };
 
 const workflowScript = `first=""

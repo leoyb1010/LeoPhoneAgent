@@ -495,7 +495,7 @@ function LoginPanelHeader({
 function LoginPanelLogo() {
   return (
     // [leo] 我们的图标自带底色与圆角,直接铺满,不再外套一层深色方块。
-    <div className="relative mb-1 size-16 shadow-lg/20" aria-label="LeoPhoneAgent" role="img">
+    <div className="relative mb-1 size-16 shadow-lg/20" aria-label="LOBE" role="img">
       <ZCodeAboutLogo className="size-full" />
     </div>
   );

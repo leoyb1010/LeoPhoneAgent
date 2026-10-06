@@ -184,7 +184,7 @@ struct SkillsManagementView: View {
                     Button {
                         showSkillsBrowser = true
                     } label: {
-                        Label(String(localized: "LeoPhoneAgent Skills"), systemImage: "globe")
+                        Label(String(localized: "LOBE Skills"), systemImage: "globe")
                     }
                     // Skill iCloud sync is wired through SyncV2; hide the
                     // force-sync entry entirely when the user has the
@@ -1029,7 +1029,7 @@ struct MinisSkillsBrowserView: View {
                     .animation(LeoMotion.spring(), value: coordinator.hudState)
                 }
             }
-            .navigationTitle("LeoPhoneAgent Skills")
+            .navigationTitle("LOBE Skills")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

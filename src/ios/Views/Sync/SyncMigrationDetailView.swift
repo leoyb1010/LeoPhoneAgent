@@ -561,7 +561,7 @@ struct SyncMigrationDetailView: View {
         } header: {
             Text("iCloud Zones")
         } footer: {
-            Text("Every zone LeoPhoneAgent has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.")
+            Text("Every zone LOBE has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.")
                 .font(.caption)
         }
     }
@@ -637,7 +637,7 @@ struct SyncMigrationDetailView: View {
             }
             return String(localized: "V1 sync (legacy) · another device's pre-v2 backup. Safe to delete if that device has migrated to V2.")
         case .system:
-            return String(localized: "CloudKit built-in zone. Not used by LeoPhoneAgent.")
+            return String(localized: "CloudKit built-in zone. Not used by LOBE.")
         case .other:
             return String(localized: "Legacy or unknown zone. Inspect before deleting.")
         case .v2:

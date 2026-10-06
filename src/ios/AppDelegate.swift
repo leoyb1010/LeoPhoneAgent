@@ -390,6 +390,7 @@ enum AppURLEntry {
     private static var lastAt: Date = .distantPast
 
     static func open(_ url: URL, source: String) {
+        let url = AppURLScheme.canonicalize(url)
         if url == lastURL, Date().timeIntervalSince(lastAt) < 2 {
             logger.info("[URL] duplicate delivery via \(source) ignored")
             return
