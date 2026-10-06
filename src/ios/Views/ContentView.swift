@@ -421,6 +421,8 @@ struct ContentView: View {
     // [T-ios-crash-contextmenu-uaf] Stable action relay for session context menus.
     @State private var menuActions = SessionMenuActionChannel()
     @ObservedObject private var sessionExtras = SessionListExtras.shared
+    /// [F5] Bumped when the focus wrap-up card is dismissed so the strip re-reads defaults.
+    @State private var homeContextRefresh = 0
     @State private var showSessionImporter = false
     @State private var newFolderName = ""
     @State private var showNewFolderAlert = false
@@ -1008,7 +1010,7 @@ struct ContentView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: isExporting)
+                    .animation(LeoMotion.standardEase(), value: isExporting)
                 }
             }
     }
@@ -2039,6 +2041,7 @@ struct ContentView: View {
             // 底部输入栏的 "/" 面板;筛选 chips 只在搜索时出现。
             homeSearchSection
             macLiveSection
+            homeContextSection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
             ForEach(groups, id: \.label) { group in
@@ -2141,6 +2144,7 @@ struct ContentView: View {
             // 旧的工作区卡片、"猜你想做"、浮动按钮都换成底部同一条输入栏。
             homeSearchSection
             macLiveSection
+            homeContextSection
             // [T-ios-session-list-equatable-jank] Diff a (label, ids) projection
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
             // array. Rows resolve the model via displaySessionsById.
@@ -3747,6 +3751,71 @@ struct ContentView: View {
             return approvalCount == 1 ? "远程机器等你审批" : "\(approvalCount) 条远程审批待处理"
         }
         return "\(sessionCount) 个会话等你处理"
+    }
+
+    // MARK: - [F5] 首页情境条
+
+    /// 继续上次 / 今日 / 安静收件箱 / 专注收尾。The decisions live in
+    /// HomeContextResolver (unit-tested); this only gathers the inputs.
+    private var homeContextSnapshot: HomeContextSnapshot {
+        _ = homeContextRefresh
+        let defaults = UserDefaults.standard
+        let badges = badgeStore.badgeStates
+        let infos: [HomeContextSession] = sessions.compactMap { session in
+            guard !sessionExtras.isArchived(session.id) else { return nil }
+            let states = badges[session.id] ?? []
+            let unfinished = runningSessionIds.contains(session.id)
+                || sidebarConcurrencyManager.isSuspended(session.id)
+                || states.contains(.paused) || states.contains(.unread)
+            let title = session.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return HomeContextSession(id: session.id,
+                                      title: title.isEmpty ? String(localized: "未命名对话") : title,
+                                      updatedAt: session.updatedAt,
+                                      unfinished: unfinished)
+        }
+        return HomeContextResolver.snapshot(
+            sessions: infos,
+            pendingCount: attentionSessions.count + relayCatchUp.missedApprovals.count,
+            hasFolders: !sessionExtras.folders.isEmpty,
+            inboxActive: sessionExtras.filter == .inbox,
+            quietUnread: sessions.reduce(0) { count, session in
+                guard let source = session.source, HomeContextResolver.quietSources.contains(source),
+                      sessionExtras.folders[session.id] == nil, !sessionExtras.isArchived(session.id),
+                      badges[session.id]?.contains(.unread) == true else { return count }
+                return count + 1
+            },
+            pinnedSessionId: defaults.string(forKey: HomeContextResolver.pinnedSessionIdKey),
+            pinnedAt: defaults.object(forKey: HomeContextResolver.pinnedAtKey) as? Double,
+            focusPayload: defaults.object(forKey: HomeContextResolver.focusSummaryKey)
+        )
+    }
+
+    @ViewBuilder
+    private var homeContextSection: some View {
+        if homeCardsEnabled, !isSelecting, !showSearchBar {
+            let snapshot = homeContextSnapshot
+            if !snapshot.isEmpty {
+                Section {
+                    HomeContextStrip(
+                        snapshot: snapshot,
+                        onResume: { jumpToSession($0) },
+                        onToggleInbox: {
+                            LeoHaptics.selection()
+                            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                                sessionExtras.filter = sessionExtras.filter == .inbox ? .all : .inbox
+                            }
+                        },
+                        onDismissFocus: {
+                            UserDefaults.standard.removeObject(forKey: HomeContextResolver.focusSummaryKey)
+                            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { homeContextRefresh += 1 }
+                        }
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
+            }
+        }
     }
 
     private func openMissedRelayApproval(_ item: RelayEventItem) {

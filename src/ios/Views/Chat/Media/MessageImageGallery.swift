@@ -103,7 +103,7 @@ struct MessageImageGallery: View {
                 Spacer()
             }
             .opacity(chromeVisible ? 1 : 0)
-            .animation(.easeInOut(duration: 0.2), value: chromeVisible)
+            .animation(LeoMotion.standardEase(), value: chromeVisible)
             .zIndex(10)
 
             // Bottom caption — file title, centered horizontally.
@@ -123,7 +123,7 @@ struct MessageImageGallery: View {
                 }
             }
             .opacity(chromeVisible ? 1 : 0)
-            .animation(.easeInOut(duration: 0.2), value: chromeVisible)
+            .animation(LeoMotion.standardEase(), value: chromeVisible)
             .zIndex(10)
         }
         .onChange(of: currentIndex) { _ in

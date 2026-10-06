@@ -405,14 +405,14 @@ struct ChatMessageRow: View {
                         guard inZone else { return }
 
                         if showUsage {
-                            withAnimation(.easeInOut(duration: 0.15)) { usageContentVisible = false }
+                            withAnimation(LeoMotion.quickEase()) { usageContentVisible = false }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                 showUsage = false
                             }
                         } else {
                             showUsage = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                withAnimation(.easeInOut(duration: 0.2)) { usageContentVisible = true }
+                                withAnimation(LeoMotion.standardEase()) { usageContentVisible = true }
                             }
                         }
                     } : nil,

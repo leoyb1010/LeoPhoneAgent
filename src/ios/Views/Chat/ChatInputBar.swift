@@ -26,12 +26,10 @@ struct SwipeToSendHint: View {
             let capsuleStart = max(0, armFraction - 0.4)
             let capsuleSpan = max(0.0001, armFraction - capsuleStart)
             let capsuleAlpha = max(0, min(1, (progress - capsuleStart) / capsuleSpan))
-            // `ChatColors.sendButton == UIColor.label` (auto-inverts:
-            // black in light, white in dark). For this floating hint we
-            // need a clearly-contrasting *glyph on top of the circle* and
-            // *text on top of the capsule* — both must use the inverse
-            // (`UIColor.systemBackground`), otherwise dark mode renders
-            // white-on-white and the indicator vanishes (bug 2026-05-18).
+            // [F1] `ChatColors.sendButton` is the teal accent now. The glyph
+            // and capsule text use `systemBackground` (white in light, black in
+            // dark): both clear 4.5:1 on the light/dark teal, and the old
+            // white-on-white dark-mode bug (2026-05-18) cannot come back.
             let chipBg = ChatColors.sendButton
             let chipFg = Color(UIColor.systemBackground)
             HStack(spacing: 8) {

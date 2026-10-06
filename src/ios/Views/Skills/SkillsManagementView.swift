@@ -227,7 +227,7 @@ struct SkillsManagementView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3), value: forceSyncAllToast)
+        .animation(LeoMotion.spring(), value: forceSyncAllToast)
     }
 
     /// [T-delete-sync-warning] A skill delete reaches the user's other devices
@@ -1028,7 +1028,7 @@ struct MinisSkillsBrowserView: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         Spacer().frame(height: 60)
                     }
-                    .animation(.spring(response: 0.3), value: coordinator.hudState)
+                    .animation(LeoMotion.spring(), value: coordinator.hudState)
                 }
             }
             .navigationTitle("LeoPhoneAgent Skills")

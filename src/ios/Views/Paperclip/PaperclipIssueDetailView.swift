@@ -594,14 +594,9 @@ struct PaperclipIssueDetailView: View {
     }
 
     private var emptyThread: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "bubble.left.and.text.bubble.right").font(.title2).foregroundStyle(.tertiary)
-            Text("还没有对话消息").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-            Text("智能体开始处理后，过程与回复会实时出现在这里。").font(.footnote).foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, LeoTheme.Spacing.xl)
+        LeoEmptyState(systemImage: "bubble.left.and.text.bubble.right",
+                      title: "还没有对话消息",
+                      message: "智能体开始处理后，过程与回复会实时出现在这里。")
     }
 
     @ViewBuilder private func entryView(_ entry: PaperclipThreadEntry) -> some View {

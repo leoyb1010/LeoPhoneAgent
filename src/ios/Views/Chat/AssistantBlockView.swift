@@ -812,35 +812,38 @@ struct ThinkingBlockView: View {
     }
 
     var body: some View {
+        // [F7] Thinking is quiet by default: neutral tones instead of the old
+        // blue (it competed with the reply and with the teal accent), and the
+        // character count is read once per body instead of twice.
+        let charCount = max(block.content.count, block.thinkingContentBuffer.count)
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 6) {
                 Image("ThinkingIcon")
                     .resizable()
                     .frame(width: 14, height: 14)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.secondary)
                 // [T-thinking-duration] "思考了 12 秒" once it's done — how long
                 // it took is what you want to know; reloaded history keeps the old label.
                 Text(block.toolDuration.map { String(localized: "思考了 \(LeoDuration.short($0))") }
                      ?? String(localized: "Deep Thinking"))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
                 if isStreaming {
                     ProgressView()
                         .controlSize(.mini)
-                        .tint(.blue)
+                        .tint(.secondary)
                 }
-                if block.content.count > 0 || block.thinkingContentBuffer.count > 0 {
-                    let charCount = max(block.content.count, block.thinkingContentBuffer.count)
+                if charCount > 0 {
                     Text(charCount > 1000 ? "\(charCount / 1000)K" : "\(charCount)")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.blue.opacity(0.6))
+                        .foregroundStyle(.tertiary)
                 }
                 Spacer()
                 Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.blue.opacity(0.5))
+                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -863,35 +866,30 @@ struct ThinkingBlockView: View {
             // Content — only visible when expanded, windowed to the tail
             // to prevent UI freeze on very long thinking (T-thinking-render-perf-ios).
             if isExpanded.wrappedValue, !block.content.isEmpty {
-                let windowSize = 8000
-                let total = block.content.count
-                let isTruncated = total > windowSize
-                let displayContent: String = {
+                // [F7] While streaming only the live tail (2K) is laid out, so a
+                // flush re-lays a small Text however long the thinking gets;
+                // once settled the 8K reading window comes back.
+                let slice: (text: Substring, truncated: Bool) = {
                     // [T-thinking-stream-jank] Time the tail-window slice and count
-                    // body re-evals. This closure runs on EVERY body evaluation of
-                    // an expanded thinking block — if body re-evals track the
-                    // per-token contentUpdateSeq rather than the 0.3s flush, the
-                    // eval counter in the 1s summary exposes it directly.
+                    // body re-evals (eval counter feeds the 1s ThinkPerf summary).
                     let t0 = CFAbsoluteTimeGetCurrent()
                     defer {
                         let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
                         ThinkingHitchMonitor.shared.bodyEvalCount += 1
                         if ms > 4 {
-                            AppLogger(category: "ThinkPerf").info("[ThinkPerf] slice SLOW total=\(total) took=\(String(format: "%.1f", ms))ms eval#\(ThinkingHitchMonitor.shared.bodyEvalCount)")
+                            AppLogger(category: "ThinkPerf").info("[ThinkPerf] slice SLOW took=\(String(format: "%.1f", ms))ms eval#\(ThinkingHitchMonitor.shared.bodyEvalCount)")
                         }
                     }
-                    guard isTruncated else { return block.content }
-                    let startIdx = block.content.index(block.content.endIndex, offsetBy: -windowSize)
-                    let cleanStart = block.content[startIdx...].firstIndex(of: "\n")
-                        .map { block.content.index(after: $0) } ?? startIdx
-                    return String(block.content[cleanStart...])
+                    return ThinkingDisplayPolicy.tail(of: block.content, isStreaming: isStreaming)
                 }()
+                let isTruncated = slice.truncated
+                let displayContent = String(slice.text)
 
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
                             if isTruncated {
-                                Text("Showing last \(displayContent.count / 1000)K of \(total / 1000)K characters", comment: "Thinking window truncation hint")
+                                Text("Showing last \(displayContent.count / 1000)K of \(charCount / 1000)K characters", comment: "Thinking window truncation hint")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 12)
@@ -915,10 +913,12 @@ struct ThinkingBlockView: View {
                     // @Published, an expanded block re-ran body + an animated
                     // scrollTo for every delta (~60-105/s measured); the flush
                     // pace is ~3-4/s for the same visual result.
-                    .onChange(of: block.content.count) { len in
+                    // utf8.count is O(1) on native strings; .count walked the
+                    // whole thinking text on every body evaluation.
+                    .onChange(of: block.content.utf8.count) { len in
                         guard isStreaming else { return }
                         AppLogger(category: "ThinkPerf").debug("[ThinkPerf] scrollTo(flush) contentLen=\(len) seq=\(block.contentUpdateSeq)")
-                        withAnimation(.linear(duration: 0.15)) {
+                        withAnimation(LeoMotion.quickEase()) {
                             proxy.scrollTo("thinkingBottom", anchor: .bottom)
                         }
                     }
@@ -943,11 +943,11 @@ struct ThinkingBlockView: View {
         .onDisappear {
             ThinkingHitchMonitor.shared.stop(owner: block.id)
         }
-        .background(Color.blue.opacity(0.06))
+        .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.blue.opacity(0.15), lineWidth: 0.5)
+                .stroke(LeoTheme.ColorToken.separator.opacity(0.6), lineWidth: 0.5)
         )
         .task(id: block.id) {
             // One-shot per-block auto-expand. Runs when this cell first hosts

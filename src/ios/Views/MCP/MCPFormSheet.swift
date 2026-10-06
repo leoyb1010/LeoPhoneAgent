@@ -225,7 +225,7 @@ struct MCPFormSheet: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.spring(response: 0.3), value: copiedToast)
+            .animation(LeoMotion.spring(), value: copiedToast)
             .sheet(item: $shareURL) { url in
                 MCPConfigShareSheet(url: url)
             }

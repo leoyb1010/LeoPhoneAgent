@@ -154,6 +154,13 @@
 		E51000001 /* MinisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51000011 /* MinisApp.swift */; };
 		E51000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51000012 /* ContentView.swift */; };
 		E5HC00001 /* HomeComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HC00002 /* HomeComposer.swift */; };
+		E5UIF01A /* LeoComposerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF01F /* LeoComposerChrome.swift */; };
+		E5UIF02A /* LeoEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF02F /* LeoEmptyState.swift */; };
+		E5UIF03A /* LeoInlineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF03F /* LeoInlineError.swift */; };
+		E5UIF04A /* LeoShimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF04F /* LeoShimmer.swift */; };
+		E5UIF05A /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
+		E5UIF06A /* HomeContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF06F /* HomeContextStrip.swift */; };
+		E5UIF05T /* LeoUIPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UIF05F /* LeoUIPolicies.swift */; };
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5CUR0023 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
@@ -961,6 +968,12 @@
 		E51000011 /* MinisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisApp.swift; sourceTree = "<group>"; };
 		E51000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E5HC00002 /* HomeComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeComposer.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF01F /* LeoComposerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoComposerChrome.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF02F /* LeoEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoEmptyState.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF03F /* LeoInlineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoInlineError.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF04F /* LeoShimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoShimmer.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF05F /* LeoUIPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Components/LeoUIPolicies.swift"; sourceTree = SOURCE_ROOT; };
+		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0022 /* PromptCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/PromptCacheKey.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0032 /* ToolExecutionLanes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/ToolExecutionLanes.swift"; sourceTree = SOURCE_ROOT; };
@@ -1987,6 +2000,12 @@
 			children = (
 				E51000012 /* ContentView.swift */,
 				E5HC00002 /* HomeComposer.swift */,
+				E5UIF01F /* LeoComposerChrome.swift */,
+				E5UIF02F /* LeoEmptyState.swift */,
+				E5UIF03F /* LeoInlineError.swift */,
+				E5UIF04F /* LeoShimmer.swift */,
+				E5UIF05F /* LeoUIPolicies.swift */,
+				E5UIF06F /* HomeContextStrip.swift */,
 				E5JV00002 /* Jev.swift */,
 				E5CUR0022 /* PromptCacheKey.swift */,
 				E5CUR0032 /* ToolExecutionLanes.swift */,
@@ -3116,6 +3135,7 @@
 				E5SRP0002 /* SyncRetryPolicy.swift in Sources */,
 				E5SHL0002 /* SyncHealth.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
+				E5UIF05T /* LeoUIPolicies.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5AFS0003 /* AgentFileSafety.swift in Sources */,
@@ -3193,6 +3213,12 @@
 				AADDA9E12F6ECCF400B66649 /* ThumbnailCache.swift in Sources */,
 				E51000002 /* ContentView.swift in Sources */,
 				E5HC00001 /* HomeComposer.swift in Sources */,
+				E5UIF01A /* LeoComposerChrome.swift in Sources */,
+				E5UIF02A /* LeoEmptyState.swift in Sources */,
+				E5UIF03A /* LeoInlineError.swift in Sources */,
+				E5UIF04A /* LeoShimmer.swift in Sources */,
+				E5UIF05A /* LeoUIPolicies.swift in Sources */,
+				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				E5JV00001 /* Jev.swift in Sources */,
 				E5CUR0021 /* PromptCacheKey.swift in Sources */,
 				E5CUR0031 /* ToolExecutionLanes.swift in Sources */,

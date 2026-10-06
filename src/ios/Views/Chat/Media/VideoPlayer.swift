@@ -75,7 +75,7 @@ struct MinisVideoFullscreenPlayer: View {
                                 player?.pause()
                                 dismiss()
                             } else {
-                                withAnimation(.spring(response: 0.3)) {
+                                withAnimation(LeoMotion.spring()) {
                                     dragOffset = 0
                                 }
                             }
@@ -211,7 +211,7 @@ struct MinisVideoFullscreenPlayer: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: showControls)
+        .animation(LeoMotion.panelEase(), value: showControls)
         .onAppear {
             let p: AVPlayer
             if let externalPlayer {

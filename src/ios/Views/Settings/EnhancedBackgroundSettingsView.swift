@@ -342,7 +342,7 @@ private extension View {
                     .opacity(focused ? 1 : 0)
                     .allowsHitTesting(false)
             )
-            .animation(.easeInOut(duration: 0.3), value: focused)
+            .animation(LeoMotion.panelEase(), value: focused)
     }
 }
 

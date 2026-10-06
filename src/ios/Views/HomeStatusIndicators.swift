@@ -48,7 +48,7 @@ struct PulseRotateIcon: View {
     private func pulseLoop() async {
         while !Task.isCancelled {
             let (anim, hold) = currentPeriod()
-            withAnimation(.easeInOut(duration: anim)) {
+            withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: anim)) {
                 rotation += 180
             }
             let total = UInt64((anim + hold) * 1_000_000_000)

@@ -175,7 +175,7 @@ struct FileBrowserView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3), value: copiedToast)
+        .animation(LeoMotion.spring(), value: copiedToast)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Close") {
@@ -315,7 +315,7 @@ struct FileBrowserView: View {
               let item = viewModel.items.first(where: { $0.name == target }) else { return }
         didLocateHighlight = true
         DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(LeoMotion.panelEase()) {
                 proxy.scrollTo(item.id, anchor: .center)
                 highlightActive = true
             }

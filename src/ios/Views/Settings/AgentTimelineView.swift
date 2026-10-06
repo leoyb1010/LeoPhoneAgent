@@ -32,8 +32,10 @@ struct AgentTimelineView: View {
     var body: some View {
         List {
             if groups.isEmpty {
-                Text("No agent activity recorded yet.")
-                    .foregroundStyle(.secondary)
+                // [F3] Shared LeoEmptyState, Chinese.
+                LeoEmptyState(systemImage: "clock.arrow.circlepath",
+                              title: "还没有 Agent 活动",
+                              message: "Agent 跑过任务后，每一步都会按天记在这里。")
             }
             ForEach(groups) { group in
                 Section(group.id) {

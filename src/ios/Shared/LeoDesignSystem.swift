@@ -15,6 +15,9 @@ enum LeoTheme {
         static let secondaryText = Color(uiColor: .secondaryLabel)
         static let tertiaryText = Color(uiColor: .tertiaryLabel)
         static let separator = Color(uiColor: .separator)
+        /// [F1] The one accent: teal, from the AccentColor asset (light #2A8282,
+        /// dark #2E9C9C — white glyphs on it stay legible in both). `ChatColors`
+        /// only forwards here; new code reads this token.
         static let accent = Color.accentColor
         static let destructive = Color(uiColor: .systemRed)
         static let success = Color(uiColor: .systemGreen)
@@ -36,6 +39,8 @@ enum LeoTheme {
         static let field: CGFloat = 12
         static let surface: CGFloat = 16
         static let bubble: CGFloat = 18
+        /// [F2] Every composer (home, chat, Paperclip) — see `leoComposerChrome()`.
+        static let composer: CGFloat = 26
     }
 
     enum TouchTarget {
@@ -77,6 +82,20 @@ enum LeoMotion {
     /// no overshoot, which matters when text is reflowing under the animation.
     static func smooth(reduceMotion: Bool, duration: Double = panel) -> Animation? {
         reduceMotion ? nil : .smooth(duration: duration)
+    }
+
+    // [F4] Same tokens for call sites with no `accessibilityReduceMotion`
+    // environment in reach (view models, UIKit-hosted views, helpers): they
+    // read the system switch directly, so Reduce Motion still wins.
+    @MainActor static var systemReduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
+    @MainActor static func quickEase() -> Animation? { systemReduceMotion ? nil : .easeInOut(duration: quick) }
+    @MainActor static func standardEase() -> Animation? { standardEase(reduceMotion: systemReduceMotion) }
+    @MainActor static func emphasisEase() -> Animation? { systemReduceMotion ? nil : .easeInOut(duration: emphasis) }
+    @MainActor static func panelEase() -> Animation? { panelEase(reduceMotion: systemReduceMotion) }
+    @MainActor static func snappy() -> Animation? { snappy(reduceMotion: systemReduceMotion) }
+    @MainActor static func spring(dampingFraction: Double = 0.82) -> Animation? {
+        spring(reduceMotion: systemReduceMotion, dampingFraction: dampingFraction)
     }
 }
 

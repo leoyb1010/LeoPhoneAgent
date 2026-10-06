@@ -24,9 +24,10 @@ struct ScheduledTaskSettingsView: View {
         List {
             Section {
                 if store.tasks.isEmpty {
-                    Text("No scheduled tasks yet. Tap + to add one — for example, run “Morning Briefing” at 8 AM every day.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    // [F3] Shared LeoEmptyState, Chinese.
+                    LeoEmptyState(systemImage: "calendar.badge.clock",
+                                  title: "还没有定时任务",
+                                  message: "点右上角 + 添加一个，比如每天早上 8 点跑「早间简报」。")
                 } else {
                     ForEach(store.tasks) { task in
                         VStack(alignment: .leading, spacing: 6) {

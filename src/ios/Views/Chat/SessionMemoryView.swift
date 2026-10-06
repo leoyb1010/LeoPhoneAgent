@@ -9,6 +9,8 @@ import SwiftUI
 
 struct SessionMemoryView: View {
     @ObservedObject var vm: AIChatViewModel
+    /// [F8] Inside the iPad inspector's 记忆 tab there is nothing to dismiss.
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -53,8 +55,10 @@ struct SessionMemoryView: View {
             .navigationTitle("Memories in Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
         }

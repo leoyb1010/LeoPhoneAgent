@@ -19,6 +19,8 @@ struct ChatDetailContainer<Content: View>: View {
 
     /// Per window: two windows side by side each keep their own.
     @SceneStorage("leo.ipad.inspectorVisible") private var inspectorVisible = false
+    /// [F8] Shared with ChatInspectorPanel so the chat's "…" menu can open a tab.
+    @AppStorage("leo.ipad.inspectorTab") private var inspectorTab = ChatInspectorPanel.Tab.run.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentFrame: CGRect = .zero
     @State private var inspectorFrame: CGRect = .zero
@@ -34,6 +36,11 @@ struct ChatDetailContainer<Content: View>: View {
 
     var body: some View {
         content
+            // [F8] The chat's "…" menu opens 用量 / 记忆 here instead of a sheet.
+            .environment(\.chatInspectorRoute, ChatInspectorRoute { tab in
+                inspectorTab = tab.rawValue
+                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible = true }
+            })
             .modifier(ChatToolbarMinimization())
             .safeAreaPadding(.trailing, coveredTrailing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
@@ -59,8 +66,20 @@ struct ChatDetailContainer<Content: View>: View {
     }
 }
 
-/// Four tabs: the run (every tool call, live), the session (model, context,
-/// what feeds it), artifacts, and files.
+/// [F8] How the chat reaches the inspector beside it. Only set inside
+/// ChatDetailContainer (iPad split); nil on iPhone, where the same views
+/// stay sheets.
+struct ChatInspectorRoute {
+    let open: @MainActor (ChatInspectorPanel.Tab) -> Void
+}
+
+extension EnvironmentValues {
+    @Entry var chatInspectorRoute: ChatInspectorRoute? = nil
+}
+
+/// [F8] Three fixed tabs: the tool timeline (every tool call, live), usage
+/// (model, context, tokens, what feeds the session) and memory hits.
+/// Artifacts and files stay in the chat's "…" menu.
 struct ChatInspectorPanel: View {
     let sessionId: String?
     @AppStorage("leo.ipad.inspectorTab") private var tabRaw = Tab.run.rawValue
@@ -73,20 +92,20 @@ struct ChatInspectorPanel: View {
     }
 
     enum Tab: String, CaseIterable, Identifiable {
-        case run, session, artifacts, files
+        case run, usage, memory
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .run: String(localized: "运行")
-            case .session: String(localized: "会话")
-            case .artifacts: String(localized: "产物")
-            case .files: String(localized: "文件")
+            case .run: String(localized: "工具时间线")
+            case .usage: String(localized: "用量")
+            case .memory: String(localized: "记忆命中")
             }
         }
     }
 
     private var tab: Binding<Tab> {
-        Binding(get: { Tab(rawValue: tabRaw) ?? .run }, set: { tabRaw = $0.rawValue })
+        Binding(get: { Tab(rawValue: ChatInspectorTabPolicy.resolve(tabRaw)) ?? .run },
+                set: { tabRaw = $0.rawValue })
     }
 
     private var vm: AIChatViewModel? {
@@ -95,8 +114,9 @@ struct ChatInspectorPanel: View {
 
     var body: some View {
         if isLocked {
-            ContentUnavailableView("This session is locked", systemImage: "lock.fill",
-                                   description: Text("Unlock it in the chat to see its runs, artifacts and files here."))
+            LeoEmptyState(systemImage: "lock.fill", title: "这段对话已上锁",
+                          message: "在对话里解锁后，这里才会显示它的工具、用量和记忆。")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             panel
         }
@@ -116,20 +136,10 @@ struct ChatInspectorPanel: View {
                 switch tab.wrappedValue {
                 case .run:
                     if let vm { InspectorRunList(vm: vm) } else { draftPlaceholder }
-                case .session:
+                case .usage:
                     if let vm { SessionInspectorView(vm: vm, embedded: true) } else { draftPlaceholder }
-                case .artifacts:
-                    // A nil id would list every session's artifacts; `.id` rescopes
-                    // the tray when the draft becomes a real session.
-                    if let sessionId { ArtifactTrayView(sessionId: sessionId, embedded: true).id(sessionId) } else { draftPlaceholder }
-                case .files:
-                    NavigationStack {
-                        let base = RootfsManager.shared.dataPath
-                        FileBrowserView(rootPath: base,
-                                        initialPath: base.appendingPathComponent("var/minis"),
-                                        rootLabel: "/",
-                                        bindSessionId: sessionId)
-                    }
+                case .memory:
+                    if let vm { SessionMemoryView(vm: vm, embedded: true) } else { draftPlaceholder }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -137,8 +147,8 @@ struct ChatInspectorPanel: View {
     }
 
     private var draftPlaceholder: some View {
-        ContentUnavailableView("还没有开始", systemImage: "sparkles",
-                               description: Text("发出第一条消息后，这里会列出 Agent 的每一步。"))
+        LeoEmptyState(systemImage: "sparkles", title: "还没有开始",
+                      message: "发出第一条消息后，这里会列出 Agent 的每一步、用量和用到的记忆。")
     }
 }
 
@@ -162,8 +172,9 @@ private struct InspectorRunList: View {
     var body: some View {
         let blocks = toolBlocks
         if blocks.isEmpty {
-            ContentUnavailableView("还没有工具调用", systemImage: "wrench.and.screwdriver",
-                                   description: Text("Agent 用到终端、文件、浏览器时，每一步都会列在这里。"))
+            LeoEmptyState(systemImage: "wrench.and.screwdriver", title: "还没有工具调用",
+                          message: "Agent 用到终端、文件、浏览器时，每一步都会列在这里。")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             List {
                 Section {

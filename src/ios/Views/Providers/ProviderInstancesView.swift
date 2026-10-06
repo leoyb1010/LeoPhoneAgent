@@ -169,7 +169,7 @@ struct ProviderInstancesView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3), value: forceSyncToast)
+        .animation(LeoMotion.spring(), value: forceSyncToast)
     }
 
     @available(iOS 17.0, *)
