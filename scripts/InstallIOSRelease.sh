@@ -49,11 +49,28 @@ app="$derived/Build/Products/Release-iphoneos/LeoPhoneAgent.app"
 [ -d "$app" ] || { echo "没找到 Release 真机构建产物" >&2; exit 1; }
 codesign --verify --deep --strict "$app" || exit 1
 
+# Apple Watch 装内嵌的手表 App(只装 iPhone 不会可靠地带上手表)。
+# 在线的配对手表总是一起装;它们不在命令行参数里也会补上。
+watch_app=$(ls -d "$app"/Watch/*.app 2>/dev/null | head -1 || true)
+devices=$(xcrun devicectl list devices 2>/dev/null || true)
+watch_udids=$(printf '%s\n' "$devices" | grep -i physical | grep -vi unavailable | grep -i 'available' | grep -i 'Watch' \
+  | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})' || true)
+if [ -n "$watch_app" ]; then
+  for w in $watch_udids; do
+    case " $udids " in *" $w "*) ;; *) udids="$udids $w" ;; esac
+  done
+fi
+
 echo "==> [3/3] 安装"
 rc=0
 for u in $udids; do
   printf '    %s ... ' "$u"
-  if xcrun devicectl device install app --device "$u" "$app" >/tmp/ios-install-$u.log 2>&1; then
+  target="$app"
+  if printf '%s\n' "$devices" | grep "$u" | grep -qi 'Watch'; then
+    [ -n "$watch_app" ] || { echo "跳过(构建里没有手表 App)"; continue; }
+    target="$watch_app"
+  fi
+  if xcrun devicectl device install app --device "$u" "$target" >/tmp/ios-install-$u.log 2>&1; then
     echo "OK"
   else
     echo "失败(见 /tmp/ios-install-$u.log)"; rc=1
