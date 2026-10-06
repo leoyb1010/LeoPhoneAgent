@@ -25,6 +25,8 @@ import Foundation
 import WatchConnectivity
 #endif
 import Speech
+import UIKit
+import UserNotifications
 
 private let logger = AppLogger(category: "WatchBridge")
 
@@ -601,7 +603,9 @@ extension WatchBridge: WCSessionDelegate {
     /// was out of reach. Each approval resolves once, so a reply that also
     /// arrived live is ignored here.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        guard (userInfo[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindApprovalReply else { return }
+        let kind = userInfo[WatchPayloadKey.kind] as? String
+        // [E4] 「在 iPhone 上继续」手机不在身边时排队送达,同样处理。
+        guard kind == WatchPayloadKey.kindApprovalReply || kind == WatchContinueOnPhone.kind else { return }
         self.session(session, didReceiveMessage: userInfo, replyHandler: { _ in })
     }
 
@@ -630,6 +634,11 @@ extension WatchBridge: WCSessionDelegate {
         case WatchPayloadKey.kindWake:
             // Receiving it is the point: iOS has already woken the app.
             replyHandler(["ok": true])
+        case WatchContinueOnPhone.kind:
+            let sessionId = WatchContinueOnPhone.sessionId(from: message)
+            replyHandler(["ok": sessionId != nil])
+            guard let sessionId else { return }
+            Task { @MainActor in await WatchContinueOnPhoneHandler.handle(sessionId: sessionId) }
         case WatchPayloadKey.kindApprovalReply:
             let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
@@ -922,5 +931,34 @@ enum WatchAskRunner {
 
     private static func deliver(requestId: String, text: String, sessionId: String = "") {
         WatchBridge.shared.sendAskReply(requestId: requestId, text: WatchTextSanitizer.plain(text), sessionId: sessionId)
+    }
+}
+
+/// [E4] 手机收到手表的「在 iPhone 上继续」:正在用手机就直接打开那个会话,否则发一条本地通知,
+/// 点开走现有的 sessionId 通知路由。
+@MainActor
+enum WatchContinueOnPhoneHandler {
+    static func handle(sessionId: String) async {
+        guard await ChatStore.shared.sessionExists(id: sessionId) else { return }
+        if UIApplication.shared.applicationState == .active {
+            SessionLockStore.shared.runWhenUnlocked {
+                NotificationNavigationStore.shared.setPending(sessionId)
+                NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                                userInfo: ["sessionId": sessionId])
+            }
+            return
+        }
+        let hide = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+            || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
+        let title = hide ? nil : await ChatStore.shared.getSession(sessionId)?.title
+        let text = WatchContinueOnPhone.notificationText(sessionTitle: title, hideTitle: hide)
+        let content = UNMutableNotificationContent()
+        content.title = text.title
+        content.body = text.body
+        content.sound = .default
+        content.userInfo = ["sessionId": sessionId]
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: WatchContinueOnPhone.notificationIdentifier(sessionId: sessionId),
+            content: content, trigger: nil))
     }
 }

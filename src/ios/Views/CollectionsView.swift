@@ -1259,9 +1259,8 @@ struct CollectionsView: View {
             do {
                 // Publish only after every selected attachment has real staged bytes.
                 let shareItems = try Self.stageAgentAttachments(chosen)
-                let instruction = prompt ?? (chosen.count == 1
-                    ? "请使用我从藏宝阁选择的这条资料回答。保留可追踪来源。"
-                    : "请综合我从藏宝阁选择的 \(chosen.count) 条资料回答。比较时保留每条资料的可追踪来源。")
+                // [E6] 全文随 treasuryContext 附上;输入框预填「基于这条收藏：」,你接着写要它做什么。
+                let instruction = prompt ?? TreasuryContextBuilder.agentInstruction(count: chosen.count)
                 ShareCoordinator.shared.storeBuffer(PendingShare(
                     items: shareItems,
                     timestamp: Date(),

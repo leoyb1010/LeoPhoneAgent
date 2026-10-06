@@ -84,6 +84,13 @@ final class RelayEventCatchUp: ObservableObject {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
             remember(fingerprint)
+            // [E5] 从手机对话派出的 Mac 任务结束:结果暂存,打开那个对话时显示。
+            if let result = MacResultInbox.entry(event: item.raw, machine: item.machine,
+                                                 receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? item.receivedAt : Date().timeIntervalSince1970)) {
+                MacResultInbox.record(result)
+                NotificationCenter.default.post(name: MacResultInbox.changed, object: nil,
+                                                userInfo: ["sessionId": result.phoneSessionId])
+            }
             switch item.eventName {
             case "approval.request":
                 approvals.append(item)

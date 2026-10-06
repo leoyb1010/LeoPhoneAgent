@@ -54,6 +54,8 @@ enum ScheduledTaskRunner {
                 // disable it so the UI can show why nothing happens.
                 logger.error("scheduled task \(task.id) references missing quick task \(task.quickTaskId) — disabling")
                 store.markRun(id: task.id, slot: slot)
+                store.recordStart(id: task.id, sessionId: nil)
+                store.recordOutcome(id: task.id, status: .skipped, preview: "对应的快捷任务已删除")
                 store.setEnabled(false, id: task.id)
                 continue
             }
@@ -79,6 +81,9 @@ enum ScheduledTaskRunner {
                 )
                 started += 1
                 store.markRun(id: task.id, slot: slot)
+                // [E3] 记下这次运行的会话；回复落地后由 resolvePendingBriefings 回写摘要与状态。
+                let startedSession = result.value?.sessionId
+                store.recordStart(id: task.id, sessionId: startedSession?.isEmpty == false ? startedSession : nil)
                 if let sessionId = result.value?.sessionId, !sessionId.isEmpty {
                     if let runId = result.value?.runId, !runId.isEmpty {
                         WidgetQuickTasksStore.bindRun(id: definition.id, requestId: widgetRequestId,
@@ -96,6 +101,8 @@ enum ScheduledTaskRunner {
                 WidgetQuickTasksStore.updateRunState(id: definition.id, state: .failed,
                                                     requestId: widgetRequestId)
                 store.markRun(id: task.id, slot: slot)
+                store.recordStart(id: task.id, sessionId: nil)
+                store.recordOutcome(id: task.id, status: .failure, preview: error.localizedDescription)
                 logger.error("scheduled task \(task.id) failed to start: \(error.localizedDescription)")
                 // [T-scheduled-report] The other half of "scheduled work WITH
                 // reporting": a silent failure is indistinguishable from

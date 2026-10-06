@@ -385,6 +385,9 @@ private struct ReplySheet: View {
                             }
                             .accessibilityLabel("追问")
                         }
+                        if let sessionId = client.history.first?.sessionId, !sessionId.isEmpty {
+                            ContinueOnPhoneButton(sessionId: sessionId)
+                        }
                     } else if isWaiting {
                         // [T-watch-stream] The answer as it is being written.
                         if !client.partialText.isEmpty {
@@ -429,6 +432,26 @@ private struct ReplySheet: View {
                     }
                     dismiss()
                 }
+            }
+        }
+    }
+}
+
+/// [E4] 手表上问过的会话,到 iPhone 上接着问。
+private struct ContinueOnPhoneButton: View {
+    let sessionId: String
+    @EnvironmentObject private var client: WatchConnectivityClient
+    @State private var result: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                result = client.continueOnPhone(sessionId: sessionId)
+            } label: {
+                Label("在 iPhone 上继续", systemImage: "iphone.and.arrow.forward")
+            }
+            if let result {
+                Text(result).font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -495,6 +518,9 @@ private struct HistoryDetail: View {
                 } label: {
                     Label(speaker.isSpeaking ? "停止" : "朗读",
                           systemImage: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                }
+                if let sessionId = entry.sessionId, !sessionId.isEmpty {
+                    ContinueOnPhoneButton(sessionId: sessionId)
                 }
             }
         }

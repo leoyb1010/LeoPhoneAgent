@@ -157,16 +157,17 @@ struct CommandMacIntent: AppIntent {
         Summary("让 \(\.$mac) 的 \(\.$cli) 执行 \(\.$prompt)")
     }
 
+    /// [E5] 返回开工的那个 Mac 任务(可接「打开 Mac 任务」);没开成返回空。
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+    func perform() async throws -> some IntentResult & ReturnsValue<MacTaskEntity?> & ProvidesDialog & ShowsSnippetView {
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == mac.id }),
               let client = GatewayHostStore.shared.client(for: host) else {
-            return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 远程机器」补上。",
+            return .result(value: nil, dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 远程机器」补上。",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "缺少访问密钥", ok: false))
         }
         guard !text.isEmpty else {
-            return .result(dialog: "任务内容是空的,没有开工。",
+            return .result(value: nil, dialog: "任务内容是空的,没有开工。",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "内容为空", ok: false))
         }
         // [T-local-brain] Siri 里是口述进来的,常常是一段流水话。先让本机
@@ -196,26 +197,109 @@ struct CommandMacIntent: AppIntent {
             // [A2] 全自动开着时 Siri / 快捷指令派的 Mac 任务也免审批;Mac 认不出这台 iPhone(403)就照常开,逐项审批。
             let fullAuto = FullAutoGate.isOn
             var refused = false
+            let sessionId: String
             do {
-                _ = try await client.createHarnessSession(
+                sessionId = try await client.createHarnessSession(
                     harness: cli.rawValue, cwd: "~", prompt: dispatch,
                     thinking: ThinkingRuleStore.lastCarriedRaw(), fullAuto: fullAuto)
             } catch GatewayError.http(let status, _)
                         where HarnessFullAuto.isRefusal(status: status, harnessKey: cli.rawValue, requestedFullAuto: fullAuto) {
                 refused = true
-                _ = try await client.createHarnessSession(
+                sessionId = try await client.createHarnessSession(
                     harness: cli.rawValue, cwd: "~", prompt: dispatch,
                     thinking: ThinkingRuleStore.lastCarriedRaw())
             }
             let suffix = refused ? "这台 Mac 没认出这台 iPhone,这次会逐项审批;打开 app 的任务页看修复步骤。" : ""
-            return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。\(suffix)",
+            let task = MacTaskEntity(hostId: host.id, machine: host.name, sessionId: sessionId,
+                                     cli: cli.displayName, title: structured?.title ?? text)
+            return .result(value: task, dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。\(suffix)",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
                                                     task: structured?.title ?? text))
         } catch {
-            return .result(dialog: "没能开工:\(error.localizedDescription)",
+            return .result(value: nil, dialog: "没能开工:\(error.localizedDescription)",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
                                                     task: error.localizedDescription, ok: false))
         }
+    }
+}
+
+// MARK: - 可打开的 Mac 任务
+
+/// [E5] 一个已开工的 Mac 任务(哪台 Mac + Mac 上的会话 id)。「指挥一台 Mac」返回它,
+/// 快捷指令可以接「打开 Mac 任务」直达它的控制台。
+@available(iOS 16.0, *)
+struct MacTaskEntity: AppEntity, Identifiable {
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Mac 任务")
+    static var defaultQuery = MacTaskQuery()
+
+    let hostId: String
+    let machine: String
+    let sessionId: String
+    var cli: String = ""
+    var title: String = ""
+
+    var id: String { Self.makeId(hostId: hostId, sessionId: sessionId) }
+
+    var displayRepresentation: DisplayRepresentation {
+        let head = title.isEmpty ? "Mac 任务" : String(title.prefix(40))
+        let sub = cli.isEmpty ? machine : "\(machine) · \(cli)"
+        return DisplayRepresentation(title: "\(head)", subtitle: "\(sub)")
+    }
+
+    static func makeId(hostId: String, sessionId: String) -> String { hostId + "::" + sessionId }
+
+    static func parse(_ id: String) -> (hostId: String, sessionId: String)? {
+        let parts = id.components(separatedBy: "::")
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
+        return (parts[0], parts[1])
+    }
+
+    /// 通知点击、深链用的同一个目标字典(见 ShortcutNotificationDelegate)。
+    var navigationTarget: [String: String] {
+        ["macSessionId": sessionId, "hostId": hostId, "machine": machine]
+    }
+}
+
+@available(iOS 16.0, *)
+struct MacTaskQuery: EntityQuery {
+    @MainActor
+    func entities(for identifiers: [String]) async throws -> [MacTaskEntity] {
+        identifiers.compactMap { id in
+            guard let parsed = MacTaskEntity.parse(id) else { return nil }
+            let row = MacLiveSessionsStore.shared.rows.first { $0.hostId == parsed.hostId && $0.session.id == parsed.sessionId }
+            let machine = GatewayHostStore.shared.activeHosts.first { $0.id == parsed.hostId }?.name ?? row?.hostName ?? "Mac"
+            return MacTaskEntity(hostId: parsed.hostId, machine: machine, sessionId: parsed.sessionId,
+                                 cli: row?.session.name ?? "", title: row?.session.title ?? "")
+        }
+    }
+
+    @MainActor
+    func suggestedEntities() async throws -> [MacTaskEntity] {
+        MacLiveSessionsStore.shared.rows.map {
+            MacTaskEntity(hostId: $0.hostId, machine: $0.hostName, sessionId: $0.session.id,
+                          cli: $0.session.name, title: $0.session.displayTitle)
+        }
+    }
+}
+
+/// 打开一个 Mac 任务的控制台(接在「指挥一台 Mac」后面就是"派完直接看")。
+@available(iOS 16.0, *)
+struct OpenMacTaskIntent: OpenIntent {
+    static var title: LocalizedStringResource = "打开 Mac 任务"
+    static var description = IntentDescription("在 App 里打开这个 Mac 任务,看它的进度和结果。")
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Mac 任务")
+    var target: MacTaskEntity
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        let navigation = target.navigationTarget
+        SessionLockStore.shared.runWhenUnlocked {
+            NotificationNavigationStore.shared.setPendingMac(navigation)
+            NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: navigation)
+        }
+        return .result()
     }
 }
 

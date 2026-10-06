@@ -9,12 +9,20 @@ enum HarnessFullAuto {
 
     /// 建任务的请求体。全自动关着时不带 full_auto(Mac 默认就是「先问我」)。
     static func createPayload(harness: String, cwd: String, prompt: String?, thinking: String?,
-                              fullAuto: Bool) -> [String: Any] {
+                              fullAuto: Bool, phoneSessionId: String? = nil) -> [String: Any] {
         var payload: [String: Any] = ["harness": harness, "cwd": cwd]
         if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
         if let thinking, !thinking.isEmpty { payload["thinking"] = thinking }
         if fullAuto { payload["full_auto"] = true }
+        if let phone = phoneSessionValue(phoneSessionId) { payload["phone_session_id"] = phone }
         return payload
+    }
+
+    /// [E5] 从手机对话里派的 Mac 任务带上那个对话的 id(中继只当不透明标签,≤200 字),
+    /// 完成推送带回 `phoneSessionId`,点通知直达那个对话。不是从对话派的不带。
+    static func phoneSessionValue(_ id: String?) -> String? {
+        guard let trimmed = id?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(200))
     }
 
     /// 后续消息里的 full_auto。LeoPhoneAgent 任务照旧带 true/false;Claude Code / Codex / Grok 只在

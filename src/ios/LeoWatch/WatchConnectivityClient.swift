@@ -484,6 +484,24 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         }
     }
 
+    /// [E4] 「在 iPhone 上继续」:请手机发一条通知,点开就是这个会话。手机不在身边时排队,连上后送达。
+    /// 返回给界面的一句话结果。
+    @discardableResult
+    func continueOnPhone(sessionId: String) -> String {
+        guard let session else { return "还没有连上 iPhone。" }
+        let payload = WatchContinueOnPhone.payload(sessionId: sessionId)
+        if session.isReachable {
+            WKInterfaceDevice.current().play(.success)
+            session.sendMessage(payload, replyHandler: { _ in }, errorHandler: { _ in
+                Task { @MainActor in session.transferUserInfo(payload) }
+            })
+            return "已发到 iPhone,看手机上的通知。"
+        }
+        session.transferUserInfo(payload)
+        WKInterfaceDevice.current().play(.click)
+        return "iPhone 暂时不可达,连上后会收到通知。"
+    }
+
     // MARK: - Inbound
 
     fileprivate func apply(_ context: [String: Any]) {

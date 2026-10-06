@@ -29,12 +29,17 @@ struct ScheduledTaskSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(store.tasks) { task in
-                        Button {
-                            editing = task
-                        } label: {
-                            row(task)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button {
+                                editing = task
+                            } label: {
+                                row(task)
+                            }
+                            .buttonStyle(.plain)
+                            if let status = task.lastStatus {
+                                lastResultRow(task, status: status)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
                         // [T-ondelete-index-shift] Resolve ids FIRST.
@@ -139,6 +144,43 @@ struct ScheduledTaskSettingsView: View {
         }
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+    }
+
+    /// [E3] 最近一次运行的摘要；有会话就点进去。
+    private func lastResultRow(_ task: ScheduledTask, status: ScheduledTask.RunStatus) -> some View {
+        let preview = task.lastResultPreview?.isEmpty == false ? task.lastResultPreview! : "没有文本结果"
+        return Button {
+            guard let sessionId = task.lastSessionId else { return }
+            Task { @MainActor in
+                guard await ChatStore.shared.sessionExists(id: sessionId) else {
+                    runNowMessage = "那次运行的会话已被删除。"
+                    return
+                }
+                NotificationNavigationStore.shared.setPending(sessionId)
+                NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                                userInfo: ["sessionId": sessionId])
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: status == .success ? "checkmark.circle.fill"
+                      : status == .failure ? "xmark.circle.fill" : "minus.circle.fill")
+                    .foregroundStyle(status == .success ? Color.green : status == .failure ? Color.red : Color.secondary)
+                Text("\(status.title) · \(preview)")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                if task.lastSessionId != nil {
+                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                }
+            }
+            .font(.caption)
+            .padding(.leading, 38)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .disabled(task.lastSessionId == nil)
+        .accessibilityIdentifier("scheduledTask.lastResult")
     }
 
     private func stepRow(_ index: Int, _ text: String) -> some View {

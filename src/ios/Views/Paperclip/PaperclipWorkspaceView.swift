@@ -385,6 +385,19 @@ private struct PaperclipCreateIssueView: View {
 
     private var assignee: PaperclipAgent? { agents.first { $0.id == draft.agentID } }
 
+    /// 只拷贝文本;上一个提交还没核对时不覆盖它(幂等契约不变)。
+    private func applyHandoff() {
+        guard let request = PaperclipHandoff.take() else { return }
+        guard !busy, !draft.submitted else {
+            error = "上一个任务还待核对，处理完再从对话升级。"
+            return
+        }
+        draft.title = request.title
+        draft.body = request.description
+        error = nil
+        focused = true
+    }
+
     var body: some View {
         PaperclipComposerBar(
             text: $draft.title, focus: $focused, placeholder: "发消息，创建服务器任务…",
@@ -442,6 +455,9 @@ private struct PaperclipCreateIssueView: View {
             }
         }
         .onChange(of: focusRequest) { _, _ in focused = true }
+        // [G3] 从对话「升级为 Paperclip 工单」:预填标题与说明,等你选执行者后确认创建。
+        .onAppear { applyHandoff() }
+        .onReceive(NotificationCenter.default.publisher(for: PaperclipHandoff.requested)) { _ in applyHandoff() }
         .onChange(of: draft.title) { _, _ in scheduleDraftSave() }
         .onChange(of: draft.body) { _, _ in scheduleDraftSave() }
         .onChange(of: draft.agentID) { _, _ in scheduleDraftSave() }

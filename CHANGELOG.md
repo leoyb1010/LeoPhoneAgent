@@ -1,5 +1,16 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.57.0 (154) · 产出不落孤岛 - 2026-10-06
+
+- E1 回复「下一步」：已完成回复的操作条新增 ↳ 菜单，固定 5 项（收进藏宝阁 / 存为快捷任务 / 设为定时任务 / 发到 Mac / 升级为 Paperclip 工单），`ReplyNextStep` 纯逻辑 + `ReplyQuickTaskForm` 表单。入口放在操作条而不是长按：文字块的长按归文本选择。收藏存成笔记（提示引用 + 完整回复）；快捷任务以这一轮提示为模板（剥掉 `<system-reminder>`），定时默认每天当前时刻、当天这一刻不补跑；发到 Mac 复用「交给哪台 Mac 继续」选择，任务描述 = 提示 + 回复摘要。
+- G3（最小桥）`Agent/Paperclip/PaperclipHandoff.swift`：只接收两段字符串（标题 = 用户提示首行，描述 = 回复摘要），切到服务器任务工作区，创建表单预填一次；上一条提交待核对时不覆盖。契约审计源文件 14 → 15，新增该文件不得引用 ChatStore / Gateway / AIChatViewModel 等、创建表单不得引用对话与网关的检查（已反向验证会红）。
+- E3 定时任务结果回写：`ScheduledTask` 新增可选 `lastSessionId` / `lastResultPreview`（前 120 字）/ `lastStatus`（成功 / 失败 / 跳过），旧 JSON 照常解码；开工记会话，回复落地时在 `resolvePendingBriefings` 回写（锁定会话不抄正文），开工失败 / 快捷任务已删记失败 / 跳过，「立即运行定时任务」动作也回写；设置页每行显示摘要，点击进入那次会话。
+- E4 手表：手表发起的会话（已有 `source = watch`）在会话列表显示手表角标；手表回答页与记录详情新增「在 iPhone 上继续」，经 WCSession（不可达时 transferUserInfo 排队）发 `continueOnPhone`，手机在前台直接打开、否则发本地通知（隐私模式 / 锁定会话不显示标题），点开走现有 sessionId 路由。消息格式 `WatchContinueOnPhone` 由 App、手表、测试共用。
+- E5 Mac 任务回到对话：从对话派出的 Mac 任务（「发到 Mac」与 /mac 切换）建任务与后续消息都带 `phone_session_id`（≤200 字）；完成推送带 `phoneSessionId` 时点通知打开那个对话，对话不在了就照旧打开 Mac 任务。结果来自回前台补齐的中继事件（`run.completed` / `run.failed` 的 output / error），暂存在 `MacResultInbox`，打开对话时作为一条提示放在末尾并滚到底（只显示一次，不写进对话历史）。「指挥一台 Mac」返回 `MacTaskEntity`，新增「打开 Mac 任务」（OpenIntent）。
+- E6 藏宝阁「发给 Agent」：全文本来就经 `treasury_context` 附上；输入框预填改为「基于这条收藏：」（多条为「基于这 N 条收藏：」）。
+- E7 接力：会话页广播 `com.leoyuan.leophoneagent.session`（与会话窗口同一类型，Info.plist 已登记），`isEligibleForHandoff`，userInfo 只放会话 id；锁定会话不广播。接收端走 `SessionWindow.accept`，会话尚未同步时首页顶部显示「正在同步接力的会话…」，同步到了自动打开，60 秒未到放弃。
+- 测试：新增 16 项逻辑测试（`CrossFeatureFlowTests`：下一步菜单与快捷任务 / 定时 5、Paperclip 桥 2、定时结果回写与旧数据 2、Mac 结果回对话 3、手表 1、藏宝阁 1、接力 2），全量 599 项逻辑测试通过。主工程链接 arm64 真机 iSH 静态库、不能在模拟器上运行，E1 的 UI 测试改由单元测试覆盖。
+
 ## iOS 1.56.0 (153) · 快捷指令深挖 - 2026-10-06
 
 - C1 `apple-shortcuts run` 拿回结果：每次运行生成 runId，x-success / x-error / x-cancel 指回 `leophoneagent://shortcut-result?run=<runId>&status=…`；回调带 `result` 就直接返回，否则读 App Group `MinisFileProvider/shared/ShortcutResults/<runId>.txt` 或 `<快捷指令名>.txt`（只认本次运行开始后写入的，读后删除）。回调到达或 App 回到前台都会检查；按 runId 挂起等待，默认 60 秒（`--timeout` 5–300），回调在 App 锁之前处理（`ShortcutCallbackStore`）。`--no-return` 保留只启动不等待。工具说明删掉“结果不会返回”，写明文件约定。

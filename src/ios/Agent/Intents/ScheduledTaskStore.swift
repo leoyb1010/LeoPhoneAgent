@@ -53,6 +53,33 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     /// Start of the slot we last ran, so a slot fires at most once.
     var lastRunSlot: Date?
     var lastRunAt: Date?
+    /// [E3] 最近一次运行的结果回写。全部可选：旧数据没有这些键也照样解码。
+    enum RunStatus: String, Codable {
+        case success, failure, skipped
+        var title: String {
+            switch self {
+            case .success: return "成功"
+            case .failure: return "失败"
+            case .skipped: return "跳过"
+            }
+        }
+    }
+    /// 那次运行所在的会话，点设置页的行可以直接进去。
+    var lastSessionId: String?
+    /// 回复的前 120 字。
+    var lastResultPreview: String?
+    var lastStatus: RunStatus?
+
+    static let previewLimit = 120
+
+    /// 回复正文压成一行、截到 120 字。
+    static func preview(_ text: String) -> String {
+        let flat = text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return String(flat.prefix(previewLimit))
+    }
 
     init(
         id: String = UUID().uuidString.lowercased(),
@@ -191,6 +218,31 @@ final class ScheduledTaskStore: ObservableObject {
         tasks[index].lastRunSlot = slot
         tasks[index].lastRunAt = Date()
         persist()
+    }
+
+    /// [E3] 一次运行的去向：开工时记下会话（结果待回写），开工失败 / 被跳过时直接记结果。
+    func recordStart(id: String, sessionId: String?) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].lastSessionId = sessionId
+        tasks[index].lastResultPreview = nil
+        tasks[index].lastStatus = nil
+        persist()
+    }
+
+    func recordOutcome(id: String, status: ScheduledTask.RunStatus, preview: String? = nil) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].lastStatus = status
+        tasks[index].lastResultPreview = preview.map(ScheduledTask.preview)
+        persist()
+    }
+
+    /// [E3] 运行结束（后台回合跑完后才知道）按会话找回是哪个定时任务。
+    /// 返回 true = 找到并写回了。
+    @discardableResult
+    func recordOutcome(sessionId: String, status: ScheduledTask.RunStatus, preview: String?) -> Bool {
+        guard let task = tasks.last(where: { $0.lastSessionId == sessionId }) else { return false }
+        recordOutcome(id: task.id, status: status, preview: preview)
+        return true
     }
 
     func dueTasks(now: Date = Date()) -> [ScheduledTask] {

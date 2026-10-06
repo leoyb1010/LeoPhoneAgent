@@ -612,7 +612,19 @@ struct ContentView: View {
                     guard sessionsByIdCache[id] != nil else { return false }
                     jumpToSession(id)
                     return true
-                }))
+                },
+                onWaitingChange: { handoffSyncing = $0 }))
+            // [E7] 接力过来的会话还没经 iCloud 同步到这台设备:提示一下,同步到了自动打开。
+            .overlay(alignment: .top) {
+                if handoffSyncing {
+                    Label("正在同步接力的会话…", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.top, 6)
+                        .accessibilityIdentifier("handoff.syncing")
+                }
+            }
         }
     }
 
@@ -3029,6 +3041,8 @@ struct ContentView: View {
     @ObservedObject private var macLive = MacLiveSessionsStore.shared
     @State private var macAttachTarget: MacLiveSessionsStore.Row?
     @State private var macChatTarget: MacChatTarget?
+    /// [E7] 接力请求在等会话同步过来。
+    @State private var handoffSyncing = false
     /// 引用对象放在 @State 里:ContentView 不订阅它,打字只重画输入栏(见 HomeDraft)。
     @State private var homeDraft = HomeDraft()
     @State private var homeDraftRestored = false
@@ -5385,6 +5399,11 @@ private struct SessionRow: View, Equatable {
                     } else if session.source == "shortcut" {
                         badgeCircle(icon: "bolt.fill", color: .orange)
                             .offset(x: 2, y: 2)
+                    } else if session.source == "watch" {
+                        // [E4] 手表上问起的会话:手机上一眼认出来,接着问。
+                        badgeCircle(icon: "applewatch", color: .teal)
+                            .offset(x: 2, y: 2)
+                            .accessibilityLabel(Text("来自 Apple Watch"))
                     } else if session.isRemote {
                         badgeCircle(icon: "icloud.fill", color: .blue, iconSize: 7)
                             .offset(x: 2, y: 2)

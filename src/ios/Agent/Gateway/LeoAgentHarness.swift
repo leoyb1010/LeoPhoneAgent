@@ -103,9 +103,10 @@ extension LeoAgentClient {
     /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。[A2] 对所有 CLI 生效(Claude Code / Codex /
     /// Grok / LeoPhoneAgent);Mac 只接受认得出的 iPhone 发来的,不接受时返回 403 和原因与修复步骤。
     func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil,
-                              fullAuto: Bool = false) async throws -> String {
+                              fullAuto: Bool = false, phoneSessionId: String? = nil) async throws -> String {
         let payload = HarnessFullAuto.createPayload(harness: harness, cwd: cwd, prompt: prompt,
-                                                    thinking: thinking, fullAuto: fullAuto)
+                                                    thinking: thinking, fullAuto: fullAuto,
+                                                    phoneSessionId: phoneSessionId)
         let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
@@ -122,10 +123,11 @@ extension LeoAgentClient {
     /// `X-Leo-Request-Id` 让重试不会投递两次。返回 true = 已排队、还没到 Mac。
     @discardableResult
     func steerHarness(sessionId: String, text: String, fullAuto: Bool? = nil,
-                      requestId: String = UUID().uuidString) async throws -> Bool {
+                      requestId: String = UUID().uuidString, phoneSessionId: String? = nil) async throws -> Bool {
         LeoPerf.macSendBegan(sessionId)
         var body: [String: Any] = ["text": text]
         if let fullAuto { body["full_auto"] = fullAuto }
+        if let phone = HarnessFullAuto.phoneSessionValue(phoneSessionId) { body["phone_session_id"] = phone }
         let obj = try await postJSON("/harness/sessions/\(sessionId)/send", body: body, service: .harness,
                                      headers: ["X-Leo-Queue": "1", "X-Leo-Request-Id": requestId])
         let queued = (obj["queued"] as? Bool) == true
@@ -285,10 +287,14 @@ final class HarnessSessionDriver: ObservableObject {
     /// Kept so a session abandoned before it existed can be re-created.
     private var firstPrompt: String?
 
-    init(client: LeoAgentClient, harness: HarnessKind, cwd: String) {
+    /// [E5] 从哪个手机对话派出来的(没有 = 不是从对话派的)。建任务和后续消息都带上,完成推送据此回到那个对话。
+    let phoneSessionId: String?
+
+    init(client: LeoAgentClient, harness: HarnessKind, cwd: String, phoneSessionId: String? = nil) {
         self.client = client
         self.harness = harness
         self.cwd = cwd
+        self.phoneSessionId = phoneSessionId
     }
 
     /// [T-composer-send-dead] 会话建立期间(经中继 1~3 秒)用户就开始发送。
@@ -308,7 +314,7 @@ final class HarnessSessionDriver: ObservableObject {
                 do {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt,
-                        thinking: thinking, fullAuto: fullAuto)
+                        thinking: thinking, fullAuto: fullAuto, phoneSessionId: self.phoneSessionId)
                 } catch GatewayError.http(let status, let message)
                             where HarnessFullAuto.isRefusal(status: status, harnessKey: self.harness.key, requestedFullAuto: fullAuto) {
                     // Mac 还不接受这台手机开全自动(中继没认出 iPhone):照常开,逐项审批,并写明怎么修。
@@ -317,7 +323,8 @@ final class HarnessSessionDriver: ObservableObject {
                         self.note(HarnessFullAuto.refusedNote(serverMessage: message, status: status))
                     }
                     id = try await self.client.createHarnessSession(
-                        harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking)
+                        harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking,
+                        phoneSessionId: self.phoneSessionId)
                 }
                 // 建任务的路上你关掉了全自动:建好后立刻让 Mac 把它切回先问我。
                 if fullAuto, !FullAutoGate.isOn {
@@ -388,7 +395,7 @@ final class HarnessSessionDriver: ObservableObject {
         defer { inFlightOutbox.remove(entry.id) }
         do {
             if try await client.steerHarness(sessionId: sessionId, text: entry.text,
-                    fullAuto: entry.fullAuto, requestId: entry.id) {
+                    fullAuto: entry.fullAuto, requestId: entry.id, phoneSessionId: phoneSessionId) {
                 try await Task.detached { try HarnessOutbox.shared.markQueued(entry) }.value
                 var queued = entry
                 queued.state = .queued

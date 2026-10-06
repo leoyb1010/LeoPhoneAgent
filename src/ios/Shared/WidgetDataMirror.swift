@@ -96,9 +96,21 @@ enum WidgetDataMirror {
             }
             if outcome == .failed || outcome == .cancelled {
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
+                if entry.origin == "scheduled" {
+                    ScheduledTaskStore.shared.recordOutcome(sessionId: entry.sessionId, status: .failure,
+                        preview: outcome == .cancelled ? "已取消" : "运行失败，点开查看")
+                }
                 continue
             }
             guard outcome.canPublishBriefing else { continue }
+            if entry.origin == "scheduled" {
+                // [E3] 定时任务结果回写：设置页每行显示摘要，点开就是这次会话。
+                // 锁定的会话不把正文抄到设置页。
+                let locked = SessionLockStore.shared.isHiddenFromSystemSurfaces(entry.sessionId)
+                let text = locked ? "" : await AgentRunResultReader.text(sessionId: entry.sessionId, runId: state.runId)
+                ScheduledTaskStore.shared.recordOutcome(sessionId: entry.sessionId, status: .success,
+                    preview: locked ? "已完成（会话已锁定）" : text)
+            }
             if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId, runId: state.runId) {
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
                 // [T-scheduled-report] Close the loop for scheduled runs: the

@@ -1075,6 +1075,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onSaveArtifact: ((_ fileName: String, _ contents: String) -> Void)?
     /// [T-share-card] Render this reply as a share-card image and present the share sheet.
     @Published var onShareCard: (() -> Void)?
+    /// [E1] 回复的「下一步」(收藏 / 快捷任务 / 定时 / 发到 Mac / Paperclip)。
+    @Published var onNextStep: ((ReplyNextStep.Action) -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?

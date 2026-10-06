@@ -15,7 +15,8 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         project = (IOS / "LeoPhoneAgent.xcodeproj/project.pbxproj").read_text()
         source_paths = sorted([*CORE.glob("*.swift"), *VIEWS.glob("*.swift")])
         # 14 = 13 + Agent/Paperclip/PaperclipIntents.swift（1.56.0 快捷指令动作，留在边界内）。
-        self.assertEqual(len(source_paths), 14)
+        # 15 = 14 + Agent/Paperclip/PaperclipHandoff.swift（1.57.0 对话升级为工单，只收字符串）。
+        self.assertEqual(len(source_paths), 15)
         for path in source_paths:
             self.assertIn(f"path = {path.relative_to(IOS)};", project)
             self.assertGreaterEqual(project.count(f"/* {path.name} in Sources */"), 2)
@@ -37,6 +38,14 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         intents = (CORE / "PaperclipIntents.swift").read_text()
         for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "AIChatViewModel", "apiKey"]:
             self.assertNotIn(forbidden, intents)
+        # [G3] 对话 → 工单的桥只接收字符串：不引用本机对话、网关与模型。
+        handoff = (CORE / "PaperclipHandoff.swift").read_text()
+        self.assertIn("static func open(title: String, description: String", handoff)
+        for forbidden in ["ChatStore", "Gateway", "AIChatViewModel", "ChatMessage", "LeoAgentClient", "runAgent", "apiKey"]:
+            self.assertNotIn(forbidden, handoff)
+        create = (VIEWS / "PaperclipWorkspaceView.swift").read_text()
+        for forbidden in ["ChatStore", "AIChatViewModel", "GatewayHostStore"]:
+            self.assertNotIn(forbidden, create)
 
     def test_native_auth_has_no_password_collection_or_javascript_cookie_bridge(self):
         client = (CORE / "PaperclipClient.swift").read_text()

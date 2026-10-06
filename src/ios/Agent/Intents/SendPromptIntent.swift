@@ -549,11 +549,25 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
             let target = ["macSessionId": macSessionId,
                           "hostId": userInfo["hostId"] as? String ?? "",
                           "machine": userInfo["machine"] as? String ?? ""]
-            DispatchQueue.main.async {
+            let openMac: @MainActor () -> Void = {
                 SessionLockStore.shared.runWhenUnlocked {
                     NotificationNavigationStore.shared.setPendingMac(target)
                     NotificationCenter.default.post(name: .openSessionFromIntent, object: nil, userInfo: target)
                 }
+            }
+            // [E5] 从手机对话派出的任务完成:回到那个对话(结果由回前台补齐写进 MacResultInbox,打开时显示并滚到底)。
+            // 没带对话 id,或那个对话已经删了:照旧打开 Mac 任务。
+            if let phoneSessionId = HarnessFullAuto.phoneSessionValue(userInfo["phoneSessionId"] as? String) {
+                Task { @MainActor in
+                    guard await ChatStore.shared.sessionExists(id: phoneSessionId) else { openMac(); return }
+                    SessionLockStore.shared.runWhenUnlocked {
+                        NotificationNavigationStore.shared.setPending(phoneSessionId)
+                        NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                                        userInfo: ["sessionId": phoneSessionId])
+                    }
+                }
+            } else {
+                Task { @MainActor in openMac() }
             }
         }
         completionHandler()

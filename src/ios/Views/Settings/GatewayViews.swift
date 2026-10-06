@@ -1305,6 +1305,10 @@ struct ComposerMacTarget: Identifiable {
     let host: GatewayHost
     let cliKey: String
     let cliName: String
+    /// [E1] 「发到 Mac 接着做」:打开就带着这段任务描述开工(空 = 打开空白控制台)。
+    var firstPrompt: String = ""
+    /// [E5] 派出它的手机对话;完成推送带回,点通知回到那个对话。
+    var phoneSessionId: String? = nil
     var id: String { host.id + cliKey }
 }
 
@@ -1320,8 +1324,9 @@ struct ComposerMacChatCover: View {
                     driver: HarnessSessionDriver(
                         client: client,
                         harness: HarnessKind(key: target.cliKey, name: target.cliName),
-                        cwd: "~"),
-                    firstPrompt: "")
+                        cwd: "~",
+                        phoneSessionId: target.phoneSessionId),
+                    firstPrompt: target.firstPrompt)
                 .navigationTitle("\(target.host.name) · \(target.cliName)")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

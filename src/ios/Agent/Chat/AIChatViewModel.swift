@@ -1477,6 +1477,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                                         userInfo: Self.shareRequestUserInfo(sessionId: sessionId))
     }
 
+    /// [E1] 回复的「下一步」:取这一轮的用户提示与回复,交给对话界面去处理(表单、跳转)。
+    func requestReplyNextStep(_ action: ReplyNextStep.Action, for message: ChatMessage) {
+        let reply = message.blocks
+            .filter { if case .text = $0.kind { return true }; return false }
+            .map(\.content)
+            .joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reply.isEmpty else { return }
+        var prompt = ""
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            prompt = messages[..<index].last(where: { $0.role == .user })?.content ?? ""
+        }
+        let request = ReplyNextStep.Request(action: action, prompt: ReplyNextStep.cleanPrompt(prompt), reply: reply)
+        NotificationCenter.default.post(name: .replyNextStepRequested, object: self, userInfo: ["request": request])
+    }
+
     /// [T-reply-toolbar] Quote a reply excerpt into the composer as a
     /// markdown blockquote, ready for a follow-up question.
     func quoteIntoComposer(_ text: String) {

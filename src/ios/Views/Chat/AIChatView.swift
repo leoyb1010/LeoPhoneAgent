@@ -282,6 +282,10 @@ struct AIChatView: View {
     /// [T-composer-quicktask-picker] Full quick-task list sheet.
     @State private var showQuickTaskPicker = false
     @State private var showMacSwitchDialog = false
+    /// [E1] 「发到 Mac」:选好 Mac 与 CLI 后带着这段任务描述开工(nil = 普通的 /mac 切换)。
+    @State private var macHandoffPrompt: String?
+    /// [E1] 「存为快捷任务」/「设为定时任务」的小表单。
+    @State private var nextStepForm: ReplyNextStep.Request?
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
@@ -3550,13 +3554,40 @@ struct AIChatView: View {
             showQuickTaskPicker = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenMacSwitch, object: vm)) { _ in
+            macHandoffPrompt = nil
             showMacSwitchDialog = true
         }
-        .confirmationDialog("交给哪台 Mac 继续", isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
+        // [E1] 回复的「下一步」菜单。
+        .onReceive(NotificationCenter.default.publisher(for: .replyNextStepRequested, object: vm)) { note in
+            guard let request = note.userInfo?["request"] as? ReplyNextStep.Request else { return }
+            handleNextStep(request)
+        }
+        .sheet(item: $nextStepForm) { request in
+            ReplyQuickTaskForm(request: request) { message in
+                vm.appendSystemInfo(message, icon: request.action == .schedule ? "clock.arrow.circlepath" : "bolt")
+            }
+        }
+        // [E7] 接力:这个会话在别的设备上可接着看。[E5] 打开时显示派到 Mac 的任务结果。
+        .task(id: vm.sessionId) {
+            advertiseHandoff()
+            consumeMacResults()
+        }
+        .onChange(of: vm.isLoadingSession) { _, _ in consumeMacResults() }
+        .onReceive(NotificationCenter.default.publisher(for: MacResultInbox.changed)) { note in
+            guard note.userInfo?["sessionId"] as? String == vm.sessionId else { return }
+            consumeMacResults()
+        }
+        .onDisappear { SessionHandoff.stop(sessionId: vm.sessionId) }
+        .confirmationDialog(macHandoffPrompt == nil ? "交给哪台 Mac 继续" : "发到哪台 Mac 接着做",
+                            isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
             ForEach(gatewayStore.activeHosts) { host in
                 ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
                     Button("\(host.name) · \(cli.1)") {
-                        macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1)
+                        // [E5] 带上这个对话的 id:Mac 任务完成的通知点开回到这里。
+                        macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1,
+                                                          firstPrompt: macHandoffPrompt ?? "",
+                                                          phoneSessionId: vm.sessionId)
+                        macHandoffPrompt = nil
                     }
                 }
             }
@@ -3572,6 +3603,51 @@ struct AIChatView: View {
             }
         }
         return AnyView(host)
+    }
+
+    /// [E1] 下一步:五项各自的去处。
+    private func handleNextStep(_ request: ReplyNextStep.Request) {
+        switch request.action {
+        case .collect:
+            Task {
+                let ok = await ReplyNextStep.collect(prompt: request.prompt, reply: request.reply)
+                LeoHaptics.notification(ok ? .success : .error)
+                vm.appendSystemInfo(ok ? "已收进藏宝阁" : "没能收进藏宝阁,请重试。", icon: "archivebox")
+            }
+        case .quickTask, .schedule:
+            nextStepForm = request
+        case .mac:
+            macHandoffPrompt = ReplyNextStep.macTaskText(prompt: request.prompt,
+                                                         reply: WatchTextSanitizer.plain(request.reply))
+            showMacSwitchDialog = true
+        case .paperclip:
+            // [G3] 只把两段文本交给 Paperclip 侧,由它的创建表单预填。
+            if !PaperclipHandoff.open(title: request.prompt,
+                                      description: ReplyNextStep.summary(WatchTextSanitizer.plain(request.reply))) {
+                LeoHaptics.notification(.error)
+            }
+        }
+    }
+
+    /// [E7] 锁定的会话不对外接力。
+    private func advertiseHandoff() {
+        guard let sid = vm.sessionId, !SessionLockStore.shared.isHiddenFromSystemSurfaces(sid) else {
+            SessionHandoff.advertise(sessionId: nil)
+            return
+        }
+        SessionHandoff.advertise(sessionId: sid)
+    }
+
+    /// [E5] 这个对话派到 Mac 的任务结束了:作为一条提示放在对话最后并滚过去(只显示一次)。
+    /// 等历史加载完再放,否则加载会把它冲掉。
+    private func consumeMacResults() {
+        guard let sid = vm.sessionId, !vm.isLoadingSession, !vm.messages.isEmpty else { return }
+        let results = MacResultInbox.take(phoneSessionId: sid)
+        guard !results.isEmpty else { return }
+        for result in results {
+            vm.appendSystemInfo(result.noticeText, icon: result.failed ? "exclamationmark.triangle" : "desktopcomputer")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { vm.forceScrollToBottom.send() }
     }
 
     /// [T-local-brain] 本机改写菜单。结果直接替换输入框内容;失败保留原文。

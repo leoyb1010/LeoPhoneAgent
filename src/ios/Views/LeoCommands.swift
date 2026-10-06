@@ -139,7 +139,7 @@ enum ChatCommandTarget {
 /// menu and dragging a row to the screen edge both carry the session as an
 /// NSUserActivity.
 enum SessionWindow {
-    static let activityType = "com.leoyuan.leophoneagent.session"
+    static let activityType = SessionHandoff.activityType
 
     static var isSupported: Bool { UIApplication.shared.supportsMultipleScenes }
 
@@ -205,6 +205,8 @@ struct SceneSessionHost: View {
     let onWindow: (UIWindow) -> Void
     /// Shows the session in this window; false when it doesn't exist (yet).
     let open: (String) -> Bool
+    /// [E7] true while a request (Handoff from another device) waits for its session to sync in.
+    var onWaitingChange: (Bool) -> Void = { _ in }
 
     /// A new-window request that arrived before the session list loaded.
     @State private var requestedSessionId: String?
@@ -246,8 +248,19 @@ struct SceneSessionHost: View {
     /// Sessions load asynchronously; a request waits for the list (and for the
     /// session itself, when it isn't in the list yet).
     private func openRequested() {
-        guard let id = requestedSessionId, sessionCount > 0, open(id) else { return }
+        guard let id = requestedSessionId else { return }
+        guard sessionCount > 0, open(id) else {
+            onWaitingChange(true)
+            // 同步迟迟不到(另一台设备没开 iCloud、会话已删):一分钟后放弃,不让提示一直挂着。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
+                guard requestedSessionId == id else { return }
+                requestedSessionId = nil
+                onWaitingChange(false)
+            }
+            return
+        }
         requestedSessionId = nil
+        onWaitingChange(false)
     }
 
     private func updateClosureConfirmation() {

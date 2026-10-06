@@ -1186,6 +1186,12 @@ enum TreasuryIntentRouteStore {
 enum TreasuryContextBuilder {
     static let defaultTotalCharacterBudget = 24_000
 
+    /// [E6] 「交给 Agent」预填进输入框的开头。条目全文已作为 treasury_context 随消息附上,
+    /// 这里只留个起头,你接着写要它做什么(例如「三句话总结」)。
+    static func agentInstruction(count: Int) -> String {
+        count <= 1 ? "基于这条收藏：" : "基于这 \(count) 条收藏："
+    }
+
     static func build(items: [CollectedItem],
                       maxTotalChars: Int = defaultTotalCharacterBudget,
                       index: CollectionSearchIndex = .shared) async -> String {
