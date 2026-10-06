@@ -72,6 +72,9 @@ class VoiceProvider: VoiceInputCapable, VoiceOutputCapable {
     // MARK: - Default model / voice (override)
 
     func defaultVoiceInputModel() -> String  { "whisper-1" }
+    /// [H5] OpenAI 兼容的 /v1/audio/transcriptions 接受 `prompt`(OpenAI、Groq 文档均有)。
+    /// 用同一 multipart 但未确认支持 prompt 的服务商覆盖为 false。
+    var acceptsRecognitionPrompt: Bool { true }
     func defaultVoiceOutputModel() -> String { "tts-1" }
     func defaultVoiceOutputVoice() -> String { "alloy" }
 
@@ -192,6 +195,23 @@ class VoiceProvider: VoiceInputCapable, VoiceOutputCapable {
             throw VoiceProviderError.httpError(http.statusCode, data)
         }
         return data
+    }
+
+    /// [H7] 逐行读取 HTTP 分块响应(一行一个 JSON 帧)。`onLine` 返回 false 即停止读取。
+    func executeStreamingLines(_ request: URLRequest, onLine: (Data) throws -> Bool) async throws {
+        let (bytes, response) = try await Self.session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw VoiceProviderError.parseError("Non-HTTP response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 || http.statusCode == 403 { throw VoiceProviderError.authError }
+            throw VoiceProviderError.httpError(http.statusCode, nil)
+        }
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard !line.isEmpty else { continue }
+            if try !onLine(Data(line.utf8)) { break }
+        }
     }
 
     // MARK: - Chat-based ASR (for audio+text multimodal models like GPT Audio Mini)

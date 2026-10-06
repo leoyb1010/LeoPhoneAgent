@@ -118,8 +118,28 @@ struct InlineVoiceInputView: View {
 
     /// Visible transcript band height = content height, clamped to the cap.
     private var transcriptBandHeight: CGFloat {
-        guard viewModel.isEditingTranscript || !viewModel.transcript.isEmpty else { return 0 }
+        guard viewModel.isEditingTranscript || hasTranscriptContent else { return 0 }
         return min(max(transcriptContentHeight, 28), transcriptMaxHeight)
+    }
+
+    /// [H1] 转写或实时字幕有内容时才显示转写区。
+    private var hasTranscriptContent: Bool {
+        !viewModel.transcript.isEmpty || !viewModel.liveCaptionFinal.isEmpty || !viewModel.liveCaptionVolatile.isEmpty
+    }
+
+    /// [H1] 转写(黑)+ 实时字幕定稿部分(黑)+ 临时部分(灰)。用 AttributedString 拼,
+    /// 不走已弃用的 `Text + Text`,也不产生本地化 key。
+    private var transcriptDisplay: AttributedString {
+        var out = AttributedString(viewModel.transcript)
+        let final = viewModel.liveCaptionFinal.trimmingCharacters(in: .whitespacesAndNewlines)
+        let volatile = viewModel.liveCaptionVolatile
+        guard !final.isEmpty || !volatile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return out }
+        let separator = viewModel.transcript.isEmpty ? "" : " "
+        out += AttributedString(separator + final)
+        var tail = AttributedString(volatile)
+        tail.swiftUI.foregroundColor = .secondary
+        out += tail
+        return out
     }
 
     /// [T-voice-scroll-gesture-priority] Should the panel's drag gesture step
@@ -399,6 +419,11 @@ struct InlineVoiceInputView: View {
             // and re-enters voice mode, a stale transcript would otherwise
             // resurrect the old text here.
             viewModel.setTranscript(inputText)
+            // [H5] 当前会话的文本作为热词来源(只在识别时用,不落盘)。
+            viewModel.hotwordTextSource = {
+                let c = conversationContext?() ?? .empty
+                return [c.lastUserMessage, c.lastAgentReply, c.rareTermsDigest].compactMap { $0 } + c.recentExcerpts
+            }
             // Open expanded ONLY when the user just switched text→voice; otherwise
             // resume the remembered expand/compact state (cross-session memory).
             if voiceMode.enteredFromText {
@@ -543,7 +568,7 @@ struct InlineVoiceInputView: View {
         VStack(spacing: 8) {
             // ── Transcript — wraps, grows with content, then scrolls once the
             // panel hits the 60%-screen cap. Double-tap to correct by keyboard. ──
-            if viewModel.isEditingTranscript || !viewModel.transcript.isEmpty {
+            if viewModel.isEditingTranscript || hasTranscriptContent {
                 transcriptArea
                     .frame(height: transcriptBandHeight)
             }
@@ -587,6 +612,20 @@ struct InlineVoiceInputView: View {
                 Text(execution.displayLabel + (execution.isFinal ? "" : " · 部分结果"))
                     .font(.caption2).foregroundStyle(.secondary)
                     .accessibilityLabel(execution.displayLabel)
+            }
+
+            // [H3] 确认过的错字已自动改好,可一键撤销。
+            if let fix = viewModel.autoCorrection {
+                HStack(spacing: 6) {
+                    Text(fix.text)
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                    Button("撤销") { viewModel.undoAutoCorrection() }
+                        .font(.caption2.weight(.semibold))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                }
+                .transition(.opacity)
             }
 
             // ── Transcription error tip (with retry countdown / manual retry) ──
@@ -726,7 +765,8 @@ struct InlineVoiceInputView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(viewModel.transcript)
+                    Text(transcriptDisplay)
+                        .contentTransition(.opacity)
                         .font(.body)
                         .foregroundStyle(ChatColors.primaryText)
                         .multilineTextAlignment(.center)
@@ -763,6 +803,9 @@ struct InlineVoiceInputView: View {
                     withAnimation(.linear(duration: 0.12)) {
                         proxy.scrollTo("voiceTranscriptTail", anchor: .bottom)
                     }
+                }
+                .onChange(of: viewModel.liveCaptionVolatile) { _ in
+                    proxy.scrollTo("voiceTranscriptTail", anchor: .bottom)
                 }
             }
             // Double-tap to correct by keyboard (pauses VAD).

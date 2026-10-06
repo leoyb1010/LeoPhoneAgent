@@ -10,9 +10,35 @@ struct SystemSpeechResourcesView: View {
     @State private var installation: Task<Void, Never>?
     @State private var message: String?
     @State private var reserved = false
+    @AppStorage(VoiceExperiencePreferences.liveCaptionsKey) private var liveCaptions = true
+    @AppStorage(VoiceExperiencePreferences.hotwordsKey) private var hotwords = true
+    @AppStorage(VoiceExperiencePreferences.streamingTTSKey) private var streamingTTS = true
+    /// [H4] 度量快照,进页面和清空时刷新。
+    @State private var metricsTick = 0
 
     var body: some View {
         List {
+            Section {
+                Toggle("说话时实时出字", isOn: $liveCaptions)
+                Toggle("识别时带上会话热词", isOn: $hotwords)
+                Toggle("流式朗读（豆包）", isOn: $streamingTTS)
+            } header: {
+                Text("语音体验")
+            } footer: {
+                Text("实时出字需要下方本机语言资源已安装，未安装时自动回到整段识别。热词取自当前会话里的项目名、人名和术语（最多 50 个），只随识别请求发送给支持热词的服务。流式朗读失败时整段改用系统朗读。")
+            }
+            Section {
+                let _ = metricsTick
+                LabeledContent("说完到看到终稿", value: Self.seconds(VoiceMetricsStore.shared.summary(.finalLatency)))
+                LabeledContent("说完到听到第一个字", value: Self.seconds(VoiceMetricsStore.shared.summary(.firstAudioLatency)))
+                LabeledContent("手动改字率", value: Self.percent(VoiceMetricsStore.shared.summary(.manualEdit),
+                                                            count: VoiceMetricsStore.shared.values(.manualEdit).count))
+                Button("清空度量") { VoiceMetricsStore.shared.reset(); metricsTick += 1 }
+            } header: {
+                Text("语音度量 · 最近 20 次")
+            } footer: {
+                Text("前两项是中位数；改字率是最近 20 条语音消息里手动改过字的比例。\"听到第一个字\"从语音消息发出算起。")
+            }
             Section("识别政策") {
                 Toggle("自动模式允许联网识别", isOn: $autoNetworkAllowed)
                 Text("关闭时，自动模式只使用本机可用资源。明确选择离线时始终禁止联网；允许联网也会优先使用已安装的本机引擎。")
@@ -55,12 +81,23 @@ struct SystemSpeechResourcesView: View {
         }
         .navigationTitle("系统语音与语言资源")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { metricsTick += 1 }
         .task {
             if #available(iOS 26.0, *) { locales = await SpeechTranscriber.supportedLocales.map(\.identifier) }
             await refresh()
         }
         .onChange(of: localeID) { _, _ in Task { await refresh() } }
         .onDisappear { installation?.cancel() }
+    }
+
+    private static func seconds(_ ms: Double?) -> String {
+        guard let ms else { return "暂无" }
+        return String(format: "%.1f 秒", ms / 1000)
+    }
+
+    private static func percent(_ rate: Double?, count: Int) -> String {
+        guard let rate else { return "暂无" }
+        return "\(Int((rate * 100).rounded()))%（\(count) 条）"
     }
 
     private var statusLabel: String {

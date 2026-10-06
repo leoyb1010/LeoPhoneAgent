@@ -23,6 +23,9 @@ struct VoiceInputRequest {
     /// nil = provider default (prefer on-device when supported). Ignored by cloud
     /// ASR providers.
     let onDeviceRecognition: Bool?
+    /// [H5] 当前会话的术语(≤50)。系统识别作为 contextualStrings;云端只在支持 prompt
+    /// 的服务商上经由 `prompt` 传递。
+    let hotwords: [String]
 
     init(audioData: Data,
          model: String? = nil,
@@ -30,7 +33,8 @@ struct VoiceInputRequest {
          responseFormat: VoiceInputFormat = .json,
          prompt: String? = nil,
          resolvedModel: LLMModel? = nil,
-         onDeviceRecognition: Bool? = nil) {
+         onDeviceRecognition: Bool? = nil,
+         hotwords: [String] = []) {
         self.audioData = audioData
         self.model = model
         self.language = language
@@ -38,6 +42,7 @@ struct VoiceInputRequest {
         self.prompt = prompt
         self.resolvedModel = resolvedModel
         self.onDeviceRecognition = onDeviceRecognition
+        self.hotwords = hotwords
     }
 }
 
@@ -88,6 +93,14 @@ protocol VoiceInputCapable {
 protocol VoiceOutputCapable {
     func synthesize(_ request: VoiceOutputRequest) async throws -> Data
     var supportsVoiceOutput: Bool { get }
+}
+
+/// [H7] 能边收边播的 TTS:按顺序回调 16-bit 小端单声道 PCM 片段。
+/// 只给已接入且接口本身就是流式的服务商实现(目前:豆包 v3 unidirectional,
+/// format=pcm 见火山引擎文档 6561/1598757)。
+protocol StreamingVoiceOutput {
+    var streamingSampleRate: Double { get }
+    func streamPCM(_ request: VoiceOutputRequest, onChunk: @escaping (Data) -> Void) async throws
 }
 
 /// A voice provider that can do both directions (ASR + TTS). The factory returns

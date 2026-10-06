@@ -124,7 +124,8 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             legacyAuthorized: Self.speechAuthStatus == .authorized)
         if case .analyzer(let locale) = route {
             if #available(iOS 26.0, *) {
-                return try await AppleSpeechAnalyzer.transcribe(data: request.audioData, localeIdentifier: locale)
+                return try await AppleSpeechAnalyzer.transcribe(data: request.audioData, localeIdentifier: locale,
+                                                                contextualStrings: request.hotwords)
             }
             throw SystemSpeechError.offlineUnavailable(loc.identifier)
         }
@@ -155,7 +156,9 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         recognitionRequest.addsPunctuation = true          // iOS 16+ auto punctuation
         recognitionRequest.taskHint = .dictation           // optimize for free-form speech
         VoiceLog.log("system ASR loc=\(loc.identifier) onDevice=\(useOnDevice) (wanted=\(request.onDeviceRecognition.map(String.init(describing:)) ?? "auto"), supports=\(recognizer.supportsOnDeviceRecognition))")
-        if let prompt = request.prompt {
+        if !request.hotwords.isEmpty {
+            recognitionRequest.contextualStrings = Array(request.hotwords.prefix(VoiceHotwords.limit))
+        } else if let prompt = request.prompt {
             recognitionRequest.contextualStrings = [prompt]
         }
 

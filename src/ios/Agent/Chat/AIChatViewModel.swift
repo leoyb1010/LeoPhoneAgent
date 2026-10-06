@@ -1660,6 +1660,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         let utterance = makeUtterance(text)
         speechSynthesizer.speak(utterance)  // queues automatically, does NOT interrupt
+        VoiceLog.noteFirstAudio()   // [H4] 系统朗读本地合成,speak 即出声
     }
 
     /// Declare the reply-TTS audio intent before System TTS speaks. The
