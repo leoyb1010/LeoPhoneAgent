@@ -29,6 +29,10 @@ struct SendPromptIntent: AppIntent {
     @Parameter(title: "Wait for Result", description: "When enabled, waits for the AI to finish and returns the full response. Use this to chain the result into subsequent Shortcuts actions.", default: false)
     var waitForResult: Bool
 
+    /// [C4] 接「搜索藏宝阁」的结果:条目作为不可信资料上下文随提示发送(不显示在气泡里)。
+    @Parameter(title: "藏宝阁条目", description: "可选。接上一步「搜索藏宝阁」的结果，Agent 会读取这些条目的内容。")
+    var treasuryItems: [TreasuryItemEntity]?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
         if let lockedId = session?.id, SessionLockStore.shared.isHiddenFromSystemSurfaces(lockedId) {
@@ -164,9 +168,12 @@ struct SendPromptIntent: AppIntent {
         var voiceOnly = false
         if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
         let sid = vm.sessionId ?? "unknown"
+        // [C4] 选中的藏宝阁条目 → 与「发给 Agent」同一个构造器生成的资料上下文。
+        let treasuryContext = await Self.treasuryContext(for: treasuryItems)
         // [T-headless-draft] 这个对话若也开在界面上,VM 是同一个:只发这条提示,用户没发出的草稿原样留着。
         let runId = try vm.withComposerSetAside {
             vm.inputText = voiceOnly ? prompt + Self.voiceOnlyReminder : prompt
+            vm.pendingTreasuryContext = treasuryContext
             return try Self.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
         }
 
@@ -205,6 +212,12 @@ struct SendPromptIntent: AppIntent {
             // ~30 s intent budget instead of being cut off mid-answer.
             let settled: (outcome: AgentRunOutcome, text: String)
             if #available(iOS 27, *) {
+                // [C12] 按工具步数汇报进度,系统据此延长运行时间。
+                let progress = self.progress
+                let reporter = Task { @MainActor in
+                    await Self.reportToolProgress(progress, runId: runId, sessionId: sid)
+                }
+                defer { reporter.cancel() }
                 settled = try await performBackgroundTask { await settle() }
             } else {
                 settled = await settle()
@@ -222,7 +235,11 @@ struct SendPromptIntent: AppIntent {
                 runId: runId
             )
             let spoken = voiceOnly ? String(VoiceTextSanitizer.sanitize(responseText).prefix(240)) : String(responseText.prefix(500))
-            return .result(value: result, dialog: "\(spoken)")
+            // [C11] 锁屏 + 隐私模式:不朗读正文(结果值仍完整交给下一步动作)。
+            let dialog = SiriReplyPrivacy.dialogText(
+                spoken, deviceLocked: !UIApplication.shared.isProtectedDataAvailable,
+                privacyMode: SiriReplyPrivacy.privacyModeEnabled, voiceOnly: voiceOnly)
+            return .result(value: result, dialog: "\(dialog)")
         }
 
         // Async mode: return immediately, notify on completion in background
@@ -242,6 +259,30 @@ struct SendPromptIntent: AppIntent {
         )
 
         return .result(value: result, dialog: "Task started with \(modelName). I'll notify you when it's done.")
+    }
+
+    /// [C4] 把选中的藏宝阁条目做成不可信资料上下文;没有条目或都已删除时为 nil。
+    @MainActor
+    static func treasuryContext(for entities: [TreasuryItemEntity]?) async -> String? {
+        guard let entities, !entities.isEmpty else { return nil }
+        let wanted = Set(entities.map(\.id))
+        let items = Array(CollectionStore.load().filter { wanted.contains($0.id) }.prefix(20))
+        guard !items.isEmpty else { return nil }
+        let context = await TreasuryContextBuilder.build(items: items)
+        return context.isEmpty ? nil : context
+    }
+
+    /// [C12] 每 2 秒按本次运行已用的工具步数更新 Progress(总数 = 步数 + 1,未完成时不会满格)。
+    @available(iOS 27, *)
+    @MainActor
+    static func reportToolProgress(_ progress: Progress, runId: String, sessionId: String) async {
+        while !Task.isCancelled {
+            let steps = AgentActivityLog.shared.recent(limit: 200, sessionId: sessionId)
+                .filter { $0.runId == runId && $0.kind == .toolChanged }.count
+            progress.totalUnitCount = Int64(steps + 1)
+            progress.completedUnitCount = Int64(steps)
+            try? await Task.sleep(for: .seconds(2))
+        }
     }
 
     /// Appended to a voice-only prompt; stripped from what the chat displays.

@@ -14,7 +14,8 @@ class IOSPaperclipContractAudit(unittest.TestCase):
     def test_all_new_production_sources_are_app_members_and_native_harness_inputs(self):
         project = (IOS / "LeoPhoneAgent.xcodeproj/project.pbxproj").read_text()
         source_paths = sorted([*CORE.glob("*.swift"), *VIEWS.glob("*.swift")])
-        self.assertEqual(len(source_paths), 13)
+        # 14 = 13 + Agent/Paperclip/PaperclipIntents.swift（1.56.0 快捷指令动作，留在边界内）。
+        self.assertEqual(len(source_paths), 14)
         for path in source_paths:
             self.assertIn(f"path = {path.relative_to(IOS)};", project)
             self.assertGreaterEqual(project.count(f"/* {path.name} in Sources */"), 2)
@@ -32,6 +33,10 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         client = (CORE / "PaperclipClient.swift").read_text()
         for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "apiKey", 'forHTTPHeaderField: "Authorization"']:
             self.assertNotIn(forbidden, client)
+        # 快捷指令动作只经 PaperclipWorkspaceStore / PaperclipClient，不碰本机对话与网关。
+        intents = (CORE / "PaperclipIntents.swift").read_text()
+        for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "AIChatViewModel", "apiKey"]:
+            self.assertNotIn(forbidden, intents)
 
     def test_native_auth_has_no_password_collection_or_javascript_cookie_bridge(self):
         client = (CORE / "PaperclipClient.swift").read_text()

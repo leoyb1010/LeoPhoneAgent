@@ -91,41 +91,23 @@ extension AIChatViewModel {
             return FileToolResult(output: "Error: could not write the correction.", success: false)
         }
 
-        let fm = FileManager.default
-        let persistDir = Self.minisMemoryPersistentDir
-        try? fm.createDirectory(at: persistDir, withIntermediateDirectories: true)
+        return Self.writeDailyMemory(content)
+    }
 
-        let dateFmt = DateFormatter()
-        dateFmt.dateFormat = "yyyy-MM-dd"
-        let fileName = "\(dateFmt.string(from: Date())).md"
-        let fileURL = persistDir.appendingPathComponent(fileName)
-
-        // Build timestamped entry
-        let timeFmt = DateFormatter()
-        timeFmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let timestamp = timeFmt.string(from: Date())
-        let entry = "<!-- \(timestamp) -->\n\(content)\n\n"
-
-        // Prepend to existing file
-        var existing = ""
-        if fm.fileExists(atPath: fileURL.path) {
-            existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-        }
-
-        let newContent = entry + existing
-        guard let writeData = newContent.data(using: .utf8) else {
-            return FileToolResult(output: "Error: Content is not valid UTF-8", success: false)
-        }
-
+    /// [C3] 写进当天记忆日志并通知各处刷新。与 ViewModel 实例无关:
+    /// memory_write 工具和「记住这个」快捷指令动作共用这一个入口。
+    static func writeDailyMemory(_ content: String) -> FileToolResult {
+        let fileName: String
         do {
-            try writeData.write(to: fileURL)
+            fileName = try MemoryDailyLog.prepend(content, in: minisMemoryPersistentDir)
+        } catch MemoryDailyLog.WriteError.notUTF8 {
+            return FileToolResult(output: "Error: Content is not valid UTF-8", success: false)
         } catch {
             return FileToolResult(output: "Error writing memory: \(error.localizedDescription)", success: false)
         }
 
         // Register in meta.db for iSH visibility
-        let linuxPath = "\(Self.minisMemoryLinuxDir)/\(fileName)"
-        ensureFakefsMetadata(for: linuxPath, isDirectory: false)
+        RootfsManager.shared.ensureFakefsMetadata(for: "\(minisMemoryLinuxDir)/\(fileName)", isDirectory: false)
 
         // Enqueue for iCloud v2 sync. Reuse fileName's stem (no second
         // Date() call) so the dateKey matches what was actually written

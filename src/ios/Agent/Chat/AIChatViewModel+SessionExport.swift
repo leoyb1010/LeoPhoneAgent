@@ -80,7 +80,7 @@ extension AIChatViewModel {
         }
     }
 
-    private static let exportStamp: DateFormatter = {
+    static let exportStamp: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
@@ -90,6 +90,11 @@ extension AIChatViewModel {
     /// The transcript as markdown. User/assistant text in full; tool calls
     /// as single marker lines; errors kept (they're part of what happened).
     private func sessionExportMarkdown() -> String {
+        Self.sessionExportMarkdown(messages: messages)
+    }
+
+    /// [C5] 与 ViewModel 实例无关的导出:App 内导出和「导出会话」快捷指令动作共用。
+    static func sessionExportMarkdown(messages: [ChatMessage]) -> String {
         var out: [String] = []
         let header = DateFormatter()
         header.dateFormat = "yyyy-MM-dd HH:mm"

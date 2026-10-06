@@ -40,6 +40,7 @@ extension Notification.Name {
 ///   leophoneagent://settings/permissions
 ///   leophoneagent://settings/environments[?create_key=…&create_value=…&create_note=…]
 ///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
+///   leophoneagent://shortcut-result?run=<runId>&status=success|error|cancel[&result=…]  (apple-shortcuts run callback)
 ///
 /// Unknown settings paths fall back to the Settings home rather than
 /// failing — same as Android — so an LLM-generated link can never
@@ -137,6 +138,10 @@ enum DeepLinkRouter {
         case "settings":
             IOSExecutionBackend.selectLocal()
             handleSettings(url: url, coord: coord)
+
+        // [C1] 快捷指令 x-success / x-error / x-cancel 回调(通常已在 AppURLEntry 处理)。
+        case ShortcutCallbackStore.callbackHost:
+            ShortcutCallbackStore.shared.handle(url: url)
 
         default:
             deepLinkLog.info("unknown host '\(host)'")

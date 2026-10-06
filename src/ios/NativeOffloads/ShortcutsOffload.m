@@ -8,7 +8,8 @@
 //  规格书 E·P0「快捷指令运行器」:iOS 没有公开 API 枚举用户的快捷指令库,
 //  也不能后台静默运行第三方动作——能做的是 shortcuts://x-callback-url 封装。
 //  run 会把前台切到快捷指令 App 执行,用户全程可见;x-success/x-error 指回
-//  leophoneagent:// 让执行完自动跳回本 App。登记表(register/list)解决
+//  leophoneagent://shortcut-result?run=<runId> 让执行完自动跳回本 App,并把
+//  快捷指令的输出带回来(见 ShortcutCallbackStore.swift,[C1])。登记表(register/list)解决
 //  「模型不知道用户有哪些快捷指令」:用户报一次名字,以后模型直接可用。
 //  这一条打开整个 E 级间接能力面(Apple Notes、系统设置、第三方 App 动作)。
 //
@@ -17,6 +18,7 @@
 #import <UIKit/UIKit.h>
 #import "NativeOffloadUtils.h"
 #include "kernel/native_offload.h"
+#import "LeoPhoneAgent-Swift.h"
 
 static NSString *const TOOL_NAME = @"apple-shortcuts";
 static NSString *const REGISTRY_KEY = @"appleShortcuts.registry";
@@ -28,7 +30,7 @@ static NSString *const HELP_TEXT =
      "  apple-shortcuts <command> [options]\n"
      "\n"
      "COMMANDS:\n"
-     "  run         Run a shortcut by name (switches to the Shortcuts app)\n"
+     "  run         Run a shortcut by name and wait for its output (switches to the Shortcuts app)\n"
      "  open        Open a shortcut in the Shortcuts editor\n"
      "  list        List shortcuts the user has registered here\n"
      "  register    Remember a shortcut name for later runs\n"
@@ -43,7 +45,8 @@ static NSString *const HELP_TEXT =
      "  --name <name>        Shortcut name (exact, as shown in Shortcuts app)\n"
      "  --input <text>       Pass text as the shortcut's input\n"
      "  --input-file <path>  Pass a file's text content as input (max 16KB)\n"
-     "  --no-return          Don't bounce back to LeoPhoneAgent when done\n"
+     "  --timeout <sec>      How long to wait for the result (default 60, 5-300)\n"
+     "  --no-return          Don't bounce back or wait for output; just launch it\n"
      "\n"
      "REGISTER OPTIONS:\n"
      "  --name <name>        Shortcut name (required)\n"
@@ -54,6 +57,16 @@ static NSString *const HELP_TEXT =
      "  apple-shortcuts run --name \"Append To Notes\" --input \"buy milk\"\n"
      "  apple-shortcuts register --name \"Append To Notes\" --desc \"Adds text to my daily note\"\n"
      "  apple-shortcuts list\n"
+     "\n"
+     "RESULTS:\n"
+     "  run waits (by run_id) until the shortcut calls back, then returns its output:\n"
+     "  1. If the Shortcuts app passes the shortcut's output on x-success, it is\n"
+     "     returned as `output` (output_source=callback).\n"
+     "  2. Otherwise end the shortcut with \"Save File\" (Ask Where to Save: off,\n"
+     "     Overwrite: on) to Files > LeoPhoneAgent > shared > ShortcutResults/<name>.txt\n"
+     "     (or <run_id>.txt). It is read when the callback arrives or when\n"
+     "     LeoPhoneAgent returns to the foreground (output_source=file).\n"
+     "  No callback within the timeout -> status=timeout (the shortcut may still run).\n"
      "\n"
      "NOTE: iOS provides no API to enumerate the user's shortcuts library.\n"
      "Ask the user for the exact shortcut name, then `register` it so it\n"
@@ -135,9 +148,8 @@ static int cmd_unregister(int argc, char **argv, int stdout_fd, BOOL compact, BO
     return NOFF_EXIT_SUCCESS;
 }
 
-/// Open a shortcuts:// URL on the main thread and report whether iOS accepted it.
-static int open_shortcuts_url(NSURL *url, NSString *action, int stdout_fd,
-                              NSDictionary *extraData, BOOL compact, BOOL quiet) {
+/// Open a URL on the main thread; returns whether iOS accepted it.
+static BOOL open_url_sync(NSURL *url, UIApplicationState *stateOut) {
     __block BOOL opened = NO;
     __block UIApplicationState appState = UIApplicationStateActive;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
@@ -150,15 +162,29 @@ static int open_shortcuts_url(NSURL *url, NSString *action, int stdout_fd,
         }];
     });
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    if (stateOut) *stateOut = appState;
+    return opened;
+}
+
+static int emit_open_failure(NSString *action, UIApplicationState appState, int stdout_fd,
+                             BOOL compact, BOOL quiet) {
+    NSString *hint = appState == UIApplicationStateActive
+        ? @"iOS declined to open the Shortcuts URL. Is the Shortcuts app installed?"
+        : @"iOS declined to open the Shortcuts URL — LeoPhoneAgent is in the background. "
+           "Ask the user to bring LeoPhoneAgent to the foreground and retry.";
+    noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, NOFF_ERR_NOT_AVAILABLE, hint),
+                   compact, quiet);
+    return NOFF_EXIT_NOT_AVAILABLE;
+}
+
+/// Open a shortcuts:// URL on the main thread and report whether iOS accepted it.
+static int open_shortcuts_url(NSURL *url, NSString *action, int stdout_fd,
+                              NSDictionary *extraData, BOOL compact, BOOL quiet) {
+    UIApplicationState appState = UIApplicationStateActive;
+    BOOL opened = open_url_sync(url, &appState);
 
     if (!opened) {
-        NSString *hint = appState == UIApplicationStateActive
-            ? @"iOS declined to open the Shortcuts URL. Is the Shortcuts app installed?"
-            : @"iOS declined to open the Shortcuts URL — LeoPhoneAgent is in the background. "
-               "Ask the user to bring LeoPhoneAgent to the foreground and retry.";
-        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, NOFF_ERR_NOT_AVAILABLE, hint),
-                       compact, quiet);
-        return NOFF_EXIT_NOT_AVAILABLE;
+        return emit_open_failure(action, appState, stdout_fd, compact, quiet);
     }
 
     NSMutableDictionary *data = [NSMutableDictionary dictionaryWithDictionary:extraData ?: @{}];
@@ -209,21 +235,66 @@ static int cmd_run(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL com
         [items addObject:[NSURLQueryItem queryItemWithName:@"input" value:@"text"]];
         [items addObject:[NSURLQueryItem queryItemWithName:@"text" value:inputText]];
     }
-    if (!noff_has_flag(argc, argv, "--no-return")) {
-        // 执行完把前台还给本 App。leophoneagent:// 无 host 时路由器安全忽略。
-        [items addObject:[NSURLQueryItem queryItemWithName:@"x-success" value:@"leophoneagent://"]];
-        [items addObject:[NSURLQueryItem queryItemWithName:@"x-error" value:@"leophoneagent://"]];
-        [items addObject:[NSURLQueryItem queryItemWithName:@"x-cancel" value:@"leophoneagent://"]];
+    if (noff_has_flag(argc, argv, "--no-return")) {
+        components.queryItems = items;
+        return open_shortcuts_url(components.URL, @"run", stdout_fd, @{
+            @"name": name,
+            @"input_passed": @(inputText.length > 0),
+            @"note": @"Launched without waiting (--no-return); no output is collected.",
+        }, compact, quiet);
     }
+
+    // [C1] 每次运行一个 runId;回调带回结果,否则读 ShortcutResults 里的结果文件。
+    NSTimeInterval timeout = 60;
+    NSString *timeoutArg = noff_find_arg(argc, argv, "--timeout");
+    if (timeoutArg.length > 0) timeout = MAX(5, MIN(300, timeoutArg.doubleValue));
+    NSString *runId = [LeoShortcutCallbackStore beginRunWithName:name];
+    [items addObject:[NSURLQueryItem queryItemWithName:@"x-success"
+                      value:[LeoShortcutCallbackStore callbackURLStringWithRunId:runId status:@"success"]]];
+    [items addObject:[NSURLQueryItem queryItemWithName:@"x-error"
+                      value:[LeoShortcutCallbackStore callbackURLStringWithRunId:runId status:@"error"]]];
+    [items addObject:[NSURLQueryItem queryItemWithName:@"x-cancel"
+                      value:[LeoShortcutCallbackStore callbackURLStringWithRunId:runId status:@"cancel"]]];
     components.queryItems = items;
 
-    return open_shortcuts_url(components.URL, @"run", stdout_fd, @{
+    UIApplicationState appState = UIApplicationStateActive;
+    if (!open_url_sync(components.URL, &appState)) {
+        [LeoShortcutCallbackStore cancelRun:runId];
+        return emit_open_failure(@"run", appState, stdout_fd, compact, quiet);
+    }
+
+    NSDate *started = [NSDate date];
+    NSDictionary *outcome = [LeoShortcutCallbackStore waitForRun:runId timeout:timeout];
+    NSString *status = outcome[@"status"] ?: @"timeout";
+    NSMutableDictionary *data = [NSMutableDictionary dictionaryWithDictionary:@{
         @"name": name,
+        @"run_id": runId,
         @"input_passed": @(inputText.length > 0),
-        @"note": @"The Shortcuts app is now in the foreground running this shortcut. "
-                  "Results the shortcut produces are not returned here; have the shortcut "
-                  "write into a shared folder or the clipboard if you need its output.",
-    }, compact, quiet);
+        @"status": status,
+        @"elapsed_ms": @((NSInteger)([[NSDate date] timeIntervalSinceDate:started] * 1000)),
+    }];
+    if ([status isEqualToString:@"error"] || [status isEqualToString:@"cancel"]) {
+        NSString *message = [status isEqualToString:@"cancel"]
+            ? [NSString stringWithFormat:@"Shortcut '%@' was cancelled.", name]
+            : [NSString stringWithFormat:@"Shortcut '%@' failed: %@", name, outcome[@"error"] ?: @"unknown error"];
+        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, @"run", NOFF_ERR_INTERNAL_ERROR, message), compact, quiet);
+        return NOFF_EXIT_ERROR;
+    }
+    if (outcome[@"output"]) {
+        data[@"output"] = outcome[@"output"];
+        data[@"output_source"] = outcome[@"source"] ?: @"callback";
+    } else if ([status isEqualToString:@"success"]) {
+        data[@"output"] = [NSNull null];
+        data[@"note"] = [NSString stringWithFormat:
+            @"The shortcut finished but returned no text. To get its output, end the shortcut with "
+             "'Save File' to Files > LeoPhoneAgent > shared > ShortcutResults/%@.txt.", name];
+    } else {
+        data[@"note"] = [NSString stringWithFormat:
+            @"No callback within %.0f s; the shortcut may still be running. If it saves "
+             "ShortcutResults/%@.txt, read it from /var/minis/shared/ShortcutResults/ later.", timeout, name];
+    }
+    noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"run", data), compact, quiet);
+    return NOFF_EXIT_SUCCESS;
 }
 
 static int cmd_open(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {

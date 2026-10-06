@@ -59,7 +59,6 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             phrases: [
                 "Take a note with \(.applicationName)",
                 "\(.applicationName) note this",
-                "\(.applicationName) remember this",
             ],
             shortTitle: "记一条笔记",
             systemImageName: "square.and.pencil"
@@ -116,23 +115,26 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             shortTitle: "Mac 任务汇报",
             systemImageName: "waveform.and.person.filled"
         )
+        // [C8] 全自动之后「批准 Mac 待审批」「停止 Mac 任务」很少用,让出两个名额
+        // (仍在快捷指令 App 的动作列表里);给「记住这个」和「派 Paperclip 工单」。
+        // "remember this" 原来挂在记笔记上,现在归记忆。
         AppShortcut(
-            intent: ApprovePendingMacIntent(),
+            intent: RememberThisIntent(),
             phrases: [
-                "Approve with \(.applicationName)",
-                "\(.applicationName) approve",
+                "Remember with \(.applicationName)",
+                "\(.applicationName) remember this",
             ],
-            shortTitle: "批准待审批",
-            systemImageName: "checkmark.seal.fill"
+            shortTitle: "记住这个",
+            systemImageName: "brain"
         )
         AppShortcut(
-            intent: StopMacTaskIntent(),
+            intent: CreatePaperclipIssueIntent(),
             phrases: [
-                "Stop a Mac task with \(.applicationName)",
-                "\(.applicationName) stop",
+                "Create a Paperclip issue with \(.applicationName)",
+                "\(.applicationName) dispatch to Paperclip",
             ],
-            shortTitle: "停止 Mac 任务",
-            systemImageName: "stop.circle.fill"
+            shortTitle: "派 Paperclip 工单",
+            systemImageName: "paperclip"
         )
         // [T-ios-remove-open-webapp-shortcut-intent] OpenWebAppIntent removed —
         // the Home-Screen WebApp tile path was replaced by another mechanism,

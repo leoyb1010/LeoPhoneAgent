@@ -1,5 +1,21 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.56.0 (153) · 快捷指令深挖 - 2026-10-06
+
+- C1 `apple-shortcuts run` 拿回结果：每次运行生成 runId，x-success / x-error / x-cancel 指回 `leophoneagent://shortcut-result?run=<runId>&status=…`；回调带 `result` 就直接返回，否则读 App Group `MinisFileProvider/shared/ShortcutResults/<runId>.txt` 或 `<快捷指令名>.txt`（只认本次运行开始后写入的，读后删除）。回调到达或 App 回到前台都会检查；按 runId 挂起等待，默认 60 秒（`--timeout` 5–300），回调在 App 锁之前处理（`ShortcutCallbackStore`）。`--no-return` 保留只启动不等待。工具说明删掉“结果不会返回”，写明文件约定。
+- C2 「记一条笔记」「收进藏宝阁」显式 `.alwaysAllowed` + `supportedModes = .background`（App 进程内后台执行，未改用 LiveActivityIntent）；摘要仍需解锁。
+- C3 `RememberThisIntent`（锁屏可跑，只写当天记忆日志）/ `RecallMemoryIntent`（需解锁，返回 top 3）；`memory_write` 落盘抽成 `MemoryDailyLog` + `AIChatViewModel.writeDailyMemory`，工具与动作共用。
+- C4 `TreasuryItemEntity`（安全标题、来源、类型，EntityStringQuery）；「搜索藏宝阁」返回实体数组（原先返回文本）；「发送提示」新增可选「藏宝阁条目」，经 `TreasuryContextBuilder` 作为不可信资料上下文随提示发送，不进气泡。
+- C5 `ExportSessionIntent`：Markdown / 纯文本 IntentFile，与 App 内导出共用 `sessionExportMarkdown(messages:)`；Face ID 锁定的会话拒绝导出。
+- C6 `ScheduledTaskEntity` + 列出 / 立即运行（等待结果并返回前 240 字摘要，iOS 27 走 `performBackgroundTask`，不改原时间表）/ 开关。
+- C7 `Agent/Paperclip/PaperclipIntents.swift`：派工单（标题、描述、可选智能体）、查进度（状态 + 智能体最近回复）；只依赖 `PaperclipWorkspaceStore` / `PaperclipClient`，不开实时通道；登录失效时切到服务器任务页并请求打开 App。契约审计源文件数 13 → 14，并新增该文件不得引用 ChatStore / Gateway / AIChatViewModel 的检查。
+- C8 App Shortcuts 10 个名额：移出「批准 Mac 待审批」「停止 Mac 任务」，加入「记住这个」「派 Paperclip 工单」；`"${applicationName} remember this"` 从记笔记移到记住这个；en / zh-Hans / zh-Hant 的 `AppShortcuts.strings` 同步（仓库里没有 AppShortcuts.xcstrings）。
+- C9 `LeoFocusFilter`（SetFocusFilterIntent）：工作模式名称、是否静默非紧急通知；开关时写 `context.signal` 诊断事件并记录开始 / 结束时间（D1 情境规则尚未实现，静默开关暂只记录）。
+- C10 设置 › Agent › 快捷指令配方（`ShortcutRecipes` + `ShortcutRecipesView`）：5 个配方，iCloud 链接暂空，显示「链接待添加」。
+- C11 `SiriReplyPrivacy`：设备锁定（受保护数据不可用）且任务状态隐私开启、非仅语音场景时，「发送提示」「跟进会话」「立即运行定时任务」的对话框只说「做完了，打开 App 查看」，返回值仍完整。
+- C12 iOS 27「发送提示（等待结果）」按本次运行的工具步数每 2 秒更新 `ProgressReportingIntent.progress`。
+- 测试：新增 12 项逻辑测试（回调解析 4、等待 / 超时 / 文件退路 / 错误 5、记忆写入 1、朗读隐私 1、配方 1），全量 583 项逻辑测试通过；Release 真机构建通过；Paperclip 契约审计通过。
+
 ## iOS 1.55.0 (152) · 交付即执行 + 看得见 - 2026-10-06
 
 - A2 全自动覆盖所有 Mac CLI：建任务对 claude / codex / grok / zcode 都带 `full_auto`（`HarnessFullAuto`），Siri/快捷指令「指挥一台 Mac」同样带上；关掉全自动时对所有在线 Mac 调用 `/harness/full-auto` 切回。后续消息：LeoPhoneAgent 任务照旧带 true/false，其余 CLI 只在请求全自动时带 true（兼容旧桌面端对这三种 CLI 带 `full_auto` 回 400）。时间线显示中继自动应答的 `approval.responded`（`auto: true`）为「已自动允许 · 工具 · 命令」。

@@ -20,6 +20,9 @@ struct CollectLinkIntent: AppIntent {
     static let description = IntentDescription(
         "把一段文字或链接存进收藏。整段粘贴即可——会自动抽出其中的链接,前面的文案当标题。")
     static let openAppWhenRun = false
+    /// [C2] 锁屏可跑:只追加一条收藏,不读取已有内容;对话框只报总数。
+    static let supportedModes: IntentModes = .background
+    static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
 
     @Parameter(title: "内容",
                description: "链接,或含链接的一整段文案(小红书那种复制出来的文字)。",
@@ -40,14 +43,14 @@ struct CollectLinkIntent: AppIntent {
     }
 }
 
-/// Explicit search action for Shortcuts/Siri. It returns only titles and
-/// source labels; article bodies, OCR, annotations, snippets and local paths
+/// Explicit search action for Shortcuts/Siri. It returns only item entities
+/// (safe title, source, kind) and speaks titles and source labels; article bodies, OCR, annotations, snippets and local paths
 /// are intentionally not spoken or exported by this system surface.
 @available(iOS 16.0, *)
 struct SearchTreasuryIntent: AppIntent {
     static let title: LocalizedStringResource = "搜索藏宝阁"
     static let description = IntentDescription(
-        "搜索本机藏宝阁并返回少量标题和来源。不会读取或朗读收藏正文。")
+        "搜索本机藏宝阁并返回匹配的条目，可接给「发送提示」让 Agent 读取。不会朗读收藏正文。")
     static let openAppWhenRun = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
@@ -58,16 +61,18 @@ struct SearchTreasuryIntent: AppIntent {
         Summary("在藏宝阁搜索 \(\.$query)")
     }
 
-    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+    /// [C4] 返回条目实体,可直接接给「发送提示」;对话框仍只念标题和来源。
+    func perform() async throws -> some IntentResult & ReturnsValue<[TreasuryItemEntity]> & ProvidesDialog {
         let normalized = String(query.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
         guard !normalized.isEmpty else {
             let output = TreasuryShortcutPresentation.searchText(
                 query: "", response: .init(items: [], truncated: false))
-            return .result(value: output, dialog: IntentDialog(stringLiteral: output))
+            return .result(value: [], dialog: IntentDialog(stringLiteral: output))
         }
         let response = await TreasuryService.search(.init(query: normalized, limit: 5))
         let output = TreasuryShortcutPresentation.searchText(query: normalized, response: response)
-        return .result(value: output, dialog: IntentDialog(stringLiteral: output))
+        return .result(value: response.items.map(TreasuryItemEntity.init),
+                       dialog: IntentDialog(stringLiteral: output))
     }
 }
 

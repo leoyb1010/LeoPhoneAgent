@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.55.0%20(152)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.56.0%20(153)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -186,7 +186,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.55.0 (152)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.56.0 (153)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-06 1.56.0：快捷指令深挖——Agent 运行快捷指令能拿回结果；新增记住这个 / 想一想、导出会话、定时任务、Paperclip 派工单与查进度等动作，藏宝阁条目可接给发送提示；锁屏轻动作、专注模式过滤条件、快捷指令配方页，锁屏隐私模式下 Siri 不念正文。
 - 2026-10-06 1.55.0：交付即执行 + 看得见——全自动覆盖所有 Mac CLI 与后台 Agent 回合的手机能力，Paperclip 审批一点即提交并自动核对未知回执；断网显示「重连中」、重试后保留原因，新增常开诊断日志。
 - 2026-10-06 1.54.1：修复 iCloud 同步重建用旧数据库快照覆盖刚刷新的模型列表（GPT-6.1 Sol 在服务商里可见、Agent Loop 与模型选择里搜不到），升级后自动重拉一次 ChatGPT 模型目录；移除 Cursor 云端 Agent。
 - 2026-10-06 1.54.0：ChatGPT 登录可用 GPT-6.1 Sol；新增 Cursor 云端 Agent（设置里填 Cursor API Key，用账号额度在云端仓库编码，启动与追加需审批）；同资源工具调用分道串行，提示缓存键按会话派生；563 项逻辑测试通过。

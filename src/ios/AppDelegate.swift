@@ -387,6 +387,12 @@ enum AppURLEntry {
         }
         lastURL = url
         lastAt = Date()
+        // [C1] 快捷指令执行完的回调只把结果交给等待中的工具,不导航、不显示内容,
+        // 不必等 App 锁解开(否则 60 秒等待会被解锁卡住)。
+        if ShortcutCallbackStore.shared.handle(url: url) {
+            logger.info("[URL] shortcut result callback delivered (\(source))")
+            return
+        }
         if SessionLockStore.shared.appIsLocked || SessionLockStore.shared.showPrivacyScreen {
             logger.info("[URL] deferred until unlock (\(source))")
         }

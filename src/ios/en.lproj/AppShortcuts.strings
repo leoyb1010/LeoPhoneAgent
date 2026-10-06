@@ -47,3 +47,8 @@
 "Take a note with ${applicationName}" = "Take a note with ${applicationName}";
 "${applicationName} note this" = "${applicationName} note this";
 "${applicationName} remember this" = "${applicationName} remember this";
+
+/* [C8] 记忆与 Paperclip */
+"Remember with ${applicationName}" = "Remember with ${applicationName}";
+"Create a Paperclip issue with ${applicationName}" = "Create a Paperclip issue with ${applicationName}";
+"${applicationName} dispatch to Paperclip" = "${applicationName} dispatch to Paperclip";

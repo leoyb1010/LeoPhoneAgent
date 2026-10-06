@@ -44,3 +44,8 @@
 "Take a note with ${applicationName}" = "让${applicationName}记笔记";
 "${applicationName} note this" = "${applicationName}记一条";
 "${applicationName} remember this" = "${applicationName}记住这个";
+
+/* [C8] 记忆与 Paperclip("${applicationName} remember this" 现归「记住这个」) */
+"Remember with ${applicationName}" = "用${applicationName}记住";
+"Create a Paperclip issue with ${applicationName}" = "用${applicationName}派Paperclip工单";
+"${applicationName} dispatch to Paperclip" = "让${applicationName}给Paperclip派个活";

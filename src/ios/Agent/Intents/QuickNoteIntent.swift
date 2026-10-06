@@ -21,6 +21,10 @@ struct QuickNoteIntent: AppIntent {
     static var description = IntentDescription("把一段话直接存进收藏库,不用打开 app。")
     /// 后台执行:开 app 就失去了这条路径的意义。
     static var openAppWhenRun: Bool = false
+    /// [C2] 在 App 进程内后台执行,锁屏的自动化 / Siri 也能跑:它只新建一条笔记,
+    /// 不读取、不朗读任何已有内容。(摘要 SummarizeTextIntent 会调模型,仍需解锁。)
+    static var supportedModes: IntentModes = .background
+    static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
 
     @Parameter(title: "内容", requestValueDialog: "要记什么?")
     var text: String
