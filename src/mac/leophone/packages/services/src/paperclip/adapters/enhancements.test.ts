@@ -127,7 +127,26 @@ test("log continuation uses the returned offset without duplicating the first pa
   assert.deepEqual(offsets, ["0", "5"]);
   assert.equal(item.service.getSnapshot().log?.content, "firstsecond");
 });
-test("missing or stalled log cursors are rejected without replacing a valid page", async () => {
+test("final log page without nextOffset ends the log and the next read continues after it", async () => {
+  const offsets: string[] = [];
+  const item = fixture(async (input) => {
+    if (input.path.endsWith("/runs"))
+      return { status: 200, data: [{ runId: "run", agentId: "agent", status: "running" }] };
+    if (!input.path.includes("/log?")) return undefined;
+    const offset = new URL(input.path, "https://example.com").searchParams.get("offset")!;
+    offsets.push(offset);
+    // 上游最后一页不带 nextOffset；"编译" 是 6 个 UTF-8 字节。
+    return { status: 200, data: { runId: "run", content: offset === "0" ? "编译" : "" } };
+  });
+  await item.service.configure("https://example.com");
+  await item.service.selectIssue("issue");
+  await item.service.readLog("run");
+  assert.equal(item.service.getSnapshot().log?.content, "编译");
+  await item.service.readLog("run");
+  assert.deepEqual(offsets, ["0", "6"]);
+  assert.equal(item.service.getSnapshot().log?.content, "编译");
+});
+test("backwards or stalled log cursors are rejected without replacing a valid page", async () => {
   let nextOffset: number | undefined = 5;
   const item = fixture(async (input) => {
     if (input.path.endsWith("/runs"))
@@ -139,7 +158,7 @@ test("missing or stalled log cursors are rejected without replacing a valid page
   await item.service.configure("https://example.com");
   await item.service.selectIssue("issue");
   await item.service.readLog("run");
-  for (const cursor of [undefined, 4, 5]) {
+  for (const cursor of [4, 5]) {
     nextOffset = cursor;
     await assert.rejects(item.service.readLog("run"));
     assert.equal(item.service.getSnapshot().log?.content, "first");

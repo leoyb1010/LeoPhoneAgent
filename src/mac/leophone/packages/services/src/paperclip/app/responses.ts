@@ -62,7 +62,8 @@ export const sessionSchema = z.object({ user: userSchema });
 export const logSchema = z.object({
   runId: id,
   content: z.string(),
-  nextOffset: z.number().int().nonnegative().safe(),
+  // 上游只在还有下一页时给 nextOffset；最后一页省略（run-log-store.ts）。
+  nextOffset: z.number().int().nonnegative().safe().optional(),
 });
 
 export const emptyPaperclipSnapshot = (): PaperclipSnapshot => ({

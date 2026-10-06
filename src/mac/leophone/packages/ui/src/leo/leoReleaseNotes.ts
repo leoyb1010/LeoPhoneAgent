@@ -13,6 +13,13 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.6.1",
+    date: "2026-10-06",
+    items: [
+      "服务器任务的运行日志读到最后一页时不再报「日志读取位置不兼容」：与服务器的分页规则对齐，最后一页照常显示，之后从已读位置继续。",
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-10-06",
     items: [

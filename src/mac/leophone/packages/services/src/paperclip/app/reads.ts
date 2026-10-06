@@ -80,10 +80,17 @@ export async function readBoundLog(
   const log = logSchema.parse(
     await api(`/api/heartbeat-runs/${paperclipId(runId)}/log?offset=${offset}&limitBytes=64000`),
   );
-  if (log.runId !== runId || log.nextOffset < offset || (log.content && log.nextOffset === offset))
+  if (
+    log.runId !== runId ||
+    (log.nextOffset !== undefined &&
+      (log.nextOffset < offset || (log.content !== "" && log.nextOffset === offset)))
+  )
     throw new Error("日志归属或读取位置不兼容，已阻止拼接。");
+  // 没有 nextOffset 表示已读到日志末尾：下次从本次读到的字节之后继续。
+  const nextOffset = log.nextOffset ?? offset + new TextEncoder().encode(log.content).length;
   return {
-    ...log,
+    runId: log.runId,
+    nextOffset,
     content: ((previous?.runId === runId ? previous.content : "") + log.content).slice(-1000000),
   };
 }
