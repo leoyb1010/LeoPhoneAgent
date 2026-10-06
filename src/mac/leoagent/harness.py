@@ -339,6 +339,11 @@ class HarnessSession:
     # grok ACP:session/prompt 的请求 id 集合;响应到达即回合结束。
     _acp_prompt_ids: set = field(default_factory=set)
     archived: bool = False
+    # 手机开着全自动发起(或后续消息切到全自动)的任务:CLI 的每条审批由这里直接答
+    # 「本会话允许」,不进手机、不推 APNs。后续消息带 full_auto 随时切换。
+    full_auto: bool = False
+    # 手机侧会话 id(建任务时可选带来):随审批 / 终态事件外推,完成通知点开直达那个会话。
+    phone_session_id: Optional[str] = None
 
     # -- event fan-out -----------------------------------------------------
 
@@ -390,6 +395,8 @@ class HarnessSession:
             if self.process is not None and self.process.returncode is None \
                     and self.status not in ("cancelled", "completed", "failed"):
                 self.status = "idle"
+        if name in PUSHABLE_EVENTS and self.phone_session_id:
+            event["phone_session_id"] = self.phone_session_id
 
         # 0600 before the first write: the log carries raw CLI stdout/stderr,
         # which can contain tokens the CLI happened to print. The write is
@@ -786,6 +793,9 @@ class HarnessSession:
                 translated = [{"event": "harness.translate_error",
                                "text": f"{type(exc).__name__}: {exc}", "raw": line[:500]}]
             for event in translated:
+                if self.full_auto and event.get("event") == EVENT_APPROVAL_REQUEST \
+                        and await self._auto_approve(event):
+                    continue
                 self._emit(event)
             if self._outbox:
                 # translator(同步)排的帧在这里代写:threadId 就绪后的排队
@@ -873,7 +883,23 @@ class HarnessSession:
             self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": "deny",
                         "approval_id": approval_id, "reason": "session ended"})
 
-    async def respond_to_approval(self, choice: str, approval_id: Optional[str] = None) -> bool:
+    async def _auto_approve(self, event: Dict[str, Any]) -> bool:
+        """全自动:不发 approval.request(手机不出卡、不推送),直接按「本会话允许」答给 CLI。
+
+        答不出去(没有可路由的 request_id、stdin 已断)就返回 False,照常发出审批让人来答。
+        """
+        approval_id = str(event.get("request_id") or f"ap_{uuid.uuid4().hex}")
+        self.pending_approvals[approval_id] = dict(event, approval_id=approval_id)
+        try:
+            delivered = await self.respond_to_approval("session", approval_id, auto=True)
+        except OSError:
+            delivered = False
+        if not delivered:
+            self.pending_approvals.pop(approval_id, None)
+        return delivered
+
+    async def respond_to_approval(self, choice: str, approval_id: Optional[str] = None,
+                                  auto: bool = False) -> bool:
         """Answer one specific pending approval in the CLI's own dialect.
 
         Returns True only when the answer actually reached the CLI's stdin.
@@ -960,7 +986,13 @@ class HarnessSession:
 
         self.process.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
         await self.process.stdin.drain()
-        self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": choice, "approval_id": approval_id})
+        responded: Dict[str, Any] = {"event": EVENT_APPROVAL_RESPONDED, "choice": choice,
+                                     "approval_id": approval_id}
+        if auto:
+            # 手机时间线据此显示「已自动允许 …」:没有对应的 approval.request,工具与命令随这条带上。
+            responded.update(auto=True, tool=pending.get("tool") or "",
+                             command=str(pending.get("command") or "")[:300])
+        self._emit(responded)
         return True
 
     def _signal_process_group(self, sig: int) -> None:
@@ -1079,7 +1111,9 @@ class HarnessManager:
         return sum(1 for s in self.sessions.values()
                    if s.status in ("starting", "running", "idle", "waiting_for_approval"))
 
-    async def create(self, harness: str, cwd: str, prompt: Optional[str] = None) -> HarnessSession:
+    async def create(self, harness: str, cwd: str, prompt: Optional[str] = None,
+                     full_auto: bool = False,
+                     phone_session_id: Optional[str] = None) -> HarnessSession:
         spec = HARNESSES.get(harness)
         if spec is None:
             raise ValueError(f"unknown harness: {harness}")
@@ -1103,12 +1137,15 @@ class HarnessManager:
             spec=spec,
             cwd=work_dir,
             log_path=self.sessions_dir / f"{session_id}.ndjson",
+            # 在 start() 之前定好:首条 prompt 引出的第一条审批就要按它答。
+            full_auto=full_auto,
+            phone_session_id=phone_session_id,
         )
         # First line of the log names the session, so a rehydrated one still
         # knows what it was. Registration happens only after a successful
         # start: a spawn failure must not leave a permanent zombie entry.
         session._emit({"event": EVENT_SESSION_CREATED, "harness": spec.key,
-                       "name": spec.display_name, "cwd": work_dir})
+                       "name": spec.display_name, "cwd": work_dir, "full_auto": full_auto})
         try:
             await session.start()
             if prompt:
@@ -1140,6 +1177,13 @@ class HarnessManager:
 
     def get(self, session_id: str) -> Optional[HarnessSession]:
         return self.sessions.get(session_id)
+
+    def turn_off_full_auto(self) -> List[str]:
+        """手机关掉全自动:所有还在全自动的会话切回逐项审批,返回切换了的会话 id。"""
+        switched = [s.session_id for s in self.sessions.values() if s.full_auto]
+        for session_id in switched:
+            self.sessions[session_id].full_auto = False
+        return switched
 
     async def archive(self, session_id: str) -> bool:
         """手机「清理」:停掉(还活着的话),从列表拿掉,删日志。"""
@@ -1188,6 +1232,7 @@ class HarnessManager:
             "updated_at": updated_at,
             "status": self._reported_status(s, updated_at),
             "seq": s.seq,
+            "full_auto": s.full_auto,
             "waiting_for_approval": bool(s.pending_approvals),
             "pending_approvals": [
                 {"approval_id": k, "command": v.get("command", ""),

@@ -13,6 +13,7 @@ import { DirectGrants } from "./directGrants.js";
 import { OperationReceipts } from "./operationReceipts.js";
 import { LeoagentForwarder } from "./leoagentForward.js";
 import {
+  deviceNotRecognized,
   error,
   expandHome,
   isLinkPath,
@@ -53,6 +54,13 @@ export type LinkBridgeDeps = {
   /** 本机 sshd 公钥(仅公钥),手机经已配对的加密通道读取后固定 SSH 身份;默认读 /etc/ssh。 */
   sshHostKeys?: () => Promise<string[]>;
 };
+
+/** [E5] 手机侧会话 id(可选):只当不透明标签,随审批 / 终态推送带回手机。 */
+function phoneSessionIdOf(body: Record<string, unknown>): string | undefined {
+  const value = body["phone_session_id"];
+  if (typeof value !== "string") return undefined;
+  return value.trim().slice(0, 200) || undefined;
+}
 
 /** 只返回看起来像 OpenSSH 公钥行的内容;私钥文件名不以 .pub 结尾,不会被读。 */
 export async function readSSHHostKeys(dir = "/etc/ssh"): Promise<string[]> {
@@ -134,6 +142,7 @@ export class LinkBridge {
       if (!taskId || !cwd || this.sessions.has(taskId)) continue;
       const session = this.newSession(taskId, cwd, entry["mode"] === "yolo" ? "yolo" : "build");
       session.title = typeof entry["title"] === "string" ? entry["title"] : "";
+      if (typeof entry["phone_session_id"] === "string") session.phoneSessionId = entry["phone_session_id"];
       if (typeof entry["created_at"] === "number") session.createdAt = entry["created_at"];
       // 最后活动时间从创建时间起算,open() 再按日志最后一条事件往后推。以前这里取的是「现在」:
       // 每次 Mac 重启,手机上的旧任务都像刚动过,一直占着首页「进行中」。
@@ -335,7 +344,7 @@ export class LinkBridge {
     // 清理不接管桌面任务:没接过来的本来就不在手机的「进行中」里。
     if (match[2] === "archive") return this.archive(sessionId, url.pathname, req.body);
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
-    if (!session) return this.leoagent.request("POST", url.pathname, req.body);
+    if (!session) return this.leoagent.request("POST", url.pathname, req.body, req.caller);
     const body = record(req.body);
     switch (match[2]) {
       case "send":
@@ -474,12 +483,11 @@ export class LinkBridge {
     const body = record(req.body);
     const harness = String(body["harness"] ?? ZCODE) || ZCODE;
     const fullAuto = body["full_auto"] === true;
-    if (harness !== ZCODE) {
-      if (fullAuto) return error(400, "全自动只支持 LeoPhoneAgent 任务");
-      return this.leoagent.request("POST", "/harness/sessions", req.body);
-    }
     if (fullAuto && !mayUseFullAuto(req.caller))
-      return error(403, "认不出是哪台设备发来的,不能开全自动;把中继升级到 0.2 后再试");
+      return deviceNotRecognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试");
+    // claude / codex / grok 跑在本机 leoagent:全自动由它直接应答 CLI 的审批;调用方类别一并带过去。
+    if (harness !== ZCODE) return this.leoagent.request("POST", "/harness/sessions", req.body, req.caller);
+    const phoneSessionId = phoneSessionIdOf(body);
     const cwd =
       typeof checkpoint?.["cwd"] === "string"
         ? checkpoint["cwd"]
@@ -536,6 +544,7 @@ export class LinkBridge {
       }
       session.emit({ event: "session.created", harness: ZCODE, cwd, full_auto: fullAuto });
     }
+    if (phoneSessionId) session.phoneSessionId = phoneSessionId;
     // taskId 回执与会话索引都在首发之前落盘，崩溃后不得再次创建另一条任务。
     await this.saveIndex();
     if (req.requestId && checkpoint?.["stage"] !== "sending")
@@ -573,7 +582,7 @@ export class LinkBridge {
     if (typeof body["full_auto"] === "boolean") {
       const wanted = body["full_auto"];
       if (wanted && !mayUseFullAuto(caller))
-        return error(403, "认不出是哪台设备发来的,不能开全自动;把中继升级到 0.2 后再试");
+        return deviceNotRecognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试");
       // "关"只把全自动任务切回先问我;计划、编辑这类别的模式不动(手机每条消息都会带开关状态)。
       const target = wanted ? "yolo" : session.isFullAuto ? "build" : null;
       if (target) {
@@ -590,11 +599,12 @@ export class LinkBridge {
     // 处在全自动(完全访问)的任务 —— 手机开的、Mac 桌面上自己设的、重启后认回来的 —— 不接受认不出身份的消息:
     // 否则谁拿到中继 0.1 的通道发一句话,就能让 Mac 免审批地跑命令。
     if (session.isFullAuto && !mayUseFullAuto(caller)) {
-      return error(
-        403,
-        "这个任务在 Mac 上是全自动(完全访问)模式,认不出是哪台设备发来的消息不接;在 Mac 上把它切回「先问我」,或把中继升级到 0.2",
+      return deviceNotRecognized(
+        "这个任务在 Mac 上是全自动(完全访问)模式,认不出是哪台设备发来的消息不接;在 Mac 上把它切回「先问我」,或按步骤在 Mac 上处理",
       );
     }
+    const phoneSessionId = phoneSessionIdOf(body);
+    if (phoneSessionId) session.phoneSessionId = phoneSessionId;
     try {
       if (req?.requestId)
         await this.receipts.checkpoint(req, {
@@ -681,6 +691,10 @@ export class LinkBridge {
       }
     }
     if (switched.length > 0) void this.saveIndex().catch(() => undefined);
+    // 本机 leoagent 里的 claude / codex / grok 全自动任务一并切回;老版本没有这条路(404),忽略。
+    const upstream = await this.leoagent.request("POST", "/harness/full-auto", { enabled: false }, req.caller);
+    const theirs = upstream.status === 200 ? record(upstream.body)["sessions"] : undefined;
+    if (Array.isArray(theirs)) switched.push(...theirs.filter((id): id is string => typeof id === "string"));
     return { status: 200, body: { ok: true, sessions: switched } };
   }
 }

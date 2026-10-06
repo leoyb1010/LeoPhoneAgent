@@ -77,6 +77,8 @@ export class LinkSession {
   lastEvent: Record<string, unknown> | null = null;
   /** 最近一次发起人;全自动只对 iPhone 发起的任务开放。 */
   lastCaller: Caller | null = null;
+  /** [E5] 手机侧会话 id(手机建任务 / 发消息时可选带来):随审批与终态推送带回,通知点开直达那个会话。 */
+  phoneSessionId: string | null = null;
   /** Mac 重启后从任务表里认回来的:下一次发消息前先让内核恢复这条会话。 */
   needsResume = false;
   readonly pendingApprovals = new Map<string, Pending>();
@@ -345,6 +347,7 @@ export class LinkSession {
       if (this.stopTimer) clearTimeout(this.stopTimer);
       this.stopTimer = null;
     }
+    if (PUSHABLE.has(name) && this.phoneSessionId) enriched["phone_session_id"] = this.phoneSessionId;
     if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
     if (RUN_END.has(name)) this.phoneTurn = false;
     if (name === "user.message") {
@@ -437,7 +440,7 @@ export class LinkSession {
 
   /** 任务表里的一行:重启后靠它认回手机上已有的任务。 */
   indexEntry(): Record<string, unknown> {
-    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt };
+    return { task_id: this.sessionId, cwd: this.cwd, title: this.title, mode: this.mode, created_at: this.createdAt, phone_session_id: this.phoneSessionId ?? undefined };
   }
 
   /**

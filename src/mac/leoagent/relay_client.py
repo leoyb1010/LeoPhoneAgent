@@ -169,8 +169,14 @@ class RelayClient:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    def _headers(self) -> Dict[str, str]:
-        return {"Authorization": f"Bearer {self.local_key}"}
+    def _headers(self, frame: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+        headers = {"Authorization": f"Bearer {self.local_key}"}
+        if frame is not None:
+            # 中继 0.2 起在转发帧里带调用方;0.1 没有,按认不出处理(本机服务据此拒开全自动)。
+            caller = frame.get("caller")
+            kind = str(caller.get("kind") or "") if isinstance(caller, dict) else ""
+            headers["X-Leo-Caller-Kind"] = kind if kind.isalnum() else "unknown"
+        return headers
 
     async def _handle_http(self, session: aiohttp.ClientSession,
                            ws: aiohttp.ClientWebSocketResponse,
@@ -183,7 +189,7 @@ class RelayClient:
             async with session.request(
                 method, self.local_base + path,
                 json=body if body is not None else None,
-                headers=self._headers(),
+                headers=self._headers(frame),
                 timeout=aiohttp.ClientTimeout(total=55),
             ) as resp:
                 try:

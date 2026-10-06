@@ -1423,12 +1423,18 @@ class Relay:
             # run.failed 故意不推:错误在 app 里、实时活动上都看得到,计划定的是"错误不推送"。
             # 事件本身照样进 recent_events,手机回前台拉 /relay/api/events 仍能补齐。
             elif kind == "run.completed":
+                user_info = {"harnessSessionId": str(event.get("session_id") or ""),
+                             "machine": machine_name,
+                             "sent_at": time.time()}
+                # [E5] 手机建任务时带了自己的会话 id:点通知直达手机上的那个会话。
+                phone_session_id = event.get("phone_session_id")
+                if isinstance(phone_session_id, str) and phone_session_id.strip():
+                    user_info["phoneSessionId"] = phone_session_id.strip()[:200]
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
                     body="任务已结束,打开 App 查看结果",
-                    user_info={"harnessSessionId": str(event.get("session_id") or ""),
-                               "sent_at": time.time()},
-                
+                    user_info=user_info,
+
                     collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
         except Exception as exc:  # noqa: BLE001

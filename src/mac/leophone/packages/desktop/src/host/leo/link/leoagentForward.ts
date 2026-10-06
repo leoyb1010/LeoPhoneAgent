@@ -1,5 +1,6 @@
 import type { LinkResponse } from "./bridge.js";
 import { error as failure } from "./linkPolicy.js";
+import type { Caller } from "./session.js";
 
 const FORWARD_TIMEOUT_MS = 55_000;
 
@@ -17,8 +18,12 @@ export class LeoagentForwarder {
     return key ? { Authorization: `Bearer ${key}`, ...extra } : null;
   }
 
-  async request(method: string, tail: string, body?: unknown): Promise<LinkResponse> {
-    const headers = this.headers(body != null ? { "Content-Type": "application/json" } : {});
+  /** `caller`:手机这一端的调用方类别,leoagent 据此决定能不能开全自动(本机直调不带)。 */
+  async request(method: string, tail: string, body?: unknown, caller?: Caller): Promise<LinkResponse> {
+    const headers = this.headers({
+      ...(body != null ? { "Content-Type": "application/json" } : {}),
+      ...(caller ? { "X-Leo-Caller-Kind": caller.kind } : {}),
+    });
     if (!headers) return failure(503, "本机 leoagent 未配置");
     try {
       const res = await fetch(`${this.endpoint.url}${tail}`, {

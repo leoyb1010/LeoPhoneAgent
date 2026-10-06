@@ -40,6 +40,43 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8646
 
 
+# 中继转发时由 relay_client / Mac 桥接写上调用方类别(手机改不了这个头)。没带这个头的是直接
+# 持本机钥匙的调用方(Mac 桥接自己、同 WiFi 直连),与主钥匙同等对待。
+CALLER_HEADER = "X-Leo-Caller-Kind"
+IDENTIFIED_CALLERS = ("master", "iphone", "legacy")
+
+# [A3] 认不出调用方时 403 的修复办法。只有中继 0.2 起才在转发里带上调用方,手机自己登记
+# 设备钥匙解决不了(钥匙本来就对),所以 fix 固定是 mac_steps:要在 Mac 上做的事。
+DEVICE_NOT_RECOGNIZED_STEPS = [
+    "在运行中继的那台 Mac 上,把中继(relay.py)更新到 0.2 或更新版本并重启中继。",
+    "在这台 Mac 上把 LeoPhoneAgent(或 leoagent)更新到最新版,确认它重新连上了中继。",
+    "回到手机重发这个任务,全自动就会生效。",
+]
+
+
+def caller_identified(request: web.Request) -> bool:
+    kind = request.headers.get(CALLER_HEADER)
+    return kind is None or kind in IDENTIFIED_CALLERS
+
+
+def device_not_recognized(message: str) -> web.Response:
+    """403 + 机器可读的原因与修复步骤;message 非空,老客户端照旧把它当原因显示。"""
+    return web.json_response({"error": {
+        "message": message,
+        "code": "device_not_recognized",
+        "fix": "mac_steps",
+        "steps": DEVICE_NOT_RECOGNIZED_STEPS,
+    }}, status=403)
+
+
+def _phone_session_id(value: Any) -> Optional[str]:
+    """手机侧会话 id 只当不透明标签用:字符串、≤200 字符,其余忽略。"""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value[:200] or None
+
+
 def _unauthorized() -> web.Response:
     return web.json_response(
         {"error": {"message": "Invalid gateway key", "code": "leoagent_auth_failed"}},
@@ -87,6 +124,7 @@ class LeoAgentServer:
                 "resumable_events": True,
                 "approval_events": True,
                 "session_steering": True,
+                "full_auto": True,
             },
             "harnesses": available_harnesses(),
         })
@@ -196,12 +234,18 @@ class LeoAgentServer:
         harness = str(body.get("harness") or "")
         cwd = str(body.get("cwd") or os.path.expanduser("~"))
         prompt = body.get("prompt")
+        full_auto = body.get("full_auto") is True
+        if full_auto and not caller_identified(request):
+            return device_not_recognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试")
         try:
-            session = await self.manager.create(harness=harness, cwd=cwd, prompt=prompt)
+            session = await self.manager.create(
+                harness=harness, cwd=cwd, prompt=prompt, full_auto=full_auto,
+                phone_session_id=_phone_session_id(body.get("phone_session_id")))
         except (ValueError, RuntimeError) as exc:
             return web.json_response({"error": {"message": str(exc)}}, status=400)
         return web.json_response(
-            {"session_id": session.session_id, "harness": harness, "status": session.status},
+            {"session_id": session.session_id, "harness": harness, "status": session.status,
+             "full_auto": session.full_auto},
             status=202,
         )
 
@@ -254,6 +298,18 @@ class LeoAgentServer:
         text = str(body.get("text") or "")
         if not text:
             return web.json_response({"error": {"message": "text is required"}}, status=400)
+        identified = caller_identified(request)
+        wanted = body.get("full_auto")
+        if wanted is True and not identified:
+            return device_not_recognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试")
+        if isinstance(wanted, bool):
+            session.full_auto = wanted
+        # 全自动的会话不接认不出身份的消息:否则谁拿到中继 0.1 的通道发一句话,就能免审批地跑命令。
+        if session.full_auto and not identified:
+            return device_not_recognized("这个任务是全自动,认不出是哪台设备发来的消息不接;按步骤在 Mac 上处理后再试")
+        phone_session_id = _phone_session_id(body.get("phone_session_id"))
+        if phone_session_id:
+            session.phone_session_id = phone_session_id
         try:
             await session.send(text)
         except (RuntimeError, OSError) as exc:
@@ -304,6 +360,18 @@ class LeoAgentServer:
             )
         return web.json_response({"ok": True, "choice": choice, "approval_id": approval_id})
 
+    async def full_auto_off(self, request: web.Request) -> web.Response:
+        """手机关掉全自动:还在全自动的会话切回逐项审批(只支持关)。"""
+        if not self._authorized(request):
+            return _unauthorized()
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": {"message": "Invalid JSON"}}, status=400)
+        if not isinstance(body, dict) or body.get("enabled") is not False:
+            return web.json_response({"error": {"message": '只支持关闭:{"enabled": false}'}}, status=400)
+        return web.json_response({"ok": True, "sessions": self.manager.turn_off_full_auto()})
+
     async def archive(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return _unauthorized()
@@ -338,6 +406,7 @@ class LeoAgentServer:
         app.router.add_get("/v1/grok/token", self.grok_token)
         app.router.add_get("/harness/sessions", self.list_sessions)
         app.router.add_post("/harness/sessions", self.create_session)
+        app.router.add_post("/harness/full-auto", self.full_auto_off)
         app.router.add_get("/harness/sessions/{session_id}/events", self.events)
         app.router.add_post("/harness/sessions/{session_id}/send", self.send)
         app.router.add_post("/harness/sessions/{session_id}/approval", self.approve)
@@ -358,7 +427,7 @@ class MacBridgeEventSink:
     # 只带推送和补齐要用的字段。Claude 的审批帧带着 raw(整份工具输入,Write 一个大文件就是几百 KB),
     # 超过 Mac 接口的上限会被拒,这条审批就永远到不了手机;文件内容也不该经 Mac 进中继。
     KEEP = ("event", "session_id", "seq", "timestamp", "approval_id", "tool", "command",
-            "description", "choices", "error", "output", "harness")
+            "description", "choices", "error", "output", "harness", "phone_session_id")
     FIELD_LIMIT = 2000
 
     def __init__(self, url: str, key: str) -> None:

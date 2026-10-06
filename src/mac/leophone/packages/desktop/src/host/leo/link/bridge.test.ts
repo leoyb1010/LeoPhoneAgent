@@ -555,7 +555,7 @@ test("after a restart the bridge picks its tasks back up: replay, continued seq,
 });
 
 test("claude / codex / grok go to the local leoagent with its own key; the phone sees one Mac", async () => {
-  const seen: { method: string; url: string; auth: string; body: string }[] = [];
+  const seen: { method: string; url: string; auth: string; caller: string; body: string }[] = [];
   const server: Server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => {
@@ -566,6 +566,7 @@ test("claude / codex / grok go to the local leoagent with its own key; the phone
         method: request.method ?? "",
         url: request.url ?? "",
         auth: String(request.headers.authorization ?? ""),
+        caller: String(request.headers["x-leo-caller-kind"] ?? ""),
         body,
       });
       if (request.url === "/v1/capabilities") {
@@ -614,14 +615,30 @@ test("claude / codex / grok go to the local leoagent with its own key; the phone
         );
         assert.equal(created.status, 202);
         assert.equal((created.body as Record<string, unknown>)["session_id"], "hs_2");
+        // 全自动对 claude / codex / grok 也生效:认得出的设备转给 leoagent 并带上调用方类别
         assert.equal(
           (
             await bridge.handle(
               req("POST", "/harness/sessions", { harness: "claude", full_auto: true }, iphone),
             )
           ).status,
-          400,
+          202,
         );
+        const forwarded = seen.filter((r) => r.method === "POST" && r.url === "/harness/sessions").at(-1)!;
+        assert.equal(JSON.parse(forwarded.body).full_auto, true);
+        assert.equal(forwarded.caller, "iphone");
+        // 认不出的调用方:就地 403,带机器可读的修复步骤,不转发
+        const before = seen.length;
+        const refused = await bridge.handle(
+          req("POST", "/harness/sessions", { harness: "claude", full_auto: true }, unknown),
+        );
+        assert.equal(refused.status, 403);
+        const refusal = (refused.body as { error: Record<string, unknown> }).error;
+        assert.equal(refusal["code"], "device_not_recognized");
+        assert.equal(refusal["fix"], "mac_steps");
+        assert.ok(Array.isArray(refusal["steps"]) && (refusal["steps"] as unknown[]).length > 0);
+        assert.ok(String(refusal["message"]).length > 0);
+        assert.equal(seen.length, before);
         const frames: string[] = [];
         await bridge.stream(
           req("GET", "/harness/sessions/hs_2/events?after=0"),
@@ -948,6 +965,24 @@ test("turns started on the Mac keep their questions and don't push the phone", a
     assert.equal(zcode.named("respondElicitation").length, 0);
     assert.equal(pushed.filter((e) => e.event === "run.completed").length, 1);
     assert.ok(!pushed.some((e) => e["approval_id"] === "m1"));
+  });
+});
+
+test("the completion push carries the phone's own session id when the phone gave one", async () => {
+  await withBridge(async ({ bridge, zcode, dir, pushed }) => {
+    const id = await createSession(bridge, dir, { prompt: "做完叫我", phone_session_id: "phone-chat-1" });
+    zcode.fire(id, { type: "task_complete", stopReason: "success" });
+    await collect(bridge, id, 0, (all) => all.some((e) => e.event === "run.completed"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const done = pushed.find((e) => e.event === "run.completed");
+    assert.equal(done?.["phone_session_id"], "phone-chat-1");
+    // 没带的老手机:推送里没有这个字段
+    const legacyId = await createSession(bridge, dir, { prompt: "老手机" });
+    zcode.fire(legacyId, { type: "task_complete", stopReason: "success" });
+    await collect(bridge, legacyId, 0, (all) => all.some((e) => e.event === "run.completed"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const legacyDone = pushed.find((e) => e.event === "run.completed" && e["session_id"] === legacyId);
+    assert.ok(legacyDone && !("phone_session_id" in legacyDone));
   });
 });
 

@@ -663,5 +663,144 @@ class RelayJoinTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(captured["status"], 409)
 
 
+class RelayClientCallerTests(unittest.TestCase):
+    """[A3] 纯 Python 的 Mac:中继帧里的调用方类别带给本机服务,手机自己改不了这个头。"""
+
+    def test_caller_kind_is_forwarded_and_missing_reads_as_unknown(self):
+        client = RelayClient("https://relay.example/relay/agent", "k" * 16, 8646, "local-key")
+        self.assertEqual(client._headers(), {"Authorization": "Bearer local-key"})
+        self.assertEqual(client._headers({"caller": {"kind": "iphone", "device_id": "d1"}})
+                         ["X-Leo-Caller-Kind"], "iphone")
+        # 中继 0.1 不带 caller;乱填的值也不能原样进头
+        self.assertEqual(client._headers({"method": "POST"})["X-Leo-Caller-Kind"], "unknown")
+        self.assertEqual(client._headers({"caller": {"kind": "iphone\r\nX-Evil: 1"}})
+                         ["X-Leo-Caller-Kind"], "unknown")
+
+
+@unittest.skipUnless(HAS_AIOHTTP, "aiohttp not installed")
+class ServerFullAutoTests(unittest.IsolatedAsyncioTestCase):
+    """[A1/A3] 本机 leoagent:全自动只接认得出的调用方;认不出时 403 带机器可读的修复步骤。"""
+
+    KEY = "local-key-0123456789"
+
+    async def asyncSetUp(self):
+        from .server import LeoAgentServer
+        self.tmp = tempfile.TemporaryDirectory()
+        self.server = LeoAgentServer(self.KEY, home=Path(self.tmp.name))
+        self.client = TestClient(TestServer(self.server.build_app()))
+        await self.client.start_server()
+
+    async def asyncTearDown(self):
+        await self.client.close()
+        self.tmp.cleanup()
+
+    def headers(self, caller=None):
+        out = {"Authorization": f"Bearer {self.KEY}"}
+        if caller is not None:
+            out["X-Leo-Caller-Kind"] = caller
+        return out
+
+    def live_session(self, full_auto=False):
+        class _Stdin:
+            def write(self, data):
+                pass
+
+            async def drain(self):
+                pass
+
+        session = HarnessSession(session_id="hs_live", spec=HARNESSES["claude"], cwd=self.tmp.name,
+                                 log_path=Path(self.tmp.name) / "hs_live.ndjson", full_auto=full_auto)
+        session.process = types.SimpleNamespace(stdin=_Stdin(), returncode=None)
+        session.status = "idle"
+        self.server.manager.sessions[session.session_id] = session
+        return session
+
+    async def assert_device_not_recognized(self, response):
+        self.assertEqual(response.status, 403)
+        error = (await response.json())["error"]
+        self.assertEqual(error["code"], "device_not_recognized")
+        self.assertEqual(error["fix"], "mac_steps")
+        self.assertTrue(error["message"])          # 老客户端只读 message,不能空
+        self.assertTrue(error["steps"] and all(isinstance(step, str) for step in error["steps"]))
+
+    async def test_unrecognized_caller_cannot_create_a_full_auto_task(self):
+        with unittest.mock.patch.object(self.server.manager, "create") as create:
+            r = await self.client.post("/harness/sessions", headers=self.headers("unknown"),
+                                       json={"harness": "codex", "cwd": "~", "full_auto": True})
+            await self.assert_device_not_recognized(r)
+            create.assert_not_called()
+
+    async def test_identified_caller_creates_full_auto_task_with_phone_session(self):
+        made = types.SimpleNamespace(session_id="hs_1", status="running", full_auto=True)
+
+        async def create(**kwargs):
+            create.kwargs = kwargs
+            return made
+
+        with unittest.mock.patch.object(self.server.manager, "create", create):
+            for caller in ("iphone", None):   # None:直接持本机钥匙(Mac 桥接自己)
+                r = await self.client.post(
+                    "/harness/sessions", headers=self.headers(caller),
+                    json={"harness": "codex", "cwd": "~", "full_auto": True, "prompt": "hi",
+                          "phone_session_id": "  chat-42  "})
+                self.assertEqual(r.status, 202)
+                self.assertIs((await r.json())["full_auto"], True)
+                self.assertIs(create.kwargs["full_auto"], True)
+                self.assertEqual(create.kwargs["phone_session_id"], "chat-42")
+
+    async def test_send_toggles_full_auto_and_guards_full_auto_sessions(self):
+        session = self.live_session()
+        r = await self.client.post("/harness/sessions/hs_live/send", headers=self.headers("unknown"),
+                                   json={"text": "go", "full_auto": True})
+        await self.assert_device_not_recognized(r)
+        self.assertFalse(session.full_auto)
+        r = await self.client.post("/harness/sessions/hs_live/send", headers=self.headers("iphone"),
+                                   json={"text": "go", "full_auto": True})
+        self.assertEqual(r.status, 200)
+        self.assertTrue(session.full_auto)
+        # 全自动的任务不接认不出身份的消息
+        r = await self.client.post("/harness/sessions/hs_live/send", headers=self.headers("unknown"),
+                                   json={"text": "rm -rf ~"})
+        await self.assert_device_not_recognized(r)
+        # 关全自动谁都可以,而且之后照常收消息
+        r = await self.client.post("/harness/sessions/hs_live/send", headers=self.headers("unknown"),
+                                   json={"text": "继续", "full_auto": False})
+        self.assertEqual(r.status, 200)
+        self.assertFalse(session.full_auto)
+
+    async def test_full_auto_off_switches_every_full_auto_session(self):
+        session = self.live_session(full_auto=True)
+        r = await self.client.post("/harness/full-auto", headers=self.headers("iphone"),
+                                   json={"enabled": True})
+        self.assertEqual(r.status, 400)
+        r = await self.client.post("/harness/full-auto", headers=self.headers("iphone"),
+                                   json={"enabled": False})
+        self.assertEqual((r.status, (await r.json())["sessions"]), (200, ["hs_live"]))
+        self.assertFalse(session.full_auto)
+
+
+class RelayCompletionPushTests(unittest.IsolatedAsyncioTestCase):
+    """[E5] 完成推送带上手机侧会话 id(有才带),点开直达手机上的那个会话。"""
+
+    async def test_completion_push_carries_phone_session_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = Relay("server-key-0123456789",
+                          device_keys_path=os.path.join(tmp, "device-keys.json"))
+            sent = []
+
+            async def send_alert(**kwargs):
+                sent.append(kwargs)
+                return 200
+
+            relay.apns = types.SimpleNamespace(enabled=True, send_alert=send_alert)
+            await relay._push_apns("MacBook", {"event": "run.completed", "session_id": "hs_1",
+                                               "phone_session_id": "chat-42"})
+            await relay._push_apns("MacBook", {"event": "run.completed", "session_id": "hs_2"})
+            first, second = (call["user_info"] for call in sent)
+            self.assertEqual((first["harnessSessionId"], first["phoneSessionId"]), ("hs_1", "chat-42"))
+            self.assertEqual(first["machine"], "MacBook")
+            self.assertNotIn("phoneSessionId", second)
+
+
 if __name__ == "__main__":
     unittest.main()
