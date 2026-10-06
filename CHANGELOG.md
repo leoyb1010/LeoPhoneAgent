@@ -1,6 +1,10 @@
 # LeoPhoneAgent 更新记录
 
-## iOS 1.57.0 (154) · 产出不落孤岛 - 2026-10-06
+## iOS 1.57.0 (154) · 产出不落孤岛 · 一套手感 · Paperclip · 语音 · 情境 - 2026-10-06
+
+升级方案 v3 的 E、F、G、H、D 五部分合为一次发版（并行开发后合并，合并后 658+ 项逻辑测试全量通过）。
+
+### E · 产出不落孤岛
 
 - E1 回复「下一步」：已完成回复的操作条新增 ↳ 菜单，固定 5 项（收进藏宝阁 / 存为快捷任务 / 设为定时任务 / 发到 Mac / 升级为 Paperclip 工单），`ReplyNextStep` 纯逻辑 + `ReplyQuickTaskForm` 表单。入口放在操作条而不是长按：文字块的长按归文本选择。收藏存成笔记（提示引用 + 完整回复）；快捷任务以这一轮提示为模板（剥掉 `<system-reminder>`），定时默认每天当前时刻、当天这一刻不补跑；发到 Mac 复用「交给哪台 Mac 继续」选择，任务描述 = 提示 + 回复摘要。
 - G3（最小桥）`Agent/Paperclip/PaperclipHandoff.swift`：只接收两段字符串（标题 = 用户提示首行，描述 = 回复摘要），切到服务器任务工作区，创建表单预填一次；上一条提交待核对时不覆盖。契约审计源文件 14 → 15，新增该文件不得引用 ChatStore / Gateway / AIChatViewModel 等、创建表单不得引用对话与网关的检查（已反向验证会红）。
@@ -9,7 +13,23 @@
 - E5 Mac 任务回到对话：从对话派出的 Mac 任务（「发到 Mac」与 /mac 切换）建任务与后续消息都带 `phone_session_id`（≤200 字）；完成推送带 `phoneSessionId` 时点通知打开那个对话，对话不在了就照旧打开 Mac 任务。结果来自回前台补齐的中继事件（`run.completed` / `run.failed` 的 output / error），暂存在 `MacResultInbox`，打开对话时作为一条提示放在末尾并滚到底（只显示一次，不写进对话历史）。「指挥一台 Mac」返回 `MacTaskEntity`，新增「打开 Mac 任务」（OpenIntent）。
 - E6 藏宝阁「发给 Agent」：全文本来就经 `treasury_context` 附上；输入框预填改为「基于这条收藏：」（多条为「基于这 N 条收藏：」）。
 - E7 接力：会话页广播 `com.leoyuan.leophoneagent.session`（与会话窗口同一类型，Info.plist 已登记），`isEligibleForHandoff`，userInfo 只放会话 id；锁定会话不广播。接收端走 `SessionWindow.accept`，会话尚未同步时首页顶部显示「正在同步接力的会话…」，同步到了自动打开，60 秒未到放弃。
-- 测试：新增 16 项逻辑测试（`CrossFeatureFlowTests`：下一步菜单与快捷任务 / 定时 5、Paperclip 桥 2、定时结果回写与旧数据 2、Mac 结果回对话 3、手表 1、藏宝阁 1、接力 2），全量 599 项逻辑测试通过。主工程链接 arm64 真机 iSH 静态库、不能在模拟器上运行，E1 的 UI 测试改由单元测试覆盖。
+- E2 从这次对话生成技能：对话右上角菜单「从这次对话生成技能」，用当前模型无工具调用一次，整理成名称、触发场景、步骤，打开预填的技能编辑页由你保存（`SkillDraft` + `SkillDraftEditorView`，不写入对话历史）。
+
+### F · 一套手感
+- F1 强调色统一为青绿（浅 #2A8282 / 深 #2E9C9C，白字 ≥4.5:1），`ChatColors` 只转发 `LeoTheme`。F2 新组件 `LeoComposerChrome`（圆角 26、同一玻璃材质、36/44 按钮），首页、对话、Paperclip 输入栏共用，去掉对话输入栏双重阴影。
+- F3 `LeoEmptyState` / `LeoInlineError` / `LeoShimmer`：藏宝阁、MCP、时间线、定时任务、Paperclip、检查器空状态统一并全中文。F4 Views 下裸写动画改走 LeoMotion，`withAnimation(.easeInOut(duration` 审计为 0。
+- F5 首页情境条 `HomeContextStrip`：继续上次（优先读情境层置顶会话）、今日、安静收件箱未读数、专注收尾卡。F6 Paperclip 头像青绿灰阶哈希配色、Chip 用 LeoTheme.surface。F7 思考块中性色、流式时只排最后 2K 字。F8 iPad 检查器固定三页（工具时间线 / 用量 / 记忆命中）。
+
+### G · Paperclip
+- G1「读取 Paperclip 工单结果」动作；G2 工单运行进灵动岛（`PaperclipActivityAttributes` + 小组件布局，同一工单一个活动、终态 4 小时后结束、隐私模式不显示标题，只用已有实时事件）；G4 `PaperclipClient.cancel`（核对运行归属与状态，GET 核实终态，未知不重发；契约审计加取消路由）；G5 关注工单运行结束发本地通知；G6 常规宽度两栏；G7 `leophoneagent://paperclip/issue/<id>` 深链（深链冒烟新增 3 个用例、4 个拒绝用例）；G8 `PaperclipSpotlightIndexer` 只索引标题与编号，退出登录清空。契约审计源文件 15 → 17。
+
+### H · 语音
+- H1 SpeechTranscriber 流式实时字幕（定稿黑字、临时灰字，资源未下载时回退）；H2 双轨识别（<8 秒且置信度 ≥0.75 用端侧，否则云端淡入替换，仅离线永不调云端）；H3 确认 ≥2 次的修正自动替换并可撤销；H4 三个语音度量（最近 20 次）；H5 热词（OpenAI 兼容 / Groq 的 prompt 与系统上下文词表）；H6 动态断句纯函数；H7 豆包 PCM 流式朗读，失败回落整句或系统朗读。H8 未做：WebRTC 音频处理未开回声消除。
+
+### D · 情境层
+- D1 自动化规则新增 `signal(name:)` 触发与 0/1/2 档（旧规则解码为 2 档）；D2「记下此刻」锁屏可跑、2.5 秒内返回，情境回合不给 shell / 浏览器 / 远程执行 / 子任务工具；D3 `ContextDecision` 到家接手（写 `leo.context.pinnedSessionId`）；D4 `QuietTaskScheduler` 插电 + 联网的后台处理任务，每日 token 预算默认 20000；D5 专注结束收尾卡；D6 主动提醒闸门（默认关，每日上限 3）。
+
+- 测试（E 部分）：新增 16 项逻辑测试（`CrossFeatureFlowTests`：下一步菜单与快捷任务 / 定时 5、Paperclip 桥 2、定时结果回写与旧数据 2、Mac 结果回对话 3、手表 1、藏宝阁 1、接力 2），全量 599 项逻辑测试通过。主工程链接 arm64 真机 iSH 静态库、不能在模拟器上运行，E1 的 UI 测试改由单元测试覆盖。
 
 ## iOS 1.56.0 (153) · 快捷指令深挖 - 2026-10-06
 
