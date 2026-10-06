@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.5.2",
+    date: "2026-10-06",
+    items: [
+      "手机开着全自动时，经这台 Mac 转给 Claude Code、Codex、Grok 的任务也走全自动：审批由本机直接允许，手机不再一条条弹审批卡。",
+      "手机认不出时不再静默降级：返回在 Mac 上要做的具体步骤，手机会话里直接显示。",
+      "Mac 任务完成的推送带上手机会话编号，点通知直接回到发起任务的那个手机对话。",
+    ],
+  },
+  {
     version: "1.5.1",
     date: "2026-10-05",
     items: [
