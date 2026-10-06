@@ -76,6 +76,8 @@ final class VoiceInputViewModel: ObservableObject {
             guard language != oldValue else { return }
             captureStart.cancel()
             VoiceLanguages.lastUsed = language
+            prewarmLiveCaptions()
+            reloadAutoCorrectionRules()
         }
     }
     /// Recording-label phase: on recording start we first show "Tap to pause"
@@ -122,6 +124,33 @@ final class VoiceInputViewModel: ObservableObject {
     /// replacing, and notify the host so the input box can mirror the text.
     var accumulate = false
     var onTranscript: ((String) -> Void)?
+
+    // MARK: [H1] 实时字幕 / [H2] 双轨 / [H3] 自动更正 / [H4] 度量 / [H5] 热词 / [H6] 动态断句
+
+    /// 当前这段话的实时字幕:已定稿部分(黑字)。
+    @Published private(set) var liveCaptionFinal = ""
+    /// 当前这段话的实时字幕:临时部分(灰字)。
+    @Published private(set) var liveCaptionVolatile = ""
+    /// 最近一次自动更正,转写下方显示"已自动更正：A→B",可撤销。
+    @Published private(set) var autoCorrection: AutoCorrectionNotice?
+    struct AutoCorrectionNotice: Equatable {
+        let original: String
+        let corrected: String
+        let rules: [VoiceAutoCorrectionRule]
+        var text: String { VoiceAutoCorrection.notice(for: rules) }
+    }
+    /// 宿主提供当前会话的文本,用来挑热词。
+    var hotwordTextSource: (() -> [String])?
+    private var hotwords: [String] = []
+    private var liveTranscriber: AppleLiveTranscriber?
+    private var liveToken = 0
+    private var liveFirstCharLogged = false
+    private var speechOnsetUptime: TimeInterval = 0
+    private var lastCaptionChangeUptime: TimeInterval = 0
+    private var endpointTimer: Timer?
+    private var autoCorrectionRules: [VoiceAutoCorrectionRule] = []
+    /// 这条消息组织过程中是否手动改过字(发送时记一笔改字率)。
+    private var editedThisComposition = false
 
     init() {
         vad.delegate = self
@@ -247,6 +276,9 @@ final class VoiceInputViewModel: ObservableObject {
         state = .waiting
         // Warm up the offline recognizer so the first utterance isn't dropped.
         prewarmIfSystem()
+        prewarmLiveCaptions()
+        reloadAutoCorrectionRules()
+        refreshHotwords()
     }
 
     /// Pre-warm the on-device recognizer when the active ASR is the System
@@ -271,6 +303,7 @@ final class VoiceInputViewModel: ObservableObject {
         captureStart.cancel()
         cancelTotalRecordingTimer()
         vad.stop()
+        stopLiveCaptions()
         state = .waiting
         listeningLabelToken &+= 1
         cancelTipCycle()
@@ -303,6 +336,7 @@ final class VoiceInputViewModel: ObservableObject {
             }
             DispatchQueue.main.async { [weak self] in self?.flushPendingSegments() }
             vad.stop()
+            detachLiveAudio()
             state = .waiting
             listeningLabelToken &+= 1
             cancelTipCycle()
@@ -343,7 +377,8 @@ final class VoiceInputViewModel: ObservableObject {
     func reset(clearTranscript: Bool = true) {
         captureStart.cancel()
         vad.stop()
-        if clearTranscript { transcript = "" }
+        stopLiveCaptions()
+        if clearTranscript { transcript = ""; autoCorrection = nil }
         // [T-voice-panel-gap-after-edit] Leaving voice mode (mic/"T" toggle) while
         // the transcript editor was open used to leave this flag TRUE, so the next
         // entry into voice mode came back straight into edit mode with a stale
@@ -380,6 +415,7 @@ final class VoiceInputViewModel: ObservableObject {
             let isSystemASR = inputProvider is SystemVoiceProvider
             vad.maxSegmentSeconds = isSystemASR ? 59 : Self.maxTotalRecordingSeconds
             try vad.start()
+            startLiveCaptions()
             state = .recording
             startError = nil
             transcribeError = nil
@@ -502,6 +538,7 @@ final class VoiceInputViewModel: ObservableObject {
 
         cancelPendingForceFlush()
 
+        let speechEnd = vad.lastVoicedTime
         switch reason {
         case .silenceDetected:
             vad.stop()
@@ -512,9 +549,13 @@ final class VoiceInputViewModel: ObservableObject {
             VoiceModePreference.shared.isCapturing = false
             cancelTotalRecordingTimer()
 
-            guard totalSeconds >= Self.minSegmentSeconds else {
+            // [H6] 实时字幕已经出了字,说明是真话,不再按 2 秒下限丢掉短指令。
+            let hasLiveText = !(liveCaptionFinal + liveCaptionVolatile)
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            guard totalSeconds >= Self.minSegmentSeconds || hasLiveText else {
                 VoiceLog.log("silence auto-stop: below min threshold, discarding \(String(format: "%.1f", totalSeconds))s")
                 pendingSegments.removeAll(keepingCapacity: true)
+                stopLiveCaptions()
                 return
             }
             #if DEBUG
@@ -522,7 +563,7 @@ final class VoiceInputViewModel: ObservableObject {
             #endif
             let merged = Self.mergeWavSegments(pendingSegments)
             pendingSegments.removeAll(keepingCapacity: true)
-            if let merged { transcribeAudio(merged) }
+            if let merged { transcribeAudio(merged, live: takeLiveSession(), speechEnd: speechEnd) }
 
         case .maxLengthReached:
             #if DEBUG
@@ -530,7 +571,7 @@ final class VoiceInputViewModel: ObservableObject {
             #endif
             let merged = Self.mergeWavSegments(pendingSegments)
             pendingSegments.removeAll(keepingCapacity: true)
-            if let merged { transcribeAudio(merged) }
+            if let merged { transcribeAudio(merged, live: takeLiveSession(), speechEnd: speechEnd) }
 
         case .manualFlush:
             guard totalSeconds >= Self.minSegmentSeconds else {
@@ -542,7 +583,7 @@ final class VoiceInputViewModel: ObservableObject {
             #endif
             let merged = Self.mergeWavSegments(pendingSegments)
             pendingSegments.removeAll(keepingCapacity: true)
-            if let merged { transcribeAudio(merged) }
+            if let merged { transcribeAudio(merged, live: takeLiveSession(), speechEnd: speechEnd) }
         }
     }
 
@@ -567,6 +608,7 @@ final class VoiceInputViewModel: ObservableObject {
                 self.vad.flush()
                 DispatchQueue.main.async { [weak self] in self?.flushPendingSegments() }
                 self.vad.stop()
+                self.detachLiveAudio()
                 self.state = .waiting
                 self.listeningLabelToken &+= 1
                 self.cancelTipCycle()
@@ -659,17 +701,20 @@ final class VoiceInputViewModel: ObservableObject {
         #endif
         let merged = Self.mergeWavSegments(pendingSegments)
         pendingSegments.removeAll(keepingCapacity: true)
-        if let merged { transcribeAudio(merged) }
+        if let merged { transcribeAudio(merged, live: takeLiveSession(), speechEnd: vad.lastVoicedTime) }
     }
 
     /// Transcribe ONE (possibly merged) utterance. The VAD engine keeps running
     /// the whole time, so while this is transcribed the next utterance is still
     /// captured. Results append in completion order.
-    private func transcribeAudio(_ audioData: Data) {
-        guard !audioData.isEmpty else { return }
+    /// - Parameters:
+    ///   - live: [H1/H2] 这段话对应的实时转写会话(有则先等它定稿,再按双轨规则取舍)。
+    ///   - speechEnd: [H4] 说完的时刻(系统运行时间),用于"说完到看到终稿";重试时不传。
+    private func transcribeAudio(_ audioData: Data, live: LiveHandoff? = nil, speechEnd: TimeInterval? = nil) {
+        guard !audioData.isEmpty else { live?.session.cancel(); return }
         // While the user hand-edits the transcript, drop new speech so it can't
         // overwrite their corrections.
-        if isEditingTranscript { return }
+        if isEditingTranscript { live?.session.cancel(); return }
 
         // Do NOT change `state` here. Transcription runs in the background while
         // the mic keeps capturing, so the button's visual must keep following the
@@ -712,49 +757,94 @@ final class VoiceInputViewModel: ObservableObject {
         #endif
 
         let generation = transcriptGeneration
-        let candidates = orderedInputCandidates()
+        // [H2] 配置了"仅离线"时,识别链里只留系统端侧引擎,永不调云端。
+        let candidates = Self.offlineFiltered(orderedInputCandidates())
+        let configuredIsOnDevice = candidates.allSatisfy(Self.isSystemCandidate)
         let requestLanguage = language
+        let words = VoiceExperiencePreferences.hotwordsEnabled ? hotwords : []
         let task = Task { [weak self] in
             guard let self else { return }
             var text = ""
-            do {
-                try Task.checkCancellation()
-                let response = try await self.transcribeWithFailover(audioData: audioData,
-                                                             candidates: candidates,
-                                                             language: requestLanguage,
-                                                             onDevice: onDevice)
-                text = response.text
-                if generation == self.transcriptGeneration, !Task.isCancelled { self.lastSpeechExecution = response.execution }
-                VoiceLog.log("transcript: \"\(text)\"")
-                self.transcribeError = nil
-            } catch is CancellationError {
-                VoiceLog.log("transcription task cancelled")
-                return
-            } catch {
-                if Task.isCancelled {
-                    VoiceLog.log("transcription task cancelled (post-error)")
+            /// 端侧结果先放进转写时追加的那一截,云端回来后整截替换。
+            var provisional: String?
+            if let live {
+                let snap = await live.session.finish()
+                let liveText = snap.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let route = VoiceDualTrack.route(liveText: liveText, confidence: snap.confidence,
+                                                 segmentSeconds: feedDur, configuredIsOnDevice: configuredIsOnDevice)
+                VoiceLog.log("dual-track route=\(route) dur=\(String(format: "%.1f", feedDur))s conf=\(snap.confidence.map { String(format: "%.2f", $0) } ?? "nil") chars=\(liveText.count)")
+                self.clearLiveCaption(ifToken: live.token)
+                if Task.isCancelled { return }   // cancelTranscription 已把计数清零
+                guard generation == self.transcriptGeneration else {
+                    // 等定稿期间已发送/清空:这段不再识别。
+                    if self.pendingTranscriptions > 0 { self.pendingTranscriptions -= 1 }
                     return
                 }
-                VoiceLog.log("ERROR transcription failed: \(error.localizedDescription)")
-                self.logger.error("Transcription failed: \(error.localizedDescription)")
-                self.transcribeError = error.localizedDescription
-                if Self.isTransientNetworkError(error) && !self.isAutoRetry {
-                    self.retryAudioData = audioData
-                    self.startRetryCountdown()
-                } else if Self.isTransientNetworkError(error) && self.isAutoRetry {
-                    self.isAutoRetry = false
-                    self.canManualRetry = true
-                    self.retryAudioData = audioData
-                } else {
-                    self.retryAudioData = nil
-                    self.canManualRetry = false
+                do {
+                    switch route {
+                    case .onDevice:
+                        text = liveText
+                        self.lastSpeechExecution = .init(engine: .speechAnalyzer, location: .onDevice,
+                                                         locale: requestLanguage, isFinal: true)
+                    case .configured:
+                        if !liveText.isEmpty, !self.isEditingTranscript {
+                            provisional = self.appendToTranscript(liveText)
+                        }
+                    }
                 }
             }
-            if generation == self.transcriptGeneration,
-               !text.isEmpty, !self.isEditingTranscript {
-                self.transcript = self.transcript.isEmpty ? text : self.transcript + " " + text
+            if text.isEmpty {
+                do {
+                    try Task.checkCancellation()
+                    let response = try await self.transcribeWithFailover(audioData: audioData,
+                                                                 candidates: candidates,
+                                                                 language: requestLanguage,
+                                                                 onDevice: onDevice,
+                                                                 hotwords: words)
+                    text = response.text
+                    if generation == self.transcriptGeneration, !Task.isCancelled { self.lastSpeechExecution = response.execution }
+                    VoiceLog.log("transcript: \"\(text)\"")
+                    self.transcribeError = nil
+                } catch is CancellationError {
+                    VoiceLog.log("transcription task cancelled")
+                    return
+                } catch {
+                    if Task.isCancelled {
+                        VoiceLog.log("transcription task cancelled (post-error)")
+                        return
+                    }
+                    VoiceLog.log("ERROR transcription failed: \(error.localizedDescription)")
+                    self.logger.error("Transcription failed: \(error.localizedDescription)")
+                    if provisional != nil {
+                        // [H2] 云端失败:保留已显示的端侧结果,不弹错、不重试(重试会重复追加)。
+                        VoiceLog.log("dual-track: configured ASR failed — keeping on-device text")
+                    } else {
+                        self.transcribeError = error.localizedDescription
+                        if Self.isTransientNetworkError(error) && !self.isAutoRetry {
+                            self.retryAudioData = audioData
+                            self.startRetryCountdown()
+                        } else if Self.isTransientNetworkError(error) && self.isAutoRetry {
+                            self.isAutoRetry = false
+                            self.canManualRetry = true
+                            self.retryAudioData = audioData
+                        } else {
+                            self.retryAudioData = nil
+                            self.canManualRetry = false
+                        }
+                    }
+                }
+            }
+            if generation == self.transcriptGeneration, !self.isEditingTranscript {
+                if let provisional {
+                    if !text.isEmpty {
+                        self.replaceProvisional(provisional, with: self.applyAutoCorrection(text))
+                    }
+                    self.recordFinalLatency(from: speechEnd)
+                } else if !text.isEmpty {
+                    self.appendToTranscript(self.applyAutoCorrection(text))
+                    self.recordFinalLatency(from: speechEnd)
+                }
                 VoiceLog.log("UI update: text=\"\(self.transcript)\"")
-                self.onTranscript?(self.transcript)
             }
             if self.pendingTranscriptions > 0 {
                 self.pendingTranscriptions -= 1
@@ -775,24 +865,31 @@ final class VoiceInputViewModel: ObservableObject {
     private func transcribeWithFailover(audioData: Data,
                                         candidates: [ModelEntry],
                                         language: String,
-                                        onDevice: Bool?) async throws -> VoiceInputResponse {
+                                        onDevice: Bool?,
+                                        hotwords: [String] = []) async throws -> VoiceInputResponse {
         guard !candidates.isEmpty else {
             let request = VoiceInputRequest(audioData: audioData,
                                             model: nil,
                                             language: language,
                                             resolvedModel: nil,
-                                            onDeviceRecognition: onDevice)
+                                            onDeviceRecognition: onDevice,
+                                            hotwords: hotwords)
             return try await SystemVoiceProvider.shared.transcribe(request)
         }
         var lastError: Error?
         for (i, entry) in candidates.enumerated() {
             try Task.checkCancellation()
             guard let provider = VoiceProviderResolver.inputProvider(for: entry) else { continue }
+            // [H5] 只给 API 明确支持 prompt 的服务商传热词提示;系统识别走 contextualStrings。
+            let prompt = (provider as? VoiceProvider)?.acceptsRecognitionPrompt == true
+                ? VoiceHotwords.prompt(for: hotwords) : nil
             let request = VoiceInputRequest(audioData: audioData,
                                             model: entry.model.id,
                                             language: language,
+                                            prompt: prompt,
                                             resolvedModel: entry.model,
-                                            onDeviceRecognition: onDevice)
+                                            onDeviceRecognition: onDevice,
+                                            hotwords: hotwords)
             do {
                 let response = try await provider.transcribe(request)
                 if stickyInputEntryId != entry.id {
@@ -827,6 +924,13 @@ final class VoiceInputViewModel: ObservableObject {
     /// user stays in voice mode (the inline panel remains), but the mic is no
     /// longer listening — they tap the mic again to dictate the next message.
     func clearAndRearm() {
+        // [H4] 一条语音消息发出:记一笔是否手动改过字,并开始等回答的第一个字。
+        if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VoiceMetricsStore.shared.record(.manualEdit, editedThisComposition ? 1 : 0)
+            VoiceMetricsStore.shared.markVoiceMessageSent(at: ProcessInfo.processInfo.systemUptime)
+        }
+        editedThisComposition = false
+        autoCorrection = nil
         // Invalidate any in-flight transcription so a late result can't refill the
         // field after the send (residual-text bug).
         transcriptGeneration &+= 1
@@ -863,6 +967,7 @@ final class VoiceInputViewModel: ObservableObject {
         // here is the training signal — see endEditing.
         editSnapshot = transcript
         vad.stop()
+        stopLiveCaptions()
         state = .result
         // Capture paused — reply TTS may resume.
         VoiceModePreference.shared.isCapturing = false
@@ -890,10 +995,13 @@ final class VoiceInputViewModel: ObservableObject {
         // gated on VoiceCorrectionCollectionConsent (default OFF, one-time
         // prompt + Settings → Permissions toggle), so without consent this
         // call is a no-op.
+        if before != after { editedThisComposition = true }
         if before != after, !before.isEmpty, !after.isEmpty {
             let locale = PhoneticNormalizerRegistry.normalizedLocaleKey(language)
-            Task.detached(priority: .utility) {
+            Task.detached(priority: .utility) { [weak self] in
                 await VoiceCorrectionRecorder.shared.recordEdit(before: before, after: after, locale: locale)
+                // [H3] 刚学到的修正可能已满 2 次,重新加载自动替换规则。
+                await self?.reloadAutoCorrectionRules()
             }
         }
     }
@@ -907,12 +1015,191 @@ final class VoiceInputViewModel: ObservableObject {
     func deleteLastCharacter() {
         guard !transcript.isEmpty else { return }
         transcript.removeLast()
+        editedThisComposition = true
     }
 
     /// Clear the whole transcript (the "clear all" affordance).
     func clearTranscript() {
         guard !transcript.isEmpty else { return }
         transcript = ""
+        autoCorrection = nil
+    }
+
+    // MARK: - [H1] 实时字幕
+
+    struct LiveHandoff {
+        let session: AppleLiveTranscriber
+        let token: Int
+    }
+
+    private func prewarmLiveCaptions() {
+        guard VoiceExperiencePreferences.liveCaptionsEnabled else { return }
+        let lang = language
+        Task { await AppleLiveTranscriber.prewarm(localeIdentifier: lang) }
+    }
+
+    /// 录音开始时开一路流式转写;系统识别资源未下载时直接返回,语音输入照常走整段识别。
+    private func startLiveCaptions() {
+        stopLiveCaptions()
+        guard VoiceExperiencePreferences.liveCaptionsEnabled else { return }
+        refreshHotwords()
+        liveToken &+= 1
+        let token = liveToken
+        guard let session = AppleLiveTranscriber(
+            localeIdentifier: language,
+            contextualStrings: VoiceExperiencePreferences.hotwordsEnabled ? hotwords : [],
+            onUpdate: { [weak self] snap in self?.applyLiveSnapshot(snap, token: token) }) else {
+            VoiceLog.log("live captions off — on-device assets not ready for \(language)")
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        liveTranscriber = session
+        liveFirstCharLogged = false
+        speechOnsetUptime = now
+        lastCaptionChangeUptime = now
+        vad.liveAudioHandler = { [weak session] samples, rate in session?.append(samples, sampleRate: rate) }
+        endpointTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkEndpoint() }
+        }
+    }
+
+    /// 停止送音频与断句检查,但保留会话(等交出的那段音频来取)。
+    private func detachLiveAudio() {
+        vad.liveAudioHandler = nil
+        endpointTimer?.invalidate()
+        endpointTimer = nil
+    }
+
+    private func stopLiveCaptions() {
+        detachLiveAudio()
+        liveTranscriber?.cancel()
+        liveTranscriber = nil
+        liveCaptionFinal = ""
+        liveCaptionVolatile = ""
+    }
+
+    /// 把当前实时会话交给这段音频的识别;采集仍在进行(超长自动切段)时立刻开新的一路。
+    private func takeLiveSession() -> LiveHandoff? {
+        detachLiveAudio()
+        guard let session = liveTranscriber else { return nil }
+        liveTranscriber = nil
+        let handoff = LiveHandoff(session: session, token: liveToken)
+        if vad.isRunning { startLiveCaptions() }
+        return handoff
+    }
+
+    private func clearLiveCaption(ifToken token: Int) {
+        guard token == liveToken, liveTranscriber == nil else { return }
+        liveCaptionFinal = ""
+        liveCaptionVolatile = ""
+    }
+
+    private func applyLiveSnapshot(_ snap: AppleLiveTranscriber.Snapshot, token: Int) {
+        guard token == liveToken, !isEditingTranscript else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if snap.finalized != liveCaptionFinal || snap.volatile != liveCaptionVolatile {
+            lastCaptionChangeUptime = now
+        }
+        liveCaptionFinal = snap.finalized
+        liveCaptionVolatile = snap.volatile
+        if !liveFirstCharLogged, !snap.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            liveFirstCharLogged = true
+            VoiceLog.latency("caption.first", ms: (now - speechOnsetUptime) * 1000)
+        }
+    }
+
+    /// [H6] 字幕显示话已说完且静音够久,就提前收尾,不等 VAD 固定的约 5 秒。
+    private func checkEndpoint() {
+        guard liveTranscriber != nil, vad.isRunning, vad.isSpeaking, !isEditingTranscript else { return }
+        let text = liveCaptionFinal + liveCaptionVolatile
+        let silence = min(vad.silenceDuration, ProcessInfo.processInfo.systemUptime - lastCaptionChangeUptime)
+        guard VoiceEndpointing.shouldEndSegment(liveText: text, silence: silence) else { return }
+        VoiceLog.log("dynamic endpoint: silence=\(String(format: "%.2f", silence))s threshold=\(VoiceEndpointing.silenceThreshold(forLiveText: text) ?? -1)")
+        vad.endSegmentEarly()
+    }
+
+    // MARK: - [H2] 双轨识别
+
+    private static func isSystemCandidate(_ entry: ModelEntry) -> Bool {
+        VoiceProviderResolver.isSystemEntry(entry.id) || VoiceProviderResolver.isSystemEntry(entry.providerInstanceId)
+    }
+
+    private static func offlineFiltered(_ candidates: [ModelEntry]) -> [ModelEntry] {
+        guard VoiceProviderResolver.resolvedSystemInputMode() == .offline else { return candidates }
+        return candidates.filter(isSystemCandidate)
+    }
+
+    /// 追加一段识别结果,返回实际追加的那一截(含分隔空格)。
+    @discardableResult
+    private func appendToTranscript(_ text: String) -> String {
+        let suffix = transcript.isEmpty ? text : " " + text
+        transcript += suffix
+        onTranscript?(transcript)
+        return suffix
+    }
+
+    /// 用云端结果替换先显示的端侧结果(轻微淡入)。用户在此期间改过字就不动。
+    private func replaceProvisional(_ suffix: String, with text: String) {
+        guard transcript.hasSuffix(suffix) else { return }
+        let base = String(transcript.dropLast(suffix.count))
+        let replacement = base.isEmpty ? text : " " + text
+        guard replacement != suffix else { return }
+        withAnimation(.easeIn(duration: 0.25)) { transcript = base + replacement }
+        onTranscript?(transcript)
+    }
+
+    // MARK: - [H3] 确认过的错字自动替换
+
+    func reloadAutoCorrectionRules() {
+        let locale = PhoneticNormalizerRegistry.normalizedLocaleKey(language)
+        Task { [weak self] in
+            guard let db = VoiceCorrectionDB.shared else { return }
+            let rows = await db.autoCorrectionRows(locale: locale, minConfirmations: VoiceAutoCorrection.minConfirmations)
+            self?.autoCorrectionRules = VoiceAutoCorrection.rules(from: rows)
+        }
+    }
+
+    private func applyAutoCorrection(_ text: String) -> String {
+        guard !autoCorrectionRules.isEmpty else { return text }
+        let (fixed, applied) = VoiceAutoCorrection.apply(text, rules: autoCorrectionRules)
+        guard !applied.isEmpty else { return text }
+        autoCorrection = AutoCorrectionNotice(original: text, corrected: fixed, rules: applied)
+        VoiceLog.log("auto-correction applied rules=\(applied.count)")
+        return fixed
+    }
+
+    /// 撤销最近一次自动更正:文字还原,每条规则的确认次数减一。
+    func undoAutoCorrection() {
+        guard let notice = autoCorrection else { return }
+        autoCorrection = nil
+        if let range = transcript.range(of: notice.corrected, options: .backwards) {
+            transcript.replaceSubrange(range, with: notice.original)
+            onTranscript?(transcript)
+        }
+        let rules = notice.rules
+        Task.detached(priority: .utility) { [weak self] in
+            guard let db = VoiceCorrectionDB.shared else { return }
+            for rule in rules {
+                await db.decrementConfusion(phoneticKey: rule.phoneticKey, correctedTerm: rule.to, locale: rule.locale)
+            }
+            await self?.reloadAutoCorrectionRules()
+        }
+    }
+
+    // MARK: - [H4] 度量 / [H5] 热词
+
+    private func recordFinalLatency(from speechEnd: TimeInterval?) {
+        guard let speechEnd, speechEnd > 0 else { return }
+        VoiceLog.metric(.finalLatency, ms: (ProcessInfo.processInfo.systemUptime - speechEnd) * 1000)
+    }
+
+    private func refreshHotwords() {
+        guard VoiceExperiencePreferences.hotwordsEnabled, let source = hotwordTextSource else { return }
+        let texts = source()
+        Task { [weak self] in
+            let words = await Task.detached(priority: .utility) { VoiceHotwords.select(from: texts) }.value
+            self?.hotwords = words
+        }
     }
 }
 
@@ -924,6 +1211,7 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
         // Ignore detected speech while the user is hand-editing the transcript.
         guard !isEditingTranscript else { return }
         state = .recording
+        if !liveFirstCharLogged { speechOnsetUptime = ProcessInfo.processInfo.systemUptime }
         // Speech detected — push the no-speech idle deadline back out.
         resetIdleTimer()
     }
@@ -942,6 +1230,7 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
         captureStart.cancel()
         // Flush any audio captured before the interruption, then return to idle.
         flushPendingSegments()
+        stopLiveCaptions()
         state = .waiting
         listeningLabelToken &+= 1
         cancelTipCycle()

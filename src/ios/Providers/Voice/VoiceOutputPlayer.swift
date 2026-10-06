@@ -109,8 +109,115 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// background prefetch behind active playback).
     private func refreshSynthesizingState() {
         let generating = queue.contains { $0.task != nil && $0.audio == nil && !$0.failed }
-        let next = generating && player == nil
+        let next = (generating && player == nil && streaming == nil) || (streaming.map { !$0.hasStarted } ?? false)
         if next != isSynthesizing { isSynthesizing = next }
+    }
+
+    // MARK: - [H7] 流式朗读
+
+    /// 正在边收边播的单元(已从 queue 移出)。
+    private var streaming: StreamingPCMPlayback?
+    private var streamingUnit: Unit?
+    private var streamingTask: Task<Void, Never>?
+    /// 服务端没按 PCM 返回过一次,本次运行期间不再尝试流式。
+    private var streamingDisabledForRun = false
+
+    /// 队首单元、当前没在播、首选音色支持流式:直接流式播放它。返回是否已接管。
+    private func startStreaming(_ unit: Unit, candidate: Candidate, streamer: any StreamingVoiceOutput) -> Bool {
+        guard let playback = StreamingPCMPlayback(sampleRate: streamer.streamingSampleRate,
+                                                  rate: VoiceOutputPreferences.speedMultiplier) else { return false }
+        do {
+            try activatePlaybackSession()
+            try playback.start()
+        } catch {
+            VoiceLog.log("TTS stream #\(unit.seq): engine start failed — whole-sentence path")
+            return false
+        }
+        queue.removeAll { $0 === unit }
+        streaming = playback
+        streamingUnit = unit
+        playingSeq = unit.seq
+        playingSessionId = unit.ownerSessionId
+        playback.onFirstAudio = { [weak self, weak playback] in
+            guard let self, let playback, self.streaming === playback else { return }
+            self.isPlaying = true
+            self.refreshSynthesizingState()
+            VoiceLog.noteFirstAudio()
+            if self.stickyCandidateKey != candidate.key {
+                self.stickyCandidateKey = candidate.key
+                self.activeModelLabel = candidate.label
+            }
+            VoiceLog.log("TTS ▶︎ stream #\(unit.seq) first audio (\(candidate.label))")
+        }
+        playback.onFinished = { [weak self, weak playback] in
+            guard let self, let playback else { return }
+            self.streamDidFinish(playback)
+        }
+        let text = unit.text
+        let model = candidate.modelId
+        let seq = unit.seq
+        streamingTask = Task.detached { [weak self, playback] in
+            do {
+                try await streamer.streamPCM(VoiceOutputRequest(input: text, model: model)) { playback.append($0) }
+                playback.endOfInput()
+            } catch is CancellationError {
+                return
+            } catch {
+                await self?.streamDidFail(playback, unit: unit, error: error, seq: seq)
+            }
+        }
+        VoiceLog.log("TTS stream #\(unit.seq) start (\(candidate.label))")
+        refreshSynthesizingState()
+        return true
+    }
+
+    private func stopStreaming() {
+        streamingTask?.cancel()
+        streamingTask = nil
+        streaming?.stop()
+        streaming = nil
+        streamingUnit = nil
+    }
+
+    private func streamDidFinish(_ playback: StreamingPCMPlayback) {
+        guard streaming === playback else { return }
+        VoiceLog.log("TTS ■ stream finished #\(playingSeq)")
+        stopStreaming()
+        playingSeq = -1
+        playingSessionId = nil
+        pumpPlayback()
+        pumpPrefetch()
+        let generating = queue.contains { $0.task != nil && $0.audio == nil && !$0.failed }
+        if queue.isEmpty && player == nil && streaming == nil && !generating {
+            isPlaying = false
+            releaseSessionIfSafe()
+        }
+    }
+
+    /// 还没出声就失败:同一音色改走整句合成(不换音色)。已经出声后失败:整段改用系统朗读。
+    private func streamDidFail(_ playback: StreamingPCMPlayback, unit: Unit, error: Error, seq: Int) {
+        guard streaming === playback else { return }
+        let started = playback.hasStarted
+        VoiceLog.log("TTS stream #\(seq) failed (started=\(started)): \(error.localizedDescription)")
+        if case VoiceProviderError.unsupported = error { streamingDisabledForRun = true }
+        stopStreaming()
+        playingSeq = -1
+        playingSessionId = nil
+        if started {
+            // 放回队首占位,系统合成好之前后面的句子不会抢先播。
+            unit.task = Task { [weak self] in
+                let data = try? await SystemVoiceProvider.shared.synthesize(VoiceOutputRequest(input: unit.text))
+                guard !Task.isCancelled else { return }
+                if let data { unit.audio = data } else { unit.failed = true }
+                self?.pumpPlayback()
+                self?.pumpPrefetch()
+            }
+        } else {
+            unit.task = nil
+        }
+        queue.insert(unit, at: 0)
+        pumpPrefetch()
+        pumpPlayback()
     }
 
     private let logger = AppLogger(category: "VoiceOutput")
@@ -127,6 +234,8 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         var audio: Data?          // nil until synthesize completes
         var failed = false        // synthesize errored → skip on playback
         var task: Task<Void, Never>?
+        /// [H7] 已尝试过流式,失败回退后不再尝试。
+        var streamTried = false
         init(seq: Int, text: String, ownerSessionId: String) {
             self.seq = seq; self.text = text; self.ownerSessionId = ownerSessionId
         }
@@ -215,7 +324,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// Whether the queue currently has any audio playing/ready (used by the caller
     /// to apply the "speak the first batch ASAP" rule when idle).
     var hasPendingAudio: Bool {
-        player != nil || queue.contains { $0.audio != nil && !$0.failed }
+        player != nil || streaming != nil || queue.contains { $0.audio != nil && !$0.failed }
     }
 
     private static func wavDuration(_ wav: Data) -> Double {
@@ -263,6 +372,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     func stopAll() {
         for u in queue { u.task?.cancel() }
         queue.removeAll()
+        stopStreaming()
         player?.stop()
         player = nil
         playingSeq = -1
@@ -281,6 +391,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     func stopSession(_ sessionId: String) {
         let owned = queue.filter { $0.ownerSessionId == sessionId }
         guard !owned.isEmpty || playingSessionId == sessionId else { return }
+        if streamingUnit?.ownerSessionId == sessionId { stopStreaming() }
         for u in owned { u.task?.cancel() }
         queue.removeAll { $0.ownerSessionId == sessionId }
         VoiceLog.log("TTS stopSession owner=\(String(sessionId.prefix(8))) cleared=\(owned.count) remaining=\(queue.count) playingWasOurs=\(playingSessionId == sessionId)")
@@ -293,7 +404,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             pumpPlayback()   // continue with other sessions' queued content
         }
         refreshSynthesizingState()
-        if queue.isEmpty && player == nil {
+        if queue.isEmpty && player == nil && streaming == nil {
             isPlaying = false
             releaseSessionIfSafe()
         }
@@ -314,6 +425,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     func setRate(_ rate: Float) {
         player?.enableRate = true
         player?.rate = rate
+        streaming?.setRate(rate)
     }
 
     /// Pause the currently-playing cloud audio (queue keeps filling in background).
@@ -325,6 +437,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// `pumpPlayback`.
     func pause() {
         if let p = player, p.isPlaying { p.pause() }
+        streaming?.pause()
         isPaused = true
     }
 
@@ -334,7 +447,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     func resume() {
         guard isPaused else { return }
         isPaused = false
-        if let p = player { p.play() } else { pumpPlayback() }
+        if let s = streaming { s.resume() } else if let p = player { p.play() } else { pumpPlayback() }
     }
 
     /// The cloud TTS queue has drained — end the reply-TTS intent. The coordinator
@@ -382,6 +495,13 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
 
         for unit in queue where unit.task == nil && unit.audio == nil && !unit.failed {
             guard slots > 0 else { break }
+            // [H7] 队首且当前没在播:首选音色支持流式就边收边播,不等整句合成完。
+            if unit === queue.first, !unit.streamTried, player == nil, streaming == nil, !isPaused,
+               !streamingDisabledForRun, VoiceExperiencePreferences.streamingTTSEnabled,
+               let lead = candidates.first, let streamer = lead.provider as? any StreamingVoiceOutput {
+                unit.streamTried = true
+                if startStreaming(unit, candidate: lead, streamer: streamer) { continue }
+            }
             slots -= 1
             let charCount = unit.text.count
             let seq = unit.seq
@@ -541,7 +661,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         // mid-recording would start playing under the recorder. `resume()`
         // re-enters here when the pause lifts.
         guard !isPaused else { return }
-        guard player == nil else { return }            // already playing
+        guard player == nil, streaming == nil else { return }   // already playing
         guard let front = queue.first else {           // queue drained
             if isPlaying { isPlaying = false }
             return
@@ -567,6 +687,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             p.rate = VoiceOutputPreferences.speedMultiplier
             p.prepareToPlay()
             p.play()
+            VoiceLog.noteFirstAudio()
             player = p
             isPlaying = true
             VoiceLog.log(String(format: "TTS ▶︎ play #%d owner=%@ dur=%.2fs rate=%.2f queueAhead=%d bufferedAfter=%.2fs",
@@ -614,5 +735,99 @@ extension VoiceOutputPlayer: AVAudioPlayerDelegate {
                 self.releaseSessionIfSafe()
             }
         }
+    }
+}
+
+// MARK: - [H7] 流式 PCM 播放
+
+/// 把收到的 16-bit 小端单声道 PCM 片段排进 AVAudioPlayerNode,边收边播。
+/// 语速走 AVAudioUnitTimePitch,与整句播放的 AVAudioPlayer.rate 一致。
+final class StreamingPCMPlayback: @unchecked Sendable {
+    private let engine = AVAudioEngine()
+    private let node = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
+    private let format: AVAudioFormat
+    private let lock = NSLock()
+    private var carry: UInt8?
+    private var pendingBuffers = 0
+    private var inputDone = false
+    private var done = false
+    private var started = false
+    /// 第一段音频排进去时(主线程)回调。
+    var onFirstAudio: (@MainActor () -> Void)?
+    /// 全部播完时(主线程)回调;stop() 之后不会再回调。
+    var onFinished: (@MainActor () -> Void)?
+
+    var hasStarted: Bool { lock.withLock { started } }
+
+    init?(sampleRate: Double, rate: Float) {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
+                                         channels: 1, interleaved: false) else { return nil }
+        self.format = format
+        timePitch.rate = rate
+        engine.attach(node)
+        engine.attach(timePitch)
+        engine.connect(node, to: timePitch, format: format)
+        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+    }
+
+    func start() throws {
+        engine.prepare()
+        try engine.start()
+        node.play()
+    }
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        guard !done else { lock.unlock(); return }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(chunk.count + 1)
+        if let c = carry { bytes.append(c); carry = nil }
+        bytes.append(contentsOf: chunk)
+        if bytes.count % 2 == 1 { carry = bytes.removeLast() }
+        let frames = bytes.count / 2
+        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)),
+              let out = buffer.floatChannelData?[0] else { lock.unlock(); return }
+        buffer.frameLength = AVAudioFrameCount(frames)
+        for i in 0..<frames {
+            let sample = Int16(bitPattern: UInt16(bytes[2 * i]) | (UInt16(bytes[2 * i + 1]) << 8))
+            out[i] = Float(sample) / 32768
+        }
+        pendingBuffers += 1
+        let first = !started
+        started = true
+        lock.unlock()
+        node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            self?.bufferPlayed()
+        }
+        if first, let cb = onFirstAudio { DispatchQueue.main.async { MainActor.assumeIsolated { cb() } } }
+    }
+
+    func endOfInput() {
+        lock.withLock { inputDone = true }
+        checkFinished()
+    }
+
+    private func bufferPlayed() {
+        lock.withLock { pendingBuffers -= 1 }
+        checkFinished()
+    }
+
+    private func checkFinished() {
+        lock.lock()
+        let finish = inputDone && pendingBuffers <= 0 && !done
+        if finish { done = true }
+        lock.unlock()
+        if finish, let cb = onFinished { DispatchQueue.main.async { MainActor.assumeIsolated { cb() } } }
+    }
+
+    func setRate(_ rate: Float) { timePitch.rate = rate }
+    func pause() { node.pause() }
+    func resume() { node.play() }
+
+    func stop() {
+        lock.withLock { done = true }
+        node.stop()
+        engine.stop()
     }
 }

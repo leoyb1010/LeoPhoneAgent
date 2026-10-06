@@ -420,6 +420,66 @@ actor VoiceCorrectionDB {
         logger.info("[VoiceCorrection][Feedback] reverted correctedLen=\(correctedTerm.count) negativeFeedbackCount=\(newNegative)(was \(negative)) confidence=\(String(format: "%.2f", newConfidence))(was \(String(format: "%.2f", oldConfidence)))")
     }
 
+    /// [H3] 自动替换撤销:确认次数减一(不低于 0),置信度随之重算。
+    /// 不写负反馈——撤销表示"这次不该自动改",不等于这条修正本身是错的。
+    func decrementConfusion(phoneticKey: String, correctedTerm: String, locale: String) {
+        guard let db else { return }
+        let sql = """
+            UPDATE confusion_dictionary
+            SET frequency = MAX(frequency - 1, 0),
+                confidence = CASE WHEN (MAX(frequency - 1, 0) + negative_feedback_count * 2) > 0
+                    THEN CAST(MAX(frequency - 1, 0) AS REAL) / (MAX(frequency - 1, 0) + negative_feedback_count * 2)
+                    ELSE 0.5 END
+            WHERE original_phonetic_key = ? AND corrected_term = ? AND locale = ?
+        """
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, phoneticKey, -1, Self.SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, correctedTerm, -1, Self.SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, locale, -1, Self.SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+        logger.info("[VoiceCorrection][AutoFix] undo → frequency-1 correctedLen=\(correctedTerm.count)")
+    }
+
+    /// [H3] 可自动替换的行:未归档、确认次数扣掉否决次数 ≥ 阈值。量很小(个人词库),一次取完。
+    func autoCorrectionRows(locale: String, minConfirmations: Int, limit: Int = 500) -> [ConfusionRow] {
+        guard let db else { return [] }
+        let sql = """
+            SELECT id, original_phonetic_key, original_variants, corrected_term, locale,
+                   frequency, negative_feedback_count, confidence, last_seen, source
+            FROM confusion_dictionary
+            WHERE locale = ? AND archived_at IS NULL
+              AND frequency - negative_feedback_count >= ?
+            ORDER BY frequency DESC
+            LIMIT ?
+        """
+        var rows: [ConfusionRow] = []
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            sqlite3_finalize(stmt); return []
+        }
+        sqlite3_bind_text(stmt, 1, locale, -1, Self.SQLITE_TRANSIENT)
+        sqlite3_bind_int(stmt, 2, Int32(minConfirmations))
+        sqlite3_bind_int(stmt, 3, Int32(limit))
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            rows.append(ConfusionRow(
+                id: sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? "",
+                phoneticKey: sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? "",
+                variants: Self.decodeVariants(sqlite3_column_text(stmt, 2).map { String(cString: $0) } ?? "[]"),
+                correctedTerm: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
+                locale: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
+                frequency: Int(sqlite3_column_int(stmt, 5)),
+                negativeFeedbackCount: Int(sqlite3_column_int(stmt, 6)),
+                confidence: sqlite3_column_double(stmt, 7),
+                lastSeen: sqlite3_column_double(stmt, 8),
+                source: sqlite3_column_text(stmt, 9).map { String(cString: $0) } ?? "asr_transcript"))
+        }
+        sqlite3_finalize(stmt)
+        return rows
+    }
+
     /// confidence = frequency / (frequency + negative * 2) — design §3.2.
     /// Negative feedback is weighted 2× because a *disproven* rule is far more costly
     /// (it actively corrupts the user's text) than a merely unconfirmed one.

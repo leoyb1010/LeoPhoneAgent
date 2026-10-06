@@ -106,6 +106,16 @@ final class VoiceActivityDetector: NSObject {
     /// Timestamp (seconds since boot) when the current segment's speech started.
     private var segmentStartTime: TimeInterval = 0
 
+    /// [H1] 实时字幕的音频出口:每个 tap 缓冲(单声道 Float32、未经 AGC 的原始采样)
+    /// 在音频线程上回调一次。nil = 不送。
+    var liveAudioHandler: ((UnsafeBufferPointer<Float>, Double) -> Void)? {
+        get { captureLock.withLock { _liveAudioHandler } }
+        set { captureLock.withLock { _liveAudioHandler = newValue } }
+    }
+    private var _liveAudioHandler: ((UnsafeBufferPointer<Float>, Double) -> Void)?
+    /// [H4][H6] 最近一帧"像在说话"(能量高于噪声门)的时间,系统运行时间。
+    private var lastVoicedUptime: TimeInterval = 0
+
     struct Configuration {
         /// Frames to confirm speech start (default 10 ≈ 0.32 s).
         var voiceStartFrameCount: Int32 = 10
@@ -165,6 +175,7 @@ final class VoiceActivityDetector: NSObject {
             throw VoiceProviderError.parseError("Audio engine failed to start")
         }
         VoiceLog.log("audioEngine started OK; isRunning=true")
+        captureLock.withLock { lastVoicedUptime = 0 }
         rawAudioBuffer.removeAll(keepingCapacity: true)
         samplesSinceSegmentEnd = 0
         rawAudioStartTime = ProcessInfo.processInfo.systemUptime
@@ -325,6 +336,24 @@ final class VoiceActivityDetector: NSObject {
             self?.delegate?.voiceActivityDidEnd(audioData: wav, reason: .manualFlush)
         }
         return true
+    }
+
+    /// [H6] 距离最后一帧有声能量过去了多久(秒)。还没听到声音时返回 0。
+    var silenceDuration: TimeInterval {
+        let last = captureLock.withLock { lastVoicedUptime }
+        guard last > 0 else { return 0 }
+        return max(0, ProcessInfo.processInfo.systemUptime - last)
+    }
+
+    /// [H4] 最后一帧有声能量的时间(系统运行时间);0 = 未知。
+    var lastVoicedTime: TimeInterval { captureLock.withLock { lastVoicedUptime } }
+
+    /// [H6] 实时字幕判断话已说完:立即按"静音结束"交出当前这段,并断开 VAD 库的回调,
+    /// 免得它稍后再按自己的 5 秒规则交出同一段。调用方随后会停掉采集。
+    func endSegmentEarly() {
+        vad?.delegate = nil
+        isSpeaking = false
+        flushCapturedSegment(reason: .silenceDetected)
     }
 
     /// How long the mic has been running since start()
@@ -527,6 +556,13 @@ final class VoiceActivityDetector: NSObject {
         let rms = (raw.count > 0) ? sqrt(sumSq / Float(raw.count)) : 0
 
         let gateThreshold = noiseFloorRMS * Self.gateRatio
+        if let live = liveAudioHandler {
+            live(raw, captureSampleRate)
+        }
+        if rms >= gateThreshold {
+            let now = ProcessInfo.processInfo.systemUptime
+            captureLock.withLock { lastVoicedUptime = now }
+        }
         let targetGain: Float
         if rms < gateThreshold {
             // Noise / silence: don't amplify. Adapt the floor toward this level

@@ -22,6 +22,7 @@ final class GroqVoiceProvider: VoiceProvider {
 // MARK: - Alibaba Bailian (OpenAI-compatible, only default models differ)
 
 final class AlibabaVoiceProvider: VoiceProvider {
+    override var acceptsRecognitionPrompt: Bool { false }   // [H5] 热词字段未在现有接入里确认
     override func defaultVoiceInputModel() -> String  { "paraformer-realtime-v2" }
     override func defaultVoiceOutputModel() -> String { "cosyvoice-v2" }
     override func defaultVoiceOutputVoice() -> String { "longxiaochun" }
@@ -30,6 +31,7 @@ final class AlibabaVoiceProvider: VoiceProvider {
 // MARK: - xAI (ASR endpoint path differs: /v1/stt)
 
 final class XAIVoiceProvider: VoiceProvider {
+    override var acceptsRecognitionPrompt: Bool { false }   // [H5] /v1/stt 未确认支持 prompt
     override func voiceInputEndpointPath() -> String  { "/v1/stt" }
     override func defaultVoiceInputModel() -> String  { "grok-stt" }
     override func defaultVoiceOutputModel() -> String { "grok-tts-1" }
@@ -187,6 +189,10 @@ final class DoubaoVoiceProvider: VoiceProvider {
     override func voiceOutputEndpointPath() -> String { "/api/v3/tts/unidirectional" }
 
     override func buildVoiceOutputRequest(_ request: VoiceOutputRequest) throws -> URLRequest {
+        try ttsRequest(request, format: request.responseFormat == .wav ? "wav" : "mp3")
+    }
+
+    private func ttsRequest(_ request: VoiceOutputRequest, format: String) throws -> URLRequest {
         let urlStr = composedURLString(path: voiceOutputEndpointPath())
         guard let url = URL(string: urlStr) else {
             throw VoiceProviderError.parseError("Invalid URL: \(urlStr)")
@@ -212,8 +218,8 @@ final class DoubaoVoiceProvider: VoiceProvider {
                 "text": request.input,
                 "speaker": speaker,
                 "audio_params": [
-                    "format": request.responseFormat == .wav ? "wav" : "mp3",
-                    "sample_rate": 24000
+                    "format": format,
+                    "sample_rate": Self.ttsSampleRate
                 ]
             ]
         ]
@@ -241,6 +247,8 @@ final class DoubaoVoiceProvider: VoiceProvider {
         }
         return audioChunks
     }
+
+    static let ttsSampleRate = 24000
 
     // -- ASR (v3 bigmodel flash recognize) ------------------------------------
 
@@ -288,6 +296,44 @@ final class DoubaoVoiceProvider: VoiceProvider {
     override func defaultVoiceInputModel() -> String  { "bigmodel" }
     override func defaultVoiceOutputModel() -> String { "zh_female_cancan_uranus_bigtts" }
     override func defaultVoiceOutputVoice() -> String { "zh_female_cancan_uranus_bigtts" }
+}
+
+// [H7] 同一个 v3 unidirectional 端点本来就是 HTTP 分块流式,改要 pcm 后边收边播。
+extension DoubaoVoiceProvider: StreamingVoiceOutput {
+    var streamingSampleRate: Double { Double(Self.ttsSampleRate) }
+
+    func streamPCM(_ request: VoiceOutputRequest, onChunk: @escaping (Data) -> Void) async throws {
+        let urlRequest = try ttsRequest(request, format: "pcm")
+        var gotAudio = false
+        try await executeStreamingLines(urlRequest) { line in
+            guard let frame = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  let code = frame["code"] as? Int else { return true }
+            if code == 20_000_000 { return false }   // 合成完成
+            guard code == 0 else {
+                let msg = frame["message"] as? String ?? "code \(code)"
+                throw VoiceProviderError.parseError("Doubao streaming TTS: \(msg)")
+            }
+            guard let b64 = frame["data"] as? String, !b64.isEmpty,
+                  let chunk = Data(base64Encoded: b64), !chunk.isEmpty else { return true }
+            // 防御:若服务端没按 pcm 返回(容器头),不要把压缩数据当 PCM 播成噪音。
+            if !gotAudio, Self.looksLikeContainer(chunk) {
+                throw VoiceProviderError.unsupported("Doubao streaming TTS returned non-PCM audio")
+            }
+            gotAudio = true
+            onChunk(chunk)
+            return true
+        }
+        guard gotAudio else { throw VoiceProviderError.parseError("Doubao streaming TTS: no audio frames") }
+    }
+
+    static func looksLikeContainer(_ data: Data) -> Bool {
+        let b = [UInt8](data.prefix(4))
+        guard b.count >= 3 else { return false }
+        if b[0] == 0x49, b[1] == 0x44, b[2] == 0x33 { return true }                 // "ID3"
+        if b.count >= 4, b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46 { return true } // "RIFF"
+        if b.count >= 4, b[0] == 0x4F, b[1] == 0x67, b[2] == 0x67, b[3] == 0x53 { return true } // "OggS"
+        return false
+    }
 }
 
 // MARK: - iFlytek / Xunfei (ASR with HMAC-SHA256 signed URL)
