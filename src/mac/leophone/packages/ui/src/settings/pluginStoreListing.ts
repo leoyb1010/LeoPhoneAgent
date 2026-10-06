@@ -14,6 +14,7 @@ import {
   isPublicStoreMarketplaceId,
   resolveLocalizedText,
   resolvePluginDisplayName,
+  INTERNAL_OFFICIAL_PLUGIN_IDS,
   ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
 } from "@zcode/shared";
 import { pluginSearchMatches } from "@/settings/pluginSearch.js";
@@ -301,7 +302,7 @@ export function buildStoreItems(input: {
       ...(metaById.get(info.id) ? { installedMeta: metaById.get(info.id) } : {}),
     });
   }
-  return [...items.values()];
+  return [...items.values()].filter((item) => !INTERNAL_OFFICIAL_PLUGIN_IDS.has(item.id));
 }
 
 /** 公开分段：Featured（CDN featured 名单按序）+ 分类聚合（无分类归 other，排最后）。 */

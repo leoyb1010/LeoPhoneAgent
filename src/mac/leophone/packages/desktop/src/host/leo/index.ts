@@ -48,8 +48,24 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
     const taskService = deps.services.get(IZCodeTaskService);
     const providerSettings = deps.services.get(IProviderSettingsService);
     const syncSubscriptions = () => void syncSubscriptionProvider(providerSettings, deps.logger);
+    const scheduleListen = () => {
+      retryTimer = setTimeout(listen, PORT_RETRY_MS);
+      retryTimer.unref();
+    };
     const listen = () => {
       retryTimer = null;
+      try {
+        listenOnce();
+      } catch (error) {
+        // 重试是从定时器里进来的,不在外层 try 里:读写钥匙文件(EACCES / ENOSPC)抛出来
+        // 会变成未捕获异常,整个窗口的 Host 连同会话一起退出。记一笔,稍后再试。
+        deps.logger.warn("[leo] start attempt failed, will retry", { error: String(error) });
+        httpServer?.close();
+        httpServer = null;
+        scheduleListen();
+      }
+    };
+    const listenOnce = () => {
       store ??= new TreasuryStore();
       httpServer = startLeoHttpApi({
         store,
@@ -112,8 +128,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
         onPortBusy: () => {
           httpServer?.close();
           httpServer = null;
-          retryTimer = setTimeout(listen, PORT_RETRY_MS);
-          retryTimer.unref();
+          scheduleListen();
         },
       });
     };
@@ -130,7 +145,7 @@ export function stopLeoHostServices(): void {
   retryTimer = null;
   if (linkTimer) clearInterval(linkTimer);
   linkTimer = null;
-  void link?.then((started) => started?.stop());
+  void link?.then((started) => started?.stop()).catch(() => undefined);
   link = null;
   httpServer?.close();
   store?.close();

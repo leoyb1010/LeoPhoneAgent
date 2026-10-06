@@ -217,7 +217,7 @@ async function upstreamFailure(
       status,
       body: {
         error: {
-          message: `订阅账号授权无效或已过期,请到 设置 → 模型供应商 → 订阅账号登录 重新登录。(上游:${detail})`,
+          message: `订阅账号授权无效或已过期，请到 设置 → 模型供应商 → 订阅账号登录 重新登录。(上游：${detail})`,
           type: "authentication_error",
           code: "invalid_api_key",
         },
@@ -229,7 +229,7 @@ async function upstreamFailure(
       status,
       body: {
         error: {
-          message: `订阅额度已用完或请求过于频繁,稍后会自动重试。(上游:${detail})`,
+          message: `订阅额度已用完或请求过于频繁，稍后会自动重试。(上游：${detail})`,
           type: "rate_limit_error",
         },
       },
@@ -280,7 +280,7 @@ export async function handleChatCompletions(
   if (!model) {
     sendJson(res, 404, {
       error: {
-        message: `模型不存在或该订阅账号没登录:${request.model}`,
+        message: `模型不存在或该订阅账号没登录：${request.model}`,
         type: "invalid_request_error",
       },
     });

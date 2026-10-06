@@ -19,6 +19,7 @@ const port = await new Promise<number>((resolve) => {
 process.env["LEOAGENT_HOME"] = home;
 process.env["LEOAGENT_PORT"] = String(port);
 process.env["LEO_PAIR_SECRET"] = "pair-secret-for-test";
+process.env["LEO_UI_SECRET"] = "ui-secret-for-test-0123456789";
 delete process.env["LEOAGENT_KEY"];
 
 const { startLeoHttpApi, readJsonBody } = await import("./httpApi.js");
@@ -179,7 +180,12 @@ test("leoagent events are only accepted with leoagent's own key and only for pus
 
 test("malformed %-escapes in a path parameter are a 400, not a 500 with a warning", async () => {
   const before = logs.length;
-  const res = await call("POST", "/api/leo/ui/oauth/providers/%E0%A4%A/login", { "x-leo-ui": "1" }, "{}");
+  const res = await call(
+    "POST",
+    "/api/leo/ui/oauth/providers/%E0%A4%A/login",
+    { "x-leo-ui": "ui-secret-for-test-0123456789" },
+    "{}",
+  );
   assert.equal(res.status, 400);
   assert.equal(logs.length, before);
 });
@@ -215,3 +221,22 @@ test("direct configuration, pairing and revocation require the same local UI-onl
   const invalid = await call("POST", "/api/leo/link/direct/configure", { ...bearer, "x-leo-pair": "pair-secret-for-test" }, JSON.stringify({ enabled: true, baseURL: "http://not-tailnet.example", port: 38474 }));
   assert.equal(invalid.status, 400);
 });
+
+test("login-page API needs this launch's UI secret, not just the X-Leo-UI header", async () => {
+  // 以前只看 `X-Leo-UI: 1`:本机任何进程都能替你登录、换号、退出。
+  for (const headers of [{}, { "x-leo-ui": "1" }, { "x-leo-ui": "wrong-secret" }, bearerHeaders()]) {
+    assert.equal((await call("GET", "/api/leo/ui/oauth/flows", headers)).status, 403);
+    assert.equal(
+      (await call("POST", "/api/leo/ui/oauth/providers/openai-codex/logout", headers, "{}")).status,
+      403,
+    );
+  }
+  const ok = await call("GET", "/api/leo/ui/oauth/flows", { "x-leo-ui": "ui-secret-for-test-0123456789" });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.body["flows"], []);
+  assert.equal(process.env["LEO_UI_SECRET"], undefined, "口令不能留在环境里给子进程继承");
+});
+
+function bearerHeaders(): Record<string, string> {
+  return { authorization: `Bearer ${leoLocalKey()}` };
+}

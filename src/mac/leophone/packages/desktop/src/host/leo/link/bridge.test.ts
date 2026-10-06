@@ -117,7 +117,8 @@ async function withBridge(
     appVersion: "test",
     journalDir: path.join(dir, "journals"),
     leoagent: {
-      url: options.leoagentUrl ?? "http://127.0.0.1:9",
+      // 没人听的端口(9 是 fetch 的禁用端口,连都不会去连,不像真的「没在运行」)。
+      url: options.leoagentUrl ?? "http://127.0.0.1:2",
       key: () => "local-key-0123456789",
     },
     ...(options.recentWorkspaces
@@ -706,10 +707,10 @@ test("tasks opened on the Mac desktop show up on the phone and are adopted on fi
         sessions: Record<string, unknown>[];
       };
       assert.equal(again.sessions.filter((s) => s["session_id"] === "desk-1").length, 1);
-      // 没列过的 id 不会被当成桌面任务
+      // 没列过的 id 不会被当成桌面任务:转给 leoagent,它没在运行就是 503(手机对 502/503/504 一视同仁)
       assert.equal(
         (await bridge.handle(req("POST", "/harness/sessions/nope/send", { text: "x" }))).status,
-        502,
+        503,
       );
     },
     { recentWorkspaces: [workspace] },
@@ -1246,5 +1247,31 @@ test("close drains an already queued mode index write before releasing sessions"
     assert.equal(saved[0].mode, "yolo");
     await bridge.close();
     assert.deepEqual(JSON.parse(await readFile(path.join(dir, "journals", "sessions.json"), "utf8")), saved);
+  });
+});
+
+test("full-auto off reports failure when the local leoagent errors, but not when it is simply not running", async () => {
+  const server: Server = createServer((_request, response) => {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ error: { message: "boom" } }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await withBridge(
+      async ({ bridge }) => {
+        const off = await bridge.handle(req("POST", "/harness/full-auto", { enabled: false }, iphone));
+        // 以前一律回 ok:手机以为都关了,leoagent 那边的任务还在免审批地跑。
+        assert.equal(off.status, 502);
+      },
+      { leoagentUrl: `http://127.0.0.1:${port}` },
+    );
+  } finally {
+    server.close();
+  }
+  await withBridge(async ({ bridge }) => {
+    // 默认指向没人听的端口:leoagent 没在运行,没有要切的任务。
+    const off = await bridge.handle(req("POST", "/harness/full-auto", { enabled: false }, iphone));
+    assert.equal(off.status, 200);
   });
 });

@@ -9,7 +9,12 @@ import type {
   ZCodePluginInfo,
   ZCodePluginScope,
 } from "@zcode/shared";
-import { compareDocumentPluginPriority, isPluginCommand, isUserCommand } from "@zcode/shared";
+import {
+  INTERNAL_OFFICIAL_PLUGIN_IDS,
+  compareDocumentPluginPriority,
+  isPluginCommand,
+  isUserCommand,
+} from "@zcode/shared";
 import { pluginSearchMatches } from "@/settings/pluginSearch.js";
 
 function canonicalPluginName(value: string): string {
@@ -37,7 +42,9 @@ export function partitionPluginsForSettings(
   plugins: readonly ZCodePluginInfo[],
   builtInPluginIds: ReadonlySet<string>,
 ): PluginSettingsGroups {
-  const materializedPlugins = plugins.filter((plugin) => plugin.packageStatus !== "missing");
+  const materializedPlugins = plugins.filter(
+    (plugin) => plugin.packageStatus !== "missing" && !INTERNAL_OFFICIAL_PLUGIN_IDS.has(plugin.id),
+  );
   return {
     installed: materializedPlugins.filter((plugin) => !builtInPluginIds.has(plugin.id)),
     builtIn: materializedPlugins

@@ -38,6 +38,10 @@ from .harness import HarnessManager, available_harnesses
 VERSION = "0.2.0"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8646
+# 事件流空闲保活间隔:与 relay_client / Mac 桥接约定的 25 秒一致。
+KEEPALIVE_S = 25.0
+# 收空闲 CLI 的巡检间隔(真正的阈值是 HarnessManager.IDLE_REAP_S)。
+IDLE_REAP_INTERVAL_S = 600.0
 
 
 # 中继转发时由 relay_client / Mac 桥接写上调用方类别(手机改不了这个头)。没带这个头的是直接
@@ -48,9 +52,9 @@ IDENTIFIED_CALLERS = ("master", "iphone", "legacy")
 # [A3] 认不出调用方时 403 的修复办法。只有中继 0.2 起才在转发里带上调用方,手机自己登记
 # 设备钥匙解决不了(钥匙本来就对),所以 fix 固定是 mac_steps:要在 Mac 上做的事。
 DEVICE_NOT_RECOGNIZED_STEPS = [
-    "在运行中继的那台 Mac 上,把中继(relay.py)更新到 0.2 或更新版本并重启中继。",
-    "在这台 Mac 上把 LeoPhoneAgent(或 leoagent)更新到最新版,确认它重新连上了中继。",
-    "回到手机重发这个任务,全自动就会生效。",
+    "在运行中继的那台 Mac 上，把中继（relay.py）更新到 0.2 或更新版本并重启中继。",
+    "在这台 Mac 上把 LeoPhoneAgent（或 leoagent）更新到最新版，确认它重新连上了中继。",
+    "回到手机重发这个任务，全自动就会生效。",
 ]
 
 
@@ -236,7 +240,7 @@ class LeoAgentServer:
         prompt = body.get("prompt")
         full_auto = body.get("full_auto") is True
         if full_auto and not caller_identified(request):
-            return device_not_recognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试")
+            return device_not_recognized("认不出是哪台设备发来的,不能开全自动；按步骤在 Mac 上处理后再试")
         try:
             session = await self.manager.create(
                 harness=harness, cwd=cwd, prompt=prompt, full_auto=full_auto,
@@ -275,14 +279,38 @@ class LeoAgentServer:
             }
         )
         await response.prepare(request)
+        stream = session.subscribe(after_seq=after)
+        pending: Optional[asyncio.Future] = None
         try:
-            async for event in session.subscribe(after_seq=after):
+            while True:
+                if pending is None:
+                    pending = asyncio.ensure_future(stream.__anext__())
+                done, _ = await asyncio.wait({pending}, timeout=KEEPALIVE_S)
+                if not done:
+                    # 空闲时也要写点东西:aiohttp 不会替断开的客户端取消处理协程,
+                    # 不写就发现不了对端已走,订阅队列和会话引用一直挂着。
+                    await response.write(b": keep-alive\n\n")
+                    continue
+                try:
+                    event = pending.result()
+                except StopAsyncIteration:
+                    break
+                finally:
+                    pending = None
                 payload = json.dumps(event, ensure_ascii=False)
                 await response.write(f"data: {payload}\n\n".encode("utf-8"))
         except (ConnectionResetError, asyncio.CancelledError):
             # A client that walked away is normal; the session keeps running
             # and its log keeps growing, so the client can resume by seq.
             pass
+        finally:
+            if pending is not None:
+                pending.cancel()
+                try:
+                    await pending
+                except (asyncio.CancelledError, StopAsyncIteration, Exception):  # noqa: BLE001
+                    pass
+            await stream.aclose()
         return response
 
     async def send(self, request: web.Request) -> web.Response:
@@ -301,12 +329,12 @@ class LeoAgentServer:
         identified = caller_identified(request)
         wanted = body.get("full_auto")
         if wanted is True and not identified:
-            return device_not_recognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试")
+            return device_not_recognized("认不出是哪台设备发来的,不能开全自动；按步骤在 Mac 上处理后再试")
         if isinstance(wanted, bool):
             session.full_auto = wanted
         # 全自动的会话不接认不出身份的消息:否则谁拿到中继 0.1 的通道发一句话,就能免审批地跑命令。
         if session.full_auto and not identified:
-            return device_not_recognized("这个任务是全自动,认不出是哪台设备发来的消息不接;按步骤在 Mac 上处理后再试")
+            return device_not_recognized("这个任务是全自动,认不出是哪台设备发来的消息不接；按步骤在 Mac 上处理后再试")
         phone_session_id = _phone_session_id(body.get("phone_session_id"))
         if phone_session_id:
             session.phone_session_id = phone_session_id
@@ -340,6 +368,9 @@ class LeoAgentServer:
             return web.json_response(
                 {"error": {"message": "No such pending approval"}}, status=409)
         allowed = pending.get("choices") or ["once", "deny"]
+        if choice != "deny" and not caller_identified(request):
+            # 与 Mac 桥接同一条规则:认不出是哪台设备,只能拒绝,不能替人放行命令。
+            return device_not_recognized("认不出是哪台设备,只能拒绝;请在 Mac 上批准,或按步骤升级中继")
         if choice not in allowed:
             return web.json_response(
                 {"error": {"message": f"Invalid choice; expected one of: {', '.join(allowed)}"}},
@@ -399,8 +430,23 @@ class LeoAgentServer:
         # launchctl kickstart -k restarts us with SIGTERM; without this every
         # spawned CLI outlives the daemon as a detached orphan.
         async def _reap(_app: web.Application) -> None:
+            task = _app.get("_idle_reaper")
+            if task is not None:
+                task.cancel()
             await self.manager.shutdown_all()
         app.on_shutdown.append(_reap)
+
+        async def _idle_reaper_loop() -> None:
+            while True:
+                await asyncio.sleep(IDLE_REAP_INTERVAL_S)
+                try:
+                    await self.manager.reap_idle()
+                except Exception:  # noqa: BLE001 - 巡检失败不能拖垮服务
+                    pass
+
+        async def _start_idle_reaper(started: web.Application) -> None:
+            started["_idle_reaper"] = asyncio.get_running_loop().create_task(_idle_reaper_loop())
+        app.on_startup.append(_start_idle_reaper)
         app.router.add_get("/health", self.health)
         app.router.add_get("/v1/capabilities", self.capabilities)
         app.router.add_get("/v1/grok/token", self.grok_token)

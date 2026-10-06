@@ -113,7 +113,7 @@ function isApiKeyProvider(providerId: string): providerId is ApiKeyProviderId {
 export const API_KEY_PROVIDER_HELP: Record<ApiKeyProviderId, { keyUrl: string; hint: string }> = {
   "opencode-go": {
     keyUrl: "https://opencode.ai/auth",
-    hint: "在 OpenCode 控制台订阅 Go 后复制 API Key。请求直接发到 opencode.ai/zen/go,按 Go 会员额度计费。",
+    hint: "在 OpenCode 控制台订阅 Go 后复制 API Key。请求直接发到 opencode.ai/zen/go，按 Go 会员额度计费。",
   },
 };
 
@@ -269,7 +269,7 @@ export async function startOAuthLogin(
   }
   const runtime = await oauthRuntime();
   if (isBlockedProvider(runtime, providerId) || !runtime.getProvider(providerId)) {
-    throw new OAuthRequestError(`不支持用这种方式登录:${providerId}`);
+    throw new OAuthRequestError(`不支持用这种方式登录：${providerId}`);
   }
   const authType = isApiKeyProvider(providerId) ? "api_key" : "oauth";
   const importedKey = options.importFromOpenCodeCli ? readOpenCodeCliKey(providerId) : null;
@@ -288,7 +288,7 @@ export async function startOAuthLogin(
   flows.set(flow.id, flow);
   const timeout = setTimeout(() => {
     if (flow.status === "running") {
-      flow.error = "登录超时(10 分钟没有完成),请重新点登录";
+      flow.error = "登录超时（10 分钟没有完成），请重新点登录";
       flow.abort.abort();
     }
   }, LOGIN_TIMEOUT_MS);

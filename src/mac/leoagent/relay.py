@@ -1351,8 +1351,8 @@ class Relay:
                 elif kind == "event":
                     # [T-leophone-push] Mac 主动上报的关键事件。手机不在线
                     # 时这是唯一的留痕;上限内保最近的。
-                    self._record_event(str(frame.get("machine") or machine.name),
-                                       dict(frame.get("event") or {}))
+                    # 只认这条连接注册时的名字:帧里自报的 machine 能冒充别的 Mac 发审批推送。
+                    self._record_event(machine.name, dict(frame.get("event") or {}))
         finally:
             if machine is not None:
                 if self.machines.get(machine.name) is machine:
@@ -1744,10 +1744,16 @@ class Relay:
         request_id = uuid.uuid4().hex
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         machine.pending[request_id] = fut
-        await machine.ws.send_json({"type": "http", "id": request_id,
-                                    "method": request.method, "path": tail,
-                                    "body": body, "caller": caller.public(),
-                                    "request_id": request.headers.get("X-Leo-Request-Id", "")})
+        try:
+            await machine.ws.send_json({"type": "http", "id": request_id,
+                                        "method": request.method, "path": tail,
+                                        "body": body, "caller": caller.public(),
+                                        "request_id": request.headers.get("X-Leo-Request-Id", "")})
+        except (ConnectionError, RuntimeError) as exc:
+            # Mac 的连接正好半死:不能把待答项留在 pending 里,也不该回 500。
+            machine.pending.pop(request_id, None)
+            return web.json_response(
+                {"error": {"message": f"转发到这台 Mac 失败:{type(exc).__name__}"}}, status=502)
         try:
             frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
         except (asyncio.TimeoutError, ConnectionError):

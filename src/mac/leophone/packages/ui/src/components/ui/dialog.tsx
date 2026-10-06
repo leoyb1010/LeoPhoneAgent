@@ -4,6 +4,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "../lib/utils.js";
 import { Button } from "./button.js";
 import { XIcon } from "lucide-react";
+import { useOptionalZCodeIntl } from "../../i18n/IntlProvider.js";
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -52,6 +53,8 @@ function DialogContent({
   showOverlay?: boolean;
   overlayClassName?: string;
 }) {
+  // 关闭按钮的读屏文字原来写死英文 "Close"；有 Intl 时按界面语言给出。
+  const closeLabel = useOptionalZCodeIntl()?.intl.formatMessage({ id: "common.close" }) ?? "Close";
   return (
     <DialogPortal>
       {showOverlay ? <DialogOverlay className={overlayClassName} /> : null}
@@ -75,7 +78,7 @@ function DialogContent({
               size="icon-sm"
             >
               <XIcon />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{closeLabel}</span>
             </Button>
           </DialogPrimitive.Close>
         )}

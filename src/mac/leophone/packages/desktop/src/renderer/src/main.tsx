@@ -6,7 +6,7 @@ import {
   AppErrorBoundary,
   Root,
   ServerWorkspaceRoot,
-  Button,
+  LeoWhatsNew,
   GlobalDatabaseStartupLoading,
   UpdateStatusWindowRoot,
   ZCodeIntlProvider,
@@ -34,6 +34,12 @@ import type { IServiceAccessor } from "@zcode/services";
 import { createPaperclipWorkspace } from "@zcode/services";
 import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
+import { LocalHostStartupBanner } from "./LocalHostStartupBanner.js";
+import {
+  prepareWorkspaceModeSwitch,
+  resolveWorkspaceMode,
+  type WorkspaceMode,
+} from "./workspaceMode.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
 import { initializeDesktopUserActionTrace } from "./userActionTraceBootstrap.js";
 import { buildRemoteWorkspaceSessionServices } from "./remoteWorkspaceSessionServices.js";
@@ -135,11 +141,24 @@ const initialWorkspaceAbsPath = readStringFlag("initialWorkspacePath");
 const initialWorkspacePurpose = readStringFlag("initialWorkspacePurpose");
 const unavailableWorkspacePath = readStringFlag("unavailableWorkspacePath");
 const windowKind = readStringFlag("windowKind");
-const isServerWorkspace = windowKind !== "update-status" && readStringFlag("workspaceMode") !== "local-recovery";
-function navigateWorkspaceMode(mode: "server" | "local-recovery"): void {
-  const target = new URL(window.location.href);
-  target.searchParams.set("workspaceMode", mode);
-  window.location.replace(target.href);
+function readModeStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+// [leo] 本机工作台是默认;服务器任务(Paperclip)是其中一个入口,切换后记住上次的选择。
+const isServerWorkspace =
+  windowKind !== "update-status" &&
+  resolveWorkspaceMode(
+    new URLSearchParams(window.location.search).get("workspaceMode"),
+    readModeStorage(),
+  ) === "server";
+function switchWorkspaceMode(mode: WorkspaceMode): void {
+  window.location.replace(
+    prepareWorkspaceModeSwitch(mode, window.location.href, readModeStorage()),
+  );
 }
 const initialLocaleFlag = readStringFlag("locale");
 const initialLocale: Locale =
@@ -149,7 +168,10 @@ const initialLocale: Locale =
 let baseServicesForRemoteSessions: IServiceAccessor | null = null;
 const pendingRemoteWorkspaceServicePorts: RemoteWorkspaceServicePortRegistration[] = [];
 
-const desktopPlatform = createDesktopPlatform({ isLocalDevelopmentRuntime });
+const desktopPlatform = createDesktopPlatform({
+  isLocalDevelopmentRuntime,
+  openServerWorkspace: () => switchWorkspaceMode("server"),
+});
 initializeDesktopLocalTtft(desktopPlatform);
 initializeDesktopUserActionTrace({
   platform: desktopPlatform,
@@ -340,11 +362,7 @@ function initializeBusinessRoot(port: MessagePort): void {
         resolveSystemLocale={desktopPlatform.getSystemLocale}
       >
         <StartupReadyNotifier />
-        <div className="flex h-dvh flex-col bg-background [&_[data-desktop-window-frame=true]]:h-full">
-          <div className="flex h-9 shrink-0 items-center justify-end border-b border-border px-3 [app-region:drag]">
-            <Button className="[app-region:no-drag]" variant="ghost" size="sm" onClick={() => navigateWorkspaceMode("server")}>返回服务器工作台</Button>
-          </div>
-          <div className="relative min-h-0 flex-1"><Root
+        <Root
           services={services}
           platform={desktopPlatform}
           isDesktop
@@ -358,29 +376,48 @@ function initializeBusinessRoot(port: MessagePort): void {
             initialWorkspacePurpose === "conversation" ? "conversation" : "project"
           }
           unavailableWorkspacePath={unavailableWorkspacePath}
-        /></div></div>
+        />
       </ZCodeIntlProvider>
     </AppErrorBoundary>,
   );
 }
 
 if (!isServerWorkspace) window.addEventListener("message", handleServicePortMessage);
+else
+  window.addEventListener("message", (event: MessageEvent) => {
+    // 服务器任务视图不接本机业务端口,但本机任务(含手机发起的)完成提示音照常响。
+    if (event.data === InternalChannels.TaskNotificationSound) void playTaskNotificationSound();
+    else if (event.source === window && event.data?.type === InternalChannels.ServicePort)
+      event.ports[0]?.close();
+  });
 if (windowKind !== "update-status" && !isServerWorkspace) {
   renderDatabaseStartup();
   sendStartupControl({ action: "snapshot" });
 }
 
 if (isServerWorkspace && desktopPlatform.paperclip) {
-  // 默认入口不等待 Host 的数据库启动或 ServicePort；只有显式恢复才进入旧业务根。
+  // 服务器任务视图不消费本机业务端口;Host 仍在后台跑手机连接、藏宝阁与定时任务。
   appInitialized = true;
   const paperclipWorkspace = createPaperclipWorkspace(desktopPlatform.paperclip);
   appRoot?.render(
     <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>
-      <ZCodeIntlProvider initialLocale="zh-CN" resolveSystemLocale={desktopPlatform.getSystemLocale}>
+      <ZCodeIntlProvider
+        initialLocale="zh-CN"
+        resolveSystemLocale={desktopPlatform.getSystemLocale}
+      >
         <StartupReadyNotifier />
-        <ServerWorkspaceRoot service={paperclipWorkspace} platform={desktopPlatform}
-          isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}
-          onEnterLocalRecovery={() => navigateWorkspaceMode("local-recovery")} />
+        <ServerWorkspaceRoot
+          service={paperclipWorkspace}
+          platform={desktopPlatform}
+          isMacDesktop={isMacDesktop}
+          isWindowsDesktop={isWindowsDesktop}
+          onReturnToLocal={() => switchWorkspaceMode("local")}
+        />
+        <LocalHostStartupBanner
+          sendControl={sendStartupControl}
+          onOpenLocal={() => switchWorkspaceMode("local")}
+        />
+        <LeoWhatsNew />
       </ZCodeIntlProvider>
     </AppErrorBoundary>,
   );

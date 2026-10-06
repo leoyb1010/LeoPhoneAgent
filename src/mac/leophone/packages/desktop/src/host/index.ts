@@ -2295,6 +2295,13 @@ process.on(
   }),
 );
 
+// 没人接的 Promise 拒绝(比如 setTaskUnread 之类 fire-and-forget 的调用失败)在 Node 默认会升级成
+// uncaughtException,按上面的 onFatal 让整个 Host 连同所有会话、自动化、手机连接一起退出。
+// 这类失败只影响那一次调用:记下来,Host 继续跑。
+process.on("unhandledRejection", (reason) => {
+  logger.error("unhandledRejection (contained):", reason);
+});
+
 parentPort.on("message", async (e: Electron.MessageEvent) => {
   const result = parseHostIncomingMessageEvent(e);
   if (!result.success) {

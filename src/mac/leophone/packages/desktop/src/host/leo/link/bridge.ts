@@ -402,7 +402,7 @@ export class LinkBridge {
     if (session.seq === 0) {
       session.emit({
         event: "session.note",
-        text: `接上了 Mac 上的任务「${task.title || "未命名"}」:之前的对话在 Mac 上,这里从现在开始同步。`,
+        text: `接上了 Mac 上的任务「${task.title || "未命名"}」：之前的对话在 Mac 上，这里从现在开始同步。`,
       });
     }
     void this.saveIndex().catch(() => undefined);
@@ -484,7 +484,7 @@ export class LinkBridge {
     const harness = String(body["harness"] ?? ZCODE) || ZCODE;
     const fullAuto = body["full_auto"] === true;
     if (fullAuto && !mayUseFullAuto(req.caller))
-      return deviceNotRecognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试");
+      return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
     // claude / codex / grok 跑在本机 leoagent:全自动由它直接应答 CLI 的审批;调用方类别一并带过去。
     if (harness !== ZCODE) return this.leoagent.request("POST", "/harness/sessions", req.body, req.caller);
     const phoneSessionId = phoneSessionIdOf(body);
@@ -523,7 +523,7 @@ export class LinkBridge {
         if (req.requestId) throw cause;
         return error(
           502,
-          `Mac 上建任务失败:${cause instanceof Error ? cause.message : String(cause)}`,
+          `Mac 上建任务失败：${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
     }
@@ -539,7 +539,7 @@ export class LinkBridge {
         await session.close().catch(() => undefined);
         return error(
           502,
-          `Mac 上打开任务日志失败:${cause instanceof Error ? cause.message : String(cause)}`,
+          `Mac 上打开任务日志失败：${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
       session.emit({ event: "session.created", harness: ZCODE, cwd, full_auto: fullAuto });
@@ -582,7 +582,7 @@ export class LinkBridge {
     if (typeof body["full_auto"] === "boolean") {
       const wanted = body["full_auto"];
       if (wanted && !mayUseFullAuto(caller))
-        return deviceNotRecognized("认不出是哪台设备发来的,不能开全自动;按步骤在 Mac 上处理后再试");
+        return deviceNotRecognized("认不出是哪台设备发来的，不能开全自动；按步骤在 Mac 上处理后再试");
       // "关"只把全自动任务切回先问我;计划、编辑这类别的模式不动(手机每条消息都会带开关状态)。
       const target = wanted ? "yolo" : session.isFullAuto ? "build" : null;
       if (target) {
@@ -591,7 +591,7 @@ export class LinkBridge {
         } catch (cause) {
           return error(
             502,
-            `切换模式失败:${cause instanceof Error ? cause.message : String(cause)}`,
+            `切换模式失败：${cause instanceof Error ? cause.message : String(cause)}`,
           );
         }
       }
@@ -600,7 +600,7 @@ export class LinkBridge {
     // 否则谁拿到中继 0.1 的通道发一句话,就能让 Mac 免审批地跑命令。
     if (session.isFullAuto && !mayUseFullAuto(caller)) {
       return deviceNotRecognized(
-        "这个任务在 Mac 上是全自动(完全访问)模式,认不出是哪台设备发来的消息不接;在 Mac 上把它切回「先问我」,或按步骤在 Mac 上处理",
+        "这个任务在 Mac 上是全自动（完全访问）模式，认不出是哪台设备发来的消息不接；在 Mac 上把它切回「先问我」，或按步骤在 Mac 上处理",
       );
     }
     const phoneSessionId = phoneSessionIdOf(body);
@@ -644,7 +644,7 @@ export class LinkBridge {
     const result = await session.respond(approvalId, choice as ApprovalChoice, caller);
     if (result === "missing") return error(409, "No such pending approval");
     if (result === "forbidden")
-      return error(403, "认不出是哪台设备,只能拒绝;请在 Mac 上批准,或把中继升级到 0.2");
+      return error(403, "认不出是哪台设备，只能拒绝；请在 Mac 上批准，或把中继升级到 0.2");
     if (result === "undelivered") return error(502, "Approval could not be delivered to the task");
     return { status: 200, body: { ok: true, choice, approval_id: approvalId } };
   }
@@ -661,7 +661,7 @@ export class LinkBridge {
       return this.leoagent.request("POST", pathname, body);
     }
     if (session.status === "running" || session.status === "waiting_for_approval") {
-      return error(409, "任务还在跑:先停止,再清理");
+      return error(409, "任务还在跑：先停止，再清理");
     }
     this.sessions.delete(sessionId);
     await session.close();
@@ -671,7 +671,7 @@ export class LinkBridge {
 
   /** 手机关掉全自动:它发起、还在跑的全自动任务切回「先问我」。 */
   private async fullAutoOff(req: LinkRequest): Promise<LinkResponse> {
-    if (record(req.body)["enabled"] !== false) return error(400, '只支持关闭:{"enabled": false}');
+    if (record(req.body)["enabled"] !== false) return error(400, '只支持关闭：{"enabled": false}');
     const switched: string[] = [];
     for (const session of this.sessions.values()) {
       if (!session.isFullAuto) continue;
@@ -695,6 +695,10 @@ export class LinkBridge {
     const upstream = await this.leoagent.request("POST", "/harness/full-auto", { enabled: false }, req.caller);
     const theirs = upstream.status === 200 ? record(upstream.body)["sessions"] : undefined;
     if (Array.isArray(theirs)) switched.push(...theirs.filter((id): id is string => typeof id === "string"));
+    // leoagent 超时 / 出错时不能回 ok:手机会以为都关了,而那边的任务还在免审批地跑。
+    // 回错误让手机按它的节奏重试(重复关是幂等的);503(没配 leoagent)和 404(老版本)没有可关的。
+    if (![200, 404, 503].includes(upstream.status))
+      return error(502, "Mac 上的任务已切回「先问我」，但本机 leoagent 没确认切回，请重试");
     return { status: 200, body: { ok: true, sessions: switched } };
   }
 }

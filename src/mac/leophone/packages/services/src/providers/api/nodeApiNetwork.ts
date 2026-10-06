@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { rootCertificates } from "node:tls";
 import { Agent, ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
+import { isLeoBlockedHost } from "@zcode/shared/leo-network-guard";
 
 export interface HostApiNetworkOptions {
   httpProxy?: string;
@@ -131,6 +132,11 @@ export function createHostApiNetworkTransport(
       throw new Error("Host API network transport has been disposed");
     }
     const requestUrl = input instanceof Request ? input.url : String(input);
+    // [leo] DNS 层的独立性闸门管不到代理:走 HTTP 代理时目标域名只出现在 CONNECT 里,
+    // 本机根本不解析它。这里按 URL 再拦一次。
+    if (isLeoBlockedHost(safeHostname(requestUrl))) {
+      throw new TypeError(`[leo] ${safeHostname(requestUrl)} 属于官方服务,LeoPhoneAgent 不连接`);
+    }
     const route = resolveHostProxyForUrl(requestUrl, options);
     if (route.kind === "invalid") {
       throw new Error(route.reason);
@@ -249,4 +255,12 @@ async function createDispatcher(
     });
   }
   return new Agent({ connect: ca ? { ca } : undefined });
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }

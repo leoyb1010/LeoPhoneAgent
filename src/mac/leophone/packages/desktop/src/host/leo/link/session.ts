@@ -192,7 +192,7 @@ export class LinkSession {
       });
     } catch (cause) {
       // 没送进内核:写个终态,不然首页和手机上一直显示「运行中」。
-      this.emit({ event: "run.failed", error: `发送失败:${cause instanceof Error ? cause.message : String(cause)}` });
+      this.emit({ event: "run.failed", error: `发送失败：${cause instanceof Error ? cause.message : String(cause)}` });
       throw cause;
     }
   }
@@ -266,7 +266,7 @@ export class LinkSession {
         void this.deps.taskService
           .respondElicitation({ taskId: this.sessionId, workspacePath: this.cwd, requestId: event.requestId, action: "cancel" })
           .catch((error: unknown) => this.deps.logger.warn("[leo/link] elicitation cancel failed", { error: String(error) }));
-        this.emit({ event: "session.note", text: `Mac 上的任务问了一个问题,手机端暂时答不了,已跳过:${event.message.slice(0, 120)}` });
+        this.emit({ event: "session.note", text: `Mac 上的任务问了一个问题，手机端暂时答不了，已跳过：${event.message.slice(0, 120)}` });
         return;
       default:
         for (const mapped of this.mapper.map(event)) this.emit(mapped);

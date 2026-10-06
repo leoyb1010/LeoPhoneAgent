@@ -29,6 +29,14 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
   // bootstrap 的「Settings 默认启用集合与 CLI 的官方插件声明一致」单测机械对照两者。
 ]);
 
+/**
+ * [leo] 只供其它官方插件使用的内部宿主,不对用户展示(设置页插件列表与插件市场都不列出)。
+ * 它仍按 DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS 默认启用,浏览器操作依赖它。
+ */
+export const INTERNAL_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set([
+  "node-repl-host@zcode-plugins-official",
+]);
+
 export const DEFAULT_PLUGIN_MARKETPLACES: DefaultPluginMarketplace[] = [
   {
     // ZCode 官方唯一市场：本地 seed 分片与 CDN 分片在 Agent storage 内合并。

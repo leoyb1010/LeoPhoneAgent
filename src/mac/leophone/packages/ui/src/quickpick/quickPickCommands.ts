@@ -63,6 +63,8 @@ interface QuickPickCommandHandlers {
   openTerminalTab: () => void;
   openBrowserTab: () => void;
   openReviewTab: () => void;
+  /** [leo] 切到服务器任务(Paperclip);只有桌面端提供。 */
+  openServerWorkspace?: () => void;
 }
 
 interface CreateQuickPickCommandsOptions {
@@ -226,6 +228,17 @@ export function createQuickPickCommands({
       run: handlers.openMcpSettings,
     },
   ];
+
+  if (handlers.openServerWorkspace) {
+    commands.push({
+      id: "open-server-tasks",
+      sectionId: "navigation",
+      titleId: "workspace.openServerTasks",
+      icon: "community",
+      keywords: ["server", "paperclip", "team", "服务器", "服务器任务", "团队"],
+      run: handlers.openServerWorkspace,
+    });
+  }
 
   // [leo] 上游在这里追加「反馈 / 用户社群 / 产品文档 / 登录·登出」命令，
   // 它们都连官方服务或官方账号，LeoPhoneAgent 不提供，命令一并去掉。

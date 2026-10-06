@@ -2,8 +2,9 @@
  * [leo] 订阅账号登录页。由本机接口直接提供(http://127.0.0.1:38473/leo/oauth),
  * 在系统浏览器里打开 —— 反正授权流程本来就要跳浏览器。
  *
- * 页面的接口调用都带 `X-Leo-UI: 1`:浏览器跨站请求带不了自定义头(会先发预检,
- * 我们不回 CORS 放行),所以别的网站没法冒充这个页面去发起登录或退出。
+ * 页面的接口调用都在 `X-Leo-UI` 里带本次启动的口令:应用打开页面时放在 URL 片段 `#t=…` 里,
+ * 页面读出后存进 sessionStorage 并从地址栏抹掉。跨站请求带自定义头会先发预检、被拒;
+ * 本机别的用户或 App 没有口令,也发不了登录或退出。
  * 凭据从不经过这个页面,它只能看到「哪家登了、有几个模型」。
  */
 export const OAUTH_PAGE_HTML = `<!doctype html>
@@ -43,13 +44,21 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
 <body>
 <main>
   <h1>订阅账号登录</h1>
-  <p class="lead">用你已有的订阅(ChatGPT、GitHub Copilot、OpenCode Go 等)驱动 LeoPhoneAgent。凭据只存在这台 Mac 的 ~/.leoagent/oauth,请求直接发到各家官方接口,中间没有别的服务。登录后回到 LeoPhoneAgent,在模型选择里找「订阅账号」即可。</p>
-  <p class="lead">Claude 订阅不在这里:Anthropic 只允许在官方 Claude Code 里用订阅登录。要用 Claude,请在「模型供应商」里填 API Key,或在手机上远程开这台 Mac 上你自己登录的官方 claude CLI。GitHub Copilot 登录时会替你开启 Copilot 的模型使用策略。</p>
+  <p class="lead">用你已有的订阅（ChatGPT、GitHub Copilot、OpenCode Go 等）驱动 LeoPhoneAgent。凭据只存在这台 Mac 的 ~/.leoagent/oauth，请求直接发到各家官方接口，中间没有别的服务。登录后回到 LeoPhoneAgent，在模型选择里找「订阅账号」即可。</p>
+  <p class="lead">Claude 订阅不在这里：Anthropic 只允许在官方 Claude Code 里用订阅登录。要用 Claude，请在「模型供应商」里填 API Key，或在手机上远程开这台 Mac 上你自己登录的官方 claude CLI。GitHub Copilot 登录时会替你开启 Copilot 的模型使用策略。</p>
   <div id="list"><p class="muted">正在读取…</p></div>
   <div id="flow"></div>
 </main>
 <script>
-const H = { "content-type": "application/json", "x-leo-ui": "1" };
+const TOKEN = (() => {
+  const fromHash = new URLSearchParams(location.hash.slice(1)).get("t");
+  try {
+    if (fromHash) sessionStorage.setItem("leo-ui-token", fromHash);
+    return fromHash || sessionStorage.getItem("leo-ui-token") || "";
+  } catch { return fromHash || ""; }
+  finally { if (location.hash) history.replaceState(null, "", location.pathname); }
+})();
+const H = { "content-type": "application/json", "x-leo-ui": TOKEN };
 const api = (path, init = {}) => fetch("/api/leo/ui/oauth" + path, { ...init, headers: { ...H, ...(init.headers || {}) } }).then(async (r) => {
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.error || r.statusText);
@@ -106,7 +115,7 @@ async function startLogin(providerId, importFromOpenCodeCli = false) {
   }
 }
 
-// 页面刷新前留着没走完的登录:接着显示,能继续也能取消。
+// 页面刷新前留着没走完的登录：接着显示，能继续也能取消。
 async function resumeFlow() {
   const { flows } = await api("/flows").catch(() => ({ flows: [] }));
   if (flows && flows.length) watchFlow(flows[flows.length - 1].id);
@@ -118,8 +127,8 @@ async function pollFlow(flowId) {
   if (!flow) { box.innerHTML = ""; clearInterval(polling); return; }
   const lines = [];
   for (const e of flow.events) {
-    if (e.url) lines.push(\`<p>在浏览器里完成授权:<br><a href="\${esc(e.url)}" target="_blank" rel="noopener">\${esc(e.url)}</a></p>\`);
-    if (e.userCode || e.user_code) lines.push(\`<p>输入这个码:</p><div class="code">\${esc(e.userCode || e.user_code)}</div>\`);
+    if (e.url) lines.push(\`<p>在浏览器里完成授权：<br><a href="\${esc(e.url)}" target="_blank" rel="noopener">\${esc(e.url)}</a></p>\`);
+    if (e.userCode || e.user_code) lines.push(\`<p>输入这个码：</p><div class="code">\${esc(e.userCode || e.user_code)}</div>\`);
     if (e.verificationUri || e.verification_uri) lines.push(\`<p><a href="\${esc(e.verificationUri || e.verification_uri)}" target="_blank" rel="noopener">打开验证页面</a></p>\`);
     if (e.instructions) lines.push(\`<p class="muted">\${esc(e.instructions)}</p>\`);
     if (e.message && !e.url) lines.push(\`<p class="muted">\${esc(e.message)}</p>\`);
@@ -131,8 +140,8 @@ async function pollFlow(flowId) {
   } else if (flow.prompt) {
     promptHtml = \`<p>\${esc(flow.prompt.message)}</p><input id="answer" type="\${flow.prompt.type === "secret" ? "password" : "text"}" placeholder="\${esc(flow.prompt.placeholder || "")}" /><button class="primary" id="send">提交</button>\`;
   }
-  const status = flow.status === "done" ? '<p style="color:var(--ok)">登录成功。回到 LeoPhoneAgent,模型选择里已经能看到这家的模型。</p>'
-    : flow.status === "error" ? \`<p class="err">登录失败:\${esc(flow.error)}</p>\`
+  const status = flow.status === "done" ? '<p style="color:var(--ok)">登录成功。回到 LeoPhoneAgent，模型选择里已经能看到这家的模型。</p>'
+    : flow.status === "error" ? \`<p class="err">登录失败：\${esc(flow.error)}</p>\`
     : flow.status === "cancelled" ? '<p class="muted">已取消。</p>' : "";
   const hadFocus = document.activeElement && document.activeElement.id === "answer";
   const typed = hadFocus ? document.getElementById("answer").value : "";
@@ -152,8 +161,9 @@ async function pollFlow(flowId) {
   if (flow.status !== "running") { clearInterval(polling); renderList(); }
 }
 
-renderList().catch((e) => { document.getElementById("list").innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
-resumeFlow();
+if (!TOKEN) document.getElementById("list").innerHTML = '<p class="err">请从 LeoPhoneAgent 里点「订阅账号登录」打开这个页面（应用重启后要重新打开）。</p>';
+else renderList().catch((e) => { document.getElementById("list").innerHTML = '<p class="err">' + esc(e.message === "forbidden" ? "这个页面已失效（应用重启过），请回到 LeoPhoneAgent 重新打开订阅账号登录。" : e.message) + "</p>"; });
+if (TOKEN) resumeFlow();
 </script>
 </body>
 </html>`;

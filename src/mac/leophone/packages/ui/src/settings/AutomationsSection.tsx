@@ -1978,7 +1978,8 @@ export function AutomationsSection({
           ) : null}
 
           {/* Scheduled task template：Client Scenes 候选目录；点击只预填新建整页。闲时任务 tab 不显示。 */}
-          {showScheduledTemplates ? (
+          {/* [leo] 模板来自官方服务端,这里拿不到;空列表时整块不出现,别留一个永远「无可用模板」的空框。 */}
+          {showScheduledTemplates && automationTemplates.scheduled.length > 0 ? (
             <section
               data-automations-scheduled-templates
               aria-busy={automationTemplates.loading}

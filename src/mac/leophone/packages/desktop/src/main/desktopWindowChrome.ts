@@ -31,6 +31,7 @@ import {
   resolveDesktopZoomLevelFromFactor,
 } from "./desktopZoom.js";
 import { resolveDesktopWindowChromeState } from "./desktopWindowChromeState.js";
+import { externalUrlForWindowOpen, isSameAppDocument } from "./mainWindowNavigationPolicy.js";
 import {
   MIN_DESKTOP_WINDOW_HEIGHT,
   MIN_DESKTOP_WINDOW_WIDTH,
@@ -591,6 +592,22 @@ export function createBrowserWindow(options: {
       // 将 deviceMid 透传给 preload，供 renderer 在 React 渲染前同步读取
       additionalArguments: [`--device-id=${options.deviceMid ?? ""}`],
     },
+  });
+
+  // 主窗口带完整 preload:只许在同一份应用页面里换查询参数(切工作台),拖进来的文件、页面里的链接
+  // 都不能把它导航走;window.open 不开继承 preload 的子窗口,http(s) 交给系统浏览器。
+  win.webContents.on("will-navigate", (event, url) => {
+    if (isSameAppDocument(win.webContents.getURL(), url)) return;
+    event.preventDefault();
+    options.logger.warn("[window] blocked main window navigation", url.slice(0, 200));
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const external = externalUrlForWindowOpen(url);
+    if (external)
+      void Promise.resolve(shell.openExternal(external)).catch((error: unknown) =>
+        options.logger.warn("[window] openExternal failed", String(error)),
+      );
+    return { action: "deny" };
   });
 
   // 缩放命令原本只改当前运行窗口，没有在重启后恢复。

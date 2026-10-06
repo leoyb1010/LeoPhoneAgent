@@ -327,7 +327,11 @@ export class PaperclipWorkspace implements IPaperclipWorkspace {
     id: string,
     receipt?: PaperclipStoredReceipt,
   ): Promise<void> {
-    const preferences = updateReceipt(this.preferences, identity, id, receipt);
+    // 以磁盘上最新的回执为底再改这一条:多个服务器窗口各持一份 preferences,
+    // 直接整份写回会抹掉别的窗口记下的「待核对」回执,解除对重复写入的阻挡。
+    const latest = await this.port.getPreferences().catch(() => null);
+    const base = latest ? { ...this.preferences, receipts: latest.receipts } : this.preferences;
+    const preferences = updateReceipt(base, identity, id, receipt);
     await this.port.setPreferences(preferences);
     this.preferences = { ...this.preferences, receipts: preferences.receipts };
   }

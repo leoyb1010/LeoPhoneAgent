@@ -2,7 +2,8 @@
  * [leo] LeoPhoneAgent 皮肤层 —— 安静工作台。
  *
  * 只改变量和几个稳定钩子(data-*、上游已有的语义 class),不改上游组件源码,
- * 同步上游时这里基本不冲突。颜色与鸿蒙端同一套青绿(浅 #2E8B8B / 深 #4DD9D9),中性色偏暖。
+ * 同步上游时这里基本不冲突。强调色与 iOS 1.57 统一的青绿一致(浅 #2A8282 / 深 #2E9C9C,
+ * 白色图标/文字压在上面都清楚),中性色偏暖。
  * 全部规则挂在 html[data-leo-skin] 下;localStorage["leo.skin"] = "off" 即整层关闭(见 leoSkin.ts)。
  */
 
@@ -24,10 +25,10 @@ html[data-leo-skin] {
   --leo-dur-4: 350ms;
 }
 
-/* ── 深色:暖石墨 + 青绿(与鸿蒙端同一个 #4DD9D9) ───────────────── */
+/* ── 深色:暖石墨 + 青绿(与 iOS 同一个 #2E9C9C) ───────────────── */
 html[data-leo-skin].theme-zai-dark {
-  --leo-brand: #4dd9d9;
-  --leo-brand-soft: rgba(77, 217, 217, 0.12);
+  --leo-brand: #2e9c9c;
+  --leo-brand-soft: rgba(46, 156, 156, 0.14);
   --leo-attention: #f0b86e;
   --leo-mark-from: #a8f1e2;
   --leo-mark-to: #4dd9d9;
@@ -68,21 +69,21 @@ html[data-leo-skin].theme-zai-dark {
   --color-foreground-inverse: #0e0d0c;
   --color-primary: #efebe5;
   --color-primary-foreground: #151413;
-  --color-accent: rgba(77, 217, 217, 0.12);
-  --color-input-border-focused: rgba(77, 217, 217, 0.42);
-  --color-interaction-ask-surface: rgba(77, 217, 217, 0.1);
+  --color-accent: rgba(46, 156, 156, 0.16);
+  --color-input-border-focused: rgba(46, 156, 156, 0.6);
+  --color-interaction-ask-surface: rgba(46, 156, 156, 0.12);
   --color-interaction-ask-foreground: #8ee8e8;
-  --color-terminal-cursor: #4dd9d9;
-  --color-terminal-selection: rgba(77, 217, 217, 0.24);
+  --color-terminal-cursor: #2e9c9c;
+  --color-terminal-selection: rgba(46, 156, 156, 0.28);
 }
 
-/* ── 浅色:暖纸白 + 青绿(与鸿蒙端同一个 #2E8B8B) ─────────────── */
+/* ── 浅色:暖纸白 + 青绿(与 iOS 同一个 #2A8282) ─────────────── */
 html[data-leo-skin].theme-zai-light {
-  --leo-brand: #2e8b8b;
-  --leo-brand-soft: rgba(46, 139, 139, 0.1);
+  --leo-brand: #2a8282;
+  --leo-brand-soft: rgba(42, 130, 130, 0.1);
   --leo-attention: #b86e12;
   --leo-mark-from: #3cc9b4;
-  --leo-mark-to: #2e8b8b;
+  --leo-mark-to: #2a8282;
   --leo-shadow-composer:
     0 1px 2px rgba(40, 32, 20, 0.04), 0 12px 30px -16px rgba(40, 32, 20, 0.22);
   --leo-shadow-card: 0 18px 44px -22px rgba(40, 32, 20, 0.28);
@@ -117,11 +118,11 @@ html[data-leo-skin].theme-zai-light {
   --color-primary: #1d1b19;
   --color-primary-foreground: #ffffff;
   --color-accent: #e3f1f0;
-  --color-input-border-focused: rgba(46, 139, 139, 0.42);
+  --color-input-border-focused: rgba(42, 130, 130, 0.42);
   --color-interaction-ask-surface: #e3f1f0;
   --color-interaction-ask-foreground: #1f6b6b;
-  --color-terminal-cursor: #2e8b8b;
-  --color-terminal-selection: rgba(46, 139, 139, 0.2);
+  --color-terminal-cursor: #2a8282;
+  --color-terminal-selection: rgba(42, 130, 130, 0.2);
 }
 
 /* ── 输入卡:一层柔和投影,聚焦时描边转青 ───────────────────── */
@@ -235,14 +236,14 @@ html[data-leo-skin] [data-leo-approval] {
   background: var(--leo-attention, #e0a24a);
 }
 .leo-status-dot[data-state="running"] {
-  background: var(--leo-brand, #2e8b8b);
+  background: var(--leo-brand, #2a8282);
   animation: leo-breathe 1.8s ease-in-out infinite;
 }
 .leo-status-dot[data-state="error"] {
   background: var(--color-destructive);
 }
 .leo-status-dot[data-state="done"] {
-  background: color-mix(in oklab, var(--leo-brand, #2e8b8b) 55%, transparent);
+  background: color-mix(in oklab, var(--leo-brand, #2a8282) 55%, transparent);
 }
 
 @keyframes leo-breathe {
@@ -300,5 +301,27 @@ html[data-leo-skin] [data-leo-approval] {
     animation: none;
     background-size: 100% 100%;
     opacity: 0.6;
+  }
+}
+
+/* ── 可滚动区域的底边渐隐：只在还没滚到底时出现，提示下面还有内容 ───────
+   用滚动驱动动画：不可滚动时时间线无效，--leo-fade-size 保持 0，不产生遮罩。 */
+@property --leo-fade-size {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.leo-scroll-fade {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--leo-fade-size)), transparent);
+  animation: leo-scroll-fade linear both;
+  animation-timeline: scroll(self);
+}
+@keyframes leo-scroll-fade {
+  from,
+  96% {
+    --leo-fade-size: 32px;
+  }
+  to {
+    --leo-fade-size: 0px;
   }
 }

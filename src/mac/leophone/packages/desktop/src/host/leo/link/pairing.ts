@@ -134,9 +134,9 @@ export async function createPairingCode(args: {
       continue;
     }
     if (res.status === 404 || res.status === 405) {
-      throw new Error("中继版本太旧,还不支持扫码配对:把中继升级到 0.2 后再试");
+      throw new Error("中继版本太旧，还不支持扫码配对：把中继升级到 0.2 后再试");
     }
-    if (res.status < 200 || res.status >= 300) throw new Error(`中继没有签发配对码(HTTP ${res.status})`);
+    if (res.status < 200 || res.status >= 300) throw new Error(`中继没有签发配对码（HTTP ${res.status}）`);
     const token = typeof res.body["token"] === "string" ? res.body["token"] : "";
     const exp = Number(res.body["exp"] ?? 0);
     if (!token || !Number.isFinite(exp) || exp <= 0) throw new Error("中继返回的配对码不完整");
@@ -144,7 +144,7 @@ export async function createPairingCode(args: {
     const apiRoot = `${base}/relay/api`;
     return { payload: encodePairPayload({ apiRoot, machine, join: token, exp }), machine, exp, apiRoot };
   }
-  throw new Error(rejected ? "中继不认这台 Mac 的钥匙,签发不了配对码" : "这台 Mac 还没有中继钥匙");
+  throw new Error(rejected ? "中继不认这台 Mac 的钥匙，签发不了配对码" : "这台 Mac 还没有中继钥匙");
 }
 
 /** 从二维码整串里取出一次性码;格式不对返回空串。 */
@@ -173,7 +173,7 @@ export async function revokePairingCode(args: {
     if (res.status === 401 || res.status === 403) continue;
     // 撤销失败不能伪装成成功，否则换码会留下仍可兑换的旧凭据。
     if (res.status === 404 || (res.status >= 200 && res.status < 300)) return;
-    throw new Error(`中继未撤销配对码(HTTP ${res.status})`);
+    throw new Error(`中继未撤销配对码（HTTP ${res.status}）`);
   }
   throw new Error("中继不认这台 Mac 的钥匙，未能撤销配对码");
 }

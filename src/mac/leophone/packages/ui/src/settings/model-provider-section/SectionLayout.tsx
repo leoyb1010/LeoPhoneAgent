@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
-import { usePlatform } from "@/hooks/usePlatform.js";
-import { LEO_OAUTH_PAGE_URL } from "@/leo/leoLocal.js";
+import { openLeoOAuthPage } from "@/leo/leoLocal.js";
 import type { ModelProviderNavGroup } from "@/settings/model-provider-section/constants.js";
 import { ModelProviderSectionNavigation } from "@/settings/model-provider-section/Navigation.js";
 import { ProviderDetailFeedbackBoundary } from "@/settings/model-provider-section/ProviderDetailFeedback.js";
@@ -48,7 +47,6 @@ export function ModelProviderSectionLayout({
   reorderableProviderIds,
   children,
 }: ModelProviderSectionLayoutProps) {
-  const platform = usePlatform();
   const refreshButtonLoading = shouldShowModelProviderRefreshLoading({
     presetLoading,
     customLoading,
@@ -74,12 +72,12 @@ export function ModelProviderSectionLayout({
           type="button"
           variant="outline"
           className="rounded-lg"
-          onClick={() => platform.openExternal(LEO_OAUTH_PAGE_URL)}
+          onClick={() => void openLeoOAuthPage()}
         >
-          订阅账号登录(ChatGPT / Copilot / OpenCode Go)
+          订阅账号登录（ChatGPT / Copilot / OpenCode Go）
         </Button>
         <span className="text-ui-sm text-foreground-subtle">
-          在浏览器里完成授权;登录后模型出现在「订阅账号」供应商下,凭据只存本机。
+          在浏览器里完成授权；登录后模型出现在「订阅账号」供应商下，凭据只存本机。
         </span>
       </div>
 

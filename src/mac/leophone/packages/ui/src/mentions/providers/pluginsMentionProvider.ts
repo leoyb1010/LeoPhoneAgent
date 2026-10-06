@@ -15,6 +15,13 @@ import { usePluginStoreOrder } from "@/hooks/usePluginStoreOrder.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
+// [leo] node_repl 宿主只给 Browser Use / Computer Use 提供运行时，插件说明自己写着
+// "Not user-facing"（见 shared/plugin-marketplaces.ts）；过去它照样出现在「+ / @」菜单里，
+// 显示一段英文内部说明，用户点了也没有用。
+const HIDDEN_RUNTIME_PLUGIN_IDS: ReadonlySet<string> = new Set([
+  "node-repl-host@zcode-plugins-official",
+]);
+
 interface PluginMentionLabels {
   conflictReason: string;
 }
@@ -59,7 +66,7 @@ function mapPluginCatalogToMentionItemsForTest(
         ]
       : entries;
   return sorted
-    .filter((entry) => entry.enabled)
+    .filter((entry) => entry.enabled && !HIDDEN_RUNTIME_PLUGIN_IDS.has(entry.pluginId))
     .map((entry) => {
       const conflicted = entry.conflictingPluginIds.length > 0;
       return {

@@ -5,7 +5,8 @@
 import type { ContextSection } from "../types.js";
 import { estimateTokens } from "../utils.js";
 
-const CLI_PREFIX_PROMPT = "You are ZCode, an interactive coding agent";
+// [leo] 产品身份是 LeoPhoneAgent;这一行之外的系统提示词与上游一致。
+const CLI_PREFIX_PROMPT = "You are LeoPhoneAgent, an interactive coding agent";
 
 export function buildCliPrefixSection(): ContextSection {
   const content = CLI_PREFIX_PROMPT;

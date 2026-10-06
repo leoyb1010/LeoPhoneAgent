@@ -530,6 +530,8 @@ export type CuaOsSupport =
 export interface IPlatformService {
   /** 原生服务器工作台的受限网络、登录与非敏感配置能力。 */
   paperclip?: NativePaperclipPort;
+  /** [leo] 从本机工作台切到服务器任务(Paperclip)视图;只有桌面端提供。 */
+  openServerWorkspace?: () => void;
   /** 当前平台的文件选择框是否能返回 agent 可访问的本地绝对路径 */
   canSelectFilePath?: boolean;
 

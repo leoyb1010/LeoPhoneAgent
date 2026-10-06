@@ -1,11 +1,22 @@
 import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 
+type OAuthOpenResult = { ok: true } | { ok: false; error: string };
+
 /**
- * [leo] 本机 Leo 服务(host 进程里的 127.0.0.1 小服务)的入口地址。
- * 订阅账号(ChatGPT / Copilot / OpenCode Go 等)登录页在系统浏览器里打开,凭据只存在本机 ~/.leoagent/oauth。
+ * [leo] 订阅账号(ChatGPT / Copilot / OpenCode Go 等)登录页:由本机 Leo 服务提供,在系统浏览器里打开,
+ * 凭据只存在本机 ~/.leoagent/oauth。地址由主进程拼:端口按实际配置,并带上本次启动的口令
+ * (登录 / 退出接口只认它);界面里不写死地址。
  */
-export const LEO_LOCAL_ORIGIN = "http://127.0.0.1:38473";
-export const LEO_OAUTH_PAGE_URL = `${LEO_LOCAL_ORIGIN}/leo/oauth`;
+export async function openLeoOAuthPage(): Promise<void> {
+  const bridge = (window as unknown as { leoLink?: { openOAuthPage?: () => Promise<OAuthOpenResult> } })
+    .leoLink;
+  if (!bridge?.openOAuthPage) return;
+  const result = await bridge.openOAuthPage().catch((error: unknown) => ({
+    ok: false as const,
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  if (!result.ok) window.alert(`打不开订阅账号登录页：${result.error}`);
+}
 
 const OPEN_MODEL_SETTINGS_AFTER_WELCOME_KEY = "leo.openModelSettingsAfterWelcome";
 

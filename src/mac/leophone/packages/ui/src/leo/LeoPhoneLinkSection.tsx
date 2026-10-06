@@ -147,7 +147,7 @@ function LeoPhoneLinkSectionBody({
   const expired = code !== null && remaining === 0;
   const ready = Boolean(!statusError && status?.running && status.connected);
   const relayTooOld = ready && status?.pairing === "unsupported";
-  const statusLine = statusError ? `读不到连接状态(${statusError})` : describeStatus(status);
+  const statusLine = statusError ? `读不到连接状态（${statusError}）` : describeStatus(status);
 
   return (
     <section className={cn("rounded-xl border border-border bg-card p-4", className)}>
@@ -183,7 +183,7 @@ function LeoPhoneLinkSectionBody({
           <div className="min-w-0 space-y-2 text-ui-caption text-foreground-subtle">
             <p className="text-ui-base text-foreground">用手机扫这个码</p>
             <p>
-              手机上打开 LeoPhoneAgent → 设置 → 远程机器 → 扫码添加机器。每台手机领到自己的钥匙,
+              手机上打开 LeoPhoneAgent → 设置 → 远程机器 → 扫码添加机器。每台手机领到自己的钥匙，
               丢了一台不影响其他。
             </p>
             <p className="tabular-nums">{formatRemaining(remaining)} 后失效 · 只能用一次</p>
@@ -213,11 +213,11 @@ function LeoPhoneLinkSectionBody({
             )}
           >
             {pending ? <RefreshCw className="size-3.5 motion-safe:animate-spin" /> : null}
-            {relayTooOld ? "中继待升级" : expired ? "码已过期,再生成一个" : "扫码连接手机"}
+            {relayTooOld ? "中继待升级" : expired ? "码已过期，再生成一个" : "扫码连接手机"}
           </button>
           <span className="text-ui-caption text-foreground-subtlest">
             {relayTooOld
-              ? "连着的中继还是旧版,升级到 0.2 后才能扫码加手机"
+              ? "连着的中继还是旧版，升级到 0.2 后才能扫码加手机"
               : (setupHint(status) ?? "不用再把钥匙抄到手机上")}
           </span>
         </div>
@@ -251,16 +251,16 @@ function describeStatus(status: LinkStatus | null): string {
     const version = status.relayVersion ? ` · 中继 ${status.relayVersion}` : "";
     return `${status.machine} 已连上中继${version}`;
   }
-  return status.lastError ? `正在重连中继(${status.lastError})` : "正在连接中继…";
+  return status.lastError ? `正在重连中继（${status.lastError}）` : "正在连接中继…";
 }
 
 /** 连接面板不能是死胡同:没配好时告诉用户下一步在哪做。 */
 function setupHint(status: LinkStatus | null): string | null {
   if (!status) return null;
   if (!status.configured)
-    return '在 ~/.leoagent/relay.json 写入中继地址和钥匙({"url","key"}),保存后 15 秒内自动连上';
+    return '在 ~/.leoagent/relay.json 写入中继地址和钥匙（{"url","key"}），保存后 15 秒内自动连上';
   if (!status.enabled)
-    return "运行 src/mac/leophone/scripts/leo-link-switch.sh 打开手机连接,不用重启 App";
+    return "运行 src/mac/leophone/scripts/leo-link-switch.sh 打开手机连接，不用重启 App";
   return null;
 }
 

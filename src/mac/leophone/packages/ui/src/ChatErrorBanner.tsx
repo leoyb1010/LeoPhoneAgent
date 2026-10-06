@@ -51,6 +51,13 @@ const LOCALIZED_ERROR_CODES = new Set([
   "ZCODE_BIGMODEL_TEAM_PLAN_MEMBER_REQUIRED",
 ]);
 
+const GENERIC_MODEL_FAILURE_MESSAGES: Record<string, string> = {
+  "Model request failed.": "chat.error.modelRequestFailed",
+  "Network connection failed for the provider request.": "chat.error.modelNetworkFailed",
+  "Proxy connection failed for the provider request.": "chat.error.modelProxyFailed",
+  "Provider marked the model request as retryable.": "chat.error.modelRetryable",
+};
+
 const MODEL_CONFIG_MISSING_CODES = new Set([
   "model_config_missing",
   "MODEL_CONFIG_MISSING",
@@ -82,6 +89,13 @@ export function resolveChatErrorBannerDisplayMessage(
 
   if (isSuspiciousEmptyModelResultMessage(error.message)) {
     return intl.formatMessage({ id: "zcode.error.modelSuspiciousEmpty" });
+  }
+
+  // [leo] Agent 的模型失败分类只给英文兜底句（failure-classifier.ts），中文界面直接露出
+  // "Model request failed."。按稳定 code + 分类句本地化；带具体原因的消息保持原文，详情里仍可复制完整报错。
+  if (error.code === "model_request_failed") {
+    const messageId = GENERIC_MODEL_FAILURE_MESSAGES[error.message.trim()];
+    if (messageId) return intl.formatMessage({ id: messageId });
   }
 
   return error.code && LOCALIZED_ERROR_CODES.has(error.code)

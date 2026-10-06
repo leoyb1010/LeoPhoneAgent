@@ -41,7 +41,11 @@ export class LeoagentForwarder {
       }
       return { status: res.status, body: payload };
     } catch (cause) {
-      return failure(502, `本机 leoagent 不可用:${cause instanceof Error ? cause.message : String(cause)}`);
+      // 端口没人听:leoagent 没在运行,上面也就没有会话。和「未配置」一样回 503,调用方能据此区分
+      // 「确定没有」和「超时 / 出错、状态不明」(502)。
+      if ((cause as { cause?: { code?: unknown } } | null)?.cause?.code === "ECONNREFUSED")
+        return failure(503, "本机 leoagent 没在运行");
+      return failure(502, `本机 leoagent 不可用：${cause instanceof Error ? cause.message : String(cause)}`);
     }
   }
 

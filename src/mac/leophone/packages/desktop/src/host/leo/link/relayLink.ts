@@ -97,6 +97,11 @@ export class RelayLink {
   private revocations: Promise<void> = Promise.resolve();
   /** 中继拒了存着的机器钥匙;领到新钥匙前改用注册钥匙。 */
   private machineKeyRejected = false;
+  /**
+   * 重连退避(秒)。runOnce 只会以断线结束(总是 reject),所以不能靠「runOnce 成功」来复位:
+   * 收到 registered 才算连上过,在那里复位;否则断几次后每次中继重启 Mac 都要离线最长 30 秒。
+   */
+  private reconnectBackoffS = 1;
   private readonly outbox: Record<string, unknown>[] = [];
   private readonly streamAborts = new Map<string, AbortController>();
   private readonly streamCallers = new Map<string, string | undefined>();
@@ -161,11 +166,9 @@ export class RelayLink {
   }
 
   private async runForever(): Promise<void> {
-    let backoff = 1;
     while (!this.stopped) {
       try {
         await this.runOnce();
-        backoff = 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.state.lastError = message;
@@ -174,13 +177,15 @@ export class RelayLink {
       }
       this.state.connected = false;
       if (this.stopped) break;
-      await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
-      backoff = Math.min(backoff * 2, 30);
+      await new Promise((resolve) => setTimeout(resolve, this.reconnectBackoffS * 1000));
+      this.reconnectBackoffS = Math.min(this.reconnectBackoffS * 2, 30);
     }
   }
 
   private async runOnce(): Promise<void> {
     const machineKey = this.machineKeyRejected ? null : await this.machineKeys.get();
+    // 取钥匙要调 security 命令行,期间可能已被 stop():不能再连一条游离的同名连接去和新桥接互踢。
+    if (this.stopped) return;
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.config.wsUrl, {
         handshakeTimeout: 15_000,
@@ -210,6 +215,10 @@ export class RelayLink {
       };
 
       ws.on("open", () => {
+        if (this.stopped) {
+          finish();
+          return;
+        }
         ws.send(
           JSON.stringify({
             type: "register",
@@ -262,6 +271,7 @@ export class RelayLink {
             });
             this.state.connected = true;
             this.state.connectedAt = Date.now();
+            this.reconnectBackoffS = 1;
             this.state.relayVersion =
               typeof frame["version"] === "string" ? frame["version"] : "0.1";
             // 0.2 起回执带 version,并且每个请求都附调用方:从此认不出身份的请求按旧版设备对待。

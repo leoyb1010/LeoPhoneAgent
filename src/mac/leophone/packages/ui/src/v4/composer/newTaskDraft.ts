@@ -27,6 +27,20 @@ export function initializeNewTaskDraft(
   };
 }
 
+/**
+ * [leo] 新任务草稿若在「还没有任何模型」时初始化，会落下一个空选择；之后用户刚加好第一个模型，
+ * 输入框仍停在「选择模型」。只对尚未发出的新任务草稿(root scope)补上 Host 推荐的模型；
+ * 已有会话的空选择是历史恢复的确定结果，不在这里改。
+ */
+export function fillEmptyNewTaskDraftModel(
+  draft: V4ComposerDraft,
+  view: ModelSelectionView | null,
+): V4ComposerDraft {
+  if (!view || !draft.mode || draft.modelSelection) return draft;
+  const selection = resolveDraftInitialModelSelection(view, null).selection;
+  return selection ? { ...draft, modelSelection: selection } : draft;
+}
+
 /** 在激活首次导入的 Session 前调用；不依赖模型可执行，也不把原新任务正文带入分享。 */
 export function seedImportedSessionDraft(result: {
   workspacePath: string;

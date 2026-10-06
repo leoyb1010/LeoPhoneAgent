@@ -20,8 +20,7 @@ import { Alert, AlertDescription } from "./components/ui/alert.js";
 import { Button } from "./components/ui/button.js";
 import { ZCodeAboutLogo } from "@/components/ui/ZCodeAboutLogo.js";
 import { useOAuth } from "./hooks/useOAuth.js";
-import { usePlatform } from "@/hooks/usePlatform.js";
-import { LEO_OAUTH_PAGE_URL, requestModelSettingsAfterWelcome } from "./leo/leoLocal.js";
+import { openLeoOAuthPage, requestModelSettingsAfterWelcome } from "./leo/leoLocal.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import { renderOAuthProviderIcon } from "./lib/oauthProviderIcon.js";
 import { ThemeHeroVisual } from "./openWorkspacePageThemeHero.js";
@@ -92,7 +91,6 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
   const markLoginEntryAttemptStatus = useZCodeStore((s) => s.markLoginEntryAttemptStatus);
   // [leo] 没有账号入口,直接进 API key。
   const [loginMode, setLoginMode] = useState<"providers" | "apiKey">("apiKey");
-  const platform = usePlatform();
   const wasActiveRef = useRef(active);
   const consumedLoginRequestRef = useRef<number | null>(null);
   const observedOAuthSuccessSeqRef = useRef(oauthSuccessSeq);
@@ -365,12 +363,12 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
               size="lg"
               className="h-auto min-h-10 w-full whitespace-normal break-words py-2 text-center text-ui-base"
               onClick={() => {
-                platform.openExternal(LEO_OAUTH_PAGE_URL);
+                void openLeoOAuthPage();
                 resetApiKeyForm();
                 void onComplete("skip");
               }}
             >
-              用订阅账号登录(ChatGPT / Copilot / OpenCode Go)
+              用订阅账号登录（ChatGPT / Copilot / OpenCode Go）
             </Button>
             <Button
               variant="outline"
@@ -385,7 +383,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
               用 API Key 添加模型供应商
             </Button>
             <p className="text-center text-ui-sm text-foreground-subtle">
-              订阅账号在浏览器里授权,模型自动出现在「订阅账号」供应商下;API Key 支持 Anthropic、OpenAI、OpenRouter、DeepSeek 等及自定义端点。凭据只保存在本机。
+              订阅账号在浏览器里授权，模型自动出现在「订阅账号」供应商下；API Key 支持 Anthropic、OpenAI、OpenRouter、DeepSeek 等及自定义端点。凭据只保存在本机。
             </p>
           </div>
         ) : null}

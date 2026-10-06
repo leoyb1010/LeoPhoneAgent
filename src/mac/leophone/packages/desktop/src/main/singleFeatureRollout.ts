@@ -37,6 +37,11 @@ export interface SingleFeatureRolloutLogger {
 
 const SINGLE_FEATURE_REQUEST_TIMEOUT_MS = 3_000;
 const SINGLE_FEATURE_CACHE_TTL_MS = 60 * 60 * 1_000;
+/**
+ * 失败后多久再试。以前失败不写缓存,调用方每分钟一刷就每分钟真发一次请求;LeoPhoneAgent 没有
+ * 灰度服务(端点是占位地址),于是每分钟一次注定失败的请求加一条 warn 日志,永远如此。
+ */
+const SINGLE_FEATURE_FAILURE_RETRY_MS = 15 * 60 * 1_000;
 
 interface CreateSingleFeatureRolloutOptions<T extends SingleFeatureRolloutConfig> {
   /** 解析 /api/v1/client/configs 响应体；null 表示响应无效（按失败处理，沿用旧快照）。 */
@@ -95,6 +100,7 @@ export function createSingleFeatureRollout<T extends SingleFeatureRolloutConfig>
         return snapshot;
       } catch (error) {
         // 灰度配置是旁路能力：服务端异常或超时不能阻塞客户端；有成功结果时沿用，首次失败回退默认。
+        snapshotExpiresAt = Date.now() + Math.min(cacheTtlMs, SINGLE_FEATURE_FAILURE_RETRY_MS);
         options.logger.warn(`[${options.logTag}] config unavailable, using cached decision`, {
           error,
           enabled: snapshot.enabled,

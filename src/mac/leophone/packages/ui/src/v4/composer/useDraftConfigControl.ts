@@ -26,7 +26,7 @@ import { prepareWorkspaceWithZCodeSessionService } from "@/hooks/useWorkspacePre
 import { useZCodeSessionService } from "@/hooks/useZCodeSessionService.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { parseModelPickerValue } from "@/lib/zcodeSessionProjection.js";
-import { initializeNewTaskDraft } from "@/v4/composer/newTaskDraft.js";
+import { fillEmptyNewTaskDraftModel, initializeNewTaskDraft } from "@/v4/composer/newTaskDraft.js";
 import {
   clearV4ComposerDraft,
   persistV4ComposerDraft,
@@ -166,6 +166,7 @@ export function useDraftConfigControl(params: {
             modelSelection: sessionConfig?.modelSelection,
           };
   }
+  if (sessionId === null) draft = fillEmptyNewTaskDraftModel(draft, modelSelectionView);
   if (sessionConfig) {
     draft = applyComposerPlanTransition(draft, sessionConfig.planTransition);
     draft = applyComposerPermissionGrant(draft, sessionConfig.permissionGrant);

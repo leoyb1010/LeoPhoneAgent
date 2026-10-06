@@ -9,6 +9,7 @@ export {
 } from "./AssistantCodeCommentFeatureProvider.js";
 export { Root } from "./Root.js";
 export { ServerWorkspaceRoot } from "./paperclip/ServerWorkspaceRoot.js";
+export { LeoWhatsNew } from "./leo/LeoWhatsNew.js";
 export { UpdateStatusWindowRoot } from "./UpdateStatusWindowRoot.js";
 export { ConfirmDialogHost } from "./ConfirmDialog.js";
 export { Terminal } from "./Terminal.js";

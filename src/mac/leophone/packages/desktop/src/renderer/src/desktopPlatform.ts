@@ -5,8 +5,10 @@ import { desktopBrowserPlatformBridge } from "./desktopBrowserPlatformBridge.js"
 
 export function createDesktopPlatform(options: {
   isLocalDevelopmentRuntime: boolean;
+  openServerWorkspace?: () => void;
 }): IPlatformService {
   return {
+    openServerWorkspace: options.openServerWorkspace,
     paperclip: {
       request: (input) => window.zcode.paperclipRequest(input),
       signIn: (input) => window.zcode.paperclipSignIn(input),

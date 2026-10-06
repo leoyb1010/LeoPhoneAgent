@@ -8,6 +8,7 @@ import { usePaperclipDraft } from "./usePaperclipDraft.js";
 import { paperclipStatus } from "./labels.js";
 import { useDialogFocusReturn } from "./useDialogFocusReturn.js";
 import { PaperclipInspector, type PaperclipDecision } from "./Inspector.js";
+import { PaperclipApprovalPayload } from "./ApprovalPayload.js";
 
 // 与 workspace.css 中隐藏 .pc-inspector 的断点一致（max-width: 1180px）。
 const NARROW_INSPECTOR_QUERY = "(max-width: 1180px)";
@@ -143,7 +144,7 @@ export function PaperclipIssueDetail({
               <div className="flex items-start gap-3 py-2 text-foreground-subtle">
                 <MessageSquare size={18} className="mt-0.5 shrink-0" />
                 <p className="text-ui-caption leading-relaxed">
-                  还没有回复。补充要求，或等待服务器代理的进展。
+                  还没有回复。补充要求，或等待服务器智能体的进展。
                 </p>
               </div>
             )}
@@ -278,7 +279,7 @@ export function PaperclipIssueDetail({
         <DialogContent className="pc-inspector-dialog p-5" {...propertiesFocus}>
           <DialogTitle className="pr-8 text-ui-lg">任务详情</DialogTitle>
           <DialogDescription className="sr-only">状态、审批、运行记录与附件。</DialogDescription>
-          {inspector}
+          <div className="pc-inspector-scroll -mx-5 px-5">{inspector}</div>
         </DialogContent>
       </Dialog>
       <Dialog
@@ -287,15 +288,13 @@ export function PaperclipIssueDetail({
           if (!open) setDecision(null);
         }}
       >
-        <DialogContent {...decisionFocus}>
-          <DialogTitle>{decision?.title}</DialogTitle>
+        <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto" {...decisionFocus}>
+          <DialogTitle className="pr-8">{decision?.title}</DialogTitle>
           <DialogDescription>
             这会更改绑定服务器的真实状态，请先核对任务和审批内容。
           </DialogDescription>
-          {decision?.preview && (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-ui-caption">
-              {decision.preview}
-            </pre>
+          {decision?.approval && (
+            <PaperclipApprovalPayload payload={decision.approval.payload} raw={decision.approval} />
           )}
           {decision?.command.kind === "status" && decision.command.status === "blocked" && (
             <label className="flex flex-col gap-2 text-ui-caption">

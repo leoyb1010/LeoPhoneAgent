@@ -846,6 +846,15 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     },
     [onCreateTask, showChatMainView, workspaceReadOnlyReason],
   );
+  // 「任务 +」和项目内新建一样,要先回到会话主视图;否则停在自动化 / 插件市场时点了没有反应。
+  const handleCreateConversationTaskInChat = useCallback(() => {
+    if (!onCreateConversationTask) {
+      handleCreateTaskInChat();
+      return;
+    }
+    showChatMainView();
+    onCreateConversationTask();
+  }, [handleCreateTaskInChat, onCreateConversationTask, showChatMainView]);
   const shellWorkbenchBinding = useMemo<WorkbenchSessionBinding | null>(
     () =>
       activeTaskId
@@ -1576,7 +1585,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     onOpenBrowserUrl={handleOpenBrowserUrl}
                     fileTreeOpenRequest={fileTreeOpenRequest}
                     onCreateTask={handleCreateTaskInChat}
-                    onCreateConversationTask={onCreateConversationTask ?? handleCreateTaskInChat}
+                    onCreateConversationTask={handleCreateConversationTaskInChat}
                     onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
                     onOpenRemoteWorkspace={onOpenRemoteWorkspace}
                     theme={theme}

@@ -1,16 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import {
-  Paperclip,
-  Plus,
-  Search,
-  Settings2,
-  RefreshCw,
-  Moon,
-  Sun,
-  Users,
-  MessageSquare,
-  ArrowLeft,
-} from "lucide-react";
+import { Paperclip, Plus, Search, RefreshCw, Moon, Sun, Users, MessageSquare } from "lucide-react";
 import type { IPaperclipWorkspace, PaperclipSnapshot } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
@@ -26,8 +15,6 @@ export function PaperclipNavigation({
   setQuery,
   home,
   setNavigation,
-  setSettings,
-  onEnterLocalRecovery,
   theme,
   setTheme,
 }: {
@@ -41,14 +28,12 @@ export function PaperclipNavigation({
   setQuery: Dispatch<SetStateAction<string>>;
   home: () => void;
   setNavigation: Dispatch<SetStateAction<boolean>>;
-  setSettings: Dispatch<SetStateAction<boolean>>;
-  onEnterLocalRecovery: () => void;
   theme: string;
   setTheme: (theme: "zai-dark" | "zai-light") => void;
 }) {
   return (
     <div className="pc-navigation flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-3 px-4 py-4">
+      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
         <span className="pc-mark flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent text-brand">
           <Paperclip size={19} strokeWidth={1.8} />
         </span>
@@ -93,13 +78,13 @@ export function PaperclipNavigation({
           }}
         >
           <Users size={17} />
-          <span>团队代理</span>
+          <span>团队智能体</span>
           <span className="ml-auto text-ui-sm text-foreground-subtlest">
             {snapshot.agents.length}
           </span>
         </button>
       </nav>
-      <div className="mt-6 flex items-center justify-between px-4 pb-2">
+      <div className="mt-4 flex items-center justify-between px-4 pb-1">
         <h2 className="text-ui-sm font-medium text-foreground-subtle">任务与对话</h2>
         <button
           className="pc-icon"
@@ -173,23 +158,10 @@ export function PaperclipNavigation({
           </Button>
         )}
       </nav>
-      <div className="space-y-1 border-t border-border px-3 py-3">
-        <button
-          className="pc-nav-row"
-          onClick={() => {
-            setSettings(true);
-            setNavigation(false);
-          }}
-        >
-          <Settings2 size={16} />
-          <span>服务器与账号</span>
-          <span className={`ml-auto pc-status-dot ${snapshot.user ? "pc-status-done" : ""}`} />
-        </button>
-        <button className="pc-nav-row text-foreground-subtle" onClick={onEnterLocalRecovery}>
-          <ArrowLeft size={16} />
-          <span>本地历史恢复</span>
-        </button>
-        <div className="flex items-center gap-2 px-2 pt-2">
+      <div className="border-t border-border px-3 py-2.5">
+        {/* 「服务器与账号」和「返回本机工作台」只保留顶栏入口（齿轮、按钮在各宽度都可见）；
+            侧栏底部只放账号与主题，给任务列表让出高度。 */}
+        <div className="flex items-center gap-2 px-2">
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface text-ui-xs font-semibold">
             {(snapshot.user?.name || "访").slice(0, 1)}
           </span>

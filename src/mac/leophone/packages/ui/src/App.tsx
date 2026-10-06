@@ -1035,9 +1035,11 @@ export function App({
           openTerminalTab: () => runVisibleWorkspaceCommand(handleOpenTerminalTabIfWritable),
           openBrowserTab: () => runVisibleWorkspaceCommand(handleOpenBrowserTab),
           openReviewTab: () => runVisibleWorkspaceCommand(handleOpenGitIfWritable),
+          openServerWorkspace: platform.openServerWorkspace,
         },
       }),
     [
+      platform.openServerWorkspace,
       allowOpenWorkspace,
       isOfficeMode,
       canOpenCommunityFromQuickPick,

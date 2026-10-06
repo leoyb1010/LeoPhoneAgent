@@ -157,7 +157,10 @@ export function ProviderModelMetadataDialog({
           </DialogTitle>
           <DialogDescription className="sr-only">
             {intl.formatMessage({
-              id: "settings.modelProvider.editModelDescription",
+              id:
+                mode === "add"
+                  ? "settings.modelProvider.addModelDescription"
+                  : "settings.modelProvider.editModelDescription",
             })}
           </DialogDescription>
           <ModelSmartConfigSwitch

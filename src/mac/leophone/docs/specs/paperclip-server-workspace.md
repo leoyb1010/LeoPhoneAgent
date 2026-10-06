@@ -1,6 +1,6 @@
 # 原生中文 Paperclip 工作台
 
-基于官方 Paperclip 994d6edc。默认桌面入口直接挂载服务器工作台，不等待 Local Host 或本地数据库；用户明确进入「本地历史恢复」才使用旧 Root/Host 链。返回服务器不销毁已由用户启动的本机会话。
+基于官方 Paperclip 994d6edc。桌面默认打开**本机工作台**（Root + Local Host）；服务器工作台是本机侧栏里的「服务器任务」入口，工作台标题栏与侧栏都有「返回本机工作台」。窗口记住上次的选择（renderer `localStorage` 键 `leo-workspace-mode`，首次启动为本机；URL `workspaceMode=server|local` 只作显式覆盖，旧的 `local-recovery` 等同本机）。不论显示哪个，Local Host 都常驻（手机连接、藏宝阁、订阅代理、定时任务）；服务器视图只是不消费本机业务端口。实现见 `packages/desktop/src/renderer/src/workspaceMode.ts`。
 
 ```text
 UI hook → 单一 Paperclip 客户端协调者 → IPlatformService.paperclip → preload 固定 IPC

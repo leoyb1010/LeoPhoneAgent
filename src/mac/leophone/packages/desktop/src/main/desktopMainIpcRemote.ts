@@ -34,15 +34,7 @@ import {
   type RemoteConnectionStats,
 } from "./desktopRemoteUsageArmsTelemetry.js";
 import { openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
-
-function isAllowedExternalOpenUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "file:";
-  } catch {
-    return false;
-  }
-}
+import { isAllowedExternalOpenUrl } from "./mainWindowNavigationPolicy.js";
 
 interface OpenExternalRequest {
   sourceUrl?: string;
@@ -275,7 +267,9 @@ export function registerRemoteIpcHandlers(options: {
       return;
     }
     const { url } = request;
-    if (!isAllowedExternalOpenUrl(url)) {
+    const fromWebviewGuest =
+      typeof event.sender?.getType === "function" && event.sender.getType() === "webview";
+    if (!isAllowedExternalOpenUrl(url, fromWebviewGuest)) {
       options.logger.warn("[open-external] blocked unsupported url", url);
       return;
     }

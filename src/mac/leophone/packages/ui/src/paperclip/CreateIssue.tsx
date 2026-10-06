@@ -55,7 +55,7 @@ export function PaperclipCreateIssue({
           </p>
           <h1 className="text-ui-xl font-semibold tracking-tight">今天，想让团队完成什么？</h1>
           <p className="mt-3 text-ui-base leading-relaxed text-foreground-subtle">
-            写下目标、补充背景，然后把它交给合适的代理。
+            写下目标、补充背景，然后把它交给合适的智能体。
           </p>
         </div>
         <form
@@ -97,9 +97,9 @@ export function PaperclipCreateIssue({
           <div className="flex items-center gap-3 border-t border-border pt-3">
             <Users size={15} className="shrink-0 text-foreground-subtle" />
             <label className="min-w-0 flex-1">
-              <span className="sr-only">执行代理</span>
+              <span className="sr-only">执行智能体</span>
               <select
-                aria-label="执行代理"
+                aria-label="执行智能体"
                 className="max-w-full rounded-lg bg-transparent py-1.5 pr-2 text-ui-caption text-foreground-subtle outline-none"
                 value={draft.agentId}
                 disabled={snapshot.busy || draft.submitted}
@@ -132,7 +132,9 @@ export function PaperclipCreateIssue({
         </form>
         <div className="mt-3 flex items-center justify-between gap-3 px-1 text-ui-sm text-foreground-subtlest">
           <span>
-            {draft.agentId ? "交给所选服务器代理，按团队规则执行" : "创建待规划任务，不会唤醒代理"}
+            {draft.agentId
+              ? "交给所选服务器智能体，按团队规则执行"
+              : "创建待规划任务，不会唤醒智能体"}
           </span>
           <span className="shrink-0">⌘ / Ctrl + Enter</span>
         </div>
@@ -181,7 +183,7 @@ export function PaperclipCreateIssue({
         </button>
         {details && (
           <p className="pc-enter mt-3 max-w-lg text-ui-caption leading-relaxed text-foreground-subtle">
-            任务提交到当前公司。指定代理后，服务器按自身的调度与审批规则执行。没有分配代理的任务保留为待规划；创建成功不会伪装成已经开始运行。
+            任务提交到当前公司。指定智能体后，服务器按自身的调度与审批规则执行。没有分配智能体的任务保留为待规划；创建成功不会伪装成已经开始运行。
           </p>
         )}
       </div>

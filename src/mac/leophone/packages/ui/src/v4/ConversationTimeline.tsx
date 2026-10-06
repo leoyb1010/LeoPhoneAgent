@@ -1754,17 +1754,22 @@ function ConversationTimelineImpl({
           // 普通 16px 边距借位，会有 32px 落到 turn map 下方，必须把完整占用计入左边界。
           turnNavigatorQueryRowIds.size >= 2 &&
             "@min-[864px]/conversation:[--markdown-table-layout-left-inset:48px]",
+          // [leo] 草稿首页的顶部留白按「会话区」高度计算（cqh），不再按整窗 dvh：
+          // 底部终端或窗口变矮时，按 29dvh 留白会把输入框整块推出可视区，要滚动才找得到发送按钮。
+          // 只在草稿居中布局时声明尺寸容器；容器高度来自 flex 分配，不依赖内容。
+          responsiveCenteredEmptyLayout && "[container-type:size]",
         )}
       >
         <div
           className={cn(
             // 固定高度断点会在窗口跨过临界值时让问候语与 composer 整组跳动。
-            // 顶部留白按视口高度伸缩，输入框的位置不再受下方推荐列表高度影响；
+            // 顶部留白按会话区高度伸缩（最多 29%，并给问候语 + 输入框约 420px 让位），
+            // 输入框的位置不再受下方推荐列表高度影响；
             // 空间不足时顶部可收缩到底线，底部继续随内容自然排布。
             responsiveCenteredEmptyLayout
               ? // 动态修改原生窗口下限会把内容换行反馈到窗口拖动，产生阻尼；
                 // 容器保留固有最小高度，由外层 timeline 统一承接受限高度下的溢出内容。
-                "flex min-h-full flex-col items-center px-4 before:block before:min-h-[52px] before:w-full before:shrink before:basis-[29dvh] before:content-[''] after:block after:min-h-4 after:w-full after:flex-1 after:content-['']"
+                "flex min-h-full flex-col items-center px-4 before:block before:min-h-[52px] before:w-full before:shrink before:basis-[min(29cqh,max(52px,calc(100cqh_-_420px)))] before:content-[''] after:block after:min-h-4 after:w-full after:flex-1 after:content-['']"
               : centeredEmptyLayout
                 ? "flex min-h-full flex-col items-center justify-center gap-4 px-4"
                 : "flex min-h-full flex-col",

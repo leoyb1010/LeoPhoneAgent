@@ -112,6 +112,8 @@ function shouldPersistSettingsMigrations(rawValue: unknown): boolean {
 interface ReadSettingsResult {
   settings: AppSettings;
   needsMigrationPersist: boolean;
+  /** 文件在、但这次没读出来(EIO / EMFILE / EACCES…):返回的是默认值,不能拿它覆盖磁盘上的配置。 */
+  readFailed?: boolean;
 }
 
 async function readSettingsWithMeta(): Promise<ReadSettingsResult> {
@@ -151,6 +153,9 @@ async function readSettingsWithMeta(): Promise<ReadSettingsResult> {
         "read failed schema validation, returning defaults. error:",
         formatZodError(result.error),
       );
+      // 和坏 JSON 同样处理:先把原文件挪成备份。否则下一次 update 会把默认值 + 补丁整块写回,
+      // 供应商、最近项目、未确认回执全没了,而且没有任何可恢复的副本。
+      await quarantineCorruptSettingsFile(settingsFile, formatZodError(result.error));
       return {
         settings: defaultSettings(),
         needsMigrationPersist: false,
@@ -180,6 +185,7 @@ async function readSettingsWithMeta(): Promise<ReadSettingsResult> {
     return {
       settings: defaultSettings(),
       needsMigrationPersist: false,
+      readFailed: true,
     };
   }
 }
@@ -300,7 +306,12 @@ export function createSettingServiceWithMigrations(): {
     async update(patch: Partial<AppSettings>, expectedAccountSettings): Promise<void> {
       const runUpdate = async (shouldCommit: () => boolean, enterCommitPhase: () => void) => {
         const validatedPatch = appSettingsPatchSchema.parse(normalizeSettingsPatch(patch));
-        const current = await readSettings();
+        const currentRead = await readSettingsWithMeta();
+        if (currentRead.readFailed) {
+          // 读失败时手里只有默认值:合并补丁写回就等于清空整份配置。这次保存失败,文件原样保留。
+          throw new Error("Settings file could not be read; refusing to overwrite it");
+        }
+        const current = currentRead.settings;
         if (expectedAccountSettings) {
           // 账号查询期间用户可能已手动切换。必须在同一写队列内校验，不能靠调用方先读再写。
           const expected = appSettingsPatchSchema.parse(expectedAccountSettings);

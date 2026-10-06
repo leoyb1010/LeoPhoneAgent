@@ -125,6 +125,28 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
         _, ack = await self.register("MacBook", body["accessKey"])
         self.assertIsNone(ack)
 
+    async def test_event_frames_are_attributed_to_the_registered_machine(self):
+        ws, _ = await self.pinned_mac("MacBook")
+        await ws.send_json({"type": "event", "machine": "OtherMac",
+                            "event": {"event": "approval.request", "session_id": "s"}})
+        for _ in range(50):
+            if self.relay.recent_events:
+                break
+            await asyncio.sleep(0.02)
+        self.assertEqual(self.relay.recent_events[-1]["machine"], "MacBook")
+
+    async def test_forward_send_failure_is_502_and_leaves_nothing_pending(self):
+        await self.pinned_mac("MacBook")
+        machine = self.relay.machines["MacBook"]
+
+        async def broken(_frame):
+            raise ConnectionResetError("half dead")
+        machine.ws.send_json = broken
+        r = await self.client.post("/relay/api/m/MacBook/harness/sessions", json={},
+                                   headers=self.auth(MASTER))
+        self.assertEqual(r.status, 502)
+        self.assertEqual(machine.pending, {})
+
     async def test_pinned_name_rejects_master_until_unpinned(self):
         ws, machine_key = await self.pinned_mac()
         await ws.close()

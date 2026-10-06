@@ -63,5 +63,17 @@ export function leoPairSecret(): string {
   return PAIR_SECRET;
 }
 
+/**
+ * 订阅登录页接口的口令,同样由主进程每次启动生成、经 fork 环境传入并立刻抹掉。主进程只把它放在
+ * 打开登录页的 URL 片段(#t=…)里:片段不发给服务器、不进日志;本机别的用户或沙盒 App 拿不到它,
+ * 就不能替你登录、换号或退出。
+ */
+const UI_SECRET = process.env["LEO_UI_SECRET"]?.trim() ?? "";
+delete process.env["LEO_UI_SECRET"];
+
+export function leoUiSecret(): string {
+  return UI_SECRET;
+}
+
 /** 本机接口端口。2.x 用的是 38473,沿用它,藏宝阁 MCP 的默认地址不用改。 */
 export const LEO_HTTP_PORT = Number(process.env["LEOAGENT_PORT"]) || 38473;

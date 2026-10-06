@@ -29,7 +29,7 @@ export function registerPaperclipConfigIpc(settings: {
   });
   ipcMain.handle(PlatformChannels.PaperclipPreferencesSet, async (event, value: unknown) => {
     requireRenderer(event);
-    if (JSON.stringify(value).length > 65536) throw new Error("服务器配置超过大小限制。");
+    if ((JSON.stringify(value) ?? "").length > 65536) throw new Error("服务器配置超过大小限制。");
     const preferences = paperclipPreferencesSchema.parse(value);
     if (preferences.origin) preferences.origin = canonicalPaperclipOrigin(preferences.origin);
     await settings.update({ paperclipPreferences: preferences });

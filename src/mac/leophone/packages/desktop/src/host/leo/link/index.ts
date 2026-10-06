@@ -237,12 +237,12 @@ export function leoLinkStatus(): LeoLinkStatus {
 /** 给新手机出一个一次性配对码。只在这台 Mac 的连接开着、而且连上中继时出码。 */
 export async function createLeoPairingCode(): Promise<PairingCode> {
   const raw = readRelayJson();
-  if (!raw) throw new Error("这台 Mac 还没配置中继(~/.leoagent/relay.json)");
+  if (!raw) throw new Error("这台 Mac 还没配置中继（~/.leoagent/relay.json）");
   // 手机只接受 https 的中继根(见 iOS RelayPairPayload.parse)。
   if (!/^(https|wss):\/\//i.test(raw.url))
-    throw new Error("中继地址不是 https,手机不会接受这个配对码");
+    throw new Error("中继地址不是 https，手机不会接受这个配对码");
   if (!running) throw new Error("手机连接没有开启");
-  if (!running.status().connected) throw new Error("这台 Mac 现在没连上中继,稍后再试");
+  if (!running.status().connected) throw new Error("这台 Mac 现在没连上中继，稍后再试");
   const machineKey = await running.machineKey();
   return createPairingCode({
     relayUrl: raw.url,

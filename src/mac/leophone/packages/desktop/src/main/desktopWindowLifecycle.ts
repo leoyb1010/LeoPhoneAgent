@@ -65,8 +65,6 @@ export function createWindow(options: {
    * 避免冷启动快照 { enabled:false } 被烤进首 Host env 后无法被异步成功结果覆盖。
    */
   awaitFirstHostSpawnDecision?: () => Promise<void>;
-  /** 服务器工作区不启动 Local Host；用户明确进入本地历史恢复后才准入。 */
-  shouldStartLocalHost?: (win: BrowserWindow) => boolean;
   /** Local Host map insertion completed; presentation facts can now be replayed safely. */
   onHostProcessReady?: (windowKey: number) => void;
   resolveBrowserViewOwner?: Parameters<typeof createBrowserWindow>[0]["resolveBrowserViewOwner"];
@@ -135,14 +133,8 @@ export function createWindow(options: {
       win.focus();
     }
 
-    // Paperclip 默认入口不读本地任务库、不启动 Agent 或恢复本地定时任务。
-    // 从显式本地恢复返回服务器时保留已存在 Host，避免销毁用户已启动的会话。
-    if (options.shouldStartLocalHost && !options.shouldStartLocalHost(win)) {
-      options.syncAutoUpdaterStateToWindow(win);
-      options.syncReadyUpdateToWindow(win);
-      options.syncPostUpdateReleaseNotesToWindow(win);
-      return;
-    }
+    // Local Host 不按窗口显示的工作台（本地 / 服务器）门控：它承载本地会话、自动化、
+    // 手机连接、订阅代理与藏宝阁，切换工作台只是 renderer reload，走下方 reattach 保留 Host。
     const oldChild = options.windowHostProcessMap.get(wcId);
     // renderer 刷新（reload）
     // 曾经无条件杀掉旧 host 进程再重建——host 连带 CLI agent 一起死，运行中的会话直接消失，
@@ -198,8 +190,7 @@ export function createWindow(options: {
     const spawnLocalHost = (runtimeProcessEnvPatch: Record<string, string>) => {
       if (
         currentDomReadyGeneration !== domReadyGeneration ||
-        win.isDestroyed() ||
-        (options.shouldStartLocalHost && !options.shouldStartLocalHost(win))
+        win.isDestroyed()
       ) {
         return;
       }

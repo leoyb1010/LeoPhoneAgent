@@ -41,9 +41,9 @@ export function expandHome(input: string): string {
  * 与 src/mac/leoagent/server.py 的 device_not_recognized 同一份契约。
  */
 export const DEVICE_NOT_RECOGNIZED_STEPS = [
-  "在运行中继的那台 Mac 上,把中继(relay.py)更新到 0.2 或更新版本并重启中继。",
-  "在这台 Mac 上把 LeoPhoneAgent(或 leoagent)更新到最新版,确认它重新连上了中继。",
-  "回到手机重发这个任务,全自动就会生效。",
+  "在运行中继的那台 Mac 上，把中继（relay.py）更新到 0.2 或更新版本并重启中继。",
+  "在这台 Mac 上把 LeoPhoneAgent(或 leoagent)更新到最新版，确认它重新连上了中继。",
+  "回到手机重发这个任务，全自动就会生效。",
 ];
 
 export function deviceNotRecognized(message: string): LinkResponse {

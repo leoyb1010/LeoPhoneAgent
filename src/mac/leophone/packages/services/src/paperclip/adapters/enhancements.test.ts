@@ -183,3 +183,20 @@ test("approval fingerprint includes applicant but ignores JSON property ordering
     paperclipApprovalFingerprint({ ...approval, requestedByUserId: "another" }),
   );
 });
+test("two windows sharing one settings store keep each other's unknown receipts", async () => {
+  const item = fixture(async (input) =>
+    input.method === "POST" ? Promise.reject(new Error("lost")) : undefined,
+  );
+  await item.service.configure("https://example.com");
+  // 第二个服务器窗口:在第一个窗口记下回执之前就已经读好了自己那份 preferences。
+  const second = createPaperclipWorkspace(item.port);
+  await second.initialize();
+  await assert.rejects(item.service.command(create));
+  await assert.rejects(second.command({ ...create, requestId: "other" }));
+  const reopened = createPaperclipWorkspace(item.port);
+  await reopened.initialize();
+  const receipts = reopened.getSnapshot().receipts;
+  // 以前第二个窗口整份写回,第一个窗口的「待核对」被抹掉,重复写入的阻挡也随之解除。
+  assert.equal(receipts.request?.state, "unknown");
+  assert.equal(receipts.other?.state, "unknown");
+});

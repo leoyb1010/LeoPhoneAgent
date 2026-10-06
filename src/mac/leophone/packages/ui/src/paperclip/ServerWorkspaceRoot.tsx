@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { Paperclip, Settings2, PanelLeft, ExternalLink, Users, ChevronRight } from "lucide-react";
+import {
+  Paperclip,
+  Settings2,
+  PanelLeft,
+  ExternalLink,
+  Users,
+  ChevronRight,
+  Monitor,
+} from "lucide-react";
 import type { IPaperclipWorkspace } from "@zcode/services";
 import type { IPlatformService } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
@@ -18,13 +26,13 @@ import "./workspace.css";
 export function ServerWorkspaceRoot({
   service,
   platform,
-  onEnterLocalRecovery,
+  onReturnToLocal,
   isMacDesktop,
   isWindowsDesktop,
 }: {
   service: IPaperclipWorkspace;
   platform: IPlatformService;
-  onEnterLocalRecovery: () => void;
+  onReturnToLocal: () => void;
   isMacDesktop: boolean;
   isWindowsDesktop: boolean;
 }) {
@@ -67,8 +75,6 @@ export function ServerWorkspaceRoot({
       setQuery={setQuery}
       home={home}
       setNavigation={setNavigation}
-      setSettings={setSettings}
-      onEnterLocalRecovery={onEnterLocalRecovery}
       theme={theme}
       setTheme={setTheme}
     />
@@ -99,7 +105,7 @@ export function ServerWorkspaceRoot({
             <ChevronRight size={13} className="text-foreground-subtlest" />
             <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground-subtle">
               {view === "agents"
-                ? "团队代理"
+                ? "团队智能体"
                 : view === "issue"
                   ? snapshot.detail?.issue.identifier || "任务对话"
                   : "新对话"}
@@ -119,6 +125,16 @@ export function ServerWorkspaceRoot({
                     ? "已连接"
                     : "等待连接"}
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5 [app-region:no-drag]"
+              data-testid="paperclip-return-local"
+              onClick={onReturnToLocal}
+            >
+              <Monitor size={14} />
+              返回本机工作台
+            </Button>
             <button
               className="pc-icon [app-region:no-drag]"
               aria-label="服务器设置"
@@ -197,7 +213,7 @@ export function ServerWorkspaceRoot({
                       <div className="min-w-0 flex-1">
                         <h1 className="text-ui-xl font-semibold">你的执行团队</h1>
                         <p className="mt-2 text-ui-caption text-foreground-subtle">
-                          代理与运行环境由服务器管理。
+                          智能体与运行环境由服务器管理。
                         </p>
                       </div>
                       <Button
@@ -228,7 +244,7 @@ export function ServerWorkspaceRoot({
                                       ? "已终止"
                                       : agent.status === "running"
                                         ? "运行中"
-                                        : "服务器代理"}
+                                        : "服务器智能体"}
                             </p>
                           </div>
                         </div>
@@ -236,7 +252,7 @@ export function ServerWorkspaceRoot({
                     </div>
                     {snapshot.agents.length === 0 && (
                       <p className="py-8 text-foreground-subtle">
-                        尚无可显示代理。连接公司后刷新，或在管理网页配置团队。
+                        尚无可显示的智能体。连接公司后刷新，或在管理网页配置团队。
                       </p>
                     )}
                   </div>

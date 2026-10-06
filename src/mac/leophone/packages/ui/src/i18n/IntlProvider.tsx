@@ -365,6 +365,11 @@ export function ZCodeIntlProvider({
 }
 
 /** 获取 intl 上下文 */
+/** 共享基础组件（如 Dialog 关闭按钮）可能渲染在 Provider 之外：拿不到时返回 null，由调用方兜底。 */
+export function useOptionalZCodeIntl(): IntlContextValue | null {
+  return useContext(IntlContext);
+}
+
 export function useZCodeIntl(): IntlContextValue {
   const ctx = useContext(IntlContext);
   if (!ctx) {

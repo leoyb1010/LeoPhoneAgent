@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { PAPERCLIP_ISSUE_STATUSES } from "@zcode/shared";
 import { paperclipPriority, paperclipStatus } from "./labels.js";
-export type PaperclipDecision = { title: string; command: PaperclipCommand; preview?: string };
+import { PaperclipApprovalPayload } from "./ApprovalPayload.js";
+export type PaperclipDecision = {
+  title: string;
+  command: PaperclipCommand;
+  /** 审批确认时冻结的完整审批，用于在确认框里核对。 */
+  approval?: NonNullable<PaperclipSnapshot["detail"]>["approvals"][number];
+};
 export function PaperclipInspector({
   service,
   snapshot,
@@ -77,7 +83,7 @@ export function PaperclipInspector({
         <div className="flex items-center gap-3">
           <span className="w-16 shrink-0 text-foreground-subtle">执行者</span>
           <span className="min-w-0 break-words">
-            {assignee?.name || (detail.issue.assigneeAgentId ? "服务器代理" : "暂未分配")}
+            {assignee?.name || (detail.issue.assigneeAgentId ? "服务器智能体" : "暂未分配")}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -97,14 +103,22 @@ export function PaperclipInspector({
         {detail.approvals.map((approval) => (
           <details key={approval.id} className="rounded-md border border-border p-3">
             <summary className="cursor-pointer">
-              {approval.type === "hire_agent" ? "聘用代理" : "服务器审批"} ·{" "}
+              {approval.type === "hire_agent" ? "聘用智能体" : "服务器审批"} ·{" "}
               {paperclipStatus(approval.status)}
             </summary>
-            <pre className="my-3 whitespace-pre-wrap break-words text-ui-caption">
-              {JSON.stringify(approval.payload, null, 2)}
-            </pre>
+            <div className="my-3">
+              <PaperclipApprovalPayload payload={approval.payload} />
+            </div>
             <p className="mb-3 text-ui-caption">
-              申请者：{approval.requestedByUserId ?? approval.requestedByAgentId ?? "服务器未提供"}
+              申请者：
+              {approval.requestedByUserId
+                ? approval.requestedByUserId === snapshot.user?.id
+                  ? snapshot.user?.name || "你"
+                  : "团队成员"
+                : approval.requestedByAgentId
+                  ? snapshot.agents.find((agent) => agent.id === approval.requestedByAgentId)
+                      ?.name || "服务器智能体"
+                  : "服务器未提供"}
             </p>
             {approval.decisionNote && <p className="mb-3">决定说明：{approval.decisionNote}</p>}
             {approval.status === "pending" && (
@@ -125,7 +139,7 @@ export function PaperclipInspector({
                       onClick={() =>
                         setDecision({
                           title: approve ? "确认批准此请求？" : "确认拒绝此请求？",
-                          preview: JSON.stringify(approval, null, 2),
+                          approval,
                           command: {
                             kind: "approval",
                             issueId: detail.issue.id,
@@ -149,37 +163,48 @@ export function PaperclipInspector({
       <section className="flex flex-col gap-3 border-t border-border pt-4">
         <h3 className="text-ui-base font-medium">运行记录</h3>
         {detail.runs.length === 0 && (
-          <p className="text-foreground-subtle">尚无运行记录。创建任务不代表代理已经开始执行。</p>
+          <p className="text-foreground-subtle">尚无运行记录。创建任务不代表智能体已经开始执行。</p>
         )}
         {detail.runs.map((run) => (
-          <div
-            key={run.runId}
-            className="flex flex-wrap items-center gap-2 rounded-md bg-surface p-3"
-          >
-            <span className="min-w-0 flex-1 break-all">
-              {paperclipStatus(run.status)} · {run.runId}
+          // 修复：状态、编号和两个按钮挤在一行时，276px 检查器里文字被压成一字一行；
+          // 改为上下两行：上面是状态与执行者，下面是编号和操作。
+          <div key={run.runId} className="flex flex-col gap-2 rounded-md bg-surface p-3">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className={`pc-status-dot pc-status-${run.status}`} />
+              <span className="min-w-0 truncate">
+                {paperclipStatus(run.status)} ·{" "}
+                {snapshot.agents.find((agent) => agent.id === run.agentId)?.name || "服务器智能体"}
+              </span>
             </span>
-            <Button
-              variant="outline"
-              disabled={snapshot.busy || snapshot.ready === false}
-              onClick={() => void invoke(() => service.readLog(run.runId))}
+            <span
+              className="truncate font-mono text-ui-xs text-foreground-subtle"
+              title={run.runId}
             >
-              {snapshot.log?.runId === run.runId ? "继续读取日志" : "读取日志"}
-            </Button>
-            {["queued", "running"].includes(run.status) && (
+              {run.runId}
+            </span>
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 disabled={snapshot.busy || snapshot.ready === false}
-                onClick={() =>
-                  setDecision({
-                    title: "确认取消此服务器运行？",
-                    command: { kind: "cancel", issueId: detail.issue.id, runId: run.runId },
-                  })
-                }
+                onClick={() => void invoke(() => service.readLog(run.runId))}
               >
-                取消运行
+                {snapshot.log?.runId === run.runId ? "继续读取日志" : "读取日志"}
               </Button>
-            )}
+              {["queued", "running"].includes(run.status) && (
+                <Button
+                  variant="outline"
+                  disabled={snapshot.busy || snapshot.ready === false}
+                  onClick={() =>
+                    setDecision({
+                      title: "确认取消此服务器运行？",
+                      command: { kind: "cancel", issueId: detail.issue.id, runId: run.runId },
+                    })
+                  }
+                >
+                  取消运行
+                </Button>
+              )}
+            </div>
           </div>
         ))}
         {snapshot.log && (
@@ -202,7 +227,7 @@ export function PaperclipInspector({
           <p className="text-foreground-subtle">暂无可下载附件</p>
         )}
         {detail.attachments.map((attachment) => (
-          <div key={attachment.id} className="flex items-center gap-3">
+          <div key={attachment.id} className="flex flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1 break-words">
               {attachment.originalFilename ?? "服务器附件"} ·{" "}
               {Math.ceil(attachment.byteSize / 1024)} KB

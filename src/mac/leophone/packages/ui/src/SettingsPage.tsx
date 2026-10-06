@@ -100,7 +100,6 @@ import { resolveModelProviderConnectivityWorkspacePath } from "@/lib/modelProvid
 import {
   createSettingsPageConfig,
   GeneralSectionContent,
-  GeneralSectionHeader,
   resolveSettingsSectionForPlatform,
 } from "./settingsPageHelpers.js";
 import { AppearanceSectionContent } from "./settingsCodePreview.js";
@@ -1443,9 +1442,11 @@ export function SettingsPage({
 
               <nav
                 aria-label={intl.formatMessage({ id: "settings.navLabel" })}
-                className="flex-1 overflow-y-auto px-2 pb-3"
+                // [leo] 窗口矮时（如 720 高）导航下半段被底栏挡住、看不出还能滚：组间距收紧一档，
+                // 并在还有内容时给底边加渐隐（leo-scroll-fade，见 leo-skin.css）。
+                className="leo-scroll-fade flex-1 overflow-y-auto px-2 pb-3"
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {settingsSectionGroups.map((group, groupIndex) => {
                     const groupLabel = intl.formatMessage({
                       id: group.titleId,
@@ -1647,9 +1648,7 @@ export function SettingsPage({
                             ) : null}
                           </div>
                         </div>
-                        {activeSection === "general" ? (
-                          <GeneralSectionHeader localePreference={localePreference} />
-                        ) : null}
+                        {/* [leo] 常规页标题下原有一个只回显界面语言的徽标,和下面的「界面语言」选项重复,去掉。 */}
                       </div>
                       <div className="space-y-8">
                         {activeSection === "general" ? (

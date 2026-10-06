@@ -7,7 +7,7 @@ import { loggedInModels, retireBlockedLogins } from "./oauthRuntime.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
-const PROVIDER_NAME = "订阅账号(ChatGPT / Copilot / OpenCode Go)";
+const PROVIDER_NAME = "订阅账号（ChatGPT / Copilot / OpenCode Go）";
 const ID_FILE = leoPath("oauth", "provider-id");
 
 function isLocalProxy(baseUrl: string | null | undefined): boolean {
@@ -61,7 +61,7 @@ export async function syncSubscriptionProvider(
     // 它就是你的了:不删你加的模型、不改你的地址和钥匙;订阅账号登录后另建一个供应商。
     // 以前没有这道判断,没登订阅账号时每次启动都会清空它的模型。
     if (existing && !isLocalProxy(existing.effectiveConfig?.api?.baseUrl)) {
-      logger.info("[leo] 订阅供应商已被改成自定义网关,不再同步它");
+      logger.info("[leo] 订阅供应商已被改成自定义网关，不再同步它");
       existing = undefined;
       providerId = null;
       if (models.length === 0) return;
@@ -112,7 +112,7 @@ export async function syncSubscriptionProvider(
     for (const modelId of current) {
       if (!wanted.has(modelId)) await providerSettings.deletePersonalModel(providerId as never, modelId as never);
     }
-    logger.info(`[leo] 订阅供应商已同步:${models.length} 个模型`);
+    logger.info(`[leo] 订阅供应商已同步：${models.length} 个模型`);
   } catch (error) {
     logger.warn("[leo] 订阅供应商同步失败", { error: String(error) });
   }

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { LEO_HTTP_PORT, leoLocalKey, leoPairSecret, leoTreasuryKey } from "./leoPaths.js";
+import { LEO_HTTP_PORT, leoLocalKey, leoPairSecret, leoTreasuryKey, leoUiSecret } from "./leoPaths.js";
 import {
   configureLeoDirect,
   createLeoDirectPairingCode,
@@ -137,6 +137,8 @@ export function startLeoHttpApi(deps: {
   const isMainKey = secretMatcher(`Bearer ${leoLocalKey()}`);
   const isTreasuryKey = secretMatcher(`Bearer ${leoTreasuryKey()}`);
   const isPairSecret = secretMatcher(leoPairSecret());
+  // 口令为空(不是主进程拉起的 Host)时 secretMatcher 一律不认:登录页接口整体关闭。
+  const isUiSecret = secretMatcher(leoUiSecret());
 
   const json = (res: ServerResponse, status: number, payload: unknown): void => {
     if (res.headersSent) {
@@ -174,10 +176,11 @@ export function startLeoHttpApi(deps: {
       return;
     }
 
-    // 登录页的接口:必须带 X-Leo-UI 头。跨站请求带自定义头会触发预检,我们不放行,
-    // 所以别的网站没法替你发起登录或退出。
+    // 登录页的接口:X-Leo-UI 必须是本次启动的口令(只经应用打开的登录页 URL 片段带过来)。
+    // 自定义头还让跨站请求先发预检、被我们拒掉;口令再挡住本机别的进程。
     if (url.pathname.startsWith("/api/leo/ui/oauth/")) {
-      if (req.headers["x-leo-ui"] !== "1") {
+      const presented = req.headers["x-leo-ui"];
+      if (typeof presented !== "string" || !isUiSecret(presented)) {
         json(res, 403, { error: "forbidden" });
         return;
       }
@@ -292,7 +295,7 @@ export function startLeoHttpApi(deps: {
         if (!(error instanceof HttpError) || error.status !== 413) throw error;
         json(res, 400, {
           error: {
-            message: "请求太大(对话里的图片或文件太多)",
+            message: "请求太大（对话里的图片或文件太多）",
             type: "invalid_request_error",
             code: "context_length_exceeded",
           },

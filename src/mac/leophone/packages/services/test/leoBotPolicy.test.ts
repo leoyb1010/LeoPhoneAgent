@@ -24,7 +24,9 @@ test("bot tasks run in build mode, not upstream's approval-free yolo", async () 
 
 test("chat approvals: read-only tools and in-workspace edits may be allowed once; everything else only denied", () => {
   const ws = "/Users/me/project";
-  assert.deepEqual(filterBotPermissionOptions(request("Read", { file_path: "/etc/hosts" }), ws).map((o) => o.optionId), ["allow_once", "deny"]);
+  assert.deepEqual(filterBotPermissionOptions(request("Read", { file_path: "src/a.ts" }), ws).map((o) => o.optionId), ["allow_once", "deny"]);
+  // 只读也只限工作区:聊天里批一下就能把 ~/.ssh 的内容读回聊天。
+  assert.deepEqual(filterBotPermissionOptions(request("Read", { file_path: "/etc/hosts" }), ws).map((o) => o.optionId), ["deny"]);
   assert.deepEqual(filterBotPermissionOptions(request("Edit", { file_path: "src/a.ts" }), ws).map((o) => o.optionId), ["allow_once", "deny"]);
   assert.deepEqual(filterBotPermissionOptions(request("Edit", { file_path: "/etc/hosts" }), ws).map((o) => o.optionId), ["deny"]);
   assert.deepEqual(filterBotPermissionOptions(request("Write", { file_path: "../escape.txt" }), ws).map((o) => o.optionId), ["deny"]);
@@ -32,4 +34,29 @@ test("chat approvals: read-only tools and in-workspace edits may be allowed once
     assert.deepEqual(filterBotPermissionOptions(request(tool, { command: "ls" }), ws).map((o) => o.optionId), ["deny"], tool);
   }
   assert.equal(botMayAllow("Edit", {}, ws), false);
+});
+
+test("chat approvals cannot reach outside the workspace or into executable config", async () => {
+  const { mkdtemp, mkdir, symlink, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await mkdtemp(join(os.tmpdir(), "leo-bot-"));
+  try {
+    const ws = join(root, "ws");
+    await mkdir(join(ws, "src"), { recursive: true });
+    await symlink(os.tmpdir(), join(ws, "out-link"));
+    assert.equal(botMayAllow("Glob", { pattern: "**/*.ts" }, ws), true);
+    assert.equal(botMayAllow("Glob", { pattern: "/Users/me/.ssh/*" }, ws), false);
+    assert.equal(botMayAllow("Grep", { pattern: "key", path: "~/.aws" }, ws), false);
+    assert.equal(botMayAllow("Write", { file_path: "src/new.ts" }, ws), true);
+    // 改了就能执行命令的位置
+    for (const file of [".git/hooks/pre-commit", ".zcode/config.json", ".agents/mcp.json", ".envrc", "sub/.mcp.json"]) {
+      assert.equal(botMayAllow("Write", { file_path: file }, ws), false, file);
+    }
+    // 符号链接指出工作区
+    assert.equal(botMayAllow("Write", { file_path: "out-link/x.txt" }, ws), false);
+    // 幌子参数:每个路径都要在工作区内
+    assert.equal(botMayAllow("NotebookEdit", { file_path: "src/a.ipynb", notebook_path: "/etc/x.ipynb" }, ws), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

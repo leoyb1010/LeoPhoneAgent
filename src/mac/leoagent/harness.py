@@ -339,6 +339,9 @@ class HarnessSession:
     # grok ACP:session/prompt 的请求 id 集合;响应到达即回合结束。
     _acp_prompt_ids: set = field(default_factory=set)
     archived: bool = False
+    # 进程组 id(start_new_session 时等于组长 pid)。组长退出/被收割后仍要能 killpg
+    # 收掉它拉起的 dev server、后台 bash,所以单独记下来,不从 process 现算。
+    _pgid: Optional[int] = None
     # 手机开着全自动发起(或后续消息切到全自动)的任务:CLI 的每条审批由这里直接答
     # 「本会话允许」,不进手机、不推 APNs。后续消息带 full_auto 随时切换。
     full_auto: bool = False
@@ -438,6 +441,21 @@ class HarnessSession:
                     queue.put_nowait(_SUBSCRIBER_OVERFLOW)
                 except asyncio.QueueFull:
                     pass
+
+    def close_subscribers(self) -> None:
+        """让所有挂着的事件流立刻收尾(归档时用:之后 _emit 什么都不发了,
+        不叫醒的话订阅协程会永远停在 queue.get() 上,连同队列一起泄漏)。"""
+        for queue in list(self._subscribers):
+            self._subscribers.remove(queue)
+            while True:
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            try:
+                queue.put_nowait(_SUBSCRIBER_OVERFLOW)
+            except asyncio.QueueFull:
+                pass
 
     def replay(self, after_seq: int = 0) -> List[Dict[str, Any]]:
         """Everything since `after_seq`. This is what makes a phone that lost
@@ -733,12 +751,18 @@ class HarnessSession:
             # 什么都没停」。有了独立进程组,stop() 才能用 killpg 一次收干净。
             start_new_session=True,
         )
+        try:
+            if os.getpgid(self.process.pid) == self.process.pid:
+                self._pgid = self.process.pid
+        except OSError:
+            pass
         self.status = "running"
         # Hold strong references: an un-referenced Task can be garbage
         # collected mid-flight, which would stop the reader silently.
         self._tasks = [
             asyncio.create_task(self._pump_stdout()),
             asyncio.create_task(self._pump_stderr()),
+            asyncio.create_task(self._sweep_group_on_exit()),
         ]
         if self.spec.dialect == "codex_app_server":
             self._outbox.extend(self._app_server_handshake())
@@ -814,6 +838,17 @@ class HarnessSession:
             else:
                 self.status = "failed"
                 self._emit({"event": EVENT_RUN_FAILED, "error": f"exited with code {code}"})
+
+    async def _sweep_group_on_exit(self) -> None:
+        """组长自己退了(崩溃、正常结束),它拉起的后台进程还在组里:一并收掉。
+
+        不能等 stdout 读到 EOF 再收:后台子进程继承了 stdout/stderr 管道,
+        它们不死管道就不关,读循环永远等不到 EOF,会话一直显示 running。
+        """
+        if self.process is None:
+            return
+        await self.process.wait()
+        self._signal_process_group(signal.SIGTERM)
 
     async def _pump_stderr(self) -> None:
         assert self.process and self.process.stderr
@@ -1000,20 +1035,21 @@ class HarnessSession:
 
         进程是 ``start_new_session=True`` 起的,pid 同时就是进程组 id,
         ``killpg`` 能把 CLI 拉起来的 ``npm test`` / dev server 一并带走。
-        旧实现只对组长调 ``terminate()``,孙子进程会变成孤儿继续跑。
+        旧实现只对组长调 ``terminate()``,孙子进程会变成孤儿继续跑;组长先退出
+        (被收割)时也照样要 killpg,所以用 start() 时记下的 _pgid。
         """
+        # 只在 start() 确认过 pid 就是组长时才 killpg。start_new_session 万一没生效,
+        # 组 id 会是**守护进程自己**的组 —— 那一下就把整个 leoagent 连同其他所有会话
+        # 一起杀了。宁可只杀单进程。
+        if self._pgid is not None and self._pgid != os.getpgrp():
+            try:
+                os.killpg(self._pgid, sig)
+                return
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         proc = self.process
         if proc is None or proc.returncode is not None:
             return
-        try:
-            # 只在这个 pid 确实是组长时才 killpg。start_new_session 万一没生效,
-            # getpgid() 会返回**守护进程自己**的组 —— 那一下就把整个 leoagent
-            # 连同其他所有会话一起杀了。宁可只杀单进程。
-            if os.getpgid(proc.pid) == proc.pid:
-                os.killpg(proc.pid, sig)
-                return
-        except (ProcessLookupError, PermissionError, OSError):
-            pass
         try:
             proc.send_signal(sig)
         except (ProcessLookupError, OSError):
@@ -1034,6 +1070,7 @@ class HarnessSession:
         self._emit({"event": EVENT_RUN_CANCELLED})
         proc = self.process
         if proc is None or proc.returncode is not None:
+            self._signal_process_group(signal.SIGTERM)
             return
         self._signal_process_group(signal.SIGTERM)
         # 有清理逻辑的 CLI 可能无视 SIGTERM;不补刀的话状态写着 cancelled
@@ -1052,6 +1089,9 @@ class HarnessManager:
     MAX_LIVE_SESSIONS = 16
     ORPHAN_RETENTION_S = 7 * 24 * 3600
     IDLE_STALE_S = 30 * 60
+    # 跑完一轮后这么久没人再动的 CLI 就收掉:手机首页不显示 available,没有别的路能停它,
+    # 不收的话每个都常驻几百 MB,直到撞上 MAX_LIVE_SESSIONS。日志保留,历史照样能回放。
+    IDLE_REAP_S = 6 * 3600
 
     def __init__(self, home: Optional[Path] = None):
         self.home = home or Path.home() / ".leoagent"
@@ -1065,6 +1105,8 @@ class HarnessManager:
         except OSError:
             pass
         self.sessions: Dict[str, HarnessSession] = {}
+        # create() 在 await 启动期间占住的名额:并发建会话不能一起越过 MAX_LIVE_SESSIONS。
+        self._reserved = 0
         self._rehydrate()
 
     def _rehydrate(self) -> None:
@@ -1108,8 +1150,9 @@ class HarnessManager:
                 status="orphaned")
 
     def _live_count(self) -> int:
-        return sum(1 for s in self.sessions.values()
-                   if s.status in ("starting", "running", "idle", "waiting_for_approval"))
+        return self._reserved + sum(
+            1 for s in self.sessions.values()
+            if s.status in ("starting", "running", "idle", "waiting_for_approval"))
 
     async def create(self, harness: str, cwd: str, prompt: Optional[str] = None,
                      full_auto: bool = False,
@@ -1130,7 +1173,15 @@ class HarnessManager:
                 await idle.stop()
         if self._live_count() >= self.MAX_LIVE_SESSIONS:
             raise RuntimeError(f"too many live sessions (max {self.MAX_LIVE_SESSIONS})")
+        self._reserved += 1
+        try:
+            return await self._create_reserved(spec, work_dir, prompt, full_auto, phone_session_id)
+        finally:
+            self._reserved -= 1
 
+    async def _create_reserved(self, spec: HarnessSpec, work_dir: str, prompt: Optional[str],
+                               full_auto: bool,
+                               phone_session_id: Optional[str]) -> HarnessSession:
         session_id = f"hs_{uuid.uuid4().hex}"
         session = HarnessSession(
             session_id=session_id,
@@ -1154,6 +1205,9 @@ class HarnessManager:
             # start() 成功但 send(prompt) 失败时,子进程已 spawn、pump 已在跑:
             # 必须先 stop 收割,否则进程既不在 sessions 里(shutdown_all 够不着)
             # 又活着,daemon 退出后成孤儿;pump 还会把刚删的日志重建出来。
+            # 先标 archived:stop() 写的 run.cancelled 与 pump 的残余输出都不能再落盘,
+            # 否则删掉的日志被重建,下次重启冒出一个假的 orphaned 会话。
+            session.archived = True
             try:
                 await session.stop()
             except Exception:  # noqa: BLE001
@@ -1190,6 +1244,9 @@ class HarnessManager:
         session = self.sessions.pop(session_id, None)
         if session is None:
             return False
+        # 先叫醒挂着的事件流再标 archived:标了之后 run.cancelled 不再发出,
+        # 订阅协程就永远等不到收尾。
+        session.close_subscribers()
         session.archived = True
         if session.process is not None and session.process.returncode is None:
             try:
@@ -1201,6 +1258,18 @@ class HarnessManager:
         except OSError:
             pass
         return True
+
+    async def reap_idle(self, now: Optional[float] = None) -> List[str]:
+        """收掉跑完一轮后 IDLE_REAP_S 没动过的 CLI,返回收掉的会话 id。"""
+        now = time.time() if now is None else now
+        stale = [s for s in self.sessions.values()
+                 if s.status == "idle" and now - self._updated_at(s) > self.IDLE_REAP_S]
+        for session in stale:
+            try:
+                await session.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        return [s.session_id for s in stale]
 
     @staticmethod
     def _updated_at(session: "HarnessSession") -> float:

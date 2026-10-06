@@ -28,6 +28,7 @@ import {
 } from "@zcode/shared";
 import { useCallback, useMemo, type KeyboardEvent } from "react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { ModelProviderNavGroup, ModelProviderNavItem } from "./constants.js";
 import { useOptimisticReorder } from "./useOptimisticReorder.js";
 import { renderModelProviderNavIcon } from "./utils.js";
@@ -376,6 +377,8 @@ export function ModelProviderSectionNavigation({
   onReorderProviderIds?: (providerIds: string[]) => Promise<void>;
   reorderableProviderIds?: ReadonlySet<string>;
 }) {
+  const { intl } = useZCodeIntl();
+  const hasItems = navigationGroups.some((group) => group.items.length > 0);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -421,6 +424,17 @@ export function ModelProviderSectionNavigation({
               )}
             </div>
           ))}
+        {/* [leo] 预置组已清空，没有自定义供应商时左栏原来整片空白；给出空状态，说明右侧可以添加。 */}
+        {!hasItems && !presetLoading && !customLoading ? (
+          <div className="px-2 py-1 max-md:hidden" data-testid="model-provider-nav-empty">
+            <p className="text-ui-sm font-medium text-foreground-subtle">
+              {intl.formatMessage({ id: "settings.modelProvider.empty" })}
+            </p>
+            <p className="mt-1 text-ui-sm text-foreground-subtlest">
+              {intl.formatMessage({ id: "settings.modelProvider.emptyHint" })}
+            </p>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

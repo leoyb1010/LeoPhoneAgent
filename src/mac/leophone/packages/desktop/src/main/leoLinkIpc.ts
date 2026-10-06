@@ -1,9 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
-import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { callLeo, LEO_HTTP_PORT, leoOAuthPageUrl, ownHostListening } from "./leoLinkHttp.js";
 
 /**
  * [leo-link] 「连接手机」面板的通道:界面 → 主进程 → 本机 Leo 接口(带 Bearer)。
@@ -16,9 +14,7 @@ export const LEO_LINK_STATUS_CHANNEL = "leo:link:status";
 export const LEO_LINK_PAIR_CHANNEL = "leo:link:pair";
 export const LEO_LINK_REVOKE_CHANNEL = "leo:link:revoke";
 
-export type LeoLinkIpcResult<T = Record<string, unknown>> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+export type { LeoLinkIpcResult } from "./leoLinkHttp.js";
 
 /**
  * 出配对码的口令:每次启动在主进程内存里随机生成,只经 fork 环境交给 Host(Host 启动即从
@@ -28,85 +24,38 @@ export type LeoLinkIpcResult<T = Record<string, unknown>> =
 const LEO_PAIR_SECRET = randomBytes(24).toString("base64url");
 export const LEO_PAIR_SECRET_ENV = "LEO_PAIR_SECRET";
 
+/**
+ * 订阅登录页接口的口令:同样每次启动随机生成、只交给我们自己的 Host。主进程打开登录页时把它放进
+ * URL 片段(#t=…,不发给服务器、不进日志),页面用它调登录 / 退出接口;本机别的进程拿不到。
+ */
+const LEO_UI_SECRET = randomBytes(24).toString("base64url");
+export const LEO_OAUTH_OPEN_CHANNEL = "leo:oauth:open";
+
 export function leoHostPairEnv(): Record<string, string> {
-  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET };
-}
-
-// 与 host/leo/leoPaths.ts 同一套约定(主进程不引 host 的模块):端口 38473,钥匙 ~/.leoagent/key。
-const LEO_HTTP_PORT = Number(process.env["LEOAGENT_PORT"]) || 38473;
-
-function leoLocalKey(): string | null {
-  const envKey = process.env["LEOAGENT_KEY"]?.trim();
-  if (envKey) return envKey;
-  const home = process.env["LEOAGENT_HOME"]?.trim() || join(homedir(), ".leoagent");
-  try {
-    const key = readFileSync(join(home, "key"), "utf8").trim();
-    return key.length >= 16 ? key : null;
-  } catch {
-    return null;
-  }
+  return { [LEO_PAIR_SECRET_ENV]: LEO_PAIR_SECRET, LEO_UI_SECRET };
 }
 
 function trustedSender(event: IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
+  // 只认应用窗口自己的页面:内嵌浏览器(webview 访客)里打开的本地 HTML 也是 file://。
+  if (event.sender.getType() !== "window") return false;
   const url = frame.url ?? "";
   if (url.startsWith("file://")) return true;
   // 开发态界面由本机 Vite 提供。
   return !app.isPackaged && /^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(url);
 }
 
-async function callLeo(
-  path: string,
-  method: "GET" | "POST" | "DELETE",
-  extraHeaders: Record<string, string> = {},
-  body?: unknown,
-): Promise<LeoLinkIpcResult> {
-  const key = leoLocalKey();
-  if (!key) return { ok: false, error: "本机 Leo 服务还没启动" };
-  try {
-    const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${key}`,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...extraHeaders,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(25_000),
-    });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: typeof body["error"] === "string" ? body["error"] : `HTTP ${res.status}`,
-      };
-    }
-    return { ok: true, data: body };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-/**
- * 38473 上的是不是我们自己的 Host。保留的 LeoCodeBox 2.x 或别的程序占着端口时,
- * 出码口令不能交给它(口令只该出现在主进程和我们的 Host 之间)。
- */
-async function ownHostListening(): Promise<boolean> {
-  try {
-    const res = await fetch(`http://127.0.0.1:${LEO_HTTP_PORT}/api/leo/health`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    return body["app"] === "leophoneagent-1.x";
-  } catch {
-    return false;
-  }
-}
-
 const PORT_TAKEN = `本机端口 ${LEO_HTTP_PORT} 被别的程序占着(比如旧版 LeoCodeBox),先关掉它再试`;
 
 export function registerLeoLinkIpc(): void {
+  ipcMain.handle(LEO_OAUTH_OPEN_CHANNEL, async (event) => {
+    if (!trustedSender(event)) return { ok: false, error: "forbidden" };
+    // 端口上不是我们的 Host(旧版 LeoCodeBox 等)时,带口令的地址不能交给它的页面。
+    if (!(await ownHostListening())) return { ok: false, error: PORT_TAKEN };
+    await shell.openExternal(leoOAuthPageUrl(LEO_HTTP_PORT, LEO_UI_SECRET));
+    return { ok: true, data: {} };
+  });
   ipcMain.handle("leo:link:direct", async (event, action: unknown, body: unknown) => {
     if (!trustedSender(event) || !["pair", "configure", "revoke"].includes(String(action)))
       return { ok: false, error: "forbidden" };

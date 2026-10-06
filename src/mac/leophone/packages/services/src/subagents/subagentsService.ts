@@ -100,8 +100,8 @@ function createBuiltInAgents(
         source: "built-in",
       }),
       name: "general-purpose",
-      description:
-        "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.",
+      // [leo] 设置页展示用的说明;给模型看的说明在 agent 的 profile 里,不受影响。
+      description: "通用子智能体：调研复杂问题、搜索代码、执行多步骤任务。",
       // 内置子智能体使用显式身份色，避免 UI 按名称 hash 后把 general-purpose 显示为红色。
       color: "blue",
       injectAgentsMd: true,
@@ -122,7 +122,7 @@ function createBuiltInAgents(
         source: "built-in",
       }),
       name: "Explore",
-      description: "Read-only search agent for broad fan-out searches.",
+      description: "只读搜索子智能体：在大量文件和目录里广泛查找，只汇报结论。",
       color: "cyan",
       injectAgentsMd: false,
       modelSelection: exploreOverride,

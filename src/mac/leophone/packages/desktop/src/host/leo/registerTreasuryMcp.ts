@@ -9,12 +9,14 @@ type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string,
 const SERVER_NAME = "leo-treasury";
 
 /** 打包态在 Resources/leo 下;开发态在 packages/desktop/leo 下。 */
-function resolveScriptPath(): string {
-  const packaged = process.resourcesPath
-    ? join(process.resourcesPath, "leo", "treasury-mcp.mjs")
-    : null;
-  if (packaged && existsSync(packaged)) return packaged;
-  return resolve(import.meta.dirname, "../../../leo/treasury-mcp.mjs");
+export function resolveScriptPath(dirname = import.meta.dirname): string {
+  const candidates = [
+    process.resourcesPath ? join(process.resourcesPath, "leo", "treasury-mcp.mjs") : null,
+    // 开发态从打包产物 out/host/index.js 跑;直接跑源码(测试)时在 src/host/leo。
+    resolve(dirname, "../../leo/treasury-mcp.mjs"),
+    resolve(dirname, "../../../leo/treasury-mcp.mjs"),
+  ].filter((candidate): candidate is string => candidate !== null);
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates.at(-1)!;
 }
 
 /**
