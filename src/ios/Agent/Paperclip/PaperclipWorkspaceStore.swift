@@ -28,6 +28,13 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private var listVisible = true
     private var listStale = false
     private let makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)?
+    /// [G2/G5/G8] 灵动岛、完成通知、Spotlight；nil（快捷指令、测试）时不触碰系统界面。
+    private let surfaces: PaperclipSystemSurfaces?
+    /// 关注工单的运行跟踪（只消费实时事件）。
+    private var runWatch = PaperclipRunWatch()
+    /// 本次运行内打开过的工单；本机创建的工单另存于 PaperclipWatchList。
+    private var viewedIssueIDs: Set<String> = []
+    private var holdingBackground = false
     private var revision = UUID()
     private var nextOffset = 0
     private var cookieVaults: [UUID: PaperclipCookieVault] = [:]
@@ -42,8 +49,10 @@ final class PaperclipWorkspaceStore: ObservableObject {
          makeCookieVault: @escaping @MainActor (PaperclipProfile) -> PaperclipCookieVault = {
              PaperclipCookieVault.shared(for: $0)
          }, makeConfiguration: @escaping @MainActor () -> URLSessionConfiguration = { .ephemeral },
-         makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)? = nil) {
+         makeLiveSocket: (@MainActor (URLRequest) -> PaperclipLiveSocket)? = nil,
+         surfaces: PaperclipSystemSurfaces? = nil) {
         self.makeLiveSocket = makeLiveSocket
+        self.surfaces = surfaces
         self.defaults = defaults
         self.makeCookieVault = makeCookieVault
         self.makeConfiguration = makeConfiguration
@@ -78,6 +87,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
         let vault = vault(for: profile)
         await signOut(profile: profile, vault: vault)
         await vault.clear()
+        surfaces?.clear(profileID: id)
         busy = false
         cookieVaults[id] = nil
         PaperclipCookieVault.forget(id)
@@ -118,6 +128,8 @@ final class PaperclipWorkspaceStore: ObservableObject {
         hasMore = false
         nextOffset = 0
         liveIssueIDs = []
+        runWatch = PaperclipRunWatch()
+        viewedIssueIDs = []
     }
 
     func clearLogin() async {
@@ -129,6 +141,8 @@ final class PaperclipWorkspaceStore: ObservableObject {
         // 先尽力撤销服务器会话（失败不阻塞），再清本机 Cookie；否则服务器端会话仍可被复用。
         await signOut(profile: profile, vault: vault)
         await vault.clear()
+        // [G8] 退出登录时清空此配置的 Spotlight 索引，并结束它的实时活动。
+        surfaces?.clear(profileID: profile.id)
         guard stamp == revision, selectedID == profile.id else { return }
         busy = false
     }
@@ -214,6 +228,8 @@ final class PaperclipWorkspaceStore: ObservableObject {
         issues = []
         agents = []
         liveIssueIDs = []
+        runWatch = PaperclipRunWatch()
+        viewedIssueIDs = []
         companyID = id
         nextOffset = 0
         hasMore = false
@@ -258,11 +274,14 @@ final class PaperclipWorkspaceStore: ObservableObject {
         case .failure(let error): failure = failure ?? error
         }
         switch runsResult {
-        case .success(let rows): liveIssueIDs = Set(rows.compactMap(\.issueId))
+        case .success(let rows):
+            liveIssueIDs = Set(rows.compactMap(\.issueId))
+            reconcileWatchedRuns(live: liveIssueIDs)
         case .failure(let error):
             // 运行遥测需要额外权限；403 只是不显示“运行中”标识，不算同步失败。
             if (error as? PaperclipError)?.underlying != .forbidden { failure = failure ?? error }
         }
+        if case .success = issuesResult, let profile = selectedProfile { surfaces?.index(issues, profileID: profile.id) }
         if let failure {
             self.error = PaperclipLabels.error(failure)
             // 过期或切换账号后不继续显示旧账号内容。
@@ -296,10 +315,83 @@ final class PaperclipWorkspaceStore: ObservableObject {
         guard active != foreground else { return }
         foreground = active
         if active {
+            releaseBackground()
             await refresh()
             startLive()
+        } else if surfaces != nil, runWatch.hasActiveRun, live != nil {
+            // [G5] 关注的工单还在运行：在系统允许的后台时间内保持实时通道，完成时才能及时通知；到期即断开。
+            holdingBackground = true
+            surfaces?.holdBackground { [weak self] in
+                guard let self, !self.foreground else { return }
+                self.holdingBackground = false
+                self.live?.stop()
+            }
         } else {
             live?.stop()
+        }
+    }
+
+    private func releaseBackground() {
+        guard holdingBackground else { return }
+        holdingBackground = false
+        surfaces?.releaseBackground()
+    }
+
+    // MARK: - 关注的工单（灵动岛与完成通知）
+
+    /// 本机创建（持久化）或正在查看（本次运行）的工单进入关注；它们开始运行时启动实时活动、结束时通知。
+    func watch(issueID: String, created: Bool = false) {
+        guard let key = watchKey else { return }
+        if created { PaperclipWatchList.add(issueID, key: key, defaults: defaults) }
+        else { viewedIssueIDs.insert(issueID) }
+    }
+
+    private var watchKey: String? {
+        guard let profile = selectedProfile, let user, !companyID.isEmpty else { return nil }
+        return PaperclipWatchList.key(profileID: profile.id, companyID: companyID, userID: user.id)
+    }
+
+    private func trackRun(_ event: PaperclipLiveEvent) {
+        guard surfaces != nil, event.type.hasPrefix("heartbeat.run."), event.issueID != nil, let key = watchKey else { return }
+        let watched = viewedIssueIDs.union(PaperclipWatchList.load(key: key, defaults: defaults))
+        guard let change = runWatch.apply(event, watched: watched) else { return }
+        publish(change)
+        if holdingBackground, !foreground, !runWatch.hasActiveRun {
+            releaseBackground()
+            live?.stop()
+        }
+    }
+
+    private func publish(_ change: PaperclipRunWatch.Change) {
+        guard let surfaces, let profile = selectedProfile, let user, !companyID.isEmpty else { return }
+        let run = change.run
+        let issue = issues.first { $0.id == run.issueID }
+        let reference = PaperclipTaskReference(profileID: profile.id, origin: profile.origin, companyID: companyID,
+                                               userID: user.id, issueID: run.issueID)
+        let agentID = run.agentID ?? issue?.assigneeAgentId
+        surfaces.runChanged(change, context: PaperclipRunContext(
+            reference: reference, identifier: issue?.identifier ?? "", title: issue?.title ?? "",
+            agentName: agents.first { $0.id == agentID }?.name ?? "智能体"))
+    }
+
+    /// 刷新拿到公司级运行列表后：接回上次留下的运行中活动，并为错过终态事件的工单补读一次运行列表。
+    private func reconcileWatchedRuns(live: Set<String>) {
+        guard let surfaces, let client, let user, let profile = selectedProfile, !companyID.isEmpty else { return }
+        for run in surfaces.activeRuns(profileID: profile.id, companyID: companyID) { runWatch.adopt(run) }
+        let stale = runWatch.staleActiveRuns(liveIssueIDs: live)
+        guard !stale.isEmpty else { return }
+        let stamp = revision
+        let company = companyID
+        Task { @MainActor [weak self] in
+            for run in stale {
+                let reference = PaperclipTaskReference(profileID: profile.id, origin: profile.origin, companyID: company,
+                                                       userID: user.id, issueID: run.issueID)
+                guard let rows = try? await client.runs(reference) else { continue }
+                guard let self, stamp == self.revision else { return }
+                guard let row = rows.first(where: { $0.runId == run.runID }),
+                      let change = self.runWatch.resolve(issueID: run.issueID, runID: run.runID, status: row.status) else { continue }
+                self.publish(change)
+            }
         }
     }
 
@@ -346,6 +438,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     }
 
     private func stopLive() {
+        releaseBackground()
         listRefreshTask?.cancel(); listRefreshTask = nil
         liveSubscriptions.removeAll()
         live?.stop()
@@ -354,6 +447,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     }
 
     private func handle(_ event: PaperclipLiveEvent) {
+        trackRun(event)
         switch event.type {
         case "heartbeat.run.queued", "heartbeat.run.status":
             if let issue = event.issueID, let status = event.string("status"), status == "queued" || status == "running" {

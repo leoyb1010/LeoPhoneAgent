@@ -15,7 +15,8 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         project = (IOS / "LeoPhoneAgent.xcodeproj/project.pbxproj").read_text()
         source_paths = sorted([*CORE.glob("*.swift"), *VIEWS.glob("*.swift")])
         # 14 = 13 + Agent/Paperclip/PaperclipIntents.swift（1.56.0 快捷指令动作，留在边界内）。
-        self.assertEqual(len(source_paths), 14)
+        # 16 = 14 + PaperclipLiveActivity.swift（灵动岛/完成通知）+ PaperclipSpotlightIndexer.swift（G2/G5/G8）。
+        self.assertEqual(len(source_paths), 16)
         for path in source_paths:
             self.assertIn(f"path = {path.relative_to(IOS)};", project)
             self.assertGreaterEqual(project.count(f"/* {path.name} in Sources */"), 2)
@@ -37,6 +38,12 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         intents = (CORE / "PaperclipIntents.swift").read_text()
         for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "AIChatViewModel", "apiKey"]:
             self.assertNotIn(forbidden, intents)
+        # G2/G5/G8 系统界面同样只依赖 Paperclip 类型与系统框架。
+        for name in ["PaperclipLiveActivity.swift", "PaperclipSpotlightIndexer.swift"]:
+            surface = (CORE / name).read_text()
+            for forbidden in ["LeoAgentClient", "GatewayHostStore", "ChatStore", "runAgent", "AIChatViewModel", "apiKey",
+                              "NotificationQuickReply", "BackgroundKeepAliveManager", "AgentLiveActivityManager"]:
+                self.assertNotIn(forbidden, surface, name)
 
     def test_native_auth_has_no_password_collection_or_javascript_cookie_bridge(self):
         client = (CORE / "PaperclipClient.swift").read_text()
@@ -59,6 +66,33 @@ class IOSPaperclipContractAudit(unittest.TestCase):
         self.assertIn("await issue(ref)", client)
         self.assertIn('approval.status == "pending"', client)
         self.assertIn("current.contains(where: { $0 == approval })", client)
+
+    def test_cancel_mirrors_mac_route_preflight_and_read_reconciliation(self):
+        # 上游 POST /api/heartbeat-runs/:runId/cancel（server/src/routes/agents.ts），
+        # 与 Mac 端 mutations.ts / reconcile.ts 一致：预检运行属于此任务且在进行，回执可空，用 GET 核实终态。
+        client = (CORE / "PaperclipClient.swift").read_text()
+        cancel = client.split("func cancel(", 1)[1].split("func runLog(", 1)[0]
+        self.assertIn('"/api/heartbeat-runs/\\(id)/cancel", method: "POST"', cancel)
+        self.assertIn('"/api/heartbeat-runs/\\(id)", userID', cancel)
+        self.assertLess(cancel.index("try await runs(ref)"), cancel.index('method: "POST"'))
+        self.assertLess(cancel.index('method: "POST"'), cancel.index("PaperclipRunReceipt"))
+        self.assertEqual(cancel.count('method: "POST"'), 1)
+        self.assertIn('current == "queued" || current == "running"', cancel)
+        self.assertIn("throw PaperclipError.uncertain", cancel)
+        contract = (CORE / "PaperclipContract.swift").read_text()
+        self.assertIn('["cancelled", "succeeded", "failed", "timed_out"]', contract)
+
+    def test_issue_deep_link_selects_paperclip_not_local(self):
+        router = (IOS / "Shared/DeepLinkRouter.swift").read_text()
+        case = router.split("case PaperclipDeepLink.host:", 1)[1].split("default:", 1)[0]
+        self.assertIn("PaperclipDeepLink.parse(url)", case)
+        self.assertIn("IOSExecutionBackend.selectPaperclip()", case)
+        self.assertNotIn("selectLocal", case)
+        self.assertLess(case.index("PaperclipDeepLink.parse(url)"), case.index("selectPaperclip()"))
+        workspace = (VIEWS / "PaperclipWorkspaceView.swift").read_text()
+        self.assertIn("NavigationSplitView", workspace)
+        self.assertIn("sizeClass == .regular", workspace)
+        self.assertIn("PaperclipNavigationInbox.shared", workspace)
 
     def test_no_secrets_in_profile_or_draft_and_no_automatic_mutation_retry(self):
         contract = (CORE / "PaperclipContract.swift").read_text()

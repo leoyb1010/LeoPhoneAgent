@@ -40,6 +40,7 @@ extension Notification.Name {
 ///   leophoneagent://settings/permissions
 ///   leophoneagent://settings/environments[?create_key=…&create_value=…&create_note=…]
 ///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
+///   leophoneagent://paperclip/issue/<id>[?company=<companyId>]   (opens the Paperclip workspace on that issue)
 ///   leophoneagent://shortcut-result?run=<runId>&status=success|error|cancel[&result=…]  (apple-shortcuts run callback)
 ///
 /// Unknown settings paths fall back to the Settings home rather than
@@ -138,6 +139,16 @@ enum DeepLinkRouter {
         case "settings":
             IOSExecutionBackend.selectLocal()
             handleSettings(url: url, coord: coord)
+
+        // [G7] 服务器任务：切到 Paperclip 工作区并打开该工单（通知、灵动岛、Spotlight 都走这里）。
+        // 无效链接不改变工作区。
+        case PaperclipDeepLink.host:
+            guard let target = PaperclipDeepLink.parse(url) else {
+                deepLinkLog.info("paperclip URL invalid")
+                return
+            }
+            IOSExecutionBackend.selectPaperclip()
+            PaperclipNavigationInbox.shared.pending = target
 
         // [C1] 快捷指令 x-success / x-error / x-cancel 回调(通常已在 AppURLEntry 处理)。
         case ShortcutCallbackStore.callbackHost:

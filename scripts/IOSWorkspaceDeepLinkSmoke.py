@@ -28,6 +28,10 @@ pending_methods = '\n'.join(module.extract_swift_method(intents, name) for name 
 contract = (root/'src/ios/Agent/Paperclip/PaperclipContract.swift').read_text()
 backend_start = contract.index('enum IOSExecutionBackend')
 backend = contract[backend_start:contract.index('\n}\n', backend_start) + 3]
+# [G7] 服务器任务深链：解析器与编号校验同样逐字取自生产代码。
+link_start = contract.index('enum PaperclipDeepLink')
+paperclip_link = contract[link_start:contract.index('\n}\n', link_start) + 3]
+component = module.extract_swift_method(contract, 'component')
 content = (root/'src/ios/Views/ContentView.swift').read_text()
 # SwiftUI 接收器不能脱离视图编译：用源码断言确认热启动路径在导航前先切回本机。
 local_write = 'executionBackend = IOSExecutionBackend.local.rawValue'
@@ -49,6 +53,15 @@ final class UserDefaults {
  func string(forKey key: String) -> String? { values[key] }
 }
 ''' + backend + r'''
+enum PaperclipError: Error { case invalidResponse }
+enum PaperclipProfile {
+''' + component + r'''
+}
+''' + paperclip_link + r'''
+// [C1] 快捷指令回调由 AppURLEntry 先处理；这里只需能编译路由里的同名分支。
+final class ShortcutCallbackStore { static let shared = ShortcutCallbackStore(); static let callbackHost = "shortcut-result"
+ @discardableResult func handle(url: URL) -> Bool { false } }
+@MainActor final class PaperclipNavigationInbox { static let shared = PaperclipNavigationInbox(); var pending: PaperclipDeepLink.Target? }
 @MainActor final class ShareCoordinator { var raised = 0; func raisePendingShare() { raised += 1 } }
 @MainActor final class QuickActionRouter {
  static let shared = QuickActionRouter(); var newCalls = 0; var voiceCalls = 0; var quickTasks: [String] = []
@@ -168,6 +181,21 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
    reset(); route(value)
    expect(UserDefaults.standard.string(forKey: key) == "paperclip", "invalid " + value + " changed workspace")
   }
+  // [G7] 服务器任务深链（通知、灵动岛、Spotlight 共用）：切到 Paperclip 工作区并缓冲待打开的工单，不被切回本机。
+  func resetLocal() { UserDefaults.standard.set("local", forKey: key); PaperclipNavigationInbox.shared.pending = nil }
+  resetLocal(); route("leophoneagent://paperclip/issue/issue-1?company=company_a")
+  expect(UserDefaults.standard.string(forKey: key) == "paperclip", "paperclip issue link stayed in local workspace")
+  expect(PaperclipNavigationInbox.shared.pending == PaperclipDeepLink.Target(issueID: "issue-1", companyID: "company_a"), "paperclip issue link lost its target")
+  resetLocal(); route("leophoneagent://paperclip/issue/PAP-12")
+  expect(PaperclipNavigationInbox.shared.pending?.issueID == "PAP-12" && PaperclipNavigationInbox.shared.pending?.companyID == nil, "identifier link not buffered")
+  let built = PaperclipDeepLink.url(issueID: "issue-2", companyID: "company_b")!
+  resetLocal(); route(built.absoluteString)
+  expect(PaperclipNavigationInbox.shared.pending?.issueID == "issue-2", "link built for notifications/Live Activity/Spotlight does not round-trip")
+  for value in ["leophoneagent://paperclip/issue/", "leophoneagent://paperclip/issue/a/b", "leophoneagent://paperclip/agent/x", "leophoneagent://paperclip"] {
+   resetLocal(); route(value)
+   expect(UserDefaults.standard.string(forKey: key) == "local", "invalid " + value + " changed workspace")
+   expect(PaperclipNavigationInbox.shared.pending == nil, "invalid " + value + " buffered a target")
+  }
   // 冷启动缓冲：通知点击、Spotlight、Siri/App Intents 经 setPending/setPendingMac；快捷操作、小组件、控制中心经 postNewChat。
   reset(); NotificationNavigationStore.shared.setPending("notification-session")
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.pending == "notification-session", "notification/Spotlight/Siri cold buffer stayed hidden")
@@ -175,7 +203,7 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.mac?["macSessionId"] == "m1", "Mac session notification stayed hidden")
   reset(); let before = QuickActionRouter.shared.newChatTrigger; QuickActionRouter.shared.startNewChat()
   expect(UserDefaults.standard.string(forKey: key) == "local" && QuickActionRouter.shared.newChatTrigger == before + 1, "home screen quick action stayed hidden")
-  print("PASS production deep links: 18 local routes + 10 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
+  print("PASS production deep links: 18 local routes + 10 rejected, 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
  }
 }
 '''

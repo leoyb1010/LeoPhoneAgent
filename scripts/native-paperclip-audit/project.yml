@@ -20,6 +20,8 @@ targets:
       - path: ../../src/ios/Shared/LeoDesignSystem.swift
       - path: ../../src/ios/Shared/LeoMotionEffects.swift
       - path: ../../src/ios/Views/Chat/ChatColors.swift
+      # [G2] 灵动岛属性与去重（主 App、小组件、逻辑测试共用，无其他依赖）。
+      - path: ../../src/ios/Shared/PaperclipActivityAttributes.swift
       - path: AuditApp.swift
       - path: FixtureServer.swift
     settings:
@@ -36,6 +38,7 @@ targets:
       - path: ../../src/ios/Shared/LeoDesignSystem.swift
       - path: ../../src/ios/Shared/LeoMotionEffects.swift
       - path: ../../src/ios/Views/Chat/ChatColors.swift
+      - path: ../../src/ios/Shared/PaperclipActivityAttributes.swift
       - path: ../../src/ios/MinisTests/PaperclipContractTests.swift
       - path: ../../src/ios/MinisTests/PaperclipClientTests.swift
       - path: ../../src/ios/MinisTests/PaperclipLiveTests.swift

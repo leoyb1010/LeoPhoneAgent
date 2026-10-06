@@ -78,6 +78,21 @@ final class PaperclipIssueDetailModel: ObservableObject {
         }
         busy = false
     }
+    /// [G4] 停止一次运行。客户端先核对运行仍属于此任务且在进行，发出后用读取核实终态；
+    /// 结果未知时只提示刷新核对，不自动重发。
+    func cancelRun(_ runID: String) async {
+        guard !busy else { return }
+        busy = true
+        do {
+            switch try await client.cancel(reference, runID: runID) {
+            case .cancelled: error = nil
+            case .alreadyFinished(let status): error = "这次运行已经结束（\(PaperclipLabels.status(status))），无需停止。"
+            }
+        } catch { record(error) }
+        busy = false
+        await refresh()
+    }
+
     func acknowledgeStatus() {
         guard !busy, let pendingStatus else { return }
         if let data = try? JSONEncoder().encode(pendingStatus) { UserDefaults.standard.set(data, forKey: statusKey + ".lastChecked") }
@@ -669,6 +684,15 @@ struct PaperclipIssueDetailView: View {
             Menu {
                 if model.pendingStatus != nil { Button("核实状态（不会重新发送）") { Task { await model.verifyStatus() } }.disabled(model.busy) }
                 Button("刷新消息", systemImage: "arrow.clockwise") { Task { await model.refresh(full: true) } }
+                // [G4] 停止正在排队或运行的智能体运行（服务器取消接口，不重发）。
+                let running = activeRuns
+                ForEach(running) { run in
+                    Button(running.count > 1 ? "停止\(run.agentName)的运行" : "停止运行", systemImage: "stop.circle", role: .destructive) {
+                        Task { await model.cancelRun(run.id) }
+                    }
+                    .disabled(model.busy)
+                    .accessibilityIdentifier("paperclip.cancelRun")
+                }
                 if let issue = model.issue {
                     if model.pendingStatus != nil {
                         // 嵌套系统 Menu 的 disabled 状态不能作为待核实写入的入口边界。

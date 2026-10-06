@@ -542,4 +542,90 @@ final class PaperclipClientTests: XCTestCase {
         await client.signOut()
         XCTAssertEqual(ledger.values, ["POST /api/auth/sign-out"])
     }
+
+    // MARK: [G4] 取消运行
+
+    private func cancelFixture(runStatus: String, cancelResult: @escaping @Sendable () throws -> (Int, String, String),
+                               finalStatus: String, ledger: PaperclipRequestLedger) {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            let path = request.url!.path
+            if path != "/api/auth/get-session" { ledger.append((request.httpMethod ?? "") + " " + path) }
+            switch path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/runs":
+                return (200, #"[{"runId":"run-1","status":"\#(runStatus)","agentId":"agent"}]"#, "application/json")
+            case "/api/heartbeat-runs/run-1/cancel":
+                XCTAssertEqual(request.httpMethod, "POST")
+                return try cancelResult()
+            case "/api/heartbeat-runs/run-1":
+                return (200, #"{"id":"run-1","companyId":"company","status":"\#(finalStatus)"}"#, "application/json")
+            default: XCTFail("不得请求其他接口：\(path)"); return (404, "{}", "application/json")
+            }
+        }
+    }
+
+    /// 取消成功：预检运行属于此任务且在运行 → 发出一次 POST → 用 GET 核实已取消。
+    func testCancelRunSendsOnceAndConfirmsByRead() async throws {
+        let ledger = PaperclipRequestLedger()
+        cancelFixture(runStatus: "running", cancelResult: { (200, #"{"id":"run-1","companyId":"company","status":"cancelled"}"#, "application/json") },
+                      finalStatus: "cancelled", ledger: ledger)
+        let client = try client()
+        let outcome = try await client.cancel(reference(client), runID: "run-1")
+        XCTAssertEqual(outcome, .cancelled)
+        XCTAssertEqual(ledger.values, ["GET /api/issues/issue", "GET /api/issues/issue/runs",
+                                       "POST /api/heartbeat-runs/run-1/cancel", "GET /api/heartbeat-runs/run-1"])
+    }
+
+    /// 取消时已结束：预检看到运行已结束就不发送；发出后才结束的，按核实到的终态如实报告。
+    func testCancelRunAlreadyFinished() async throws {
+        let ledger = PaperclipRequestLedger()
+        cancelFixture(runStatus: "succeeded", cancelResult: { XCTFail("已结束的运行不得发送取消"); return (500, "{}", "application/json") },
+                      finalStatus: "succeeded", ledger: ledger)
+        var client = try client()
+        var outcome = try await client.cancel(reference(client), runID: "run-1")
+        XCTAssertEqual(outcome, .alreadyFinished("succeeded"))
+        XCTAssertFalse(ledger.values.contains { $0.hasPrefix("POST") })
+
+        let raced = PaperclipRequestLedger()
+        // 服务器对已结束的运行原样返回该运行（空回执也接受），以读取核实为准。
+        cancelFixture(runStatus: "running", cancelResult: { (200, "null", "application/json") }, finalStatus: "succeeded", ledger: raced)
+        client = try self.client()
+        outcome = try await client.cancel(reference(client), runID: "run-1")
+        XCTAssertEqual(outcome, .alreadyFinished("succeeded"))
+        XCTAssertEqual(raced.values.filter { $0.hasPrefix("POST") }.count, 1)
+    }
+
+    /// 回执未知：POST 超时，或核实时仍在运行 → 结果未知，不自动重发。
+    func testCancelRunUnknownReceiptIsUncertainAndNotRetried() async throws {
+        let cases: [(@Sendable () throws -> (Int, String, String), String)] = [
+            ({ throw URLError(.timedOut) }, "running"),
+            ({ (200, "{}", "application/json") }, "running"),
+        ]
+        for (result, final) in cases {
+            let ledger = PaperclipRequestLedger()
+            cancelFixture(runStatus: "running", cancelResult: result, finalStatus: final, ledger: ledger)
+            let client = try client()
+            do { _ = try await client.cancel(reference(client), runID: "run-1"); XCTFail("未核实的取消不能报告成功") }
+            catch { XCTAssertEqual(error as? PaperclipError, .uncertain) }
+            XCTAssertEqual(ledger.values.filter { $0.hasPrefix("POST") }.count, 1, "取消不自动重发")
+        }
+    }
+
+    /// 运行不属于此任务：预检拒绝，写请求未发出。
+    func testCancelRunOfAnotherIssueIsRejectedBeforeSending() async throws {
+        let session = Self.session; let issue = Self.issue
+        PaperclipTestProtocol.install { request in
+            switch request.url!.path {
+            case "/api/auth/get-session": return (200, session, "application/json")
+            case "/api/issues/issue": return (200, issue, "application/json")
+            case "/api/issues/issue/runs", "/api/issues/issue/live-runs": return (200, "[]", "application/json")
+            default: XCTFail("不得发送"); return (500, "{}", "application/json")
+            }
+        }
+        let client = try client()
+        do { _ = try await client.cancel(reference(client), runID: "run-1"); XCTFail("不属于此任务的运行不能取消") }
+        catch { XCTAssertEqual(error as? PaperclipError, .preflightFailed(.http(409))) }
+    }
 }

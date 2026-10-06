@@ -290,6 +290,12 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         guard activity.activityType == CSSearchableItemActionType,
               let itemId = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
               !itemId.isEmpty else { return }
+        // [G8] Paperclip 工单：条目编号就是 G7 深链，走同一入口（App 锁解开后再导航）。
+        if itemId.hasPrefix(PaperclipSpotlightIndexer.identifierPrefix), let url = URL(string: itemId) {
+            logger.info("[Spotlight] open Paperclip issue phase=\(phase)")
+            Task { @MainActor in AppURLEntry.open(url, source: "spotlight") }
+            return
+        }
         if itemId.hasPrefix("collection:") {
             logger.info("[Spotlight] open treasury item phase=\(phase)")
             Task { @MainActor in

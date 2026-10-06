@@ -200,6 +200,29 @@ final class PaperclipClient {
         return row
     }
 
+    /// [G4] 停止一次运行，对照 Mac 端 mutations.ts / reconcile.ts：
+    /// 预检任务与运行归属（运行须属于此任务且仍在排队或运行，已结束则不发送）；
+    /// POST /api/heartbeat-runs/:id/cancel 的回执可以为空，最终状态一律用 GET /api/heartbeat-runs/:id 核实，
+    /// 核实不到终态即为结果未知（不自动重发）。
+    func cancel(_ ref: PaperclipTaskReference, runID: String) async throws -> PaperclipCancelOutcome {
+        let id = try PaperclipProfile.component(runID)
+        let current = try await preflight { () async throws -> String? in
+            _ = try await issue(ref)
+            if let row = try await runs(ref).first(where: { $0.runId == runID }) { return row.status }
+            // 刚开始的运行可能只出现在 live-runs 中。
+            return try await liveRuns(ref).first(where: { $0.id == runID })?.status
+        }
+        guard let current else { throw PaperclipError.preflightFailed(.http(409)) }
+        guard current == "queued" || current == "running" else { return .alreadyFinished(current) }
+        let _: PaperclipJSON = try await authenticated("/api/heartbeat-runs/\(id)/cancel", method: "POST", body: [:], userID: ref.userID)
+        let receipt: PaperclipRunReceipt
+        do { receipt = try await authenticated("/api/heartbeat-runs/\(id)", userID: ref.userID) }
+        catch { throw PaperclipError.uncertain }
+        guard receipt.id == runID, receipt.companyId == ref.companyID else { throw PaperclipError.identityChanged }
+        guard PaperclipCancelOutcome.terminalStatuses.contains(receipt.status) else { throw PaperclipError.uncertain }
+        return receipt.status == "cancelled" ? .cancelled : .alreadyFinished(receipt.status)
+    }
+
     func runLog(_ ref: PaperclipTaskReference, runID: String, offset: Int = 0) async throws -> PaperclipRunLogChunk {
         // 运行与任务归属确认一次后缓存：以前每读一段都重新请求 issue + runs。
         let key = ref.id + "/" + runID

@@ -6,7 +6,7 @@ struct IOSWorkspaceRootView<LocalContent: View>: View {
     private let makeStore: @MainActor () -> PaperclipWorkspaceStore
     @ViewBuilder let localContent: () -> LocalContent
 
-    init(makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore() },
+    init(makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore(surfaces: PaperclipDeviceSurfaces.shared) },
          @ViewBuilder localContent: @escaping () -> LocalContent) {
         self.makeStore = makeStore
         self.localContent = localContent
@@ -49,18 +49,21 @@ struct PaperclipWorkspaceView: View {
     @StateObject private var store: PaperclipWorkspaceStore
 
     init(onReturnToLocal: @escaping () -> Void = {},
-         makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore() }) {
+         makeStore: @escaping @MainActor () -> PaperclipWorkspaceStore = { PaperclipWorkspaceStore(surfaces: PaperclipDeviceSurfaces.shared) }) {
         self.onReturnToLocal = onReturnToLocal
         _store = StateObject(wrappedValue: makeStore())
     }
     @State private var settings = false
     @State private var creating = false
     @State private var focusRequest = 0
-    @State private var createdReference: PaperclipTaskReference?
+    /// 打开的工单：刚创建的、深链指向的；宽屏两栏里也是右栏当前选中的工单。
+    @State private var openedReference: PaperclipTaskReference?
     @State private var query = ""
     @State private var listVisible = false
     @FocusState private var searching: Bool
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @ObservedObject private var inbox = PaperclipNavigationInbox.shared
 
     private var filtered: [PaperclipIssue] {
         let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,58 +81,14 @@ struct PaperclipWorkspaceView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    content
-                }
-                .padding(.horizontal, LeoTheme.Spacing.md)
-                .padding(.bottom, LeoTheme.Spacing.lg)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
-            }
-            .background(LeoTheme.ColorToken.groupedBackground)
-            .navigationTitle("服务器任务")
-            .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let client = store.client, let user = store.user, !store.companyID.isEmpty {
-                    PaperclipCreateIssueView(client: client, companyID: store.companyID, userID: user.id,
-                        agents: store.agents, focusRequest: focusRequest, creating: $creating) { issue in
-                            guard store.client === client, store.user?.id == user.id, store.companyID == issue.companyId else { return }
-                            createdReference = client.reference(for: issue, userID: user.id)
-                            await store.refresh()
-                        }
-                        .id(store.identityKey)
-                }
-            }
-            .navigationDestination(item: $createdReference) { reference in
-                if let client = store.client {
-                    detail(client: client, reference: reference)
-                }
-            }
-            .refreshable { await refresh() }
-            .onAppear { listVisible = true; store.setListVisible(true) }
-            .onDisappear { listVisible = false; store.setListVisible(false) }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("本机", systemImage: "iphone") { onReturnToLocal() }
-                        .accessibilityIdentifier("paperclip.returnLocal")
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { settings = true } label: { Label("服务器设置", systemImage: "gearshape") }
-                        .accessibilityIdentifier("paperclip.settings")
-                    Button { searching = false; focusRequest += 1 } label: { Label("新建任务", systemImage: "square.and.pencil") }
-                        .disabled(store.user == nil || store.companyID.isEmpty)
-                        .accessibilityIdentifier("paperclip.create")
-                }
-            }
-        }
+        workspace
         .id(store.identityKey)
-        .onChange(of: store.identityKey) { _, _ in createdReference = nil }
+        .onChange(of: store.identityKey) { _, _ in openedReference = nil }
         .sheet(isPresented: $settings) { PaperclipServerSettingsView(store: store) }
         // 连接任务放在重置导航路径的 id 之外，退出登录不会意外触发重新登录。
         .task(id: store.selectedID) { if store.selectedProfile != nil { await store.connect() } }
+        // [G7] 深链：等连上（身份或公司变化会重跑）后打开待打开的工单。
+        .task(id: "\(inbox.pending?.id ?? "")|\(store.identityKey)") { await openPendingLink() }
         .task(id: scenePhase) {
             // 进入后台主动断开实时通道；回到前台立即刷新、重新确认身份并连接，再进入周期（以前先睡 15 秒）。
             // 短暂的 inactive（下拉通知中心、多任务切换）不断开，避免反复重连。
@@ -153,16 +112,110 @@ struct PaperclipWorkspaceView: View {
         }
     }
 
+    /// [G6] 宽屏（iPad 常规宽度）左右两栏：左列表、右详情；窄屏保持单栏导航。
+    @ViewBuilder private var workspace: some View {
+        if sizeClass == .regular {
+            NavigationSplitView {
+                listPage(split: true)
+            } detail: {
+                NavigationStack {
+                    if let reference = openedReference, let client = store.client {
+                        detail(client: client, reference: reference).id(reference.id)
+                    } else {
+                        ContentUnavailableView("选择一个任务", systemImage: "sidebar.left",
+                                               description: Text("在左侧选择任务，对话与运行会显示在这里。"))
+                    }
+                }
+            }
+        } else {
+            NavigationStack {
+                listPage(split: false)
+                    .navigationDestination(item: $openedReference) { reference in
+                        if let client = store.client {
+                            detail(client: client, reference: reference)
+                        }
+                    }
+            }
+        }
+    }
+
+    private func listPage(split: Bool) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                content(split: split)
+            }
+            .padding(.horizontal, LeoTheme.Spacing.md)
+            .padding(.bottom, LeoTheme.Spacing.lg)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+        }
+        .background(LeoTheme.ColorToken.groupedBackground)
+        .navigationTitle("服务器任务")
+        .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let client = store.client, let user = store.user, !store.companyID.isEmpty {
+                PaperclipCreateIssueView(client: client, companyID: store.companyID, userID: user.id,
+                    agents: store.agents, focusRequest: focusRequest, creating: $creating) { issue in
+                        guard store.client === client, store.user?.id == user.id, store.companyID == issue.companyId else { return }
+                        store.watch(issueID: issue.id, created: true)
+                        openedReference = client.reference(for: issue, userID: user.id)
+                        await store.refresh()
+                    }
+                    .id(store.identityKey)
+            }
+        }
+        .refreshable { await refresh() }
+        .onAppear { listVisible = true; store.setListVisible(true) }
+        .onDisappear { listVisible = false; store.setListVisible(false) }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("本机", systemImage: "iphone") { onReturnToLocal() }
+                    .accessibilityIdentifier("paperclip.returnLocal")
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { settings = true } label: { Label("服务器设置", systemImage: "gearshape") }
+                    .accessibilityIdentifier("paperclip.settings")
+                Button { searching = false; focusRequest += 1 } label: { Label("新建任务", systemImage: "square.and.pencil") }
+                    .disabled(store.user == nil || store.companyID.isEmpty)
+                    .accessibilityIdentifier("paperclip.create")
+            }
+        }
+    }
+
+    /// [G7] 打开深链指向的工单：链接带公司且不是当前公司时先切公司（身份键变化后重跑）；
+    /// 编号可以是工单 id，也可以是已加载列表里的工单编号（如 PAP-12）。
+    private func openPendingLink() async {
+        guard let target = inbox.pending, let client = store.client, let user = store.user, !store.companyID.isEmpty else { return }
+        if let company = target.companyID, company != store.companyID {
+            if store.companies.contains(where: { $0.id == company }) {
+                await store.selectCompany(company)
+            } else {
+                inbox.pending = nil
+                store.error = "链接里的任务属于当前账号无法访问的公司，未打开。"
+            }
+            return
+        }
+        inbox.pending = nil
+        let issueID = store.issues.first { $0.id == target.issueID || $0.identifier == target.issueID }?.id ?? target.issueID
+        // 让身份变化触发的导航重置先完成，再打开。
+        await Task.yield()
+        openedReference = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
+                                                 companyID: store.companyID, userID: user.id, issueID: issueID)
+    }
+
     private func detail(client: PaperclipClient, reference: PaperclipTaskReference) -> some View {
         PaperclipIssueDetailView(client: client, reference: reference, agents: store.agents,
                                  live: store.live, userLabel: store.user?.label)
+            // [G2/G5] 正在查看的工单进入关注：开始运行进灵动岛，结束时通知。
+            .onAppear { store.watch(issueID: reference.issueID) }
     }
 
     private func refresh() async {
         if store.user == nil { await store.connect() } else { await store.refresh() }
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(split: Bool) -> some View {
         if let user = store.user, let client = store.client {
             PaperclipListToolbar(store: store, query: $query, searching: $searching)
                 .padding(.top, LeoTheme.Spacing.xs)
@@ -189,11 +242,25 @@ struct PaperclipWorkspaceView: View {
                     .padding(.leading, 4)
                     .accessibilityAddTraits(.isHeader)
                     ForEach(rows) { issue in
-                        NavigationLink {
-                            detail(client: client, reference: client.reference(for: issue, userID: user.id))
-                        } label: {
-                            PaperclipIssueCard(issue: issue, assignee: store.agents.first { $0.id == issue.assigneeAgentId },
-                                               running: store.liveIssueIDs.contains(issue.id), client: client)
+                        let card = PaperclipIssueCard(issue: issue, assignee: store.agents.first { $0.id == issue.assigneeAgentId },
+                                                      running: store.liveIssueIDs.contains(issue.id), client: client)
+                        Group {
+                            if split {
+                                // 两栏：选中只换右栏详情，列表不重建、不重新加载。
+                                let selected = openedReference?.issueID == issue.id
+                                Button { openedReference = client.reference(for: issue, userID: user.id) } label: {
+                                    card.overlay {
+                                        RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
+                                            .strokeBorder(LeoTheme.ColorToken.accent, lineWidth: 2)
+                                            .opacity(selected ? 1 : 0)
+                                    }
+                                }
+                                .accessibilityAddTraits(selected ? .isSelected : [])
+                            } else {
+                                NavigationLink {
+                                    detail(client: client, reference: client.reference(for: issue, userID: user.id))
+                                } label: { card }
+                            }
                         }
                         .buttonStyle(LeoSquishButtonStyle())
                         .padding(.bottom, 10)

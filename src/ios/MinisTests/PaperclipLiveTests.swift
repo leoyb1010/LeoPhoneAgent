@@ -723,3 +723,108 @@ private final class LoopbackWebSocketServer: @unchecked Sendable {
         listener.cancel()
     }
 }
+
+/// [G2/G5] 关注工单的运行跟踪与灵动岛去重。
+final class PaperclipRunWatchTests: XCTestCase {
+    private func event(_ type: String, issue: String = "issue", run: String = "run-1", _ payload: [String: PaperclipJSON] = [:]) -> PaperclipLiveEvent {
+        var body = payload
+        body["issueId"] = .string(issue)
+        body["runId"] = .string(run)
+        return PaperclipLiveEvent(companyId: "company", type: type, payload: body)
+    }
+
+    func testWatchedRunStartsProgressesAndFinishesOnce() {
+        var watch = PaperclipRunWatch()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        guard case .active(let started)? = watch.apply(event("heartbeat.run.queued", ["status": .string("queued"), "agentId": .string("agent")]),
+                                                       watched: ["issue"], now: now) else { return XCTFail("关注工单的运行开始应启动活动") }
+        XCTAssertEqual(started.status, "queued")
+        XCTAssertEqual(started.agentID, "agent")
+        XCTAssertEqual(started.startedAt, now)
+        guard case .active(let running)? = watch.apply(event("heartbeat.run.status", ["status": .string("running")]), watched: ["issue"]) else {
+            return XCTFail("状态变化要更新")
+        }
+        XCTAssertEqual(running.startedAt, now, "同一运行保留开始时间")
+        XCTAssertNil(watch.apply(event("heartbeat.run.status", ["status": .string("running")]), watched: ["issue"]), "相同状态不重复推送")
+        guard case .active(let progressed)? = watch.apply(event("heartbeat.run.progress", ["currentToolName": .string("Bash")]), watched: ["issue"]) else {
+            return XCTFail("阶段变化要更新")
+        }
+        XCTAssertEqual(progressed.stage, "正在使用 Bash")
+        XCTAssertTrue(watch.hasActiveRun)
+        guard case .finished(let done)? = watch.apply(event("heartbeat.run.status", ["status": .string("succeeded")]), watched: ["issue"]) else {
+            return XCTFail("终态要报告")
+        }
+        XCTAssertEqual(done.status, "succeeded")
+        XCTAssertFalse(watch.hasActiveRun)
+        // 重连后服务器可能再次推送同一终态或迟到的进度：不重复通知、不复活。
+        XCTAssertNil(watch.apply(event("heartbeat.run.status", ["status": .string("succeeded")]), watched: ["issue"]))
+        XCTAssertNil(watch.apply(event("heartbeat.run.progress", ["message": .string("收尾")]), watched: ["issue"]))
+        // 同一工单的下一次运行重新开始。
+        guard case .active(let next)? = watch.apply(event("heartbeat.run.status", run: "run-2", ["status": .string("running")]), watched: ["issue"]) else {
+            return XCTFail("新运行要重新启动活动")
+        }
+        XCTAssertEqual(next.runID, "run-2")
+    }
+
+    func testUnwatchedIssuesAndOtherEventsAreIgnored() {
+        var watch = PaperclipRunWatch()
+        XCTAssertNil(watch.apply(event("heartbeat.run.status", ["status": .string("running")]), watched: ["other"]))
+        XCTAssertNil(watch.apply(event("heartbeat.run.log", ["chunk": .string("x")]), watched: ["issue"]))
+        XCTAssertNil(watch.apply(PaperclipLiveEvent(companyId: "company", type: "heartbeat.run.status", payload: ["status": .string("running")]),
+                                 watched: ["issue"]), "缺工单或运行编号的事件忽略")
+        // 正在看的运行中工单没有开始事件：第一条进度即开始。
+        guard case .active(let run)? = watch.apply(event("heartbeat.run.progress", ["message": .string("读取文件")]), watched: ["issue"]) else {
+            return XCTFail("进度事件也能开始跟踪")
+        }
+        XCTAssertEqual(run.status, "running")
+        XCTAssertEqual(run.stage, "读取文件")
+    }
+
+    func testAdoptedRunsAreReconciledWhenTerminalEventWasMissed() {
+        var watch = PaperclipRunWatch()
+        watch.adopt(.init(issueID: "issue", runID: "run-1", status: "running"))
+        watch.adopt(.init(issueID: "issue", runID: "run-0", status: "running"))
+        XCTAssertEqual(watch.runs["issue"]?.runID, "run-1", "已在跟踪的工单不被覆盖")
+        XCTAssertEqual(watch.staleActiveRuns(liveIssueIDs: ["issue"]), [], "服务器仍在运行的不补读")
+        XCTAssertEqual(watch.staleActiveRuns(liveIssueIDs: []).map(\.runID), ["run-1"])
+        XCTAssertNil(watch.resolve(issueID: "issue", runID: "run-1", status: "running"), "仍在运行不算终态")
+        XCTAssertNil(watch.resolve(issueID: "issue", runID: "run-9", status: "failed"), "别的运行不影响")
+        guard case .finished(let run)? = watch.resolve(issueID: "issue", runID: "run-1", status: "failed") else { return XCTFail("补读到终态要报告") }
+        XCTAssertEqual(run.status, "failed")
+        XCTAssertNil(watch.resolve(issueID: "issue", runID: "run-1", status: "failed"), "只报告一次")
+        // 接回的工单即使不在关注列表里，后续事件也继续跟踪。
+        var adopted = PaperclipRunWatch()
+        adopted.adopt(.init(issueID: "issue", runID: "run-1", status: "running"))
+        XCTAssertNotNil(adopted.apply(event("heartbeat.run.status", ["status": .string("cancelled")]), watched: []))
+    }
+
+    /// 同一工单只允许一个活动：App 退到后台再回来、重复请求、上次已结束仍挂着的卡片都不会叠出第二个。
+    func testLiveActivityDedupeKeepsOneActivityPerIssue() {
+        let key = PaperclipActivityAttributes.issueKey(profileID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+                                                       companyID: "company", issueID: "issue")
+        XCTAssertEqual(key, "00000000-0000-0000-0000-000000000001/company/issue")
+        let existing: [PaperclipActivityDedupe.Existing] = [
+            .init(id: "ended", issueKey: key, isLive: false),
+            .init(id: "a", issueKey: key, isLive: true),
+            .init(id: "b", issueKey: key, isLive: true),
+            .init(id: "other", issueKey: key + "-x", isLive: true),
+        ]
+        XCTAssertEqual(PaperclipActivityDedupe.plan(existing: existing, issueKey: key), .init(reuse: "a", dismiss: ["ended", "b"]))
+        XCTAssertEqual(PaperclipActivityDedupe.plan(existing: [.init(id: "ended", issueKey: key, isLive: false)], issueKey: key),
+                       .init(reuse: nil, dismiss: ["ended"]), "上一轮已结束的卡片在新运行开始时移除，由新活动取代")
+        XCTAssertEqual(PaperclipActivityDedupe.plan(existing: [], issueKey: key), .init(reuse: nil, dismiss: []))
+    }
+
+    func testActivityPhaseMapping() {
+        typealias Phase = PaperclipActivityAttributes.ContentState.Phase
+        XCTAssertEqual(Phase(runStatus: "queued"), .queued)
+        XCTAssertEqual(Phase(runStatus: "running"), .running)
+        XCTAssertEqual(Phase(runStatus: "succeeded"), .succeeded)
+        XCTAssertEqual(Phase(runStatus: "timed_out"), .failed)
+        XCTAssertEqual(Phase(runStatus: "failed"), .failed)
+        XCTAssertEqual(Phase(runStatus: "cancelled"), .cancelled)
+        XCTAssertTrue(Phase.succeeded.isTerminal && Phase.failed.isTerminal && Phase.cancelled.isTerminal)
+        XCTAssertFalse(Phase.running.isTerminal || Phase.queued.isTerminal)
+        XCTAssertEqual(PaperclipActivityAttributes.lingerAfterTerminal, 4 * 3600)
+    }
+}

@@ -351,3 +351,101 @@ enum PaperclipThread {
         return result
     }
 }
+
+// MARK: - 关注工单的运行跟踪（灵动岛与完成通知的事件来源）
+
+/// [G2/G5] 关注工单（本机创建或正在查看）的运行变化。只消费已有的实时事件，不新增轮询；
+/// 一个工单只跟踪最近一次运行，同一运行的终态只报告一次（重连补发、迟到事件都不会重复通知）。
+struct PaperclipRunWatch: Equatable, Sendable {
+    struct Run: Equatable, Sendable {
+        let issueID: String
+        let runID: String
+        var status: String
+        var agentID: String?
+        var startedAt: Date?
+        /// 当前阶段：工具名或进度消息。
+        var stage: String?
+        var isActive: Bool { status == "queued" || status == "running" }
+    }
+    enum Change: Equatable, Sendable {
+        /// 开始运行或阶段变化。
+        case active(Run)
+        /// 运行结束（成功、失败、取消、超时），每个运行只出现一次。
+        case finished(Run)
+        var run: Run {
+            switch self { case .active(let run), .finished(let run): return run }
+        }
+    }
+    static let terminalStatuses: Set<String> = ["succeeded", "failed", "cancelled", "timed_out"]
+
+    private(set) var runs: [String: Run] = [:]
+    private var finished: Set<String> = []
+
+    var hasActiveRun: Bool { runs.values.contains(where: \.isActive) }
+
+    /// - Parameter watched: 关注的工单；已在跟踪的工单（例如从上次的实时活动接回的）继续跟踪。
+    mutating func apply(_ event: PaperclipLiveEvent, watched: Set<String>, now: Date = Date()) -> Change? {
+        guard let issueID = event.issueID, let runID = event.runID, !finished.contains(runID),
+              watched.contains(issueID) || runs[issueID] != nil else { return nil }
+        let existing = runs[issueID].flatMap { $0.runID == runID ? $0 : nil }
+        switch event.type {
+        case "heartbeat.run.queued", "heartbeat.run.status":
+            guard let status = event.string("status") ?? (event.type == "heartbeat.run.queued" ? "queued" : nil) else { return nil }
+            var run = existing ?? Run(issueID: issueID, runID: runID, status: status)
+            run.status = status
+            run.agentID = event.string("agentId") ?? run.agentID
+            run.startedAt = run.startedAt ?? PaperclipDates.parse(event.string("startedAt")) ?? now
+            if Self.terminalStatuses.contains(status) {
+                finished.insert(runID)
+                runs[issueID] = run
+                return .finished(run)
+            }
+            guard run.isActive else { return nil }
+            let changed = existing == nil || existing?.status != status
+            runs[issueID] = run
+            return changed ? .active(run) : nil
+        case "heartbeat.run.progress":
+            // 已在看的运行中工单没有开始事件：第一条进度即视为开始。
+            var run = existing ?? Run(issueID: issueID, runID: runID, status: "running", startedAt: now)
+            guard run.isActive else { return nil }
+            let stage = Self.stage(event) ?? run.stage
+            guard existing == nil || stage != run.stage else { return nil }
+            run.stage = stage
+            runs[issueID] = run
+            return .active(run)
+        default:
+            return nil
+        }
+    }
+
+    static func stage(_ event: PaperclipLiveEvent) -> String? {
+        if let tool = event.string("currentToolName")?.trimmingCharacters(in: .whitespacesAndNewlines), !tool.isEmpty {
+            return "正在使用 " + String(tool.prefix(40))
+        }
+        if let message = event.string("message")?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+            return String(message.prefix(80))
+        }
+        return nil
+    }
+
+    /// 接回上次留下的运行中活动（App 重启后），以便补核终态；已结束或已在跟踪的不覆盖。
+    mutating func adopt(_ run: Run) {
+        guard run.isActive, !finished.contains(run.runID), runs[run.issueID] == nil else { return }
+        runs[run.issueID] = run
+    }
+
+    /// 本地认为仍在运行、但公司级 live-runs 已经没有的工单：断线或后台期间错过了终态事件，需要补读一次运行列表。
+    func staleActiveRuns(liveIssueIDs: Set<String>) -> [Run] {
+        runs.values.filter { $0.isActive && !liveIssueIDs.contains($0.issueID) }.sorted { $0.issueID < $1.issueID }
+    }
+
+    /// 补读得到的终态；运行已被更新的运行取代或状态仍在进行时不变。
+    mutating func resolve(issueID: String, runID: String, status: String) -> Change? {
+        guard var run = runs[issueID], run.runID == runID, run.isActive, Self.terminalStatuses.contains(status),
+              !finished.contains(runID) else { return nil }
+        run.status = status
+        finished.insert(runID)
+        runs[issueID] = run
+        return .finished(run)
+    }
+}
