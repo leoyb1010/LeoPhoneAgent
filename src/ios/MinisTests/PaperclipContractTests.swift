@@ -278,3 +278,72 @@ final class PaperclipContractTests: XCTestCase {
         XCTAssertEqual(draft.firstSubmittedAt, originalTime)
     }
 }
+
+/// [G1/G7/G8] 结果读取、深链、关注列表与 Spotlight 条目。
+final class PaperclipUpgradeContractTests: XCTestCase {
+    private func issue(_ status: String) throws -> PaperclipIssue {
+        try JSONDecoder().decode(PaperclipIssue.self, from: Data(#"{"id":"issue","companyId":"company","identifier":"PAP-12","title":"整理周报","status":"\#(status)","priority":"medium"}"#.utf8))
+    }
+    private func comment(_ id: String, body: String, agent: Bool) -> PaperclipComment {
+        PaperclipComment(id: id, companyId: "company", issueId: "issue", body: body, authorUserId: agent ? nil : "human",
+                         authorAgentId: agent ? "agent" : nil, clientRequestId: nil, createdAt: nil)
+    }
+
+    func testIssueResultReturnsLatestAgentReplyInFull() throws {
+        let long = String(repeating: "结", count: 400)
+        let comments = [comment("1", body: "旧结果", agent: true), comment("2", body: long, agent: true), comment("3", body: "谢谢", agent: false)]
+        let done = PaperclipIssueResult.compose(issue: try issue("done"), comments: comments)
+        XCTAssertEqual(done.value, long, "输出是最近一条智能体回复全文，人类评论不算结果")
+        XCTAssertTrue(done.dialog.hasPrefix("「整理周报」已完成。结果："))
+        XCTAssertLessThan(done.dialog.count, long.count, "Siri 只念开头")
+        let running = PaperclipIssueResult.compose(issue: try issue("in_progress"), comments: comments)
+        XCTAssertEqual(running.value, long)
+        XCTAssertTrue(running.dialog.contains("当前状态为进行中"))
+        let empty = PaperclipIssueResult.compose(issue: try issue("todo"), comments: [comment("3", body: "请处理", agent: false)])
+        XCTAssertEqual(empty.value, "")
+        XCTAssertEqual(empty.dialog, "「整理周报」待处理，还没有智能体给出结果。")
+    }
+
+    func testPaperclipDeepLinkRoundTripAndRejectsInvalidLinks() throws {
+        let url = try XCTUnwrap(PaperclipDeepLink.url(issueID: "issue-1", companyID: "company_a"))
+        XCTAssertEqual(url.absoluteString, "leophoneagent://paperclip/issue/issue-1?company=company_a")
+        XCTAssertEqual(PaperclipDeepLink.parse(url), .init(issueID: "issue-1", companyID: "company_a"))
+        XCTAssertEqual(PaperclipDeepLink.parse(URL(string: "leophoneagent://paperclip/issue/PAP-12")!), .init(issueID: "PAP-12", companyID: nil))
+        XCTAssertEqual(PaperclipDeepLink.parse(URL(string: "leophoneagent://paperclip/issue/x?company=../evil")!), .init(issueID: "x", companyID: nil),
+                       "非法公司编号丢弃，不跳到别的公司")
+        for bad in ["leophoneagent://paperclip/issue/", "leophoneagent://paperclip/issue/a/b", "leophoneagent://paperclip/agent/a",
+                    "leophoneagent://paperclip", "leophoneagent://sessions/issue", "https://paperclip/issue/a", "leophoneagent://paperclip/issue/a%20b"] {
+            XCTAssertNil(PaperclipDeepLink.parse(URL(string: bad)!), bad)
+        }
+        XCTAssertNil(PaperclipDeepLink.url(issueID: "a/b", companyID: nil))
+        XCTAssertEqual(PaperclipSpotlightIndexer.identifierPrefix, "leophoneagent://paperclip/")
+        XCTAssertTrue(url.absoluteString.hasPrefix(PaperclipSpotlightIndexer.identifierPrefix))
+    }
+
+    func testWatchListKeepsRecentCreatedIssuesPerIdentity() {
+        let suite = "paperclip.watch.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let profile = UUID()
+        let key = PaperclipWatchList.key(profileID: profile, companyID: "company", userID: "human")
+        XCTAssertTrue(key.hasPrefix("leo.paperclip.") && key.contains(profile.uuidString), "删除配置时按前缀与配置编号清除")
+        for index in 0..<55 { PaperclipWatchList.add("issue-\(index)", key: key, defaults: defaults) }
+        PaperclipWatchList.add("issue-10", key: key, defaults: defaults)
+        let list = PaperclipWatchList.load(key: key, defaults: defaults)
+        XCTAssertEqual(list.count, PaperclipWatchList.limit)
+        XCTAssertEqual(list.last, "issue-10")
+        XCTAssertFalse(list.contains("issue-0"))
+        XCTAssertEqual(Set(list).count, list.count)
+    }
+
+    func testSpotlightItemHoldsOnlyTitleAndIdentifier() throws {
+        let profile = UUID()
+        let raw = try JSONDecoder().decode(PaperclipIssue.self, from: Data(#"{"id":"issue","companyId":"company","identifier":"PAP-12","title":"整理周报","description":"机密描述","status":"done","priority":"medium"}"#.utf8))
+        let item = try XCTUnwrap(PaperclipSpotlightIndexer.item(for: raw, profileID: profile))
+        XCTAssertEqual(item.uniqueIdentifier, "leophoneagent://paperclip/issue/issue?company=company", "点击走 G7 深链")
+        XCTAssertEqual(item.domainIdentifier, PaperclipSpotlightIndexer.domain(profileID: profile))
+        XCTAssertEqual(item.attributeSet.title, "PAP-12 整理周报")
+        XCTAssertNil(item.attributeSet.contentDescription, "不索引描述")
+        XCTAssertEqual(item.attributeSet.keywords, ["PAP-12", "Paperclip"])
+    }
+}

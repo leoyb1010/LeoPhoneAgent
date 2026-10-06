@@ -61,6 +61,9 @@
 		F0ACB0000000000000000009 /* PaperclipLiveConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000009 /* PaperclipLiveConnection.swift */; };
 		F0ACA0000000000000000010 /* PaperclipRunStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000010 /* PaperclipRunStream.swift */; };
 		F0ACB0000000000000000010 /* PaperclipRunStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000010 /* PaperclipRunStream.swift */; };
+		E5PCG0021 /* PaperclipLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0020 /* PaperclipLiveActivity.swift */; };
+		E5PCG0031 /* PaperclipSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0030 /* PaperclipSpotlightIndexer.swift */; };
+		E5PCG0032 /* PaperclipSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0030 /* PaperclipSpotlightIndexer.swift */; };
 		F0ACA0000000000000000011 /* PaperclipDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000011 /* PaperclipDesign.swift */; };
 		F0ACA0000000000000000012 /* PaperclipThreadViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000012 /* PaperclipThreadViews.swift */; };
 		F0ACA0000000000000000013 /* PaperclipIssueListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000013 /* PaperclipIssueListViews.swift */; };
@@ -336,11 +339,15 @@
 		E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000013 /* EnhancedBackgroundSettingsView.swift */; };
 		E5G000004 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5G000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
+		E5PCG0011 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
+		E5PCG0012 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
 		E5GWF0003 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5GWF0004 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5H000001 /* AgentWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000011 /* AgentWidgetBundle.swift */; };
 		E5H000002 /* AgentLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000012 /* AgentLiveActivityWidget.swift */; };
+		E5PCG0041 /* PaperclipLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0040 /* PaperclipLiveActivityWidget.swift */; };
 		E5H000003 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
+		E5PCG0013 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
 		E5H000009 /* AgentWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5H000010 /* AgentWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5I000001 /* SpeechRecognitionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5I000011 /* SpeechRecognitionManager.swift */; };
 		E5I000002 /* AudioWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5I000012 /* AudioWaveformView.swift */; };
@@ -835,6 +842,8 @@
 		F0AC10000000000000000008 /* PaperclipLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLive.swift; sourceTree = SOURCE_ROOT; };
 		F0AC10000000000000000009 /* PaperclipLiveConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLiveConnection.swift; sourceTree = SOURCE_ROOT; };
 		F0AC10000000000000000010 /* PaperclipRunStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipRunStream.swift; sourceTree = SOURCE_ROOT; };
+		E5PCG0020 /* PaperclipLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLiveActivity.swift; sourceTree = SOURCE_ROOT; };
+		E5PCG0030 /* PaperclipSpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipSpotlightIndexer.swift; sourceTree = SOURCE_ROOT; };
 		F0AC10000000000000000011 /* PaperclipDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipDesign.swift; sourceTree = SOURCE_ROOT; };
 		F0AC10000000000000000012 /* PaperclipThreadViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipThreadViews.swift; sourceTree = SOURCE_ROOT; };
 		F0AC10000000000000000013 /* PaperclipIssueListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipIssueListViews.swift; sourceTree = SOURCE_ROOT; };
@@ -1164,11 +1173,13 @@
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
 		E5G000013 /* EnhancedBackgroundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancedBackgroundSettingsView.swift; sourceTree = "<group>"; };
 		E5G000014 /* AgentActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityAttributes.swift; sourceTree = "<group>"; };
+		E5PCG0010 /* PaperclipActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipActivityAttributes.swift; sourceTree = "<group>"; };
 		24B74F300D94BD261002831C /* CommandRisk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRisk.swift; sourceTree = "<group>"; };
 		E5GWF0013 /* GeminiWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiWireFormat.swift; sourceTree = "<group>"; };
 		E5H000010 /* AgentWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgentWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5H000011 /* AgentWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWidgetBundle.swift; sourceTree = "<group>"; };
 		E5H000012 /* AgentLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityWidget.swift; sourceTree = "<group>"; };
+		E5PCG0040 /* PaperclipLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipLiveActivityWidget.swift; sourceTree = "<group>"; };
 		E5H000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5H000014 /* AgentWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentWidget.entitlements; sourceTree = "<group>"; };
 		E5I000011 /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
@@ -2041,6 +2052,7 @@
 			isa = PBXGroup;
 			children = (
 				E5G000014 /* AgentActivityAttributes.swift */,
+				E5PCG0010 /* PaperclipActivityAttributes.swift */,
 				24B74F300D94BD261002831C /* CommandRisk.swift */,
 				E5AT00011 /* AudioTogglePlaybackIntent.swift */,
 				E5Q000013 /* AppLogger.swift */,
@@ -2127,6 +2139,7 @@
 			children = (
 				E5H000011 /* AgentWidgetBundle.swift */,
 				E5H000012 /* AgentLiveActivityWidget.swift */,
+				E5PCG0040 /* PaperclipLiveActivityWidget.swift */,
 				E5H000013 /* Info.plist */,
 				E5H000014 /* AgentWidget.entitlements */,
 			);
@@ -2304,6 +2317,8 @@
 				F0AC10000000000000000008 /* PaperclipLive.swift */,
 				F0AC10000000000000000009 /* PaperclipLiveConnection.swift */,
 				F0AC10000000000000000010 /* PaperclipRunStream.swift */,
+				E5PCG0020 /* PaperclipLiveActivity.swift */,
+				E5PCG0030 /* PaperclipSpotlightIndexer.swift */,
 				F0AC10000000000000000011 /* PaperclipDesign.swift */,
 				F0AC10000000000000000012 /* PaperclipThreadViews.swift */,
 				F0AC10000000000000000013 /* PaperclipIssueListViews.swift */,
@@ -3107,6 +3122,7 @@
 				F0ACB0000000000000000008 /* PaperclipLive.swift in Sources */,
 				F0ACB0000000000000000009 /* PaperclipLiveConnection.swift in Sources */,
 				F0ACB0000000000000000010 /* PaperclipRunStream.swift in Sources */,
+				E5PCG0032 /* PaperclipSpotlightIndexer.swift in Sources */,
                 E5HOUB002 /* HarnessOutbox.swift in Sources */,
                 E5HFA002 /* HarnessFullAuto.swift in Sources */,
                 E5DGR002 /* DiagnosticRing.swift in Sources */,
@@ -3127,6 +3143,7 @@
 				E5MG0003 /* ModelGroup.swift in Sources */,
 				E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
+				E5PCG0012 /* PaperclipActivityAttributes.swift in Sources */,
 				E5ART0003 /* ArtifactModels.swift in Sources */,
 				E5ART0004 /* ArtifactRepository.swift in Sources */,
 				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
@@ -3572,6 +3589,7 @@
 				E5G000002 /* AgentLiveActivityManager.swift in Sources */,
 				E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,
+				E5PCG0011 /* PaperclipActivityAttributes.swift in Sources */,
 				E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */,
 				E5I000001 /* SpeechRecognitionManager.swift in Sources */,
 				E5I000002 /* AudioWaveformView.swift in Sources */,
@@ -3673,6 +3691,8 @@
 				F0ACA0000000000000000008 /* PaperclipLive.swift in Sources */,
 				F0ACA0000000000000000009 /* PaperclipLiveConnection.swift in Sources */,
 				F0ACA0000000000000000010 /* PaperclipRunStream.swift in Sources */,
+				E5PCG0021 /* PaperclipLiveActivity.swift in Sources */,
+				E5PCG0031 /* PaperclipSpotlightIndexer.swift in Sources */,
 				F0ACA0000000000000000011 /* PaperclipDesign.swift in Sources */,
 				F0ACA0000000000000000012 /* PaperclipThreadViews.swift in Sources */,
 				F0ACA0000000000000000013 /* PaperclipIssueListViews.swift in Sources */,
@@ -3754,7 +3774,9 @@
 			files = (
 				E5H000001 /* AgentWidgetBundle.swift in Sources */,
 				E5H000002 /* AgentLiveActivityWidget.swift in Sources */,
+				E5PCG0041 /* PaperclipLiveActivityWidget.swift in Sources */,
 				E5H000003 /* AgentActivityAttributes.swift in Sources */,
+				E5PCG0013 /* PaperclipActivityAttributes.swift in Sources */,
 				E5AT00003 /* AudioTogglePlaybackIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

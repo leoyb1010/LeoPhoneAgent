@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// Paperclip 994d6edcdd4e15d5f9cc5cf8c135ac599104b86a 的原生客户端契约。
@@ -11,6 +12,65 @@ enum IOSExecutionBackend: String, CaseIterable, Codable {
     /// @AppStorage 观察同一键，会把隐藏的服务器任务页切回本机。
     static func selectLocal(_ defaults: UserDefaults = .standard) {
         defaults.set(IOSExecutionBackend.local.rawValue, forKey: storageKey)
+    }
+    /// [G7] 服务器任务深链（含其通知、灵动岛、Spotlight 入口）要落在 Paperclip 工作区。
+    static func selectPaperclip(_ defaults: UserDefaults = .standard) {
+        defaults.set(IOSExecutionBackend.paperclip.rawValue, forKey: storageKey)
+    }
+}
+
+/// [G7] `leophoneagent://paperclip/issue/<id>[?company=<companyId>]`：切到 Paperclip 工作区并打开该工单。
+/// 工单与公司编号只接受服务器编号字符集；不合法的链接返回 nil，不改变工作区。
+enum PaperclipDeepLink {
+    static let host = "paperclip"
+    struct Target: Hashable, Sendable {
+        let issueID: String
+        let companyID: String?
+        var id: String { "\(companyID ?? "")/\(issueID)" }
+    }
+    static func url(issueID: String, companyID: String?) -> URL? {
+        guard let issue = try? PaperclipProfile.component(issueID) else { return nil }
+        var parts = URLComponents()
+        parts.scheme = "leophoneagent"
+        parts.host = host
+        parts.path = "/issue/" + issue
+        if let company = companyID.flatMap({ try? PaperclipProfile.component($0) }) {
+            parts.queryItems = [URLQueryItem(name: "company", value: company)]
+        }
+        return parts.url
+    }
+    static func parse(_ url: URL) -> Target? {
+        guard url.scheme == "leophoneagent", url.host == host else { return nil }
+        let segments = url.path.split(separator: "/").map(String.init)
+        guard segments.count == 2, segments[0] == "issue",
+              let issue = try? PaperclipProfile.component(segments[1]) else { return nil }
+        let company = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .first(where: { $0.name == "company" })?.value.flatMap { try? PaperclipProfile.component($0) }
+        return Target(issueID: issue, companyID: company)
+    }
+}
+
+/// [G7] 深链交给工作区的待打开工单；冷启动时工作区尚未挂载，先在这里缓冲，连上后再打开。
+@MainActor
+final class PaperclipNavigationInbox: ObservableObject {
+    static let shared = PaperclipNavigationInbox()
+    @Published var pending: PaperclipDeepLink.Target?
+}
+
+/// [G2/G5] 关注的工单：本机（App 或快捷指令）创建的会持久化（每个配置/公司/用户最多 50 个），
+/// 正在查看的由工作区在本次运行内记住。键以 leo.paperclip. 开头并含配置编号，删除配置时一并清除。
+enum PaperclipWatchList {
+    static let limit = 50
+    static func key(profileID: UUID, companyID: String, userID: String) -> String {
+        "leo.paperclip.watched.v1.\(profileID.uuidString).\(companyID).\(userID)"
+    }
+    static func load(key: String, defaults: UserDefaults = .standard) -> [String] {
+        defaults.stringArray(forKey: key) ?? []
+    }
+    static func add(_ issueID: String, key: String, defaults: UserDefaults = .standard) {
+        var list = load(key: key, defaults: defaults).filter { $0 != issueID }
+        list.append(issueID)
+        defaults.set(Array(list.suffix(limit)), forKey: key)
     }
 }
 
@@ -172,6 +232,18 @@ struct PaperclipRun: Decodable, Identifiable, Sendable, Equatable {
     var id: String { runId }
     var isActive: Bool { status == "queued" || status == "running" }
 }
+/// [G4] 取消与核实运行时只读的字段（POST /cancel 回执与 GET /api/heartbeat-runs/:id）。
+struct PaperclipRunReceipt: Decodable, Sendable {
+    let id: String
+    let companyId: String
+    let status: String
+}
+/// [G4] 停止运行的结果：已停止，或发出前/核实时运行已经自行结束（附结束状态）。
+enum PaperclipCancelOutcome: Equatable, Sendable {
+    case cancelled
+    case alreadyFinished(String)
+    static let terminalStatuses: Set<String> = ["cancelled", "succeeded", "failed", "timed_out"]
+}
 struct PaperclipRunLogChunk: Decodable, Sendable {
     let runId: String
     let content: String
@@ -311,6 +383,23 @@ enum PaperclipFullAuto {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
     /// 审批决定要不要再弹「确认批准 / 拒绝？」。
     static func needsDecisionConfirmation(fullAuto: Bool) -> Bool { !fullAuto }
+}
+
+/// [G1] 「读取工单结果」：智能体最近一条回复全文作为结果，交给快捷指令下一步；Siri 只念开头。
+enum PaperclipIssueResult {
+    static let finishedStatuses: Set<String> = ["done", "in_review"]
+    static let valueLimit = 20_000
+    static let spokenLimit = 300
+    static func compose(issue: PaperclipIssue, comments: [PaperclipComment]) -> (value: String, dialog: String) {
+        let reply = comments.last { !($0.authorAgentId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let body = reply?.body.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let status = PaperclipLabels.status(issue.status)
+        guard !body.isEmpty else { return ("", "「\(issue.title)」\(status)，还没有智能体给出结果。") }
+        let value = String(body.prefix(valueLimit))
+        let spoken = String(body.prefix(spokenLimit))
+        if finishedStatuses.contains(issue.status) { return (value, "「\(issue.title)」\(status)。结果：\(spoken)") }
+        return (value, "「\(issue.title)」当前状态为\(status)，目前最新的结果：\(spoken)")
+    }
 }
 
 enum PaperclipLabels {

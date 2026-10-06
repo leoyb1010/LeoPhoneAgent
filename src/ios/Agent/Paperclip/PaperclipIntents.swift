@@ -175,6 +175,9 @@ struct CreatePaperclipIssueIntent: AppIntent {
                 companyID: context.companyID, userID: context.userID, title: title,
                 description: details?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
                 agentID: agent?.id, requestID: UUID())
+            // [G2/G5] 快捷指令派的工单同样进入关注：开始运行时进灵动岛、结束时通知。
+            PaperclipWatchList.add(issue.id, key: PaperclipWatchList.key(profileID: context.profile.id,
+                                                                        companyID: context.companyID, userID: context.userID))
             let entity = PaperclipIssueEntity(issue)
             let assignee = agent.map { "，已指派给\($0.name)" } ?? ""
             return .result(value: entity, dialog: IntentDialog(stringLiteral: "已派出「\(title)」\(assignee)。"))
@@ -214,6 +217,37 @@ struct PaperclipIssueStatusIntent: AppIntent {
                 text += "智能体还没有回复。"
             }
             return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+        } catch {
+            throw PaperclipIntentError.surfaced(error, by: self)
+        }
+    }
+}
+
+/// [G1] 工单完成后读取结果：智能体最近一条回复全文作为输出，可直接交给快捷指令的下一个动作；Siri 只念开头。
+struct PaperclipIssueResultIntent: AppIntent {
+    static let title: LocalizedStringResource = "读取 Paperclip 工单结果"
+    static let description = IntentDescription("返回工单里智能体最近一条回复的全文，可交给下一个动作；工单未完成时同样返回目前最新的结果。")
+    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "工单")
+    var issue: PaperclipIssueEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("读取 \(\.$issue) 的结果")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        do {
+            let context = try await PaperclipIntentConnection.open()
+            guard issue.companyID == context.companyID else { throw PaperclipIntentError.notFound }
+            let reference = PaperclipTaskReference(profileID: context.profile.id, origin: context.profile.origin,
+                                                   companyID: context.companyID, userID: context.userID, issueID: issue.id)
+            let current = try await context.client.issue(reference)
+            let comments = try await context.client.comments(reference)
+            let result = PaperclipIssueResult.compose(issue: current, comments: comments)
+            return .result(value: result.value, dialog: IntentDialog(stringLiteral: result.dialog))
         } catch {
             throw PaperclipIntentError.surfaced(error, by: self)
         }

@@ -544,6 +544,9 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
                     )
                 }
             }
+        } else if let link = userInfo["paperclipURL"] as? String, let url = URL(string: link) {
+            // [G5] Paperclip 工单完成通知：走 G7 深链打开该工单。
+            Task { @MainActor in AppURLEntry.open(url, source: "paperclipNotification") }
         } else if let macSessionId = userInfo["harnessSessionId"] as? String, !macSessionId.isEmpty {
             // A Mac's "waiting for you" / "done": open that Mac session, not just the app.
             let target = ["macSessionId": macSessionId,
