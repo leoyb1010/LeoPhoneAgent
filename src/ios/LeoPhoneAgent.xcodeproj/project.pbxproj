@@ -20,6 +20,12 @@
 		E5C15606A /* ExportSessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15606F /* ExportSessionIntent.swift */; };
 		E5C15607A /* ScheduledTaskIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15607F /* ScheduledTaskIntents.swift */; };
 		E5C15608A /* LeoFocusFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15608F /* LeoFocusFilter.swift */; };
+		E5D601A /* AutomationRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D601F /* AutomationRule.swift */; };
+		E5D601T /* AutomationRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D601F /* AutomationRule.swift */; };
+		E5D602A /* ContextDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D602F /* ContextDecision.swift */; };
+		E5D602T /* ContextDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D602F /* ContextDecision.swift */; };
+		E5D603A /* NoteContextIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D603F /* NoteContextIntent.swift */; };
+		E5D604A /* QuietTaskScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D604F /* QuietTaskScheduler.swift */; };
 		E5C15609A /* ShortcutRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15609F /* ShortcutRecipes.swift */; };
 		E5C15610A /* PaperclipIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15610F /* PaperclipIntents.swift */; };
 		E5C15611A /* ShortcutRecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15611F /* ShortcutRecipesView.swift */; };
@@ -778,6 +784,10 @@
 		E5C15606F /* ExportSessionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ExportSessionIntent.swift; sourceTree = SOURCE_ROOT; };
 		E5C15607F /* ScheduledTaskIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ScheduledTaskIntents.swift; sourceTree = SOURCE_ROOT; };
 		E5C15608F /* LeoFocusFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/LeoFocusFilter.swift; sourceTree = SOURCE_ROOT; };
+		E5D601F /* AutomationRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/AutomationRule.swift; sourceTree = SOURCE_ROOT; };
+		E5D602F /* ContextDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ContextDecision.swift; sourceTree = SOURCE_ROOT; };
+		E5D603F /* NoteContextIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/NoteContextIntent.swift; sourceTree = SOURCE_ROOT; };
+		E5D604F /* QuietTaskScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Background/QuietTaskScheduler.swift; sourceTree = SOURCE_ROOT; };
 		E5C15609F /* ShortcutRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ShortcutRecipes.swift; sourceTree = SOURCE_ROOT; };
 		E5C15610F /* PaperclipIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipIntents.swift; sourceTree = SOURCE_ROOT; };
 		E5C15611F /* ShortcutRecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/ShortcutRecipesView.swift; sourceTree = SOURCE_ROOT; };
@@ -2181,6 +2191,9 @@
 				E5SCH011 /* ScheduledTaskStore.swift */,
 				E5SCH012 /* ScheduledTaskRunner.swift */,
 				E5AUT0002 /* AutomationEngine.swift */,
+				E5D601F /* AutomationRule.swift */,
+				E5D602F /* ContextDecision.swift */,
+				E5D603F /* NoteContextIntent.swift */,
 				E5SET0002 /* SettingsHomeView.swift */,
 				E5STG9002 /* SensitiveToolGate.swift */,
 				E5FA00002 /* FullAuto.swift */,
@@ -2394,6 +2407,7 @@
 			children = (
 				E5G000012 /* AgentLiveActivityManager.swift */,
 				E5G000011 /* BackgroundKeepAliveManager.swift */,
+				E5D604F /* QuietTaskScheduler.swift */,
 				E53000016 /* CacheKeepAliveManager.swift */,
 			);
 			path = Background;
@@ -3017,6 +3031,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5C15609T /* ShortcutRecipes.swift in Sources */,
+				E5D601T /* AutomationRule.swift in Sources */,
+				E5D602T /* ContextDecision.swift in Sources */,
 				E5C15601T /* ShortcutCallbackStore.swift in Sources */,
 				E5C15602T /* MemoryDailyLog.swift in Sources */,
 				E5C15604T /* TreasuryItemEntity.swift in Sources */,
@@ -3269,6 +3285,9 @@
 				E5NMCP001 /* NativeMCPClient.swift in Sources */,
 				E5SCH002 /* ScheduledTaskRunner.swift in Sources */,
 				E5AUT0001 /* AutomationEngine.swift in Sources */,
+				E5D601A /* AutomationRule.swift in Sources */,
+				E5D602A /* ContextDecision.swift in Sources */,
+				E5D603A /* NoteContextIntent.swift in Sources */,
 				E5SET0001 /* SettingsHomeView.swift in Sources */,
 				E5STG9001 /* SensitiveToolGate.swift in Sources */,
 				E5FA00001 /* FullAuto.swift in Sources */,
@@ -3470,6 +3489,7 @@
 				E5E000008 /* ShareCoordinator.swift in Sources */,
 				E5E0000A1 /* ExternalFileImporter.swift in Sources */,
 				E5G000001 /* BackgroundKeepAliveManager.swift in Sources */,
+				E5D604A /* QuietTaskScheduler.swift in Sources */,
 				E5G000002 /* AgentLiveActivityManager.swift in Sources */,
 				E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,

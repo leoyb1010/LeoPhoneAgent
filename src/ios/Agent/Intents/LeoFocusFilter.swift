@@ -4,7 +4,8 @@
 //
 //  [C9] 专注模式过滤条件:系统设置 › 专注模式 › <某个专注> › 专注模式过滤条件 › LeoPhoneAgent。
 //  系统开关这个专注时调用 perform():写一条情境信号(诊断日志 context.signal),
-//  并记下开始 / 结束时间,供以后的情境层(D1)读取。外部信号触发规则要等 D1 落地。
+//  并记下开始 / 结束时间。[D1][D5] 开始 / 结束这两次切换作为「开始专注」「结束专注」
+//  情境信号交给 ContextSignalCenter:匹配规则,结束时生成专注收尾卡片。
 //
 //  系统在专注开启时用你设置的参数调用 perform(),关闭时用默认值(这里是空)调用,
 //  所以参数都可选、无默认值:有值 = 开始,全空 = 结束。
@@ -31,7 +32,14 @@ struct LeoFocusFilter: SetFocusFilterIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        LeoFocusState.record(modeName: modeName, silenceNonUrgent: silenceNonUrgent)
+        let transition = LeoFocusState.record(modeName: modeName, silenceNonUrgent: silenceNonUrgent)
+        if let transition {
+            await MainActor.run {
+                ContextSignalCenter.shared.enqueue(transition, source: "focus", logged: true)
+                // 不等:perform 要快;没处理完的留在队列里,下次进前台接着处理。
+                Task { await ContextSignalCenter.shared.processPending() }
+            }
+        }
         return .result()
     }
 }
@@ -44,8 +52,10 @@ enum LeoFocusState {
     static let startedKey = "leo.focus.startedAt"
     static let endedKey = "leo.focus.endedAt"
 
+    /// 返回这次调用造成的切换(「开始专注」/「结束专注」);只改参数不算切换,返回 nil。
+    @discardableResult
     static func record(modeName: String?, silenceNonUrgent: Bool?, now: Date = Date(),
-                       defaults: UserDefaults = .standard) {
+                       defaults: UserDefaults = .standard) -> String? {
         let active = modeName != nil || silenceNonUrgent != nil
         let wasActive = defaults.bool(forKey: activeKey)
         defaults.set(active, forKey: activeKey)
@@ -59,5 +69,8 @@ enum LeoFocusState {
         let event = active ? "focus.start" : "focus.end"
         DiagnosticRing.shared.record(.contextSignal, entryId: event,
                                      message: "\(event) mode=\(modeName ?? "-") silence=\(silenceNonUrgent.map(String.init) ?? "-")")
+        if active && !wasActive { return ContextSignalName.focusStart }
+        if !active && wasActive { return ContextSignalName.focusEnd }
+        return nil
     }
 }

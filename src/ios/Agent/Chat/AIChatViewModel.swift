@@ -2159,6 +2159,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Source tag written to the session record on creation (e.g. "shortcut").
     var sessionSource: String?
 
+    /// [D2][D4] 情境信号 / 安静任务发起的回合不发信、不删除、不远程执行:
+    /// makeAgentTools 去掉 ContextToolPolicy.blockedTools。发起方在回合结束后清掉。
+    var blocksSideEffectTools = false
+
     /// Draft-time Workspace bind; written when the session row is created.
     var pendingWorkspaceMountId: UUID?
 
