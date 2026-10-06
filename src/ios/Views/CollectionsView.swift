@@ -207,12 +207,9 @@ struct CollectionsView: View {
                 // 判据必须是 visible 而不是 items:切到"查看归档"却没有
                 // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
                 // 筛选胶囊和一片空白,没有任何解释。
-                Text(showArchived ? "归档里还没有东西。左滑任意条目可以归档。"
-                                  : "没有匹配的内容。")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
-                    .listRowSeparator(.hidden)
+                LeoEmptyState(systemImage: showArchived ? "archivebox" : "magnifyingglass",
+                              title: showArchived ? String(localized: "归档里还没有东西") : String(localized: "没有匹配的内容"),
+                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil)
             } else {
                 if sources.count > 1 { sourceFilter }
                 ForEach(shown) { item in
@@ -430,11 +427,8 @@ struct CollectionsView: View {
             }
             .id(item.id)
         } else {
-            ContentUnavailableView(
-                "选择一条收藏",
-                systemImage: "sidebar.left",
-                description: Text("在左侧选择内容，即可阅读正文、更新进度并添加高亮。")
-            )
+            LeoEmptyState(systemImage: "sidebar.left", title: String(localized: "选择一条收藏"),
+                          message: String(localized: "在左侧选择内容，即可阅读正文、更新进度并添加高亮。"))
         }
     }
 
@@ -454,7 +448,7 @@ struct CollectionsView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("你的可调用记忆")
+                    Text("你的资料库")
                         .font(.headline.weight(.bold))
                     Text("收藏、笔记、扫描与文件会统一索引，随时交给 Agent 继续工作。")
                         .font(.caption)
@@ -1362,11 +1356,8 @@ private struct TreasuryReadingSheet: View {
                     if bodyStatus == "loading" || bodyStatus == "remote_fetching" {
                         ProgressView("正在读取…")
                     } else if bodyText.isEmpty {
-                        ContentUnavailableView(
-                            bodyUnavailableTitle,
-                            systemImage: "doc.text.magnifyingglass",
-                            description: Text(bodyUnavailableDescription)
-                        )
+                        LeoEmptyState(systemImage: "doc.text.magnifyingglass",
+                                      title: bodyUnavailableTitle, message: bodyUnavailableDescription)
                         if isRemoteItem {
                             Button("重新获取正文", systemImage: "arrow.clockwise") {
                                 Task { await loadBody(forceRemoteFetch: true) }

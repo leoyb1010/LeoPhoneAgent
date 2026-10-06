@@ -598,12 +598,19 @@ final class SyncCore {
                 if let ticket = tickets[id.description] {
                     try await ChatStore.shared.acknowledgeSyncDelivery(ticket)
                 }
-            case .conflict(_, let serverRecord):
+            case .conflict(let id, let serverRecord):
                 conflict += 1
                 _ = await processInbound(SyncInboundBatch(records: [serverRecord], deletes: [], sourceDeviceId: nil), from: transport, countAsReceived: false)
-                // Note: we deliberately do NOT clear dirty here. The
-                // transport (CloudKit) re-queues the record so the next
-                // send retries with the fresh server etag.
+                // 后写者胜(SyncConflictPolicy):服务器那版更新时,本地合并器已吸收它,
+                // 这一版冻结的本地快照作废 —— 确认掉,别再拿旧内容盖住服务器上更新的改动。
+                // 本地更新时保留票据,下一轮在服务器最新的系统字段上重发(retryNeeded 会排程)。
+                if let ticket = tickets[id.description],
+                   let data = try await ChatStore.shared.syncDeliveryPayload(ticket),
+                   let local = try? JSONDecoder().decode(PortableRecord.self, from: data),
+                   SyncConflictPolicy.resolve(localUpdatedAt: local.updatedAt,
+                                              serverUpdatedAt: serverRecord.updatedAt) == .acceptServer {
+                    try await ChatStore.shared.acknowledgeSyncDelivery(ticket)
+                }
             case .transientFailure(let id, let after):
                 transient += 1
                 policy.failed(.record(id.description), at: Date(), minimumDelay: after ?? 0,

@@ -781,7 +781,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             return
         }
 
-        let shouldBeActive = !sessions.isEmpty && enabled
+        // Mac 会话只为灵动岛登记在 tracker 里;只有本机在跑的回合才需要本机保活。
+        let localSessions = sessions.subtracting(HarnessLiveActivityBridge.registeredSessionIds)
+        let shouldBeActive = !localSessions.isEmpty && enabled
         let sessionList = sessions.prefix(5).joined(separator: ",")
         // [T-ios-log-noise-reduction] INFO→DEBUG: reevaluate runs on every
         // session-set / toggle change and was ~482 lines/day even when nothing

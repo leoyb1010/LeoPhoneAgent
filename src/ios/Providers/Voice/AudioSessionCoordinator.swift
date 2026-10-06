@@ -138,9 +138,11 @@ final class AudioSessionCoordinator {
     private var pausedByExternalAudio = false
 
     private func registerInterruptionObserver() {
+        // AVAudioSession 的通知可能在后台线程发出;本类是 @MainActor,统一回主队列处理,
+        // 免得在后台线程改 pausedByExternalAudio / 驱动 VoiceOutputPlayer。
         NotificationCenter.default.addObserver(
-            self, selector: #selector(handleInterruption(_:)),
-            name: AVAudioSession.interruptionNotification, object: nil)
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in MainActor.assumeIsolated { self?.handleInterruption(note) } }
         // [T-tts-pause-on-external-record] A third-party keyboard's dictation
         // (or any other app recording) runs its OWN audio session alongside our
         // .playback/.spokenAudio one — iOS does NOT post an
@@ -150,8 +152,8 @@ final class AudioSessionCoordinator {
         // audio (recording/call) should dominate: pause TTS there, resume on
         // .end.
         NotificationCenter.default.addObserver(
-            self, selector: #selector(handleSilenceSecondaryAudioHint(_:)),
-            name: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil)
+            forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main
+        ) { [weak self] note in MainActor.assumeIsolated { self?.handleSilenceSecondaryAudioHint(note) } }
         // [T-tts-pause-inapp-keyboard-dictation] A third-party keyboard's
         // dictation started FROM INSIDE our app shares this process's audio
         // context — iOS does NOT post a silence-secondary-audio hint for it (that
@@ -164,11 +166,11 @@ final class AudioSessionCoordinator {
         // routeConfigurationChange fire for many unrelated cases — so we trust the
         // property, not the reason.)
         NotificationCenter.default.addObserver(
-            self, selector: #selector(handleRouteChange(_:)),
-            name: AVAudioSession.routeChangeNotification, object: nil)
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] note in MainActor.assumeIsolated { self?.handleRouteChange(note) } }
     }
 
-    @objc private func handleRouteChange(_ note: Notification) {
+    private func handleRouteChange(_ note: Notification) {
         let shouldSilence = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
         if shouldSilence {
             pauseTTSForExternalAudio(reason: "route-change(secondary-silence)")
@@ -205,7 +207,7 @@ final class AudioSessionCoordinator {
         logger.info("[AudioSession] \(reason) → TTS resumed")
     }
 
-    @objc private func handleInterruption(_ note: Notification) {
+    private func handleInterruption(_ note: Notification) {
         guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
         switch type {
@@ -226,7 +228,7 @@ final class AudioSessionCoordinator {
         }
     }
 
-    @objc private func handleSilenceSecondaryAudioHint(_ note: Notification) {
+    private func handleSilenceSecondaryAudioHint(_ note: Notification) {
         guard let raw = note.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt,
               let type = AVAudioSession.SilenceSecondaryAudioHintType(rawValue: raw) else { return }
         switch type {

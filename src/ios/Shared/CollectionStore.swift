@@ -714,6 +714,45 @@ enum CollectionStore {
         directory?.appendingPathComponent("items.json")
     }
 
+    /// SQLite 打不开时的写入暂存(新收藏、改动、删除)。下次 SQLite 能打开时并回库再删掉。
+    /// 以前这些写进旧的 items.json,而迁移标记已经设过,那份 JSON 再也不会被导入 —— 等于丢了。
+    private static var pendingOpsURL: URL? {
+        directory?.appendingPathComponent("items.pending.json")
+    }
+
+    /// 打开库,并先把暂存的写入并回去(只在 ioQueue 内调用)。
+    private static func openStore(_ directory: URL) throws -> TreasurySQLiteStore {
+        let store = try TreasurySQLiteStore(directory: directory)
+        drainPendingLocked(into: store)
+        return store
+    }
+
+    private static func drainPendingLocked(into store: TreasurySQLiteStore) {
+        guard let url = pendingOpsURL, FileManager.default.fileExists(atPath: url.path) else { return }
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &coordError) { activeURL in
+            // 读不出来就原样留着(不删、不覆盖),下次再试。
+            guard let data = try? Data(contentsOf: activeURL),
+                  let ops = try? JSONDecoder().decode(TreasuryPendingOps.self, from: data) else { return }
+            do {
+                try store.applyPending(ops)
+                try FileManager.default.removeItem(at: activeURL)
+            } catch {
+                // 并回失败:暂存保留,下次打开再并。
+            }
+        }
+    }
+
+    private static func readPendingOps(at url: URL) -> TreasuryPendingOps {
+        guard let data = try? Data(contentsOf: url) else { return TreasuryPendingOps() }
+        if let ops = try? JSONDecoder().decode(TreasuryPendingOps.self, from: data) { return ops }
+        // 坏文件先挪开再从空开始,不能被下一次写入直接盖掉。
+        let backup = url.deletingLastPathComponent()
+            .appendingPathComponent("items.pending.corrupt-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.moveItem(at: url, to: backup)
+        return TreasuryPendingOps()
+    }
+
     // MARK: 读写
     // SQLite WAL 负责主 App 与 Share Extension 的跨进程并发。
     // 串行队列仅保证本进程同步调用顺序；旧 JSON 只在 SQLite
@@ -733,12 +772,14 @@ enum CollectionStore {
     private static func loadLocked() -> [CollectedItem] {
         guard let directory else { return [] }
         do {
-            return try TreasurySQLiteStore(directory: directory).load()
+            return try openStore(directory).load()
         } catch {
             // Database/migration failures never become an empty library. The
-            // untouched legacy JSON remains available as a recovery source.
+            // untouched legacy JSON remains available as a recovery source,
+            // with writes made while SQLite was unavailable laid on top.
             guard let url = legacyIndexURL else { return [] }
-            return coordinatedLegacyLoad(at: url)
+            let pending = pendingOpsURL.map(readPendingOps(at:)) ?? TreasuryPendingOps()
+            return pending.overlay(on: coordinatedLegacyLoad(at: url))
         }
     }
 
@@ -771,7 +812,7 @@ enum CollectionStore {
     private static func saveLocked(_ items: [CollectedItem]) {
         guard let directory else { return }
         do {
-            try TreasurySQLiteStore(directory: directory).replaceActiveItems(items)
+            try openStore(directory).replaceActiveItems(items)
         } catch {
             mutateLegacyLocked { $0 = items }
         }
@@ -780,24 +821,23 @@ enum CollectionStore {
     /// Only used if SQLite cannot be opened. Keeping this path coordinated
     /// prevents a temporary storage failure from dropping a Share Extension
     /// capture while still making SQLite the normal source of truth.
+    /// 变换作用在「旧 JSON + 暂存」上,差异记进暂存文件;SQLite 恢复后由 openStore 并回库。
     private static func mutateLegacyLocked(_ transform: (inout [CollectedItem]) -> Void) {
-        guard let url = legacyIndexURL else { return }
-        var coordError: NSError?
-        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging,
-                                       error: &coordError) { activeURL in
-            var items = decodeItems(at: activeURL)
-            transform(&items)
-            if let data = try? JSONEncoder().encode(items) {
+        guard let url = pendingOpsURL, let legacy = legacyIndexURL else { return }
+        func apply(_ activeURL: URL) {
+            var ops = readPendingOps(at: activeURL)
+            let before = ops.overlay(on: decodeItems(at: legacy))
+            var after = before
+            transform(&after)
+            ops.record(before: before, after: after)
+            if let data = try? JSONEncoder().encode(ops) {
                 try? data.write(to: activeURL, options: .atomic)
             }
         }
-        if coordError != nil {
-            var items = decodeItems(at: url)
-            transform(&items)
-            if let data = try? JSONEncoder().encode(items) {
-                try? data.write(to: url, options: .atomic)
-            }
-        }
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging,
+                                       error: &coordError) { apply($0) }
+        if coordError != nil { apply(url) }
     }
 
     static func add(_ new: [CollectedItem]) {
@@ -805,7 +845,7 @@ enum CollectionStore {
         ioQueue.sync {
             guard let directory else { return }
             do {
-                try TreasurySQLiteStore(directory: directory).add(new)
+                try openStore(directory).add(new)
             } catch {
                 mutateLegacyLocked { items in
                     items.insert(contentsOf: new, at: 0)
@@ -823,7 +863,7 @@ enum CollectionStore {
         ioQueue.sync {
             guard let directory else { return }
             do {
-                try TreasurySQLiteStore(directory: directory).mutate(id: id, transform)
+                try openStore(directory).mutate(id: id, transform)
             } catch {
                 mutateLegacyLocked { items in
                     guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -838,7 +878,7 @@ enum CollectionStore {
         ioQueue.sync {
             guard let directory else { return false }
             do {
-                return try TreasurySQLiteStore(directory: directory)
+                return try openStore(directory)
                     .agentUpdate(item, collectionIDs: collectionIDs)
             } catch {
                 // Legacy JSON has no collection_ids field. Never report a
@@ -875,7 +915,7 @@ enum CollectionStore {
             do {
                 // Reuse the existing checked transaction; nil preserves the
                 // item's collection membership, and missing rows return false.
-                return try TreasurySQLiteStore(directory: directory).agentUpdate(item, collectionIDs: nil)
+                return try openStore(directory).agentUpdate(item, collectionIDs: nil)
             } catch {
                 mutateLegacyLocked { items in
                     guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
@@ -1009,7 +1049,7 @@ enum CollectionStore {
             do {
                 // Deletion is now a recoverable sync tombstone. Bodies and
                 // assets are retained until a later retention cleanup.
-                try TreasurySQLiteStore(directory: directory).tombstone(ids: ids)
+                try openStore(directory).tombstone(ids: ids)
             } catch {
                 mutateLegacyLocked { items in
                     items.removeAll { ids.contains($0.id) }
@@ -1126,6 +1166,41 @@ enum CollectionStore {
 /// are intentionally short-lived; WAL + BEGIN IMMEDIATE provides cross-process
 /// serialization without holding a database handle while doing extraction,
 /// OCR, hashing, or network work.
+/// SQLite 不可用期间的收藏写入暂存:按条目记最新版本与删除。
+struct TreasuryPendingOps: Codable, Equatable {
+    var upserts: [CollectedItem] = []
+    var deletedIDs: [String] = []
+
+    var isEmpty: Bool { upserts.isEmpty && deletedIDs.isEmpty }
+
+    /// 读路径看到的「当前」列表:冻结的旧数据 + 暂存的改动。
+    func overlay(on base: [CollectedItem]) -> [CollectedItem] {
+        let deleted = Set(deletedIDs)
+        var items = base.filter { !deleted.contains($0.id) }
+        for item in upserts {
+            if let index = items.firstIndex(where: { $0.id == item.id }) { items[index] = item }
+            else { items.insert(item, at: 0) }
+        }
+        return items
+    }
+
+    /// 把一次变换前后的差异记进来:新增 / 改动记为 upsert,消失的记为删除。
+    mutating func record(before: [CollectedItem], after: [CollectedItem]) {
+        var previous: [String: CollectedItem] = [:]
+        for item in before where previous[item.id] == nil { previous[item.id] = item }
+        let remaining = Set(after.map(\.id))
+        for item in after where previous[item.id] != item {
+            upserts.removeAll { $0.id == item.id }
+            upserts.append(item)
+            deletedIDs.removeAll { $0 == item.id }
+        }
+        for id in previous.keys.sorted() where !remaining.contains(id) {
+            upserts.removeAll { $0.id == id }
+            if !deletedIDs.contains(id) { deletedIDs.append(id) }
+        }
+    }
+}
+
 final class TreasurySQLiteStore {
     private static let initializationLock = NSLock()
     /// 受 initializationLock 保护。
@@ -1481,6 +1556,17 @@ final class TreasurySQLiteStore {
         try withDatabase { db in
             try Self.transaction(db) { try Self.tombstone(Array(ids), db: db) }
         }
+    }
+
+    /// 并回 SQLite 不可用期间暂存的写入:库里已有的条目按最新版本更新,其余按新增(照常去重)。
+    func applyPending(_ ops: TreasuryPendingOps) throws {
+        for item in ops.upserts {
+            let exists = try withDatabase { db in
+                try Self.scalarInt(db, sql: "SELECT COUNT(*) FROM treasure_items WHERE id=?", bindings: [item.id]) > 0
+            }
+            if exists { try update(item) } else { try add([item]) }
+        }
+        if !ops.deletedIDs.isEmpty { try tombstone(ids: Set(ops.deletedIDs)) }
     }
 
     func pendingJobs(limit: Int = 50, now: Date = Date()) throws -> [Job] {

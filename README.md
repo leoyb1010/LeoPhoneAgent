@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.57.0%20(154)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.57.1%20(155)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.5.1-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -21,7 +21,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
 
-## Paperclip 对话工作区（iOS 1.53.4 / Mac 1.5.1）
+## Paperclip 对话工作区（iOS 1.57.1 / Mac 1.6.1）
 
 吸收 [Paperclip](https://github.com/paperclipai/paperclip) 的公司、Agent、任务、审批与运行记录能力。服务器持有任务和执行状态，客户端通过原生工作区连接独立部署的 HTTPS 服务；管理员使用服务器的人类账号登录，不把 Agent API Key 当作个人登录凭据。
 
@@ -186,7 +186,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.57.0 (154)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.57.1 (155)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-06 1.57.1 / Mac 1.6.1：全面审计修复——Mac 恢复本机优先、本机服务常驻、遮挡与安全修复；iOS 冷启动回本机、路径越界与丢消息等 P0/P1 修复；694 项逻辑测试、Paperclip 原生 96+14 通过。
 - 2026-10-06 1.57.0：升级方案 v3 的 E、F、G、H、D 合并发版——回复「下一步」与对话生成技能；三处输入栏统一、青绿强调色、首页情境条；Paperclip 灵动岛、完成通知、停止运行、iPad 两栏、深链与 Spotlight；实时字幕、双轨识别、错字自动更正、流式朗读；「记下此刻」、情境档位、安静任务、专注收尾卡。
 - 2026-10-06 1.56.0：快捷指令深挖——Agent 运行快捷指令能拿回结果；新增记住这个 / 想一想、导出会话、定时任务、Paperclip 派工单与查进度等动作，藏宝阁条目可接给发送提示；锁屏轻动作、专注模式过滤条件、快捷指令配方页，锁屏隐私模式下 Siri 不念正文。
 - 2026-10-06 1.55.0：交付即执行 + 看得见——全自动覆盖所有 Mac CLI 与后台 Agent 回合的手机能力，Paperclip 审批一点即提交并自动核对未知回执；断网显示「重连中」、重试后保留原因，新增常开诊断日志。

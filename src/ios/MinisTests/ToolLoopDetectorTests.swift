@@ -155,6 +155,23 @@ final class ToolLoopDetectorTests: XCTestCase {
         XCTAssertTrue(pre.message?.contains("global circuit breaker") == true)
     }
 
+    /// 拦下后一直拦:被拦的那次按拦截消息记进历史(结果哈希不同)也不会让同样的调用重新放行;
+    /// 换参数的调用不受影响;reset 清掉。
+    func testCriticalBlockIsSticky() {
+        let detector = ToolLoopDetector(config: ToolLoopConfig(historySize: 60))
+        let params: [String: Any] = ["k": "v"]
+        for _ in 0..<29 {
+            _ = detector.record(toolName: "weird_tool", params: params, result: "same")
+        }
+        XCTAssertEqual(detector.check(toolName: "weird_tool", params: params).level, .critical)
+        // 调用方把拦截消息当作结果记录(内容每次不同)
+        _ = detector.record(toolName: "weird_tool", params: params, result: "[LOOP BLOCKED] attempt 30")
+        XCTAssertEqual(detector.check(toolName: "weird_tool", params: params).level, .critical, "同样的调用继续被拦")
+        XCTAssertEqual(detector.check(toolName: "weird_tool", params: ["k": "other"]).level, .none)
+        detector.reset()
+        XCTAssertEqual(detector.check(toolName: "weird_tool", params: params).level, .none)
+    }
+
     // MARK: - Reset
 
     func testReset_clearsState() {

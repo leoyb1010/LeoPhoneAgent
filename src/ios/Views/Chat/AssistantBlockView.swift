@@ -915,7 +915,7 @@ struct ThinkingBlockView: View {
                     // pace is ~3-4/s for the same visual result.
                     // utf8.count is O(1) on native strings; .count walked the
                     // whole thinking text on every body evaluation.
-                    .onChange(of: block.content.utf8.count) { len in
+                    .onChange(of: block.content.utf8.count) { _, len in
                         guard isStreaming else { return }
                         AppLogger(category: "ThinkPerf").debug("[ThinkPerf] scrollTo(flush) contentLen=\(len) seq=\(block.contentUpdateSeq)")
                         withAnimation(LeoMotion.quickEase()) {

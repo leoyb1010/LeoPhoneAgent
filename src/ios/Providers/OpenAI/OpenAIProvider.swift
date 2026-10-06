@@ -412,12 +412,25 @@ final class OpenAIProvider: LLMProvider {
             stream: true
         )
 
-        let (byteStream, response) = try await streamingSession.bytes(for: request)
+        // 原始 URLError(-1005 断开、-1009 没网、超时)要映射成 LLMError,自动重试与诊断分类才认得出来。
+        let byteStream: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (byteStream, response) = try await streamingSession.bytes(for: request)
+        } catch {
+            throw mapError(error)
+        }
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
 
         if !(200..<300).contains(statusCode) {
+            // 错误正文最多读 8 KB;读的途中断开也保留 HTTP 状态码(401/429 不能变成可重试的网络错误)。
             var body = ""
-            for try await line in byteStream.lines { body += line }
+            do {
+                for try await line in byteStream.lines {
+                    body += line
+                    if body.utf8.count > 8_192 { break }
+                }
+            } catch {}
             throw mapHTTPError(statusCode: statusCode, body: body)
         }
 
@@ -547,12 +560,25 @@ final class OpenAIProvider: LLMProvider {
         logOutgoingRequest(url: url, headers: request.allHTTPHeaderFields, body: body)
         #endif
 
-        let (byteStream, response) = try await streamingSession.bytes(for: request)
+        // 原始 URLError(-1005 断开、-1009 没网、超时)要映射成 LLMError,自动重试与诊断分类才认得出来。
+        let byteStream: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (byteStream, response) = try await streamingSession.bytes(for: request)
+        } catch {
+            throw mapError(error)
+        }
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
 
         if !(200..<300).contains(statusCode) {
+            // 错误正文最多读 8 KB;读的途中断开也保留 HTTP 状态码(401/429 不能变成可重试的网络错误)。
             var body = ""
-            for try await line in byteStream.lines { body += line }
+            do {
+                for try await line in byteStream.lines {
+                    body += line
+                    if body.utf8.count > 8_192 { break }
+                }
+            } catch {}
             throw mapHTTPError(statusCode: statusCode, body: body)
         }
 
@@ -1606,8 +1632,8 @@ final class OpenAIProvider: LLMProvider {
         } catch let e as LLMError {
             throw e
         } catch {
-            // Network / interface error mid-stream.
-            throw LLMError.networkError(underlying: error)
+            // Network / interface error mid-stream. 用户取消要映射成 .cancelled,不能当成可重试的网络错误。
+            throw mapError(error)
         }
 
         // Success: base64 image extracted.

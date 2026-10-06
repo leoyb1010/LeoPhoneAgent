@@ -6,6 +6,8 @@
 //
 
 #import "NativeOffloadUtils.h"
+#include "fs/fake.h"
+#include <limits.h>
 #import "NativeOffloadDispatch.h"
 #import "LeoPhoneAgent-Swift.h"
 #include "kernel/task.h"
@@ -112,12 +114,33 @@ static int noff_authorize_native(const char *registered_name, int argc, char **a
     }
 }
 
+// Non-device helpers (minis-*, ffmpeg) have their own permission policy; they
+// still go through a dispatch slot so the shared ".." path guard applies.
+static int noff_authorize_paths_only(const char *registered_name, int argc, char **argv,
+                                     int stdout_fd, int stderr_fd) {
+    (void)stderr_fd;
+    // Handlers build NSDictionary literals from argv; a nil from invalid
+    // UTF-8 would raise and take the whole app down.
+    @autoreleasepool {
+        for (int i = 1; i < argc; i++) {
+            if (argv[i] && ![NSString stringWithUTF8String:argv[i]]) {
+                NSString *command = [NSString stringWithUTF8String:registered_name] ?: @"tool";
+                noff_emit_json(stdout_fd, noff_json_error(command, @"run", NOFF_ERR_INVALID_ARGS,
+                    @"Arguments must be valid UTF-8."), NO, NO);
+                return NOFF_EXIT_INVALID_ARGS;
+            }
+        }
+    }
+    return 0;
+}
+
 int noff_register_authorized_handler(const char *guest_name, native_handler_func handler) {
-    // Non-device helpers have their own policy. All apple-* tools, including
-    // future registrations importing this header, must use the guarded slots.
-    if (!guest_name || strncmp(guest_name, "apple-", 6) != 0)
-        return (native_offload_add_handler)(guest_name, handler);
-    return noff_dispatch_register(guest_name, handler, noff_authorize_native,
+    if (!guest_name) return (native_offload_add_handler)(guest_name, handler);
+    // All apple-* tools, including future registrations importing this header,
+    // use the guarded slots with the permission authorizer.
+    BOOL device = strncmp(guest_name, "apple-", 6) == 0;
+    return noff_dispatch_register(guest_name, handler,
+                                  device ? noff_authorize_native : noff_authorize_paths_only,
                                   (native_offload_add_handler));
 }
 
@@ -350,12 +373,29 @@ NSString *_Nullable noff_resolve_host_path(NSString *guestPath) {
         NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
     NSString *dataRoot = [documents stringByAppendingPathComponent:@"alpine-rootfs/data"];
 
-    // Strip leading "/" from guest path and append to host data root
-    NSString *relative = guestPath;
-    while ([relative hasPrefix:@"/"]) {
-        relative = [relative substringFromIndex:1];
+    // Normalize like the guest does ("." dropped, ".." clamped at "/"), then
+    // append to the host data root: a guest path can never climb out of it.
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    for (NSString *component in [guestPath componentsSeparatedByString:@"/"]) {
+        if (component.length == 0 || [component isEqualToString:@"."]) continue;
+        if ([component isEqualToString:@".."]) {
+            if (parts.count > 0) [parts removeLastObject];
+            continue;
+        }
+        [parts addObject:component];
     }
-    return [dataRoot stringByAppendingPathComponent:relative];
+    NSString *relative = [parts componentsJoinedByString:@"/"];
+    // Honor the calling task's own mounts first (the same lookup the kernel
+    // uses for argv): /var/minis/{offloads,attachments,workspace,…} belong to
+    // the session that ran the command. The data/var/minis symlink only points
+    // at whichever chat is open in the UI, so a background or concurrent
+    // session's camera/photos/clipboard output used to land in another chat.
+    NSString *normalized = [@"/" stringByAppendingString:relative];
+    char translated[PATH_MAX];
+    if (fakefs_bind_mount_translate_path(normalized.fileSystemRepresentation, translated, sizeof(translated))) {
+        return [NSString stringWithUTF8String:translated] ?: [dataRoot stringByAppendingPathComponent:relative];
+    }
+    return relative.length > 0 ? [dataRoot stringByAppendingPathComponent:relative] : dataRoot;
 }
 
 // ── Read stdin ──

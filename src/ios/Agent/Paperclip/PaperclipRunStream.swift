@@ -140,7 +140,7 @@ final class PaperclipRunStream: ObservableObject {
         // 修复重复：服务器先写日志再推事件，REST 读取可能已包含这条片段；seq 不大于已读最大序号即丢弃。
         if let seq, let restSeq = (state.restSnapshot ?? state.parser).maxSeq, seq <= restSeq { return }
         let truncated = event.bool("truncated") ?? false
-        if truncated || (seq != nil && state.lastSeq != nil && seq != state.lastSeq! + 1) {
+        if truncated || (seq != nil && state.lastSeq != nil && seq != state.lastSeq.map { $0 &+ 1 }) {
             if let seq { state.lastSeq = seq }
             logs[runID] = state
             scheduleResync(runID)
@@ -202,8 +202,10 @@ final class PaperclipRunStream: ObservableObject {
                 guard stamp == generation else { return }
                 parser.feedNDJSON(chunk.content, startsMidRecord: startsMidRecord && pages == 0)
                 pages += 1
+                // 游标已在客户端校验(给出时不倒退、有内容必前进)。上游读到末尾时省略 nextOffset:
+                // 这一页从 offset 读到了文件尾,下次从 offset + 本页字节数接着读。
                 guard let next = chunk.nextOffset, next > offset else {
-                    offset += chunk.content.utf8.count
+                    if chunk.nextOffset == nil { offset += chunk.content.utf8.count }
                     hasMore = false
                     break
                 }

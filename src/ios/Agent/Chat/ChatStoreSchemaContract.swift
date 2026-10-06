@@ -1,6 +1,10 @@
 import Foundation
 import SQLite3
 
+/// SQLite 立即拷贝绑定的文本。nil(SQLITE_STATIC)要求指针活到 step,而桥接出来的临时
+/// NSString 缓冲在绑定语句结束后就可能被释放,写进库的会是错乱的文本。
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 /// Versioned, independently testable contract for the durable chat database.
 ///
 /// `ChatStore` still owns its complete operational schema. This contract is the
@@ -284,7 +288,7 @@ enum ChatStoreSchemaContract {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
         guard sqlite3_prepare_v2(db, "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1", -1, &statement, nil) == SQLITE_OK else { return false }
-        sqlite3_bind_text(statement, 1, (table as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, 1, (table as NSString).utf8String, -1, SQLITE_TRANSIENT)
         return sqlite3_step(statement) == SQLITE_ROW
     }
 

@@ -128,6 +128,13 @@ enum SystemSpeechPolicy {
 /// A callback or XPC operation may ignore cooperative Task cancellation. This
 /// lifetime owns one continuation and requests all cleanup before resuming it.
 /// The deadline therefore does not wait for a stuck child task to cooperate.
+extension SystemSpeechPolicy {
+    /// 系统 TTS 离线渲染的等待上限:15 秒起,每字加 0.3 秒,最多 3 分钟。
+    static func synthesisTimeout(characters: Int) -> Double {
+        min(180, 15 + Double(max(0, characters)) * 0.3)
+    }
+}
+
 final class SpeechRequestLifetime<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var terminal: Result<Value, Error>?

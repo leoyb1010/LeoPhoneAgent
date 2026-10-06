@@ -31,6 +31,12 @@ enum MinisURLPathDecoding {
         if let twice = base.removingPercentEncoding, twice != base {
             candidates.append(twice)
         }
-        return candidates
+        // ".." 段会爬出作用域目录(别的会话、App 私有文件),这样的候选一律不要。
+        return candidates.filter { !hasParentTraversal($0) }
+    }
+
+    /// 路径里有没有 ".." 段(`a/..b` 这种文件名不算)。
+    static func hasParentTraversal(_ path: String) -> Bool {
+        path.split(separator: "/", omittingEmptySubsequences: true).contains("..")
     }
 }

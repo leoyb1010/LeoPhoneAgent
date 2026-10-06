@@ -328,11 +328,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     }
 
     private static func wavDuration(_ wav: Data) -> Double {
-        guard wav.count > 44 else { return 0 }
-        let byteRate = wav.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 28, as: UInt32.self) }
-        let rate = UInt32(littleEndian: byteRate)
-        guard rate > 0 else { return 0 }
-        return Double(wav.count - 44) / Double(rate)
+        TTSAudioData.duration(wav)
     }
 
     // MARK: - Public API
@@ -640,17 +636,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// Concatenate multiple WAV blobs into one (uses the first header, sums data).
     /// Assumes identical format (same model → same 24 kHz/16-bit mono).
     nonisolated private static func concatWav(_ wavs: [Data]) -> Data {
-        guard let first = wavs.first else { return Data() }
-        guard wavs.count > 1 else { return first }
-        var pcm = Data()
-        for w in wavs where w.count > 44 { pcm.append(w.subdata(in: 44..<w.count)) }
-        var out = first.subdata(in: 0..<44)   // reuse header, then fix sizes
-        let dataSize = UInt32(pcm.count).littleEndian
-        let riffSize = UInt32(36 + pcm.count).littleEndian
-        out.replaceSubrange(4..<8, with: withUnsafeBytes(of: riffSize) { Data($0) })
-        out.replaceSubrange(40..<44, with: withUnsafeBytes(of: dataSize) { Data($0) })
-        out.append(pcm)
-        return out
+        TTSAudioData.concat(wavs)
     }
 
     /// Play the front unit if it's ready and nothing is currently playing.
@@ -736,6 +722,12 @@ extension VoiceOutputPlayer: AVAudioPlayerDelegate {
             }
         }
     }
+
+    /// 解码出错时系统不会再调 DidFinishPlaying:不接住的话 player 一直占着,后面的朗读全卡住。
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        VoiceLog.log("TTS ✗ decode error: \(error?.localizedDescription ?? "unknown")")
+        audioPlayerDidFinishPlaying(player, successfully: false)
+    }
 }
 
 // MARK: - [H7] 流式 PCM 播放
@@ -769,12 +761,35 @@ final class StreamingPCMPlayback: @unchecked Sendable {
         engine.attach(timePitch)
         engine.connect(node, to: timePitch, format: format)
         engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        // 拔耳机 / 换输出设备时系统会停掉引擎,已排的片段不再回调「播完」:
+        // 不处理的话 onFinished 永远不来,后面的朗读全部卡住。直接结束这一段,队列接着走。
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in self?.abandon() }
+    }
+
+    private var configObserver: NSObjectProtocol?
+
+    deinit {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
     }
 
     func start() throws {
         engine.prepare()
         try engine.start()
         node.play()
+    }
+
+    /// 播不下去了:停掉,并像正常播完一样回调一次 onFinished(stop() 之后不会再回调)。
+    private func abandon() {
+        lock.lock()
+        let already = done
+        done = true
+        lock.unlock()
+        guard !already else { return }
+        node.stop()
+        engine.stop()
+        if let cb = onFinished { DispatchQueue.main.async { MainActor.assumeIsolated { cb() } } }
     }
 
     func append(_ chunk: Data) {
@@ -823,7 +838,16 @@ final class StreamingPCMPlayback: @unchecked Sendable {
 
     func setRate(_ rate: Float) { timePitch.rate = rate }
     func pause() { node.pause() }
-    func resume() { node.play() }
+    /// 来电 / Siri 打断后系统已经停了引擎:直接 node.play() 会抛 ObjC 异常
+    /// ("_engine->IsRunning()")让 App 崩溃。先把引擎拉起来,拉不起来就结束这一段。
+    func resume() {
+        if !engine.isRunning {
+            engine.prepare()
+            do { try engine.start() } catch { abandon(); return }
+        }
+        guard engine.isRunning else { abandon(); return }
+        node.play()
+    }
 
     func stop() {
         lock.withLock { done = true }

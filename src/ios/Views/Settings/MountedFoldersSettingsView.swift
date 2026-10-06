@@ -39,19 +39,9 @@ struct MountedFoldersSettingsView: View {
 
             if model.entries.isEmpty {
                 Section {
-                    VStack(spacing: 10) {
-                        Image(systemName: "externaldrive.badge.plus")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.secondary)
-                        Text("No mounted folders")
-                            .font(.headline)
-                        Text("Tap + to pick a folder from Files (e.g. an Obsidian vault in iCloud Drive).")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    LeoEmptyState(systemImage: "externaldrive.badge.plus",
+                                  title: String(localized: "No mounted folders"),
+                                  message: String(localized: "Tap + to pick a folder from Files (e.g. an Obsidian vault in iCloud Drive)."))
                 }
             } else {
                 Section {

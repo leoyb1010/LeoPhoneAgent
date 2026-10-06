@@ -167,11 +167,20 @@ final class LoggingManager: ObservableObject {
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         defer { buffer.deallocate() }
 
+        // 4 KB 一读会把一个多字节 UTF-8 字符(中文)切成两半:那一整段解码失败,
+        // 隐私模式下被整段丢弃、关闭时原样写盘(也绕过了脱敏)。不完整的尾巴留到下一段再拼。
+        var carry = Data()
         while !Thread.current.isCancelled {
-            let bytesRead = read(pipeFds[0], buffer, bufferSize)
-            if bytesRead <= 0 { break }
+            let readCount = read(pipeFds[0], buffer, bufferSize)
+            if readCount <= 0 { break }
 
-            let chunk = Data(bytes: buffer, count: bytesRead)
+            var joined = carry
+            joined.append(buffer, count: readCount)
+            let complete = Self.completeUTF8PrefixLength(joined)
+            carry = Data(joined[complete...])
+            let chunk = Data(joined[..<complete])
+            let bytesRead = chunk.count
+            if bytesRead == 0 { continue }
             let capturedAt = Date()
             let teeFd = origStdout
 
@@ -207,6 +216,21 @@ final class LoggingManager: ObservableObject {
                 self?.processChunk(chunk, capturedAt: capturedAt, teeFd: teeFd)
             }
         }
+    }
+
+    /// 去掉末尾不完整的 UTF-8 序列后的长度(最多回看 3 字节;非法字节不处理,原样放行)。
+    static func completeUTF8PrefixLength(_ data: Data) -> Int {
+        let bytes = [UInt8](data.suffix(4))
+        let base = data.count - bytes.count
+        var i = bytes.count - 1
+        while i >= 0 {
+            let b = bytes[i]
+            if b & 0xC0 == 0x80 { i -= 1; continue }       // 续字节,继续往前找首字节
+            if b < 0x80 { return data.count }              // ASCII:完整
+            let needed = b >= 0xF0 ? 4 : (b >= 0xE0 ? 3 : 2)
+            return bytes.count - i < needed ? base + i : data.count
+        }
+        return data.count
     }
 
     /// Runs on `writerQueue`. Owns all file-handle state and persistence.

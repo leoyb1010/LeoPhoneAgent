@@ -3,7 +3,7 @@
 //  MinisApp
 //
 //  [C10] 设置 › Agent › 快捷指令配方:每个配方一张卡,用途、触发器、
-//  一键添加链接(还没有时显示「链接待添加」)和三步建自动化。
+//  一键添加链接(还没有时不显示)和三步建自动化。
 //
 
 import SwiftUI
@@ -69,10 +69,7 @@ struct ShortcutRecipesView: View {
             } label: {
                 Label("一键添加到快捷指令", systemImage: "plus.circle.fill")
             }
-        } else {
-            Label("链接待添加，先按上面三步手动建", systemImage: "link.badge.plus")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
+        // 还没有一键添加的链接时不显示占位:按上面的步骤手动建即可。
     }
 }

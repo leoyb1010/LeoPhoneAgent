@@ -140,23 +140,28 @@ final class ConfigConfirmationGate: ObservableObject {
     }
 
     private func resolve(id: String, outcome: PendingConfigChange.Outcome) {
-        guard let cont = awaiters.removeValue(forKey: id) else { return }
-        gateLogger.info("resolve id=\(id) outcome=\(Self.describe(outcome))")
-        timeoutTasks[id]?.cancel()
-        timeoutTasks.removeValue(forKey: id)
-        notifiedIds.remove(id)
-        cont.resume(returning: outcome)
-        // Advance queue.
+        if let cont = awaiters.removeValue(forKey: id) {
+            gateLogger.info("resolve id=\(id) outcome=\(Self.describe(outcome))")
+            timeoutTasks[id]?.cancel()
+            timeoutTasks.removeValue(forKey: id)
+            notifiedIds.remove(id)
+            cont.resume(returning: outcome)
+        }
+        // A queued (not yet shown) change can time out on its own: drop it from
+        // the queue, or it would later surface as a stale `pending` whose
+        // buttons do nothing — and every later write would wait behind it.
+        queue.removeAll { $0.0.id == id }
+        // Advance queue — even when the awaiter was already gone.
         if pending?.id == id {
-            if let next = queue.first {
+            pending = nil
+            while let next = queue.first {
                 queue.removeFirst()
+                guard awaiters[next.0.id] != nil else { continue }
                 pending = next.0
                 // [T-config-confirm-timeout-bg] The newly-surfaced change also
                 // needs a background nudge if the user is away.
                 notifyIfBackgrounded(next.0)
-                // its continuation is already in `awaiters`
-            } else {
-                pending = nil
+                break
             }
         }
     }
@@ -180,12 +185,8 @@ final class ConfigConfirmationGate: ObservableObject {
 
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-        // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
-        let configCategory = UNNotificationCategory(
-            identifier: Self.notifyCategoryId, actions: [], intentIdentifiers: [])
-        center.getNotificationCategories { existing in
-            center.setNotificationCategories(existing.union([configCategory]))
-        }
+        // [T-siri-approval-notify] set 是整体替换;没有按钮的类别不必注册,统一走全量注册,别抹掉其他类别的按钮。
+        LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
         content.title = String(localized: "⚙️ 有设置改动等你确认")

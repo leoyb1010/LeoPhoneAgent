@@ -39,6 +39,7 @@ final class PaperclipDeviceSurfaces: PaperclipSystemSurfaces {
 
     private var lastStageUpdate: [String: Date] = [:]
     private var indexSignatures: [UUID: Int] = [:]
+    private var clearedWhileDisabled: Set<UUID> = []
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     func runChanged(_ change: PaperclipRunWatch.Change, context: PaperclipRunContext) {
@@ -123,7 +124,7 @@ final class PaperclipDeviceSurfaces: PaperclipSystemSurfaces {
         guard phase == .succeeded || phase == .failed, Self.notificationsEnabled,
               let link = PaperclipDeepLink.url(issueID: run.issueID, companyID: context.reference.companyID) else { return }
         let content = UNMutableNotificationContent()
-        let name = context.identifier.isEmpty ? "Paperclip 工单" : context.identifier
+        let name = context.identifier.isEmpty ? "服务器任务" : context.identifier
         content.title = "\(name) \(phase.label)"
         // 与本机任务通知同一隐私开关：开着时不显示工单标题。
         content.body = Self.privacyMode || context.title.isEmpty ? "打开 App 查看" : "「\(context.title)」\(context.agentName)\(phase == .succeeded ? "已完成这一轮处理" : "运行失败")"
@@ -138,9 +139,14 @@ final class PaperclipDeviceSurfaces: PaperclipSystemSurfaces {
 
     func index(_ issues: [PaperclipIssue], profileID: UUID) {
         guard PaperclipSpotlightIndexer.isEnabled else {
-            if indexSignatures.removeValue(forKey: profileID) != nil { PaperclipSpotlightIndexer.clear(profileID: profileID) }
+            // 上次启动时索引过的条目也要清:indexSignatures 只记本次进程,不能拿它判断「有没有索引过」。
+            if indexSignatures.removeValue(forKey: profileID) != nil || !clearedWhileDisabled.contains(profileID) {
+                clearedWhileDisabled.insert(profileID)
+                PaperclipSpotlightIndexer.clear(profileID: profileID)
+            }
             return
         }
+        clearedWhileDisabled.remove(profileID)
         let signature = PaperclipSpotlightIndexer.signature(issues)
         guard indexSignatures[profileID] != signature else { return }
         indexSignatures[profileID] = signature

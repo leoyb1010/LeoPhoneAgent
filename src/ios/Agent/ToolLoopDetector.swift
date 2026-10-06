@@ -63,6 +63,9 @@ final class ToolLoopDetector {
     private var history: [ToolCallRecord] = []
     /// Map<warningKey, lastBucket> — used to throttle repeated warnings to once per N triggers.
     private var warningBuckets: [String: Int] = [:]
+    /// 已经被判「严重」拦下的调用(工具名 + 参数,或不存在的工具名)。拦下后一直拦:
+    /// 以前被拦的那次按拦截消息记进历史,结果哈希变了,连续计数归 1,同样的调用接着又放行。
+    private var trippedKeys: Set<String> = []
     private let lock = NSLock()
 
     init(config: ToolLoopConfig = ToolLoopConfig()) {
@@ -76,10 +79,19 @@ final class ToolLoopDetector {
         defer { lock.unlock() }
 
         let argsHash = argsHashFor(toolName, params)
+        let callKey = "call:\(toolName):\(argsHash)"
+        let unknownKey = "unknown:\(toolName)"
+        if trippedKeys.contains(unknownKey) {
+            return LoopCheckResult(level: .critical, message: "[LOOP BLOCKED] CRITICAL: '\(toolName)' is unavailable and was already blocked. Stop retrying that missing tool and answer without it.", warningKey: nil)
+        }
+        if trippedKeys.contains(callKey) {
+            return LoopCheckResult(level: .critical, message: "[LOOP BLOCKED] CRITICAL: this exact \(toolName) call was already blocked for repeating without progress. Change the approach or report the task as failed.", warningKey: nil)
+        }
 
         // Strategy 1: unknown_tool_repeat — highest priority.
         let unknownStreak = countUnknownStreakFromTail(toolName: toolName)
         if unknownStreak >= config.unknownToolThreshold {
+            trippedKeys.insert(unknownKey)
             let msg = "[LOOP BLOCKED] CRITICAL: attempted unavailable tool '\(toolName)' \(unknownStreak) times. Stop retrying that missing tool and answer without it."
             logger.error("loop-detector: unknown_tool_repeat critical tool=\(toolName) streak=\(unknownStreak)")
             return LoopCheckResult(level: .critical, message: msg, warningKey: nil)
@@ -92,6 +104,7 @@ final class ToolLoopDetector {
         // instead of allowing it and only noticing after the fact.
         let upcomingNoProgressCount = noProgressStreak + 1
         if upcomingNoProgressCount >= config.globalCircuitBreakerThreshold {
+            trippedKeys.insert(callKey)
             let msg = "[LOOP BLOCKED] CRITICAL: \(toolName) is about to repeat an identical no-progress outcome for attempt \(upcomingNoProgressCount). Session execution blocked by global circuit breaker."
             logger.error("loop-detector: global_circuit_breaker critical tool=\(toolName) upcoming=\(upcomingNoProgressCount)")
             return LoopCheckResult(level: .critical, message: msg, warningKey: nil)
@@ -100,6 +113,7 @@ final class ToolLoopDetector {
         // Strategy 3: known_poll_no_progress — dual threshold for known polling tools.
         if isPollTool(toolName, params) {
             if upcomingNoProgressCount >= config.criticalThreshold {
+                trippedKeys.insert(callKey)
                 let msg = "[LOOP BLOCKED] CRITICAL: \(toolName) is about to make its \(upcomingNoProgressCount)th identical no-progress poll. Session execution blocked."
                 logger.error("loop-detector: poll_no_progress critical tool=\(toolName) upcoming=\(upcomingNoProgressCount)")
                 return LoopCheckResult(level: .critical, message: msg, warningKey: nil)
@@ -192,6 +206,7 @@ final class ToolLoopDetector {
         defer { lock.unlock() }
         history.removeAll()
         warningBuckets.removeAll()
+        trippedKeys.removeAll()
     }
 
     /// Test-only inspection. Not part of production callers.

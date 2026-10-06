@@ -20,8 +20,26 @@ final class CrossFeatureFlowTests: XCTestCase {
     @MainActor func testNextStepMenuHasFiveItemsInFixedOrder() {
         XCTAssertEqual(ReplyNextStep.menu, [.collect, .quickTask, .schedule, .mac, .paperclip])
         XCTAssertEqual(ReplyNextStep.menu.map(\.title),
-                       ["收进藏宝阁", "存为快捷任务", "设为定时任务", "发到 Mac", "升级为 Paperclip 工单"])
+                       ["收进藏宝阁", "存为快捷任务", "设为定时任务", "发到 Mac", "转为服务器任务"])
         XCTAssertLessThanOrEqual(ReplyNextStep.menu.count, 5)
+    }
+
+    /// 本机优先:没连过 Paperclip 服务器,「下一步」里不出现「转为服务器任务」。
+    @MainActor func testNextStepHidesServerTaskUntilPaperclipConfigured() throws {
+        XCTAssertFalse(PaperclipProfile.hasSaved(defaults))
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false), [.collect, .quickTask, .schedule, .mac])
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true), ReplyNextStep.menu)
+        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
+        defaults.set(try JSONEncoder().encode([profile]), forKey: PaperclipProfile.storageKey)
+        XCTAssertTrue(PaperclipProfile.hasSaved(defaults))
+    }
+
+    /// 冷启动回到本机:不管上次停在哪个工作区。
+    func testSelectLocalOverridesRememberedPaperclipWorkspace() {
+        IOSExecutionBackend.selectPaperclip(defaults)
+        XCTAssertEqual(defaults.string(forKey: IOSExecutionBackend.storageKey), IOSExecutionBackend.paperclip.rawValue)
+        IOSExecutionBackend.selectLocal(defaults)
+        XCTAssertEqual(defaults.string(forKey: IOSExecutionBackend.storageKey), IOSExecutionBackend.local.rawValue)
     }
 
     @MainActor func testSaveQuickTaskAppearsInQuickTaskList() throws {
@@ -62,6 +80,37 @@ final class CrossFeatureFlowTests: XCTestCase {
         // 刚建好不该立刻跑,明天这个时刻才到点。
         XCTAssertFalse(schedule.isDue(now: now, calendar: calendar))
         XCTAssertTrue(schedule.isDue(now: now.addingTimeInterval(24 * 3600), calendar: calendar))
+    }
+
+    /// 停用期间错过的那一档、或改时间后已经过去的那一档:都不能在启用 / 保存的瞬间补跑。
+    @MainActor func testReEnableOrRescheduleDoesNotFireImmediately() throws {
+        let store = ScheduledTaskStore(defaults: defaults)
+        let calendar = Calendar.current
+        let created = try XCTUnwrap(calendar.date(bySettingHour: 7, minute: 0, second: 0, of: Date()))
+        store.add(ScheduledTask(id: "t1", quickTaskId: "q", minuteOfDay: 8 * 60, isEnabled: true, now: created))
+        store.setEnabled(false, id: "t1")
+        let nine = try XCTUnwrap(calendar.date(bySettingHour: 9, minute: 0, second: 0, of: Date()))
+        store.setEnabled(true, id: "t1", now: nine)
+        XCTAssertFalse(try XCTUnwrap(store.tasks.first).isDue(now: nine), "08:00 那档在停用期间错过,启用时不补跑")
+
+        var edited = try XCTUnwrap(store.tasks.first)
+        edited.minuteOfDay = 8 * 60 + 30
+        store.update(edited, now: nine)
+        XCTAssertFalse(try XCTUnwrap(store.tasks.first).isDue(now: nine), "改成已过去的 08:30,保存时不跑")
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: nine))
+        XCTAssertTrue(try XCTUnwrap(store.tasks.first).isDue(now: tomorrow), "明天照常")
+    }
+
+    /// 一条解不出来的任务(例如降级后遇到新版本的频率值)只跳过它,其余照旧;原始数据先备份。
+    @MainActor func testUndecodableTaskDoesNotWipeTheOthers() throws {
+        let raw = """
+        [{"id":"good","quickTaskId":"q","cadence":"daily","minuteOfDay":480,"weekday":2,"isEnabled":true},
+         {"id":"future","quickTaskId":"q","cadence":"monthly","minuteOfDay":480,"weekday":2,"isEnabled":true}]
+        """
+        defaults.set(Data(raw.utf8), forKey: ScheduledTaskStore.storageKey)
+        let store = ScheduledTaskStore(defaults: defaults)
+        XCTAssertEqual(store.tasks.map(\.id), ["good"])
+        XCTAssertEqual(defaults.data(forKey: ScheduledTaskStore.storageKey + ".backup"), Data(raw.utf8))
     }
 
     @MainActor func testEmptyNameOrPromptIsNotSaved() {

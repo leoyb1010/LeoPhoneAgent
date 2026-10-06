@@ -253,7 +253,9 @@ actor LeoAgentClient {
         // timeout must not guillotine a long remote task.
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 60 * 60
-        config.waitsForConnectivity = true
+        // 不能 waitsForConnectivity:没网时它会无视上面的 60 秒,一直挂到 1 小时的资源超时 ——
+        // 锁屏审批按钮的后台窗口过期、回前台补齐卡住、离线发送也不会退回输入框。没网就立刻失败,由各处重试。
+        config.waitsForConnectivity = false
         config.httpAdditionalHeaders = ["Accept-Encoding": "identity"]
         self.session = URLSession(configuration: config)
         let directConfig = URLSessionConfiguration.ephemeral

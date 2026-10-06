@@ -227,7 +227,8 @@ actor IMAPClient {
             case .keyword(let k): parts.append(k)
             case .since(let d): parts.append("SINCE \(dateFormatter.string(from: d))")
             case .field(let name, let value):
-                if value.allSatisfy({ $0.isASCII }) && !value.contains(where: { $0 == "\"" || $0 == "\\" || $0 == "\r" || $0 == "\n" }) {
+                // 按 Unicode 标量检查:Swift 把 "\r\n" 当成一个 Character,`$0 == "\r"` 匹配不到它。
+                if value.unicodeScalars.allSatisfy({ $0.isASCII && $0 != "\"" && $0 != "\\" && $0 != "\r" && $0 != "\n" && $0 != "\0" }) {
                     parts.append("\(name) \"\(value)\"")
                 } else {
                     needsUTF8 = true
@@ -392,7 +393,15 @@ actor IMAPClient {
     }
 
     private func quoted(_ s: String) -> String {
-        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        // 文件夹名等参数可能来自模型(或它读过的邮件里的注入文字):CR / LF / NUL 会把一条命令
+        // 拆成多条(例如在只读会话里追加 DELETE),一律去掉。
+        let safe = String(String.UnicodeScalarView(s.unicodeScalars.filter { $0 != "\r" && $0 != "\n" && $0 != "\0" }))
+        return "\"" + safe.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+
+    /// 超时时掐断连接:挂在 receive 上的等待随之以错误结束,任务组才能真正退出。
+    private func abortForTimeout() {
+        connection?.cancel()
     }
 
     private func mailboxWireName(_ name: String) -> String {
@@ -403,8 +412,10 @@ actor IMAPClient {
                                           _ body: @escaping @Sendable () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask { try await body() }
-            group.addTask {
+            group.addTask { [weak self] in
                 try await Task.sleep(nanoseconds: UInt64(max(0.1, seconds) * 1_000_000_000))
+                // 任务组要等所有子任务结束;body 卡在不可取消的 receive 上,不掐断连接超时就永远不生效。
+                await self?.abortForTimeout()
                 throw IMAPError.timeout(label)
             }
             guard let first = try await group.next() else { throw IMAPError.timeout(label) }

@@ -130,11 +130,12 @@ struct SetScheduledTaskEnabledIntent: AppIntent {
     @Parameter(title: "定时任务")
     var task: ScheduledTaskEntity
 
-    @Parameter(title: "开启", default: false)
+    // 默认「开启」:加进快捷指令后不改就运行,不该把任务关掉。
+    @Parameter(title: "开启", default: true, displayName: Bool.IntentDisplayName(true: "开启", false: "关闭"))
     var enabled: Bool
 
     static var parameterSummary: some ParameterSummary {
-        Summary("把 \(\.$task) 设为开启：\(\.$enabled)")
+        Summary("\(\.$enabled)「\(\.$task)」")
     }
 
     @MainActor

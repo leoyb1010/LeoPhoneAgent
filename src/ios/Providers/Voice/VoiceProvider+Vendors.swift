@@ -503,7 +503,9 @@ final class XunfeiVoiceProvider: VoiceProvider {
                          "signature=\"\(signatureB64)\""
         let authB64 = Data(authOrigin.utf8).base64EncodedString()
 
-        return "https://\(host)\(path)?authorization=\(authB64)&date=\(dateStr.voiceURLEncoded)&host=\(host)"
+        // base64 里的 + / = 必须百分号编码:服务器把裸 "+" 解成空格,HMAC 校验就会失败。
+        let authParam = authB64.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? authB64
+        return "https://\(host)\(path)?authorization=\(authParam)&date=\(dateStr.voiceURLEncoded)&host=\(host)"
     }
 }
 

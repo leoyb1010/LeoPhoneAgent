@@ -40,7 +40,7 @@ struct PaperclipLiveEvent: Decodable, Sendable, Equatable {
     }
     func int(_ key: String) -> Int? {
         switch payload[key] {
-        case .number(let value)?: return value.isFinite ? Int(value) : nil
+        case .number(let value)?: return Int(exactly: value.rounded(.towardZero))  // 超出 Int 范围的服务器数据不能让 Int(_:) 陷阱崩溃
         case .string(let value)?: return Int(value)
         default: return nil
         }
@@ -139,6 +139,16 @@ struct PaperclipRunLogParser: Equatable, Sendable {
     /// heartbeat.run.log 事件同一序号），用于把实时片段与 REST 读取结果去重、补齐。
     private(set) var maxSeq: Int?
     var maxLines = 1_500
+    /// 与 Mac 契约一致:最多保留最近 1 MB 文本(行数上限挡不住单行几十 KB 的日志)。
+    var maxBytes = 1_000_000
+    private var textBytes = 0
+
+    /// 日志分页游标是否可接受:省略 = 已读到末尾(上游只在还有下一页时给出);
+    /// 给出时不能倒退,带了内容就必须前进。
+    static func isValidCursor(requested: Int, next: Int?, hasContent: Bool) -> Bool {
+        guard let next else { return true }
+        return next >= requested && (!hasContent || next > requested)
+    }
 
     var isEmpty: Bool { lines.isEmpty }
     var text: String { lines.map(\.text).joined(separator: "\n") }
@@ -183,9 +193,28 @@ struct PaperclipRunLogParser: Equatable, Sendable {
                 lines.append(PaperclipLogLine(id: nextID, stream: stream, text: visible))
                 nextID += 1
             }
+            textBytes += visible.utf8.count
         }
         lastLineOpen = !endsWithNewline && !pieces.isEmpty
-        if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
+        trimToLimits()
+    }
+
+    private mutating func trimToLimits() {
+        var drop = max(0, lines.count - maxLines)
+        var bytes = textBytes
+        for line in lines.prefix(drop) { bytes -= line.text.utf8.count }
+        while bytes > maxBytes, drop < lines.count - 1 {
+            bytes -= lines[drop].text.utf8.count
+            drop += 1
+        }
+        if drop > 0 { lines.removeFirst(drop) }
+        textBytes = bytes
+        // 只剩一行仍超限:保留它最后 maxBytes 字节。
+        if textBytes > maxBytes, var last = lines.last {
+            last.text = String(decoding: last.text.utf8.suffix(maxBytes), as: UTF8.self)
+            lines[lines.count - 1] = last
+            textBytes = last.text.utf8.count
+        }
     }
 
     private mutating func consume(_ record: String) {

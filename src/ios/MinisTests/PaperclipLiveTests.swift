@@ -104,6 +104,39 @@ final class PaperclipLiveTests: XCTestCase {
 
     // MARK: 握手请求与身份
 
+    /// 日志游标:给出时不能倒退、带内容就必须前进;上游读到末尾时省略 nextOffset,按「已到末尾」处理。
+    func testRunLogCursorRejectsBackwardsAndStalledCursors() throws {
+        XCTAssertTrue(PaperclipRunLogParser.isValidCursor(requested: 100, next: 164, hasContent: true))
+        XCTAssertTrue(PaperclipRunLogParser.isValidCursor(requested: 100, next: 100, hasContent: false), "读到尾")
+        XCTAssertTrue(PaperclipRunLogParser.isValidCursor(requested: 100, next: nil, hasContent: true), "上游末页省略游标")
+        XCTAssertFalse(PaperclipRunLogParser.isValidCursor(requested: 100, next: 100, hasContent: true), "有内容却不前进")
+        XCTAssertFalse(PaperclipRunLogParser.isValidCursor(requested: 100, next: 40, hasContent: false), "倒退")
+        let last = try JSONDecoder().decode(PaperclipRunLogChunk.self, from: Data(#"{"runId":"r","content":"x"}"#.utf8))
+        XCTAssertNil(last.nextOffset)
+    }
+
+    /// 最多保留最近 1 MB 文本,行数上限挡不住的大行也要截。
+    func testRunLogParserKeepsAtMostMaxBytes() {
+        var parser = PaperclipRunLogParser()
+        parser.maxBytes = 1_000
+        for i in 0..<50 { parser.appendChunk(String(repeating: "\(i % 10)", count: 100) + "\n", stream: "stdout") }
+        XCTAssertLessThanOrEqual(parser.text.utf8.count, 1_000 + parser.lines.count)
+        XCTAssertTrue(parser.text.hasSuffix(String(repeating: "9", count: 100)), "保留的是最新的")
+        var big = PaperclipRunLogParser()
+        big.maxBytes = 1_000
+        big.appendChunk(String(repeating: "a", count: 5_000), stream: "stdout")
+        XCTAssertEqual(big.text.utf8.count, 1_000)
+    }
+
+    /// 服务器给出超出 Int 范围的数字时返回 nil,不能让 Int(_:) 陷阱崩溃。
+    func testLiveEventIntRejectsOutOfRangeNumbers() {
+        let event = PaperclipLiveEvent(companyId: "c", type: "t",
+                                       payload: ["big": .number(1e30), "ok": .number(42), "neg": .number(-3.7)])
+        XCTAssertNil(event.int("big"))
+        XCTAssertEqual(event.int("ok"), 42)
+        XCTAssertEqual(event.int("neg"), -3)
+    }
+
     func testLiveSocketRequestFreshlyConfirmsIdentityAndUsesFilteredCookiesOnSameOriginWSS() async throws {
         let session = Self.session
         PaperclipLiveTestProtocol.install { request in
@@ -350,7 +383,8 @@ final class PaperclipLiveTests: XCTestCase {
             case "/api/issues/issue": return (200, issue, "application/json")
             case "/api/issues/issue/runs": return (200, #"[{"runId":"run-1","status":"running","agentId":"a"}]"#, "application/json")
             case "/api/issues/issue/live-runs": return (200, "[]", "application/json")
-            case "/api/heartbeat-runs/run-1/log": return (200, #"{"runId":"run-1","content":""}"#, "application/json")
+            case "/api/heartbeat-runs/run-1/log":
+                return (200, #"{"runId":"run-1","content":""}"#, "application/json")
             case "/api/heartbeat-runs/foreign/log": XCTFail("未确认归属的运行不得读取日志"); return (500, "{}", "application/json")
             default: return (404, "{}", "application/json")
             }
@@ -552,10 +586,21 @@ final class PaperclipLiveTests: XCTestCase {
                 let offset = Int(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "offset" }!.value!)!
                 let (status, body) = content(offset)
                 if status != 200 { return (status, #"{"error":"Run log not found"}"#, "application/json") }
-                let json = String(decoding: try JSONSerialization.data(withJSONObject: ["runId": "run-1", "content": body]), as: UTF8.self)
+                // 与上游 run-log-store 一致:整段读到文件尾时不给 nextOffset。
+                let json = String(decoding: try JSONSerialization.data(withJSONObject: [
+                    "runId": "run-1", "content": body]), as: UTF8.self)
                 return (200, json, "application/json")
             default: return (404, "{}", "application/json")
             }
+        }
+    }
+
+    private final class LogServerState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var third = false
+        var hasThird: Bool {
+            get { lock.withLock { third } }
+            set { lock.withLock { third = newValue } }
         }
     }
 
@@ -564,7 +609,13 @@ final class PaperclipLiveTests: XCTestCase {
         let first = logRecord(1, "一") + logRecord(2, "二")
         let firstBytes = first.utf8.count
         let third = logRecord(3, "三")
-        installLogServer { offset in offset == 0 ? (200, first) : (200, third) }
+        // seq 3 只在第二次读取前写进服务器日志;读到尾之后再读返回空内容。
+        let server = LogServerState()
+        installLogServer { offset in
+            if offset == 0 { return (200, first) }
+            if offset == firstBytes, server.hasThird { return (200, third) }
+            return (200, "")
+        }
         let client = try client()
         let stream = PaperclipRunStream(client: client, reference: reference(client))
         try await stream.reloadLiveRuns()
@@ -576,6 +627,7 @@ final class PaperclipLiveTests: XCTestCase {
         stream.handle(logEvent(3, "三"))
         XCTAssertEqual(stream.logs["run-1"]?.parser.lines.map(\.text), ["一", "二", "三"])
         // 补齐读取进行中又到达 seq 4；服务器这次读取只含到 seq 3。
+        server.hasThird = true
         let release = PaperclipLiveTestProtocol.hold("/api/heartbeat-runs/run-1/log")
         let load = Task { @MainActor in await stream.loadLog(runID: "run-1") }
         await waitUntil { stream.logs["run-1"]?.loading == true }
@@ -609,7 +661,7 @@ final class PaperclipLiveTests: XCTestCase {
         let client = try client()
         let stream = PaperclipRunStream(client: client, reference: reference(client))
         try await stream.reloadLiveRuns()
-        installLogServer { _ in (200, #"{"ts":"t","stream":"stdout","chunk":"旧数据\n","seq":1}"# + "\n") }
+        installLogServer { offset in offset == 0 ? (200, #"{"ts":"t","stream":"stdout","chunk":"旧数据\n","seq":1}"# + "\n") : (200, "") }
         let release = PaperclipLiveTestProtocol.hold("/api/heartbeat-runs/run-1/log")
         let load = Task { @MainActor in await stream.loadLog(runID: "run-1") }
         await waitUntil { stream.logs["run-1"]?.loading == true }

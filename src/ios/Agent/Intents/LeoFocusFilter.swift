@@ -13,6 +13,7 @@
 
 import AppIntents
 import Foundation
+import UserNotifications
 
 struct LeoFocusFilter: SetFocusFilterIntent {
     static var title: LocalizedStringResource = "LeoPhoneAgent 工作模式"
@@ -72,5 +73,36 @@ enum LeoFocusState {
         if active && !wasActive { return ContextSignalName.focusStart }
         if !active && wasActive { return ContextSignalName.focusEnd }
         return nil
+    }
+
+    /// [D2] 快捷指令「记下此刻:开始 / 结束专注」与专注过滤器共用起止时间,
+    /// 结束时的收尾卡片才算得出这段专注。已经在专注中再「开始」不改起点。
+    static func recordShortcut(start: Bool, now: Date = Date(), defaults: UserDefaults = .standard) {
+        let wasActive = defaults.bool(forKey: activeKey)
+        if start {
+            guard !wasActive else { return }
+            defaults.set(true, forKey: activeKey)
+            defaults.set("专注", forKey: modeKey)
+            defaults.set(false, forKey: silenceKey)
+            defaults.set(now, forKey: startedKey)
+        } else {
+            defaults.set(false, forKey: activeKey)
+            defaults.set(now, forKey: endedKey)
+        }
+    }
+
+    /// 专注过滤条件里选了「静默非紧急通知」,且专注正开着。
+    static func silencesNonUrgent(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: activeKey) && defaults.bool(forKey: silenceKey)
+    }
+}
+
+extension UNMutableNotificationContent {
+    /// [C9] 专注时静默非紧急通知:任务完成、结果类通知只进通知中心,不响、不亮屏。
+    /// 审批类(要你拍板,不批就卡住)不调用它。
+    func applyFocusQuiet(defaults: UserDefaults = .standard) {
+        guard LeoFocusState.silencesNonUrgent(defaults: defaults) else { return }
+        sound = nil
+        interruptionLevel = .passive
     }
 }

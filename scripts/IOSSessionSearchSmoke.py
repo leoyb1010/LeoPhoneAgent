@@ -13,6 +13,7 @@ method = generator.extract_swift_method((root / 'src/ios/Agent/Chat/ChatStore.sw
 source = r'''
 import Foundation
 import SQLite3
+let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 struct ChatSession {
  let id: String; let title: String?; let category: String?; let modelId: String
  let createdAt: Date; let updatedAt: Date; let lastMessage: String?

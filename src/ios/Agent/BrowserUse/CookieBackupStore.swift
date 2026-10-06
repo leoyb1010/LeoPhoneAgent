@@ -61,6 +61,8 @@ final class CookieBackupStore {
     /// backup listing when the set actually changed, so the 60s cadence
     /// doesn't flood the log with identical listings.
     private var lastLoggedKeys: Set<String> = []
+    /// 本进程上一次同步时在线的 cookie 键(按可注册域分组),用来认出站点自己删掉的 cookie。
+    private var lastLiveKeysByDomain: [String: Set<String>]?
 
     private struct BackupCookie: Codable {
         var name: String
@@ -256,11 +258,21 @@ final class CookieBackupStore {
             merged[entry.key] = entry
         }
         var liveKeys = Set<String>()
+        var liveKeysByDomain: [String: Set<String>] = [:]
         for cookie in live {
             let entry = BackupCookie(from: cookie)
             liveKeys.insert(entry.key)
+            liveKeysByDomain[Self.registrableDomain(entry.domain), default: []].insert(entry.key)
             merged[entry.key] = entry
         }
+        // 登出 / 过期 / 轮换:站点还在、只少了几个 cookie —— 那是站点自己删的,从备份里去掉,不再塞回去。
+        // 整站消失(ITP 清理)不在此列,照旧恢复。
+        if let previous = lastLiveKeysByDomain {
+            let removed = CookieDeletionPolicy.deliberatelyRemovedKeys(previous: previous, current: liveKeysByDomain)
+            for key in removed { merged.removeValue(forKey: key) }
+            if !removed.isEmpty { logger.info("dropped \(removed.count) cookie(s) the site removed itself (sign-out / expiry)") }
+        }
+        lastLiveKeysByDomain = liveKeysByDomain
 
         // Prune dropped domains (time-aged or evicted by the cap) from the
         // visit map and delete their backup files, then persist the merge.

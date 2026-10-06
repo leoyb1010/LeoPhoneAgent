@@ -1843,19 +1843,11 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
                 serverRecordCache[server.recordID] = server
                 etagCacheDirty = true
                 pendingOutcomes[failed.record.recordID.recordName] = .conflict(id, serverRecord: portable)
-                // Re-queue with the fresh etag. CKSyncEngine consults
-                // both engine.state AND nextRecordZoneChangeBatch — only
-                // adding to engine.state without re-appending the record
-                // body silently drops the retry. So rebuild a fresh
-                // CKRecord on top of the server's system fields, copy
-                // failed.record's known fields onto it, and re-append
-                // to pendingRecords so the next batch ships the merge.
-                let mergedRecord = server   // server has correct etag + system fields
-                for key in failed.record.allKeys() {
-                    mergedRecord[key] = failed.record[key]
-                }
-                pendingRecords.append(mergedRecord)
-                syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
+                // 不在这里把本地字段整体盖到服务器新版本上立即重发(那会抹掉另一台设备的改动,
+                // 而且同一次 sendChanges 里的成功结果还会覆盖掉这条冲突,SyncCore 的合并永远不跑)。
+                // 交给 SyncCore:按 SyncConflictPolicy 决定接受服务器还是重发本地;
+                // 重发时以上面缓存的服务器记录(新 etag)为底重建。
+                syncEngine?.state.remove(pendingRecordZoneChanges: [.saveRecord(failed.record.recordID)])
             } else if Self.isTransientCKError(failed.error) {
                 pendingOutcomes[failed.record.recordID.recordName] = .transientFailure(id, retryAfter: failed.error.retryAfterSeconds)
                 if let after = failed.error.retryAfterSeconds { observeServiceRetry(after) }

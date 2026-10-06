@@ -10,6 +10,8 @@
 #import "NativeOffloadUtils.h"
 #include "kernel/native_offload.h"
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #import "LeoPhoneAgent-Swift.h"
 
@@ -412,6 +414,24 @@ static int cmd_run(int argc, char **argv, int stdin_fd, int stdout_fd, int stder
 
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
+    // Streaming writes happen on a Swift task that can outlive this handler
+    // (300 s timeout, Ctrl-C). The kernel closes stdout_fd as soon as we
+    // return, and a later open() could reuse that number — tokens would then
+    // land in whatever file got it. Hand Swift its own dup; if we return
+    // first, point the dup at /dev/null so late writes go nowhere, and let the
+    // completion close it. `fdLock` orders "completion closed" vs "detach".
+    __block int streamFd = -1;
+    __block BOOL streamClosed = NO;
+    NSObject *fdLock = [NSObject new];
+    if (stream) {
+        streamFd = dup(stdout_fd);
+        if (streamFd < 0) {
+            noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, @"run", NOFF_ERR_INTERNAL_ERROR,
+                                                      @"Could not set up the output stream."), compact, quiet);
+            return NOFF_EXIT_ERROR;
+        }
+    }
+
     if (stream) {
         // Streaming mode: write tokens directly to stdout
         [ModelUseOffloadBridge runModelWithIdOrName:modelIdOrName
@@ -421,8 +441,12 @@ static int cmd_run(int argc, char **argv, int stdin_fd, int stdout_fd, int stder
                                          maxTokens:maxTokens
                                        temperature:temperature
                                     outputHostPath:outputHostPath
-                                          streamFd:stdout_fd
+                                          streamFd:streamFd
                                         completion:^(NSDictionary *data, NSString *error) {
+            @synchronized (fdLock) {
+                close(streamFd);
+                streamClosed = YES;
+            }
             result = data;
             errorMsg = error;
             dispatch_semaphore_signal(sem);
@@ -444,7 +468,23 @@ static int cmd_run(int argc, char **argv, int stdin_fd, int stdout_fd, int stder
     }
 
     // Wait with 5 minute timeout for model response
-    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_SEC));
+    long waited = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_SEC));
+
+    if (waited != 0) {
+        if (stream) {
+            @synchronized (fdLock) {
+                if (!streamClosed) {
+                    int devnull = open("/dev/null", O_WRONLY);
+                    if (devnull >= 0) { dup2(devnull, streamFd); close(devnull); }
+                }
+            }
+        }
+        BOOL cancelled = waited == ECANCELED || noff_is_cancelled();
+        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, @"run",
+                       cancelled ? @"cancelled" : @"timeout",
+                       cancelled ? @"Cancelled." : @"The model did not finish within 300 seconds."), compact, quiet);
+        return cancelled ? 130 : NOFF_EXIT_ERROR;
+    }
 
     if (errorMsg) {
         NSDictionary *err = noff_json_error(TOOL_NAME, @"run",

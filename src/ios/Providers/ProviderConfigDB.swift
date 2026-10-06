@@ -544,6 +544,10 @@ actor ProviderConfigDB {
                 logger.error("[v3] bulkReplace failed; previous provider configuration retained")
             }
         }
+        // 记下旧行:重写后内容没变的行恢复原 updated_at,secret_* / extras_json 原样保留。
+        for table in ProviderRowStamps.all {
+            guard ProviderRowStamps.snapshot(db, table) else { return false }
+        }
         guard Self.exec(db: db, "DELETE FROM provider_model_groups") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_model_entries") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_instances") == SQLITE_OK else { return false }
@@ -677,6 +681,9 @@ actor ProviderConfigDB {
             guard insertAgentLoopIdRow(kind: "group", targetId: gid, sortOrder: idx) else { return false }
         }
 
+        for table in ProviderRowStamps.all {
+            guard ProviderRowStamps.restore(db, table) else { return false }
+        }
         guard Self.exec(db: db, "COMMIT") == SQLITE_OK else { return false }
         committed = true
         let c = counts()

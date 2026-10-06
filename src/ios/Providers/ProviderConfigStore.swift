@@ -2927,15 +2927,22 @@ enum ProviderKeychainHelper {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
-        var syncDelete = deleteQuery
-        syncDelete[kSecAttrSynchronizable as String] = true
-        SecItemDelete(syncDelete as CFDictionary)
-        var addQuery = deleteQuery
-        addQuery[kSecValueData as String] = Data(value.utf8)
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        addQuery[kSecAttrSynchronizable as String] = true
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        // 先原地更新:「先删再加」时只要加失败(钥匙串忙、锁屏),旧凭证已经没了,用户被登出。
+        var syncMatch = deleteQuery
+        syncMatch[kSecAttrSynchronizable as String] = true
+        let updateAttrs: [String: Any] = [
+            kSecValueData as String: Data(value.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        var addStatus = SecItemUpdate(syncMatch as CFDictionary, updateAttrs as CFDictionary)
+        if addStatus == errSecItemNotFound {
+            // 没有同步副本:清掉可能残留的本机副本,再加同步副本(与以前的落点一致)。
+            SecItemDelete(deleteQuery as CFDictionary)
+            var addQuery = syncMatch
+            addQuery[kSecValueData as String] = Data(value.utf8)
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        }
         AppLogger(category: "Keychain").info("write oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) valLen=\(value.count) addStatus=\(addStatus) caller=\(caller)")
         notifyAuthChanged(instanceId: instanceId)
     }

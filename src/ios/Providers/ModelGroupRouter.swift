@@ -33,10 +33,19 @@ enum ModelGroupRouter {
             return available.first
 
         case .loadBalance:
-            let index = abs(sessionId.hashValue) % available.count
+            // 稳定哈希:String.hashValue 每次启动换种子,重启后同一会话会换到别的成员(提示缓存失效);
+            // abs(Int.min) 还会陷阱崩溃。
+            let index = Int(Self.stableHash(sessionId) % UInt64(available.count))
             if verbose { logger.info("🔀ROUTE resolve loadBalance index=\(index) → \(available[index])") }
             return available[index]
         }
+    }
+
+    /// FNV-1a 64 位,跨启动稳定。
+    static func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
+        return hash
     }
 
     /// Get the next fallback entry after the current one failed.

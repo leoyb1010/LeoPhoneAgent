@@ -391,19 +391,25 @@ final class AnthropicProvider: LLMProvider {
         // Check for captured error body from URLProtocol (has the full JSON error)
         let capturedBody = LastAPIErrorBody.shared.take()
         let description = String(describing: error)
+        // 先认 SDK 写在开头的「status code NNN」:在整段描述里搜子串会误判 ——
+        // 400「prompt is too long: 205000 tokens」含 "500" 被当成可重试,反复重发注定失败的请求;
+        // "generate"/"moderate" 含 "rate" 被当成限流。
+        let status = Self.httpStatus(inDescription: description)
+        let lowered = description.lowercased()
 
-        if description.contains("authentication") || description.contains("401") {
+        if status.map({ $0 == 401 || $0 == 403 })
+            ?? (lowered.contains("authentication") || description.contains("status code 401")) {
             let detail = Self.extractMessageFromBody(capturedBody)
                 ?? Self.extractAPIErrorMessage(from: description)
             return .invalidAPIKey(detail: detail)
         }
-        if description.contains("429") || description.lowercased().contains("rate") {
+        if status.map({ $0 == 429 }) ?? (lowered.contains("rate_limit") || lowered.contains("rate limit")) {
             return .rateLimited
         }
 
         // Transient server errors (5xx): retry same model, do not trigger group fallback.
-        let transientCodes = ["500", "502", "503", "504", "529"]
-        if transientCodes.contains(where: { description.contains($0) }) {
+        let transientCodes: Set<Int> = [500, 502, 503, 504, 529]
+        if status.map({ transientCodes.contains($0) }) ?? lowered.contains("overloaded") {
             let detailedMessage = Self.extractMessageFromBody(capturedBody)
                 ?? Self.extractAPIErrorMessage(from: description)
             return .transientError(message: detailedMessage)
@@ -444,6 +450,14 @@ final class AnthropicProvider: LLMProvider {
     /// Extract a human-readable error message from SwiftAnthropic's error description.
     /// Input format: `responseUnsuccessful(description: "status code 400some error message")`
     /// Output: `"[400] some error message"` or the original string if parsing fails.
+    /// SDK 错误描述里的 HTTP 状态码(「status code NNN」),没有就 nil。
+    static func httpStatus(inDescription description: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: #"status code (\d{3})"#),
+              let match = regex.firstMatch(in: description, range: NSRange(description.startIndex..., in: description)),
+              let range = Range(match.range(at: 1), in: description) else { return nil }
+        return Int(description[range])
+    }
+
     static func extractAPIErrorMessage(from description: String) -> String {
         // Try to extract the description string from the enum case
         let pattern = #"responseUnsuccessful\(description:\s*"(.+?)"\)"#

@@ -32,6 +32,8 @@ struct HomeContextStrip: View {
                 }
             }
         }
+        // contain:容器自己的标识不覆盖里面各按钮的 home.context-* 标识。
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.context-strip")
     }
 

@@ -635,10 +635,15 @@ extension WatchBridge: WCSessionDelegate {
             // Receiving it is the point: iOS has already woken the app.
             replyHandler(["ok": true])
         case WatchContinueOnPhone.kind:
-            let sessionId = WatchContinueOnPhone.sessionId(from: message)
-            replyHandler(["ok": sessionId != nil])
-            guard let sessionId else { return }
-            Task { @MainActor in await WatchContinueOnPhoneHandler.handle(sessionId: sessionId) }
+            // 先确认会话还在、通知真发出去了再回 ok,别让手表显示「已发到 iPhone」却什么都没有。
+            guard let sessionId = WatchContinueOnPhone.sessionId(from: message) else {
+                replyHandler(["ok": false])
+                return
+            }
+            Task { @MainActor in
+                let delivered = await WatchContinueOnPhoneHandler.handle(sessionId: sessionId)
+                replyHandler(["ok": delivered])
+            }
         case WatchPayloadKey.kindApprovalReply:
             let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
@@ -938,15 +943,17 @@ enum WatchAskRunner {
 /// 点开走现有的 sessionId 通知路由。
 @MainActor
 enum WatchContinueOnPhoneHandler {
-    static func handle(sessionId: String) async {
-        guard await ChatStore.shared.sessionExists(id: sessionId) else { return }
+    /// 返回 true = 已打开或通知已排进系统。
+    @discardableResult
+    static func handle(sessionId: String) async -> Bool {
+        guard await ChatStore.shared.sessionExists(id: sessionId) else { return false }
         if UIApplication.shared.applicationState == .active {
             SessionLockStore.shared.runWhenUnlocked {
                 NotificationNavigationStore.shared.setPending(sessionId)
                 NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
                                                 userInfo: ["sessionId": sessionId])
             }
-            return
+            return true
         }
         let hide = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
             || SessionLockStore.shared.isHiddenFromSystemSurfaces(sessionId)
@@ -957,8 +964,14 @@ enum WatchContinueOnPhoneHandler {
         content.body = text.body
         content.sound = .default
         content.userInfo = ["sessionId": sessionId]
-        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(
-            identifier: WatchContinueOnPhone.notificationIdentifier(sessionId: sessionId),
-            content: content, trigger: nil))
+        content.applyFocusQuiet()
+        do {
+            try await UNUserNotificationCenter.current().add(UNNotificationRequest(
+                identifier: WatchContinueOnPhone.notificationIdentifier(sessionId: sessionId),
+                content: content, trigger: nil))
+            return true
+        } catch {
+            return false
+        }
     }
 }

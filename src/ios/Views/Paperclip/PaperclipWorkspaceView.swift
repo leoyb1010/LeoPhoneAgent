@@ -33,14 +33,14 @@ struct PaperclipBackendSettingsView: View {
     @AppStorage("leo.ios.executionBackend.v1") private var selected = IOSExecutionBackend.local.rawValue
     var body: some View {
         Form {
-            Section("iOS 执行后端") {
+            Section("当前工作区") {
                 Picker("工作区", selection: $selected) {
                     ForEach(IOSExecutionBackend.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 }
-                Text("本机是默认选项。切换工作区不会移动已有会话、记忆或工具；每项服务器任务始终绑定创建它的服务器、公司和用户。")
+                Text("本机是默认选项，每次打开 App 都从本机开始。切换工作区不会移动已有会话、记忆或工具；每项服务器任务始终绑定创建它的服务器、公司和用户。")
                 Text("Paperclip 在你独立部署的服务器上执行。连接超时或登录过期时会停止并提示，不会回退到本机。")
             }
-        }.navigationTitle("执行后端")
+        }.navigationTitle("服务器任务")
     }
 }
 
@@ -60,6 +60,7 @@ struct PaperclipWorkspaceView: View {
     @State private var openedReference: PaperclipTaskReference?
     @State private var query = ""
     @State private var listVisible = false
+    @State private var columns = NavigationSplitViewVisibility.all
     @FocusState private var searching: Bool
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -115,18 +116,20 @@ struct PaperclipWorkspaceView: View {
     /// [G6] 宽屏（iPad 常规宽度）左右两栏：左列表、右详情；窄屏保持单栏导航。
     @ViewBuilder private var workspace: some View {
         if sizeClass == .regular {
-            NavigationSplitView {
+            // 竖屏也展开左栏：「本机」、新建和输入栏都在左栏里，收起就找不到。
+            NavigationSplitView(columnVisibility: $columns) {
                 listPage(split: true)
             } detail: {
                 NavigationStack {
                     if let reference = openedReference, let client = store.client {
                         detail(client: client, reference: reference).id(reference.id)
                     } else {
-                        ContentUnavailableView("选择一个任务", systemImage: "sidebar.left",
-                                               description: Text("在左侧选择任务，对话与运行会显示在这里。"))
+                        LeoEmptyState(systemImage: "sidebar.left", title: "选择一个任务",
+                                      message: "在左侧选择任务，对话与运行会显示在这里。")
                     }
                 }
             }
+            .navigationSplitViewStyle(.balanced)
         } else {
             NavigationStack {
                 listPage(split: false)
@@ -221,7 +224,7 @@ struct PaperclipWorkspaceView: View {
                 .padding(.top, LeoTheme.Spacing.xs)
                 .padding(.bottom, LeoTheme.Spacing.md)
             if let error = store.error {
-                PaperclipNotice(text: "同步失败，保留已加载任务。" + error, actionTitle: "重试") { Task { await refresh() } }
+                PaperclipNotice(text: error.hasPrefix("链接") ? error : "同步失败，保留已加载任务。" + error, actionTitle: "重试") { Task { await refresh() } }
                     .padding(.bottom, LeoTheme.Spacing.md)
             }
             if store.companies.isEmpty {
@@ -291,20 +294,12 @@ struct PaperclipWorkspaceView: View {
             HStack(spacing: 10) { ProgressView(); Text("正在加载任务…").foregroundStyle(.secondary) }
                 .frame(maxWidth: .infinity).padding(.top, 60)
         } else if !query.isEmpty {
-            Text("没有匹配任务，试试其他关键词。").font(.subheadline).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity).padding(.top, 40)
+            LeoEmptyState(systemImage: "magnifyingglass", title: "没有匹配的任务", message: "试试其他关键词。")
         } else {
-            VStack(spacing: 12) {
-                Image(systemName: "sparkles.rectangle.stack").font(.largeTitle).foregroundStyle(LeoTheme.ColorToken.accent)
-                Text("想让服务器帮你做什么？").font(.title3.weight(.semibold))
-                Text("在下方输入要求，发送后创建一个服务器任务，执行过程会实时显示。")
-                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button("开始新任务", systemImage: "plus") { focusRequest += 1 }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("paperclip.createEmpty")
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 48)
+            LeoEmptyState(systemImage: "sparkles.rectangle.stack", title: "想让服务器帮你做什么？",
+                          message: "在下方输入要求，发送后创建一个服务器任务，执行过程会实时显示。",
+                          actionTitle: "开始新任务", actionSystemImage: "plus",
+                          action: { focusRequest += 1 }, actionIdentifier: "paperclip.createEmpty")
         }
     }
 }
@@ -456,7 +451,13 @@ private struct PaperclipCreateIssueView: View {
     private func applyHandoff() {
         guard let request = PaperclipHandoff.take() else { return }
         guard !busy, !draft.submitted else {
-            error = "上一个任务还待核对，处理完再从对话升级。"
+            error = "上一个任务还待核对，处理完再从对话转过来。"
+            return
+        }
+        // 输入框里还有没发出的内容：不覆盖，先让你发送或清空。
+        let typed = draft.title.trimmingCharacters(in: .whitespacesAndNewlines) + draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard typed.isEmpty || (draft.title == request.title && draft.body == request.description) else {
+            error = "输入框里还有没发出的内容，先发送或清空，再从对话转过来。"
             return
         }
         draft.title = request.title

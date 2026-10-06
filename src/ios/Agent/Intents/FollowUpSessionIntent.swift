@@ -62,7 +62,10 @@ struct FollowUpSessionIntent: AppIntent {
 
         let (vm, isNew) = ViewModelCache.shared.getOrCreate(for: session.id)
         if isNew {
+            // loadSession 会把它记成「屏幕上的会话」;追问是后台动作,还原成真正在看的那个。
+            let onScreen = AIChatViewModel.activeSessionId
             await vm.loadSession()
+            AIChatViewModel.activeSessionId = onScreen
         }
 
         // Wait if session is currently processing

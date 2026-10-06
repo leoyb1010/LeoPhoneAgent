@@ -443,6 +443,8 @@ class RootfsManager {
         guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let db else { return }
         defer { sqlite3_close(db) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(db, 5_000)
 
         let effectiveMode: UInt32 = mode ?? (isDirectory ? 0o040755 : 0o100644)
         var statBytes: [UInt8] = Array(repeating: 0, count: 16)
@@ -510,6 +512,8 @@ class RootfsManager {
         guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let db else { return }
         defer { sqlite3_close(db) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(db, 5_000)
 
         // Collect inodes of rows that will be deleted so we can drop their
         // stat rows too (meta.db has no FK cascade).

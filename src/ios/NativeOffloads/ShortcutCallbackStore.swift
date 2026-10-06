@@ -19,7 +19,6 @@ import UIKit
 @objc(LeoShortcutCallbackStore)
 final class ShortcutCallbackStore: NSObject, @unchecked Sendable {
     static let callbackHost = "shortcut-result"
-    static let defaultTimeout: TimeInterval = 60
     /// 结果文本上限,防止一个大文件塞满工具输出。
     static let maxOutputBytes = 64 * 1024
 

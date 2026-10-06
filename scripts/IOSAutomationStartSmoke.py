@@ -8,7 +8,9 @@ root=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('audit_generator',root/'scripts/native-model-audit/generate.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 source=(root/'src/ios/Agent/Intents/AutomationEngine.swift').read_text()
-rule=source[source.index('struct AutomationRule:'):source.index('@MainActor\nfinal class AutomationStore')]
+# 1.57 起规则模型拆到 AutomationRule.swift(只依赖 Foundation),整份编进来。
+rule_source=(root/'src/ios/Agent/Intents/AutomationRule.swift').read_text()
+rule=rule_source[rule_source.index('struct AutomationRule:'):]
 method=module.extract_swift_method(source,'fire').replace('private func','func')
 swift='import Foundation\n'+rule+r'''
 struct Logger {func info(_ text:String){}}
@@ -18,7 +20,24 @@ let logger=Logger()
  func markFired(id:String){attempts+=1;if let i=rules.firstIndex(where:{$0.id==id}){rules[i].lastFiredAt=Date()}}
 }
 @MainActor final class BackgroundKeepAliveManager {
- static let shared=BackgroundKeepAliveManager();func armEagerlyForShortcut(sessionId:String,caller:String)->Bool {true}
+ static let shared=BackgroundKeepAliveManager()
+ func armEagerlyForShortcut(sessionId:String,caller:String)->(armed:Bool,skipReason:String?) {SessionActivityTracker.shared.active.insert(sessionId);return (true,nil)}
+}
+@MainActor final class SessionActivityTracker {
+ static let shared=SessionActivityTracker();var active:Set<String>=[]
+ func setInactive(_ id:String,haptic:Bool,source:String){active.remove(id)}
+}
+final class DiagnosticRing {
+ enum Kind {case contextDecision}
+ static let shared=DiagnosticRing()
+ func record(_ kind:Kind,entryId:String?=nil,message:String?=nil){}
+}
+struct QuickTaskDefinition {func renderedPrompt()->String {""}}
+@MainActor final class QuickTaskStore {static let shared=QuickTaskStore();func definition(for id:String)->QuickTaskDefinition? {nil}}
+@MainActor final class SessionBadgeStore {enum Badge {case unread};static let shared=SessionBadgeStore();func pushFront(_ b:Badge,for id:String){}}
+@MainActor enum ContextTurnRunner {
+ struct Outcome {var sessionId:String?=nil;var started=false;var tokens=0}
+ static func run(prompt:String,source:String,blocksSideEffectTools:Bool,shouldStop:((Int)->Bool)?) async->Outcome {Outcome()}
 }
 @MainActor enum QuickTaskWidgetRunner {
  static var outcomes:[String:Bool]=[:];static var calls:[String]=[]
@@ -54,7 +73,8 @@ func expect(_ c:Bool,_ m:String){if !c{print("FAIL: "+m);exit(1)}}
   var custom=AutomationRule(name:"Custom",trigger:.nightCharging);custom.prompt="do task"
   await engine.fire(custom,context:"calendar context")
   expect(WatchAskRunner.prompts==["calendar context\n\ndo task"],"custom action context was changed")
-  print("PASS actual automation dispatch: missing/failed/accepted quick task, preserved rule and cooldown, unchanged custom prompt")
+  expect(SessionActivityTracker.shared.active.isEmpty,"keep-alive placeholder left active after the rule fired")
+  print("PASS actual automation dispatch: missing/failed/accepted quick task, preserved rule and cooldown, unchanged custom prompt, keep-alive placeholder released")
  }
 }
 '''

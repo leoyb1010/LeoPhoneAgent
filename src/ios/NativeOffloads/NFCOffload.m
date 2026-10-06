@@ -1935,13 +1935,33 @@ static int cmd_read_emv(int argc, char **argv, int stdout_fd, BOOL compact, BOOL
                     [pan substringFromIndex:n - 4]];
                 emvResult[@"pan_masked"] = masked;
             }
+            // The full card number must not reach the model, the transcript or
+            // provider logs: keep only the masked form.
+            BOOL panRead = emvResult[@"pan"] != nil;
+            [emvResult removeObjectForKey:@"pan"];
 
-            if (verbose) emvResult[@"trace"] = trace;
-            emvResult[@"hint"] = emvResult[@"pan"]
-                ? @"Read successful. PAN is the funding or device account number. Balances/transaction history are NOT on the chip — they require contacting the issuing bank."
+            if (verbose) {
+                // GPO / READ RECORD 的原始响应里带着完整卡号(Track 2 / 5A)和有效期:只留状态字和长度。
+                NSMutableArray *redacted = [NSMutableArray array];
+                for (NSDictionary *entry in trace) {
+                    NSString *step = entry[@"step"];
+                    if ([step hasPrefix:@"GPO"] || [step hasPrefix:@"READ RECORD"]) {
+                        NSMutableDictionary *copy = [entry mutableCopy];
+                        NSString *resp = entry[@"resp"];
+                        copy[@"resp"] = [NSString stringWithFormat:@"<redacted %lu bytes>", (unsigned long)(resp.length / 2)];
+                        [copy removeObjectForKey:@"pdol"];
+                        [redacted addObject:copy];
+                    } else {
+                        [redacted addObject:entry];
+                    }
+                }
+                emvResult[@"trace"] = redacted;
+            }
+            emvResult[@"hint"] = panRead
+                ? @"Read successful. pan_masked is the funding or device account number (masked). Balances/transaction history are NOT on the chip — they require contacting the issuing bank."
                 : @"Card detected but no PAN extracted. Try --verbose to see the APDU trace.";
 
-            helper.session.alertMessage = emvResult[@"pan"] ? @"Card read" : @"Card detected";
+            helper.session.alertMessage = panRead ? @"Card read" : @"Card detected";
             [helper.session invalidateSession];
             dispatch_semaphore_signal(helper.semaphore);
         };

@@ -33,6 +33,10 @@ final class HarnessLiveActivityBridge {
     /// leaves on disappear). Read by the notification delegate, which isn't
     /// main-actor isolated; written on main only.
     nonisolated(unsafe) static var onScreenSessionIds: Set<String> = []
+    /// 所有登记过的 Mac 会话(不论是否在跑)。它们进 SessionActivityTracker 只为了灵动岛;
+    /// 本机保活(静音音频 / 定位)不该因为「屏幕上开着一个 Mac 控制台」而一直开着 ——
+    /// 活在 Mac 上跑,审批靠中继推送。写只在主线程。
+    nonisolated(unsafe) static var registeredSessionIds: Set<String> = []
     /// 只有这里拉起的 activity 才由这里结束,不碰聊天任务的。
     private var startedByBridge = false
 
@@ -98,6 +102,7 @@ final class HarnessLiveActivityBridge {
     /// driver 状态变化时喊一声(update 在后台也合法,start 只在前台发生)。
     func refresh() {
         entries = entries.filter { $0.value.driver != nil }
+        Self.registeredSessionIds = Set(entries.values.compactMap { $0.driver?.sessionId })
         // Only consoles still following: one that gave up reconnecting shows no
         // card, so its approvals must still banner.
         Self.onScreenSessionIds = Set(entries.values.compactMap { entry in

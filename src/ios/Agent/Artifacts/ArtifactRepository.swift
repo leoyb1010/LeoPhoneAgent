@@ -2,6 +2,10 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+/// SQLite 立即拷贝绑定的文本。nil(SQLITE_STATIC)要求指针活到 step,而桥接出来的临时
+/// NSString 缓冲在绑定语句结束后就可能被释放,写进库的会是错乱的文本。
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 private final class ArtifactSQLiteHandle: @unchecked Sendable {
     let pointer: OpaquePointer?
 
@@ -256,8 +260,9 @@ actor ArtifactRepository {
             let statement = try prepare("DELETE FROM artifacts WHERE id = ?")
             bindText(statement, 1, id)
             do {
+                // 失败时也要 finalize,否则语句泄漏。
+                defer { sqlite3_finalize(statement) }
                 try stepDone(statement)
-                sqlite3_finalize(statement)
             } catch {
                 sqlite3_finalize(statement)
                 throw error
@@ -394,8 +399,9 @@ actor ArtifactRepository {
             bindText(placeholder, 6, remote.id)
             sqlite3_bind_double(placeholder, 7, remote.createdAt.timeIntervalSince1970)
             sqlite3_bind_double(placeholder, 8, remote.createdAt.timeIntervalSince1970)
+            // 失败时也要 finalize,否则语句泄漏。
+            defer { sqlite3_finalize(placeholder) }
             try stepDone(placeholder)
-            sqlite3_finalize(placeholder)
 
             let insert = try prepare("INSERT INTO artifact_versions (id, artifact_id, version_number, original_file_name, relative_path, byte_count, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
             bindText(insert, 1, remote.id)
@@ -406,8 +412,9 @@ actor ArtifactRepository {
             sqlite3_bind_int64(insert, 6, remote.byteCount)
             bindText(insert, 7, remote.sha256)
             sqlite3_bind_double(insert, 8, remote.createdAt.timeIntervalSince1970)
+            // 失败时也要 finalize,否则语句泄漏。
+            defer { sqlite3_finalize(insert) }
             try stepDone(insert)
-            sqlite3_finalize(insert)
             try execute("COMMIT")
         } catch {
             _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
@@ -457,8 +464,9 @@ actor ArtifactRepository {
                 bindText(insert, 8, versionId)
                 sqlite3_bind_double(insert, 9, artifact.createdAt.timeIntervalSince1970)
                 sqlite3_bind_double(insert, 10, artifact.updatedAt.timeIntervalSince1970)
+                // 失败时也要 finalize,否则语句泄漏。
+                defer { sqlite3_finalize(insert) }
                 try stepDone(insert)
-                sqlite3_finalize(insert)
             }
 
             let versionInsert = try prepare("INSERT INTO artifact_versions (id, artifact_id, version_number, original_file_name, relative_path, byte_count, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
@@ -470,8 +478,9 @@ actor ArtifactRepository {
             sqlite3_bind_int64(versionInsert, 6, Int64(data.count))
             bindText(versionInsert, 7, checksum)
             sqlite3_bind_double(versionInsert, 8, artifact.updatedAt.timeIntervalSince1970)
+            // 失败时也要 finalize,否则语句泄漏。
+            defer { sqlite3_finalize(versionInsert) }
             try stepDone(versionInsert)
-            sqlite3_finalize(versionInsert)
 
             if !isNew {
                 let update = try prepare("UPDATE artifacts SET title = ?, kind = ?, mime_type = ?, current_version_id = ?, updated_at = ?, trashed_at = NULL WHERE id = ?")
@@ -481,8 +490,9 @@ actor ArtifactRepository {
                 bindText(update, 4, versionId)
                 sqlite3_bind_double(update, 5, artifact.updatedAt.timeIntervalSince1970)
                 bindText(update, 6, artifact.id)
+                // 失败时也要 finalize,否则语句泄漏。
+                defer { sqlite3_finalize(update) }
                 try stepDone(update)
-                sqlite3_finalize(update)
             }
             try execute("COMMIT")
         } catch {
@@ -566,7 +576,7 @@ actor ArtifactRepository {
     }
 
     private func bindText(_ statement: OpaquePointer?, _ index: Int32, _ value: String) {
-        sqlite3_bind_text(statement, index, (value as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, index, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
     }
 
     private func bindOptionalText(_ statement: OpaquePointer?, _ index: Int32, _ value: String?) {

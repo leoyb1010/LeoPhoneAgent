@@ -11,6 +11,24 @@ import Foundation
 private let logger = AppLogger(category: "SessionsOffload")
 
 @objc public class SessionsOffloadBridge: NSObject {
+    /// 等桥接任务完成。以前是无限期 `sem.wait()`:ChatStore 慢、主线程忙时 guest 线程永久卡住,
+    /// Ctrl-C 也停不下来。超时或 Ctrl-C 返回 false;调用方不再读任务里的结果(任务可能还在写)。
+    private static func bridgeWait(_ sem: DispatchSemaphore, seconds: Double) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while true {
+            if sem.wait(timeout: .now() + 0.1) == .success { return true }
+            if noff_is_cancelled() || Date() >= deadline { return false }
+        }
+    }
+
+    private static func bridgeTimeout(_ operation: String, seconds: Int) -> NSDictionary {
+        let cancelled = noff_is_cancelled()
+        return [
+            "error": cancelled ? "cancelled" : "timeout",
+            "message": cancelled ? "已取消。" : "App 在 \(seconds) 秒内没有完成 \(operation),操作结果未知,请稍后用 status 查看。",
+        ] as NSDictionary
+    }
+
 
     // MARK: - List / Search Sessions
 
@@ -55,7 +73,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("querySessions", seconds: 60) }
 
         return [
             "count": result.count,
@@ -104,7 +122,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("searchMessages", seconds: 60) }
 
         return [
             "count": result.count,
@@ -152,7 +170,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 60) else { return bridgeTimeout("loadMessages", seconds: 60) }
 
         return [
             "session_id": sessionId,
@@ -324,7 +342,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 120) else { return bridgeTimeout("sendPrompt", seconds: 120) }
         return output as NSDictionary
     }
 
@@ -414,7 +432,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 120) else { return bridgeTimeout("retryMessage", seconds: 120) }
         return output as NSDictionary
     }
 
@@ -457,7 +475,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 30) else { return bridgeTimeout("openSession", seconds: 30) }
         return output as NSDictionary
     }
 
@@ -532,7 +550,7 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        guard bridgeWait(sem, seconds: 30) else { return bridgeTimeout("getSessionStatus", seconds: 30) }
         return output as NSDictionary
     }
 }

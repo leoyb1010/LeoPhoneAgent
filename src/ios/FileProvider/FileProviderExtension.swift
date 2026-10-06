@@ -315,6 +315,21 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             return Progress()
         }
 
+        // 移动 / 改名的目的地同样受限:不能挪到根目录下,也不能挪进只读的 memory/、skills/
+        // (以前只看源条目,从 shared/ 拖进 skills/ 就绕过了只读)。文件名里不能带路径。
+        if changedFields.contains(.filename) || changedFields.contains(.parentItemIdentifier) {
+            let parentRaw = item.parentItemIdentifier.rawValue
+            let badName = item.filename.contains("/") || item.filename == ".." || item.filename == "."
+            if badName || item.parentItemIdentifier == .rootContainer
+                || parentRaw == "memory" || parentRaw.hasPrefix("memory/")
+                || parentRaw == "skills" || parentRaw.hasPrefix("skills/") {
+                completionHandler(nil, [], false,
+                                  NSError(domain: NSCocoaErrorDomain,
+                                          code: NSFileWriteNoPermissionError))
+                return Progress()
+            }
+        }
+
         let srcURL = Self.providerRoot.appendingPathComponent(item.itemIdentifier.rawValue)
 
         do {
@@ -334,9 +349,19 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
             if changedFields.contains(.contents), let newContents {
                 if FileManager.default.fileExists(atPath: destURL.path) {
-                    try FileManager.default.removeItem(at: destURL)
+                    // 先拷到旁边再原子替换:以前先删后拷,拷贝失败文件就没了。
+                    let staged = destURL.deletingLastPathComponent()
+                        .appendingPathComponent(".\(UUID().uuidString).staging")
+                    try FileManager.default.copyItem(at: newContents, to: staged)
+                    do {
+                        _ = try FileManager.default.replaceItemAt(destURL, withItemAt: staged)
+                    } catch {
+                        try? FileManager.default.removeItem(at: staged)
+                        throw error
+                    }
+                } else {
+                    try FileManager.default.copyItem(at: newContents, to: destURL)
                 }
-                try FileManager.default.copyItem(at: newContents, to: destURL)
             }
 
             let resultItem = FileProviderItem(url: destURL, parentIdentifier: item.parentItemIdentifier)

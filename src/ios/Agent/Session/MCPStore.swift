@@ -304,6 +304,11 @@ final class MCPStore: ObservableObject {
         // Matches Android's leniency.
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rawServers = root["mcpServers"] as? [String: Any] else {
+            // 整份解析不了:以前静默返回空,下一次保存就把所有服务器配置覆盖掉。先备份原文件并记一笔。
+            let backup = serversFileURL.deletingLastPathComponent()
+                .appendingPathComponent("servers.corrupt-\(Int(Date().timeIntervalSince1970)).json")
+            try? data.write(to: backup, options: .atomic)
+            AppLogger(category: "MCPStore").error("[Load] servers.json unreadable (\(data.count) bytes) — backed up to \(backup.lastPathComponent)")
             return []
         }
 

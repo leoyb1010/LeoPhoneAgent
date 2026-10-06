@@ -467,14 +467,18 @@ private struct ReplyActionBarV3: View {
             // [E1] 下一步:这条回复流到别的功能。5 项,顺序固定。
             if bridge.onNextStep != nil {
                 Menu {
-                    ForEach(ReplyNextStep.menu) { action in
+                    ForEach(ReplyNextStep.visibleMenu(paperclipConfigured: PaperclipProfile.hasSaved())) { action in
                         Button {
                             bridge.onNextStep?(action)
                         } label: { Label(action.title, systemImage: action.symbolName) }
                     }
                 } label: {
+                    // 图标还是 14pt,点按区 44×44;负边距让它不撑大这一行、不挤动左右按钮。
                     Image(systemName: "arrow.turn.down.right")
+                        .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                        .contentShape(Rectangle())
                 }
+                .padding(-13)
                 .accessibilityLabel(Text("下一步"))
                 .accessibilityIdentifier("reply.nextStep")
             }

@@ -158,6 +158,7 @@ final class PaperclipContractTests: XCTestCase {
 
     func testChineseLabelsNeverExposeUnknownWireStatus() {
         XCTAssertEqual(IOSExecutionBackend.local.title, "本机")
+        XCTAssertEqual(IOSExecutionBackend.paperclip.title, "服务器任务（Paperclip）")
         XCTAssertEqual(PaperclipLabels.status("future_status"), "未知状态")
         for status in PaperclipIssueStatus.allCases { XCTAssertNotEqual(status.title, status.rawValue) }
     }

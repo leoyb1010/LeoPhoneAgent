@@ -27,7 +27,10 @@ struct ScheduledTaskSettingsView: View {
                     // [F3] Shared LeoEmptyState, Chinese.
                     LeoEmptyState(systemImage: "calendar.badge.clock",
                                   title: "还没有定时任务",
-                                  message: "点右上角 + 添加一个，比如每天早上 8 点跑「早间简报」。")
+                                  // 定时任务从快捷任务里选;一个快捷任务都没有时右上角 + 是灰的,别指向它。
+                                  message: quickTasks.tasks.isEmpty
+                                      ? "定时任务要从快捷任务里选。先到 设置 › 快捷任务 建一个，再回来添加。"
+                                      : "点右上角 + 添加一个，比如每天早上 8 点跑「早间简报」。")
                 } else {
                     ForEach(store.tasks) { task in
                         VStack(alignment: .leading, spacing: 6) {

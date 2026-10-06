@@ -401,6 +401,7 @@ enum ShortcutNotification {
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["sessionId": sessionId]
+        content.applyFocusQuiet()
 
         // Increment app badge count
         let current = UIApplication.shared.applicationIconBadgeNumber
@@ -626,13 +627,10 @@ enum LeoNotificationCategories {
         ]
     }
 
+    /// 本 App 所有类别都在 `all` 里,直接写全量:不先读再并(两处同时「读-并-写」会互相覆盖,
+    /// 冷启动时可能把审批按钮抹掉),也就不存在先后顺序问题。
     static func register() {
-        let center = UNUserNotificationCenter.current()
-        let ours = all
-        let ids = Set(ours.map(\.identifier))
-        center.getNotificationCategories { existing in
-            center.setNotificationCategories(existing.filter { !ids.contains($0.identifier) }.union(ours))
-        }
+        UNUserNotificationCenter.current().setNotificationCategories(Set(all))
     }
 }
 

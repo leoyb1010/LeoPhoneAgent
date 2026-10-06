@@ -141,6 +141,36 @@ final class ShortcutDeepeningTests: XCTestCase {
         XCTAssertEqual(text.components(separatedBy: "<!-- ").count - 1, 2)
     }
 
+    /// 快捷指令(可能在锁屏时)写入的条目标明来源;时间戳注释格式不变,按时间读取照旧。
+    func testMemoryDailyLogTagsShortcutSource() throws {
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        let name = try MemoryDailyLog.prepend("我对花生过敏", in: dir, at: date, source: "快捷指令·锁屏")
+        let text = try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+        XCTAssertTrue(text.hasPrefix("<!-- "))
+        XCTAssertTrue(text.contains("-->\n[来源:快捷指令·锁屏] 我对花生过敏\n"))
+    }
+
+    /// 当天文件读不出来(编码损坏 / 锁屏数据保护)时必须报错,不能用新条目覆盖掉旧内容。
+    func testMemoryDailyLogRefusesToOverwriteUnreadableFile() throws {
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        let url = dir.appendingPathComponent(MemoryDailyLog.fileName(for: date))
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let corrupt = Data([0xFF, 0xFE, 0x00, 0xC3])
+        try corrupt.write(to: url)
+        XCTAssertThrowsError(try MemoryDailyLog.prepend("新的一条", in: dir, at: date))
+        XCTAssertEqual(try Data(contentsOf: url), corrupt, "旧内容原样保留")
+    }
+
+    func testMemoryDailyLogConcurrentWritesKeepEveryEntry() throws {
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        let directory: URL = dir
+        DispatchQueue.concurrentPerform(iterations: 20) { i in
+            _ = try? MemoryDailyLog.prepend("entry-\(i)", in: directory, at: date)
+        }
+        let text = try String(contentsOf: dir.appendingPathComponent(MemoryDailyLog.fileName(for: date)), encoding: .utf8)
+        for i in 0..<20 { XCTAssertTrue(text.contains("entry-\(i)\n"), "entry-\(i) 丢了") }
+    }
+
     // MARK: C11 Siri 朗读与隐私
 
     func testSiriReplyHiddenOnlyWhenLockedWithPrivacyAndNotVoiceOnly() {

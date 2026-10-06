@@ -220,7 +220,7 @@ final class SensitiveToolGate: ObservableObject {
     private var backgroundTimedOutCategories: Set<Category> = []
 
     struct PendingApproval: Identifiable {
-        let id = UUID()
+        var id = UUID()
         let category: Category
         let host: String           // 展示用:哪个站点 / 哪条命令
         let grantScope: String     // 授权键用:这次放行覆盖多大范围
@@ -306,8 +306,17 @@ final class SensitiveToolGate: ObservableObject {
             }
         }
 
-        return await withCheckedContinuation { (cont: CheckedContinuation<Outcome, Never>) in
+        // 用户按了停止 / 删了会话:回合的 Task 被取消,审批也要随之作废 ——
+        // 否则弹窗还挂着,之后点「允许」会让已取消的回合接着写文件、跑远程命令。
+        let requestId = UUID()
+        return await withTaskCancellationHandler {
+          await withCheckedContinuation { (cont: CheckedContinuation<Outcome, Never>) in
+            if Task.isCancelled {
+                cont.resume(returning: .deniedByUser)
+                return
+            }
             let request = PendingApproval(
+                id: requestId,
                 category: category, host: host, grantScope: scope, sessionId: sessionId,
                 risk: risk, continuation: cont)
             // 灵动岛、首页提醒条、会话行都靠这个阶段知道"在等你批准"。
@@ -326,6 +335,22 @@ final class SensitiveToolGate: ObservableObject {
                 // continuation 永远不恢复,整条 agent run 看起来像"卡死"。
                 self.queued.append(request)
             }
+          }
+        } onCancel: {
+            Task { @MainActor in SensitiveToolGate.shared.cancelRequest(requestId) }
+        }
+    }
+
+    /// 回合被取消:正在弹的那条按拒绝收尾,排队里的直接移除并拒绝。
+    func cancelRequest(_ requestId: UUID) {
+        if let p = pending, p.id == requestId {
+            finish(p, outcome: .deniedByUser)
+            return
+        }
+        if let index = queued.firstIndex(where: { $0.id == requestId }) {
+            let request = queued.remove(at: index)
+            request.continuation.resume(returning: .deniedByUser)
+            clearWaitingIfDone(request.sessionId)
         }
     }
 
@@ -473,6 +498,7 @@ final class SensitiveToolGate: ObservableObject {
 
         let center = UNUserNotificationCenter.current()
         // [T-siri-approval-notify] set 是整体替换;按标识换掉旧定义再并入,别抹掉其他类别的按钮。
+        // (本文件也编进逻辑测试目标,够不到 App 里的 LeoNotificationCategories;启动时那次全量注册已含本类别。)
         let category = Self.notificationCategory
         center.getNotificationCategories { existing in
             center.setNotificationCategories(existing.filter { $0.identifier != category.identifier }.union([category]))

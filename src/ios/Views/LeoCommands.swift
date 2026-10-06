@@ -229,7 +229,9 @@ struct SceneSessionHost: View {
             takeRequest()   // a new window's request arrives before its views exist
         }
         .frame(width: 0, height: 0)
-        .onChange(of: sessionCount) { _, _ in openRequested() }
+        // 下一轮再试:ContentView 的 id→会话缓存在同一轮的另一个 onChange 里才重建,
+        // 先于它判断会把刚同步到的会话当成"还没到"(E7 接力会一直等到超时)。
+        .onChange(of: sessionCount) { _, _ in DispatchQueue.main.async { openRequested() } }
         // Keyed on WHICH session is running, so switching between two running
         // chats re-targets "stop and close" too.
         .onChange(of: runningId) { _, _ in updateClosureConfirmation() }
@@ -250,7 +252,8 @@ struct SceneSessionHost: View {
     private func openRequested() {
         guard let id = requestedSessionId else { return }
         guard sessionCount > 0, open(id) else {
-            onWaitingChange(true)
+            // 列表还没加载(冷启动的新窗口请求)不算等同步,不闪"正在同步"。
+            if sessionCount > 0 { onWaitingChange(true) }
             // 同步迟迟不到(另一台设备没开 iCloud、会话已删):一分钟后放弃,不让提示一直挂着。
             DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
                 guard requestedSessionId == id else { return }

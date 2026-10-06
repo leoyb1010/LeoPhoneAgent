@@ -99,11 +99,16 @@ func sql(_ text: String) throws {
   expect(NoteBodyStore.loadRecoveryDraft(noteID: original.id)?.title == "New title", "metadata failure must retain recovery title")
   let indexedAfterFailure = await CollectionSearchIndex.shared.indexedBodies
   expect(indexedAfterFailure.isEmpty, "uncommitted metadata must not advance search index")
+  // The fallback sink is the pending-ops queue (re-imported once SQLite works again), not the
+  // frozen items.json that is never read back after migration.
+  let pendingURL = fixtureDirectory.appendingPathComponent("items.pending.json")
+  let pending = try JSONDecoder().decode(TreasuryPendingOps.self, from: Data(contentsOf: pendingURL))
+  expect(pending.upserts.first?.title == "New title", "failed metadata write is queued for re-import, not primary commit")
   let legacy = try JSONDecoder().decode([CollectedItem].self, from: Data(contentsOf: legacyURL))
-  expect(legacy.first?.title == "New title", "existing legacy recovery attempt remains compatible but is not primary commit")
-  // Legacy recovery failure must not change the same false result.
-  try fm.removeItem(at: legacyURL)
-  try fm.createDirectory(at: legacyURL, withIntermediateDirectories: true)
+  expect(legacy.first?.title == "Original title", "frozen legacy JSON is never rewritten")
+  // Recovery-queue failure must not change the same false result.
+  try fm.removeItem(at: pendingURL)
+  try fm.createDirectory(at: pendingURL, withIntermediateDirectories: true)
   let stillRejected = await editor.persist()
   expect(!stillRejected && NoteBodyStore.hasRecoveryDraft(noteID: original.id), "dual metadata sink failure retains recovery")
   try sql("DROP TRIGGER reject_metadata")
@@ -120,7 +125,7 @@ func sql(_ text: String) throws {
   expect(!journalRejected && editor.lastPersistedTitle == "New title", "late transaction failure must not advance baseline")
   expect(try treasury.load().first?.title == "New title", "journal failure must roll back earlier metadata write")
   expect(NoteBodyStore.hasRecoveryDraft(noteID: original.id), "late failure retains retry draft")
-  print("PASS actual SQLite transaction failures: body written, title rollback, legacy backup/failure, recovery retention, retry and late journal rollback")
+  print("PASS actual SQLite transaction failures: body written, title rollback, pending-queue backup/failure, frozen legacy JSON, recovery retention, retry and late journal rollback")
  }
 }
 '''

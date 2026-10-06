@@ -18,23 +18,29 @@ enum MemoryDailyLog {
         return "\(formatter.string(from: date)).md"
     }
 
-    static func entry(_ content: String, at date: Date) -> String {
+    /// `source` 非空时在正文前标出来源(例如锁屏时经快捷指令写入),以后读记忆的人和模型都看得到它不是对话里记下的。
+    static func entry(_ content: String, at date: Date, source: String? = nil) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return "<!-- \(formatter.string(from: date)) -->\n\(content)\n\n"
+        let body = source.map { "[来源:\($0)] \(content)" } ?? content
+        return "<!-- \(formatter.string(from: date)) -->\n\(body)\n\n"
     }
 
+    /// memory_write 工具与「记住这个」快捷指令可能同时写同一天的文件:读-改-写串行化,免得后写的吞掉先写的。
+    private static let writeLock = NSLock()
+
     /// 把一条记忆插到当天日志最前面,返回写入的文件名(如 2026-10-06.md)。
+    /// 已有文件读不出来(锁屏数据保护、编码损坏)时报错,绝不拿空串覆盖掉当天已有的记忆。
     @discardableResult
-    static func prepend(_ content: String, in directory: URL, at date: Date = Date()) throws -> String {
+    static func prepend(_ content: String, in directory: URL, at date: Date = Date(), source: String? = nil) throws -> String {
+        writeLock.lock(); defer { writeLock.unlock() }
         let fm = FileManager.default
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         let name = fileName(for: date)
         let url = directory.appendingPathComponent(name)
-        let existing = fm.fileExists(atPath: url.path)
-            ? ((try? String(contentsOf: url, encoding: .utf8)) ?? "") : ""
-        guard let data = (entry(content, at: date) + existing).data(using: .utf8) else { throw WriteError.notUTF8 }
-        try data.write(to: url)
+        let existing = fm.fileExists(atPath: url.path) ? try String(contentsOf: url, encoding: .utf8) : ""
+        guard let data = (entry(content, at: date, source: source) + existing).data(using: .utf8) else { throw WriteError.notUTF8 }
+        try data.write(to: url, options: .atomic)
         return name
     }
 }

@@ -40,14 +40,14 @@ struct AutomationSettingsView: View {
                 Toggle("安静任务", isOn: $quietEnabled)
                     .onChange(of: quietEnabled) { QuietTaskScheduler.shared.schedule() }
                 Stepper(value: $quietBudget, in: 5_000...200_000, step: 5_000) {
-                    LabeledContent("每日 token 预算", value: "\(quietBudget)")
+                    LabeledContent("每日 token 预算", value: quietBudget.formatted())
                 }
-                LabeledContent("今天已用", value: "\(QuietTaskScheduler.shared.budget.used)")
+                LabeledContent("今天已用", value: QuietTaskScheduler.shared.budget.used.formatted())
                 Toggle("到家时主动提醒", isOn: $proactiveSpeech)
             } header: {
                 Text("情境层")
             } footer: {
-                Text("安静任务在插电、联网、空闲时(通常夜里充电)由系统安排:「夜间充电」规则、过去 24 小时的对话摘要、每周一次记忆整理。预算用完即停,结果放进会话列表的「未分组」,不推送。低电量模式不跑。「到家时主动提醒」每天最多 3 次,只在本机模型可用、刚中断的任务值得提醒时出声;建议先看两周决策日志再打开。")
+                Text("安静任务在插电、联网、空闲时(通常夜里充电)由系统安排:「夜间充电」规则、过去 24 小时的对话摘要、每周一次记忆整理。预算用完即停,结果放进会话列表的「未分组」,不推送。低电量模式不跑。「到家时主动提醒」每天最多 3 次,只在本机模型可用、刚中断的任务值得提醒时出声。")
             }
         }
         .navigationTitle(Text("Automations"))
@@ -191,7 +191,7 @@ private struct AutomationEditSheet: View {
                         Text("跑完通知").tag(AutomationRule.Tier.speak)
                     }
                 } footer: {
-                    Text("只记录:写进诊断日志,不执行。准备:执行,结果放进会话列表,不打扰。")
+                    Text("只记录:写进诊断日志,不执行。准备:执行,结果放进会话列表,不打扰。跑完通知:执行,完成后推送通知。")
                 }
                 Section(String(localized: "Action")) {
                     Picker(String(localized: "Run"), selection: $model.useQuickTask) {

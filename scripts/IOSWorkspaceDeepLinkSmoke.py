@@ -37,6 +37,10 @@ content = (root/'src/ios/Views/ContentView.swift').read_text()
 local_write = 'executionBackend = IOSExecutionBackend.local.rawValue'
 receiver = content[content.index('.onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent))'):]
 assert local_write in receiver[:receiver.index('macSessionId')], 'openSessionFromIntent receiver does not select local first'
+# [T-local-first] 冷启动总是从本机开始：App.init 里在其他启动步骤之前写回本机。
+app = (root/'src/ios/MinisApp.swift').read_text()
+app_init = app[app.index('    init() {'):]
+assert 'IOSExecutionBackend.selectLocal()' in app_init[:app_init.index('LeoPerf.start()')], 'cold launch does not reset to local'
 new_chat = module.extract_swift_method(content, 'handleNewChatRequest')
 assert local_write in new_chat[:new_chat.index('makeNewSessionId')], 'quick action new-chat handler does not select local'
 start = content.index('.onChange(of: deepLink.pendingSettingsTarget')

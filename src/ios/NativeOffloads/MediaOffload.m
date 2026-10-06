@@ -70,7 +70,7 @@ static dispatch_queue_t authQueue(void) {
 
 // Request media library authorization synchronously
 static BOOL requestMediaAccess(NSString **outError) {
-    __block MPMediaLibraryAuthorizationStatus status;
+    __block MPMediaLibraryAuthorizationStatus status = MPMediaLibraryAuthorizationStatusNotDetermined;
 
     dispatch_sync(authQueue(), ^{
         dispatch_semaphore_t sem = dispatch_semaphore_create(0);

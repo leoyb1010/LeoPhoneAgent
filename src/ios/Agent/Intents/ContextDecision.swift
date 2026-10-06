@@ -102,14 +102,23 @@ struct ContextDecision: Equatable {
 }
 
 /// [D2] 情境信号(可能在锁屏时)和安静任务触发的回合:不发信、不删除、不远程执行。
-/// 发消息 / 跑快捷指令 / 删文件都要经过 shell 或浏览器,所以整类拿掉。
+/// 发消息 / 跑快捷指令 / 删文件都要经过 shell 或浏览器,所以整类拿掉;
+/// file_write / file_edit 能覆盖、清空文件(等同删除),这类无人值守回合也不给。
 enum ContextToolPolicy {
     static let blockedTools: Set<String> = [
         "shell_execute", "browser_use", "remote_shell", "remote_agent", "dispatch_subtask",
+        "file_write", "file_edit",
     ]
 
     static func filter<T>(_ tools: [T], name: (T) -> String) -> [T] {
         tools.filter { !blockedTools.contains(name($0)) }
+    }
+
+    /// 受限回合是否还在进行:在跑、在压缩、或压缩完待发,任一成立都算 ——
+    /// 否则「先压缩再发」的回合会被当成已结束,工具限制在真正开跑前就被解除。
+    static func isTurnActive(processing: Bool, compacting: Bool, pendingCompactSend: Bool,
+                             tracked: Bool) -> Bool {
+        processing || compacting || pendingCompactSend || tracked
     }
 }
 

@@ -113,9 +113,11 @@ final class QuietTaskScheduler {
             DiagnosticRing.shared.record(.contextDecision, entryId: "quiet", message: "低电量模式,安静任务跳过")
             return
         }
-        // 「夜间充电」规则改由这里触发(插电是请求条件)。
-        await AutomationEngine.shared.fireNightChargingRules()
-        guard isEnabled else { return }
+        // 「夜间充电」规则改由这里触发(插电是请求条件),同样计入每日预算。
+        let ruleTokens = await AutomationEngine.shared.fireNightChargingRules(
+            tokenBudget: budget.remaining(limit: tokenLimit, now: Date()))
+        if ruleTokens > 0 { budget = budget.adding(ruleTokens, now: Date()) }
+        guard isEnabled, !Task.isCancelled else { return }
         for job in [Job.digest, Job.memoryTidy] {
             if Task.isCancelled { break }
             let limit = tokenLimit
@@ -128,7 +130,8 @@ final class QuietTaskScheduler {
             let outcome = await ContextTurnRunner.run(prompt: prompt, source: "quiet",
                                                       shouldStop: { $0 >= remaining })
             budget = budget.adding(outcome.tokens, now: Date())
-            if job == .memoryTidy, outcome.started {
+            // 只有真跑完才算整理过;半路被系统收回或超预算,下次还要再整理。
+            if job == .memoryTidy, outcome.finished {
                 UserDefaults.standard.set(Date(), forKey: Self.lastMemoryTidyKey)
             }
             if let sid = outcome.sessionId {
@@ -190,11 +193,12 @@ enum ContextTurnRunner {
 
     /// `shouldStop(已用 token)` 返回 true 时取消回合(预算用完即停)。
     static func run(prompt: String, source: String, maxWait: TimeInterval = 600,
+                    blocksSideEffectTools: Bool = true,
                     shouldStop: ((Int) -> Bool)? = nil) async -> Outcome {
         let previousActive = AIChatViewModel.activeSessionId
         let vm = ViewModelCache.shared.createDraft()
         vm.sessionSource = source
-        vm.blocksSideEffectTools = true
+        vm.blocksSideEffectTools = blocksSideEffectTools
         _ = await vm.ensureSessionReturningId()
         AIChatViewModel.activeSessionId = previousActive
         guard let sid = vm.sessionId else {
@@ -222,8 +226,12 @@ enum ContextTurnRunner {
                 vm.cancel()
                 break
             }
-            let active = vm.isProcessing || SessionActivityTracker.shared.activeSessions.contains(sid)
-                || SessionActivityTracker.shared.isActive(sid)
+            // 先压缩再发的回合:压缩期间 isProcessing 为 false,不能当成已结束(否则工具限制提前解除)。
+            let active = ContextToolPolicy.isTurnActive(
+                processing: vm.isProcessing, compacting: vm.isCompacting,
+                pendingCompactSend: vm.compactAndSendRequestId != nil,
+                tracked: SessionActivityTracker.shared.activeSessions.contains(sid)
+                    || SessionActivityTracker.shared.isActive(sid))
             if active { sawActive = true; continue }
             if sawActive || Date().timeIntervalSince(started) >= 15 {
                 stillRunning = false
@@ -232,10 +240,11 @@ enum ContextTurnRunner {
             }
         }
         outcome.tokens = max(0, tokens() - baseline)
-        if stillRunning && vm.isProcessing {
+        let busy = { vm.isProcessing || vm.isCompacting || vm.compactAndSendRequestId != nil }
+        if stillRunning && busy() {
             // 还在跑:跑完再放开工具,不在半路改这个回合的工具表。
             Task { @MainActor in
-                while vm.isProcessing { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+                while busy() { try? await Task.sleep(nanoseconds: 2_000_000_000) }
                 vm.blocksSideEffectTools = false
             }
         } else {

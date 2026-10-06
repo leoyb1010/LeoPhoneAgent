@@ -265,7 +265,11 @@ final class GatewayRunDriver: ObservableObject {
                     }
                 }
             } else {
-                await MainActor.run { self.status = snapshot.status }
+                await MainActor.run {
+                    self.status = snapshot.status
+                    // 这次审批已经过去了:同一个 run 里后面再要审批,还得能出卡片。
+                    self.answeredApprovalRuns.remove(runId)
+                }
             }
 
             try? await Task.sleep(nanoseconds: 3_000_000_000)

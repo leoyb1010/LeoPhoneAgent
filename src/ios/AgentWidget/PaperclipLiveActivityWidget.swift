@@ -10,6 +10,8 @@ struct PaperclipLiveActivityWidget: Widget {
         ActivityConfiguration(for: PaperclipActivityAttributes.self) { context in
             PaperclipActivityCard(attributes: context.attributes, state: context.state, isStale: context.isStale)
                 .padding(14)
+                // 计时与时长跟随 App 里选的语言,和本机任务的灵动岛一致。
+                .leoWidgetLocale()
                 .widgetURL(URL(string: context.attributes.link))
         } dynamicIsland: { context in
             DynamicIsland {
@@ -35,9 +37,10 @@ struct PaperclipLiveActivityWidget: Widget {
                 if context.state.phase.isTerminal {
                     Image(systemName: context.state.phase.symbol).foregroundStyle(context.state.phase.tint)
                 } else {
+                    // 超过一小时是 "1:02:03",44pt 会被截掉。
                     Text(context.state.startedAt, style: .timer)
-                        .monospacedDigit()
-                        .frame(maxWidth: 44)
+                        .font(.caption2.monospacedDigit())
+                        .frame(maxWidth: 52)
                 }
             } minimal: {
                 Image(systemName: context.state.phase.isTerminal ? context.state.phase.symbol : "paperclip")
@@ -111,7 +114,7 @@ private struct PaperclipActivityClock: View {
 }
 
 private extension PaperclipActivityAttributes {
-    var displayName: String { identifier.isEmpty ? "Paperclip 工单" : identifier }
+    var displayName: String { identifier.isEmpty ? "服务器任务" : identifier }
 }
 
 private extension PaperclipActivityAttributes.ContentState.Phase {

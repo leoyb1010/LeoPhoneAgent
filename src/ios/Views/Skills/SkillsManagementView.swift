@@ -67,15 +67,13 @@ struct SkillsManagementView: View {
         List {
             if store.skills.isEmpty {
                 Section {
-                    Text(String(localized: "No skills installed. Tap + to import a SKILL.md from GitHub or paste one manually."))
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                    LeoEmptyState(systemImage: "sparkles", title: String(localized: "还没有技能"),
+                                  message: String(localized: "No skills installed. Tap + to import a SKILL.md from GitHub or paste one manually."))
                 }
             } else if filteredSkills.isEmpty {
                 Section {
-                    Text(String(localized: "No skills match \"\(searchQuery)\"."))
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                    LeoEmptyState(systemImage: "magnifyingglass",
+                                  title: String(localized: "No skills match \"\(searchQuery)\"."))
                 }
             }
 

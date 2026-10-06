@@ -128,6 +128,13 @@ static NSString *get_arg(int argc, char **argv, const char *name) {
     return noff_find_arg(argc, argv, name);
 }
 
+// The audit actor is chosen by the host, not by the guest: a guest-supplied
+// `--actor user` would let the agent log its own writes as the user's.
+static NSString *guest_actor(NSString *requested, NSString *fallback) {
+    return [requested isEqualToString:@"agent"] || [requested isEqualToString:@"agent-revert"]
+        ? requested : fallback;
+}
+
 static int exit_code_from_envelope(NSDictionary *envelope) {
     if ([envelope[@"ok"] boolValue]) return NOFF_EXIT_SUCCESS;
     NSString *err = envelope[@"error"];
@@ -244,7 +251,7 @@ static int cmd_set(int argc, char **argv, int stdout_fd, int stderr_fd,
         valueJSON = [NSString stringWithUTF8String:argv[3]];
     }
     NSString *caption = get_arg(argc, argv, "--caption");
-    NSString *actor = get_arg(argc, argv, "--actor") ?: @"agent";
+    NSString *actor = guest_actor(get_arg(argc, argv, "--actor"), @"agent");
     NSString *sessionId = get_arg(argc, argv, "--session");
     NSDictionary *item = @{@"path": path, @"value_json": valueJSON};
     NSDictionary *envelope = [ConfigOffloadBridge writeFieldsWithItems:@[item]
@@ -295,7 +302,7 @@ static int cmd_add(int argc, char **argv, int stdout_fd, int stderr_fd,
     // Route through the collection-add suffix the bridge already understands.
     NSString *path = [topic stringByAppendingString:@".add"];
     NSString *caption = get_arg(argc, argv, "--caption");
-    NSString *actor = get_arg(argc, argv, "--actor") ?: @"agent";
+    NSString *actor = guest_actor(get_arg(argc, argv, "--actor"), @"agent");
     NSString *sessionId = get_arg(argc, argv, "--session");
     NSDictionary *item = @{@"path": path, @"value_json": valueJSON};
     NSDictionary *envelope = [ConfigOffloadBridge writeFieldsWithItems:@[item]
@@ -345,7 +352,7 @@ static int cmd_set_batch(int argc, char **argv, int stdin_fd, int stdout_fd, int
         return NOFF_EXIT_INVALID_ARGS;
     }
     NSString *caption = get_arg(argc, argv, "--caption");
-    NSString *actor = get_arg(argc, argv, "--actor") ?: @"agent";
+    NSString *actor = guest_actor(get_arg(argc, argv, "--actor"), @"agent");
     NSString *sessionId = get_arg(argc, argv, "--session");
     NSDictionary *envelope = [ConfigOffloadBridge writeFieldsWithItems:items
                                                                 caption:caption
@@ -390,7 +397,7 @@ static int cmd_audit_revert(int argc, char **argv, int stdout_fd,
         return NOFF_EXIT_INVALID_ARGS;
     }
     NSString *idStr = [NSString stringWithUTF8String:argv[2]];
-    NSString *actor = get_arg(argc, argv, "--actor") ?: @"agent-revert";
+    NSString *actor = guest_actor(get_arg(argc, argv, "--actor"), @"agent-revert");
     NSString *sessionId = get_arg(argc, argv, "--session");
     NSDictionary *envelope = [ConfigOffloadBridge auditRevertWithId:idStr
                                                             actorRaw:actor

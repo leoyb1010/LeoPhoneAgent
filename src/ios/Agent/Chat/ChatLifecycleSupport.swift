@@ -556,8 +556,13 @@ final class SessionConcurrencyManager: ObservableObject {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             waiters.append((id: sessionId, continuation: continuation))
         }
-        // After resuming, check if the task was cancelled while waiting
-        try Task.checkCancellation()
+        // After resuming, check if the task was cancelled while waiting.
+        // 被 resumeNextWaiter 叫醒的是「交接给我的空位」:我已取消就把空位转给下一个等待者,
+        // 否则空位就丢了,后面排队的会话一直挂着。
+        if Task.isCancelled {
+            if runningSessions.count < maxConcurrent { resumeNextWaiter() }
+            throw CancellationError()
+        }
         runningSessions.insert(sessionId)
     }
 

@@ -36,6 +36,8 @@ enum SessionSpotlightIndexer {
             Task { await reindexAll(force: true) }
         } else {
             deleteAll()
+            // 同一个开关也管 Paperclip 工单;它们在别的域里,以前关掉开关后工单标题仍可被搜到。
+            PaperclipSpotlightIndexer.clearAll()
         }
     }
 

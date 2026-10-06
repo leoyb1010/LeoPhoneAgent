@@ -2662,6 +2662,12 @@ struct ContentView: View {
     ///      so voice / camera fires *inside* the new chat — never inside
     ///      the previous one.
     private func handleNewChatRequest() {
+        // [T-open-session-over-sheet] 从设置里的藏宝阁「发给 Agent」、命令面板等面板里开新对话:
+        // 先收起面板,不然新对话开在面板底下,看起来像按钮没反应。
+        if dismissSheetsForNavigation() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { handleNewChatRequest() }
+            return
+        }
         // 快捷操作/小组件/控制中心的新对话在本机工作区打开，先切回本机。
         executionBackend = IOSExecutionBackend.local.rawValue
         let newId = Self.makeNewSessionId()

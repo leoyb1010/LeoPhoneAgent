@@ -3,7 +3,7 @@
 
 // The kernel stores a plain C function pointer. One fixed trampoline per slot
 // preserves the registered capability identity even when execve spoofs argv[0].
-#define NOFF_DISPATCH_CAPACITY 32
+#define NOFF_DISPATCH_CAPACITY 48
 
 typedef int (*noff_dispatch_handler)(int argc, char **argv,
                                    int stdin_fd, int stdout_fd, int stderr_fd);
@@ -22,4 +22,10 @@ int noff_dispatch_register(const char *registered_name,
 // names fail closed; no caller-supplied argv element selects a different tool.
 int noff_dispatch_execute(const char *registered_name, int argc, char **argv,
                           int stdin_fd, int stdout_fd, int stderr_fd);
+
+// The kernel turns every argv element that starts with "/" into a host path by
+// plain concatenation, without resolving "..", and handlers resolve relative
+// paths against the host cwd. Returns 1 when an element has a ".." path
+// component (it could escape the rootfs and session folders).
+int noff_arg_has_parent_traversal(const char *arg);
 #endif

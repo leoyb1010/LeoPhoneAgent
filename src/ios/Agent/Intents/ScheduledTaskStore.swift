@@ -183,12 +183,22 @@ final class ScheduledTaskStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.storageKey),
-           let decoded = try? JSONDecoder().decode([ScheduledTask].self, from: data) {
-            tasks = decoded
-        } else {
-            tasks = []
-        }
+        tasks = Self.decodeTasks(defaults.data(forKey: Self.storageKey), defaults: defaults)
+    }
+
+    private struct LossyTask: Decodable {
+        let task: ScheduledTask?
+        init(from decoder: Decoder) throws { task = try? ScheduledTask(from: decoder) }
+    }
+
+    /// 逐条解码:某一条解不出来(降级后遇到新版本的频率值等)只跳过那一条;
+    /// 原始数据先备份,不会因为一条坏数据、在下一次保存时把全部定时任务清空。
+    static func decodeTasks(_ data: Data?, defaults: UserDefaults) -> [ScheduledTask] {
+        guard let data else { return [] }
+        if let all = try? JSONDecoder().decode([ScheduledTask].self, from: data) { return all }
+        defaults.set(data, forKey: storageKey + ".backup")
+        let lossy = (try? JSONDecoder().decode([LossyTask].self, from: data)) ?? []
+        return lossy.compactMap(\.task)
     }
 
     func add(_ task: ScheduledTask) {
@@ -196,8 +206,14 @@ final class ScheduledTaskStore: ObservableObject {
         persist()
     }
 
-    func update(_ task: ScheduledTask) {
+    func update(_ task: ScheduledTask, now: Date = Date()) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var task = task
+        let old = tasks[index]
+        // 改了时间 / 频率:和新建一样认领今天已经过去的那一档,别保存的瞬间就跑一次。
+        if old.cadence != task.cadence || old.minuteOfDay != task.minuteOfDay || old.weekday != task.weekday {
+            task.lastRunSlot = Self.claimed(task.lastRunSlot, task.mostRecentDueSlot(now: now))
+        }
         tasks[index] = task
         persist()
     }
@@ -207,10 +223,20 @@ final class ScheduledTaskStore: ObservableObject {
         persist()
     }
 
-    func setEnabled(_ enabled: Bool, id: String) {
+    func setEnabled(_ enabled: Bool, id: String, now: Date = Date()) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        // 停用期间错过的那一档不补跑:重新启用时认领当前档,等下一次到点。
+        if enabled && !tasks[index].isEnabled {
+            tasks[index].lastRunSlot = Self.claimed(tasks[index].lastRunSlot, tasks[index].mostRecentDueSlot(now: now))
+        }
         tasks[index].isEnabled = enabled
         persist()
+    }
+
+    private static func claimed(_ last: Date?, _ current: Date?) -> Date? {
+        guard let current else { return last }
+        guard let last else { return current }
+        return max(last, current)
     }
 
     func markRun(id: String, slot: Date) {

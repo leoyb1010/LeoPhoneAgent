@@ -178,7 +178,9 @@ struct InlineVoiceInputView: View {
     private var effectiveHeight: CGFloat {
         guard expanded else { return Self.compactHeight }
         let band = transcriptBandHeight
-        return min(maxPanelHeight, Self.expandedBaseHeight + (band > 0 ? band + 8 : 0))
+        // [H3]「已自动更正 · 撤销」一行不在基础高度里,不加会把话筒/模型条挤出圆角外。
+        let correction: CGFloat = viewModel.autoCorrection != nil ? 22 : 0
+        return min(maxPanelHeight, Self.expandedBaseHeight + correction + (band > 0 ? band + 8 : 0))
     }
 
     var body: some View {
@@ -551,7 +553,14 @@ struct InlineVoiceInputView: View {
         // vertically centered, so the mic shifts down just enough to make room for
         // the hint instead of overlapping it. No hint → mic is dead-centered.
         VStack(spacing: 6) {
-            if !viewModel.transcript.isEmpty {
+            if !viewModel.liveCaptionFinal.isEmpty || !viewModel.liveCaptionVolatile.isEmpty {
+                // [H1] 收起态也看得到正在说的话(发完一条后面板会收起,不然实时出字只在第一句可见)。
+                Text(transcriptDisplay)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .accessibilityIdentifier("voice.compactCaption")
+            } else if !viewModel.transcript.isEmpty {
                 Text("… \(viewModel.transcript.count) chars …", comment: "Compact voice buffered char count")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -804,7 +813,10 @@ struct InlineVoiceInputView: View {
                         proxy.scrollTo("voiceTranscriptTail", anchor: .bottom)
                     }
                 }
-                .onChange(of: viewModel.liveCaptionVolatile) { _ in
+                .onChange(of: viewModel.liveCaptionVolatile) { _, _ in
+                    proxy.scrollTo("voiceTranscriptTail", anchor: .bottom)
+                }
+                .onChange(of: viewModel.liveCaptionFinal) { _, _ in
                     proxy.scrollTo("voiceTranscriptTail", anchor: .bottom)
                 }
             }
@@ -1160,7 +1172,10 @@ private final class DeleteButtonState: ObservableObject {
     func startHoldTimer(after seconds: TimeInterval) {
         stopHoldTimer()
         let t = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in
-            withAnimation(LeoMotion.standardEase()) { self?.canClearAll = true }
+            // Scheduled on the main run loop below; LeoMotion is main-actor.
+            MainActor.assumeIsolated {
+                withAnimation(LeoMotion.standardEase()) { self?.canClearAll = true }
+            }
         }
         RunLoop.main.add(t, forMode: .common)
         holdTimer = t

@@ -1622,6 +1622,8 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         guard sqlite3_open_v2(fakefsMetaDBPath, &fdb, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let fdb else { return }
         defer { sqlite3_close(fdb) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(fdb, 5_000)
 
         var checkStmt: OpaquePointer?
         guard sqlite3_prepare_v2(fdb, "SELECT inode FROM paths WHERE path = ?", -1, &checkStmt, nil) == SQLITE_OK,

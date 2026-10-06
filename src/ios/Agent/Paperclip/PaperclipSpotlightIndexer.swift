@@ -30,18 +30,37 @@ enum PaperclipSpotlightIndexer {
 
     static func signature(_ issues: [PaperclipIssue]) -> Int {
         var hasher = Hasher()
-        for issue in issues { hasher.combine(issue.id); hasher.combine(issue.title); hasher.combine(issue.identifier) }
+        for issue in issues {
+            hasher.combine(issue.id); hasher.combine(issue.title); hasher.combine(issue.identifier)
+            hasher.combine(issue.status); hasher.combine(issue.companyId)   // 关单、切公司都要重建索引
+        }
         return hasher.finalize()
     }
 
+    /// 只索引还没结束的工单(已完成 / 已取消的不进系统搜索)。
+    static func indexable(_ issues: [PaperclipIssue]) -> [PaperclipIssue] {
+        issues.filter { $0.status != PaperclipIssueStatus.done.rawValue && $0.status != PaperclipIssueStatus.cancelled.rawValue }
+    }
+
+    /// 用当前列表整体替换该配置的索引:以前只追加,删除 / 关闭的工单和切换前公司的工单
+    /// 一直留在系统搜索里,直到退出登录。调用方传的是当前公司已加载的完整列表。
     static func index(_ issues: [PaperclipIssue], profileID: UUID) {
         guard isEnabled else { clear(profileID: profileID); return }
-        let items = issues.compactMap { item(for: $0, profileID: profileID) }
-        guard !items.isEmpty else { return }
-        CSSearchableIndex.default().indexSearchableItems(items) { _ in }
+        let items = indexable(issues).compactMap { item(for: $0, profileID: profileID) }
+        let index = CSSearchableIndex.default()
+        index.deleteSearchableItems(withDomainIdentifiers: [domain(profileID: profileID)]) { _ in
+            guard !items.isEmpty else { return }
+            index.indexSearchableItems(items) { _ in }
+        }
     }
 
     static func clear(profileID: UUID) {
         CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain(profileID: profileID)]) { _ in }
+    }
+
+    /// 所有服务器配置的工单(域按点号分层,删父域连同各配置子域一起删)。
+    static let rootDomain = "com.leoyuan.leophoneagent.paperclip"
+    static func clearAll() {
+        CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [rootDomain]) { _ in }
     }
 }

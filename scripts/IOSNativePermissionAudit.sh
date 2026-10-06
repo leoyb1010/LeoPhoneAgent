@@ -26,9 +26,10 @@ if apple - known:
     raise SystemExit(f'Missing permission descriptors: {sorted(apple-known)}')
 capacity = int(re.search(r'#define NATIVE_OFFLOAD_MAX\s+(\d+)', Path('deps/ish/kernel/native_offload.h').read_text()).group(1))
 proxy_capacity = int(re.search(r'#define NOFF_DISPATCH_CAPACITY\s+(\d+)', (root / 'NativeOffloads/NativeOffloadDispatch.h').read_text()).group(1))
-if len(registrations) > capacity or len(apple) > proxy_capacity:
+# Every registration (apple-* with permission, minis-*/ffmpeg with the path guard) uses a dispatch slot.
+if len(registrations) > capacity or len(registrations) > proxy_capacity:
     raise SystemExit('A native registry would overflow; do not register an unguarded fallback')
-print(f'Native registration wiring: {len(registrations)}/{capacity} kernel slots, {len(apple)}/{proxy_capacity} guarded Apple slots')
+print(f'Native registration wiring: {len(registrations)}/{capacity} kernel slots, {len(registrations)}/{proxy_capacity} guarded dispatch slots ({len(apple)} with device permission)')
 PY
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/ios-native-permission.XXXXXX")

@@ -126,7 +126,7 @@ static dispatch_queue_t authQueue(void) {
 
 // Request photo library access synchronously via semaphore
 static BOOL requestPhotosAccess(NSString **outError) {
-    __block PHAuthorizationStatus status;
+    __block PHAuthorizationStatus status = PHAuthorizationStatusNotDetermined;
 
     dispatch_sync(authQueue(), ^{
         dispatch_semaphore_t sem = dispatch_semaphore_create(0);

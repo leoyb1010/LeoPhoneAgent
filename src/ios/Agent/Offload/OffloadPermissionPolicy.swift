@@ -45,10 +45,16 @@ enum OffloadPermissionPolicy {
         return fullAuto && source == .agentRun ? .allowed : .ask
     }
 
+    /// 宿主自己用的执行 id(设置页刷新 MCP 工具等),不是 Agent 回合。
+    static let hostSessionIds: Set<String> = ["mcp-settings"]
+
     /// 原生桥上的来源:会话 id 来自宿主发给 Agent 回合的 fs_context(Agent 冒充不了);
     /// 你在终端里开的 shell 不带会话上下文,没有 id。
-    static func source(forSessionId sid: String?) -> OffloadInvocationSource {
-        guard let sid, !sid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .userTerminal }
+    /// 只有该会话**正有回合在跑**才算 Agent 回合(快捷指令、定时任务、自动化的后台回合同样被
+    /// SessionActivityTracker 记为活跃):回合结束后残留的后台进程、宿主自用 id 都按「先问」处理。
+    static func source(forSessionId sid: String?, turnActive: Bool) -> OffloadInvocationSource {
+        guard let sid = sid?.trimmingCharacters(in: .whitespacesAndNewlines), !sid.isEmpty,
+              !hostSessionIds.contains(sid), turnActive else { return .userTerminal }
         return .agentRun
     }
 }

@@ -6,7 +6,7 @@ import Foundation
 enum IOSExecutionBackend: String, CaseIterable, Codable {
     case local
     case paperclip
-    var title: String { self == .local ? "本机" : "Paperclip 服务器" }
+    var title: String { self == .local ? "本机" : "服务器任务（Paperclip）" }
     static let storageKey = "leo.ios.executionBackend.v1"
     /// 通知、Siri、快捷操作、深链等外部入口都要显示本机内容；统一走这一处写入，
     /// @AppStorage 观察同一键，会把隐藏的服务器任务页切回本机。
@@ -96,6 +96,16 @@ struct PaperclipProfile: Codable, Hashable, Identifiable, Sendable {
         self.id = id
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "我的服务器" : name
         self.origin = origin
+    }
+
+    /// 服务器配置列表存在这里（PaperclipWorkspaceStore 读写）。
+    static let storageKey = "leo.paperclip.profiles.v1"
+
+    /// 是否连过 Paperclip 服务器。没配置时，对话里不出现「转为服务器任务」这类入口（本机优先）。
+    static func hasSaved(_ defaults: UserDefaults = .standard) -> Bool {
+        guard let data = defaults.data(forKey: storageKey),
+              let saved = try? JSONDecoder().decode([PaperclipProfile].self, from: data) else { return false }
+        return !saved.isEmpty
     }
 
     func validated() throws -> PaperclipProfile {
@@ -247,6 +257,8 @@ enum PaperclipCancelOutcome: Equatable, Sendable {
 struct PaperclipRunLogChunk: Decodable, Sendable {
     let runId: String
     let content: String
+    /// 上游服务器(run-log-store.ts)只在还有下一页时给出;读到日志末尾时省略(nil = 已到末尾)。
+    /// 给出时必须前进,倒退或带内容却不前进都拒绝(见 PaperclipRunLogParser.isValidCursor)。
     let nextOffset: Int?
 }
 struct PaperclipApproval: Decodable, Identifiable, Sendable, Equatable {

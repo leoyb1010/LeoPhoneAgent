@@ -143,6 +143,7 @@ extension ScheduledTaskRunner {
         content.body = body
         content.sound = .default
         if let sessionId { content.userInfo["sessionId"] = sessionId }
+        content.applyFocusQuiet()
         UNUserNotificationCenter.current().add(UNNotificationRequest(
             identifier: "scheduled-report-\(UUID().uuidString)",
             content: content, trigger: nil))

@@ -96,10 +96,10 @@ extension AIChatViewModel {
 
     /// [C3] 写进当天记忆日志并通知各处刷新。与 ViewModel 实例无关:
     /// memory_write 工具和「记住这个」快捷指令动作共用这一个入口。
-    static func writeDailyMemory(_ content: String) -> FileToolResult {
+    static func writeDailyMemory(_ content: String, source: String? = nil) -> FileToolResult {
         let fileName: String
         do {
-            fileName = try MemoryDailyLog.prepend(content, in: minisMemoryPersistentDir)
+            fileName = try MemoryDailyLog.prepend(content, in: minisMemoryPersistentDir, source: source)
         } catch MemoryDailyLog.WriteError.notUTF8 {
             return FileToolResult(output: "Error: Content is not valid UTF-8", success: false)
         } catch {
@@ -259,10 +259,12 @@ extension AIChatViewModel {
 
         func extractTimestamp(from entryText: String, fileLabel: String) -> Date {
             // Try <!-- 2026-03-04 17:00:00 --> in first line
+            // 从第 5 个字符之后再找 " -->":空注释「<!-- -->」时它落在第 4 位,切片会越界崩溃。
             if let firstLine = entryText.components(separatedBy: "\n").first,
                firstLine.hasPrefix("<!-- "),
-               let end = firstLine.range(of: " -->"),
-               let ts = tsFormatter.date(from: String(firstLine[firstLine.index(firstLine.startIndex, offsetBy: 5)..<end.lowerBound])) {
+               case let bodyStart = firstLine.index(firstLine.startIndex, offsetBy: 5),
+               let end = firstLine.range(of: " -->", range: bodyStart..<firstLine.endIndex),
+               let ts = tsFormatter.date(from: String(firstLine[bodyStart..<end.lowerBound])) {
                 return ts
             }
             // Fall back to file label date (e.g. "2026-03-04.md")

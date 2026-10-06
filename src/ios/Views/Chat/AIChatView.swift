@@ -3933,6 +3933,14 @@ struct AIChatView: View {
             // inside the rounded rect.
             // [F2] Same shell as home and Paperclip (LeoComposerChrome):
             // 26pt corner, regular glass, and no more double shadow.
+            // The chat composer floats over the UIKit message list with no
+            // scroll-edge blur (home gets one from safeAreaBar), so bare glass
+            // let message text show through under the placeholder. Keep the
+            // opaque fill — a rounded-shape fill, so no white corners.
+            .background(
+                RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous)
+                    .fill(ChatColors.inputBg)
+            )
             .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.composer, style: .continuous))
             .leoComposerChrome()
             .frame(maxWidth: maxContentWidth)

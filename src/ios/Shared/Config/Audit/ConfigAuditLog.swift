@@ -1,6 +1,10 @@
 import Foundation
 import SQLite3
 
+/// SQLite 立即拷贝绑定的文本。nil(SQLITE_STATIC)要求指针活到 step,而桥接出来的临时
+/// NSString 缓冲在绑定语句结束后就可能被释放,写进库的会是错乱的文本。
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 private let auditLogger = AppLogger(category: "ConfigAudit")
 
 /// SQLite-backed rolling log of config changes.
@@ -90,31 +94,31 @@ final class ConfigAuditLog: ObservableObject {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (entry.id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (entry.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 2, entry.at.timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 3, (entry.actor.rawValue as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, (entry.actor.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if let sid = entry.sessionId {
-                sqlite3_bind_text(stmt, 4, (sid as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 4, (sid as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 4)
             }
-            sqlite3_bind_text(stmt, 5, (entry.scope as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 6, (entry.key as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 7, (entry.oldValueJSON as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 8, (entry.newValueJSON as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 5, (entry.scope as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 6, (entry.key as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 7, (entry.oldValueJSON as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 8, (entry.newValueJSON as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if let confirmed = entry.confirmedAt {
                 sqlite3_bind_double(stmt, 9, confirmed.timeIntervalSince1970)
             } else {
                 sqlite3_bind_null(stmt, 9)
             }
-            sqlite3_bind_text(stmt, 10, (entry.status.rawValue as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 10, (entry.status.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if let r = entry.revertOf {
-                sqlite3_bind_text(stmt, 11, (r as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 11, (r as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 11)
             }
             if let cap = entry.caption, !cap.isEmpty {
-                sqlite3_bind_text(stmt, 12, (cap as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 12, (cap as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 12)
             }
@@ -142,8 +146,8 @@ final class ConfigAuditLog: ObservableObject {
         let sql = "UPDATE config_audit SET status = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (ConfigAuditStatus.reverted.rawValue as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (ConfigAuditStatus.reverted.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -173,7 +177,7 @@ final class ConfigAuditLog: ObservableObject {
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             var bindIdx: Int32 = 1
             if let s = scope {
-                sqlite3_bind_text(stmt, bindIdx, (s as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, bindIdx, (s as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 bindIdx += 1
             }
             sqlite3_bind_int(stmt, bindIdx, Int32(cap))
@@ -191,7 +195,7 @@ final class ConfigAuditLog: ObservableObject {
         var stmt: OpaquePointer?
         var entry: ConfigAuditEntry?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW { entry = decode(stmt: stmt) }
         }
         sqlite3_finalize(stmt)

@@ -700,6 +700,8 @@ actor ISHExecutionCoordinator {
         guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let db else { return }
         defer { sqlite3_close(db) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(db, 5_000)
 
         var checkStmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT inode FROM paths WHERE path = ?", -1, &checkStmt, nil) == SQLITE_OK,
@@ -760,6 +762,8 @@ actor ISHExecutionCoordinator {
         guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let db else { return }
         defer { sqlite3_close(db) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(db, 5_000)
 
         // Prepare reusable statements
         var checkStmt: OpaquePointer?

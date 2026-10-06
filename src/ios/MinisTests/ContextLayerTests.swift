@@ -160,6 +160,20 @@ final class ContextLayerTests: XCTestCase {
         XCTAssertEqual(kept, ["file_read", "memory_write", "treasury_save"])
     }
 
+    /// 无人值守回合不给能覆盖 / 清空文件的工具。
+    func testContextToolPolicyBlocksFileMutation() {
+        XCTAssertTrue(ContextToolPolicy.blockedTools.contains("file_write"))
+        XCTAssertTrue(ContextToolPolicy.blockedTools.contains("file_edit"))
+        XCTAssertFalse(ContextToolPolicy.blockedTools.contains("memory_write"), "安静任务的记忆整理要用")
+    }
+
+    /// 先压缩再发:压缩中 / 待发都算回合还在,工具限制不能提前解除。
+    func testTurnStillActiveWhileCompacting() {
+        XCTAssertTrue(ContextToolPolicy.isTurnActive(processing: false, compacting: true, pendingCompactSend: false, tracked: false))
+        XCTAssertTrue(ContextToolPolicy.isTurnActive(processing: false, compacting: false, pendingCompactSend: true, tracked: false))
+        XCTAssertFalse(ContextToolPolicy.isTurnActive(processing: false, compacting: false, pendingCompactSend: false, tracked: false))
+    }
+
     // MARK: D4 预算
 
     func testBudgetCountsAndResetsDaily() {

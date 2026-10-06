@@ -59,9 +59,10 @@ final class AnthropicAgentProvider: AgentProvider {
         let anthropicTools = convertTools(tools)
         let cachedMessages = messagesWithCacheBreakpoints(anthropicMessages)
 
-        // Pass tool result images to the patcher via thread-safe shared storage
+        // 这次请求的附加设置(图片、思考、推理回放)按请求登记,重试和并发请求不会互相串。
+        var requestSettings = AnthropicRequestSettings()
         if !pendingToolResultImages.isEmpty {
-            RequestBodyPatcher.setToolResultImages(pendingToolResultImages)
+            requestSettings.toolResultImages = pendingToolResultImages
             #if DEBUG
             AgentRequestTrace.shared.step("anthropic.setToolResultImages", detail: "ids=\(Array(pendingToolResultImages.keys))")
             #endif
@@ -76,12 +77,12 @@ final class AnthropicAgentProvider: AgentProvider {
         if thinkingLevel.isEnabled, model.supportsReasoning ?? false {
             if AnthropicProvider.modelUsesAdaptiveThinking(model.id) {
                 let effort = Self.thinkingEffort(for: thinkingLevel)
-                RequestBodyPatcher.setThinkingEffort(effort)
+                requestSettings.thinkingEffort = effort
                 logger.info("Thinking enabled (adaptive): effort=\(effort)")
             } else {
                 let budget = Self.thinkingBudget(for: model, maxTokens: maxTokens, level: thinkingLevel)
                 if budget > 0 {
-                    RequestBodyPatcher.setThinkingBudget(budget)
+                    requestSettings.thinkingBudget = budget
                     logger.info("Thinking enabled (budget): budget_tokens=\(budget)")
                 }
             }
@@ -93,7 +94,7 @@ final class AnthropicAgentProvider: AgentProvider {
             // call with max_tokens=256 → stop_reason=max_tokens,
             // thinking_tokens=256/256, empty body). Legacy (<=4.5) models
             // default to no thinking, so absence is fine there.
-            RequestBodyPatcher.setThinkingDisabled()
+            requestSettings.thinkingDisabled = true
             logger.info("Thinking explicitly DISABLED (adaptive default-on model, level=off)")
         }
 
@@ -165,15 +166,19 @@ final class AnthropicAgentProvider: AgentProvider {
                 }
                 lastRole = msg.role
             }
-            RequestBodyPatcher.setReasoningHistory(history, injectPlaceholder: injectPlaceholder)
+            requestSettings.reasoningHistory = history
+            requestSettings.reasoningInjectPlaceholder = injectPlaceholder
             logger.info("Compat-proxy thinking echo: queued \(history.compactMap { $0 }.count) reasoning block(s) across \(history.count) assistant turn(s), placeholder=\(injectPlaceholder)")
         }
 
+        let settingsMarker = AnthropicRequestSettingsRegistry.register(requestSettings)
+        defer { AnthropicRequestSettingsRegistry.release(settingsMarker) }
         let parameter = MessageParameter(
             model: .other(model.id),
             messages: cachedMessages,
             maxTokens: maxTokens,
             system: provider.resolveSystemPrompt(systemPrompt),
+            stopSequences: [settingsMarker],
             temperature: provider.effectiveTemperature(0.7),
             tools: anthropicTools,
             toolChoice: .init(type: .auto)
@@ -926,9 +931,10 @@ final class AnthropicAgentProvider: AgentProvider {
         let anthropicTools = convertTools(tools)
         let cachedMessages = messagesWithCacheBreakpoints(anthropicMessages)
 
-        if !pendingToolResultImages.isEmpty {
-            RequestBodyPatcher.setToolResultImages(pendingToolResultImages)
-        }
+        var requestSettings = AnthropicRequestSettings()
+        requestSettings.toolResultImages = pendingToolResultImages
+        let settingsMarker = AnthropicRequestSettingsRegistry.register(requestSettings)
+        defer { AnthropicRequestSettingsRegistry.release(settingsMarker) }
 
         // Append a lightweight user message to form a valid request
         let warmupUserMsg = MessageParameter.Message(
@@ -944,6 +950,7 @@ final class AnthropicAgentProvider: AgentProvider {
             messages: allMessages,
             maxTokens: 1,
             system: provider.resolveSystemPrompt(systemPrompt),
+            stopSequences: [settingsMarker],
             temperature: provider.effectiveTemperature(0),
             tools: anthropicTools
         )

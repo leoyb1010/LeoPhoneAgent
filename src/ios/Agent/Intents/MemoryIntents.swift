@@ -10,6 +10,7 @@
 
 import AppIntents
 import Foundation
+import UIKit
 
 struct RememberThisIntent: AppIntent {
     static var title: LocalizedStringResource = "记住这个"
@@ -32,7 +33,9 @@ struct RememberThisIntent: AppIntent {
         guard (UserDefaults.standard.object(forKey: "memory.global.enabled") as? Bool) ?? true else {
             return .result(dialog: "记忆功能已关闭，可以在 App 的设置 › 记忆里打开。")
         }
-        let outcome = AIChatViewModel.writeDailyMemory(content)
+        // 锁屏可跑(产品决定保留):条目上标明来源,读记忆时能分辨这条不是对话里记下的。
+        let locked = !UIApplication.shared.isProtectedDataAvailable
+        let outcome = AIChatViewModel.writeDailyMemory(content, source: locked ? "快捷指令·锁屏" : "快捷指令")
         return .result(dialog: outcome.success ? "记住了。" : "没记上，请稍后再试。")
     }
 }

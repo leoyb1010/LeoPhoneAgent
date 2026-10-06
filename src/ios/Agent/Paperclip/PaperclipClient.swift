@@ -237,8 +237,13 @@ final class PaperclipClient {
             guard verifiedRuns.contains(key) else { throw PaperclipError.identityChanged }
         }
         let id = try PaperclipProfile.component(runID)
-        let log: PaperclipRunLogChunk = try await authenticated("/api/heartbeat-runs/\(id)/log?offset=\(max(0, offset))&limitBytes=64000", userID: ref.userID)
+        let start = max(0, offset)
+        let log: PaperclipRunLogChunk = try await authenticated("/api/heartbeat-runs/\(id)/log?offset=\(start)&limitBytes=64000", userID: ref.userID)
         guard log.runId == runID else { throw PaperclipError.identityChanged }
+        // 与 Mac 契约一致:游标倒退、或带了内容却不前进,都说明读取位置不兼容 —— 拒绝拼接。
+        guard PaperclipRunLogParser.isValidCursor(requested: start, next: log.nextOffset, hasContent: !log.content.isEmpty) else {
+            throw PaperclipError.invalidResponse
+        }
         return log
     }
 

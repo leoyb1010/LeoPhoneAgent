@@ -240,15 +240,9 @@ enum ShortcutRunTracker {
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
-        let action = UNNotificationCategory(
-            identifier: notificationCategoryId,
-            actions: [],
-            intentIdentifiers: []
-        )
-        center.getNotificationCategories { existing in
-            // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
-            center.setNotificationCategories(existing.union([action]))
-        }
+        // 没有按钮的类别不必注册;各处并发「读-并-写」类别集合会互相覆盖,
+        // 统一走 LeoNotificationCategories.register()(每次都写全量,谁后写都不丢按钮)。
+        LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
         content.title = title

@@ -14,6 +14,8 @@ struct LeoEmptyState: View {
     var actionTitle: String?
     var actionSystemImage: String?
     var action: (() -> Void)?
+    /// UI-test identifier for the action button.
+    var actionIdentifier: String?
 
     var body: some View {
         VStack(spacing: LeoTheme.Spacing.sm) {
@@ -53,6 +55,7 @@ struct LeoEmptyState: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(LeoSquishButtonStyle())
+                .accessibilityIdentifier(actionIdentifier ?? "")
                 .padding(.top, LeoTheme.Spacing.xxs)
             }
         }

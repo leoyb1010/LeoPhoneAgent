@@ -200,8 +200,17 @@ final class OffloadPermissionQueueTests: XCTestCase {
     }
 
     func testSourceIsInferredFromHostIssuedSessionId() {
-        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "session-1"), .agentRun)
-        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: nil), .userTerminal)
-        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "  "), .userTerminal)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "session-1", turnActive: true), .agentRun)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: nil, turnActive: true), .userTerminal)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "  ", turnActive: true), .userTerminal)
+    }
+
+    /// 回合已结束(残留后台进程)或宿主自用 id(设置页刷新 MCP):全自动下也先问。
+    func testSourceRequiresActiveTurnAndExcludesHostIds() {
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "session-1", turnActive: false), .userTerminal)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "mcp-settings", turnActive: true), .userTerminal)
+        XCTAssertEqual(OffloadPermissionPolicy.fullAutoVerdict(
+            fullAuto: true, notAllowed: false,
+            source: OffloadPermissionPolicy.source(forSessionId: "session-1", turnActive: false)), .ask)
     }
 }

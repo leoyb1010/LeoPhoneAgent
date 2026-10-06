@@ -17,7 +17,7 @@ struct CollectedItem {enum Kind{case file,text};let id:String;let kind:Kind;let 
 struct PendingShare {struct Item {enum Kind{case attachment};let kind:Kind;let value:String};let items:[Item];let timestamp:Date;let instruction:String;let treasuryContext:String}
 enum CollectionStore {static var directory:URL!;static func fileURL(named name:String)->URL? {directory.appendingPathComponent(name)}}
 enum SharedContainerStore {static var directory:URL!;static func sharedFileURL(named name:String)->URL? {directory.appendingPathComponent(name)}}
-enum TreasuryContextBuilder {static func build(items:[CollectedItem]) async ->String {"untrusted fixture"}}
+enum TreasuryContextBuilder {static func build(items:[CollectedItem]) async ->String {"untrusted fixture"}; static func agentInstruction(count:Int)->String {"fixture instruction"}}
 @MainActor final class ShareCoordinator {static let shared=ShareCoordinator();var shares:[PendingShare]=[];func storeBuffer(_ share:PendingShare){shares.append(share)}}
 extension Notification.Name {static let newChatRequested=Notification.Name("test.newChat")}
 @MainActor final class Harness {

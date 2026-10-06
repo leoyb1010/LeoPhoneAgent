@@ -408,7 +408,8 @@ final class OffloadPermissionManager: ObservableObject {
         // [T-full-auto] 全自动:「询问」一律放行;你设成「不允许」的上面已经挡掉。
         // [A4] 只看来源不看会话是否"正活跃":快捷指令、定时任务、自动化触发的后台回合同样放行;
         // 你自己在终端里敲(或被链接预填)的命令照旧先问。
-        let origin = source ?? OffloadPermissionPolicy.source(forSessionId: sid)
+        let origin = source ?? OffloadPermissionPolicy.source(
+            forSessionId: sid, turnActive: sid.map { SessionActivityTracker.shared.isActive($0) } ?? false)
         if OffloadPermissionPolicy.fullAutoVerdict(fullAuto: FullAutoGate.isOn, notAllowed: false, source: origin) == .allowed {
             FullAutoGate.announce("\(command) \(arguments.prefix(3).joined(separator: " "))", sessionId: sid)
             return .allowed

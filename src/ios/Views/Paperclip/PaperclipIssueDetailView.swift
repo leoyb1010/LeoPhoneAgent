@@ -83,14 +83,17 @@ final class PaperclipIssueDetailModel: ObservableObject {
     func cancelRun(_ runID: String) async {
         guard !busy else { return }
         busy = true
+        // 刷新成功会清掉 error：「已经结束」的提示等刷新完再放，否则一闪就没了。
+        var notice: String?
         do {
             switch try await client.cancel(reference, runID: runID) {
             case .cancelled: error = nil
-            case .alreadyFinished(let status): error = "这次运行已经结束（\(PaperclipLabels.status(status))），无需停止。"
+            case .alreadyFinished(let status): notice = "这次运行已经结束（\(PaperclipLabels.status(status))），无需停止。"
             }
         } catch { record(error) }
         busy = false
         await refresh()
+        if let notice { error = notice }
     }
 
     func acknowledgeStatus() {

@@ -3,6 +3,10 @@ import SQLite3
 import SwiftAnthropic
 import os.log
 
+/// SQLite 立即拷贝绑定的文本。nil(SQLITE_STATIC)要求指针活到 step,而桥接出来的临时
+/// NSString 缓冲在绑定语句结束后就可能被释放,写进库的会是错乱的文本。
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 private let logger = AppLogger(category: "ChatStore")
 /// [T-memory-enabled-new-session-bug DIAG] dedicated category so the
 /// memory-toggle trace is grep-able (`[MemDiag]`) without ChatStore noise.
@@ -874,9 +878,9 @@ actor ChatStore {
         let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled) VALUES (?, ?, ?, ?, ?, ?, ?)"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             bindOptionalText(stmt, index: 2, value: session.title)
-            sqlite3_bind_text(stmt, 3, (session.modelId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, (session.modelId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 4, now.timeIntervalSince1970)
             sqlite3_bind_double(stmt, 5, now.timeIntervalSince1970)
             bindOptionalText(stmt, index: 6, value: source)
@@ -1361,9 +1365,9 @@ actor ChatStore {
         var results: [SearchResult] = []
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (likePattern as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (likePattern as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (likePattern as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
             let lowerQuery = query.lowercased()
             while sqlite3_step(stmt) == SQLITE_ROW {
@@ -1462,7 +1466,7 @@ actor ChatStore {
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             for (idx, value) in bindings {
-                sqlite3_bind_text(stmt, idx, (value as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, idx, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
             }
             for (idx, value) in doubleBindings {
                 sqlite3_bind_double(stmt, idx, value)
@@ -1553,7 +1557,7 @@ actor ChatStore {
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             for (idx, value) in bindings {
-                sqlite3_bind_text(stmt, idx, (value as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, idx, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
             }
             for (idx, value) in doubleBindings {
                 sqlite3_bind_double(stmt, idx, value)
@@ -1631,7 +1635,7 @@ actor ChatStore {
         var results: [(messageId: String, role: String, createdAt: Date, text: String, truncated: Bool)] = []
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(stmt, 2, Int32(limit))
             sqlite3_bind_int(stmt, 3, Int32(offset))
 
@@ -1665,7 +1669,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var count = 0
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 count = Int(sqlite3_column_int(stmt, 0))
             }
@@ -1680,7 +1684,7 @@ actor ChatStore {
         var session: ChatSession?
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
                 let modelId = String(cString: sqlite3_column_text(stmt, 2))
@@ -1708,8 +1712,8 @@ actor ChatStore {
         let sql = "UPDATE sessions SET model_id = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (modelId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (modelId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
                 SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
             }
@@ -1724,10 +1728,10 @@ actor ChatStore {
         let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (title as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (title as NSString).utf8String, -1, SQLITE_TRANSIENT)
             bindOptionalText(stmt, index: 2, value: category)
             sqlite3_bind_double(stmt, 3, Date().timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 4, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 4, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
                 SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
             }
@@ -1759,7 +1763,7 @@ actor ChatStore {
         let checkSql = "SELECT pinned_at FROM sessions WHERE id = ?"
         var checkStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, checkSql, -1, &checkStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(checkStmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(checkStmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(checkStmt) == SQLITE_ROW {
                 isPinned = sqlite3_column_type(checkStmt, 0) != SQLITE_NULL
             }
@@ -1775,7 +1779,7 @@ actor ChatStore {
             } else {
                 sqlite3_bind_null(stmt, 1)
             }
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
                 SessionProvenanceStore.editedLocally(db, id: id, deviceID: DeviceIdentity.deviceId)
             }
@@ -1799,7 +1803,7 @@ actor ChatStore {
         var rowFound = false
         var enabled = true
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 enabled = sqlite3_column_int(stmt, 0) != 0
                 rowFound = true
@@ -1828,7 +1832,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_int(stmt, 1, enabled ? 1 : 0)
-            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
                 SessionProvenanceStore.editedLocally(db, id: sessionId, deviceID: DeviceIdentity.deviceId)
             }
@@ -1879,7 +1883,7 @@ actor ChatStore {
                 var statement: OpaquePointer?
                 defer { sqlite3_finalize(statement) }
                 _ = try prepareInbound("DELETE FROM \(table) WHERE \(key) = ?", &statement)
-                sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 _ = try stepInbound(statement)
             }
             for directory in directories where FileManager.default.fileExists(atPath: directory.path) {
@@ -1903,7 +1907,7 @@ actor ChatStore {
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             _ = try prepareInbound("DELETE FROM compact_markers WHERE id = ?", &statement)
-            sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             _ = try stepInbound(statement)
         }
     }
@@ -1916,7 +1920,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         return sqlite3_step(stmt) == SQLITE_ROW
     }
 
@@ -1931,7 +1935,7 @@ actor ChatStore {
         let sql = "DELETE FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -1973,7 +1977,7 @@ actor ChatStore {
         let msgSql = "SELECT id FROM messages WHERE session_id = ?"
         var msgStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, msgSql, -1, &msgStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(msgStmt) == SQLITE_ROW {
                 let msgId = String(cString: sqlite3_column_text(msgStmt, 0))
                 markDirty(recordType: "Message", recordId: msgId, operation: "delete")
@@ -1984,7 +1988,7 @@ actor ChatStore {
         let cmSql = "SELECT id FROM compact_markers WHERE session_id = ?"
         var cmStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, cmSql, -1, &cmStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(cmStmt) == SQLITE_ROW {
                 let cmId = String(cString: sqlite3_column_text(cmStmt, 0))
                 markDirty(recordType: "CompactMarker", recordId: cmId, operation: "delete")
@@ -2062,7 +2066,7 @@ actor ChatStore {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
-        exec("BEGIN TRANSACTION")
+        exec("BEGIN IMMEDIATE")
 
         var touchedSessions = Set<String>()
         for message in messages {
@@ -2089,10 +2093,10 @@ actor ChatStore {
             var stmt: OpaquePointer?
             let prepRC = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
             if prepRC == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (message.id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (message.sessionId as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (message.role.rawValue as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 4, (partsJSON as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (message.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (message.sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (message.role.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 4, (partsJSON as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_double(stmt, 5, message.createdAt.timeIntervalSince1970)
                 bindOptionalText(stmt, index: 6, value: usageJSON)
                 sqlite3_bind_int64(stmt, 7, Int64(sortOrder))
@@ -2149,7 +2153,7 @@ actor ChatStore {
         var count = 0
         var maxSo = -1
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 count = Int(sqlite3_column_int64(stmt, 0))
                 maxSo = Int(sqlite3_column_int64(stmt, 1))
@@ -2171,7 +2175,7 @@ actor ChatStore {
 
         let prepareResult = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
         if prepareResult == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
@@ -2226,7 +2230,7 @@ actor ChatStore {
             """
             if sqlite3_prepare_v2(db, fallbackSql, -1, &stmt, nil) == SQLITE_OK {
                 logger.info("[ChatStore.loadMessages] Fallback query succeeded for session \(sessionId)")
-                sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 while sqlite3_step(stmt) == SQLITE_ROW {
                     let id = String(cString: sqlite3_column_text(stmt, 0))
                     let sessId = String(cString: sqlite3_column_text(stmt, 1))
@@ -2276,7 +2280,7 @@ actor ChatStore {
         let soSql = "SELECT sort_order FROM messages WHERE session_id = ? ORDER BY sort_order ASC, created_at ASC, id ASC"
         var soStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, soSql, -1, &soStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(soStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(soStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(soStmt) == SQLITE_ROW {
                 sortOrders.append(Int(sqlite3_column_int64(soStmt, 0)))
             }
@@ -2393,7 +2397,7 @@ actor ChatStore {
         let selSql = "SELECT id FROM messages WHERE session_id = ?"
         var selStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, selSql, -1, &selStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(selStmt) == SQLITE_ROW {
                 let msgId = String(cString: sqlite3_column_text(selStmt, 0))
                 markDirty(recordType: "Message", recordId: msgId, operation: "delete")
@@ -2404,8 +2408,11 @@ actor ChatStore {
         let sql = "DELETE FROM messages WHERE session_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            // 删除没成功却提交了同步删除标记,别的设备会删掉这台还留着的消息:失败就回滚整次变更。
+            if sqlite3_step(stmt) != SQLITE_DONE { noteSyncMutationFailure() }
+        } else {
+            noteSyncMutationFailure()
         }
         sqlite3_finalize(stmt)
     }
@@ -2434,10 +2441,10 @@ actor ChatStore {
         let sql = "UPDATE messages SET parts_json = ?, updated_at = ?, part_flags = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (partsJSON as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (partsJSON as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
             sqlite3_bind_int64(stmt, 3, Int64(partFlags))
-            sqlite3_bind_text(stmt, 4, (messageId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 4, (messageId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             let rc = sqlite3_step(stmt)
             logger.info("[updateMessageParts] id=\(messageId.prefix(8)) parts=\(parts.count) stepRC=\(rc)")
         }
@@ -2499,7 +2506,7 @@ actor ChatStore {
                 """
             var bStmt: OpaquePointer?
             if sqlite3_prepare_v2(db, boundarySql, -1, &bStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(bStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(bStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_int64(bStmt, 2, Int64(keepCount - 1))
                 if sqlite3_step(bStmt) == SQLITE_ROW {
                     boundarySortOrder = sqlite3_column_int64(bStmt, 0)
@@ -2521,7 +2528,7 @@ actor ChatStore {
         var selectStmt: OpaquePointer?
         var toDelete: [String] = []
         if sqlite3_prepare_v2(db, selectSql, -1, &selectStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(selectStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(selectStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if let boundary = boundarySortOrder {
                 sqlite3_bind_int64(selectStmt, 2, boundary)
             }
@@ -2539,11 +2546,13 @@ actor ChatStore {
             : "DELETE FROM messages WHERE session_id = ? AND sort_order > ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if let boundary = boundarySortOrder {
                 sqlite3_bind_int64(stmt, 2, boundary)
             }
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) != SQLITE_DONE { noteSyncMutationFailure() }
+        } else {
+            noteSyncMutationFailure()
         }
         let deletedRows = Int(sqlite3_changes(db))
         sqlite3_finalize(stmt)
@@ -2662,9 +2671,9 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         if try prepareInbound(sql, &stmt) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (marker.id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (marker.sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (marker.summary as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (marker.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (marker.sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (marker.summary as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int64(stmt, 4, Int64(marker.firstKeptSortOrder))
             sqlite3_bind_int64(stmt, 5, Int64(marker.compactedCount))
             sqlite3_bind_double(stmt, 6, marker.createdAt.timeIntervalSince1970)
@@ -2674,17 +2683,17 @@ actor ChatStore {
                 sqlite3_bind_null(stmt, 7)
             }
             if let bmId = marker.boundaryMessageId {
-                sqlite3_bind_text(stmt, 8, (bmId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 8, (bmId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 8)
             }
             if let fkmId = marker.firstKeptMessageId {
-                sqlite3_bind_text(stmt, 9, (fkmId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 9, (fkmId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 9)
             }
             if let lcmId = marker.lastCompactedMessageId {
-                sqlite3_bind_text(stmt, 10, (lcmId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 10, (lcmId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 10)
             }
@@ -2709,7 +2718,7 @@ actor ChatStore {
         let delSql = "DELETE FROM compact_markers WHERE id = ?"
         var delStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(delStmt)
         }
         sqlite3_finalize(delStmt)
@@ -2722,7 +2731,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var marker: CompactMarker?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 marker = readCompactMarker(from: stmt)
             }
@@ -2750,7 +2759,7 @@ actor ChatStore {
             defer { sqlite3_finalize(checkStmt) }
             var sessionExists = false
             if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
-                sqlite3_bind_text(checkStmt, 1, (marker.sessionId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(checkStmt, 1, (marker.sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sessionExists = try stepInbound(checkStmt) == SQLITE_ROW
             }
             sqlite3_finalize(checkStmt); checkStmt = nil
@@ -2771,7 +2780,7 @@ actor ChatStore {
                 var delStmt: OpaquePointer?
                 defer { sqlite3_finalize(delStmt) }
                 if try prepareInbound(delSql, &delStmt) == SQLITE_OK {
-                    sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(delStmt, 1, (marker.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     _ = try stepInbound(delStmt)
                 }
                 sqlite3_finalize(delStmt); delStmt = nil
@@ -2793,7 +2802,7 @@ actor ChatStore {
         var memoryEnabled = true
         var modelBinding: String?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 memoryEnabled = sqlite3_column_int(stmt, 0) != 0
                 modelBinding = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
@@ -2812,7 +2821,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var marker: CompactMarker?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 marker = readCompactMarker(from: stmt)
             }
@@ -2833,7 +2842,7 @@ actor ChatStore {
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
-        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
         return sqlite3_changes(db) > 0
     }
@@ -2854,7 +2863,7 @@ actor ChatStore {
         // string would render a blank banner). [T-error-persist-ios]
         let normalized = errorInfo?.trimmingCharacters(in: .whitespacesAndNewlines)
         bindOptionalText(stmt, index: 1, value: (normalized?.isEmpty == false) ? normalized : nil)
-        sqlite3_bind_text(stmt, 2, (messageId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (messageId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
         return sqlite3_changes(db) > 0
     }
@@ -2866,7 +2875,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW,
               let cstr = sqlite3_column_text(stmt, 0) else { return nil }
         return String(cString: cstr)
@@ -2884,7 +2893,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 2, at.timeIntervalSince1970)
         _ = sqlite3_step(stmt)
     }
@@ -2897,7 +2906,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         return Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
     }
@@ -2926,8 +2935,8 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
-        sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 3, at.timeIntervalSince1970)
         return sqlite3_step(stmt) == SQLITE_DONE
     }
@@ -2938,8 +2947,8 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         return Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
     }
@@ -2965,7 +2974,7 @@ actor ChatStore {
         } else {
             sqlite3_bind_null(stmt, 1)
         }
-        sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         _ = sqlite3_step(stmt)
     }
 
@@ -2976,7 +2985,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         if sqlite3_column_type(stmt, 0) == SQLITE_NULL { return nil }
         return Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
@@ -3012,7 +3021,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var msgCount = 0
         if sqlite3_prepare_v2(db, msgSql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 if let cstr = sqlite3_column_text(stmt, 0) {
                     let mid = String(cString: cstr)
@@ -3070,10 +3079,10 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 3, (zoneName as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 4, ("upsert" as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, (zoneName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 4, ("upsert" as NSString).utf8String, -1, SQLITE_TRANSIENT)
         _ = sqlite3_step(stmt)
     }
 
@@ -3101,7 +3110,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var markers: [CompactMarker] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 markers.append(readCompactMarker(from: stmt))
             }
@@ -3119,7 +3128,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var marker: CompactMarker?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 marker = readCompactMarker(from: stmt)
             }
@@ -3148,7 +3157,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
         let removed = sqlite3_changes(db) > 0
         if removed {
@@ -3167,7 +3176,7 @@ actor ChatStore {
         let selSql = "SELECT id FROM compact_markers WHERE session_id = ?"
         var selStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, selSql, -1, &selStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(selStmt) == SQLITE_ROW {
                 let cmId = String(cString: sqlite3_column_text(selStmt, 0))
                 markDirty(recordType: "CompactMarker", recordId: cmId, operation: "delete")
@@ -3178,7 +3187,7 @@ actor ChatStore {
         let sql = "DELETE FROM compact_markers WHERE session_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -3220,7 +3229,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         return decodeWebAppShortcutRow(stmt)
     }
@@ -3242,12 +3251,12 @@ actor ChatStore {
             logger.error("saveWebAppShortcut prepare failed: \(String(cString: sqlite3_errmsg(db)))")
             return
         }
-        sqlite3_bind_text(stmt, 1, (shortcut.id as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (shortcut.htmlPath as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 3, (shortcut.pathScope.rawValue as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (shortcut.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (shortcut.htmlPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, (shortcut.pathScope.rawValue as NSString).utf8String, -1, SQLITE_TRANSIENT)
         bindOptionalText(stmt, index: 4, value: shortcut.scopeContext)
-        sqlite3_bind_text(stmt, 5, (shortcut.title as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 6, (shortcut.iconRef.encoded as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 5, (shortcut.title as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 6, (shortcut.iconRef.encoded as NSString).utf8String, -1, SQLITE_TRANSIENT)
         bindOptionalText(stmt, index: 7, value: shortcut.iconCachePath)
         sqlite3_bind_double(stmt, 8, shortcut.createdAt.timeIntervalSince1970)
         bindOptionalText(stmt, index: 9, value: shortcut.sourceSessionId)
@@ -3263,7 +3272,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         _ = sqlite3_step(stmt)
     }
 
@@ -3316,7 +3325,7 @@ actor ChatStore {
         var countStmt: OpaquePointer?
         let countSql = "SELECT COUNT(*) FROM messages WHERE session_id = ?"
         guard sqlite3_prepare_v2(db, countSql, -1, &countStmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(countStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(countStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(countStmt) == SQLITE_ROW else {
             sqlite3_finalize(countStmt)
             return
@@ -3348,7 +3357,7 @@ actor ChatStore {
         """
         var delStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, delSql, -1, &delStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(delStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(delStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int64(delStmt, 2, Int64(deleteCount))
             sqlite3_step(delStmt)
         }
@@ -3376,7 +3385,7 @@ actor ChatStore {
         var dupStmt: OpaquePointer?
         var hasDup = false
         if sqlite3_prepare_v2(db, dupSql, -1, &dupStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(dupStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(dupStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(dupStmt) == SQLITE_ROW {
                 let total = sqlite3_column_int64(dupStmt, 0)
                 let unique = sqlite3_column_int64(dupStmt, 1)
@@ -3394,7 +3403,7 @@ actor ChatStore {
         var mStmt: OpaquePointer?
         var hasLegacyMarker = false
         if sqlite3_prepare_v2(db, markerSql, -1, &mStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             hasLegacyMarker = sqlite3_step(mStmt) == SQLITE_ROW
         }
         sqlite3_finalize(mStmt)
@@ -3414,7 +3423,7 @@ actor ChatStore {
         var invStmt: OpaquePointer?
         var hasInversion = false
         if sqlite3_prepare_v2(db, invSql, -1, &invStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(invStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(invStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             hasInversion = sqlite3_step(invStmt) == SQLITE_ROW
         }
         sqlite3_finalize(invStmt)
@@ -3432,7 +3441,7 @@ actor ChatStore {
         invalidateSessionListCache()
         var report = RepairReport()
 
-        exec("BEGIN TRANSACTION")
+        exec("BEGIN IMMEDIATE")
 
         // Step 1: reload messages by a stable composite key to drive sortOrder rewrite.
         // Order by (created_at, id) ignoring the current sort_order entirely — this gives
@@ -3441,7 +3450,7 @@ actor ChatStore {
         var rows: [(id: String, oldSortOrder: Int)] = []
         var selStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, selectSql, -1, &selStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(selStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(selStmt) == SQLITE_ROW {
                 let idC = sqlite3_column_text(selStmt, 0).map { String(cString: $0) } ?? ""
                 let so = Int(sqlite3_column_int64(selStmt, 1))
@@ -3458,7 +3467,7 @@ actor ChatStore {
             for (newSO, row) in rows.enumerated() where row.oldSortOrder != newSO {
                 sqlite3_reset(updStmt)
                 sqlite3_bind_int(updStmt, 1, Int32(newSO))
-                sqlite3_bind_text(updStmt, 2, (row.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(updStmt, 2, (row.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(updStmt)
                 report.sortOrderFixed += 1
             }
@@ -3488,7 +3497,7 @@ actor ChatStore {
         var mSelStmt: OpaquePointer?
         var legacyMarkers: [(id: String, firstKeptSortOrder: Int)] = []
         if sqlite3_prepare_v2(db, markerSelSql, -1, &mSelStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(mSelStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(mSelStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(mSelStmt) == SQLITE_ROW {
                 let mid = sqlite3_column_text(mSelStmt, 0).map { String(cString: $0) } ?? ""
                 let fkso = Int(sqlite3_column_int64(mSelStmt, 1))
@@ -3508,8 +3517,8 @@ actor ChatStore {
                     continue
                 }
                 sqlite3_reset(mUpdStmt)
-                sqlite3_bind_text(mUpdStmt, 1, (fkmId as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(mUpdStmt, 2, (lm.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(mUpdStmt, 1, (fkmId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(mUpdStmt, 2, (lm.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(mUpdStmt)
                 report.markersUpgraded += 1
                 // Mark marker as dirty so the upgraded field propagates to iCloud.
@@ -3645,7 +3654,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         var order = 0
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 order = Int(sqlite3_column_int64(stmt, 0))
             }
@@ -3660,7 +3669,7 @@ actor ChatStore {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 {
                 SessionProvenanceStore.editedLocally(db, id: sessionId, deviceID: DeviceIdentity.deviceId)
             }
@@ -3670,7 +3679,7 @@ actor ChatStore {
 
     private func bindOptionalText(_ stmt: OpaquePointer?, index: Int32, value: String?) {
         if let value {
-            sqlite3_bind_text(stmt, index, (value as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, index, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(stmt, index)
         }
@@ -4481,10 +4490,10 @@ extension ChatStore {
         if writeV1Row {
             prepareRC = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
             if prepareRC == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (zoneName as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 4, (operation as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (zoneName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 4, (operation as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_int(stmt, 5, Int32(priority))
                 sqlite3_bind_double(stmt, 6, now)
                 stepRC = sqlite3_step(stmt)
@@ -4504,10 +4513,10 @@ extension ChatStore {
         if v2Type != recordType, !retiredV2Upsert {
             var v2Stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, sql, -1, &v2Stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(v2Stmt, 1, (v2Type as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(v2Stmt, 2, (recordId as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(v2Stmt, 3, (zoneName as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(v2Stmt, 4, (operation as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(v2Stmt, 1, (v2Type as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(v2Stmt, 2, (recordId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(v2Stmt, 3, (zoneName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(v2Stmt, 4, (operation as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_int(v2Stmt, 5, Int32(priority))
                 sqlite3_bind_double(v2Stmt, 6, now)
                 if sqlite3_step(v2Stmt) != SQLITE_DONE { noteSyncMutationFailure() }
@@ -4655,7 +4664,7 @@ extension ChatStore {
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
                 sqlite3_bind_double(stmt, 1, afterTime)
                 sqlite3_bind_double(stmt, 2, afterTime)
-                sqlite3_bind_text(stmt, 3, (afterId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (afterId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 while sqlite3_step(stmt) == SQLITE_ROW {
                     page.append((String(cString: sqlite3_column_text(stmt, 0)), sqlite3_column_double(stmt, 1)))
                 }
@@ -4776,7 +4785,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         return Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
     }
@@ -4792,7 +4801,7 @@ extension ChatStore {
         let msgSql = "SELECT id FROM messages WHERE session_id = ?"
         var msgStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, msgSql, -1, &msgStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(msgStmt) == SQLITE_ROW {
                 markDirty(recordType: "Message",
                           recordId: String(cString: sqlite3_column_text(msgStmt, 0)),
@@ -4803,7 +4812,7 @@ extension ChatStore {
         let cmSql = "SELECT id FROM compact_markers WHERE session_id = ?"
         var cmStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, cmSql, -1, &cmStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(cmStmt) == SQLITE_ROW {
                 markDirty(recordType: "CompactMarker",
                           recordId: String(cString: sqlite3_column_text(cmStmt, 0)),
@@ -4980,7 +4989,7 @@ extension ChatStore {
         let msgSql = "SELECT id FROM messages WHERE session_id = ?"
         var msgStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, msgSql, -1, &msgStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(msgStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(msgStmt) == SQLITE_ROW {
                 let msgId = String(cString: sqlite3_column_text(msgStmt, 0))
                 markDirty(recordType: "Message", recordId: msgId)
@@ -4991,7 +5000,7 @@ extension ChatStore {
         let cmSql = "SELECT id FROM compact_markers WHERE session_id = ?"
         var cmStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, cmSql, -1, &cmStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(cmStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(cmStmt) == SQLITE_ROW {
                 let cmId = String(cString: sqlite3_column_text(cmStmt, 0))
                 markDirty(recordType: "CompactMarker", recordId: cmId)
@@ -5049,7 +5058,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -5249,7 +5258,7 @@ extension ChatStore {
         // Messages
         var mStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT id FROM messages WHERE session_id = ?", -1, &mStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(mStmt) == SQLITE_ROW {
                 markDirty(recordType: "Message", recordId: String(cString: sqlite3_column_text(mStmt, 0)))
                 count += 1
@@ -5259,7 +5268,7 @@ extension ChatStore {
         // CompactMarkers
         var cStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT id FROM compact_markers WHERE session_id = ?", -1, &cStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(cStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(cStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(cStmt) == SQLITE_ROW {
                 markDirty(recordType: "CompactMarker", recordId: String(cString: sqlite3_column_text(cStmt, 0)))
                 count += 1
@@ -5335,7 +5344,7 @@ extension ChatStore {
         var messageIds: [String] = []
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT id FROM messages WHERE session_id = ?", -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 messageIds.append(String(cString: sqlite3_column_text(stmt, 0)))
             }
@@ -5344,7 +5353,7 @@ extension ChatStore {
         var markerIds: [String] = []
         var mStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT id FROM compact_markers WHERE session_id = ?", -1, &mStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(mStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(mStmt) == SQLITE_ROW {
                 markerIds.append(String(cString: sqlite3_column_text(mStmt, 0)))
             }
@@ -5355,14 +5364,14 @@ extension ChatStore {
         var locallyDeleted = 0
         var dStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "DELETE FROM messages WHERE session_id = ?", -1, &dStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(dStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(dStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(dStmt)
             locallyDeleted += Int(sqlite3_changes(db))
         }
         sqlite3_finalize(dStmt)
         var dmStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "DELETE FROM compact_markers WHERE session_id = ?", -1, &dmStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(dmStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(dmStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(dmStmt)
             locallyDeleted += Int(sqlite3_changes(db))
         }
@@ -5383,16 +5392,16 @@ extension ChatStore {
         let clearPushedSQL = "DELETE FROM sync_pushed_records WHERE record_name = ?"
         if sqlite3_prepare_v2(db, clearPushedSQL, -1, &pushedClearStmt, nil) == SQLITE_OK {
             for id in messageIds {
-                sqlite3_bind_text(pushedClearStmt, 1, ("Message:\(id)" as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(pushedClearStmt, 1, ("Message:\(id)" as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(pushedClearStmt)
                 sqlite3_reset(pushedClearStmt)
             }
             for id in markerIds {
-                sqlite3_bind_text(pushedClearStmt, 1, ("CompactMarker:\(id)" as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(pushedClearStmt, 1, ("CompactMarker:\(id)" as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(pushedClearStmt)
                 sqlite3_reset(pushedClearStmt)
             }
-            sqlite3_bind_text(pushedClearStmt, 1, ("Session:\(sessionId)" as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(pushedClearStmt, 1, ("Session:\(sessionId)" as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(pushedClearStmt)
         }
         sqlite3_finalize(pushedClearStmt)
@@ -5447,8 +5456,8 @@ extension ChatStore {
         let sql = "DELETE FROM sync_dirty_records WHERE record_type = ? AND record_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (recordType as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (recordId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -5461,12 +5470,12 @@ extension ChatStore {
     /// every relaunch re-marking already-pushed records dirty.
     func markRecordsPushed(_ recordNames: [String]) {
         guard !recordNames.isEmpty else { return }
-        exec("BEGIN TRANSACTION")
+        exec("BEGIN IMMEDIATE")
         let sql = "INSERT OR IGNORE INTO sync_pushed_records (record_name) VALUES (?)"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             for name in recordNames {
-                sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(stmt)
                 sqlite3_reset(stmt)
             }
@@ -5529,12 +5538,12 @@ extension ChatStore {
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             if try prepareInbound(sql, &stmt) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (device.id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (device.deviceName as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (device.zoneName as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (device.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (device.deviceName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (device.zoneName as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_double(stmt, 4, device.lastSeen.timeIntervalSince1970)
-                sqlite3_bind_text(stmt, 5, (device.osVersion as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 6, (device.uploadTypes.joined(separator: ",") as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 5, (device.osVersion as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 6, (device.uploadTypes.joined(separator: ",") as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 _ = try stepInbound(stmt)
             }
             sqlite3_finalize(stmt); stmt = nil
@@ -5605,11 +5614,11 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             bindOptionalText(stmt, index: 3, value: session.title)
             bindOptionalText(stmt, index: 4, value: session.category)
-            sqlite3_bind_text(stmt, 5, (session.modelId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 5, (session.modelId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 6, session.createdAt.timeIntervalSince1970)
             sqlite3_bind_double(stmt, 7, session.updatedAt.timeIntervalSince1970)
             sqlite3_step(stmt)
@@ -5634,7 +5643,7 @@ extension ChatStore {
             var checkStmt: OpaquePointer?
             defer { sqlite3_finalize(checkStmt) }
             if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
-                sqlite3_bind_text(checkStmt, 1, (session.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(checkStmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 if try stepInbound(checkStmt) == SQLITE_ROW {
                     localUpdatedAt = sqlite3_column_double(checkStmt, 0)
                     if sqlite3_column_type(checkStmt, 1) != SQLITE_NULL {
@@ -5695,7 +5704,7 @@ extension ChatStore {
                         } else {
                             sqlite3_bind_null(stmt, 6)
                         }
-                        sqlite3_bind_text(stmt, 7, (session.id as NSString).utf8String, -1, nil)
+                        sqlite3_bind_text(stmt, 7, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                         _ = try stepInbound(stmt)
                     }
                     sqlite3_finalize(stmt); stmt = nil
@@ -5725,7 +5734,7 @@ extension ChatStore {
                             } else {
                                 sqlite3_bind_null(pinStmt, 1)
                             }
-                            sqlite3_bind_text(pinStmt, 2, (session.id as NSString).utf8String, -1, nil)
+                            sqlite3_bind_text(pinStmt, 2, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                             _ = try stepInbound(pinStmt)
                         }
                         sqlite3_finalize(pinStmt); pinStmt = nil
@@ -5748,13 +5757,13 @@ extension ChatStore {
                 var stmt: OpaquePointer?
                 defer { sqlite3_finalize(stmt) }
                 if try prepareInbound(sql, &stmt) == SQLITE_OK {
-                    sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     bindOptionalText(stmt, index: 2, value: session.title)
                     bindOptionalText(stmt, index: 3, value: session.category)
-                    sqlite3_bind_text(stmt, 4, (session.modelId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 4, (session.modelId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_bind_double(stmt, 5, session.createdAt.timeIntervalSince1970)
                     sqlite3_bind_double(stmt, 6, remoteUpdated)
-                    sqlite3_bind_text(stmt, 7, (fromDeviceId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 7, (fromDeviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_bind_int(stmt, 8, memoryEnabled ? 1 : 0)
                     bindOptionalText(stmt, index: 9, value: modelBinding)
                     if let pinTs = resolvedPinnedAt {
@@ -5789,7 +5798,7 @@ extension ChatStore {
             var bfStmt: OpaquePointer?
             defer { sqlite3_finalize(bfStmt) }
             if try prepareInbound(backfillSql, &bfStmt) == SQLITE_OK {
-                sqlite3_bind_text(bfStmt, 1, (session.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(bfStmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 _ = try stepInbound(bfStmt)
             }
             sqlite3_finalize(bfStmt); bfStmt = nil
@@ -5806,8 +5815,8 @@ extension ChatStore {
         let sql = "DELETE FROM sessions WHERE id = ? AND remote_origin_device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
             let deleted = sqlite3_changes(db)
             if deleted > 0 {
@@ -5816,7 +5825,7 @@ extension ChatStore {
                 let delMsgSql = "DELETE FROM messages WHERE session_id = ?"
                 var delMsgStmt: OpaquePointer?
                 if sqlite3_prepare_v2(db, delMsgSql, -1, &delMsgStmt, nil) == SQLITE_OK {
-                    sqlite3_bind_text(delMsgStmt, 1, (id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(delMsgStmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_step(delMsgStmt)
                 }
                 sqlite3_finalize(delMsgStmt)
@@ -5857,7 +5866,7 @@ extension ChatStore {
             defer { sqlite3_finalize(checkStmt) }
             var sessionExists = false
             if try prepareInbound(checkSql, &checkStmt) == SQLITE_OK {
-                sqlite3_bind_text(checkStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(checkStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sessionExists = try stepInbound(checkStmt) == SQLITE_ROW
             }
             sqlite3_finalize(checkStmt); checkStmt = nil
@@ -5888,7 +5897,7 @@ extension ChatStore {
             var existStmt: OpaquePointer?
             defer { sqlite3_finalize(existStmt) }
             if try prepareInbound(existSql, &existStmt) == SQLITE_OK {
-                sqlite3_bind_text(existStmt, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(existStmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 if try stepInbound(existStmt) == SQLITE_ROW {
                     localUpdatedAt = sqlite3_column_double(existStmt, 0)
                 }
@@ -5928,15 +5937,15 @@ extension ChatStore {
                 var stmt: OpaquePointer?
                 defer { sqlite3_finalize(stmt) }
                 if try prepareInbound(updateSql, &stmt) == SQLITE_OK {
-                    sqlite3_bind_text(stmt, 1, (partsJson as NSString).utf8String, -1, nil)
-                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 2, (tu as NSString).utf8String, -1, nil) }
+                    sqlite3_bind_text(stmt, 1, (partsJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 2, (tu as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 2) }
-                    if let r = reasoningContent { sqlite3_bind_text(stmt, 3, (r as NSString).utf8String, -1, nil) }
+                    if let r = reasoningContent { sqlite3_bind_text(stmt, 3, (r as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 3) }
                     sqlite3_bind_int(stmt, 4, Int32(streamInterruptCount))
                     sqlite3_bind_double(stmt, 5, effectiveUpdatedAt)
                     sqlite3_bind_int64(stmt, 6, Int64(partFlags))
-                    sqlite3_bind_text(stmt, 7, (id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 7, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     _ = try stepInbound(stmt)
                 }
                 sqlite3_finalize(stmt); stmt = nil
@@ -5961,10 +5970,10 @@ extension ChatStore {
                 defer { sqlite3_finalize(earlierStmt) }
                 var earlierMax: Int32 = -1
                 if try prepareInbound(earlierSql, &earlierStmt) == SQLITE_OK {
-                    sqlite3_bind_text(earlierStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(earlierStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_bind_double(earlierStmt, 2, createdAtTs)
                     sqlite3_bind_double(earlierStmt, 3, createdAtTs)
-                    sqlite3_bind_text(earlierStmt, 4, (id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(earlierStmt, 4, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     if try stepInbound(earlierStmt) == SQLITE_ROW {
                         earlierMax = sqlite3_column_int(earlierStmt, 0)
                     }
@@ -5982,10 +5991,10 @@ extension ChatStore {
                 var hasLater = false
                 var laterMin: Int32 = 0
                 if try prepareInbound(laterSql, &laterStmt) == SQLITE_OK {
-                    sqlite3_bind_text(laterStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(laterStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_bind_double(laterStmt, 2, createdAtTs)
                     sqlite3_bind_double(laterStmt, 3, createdAtTs)
-                    sqlite3_bind_text(laterStmt, 4, (id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(laterStmt, 4, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     if try stepInbound(laterStmt) == SQLITE_ROW {
                         if sqlite3_column_type(laterStmt, 0) != SQLITE_NULL {
                             hasLater = true
@@ -6008,7 +6017,7 @@ extension ChatStore {
                     var shiftStmt: OpaquePointer?
                     defer { sqlite3_finalize(shiftStmt) }
                     if try prepareInbound(shiftSql, &shiftStmt) == SQLITE_OK {
-                        sqlite3_bind_text(shiftStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+                        sqlite3_bind_text(shiftStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_int(shiftStmt, 2, laterMin)
                         _ = try stepInbound(shiftStmt)
                     }
@@ -6026,15 +6035,15 @@ extension ChatStore {
                 var stmt: OpaquePointer?
                 defer { sqlite3_finalize(stmt) }
                 if try prepareInbound(insertSql, &stmt) == SQLITE_OK {
-                    sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-                    sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
-                    sqlite3_bind_text(stmt, 3, (role as NSString).utf8String, -1, nil)
-                    sqlite3_bind_text(stmt, 4, (partsJson as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                    sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                    sqlite3_bind_text(stmt, 3, (role as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                    sqlite3_bind_text(stmt, 4, (partsJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
                     sqlite3_bind_double(stmt, 5, createdAt.timeIntervalSince1970)
-                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 6, (tu as NSString).utf8String, -1, nil) }
+                    if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 6, (tu as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 6) }
                     sqlite3_bind_int(stmt, 7, Int32(finalSortOrder))
-                    if let r = reasoningContent { sqlite3_bind_text(stmt, 8, (r as NSString).utf8String, -1, nil) }
+                    if let r = reasoningContent { sqlite3_bind_text(stmt, 8, (r as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 8) }
                     sqlite3_bind_int(stmt, 9, Int32(streamInterruptCount))
                     sqlite3_bind_double(stmt, 10, effectiveUpdatedAt)
@@ -6064,8 +6073,8 @@ extension ChatStore {
             let sql = "DELETE FROM \(table) WHERE session_id = ? AND device_id = ?"
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
@@ -6073,8 +6082,8 @@ extension ChatStore {
         let sql = "DELETE FROM remote_sessions WHERE id = ? AND device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6089,7 +6098,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var sessions: [ChatSession] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 sessions.append(ChatSession(
                     id: String(cString: sqlite3_column_text(stmt, 0)),
@@ -6124,8 +6133,8 @@ extension ChatStore {
         """
         var pStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, placeholderSQL, -1, &pStmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(pStmt, 1, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(pStmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(pStmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(pStmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(pStmt, 3, createdAt.timeIntervalSince1970)
             sqlite3_bind_double(pStmt, 4, createdAt.timeIntervalSince1970)
             sqlite3_step(pStmt)
@@ -6139,11 +6148,11 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (role as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 5, (partsJson as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, (role as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 5, (partsJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 6, createdAt.timeIntervalSince1970)
             bindOptionalText(stmt, index: 7, value: tokenUsageJson)
             sqlite3_bind_int64(stmt, 8, Int64(sortOrder))
@@ -6164,7 +6173,7 @@ extension ChatStore {
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
             if try prepareInbound(sql, &stmt) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 _ = try stepInbound(stmt)
             }
             let changes = Int(sqlite3_changes(db))
@@ -6185,8 +6194,8 @@ extension ChatStore {
         let sql = "DELETE FROM remote_messages WHERE id = ? AND device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6201,8 +6210,8 @@ extension ChatStore {
         var messages: [RawMessage] = []
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
@@ -6246,10 +6255,10 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (relativePath as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, (relativePath as NSString).utf8String, -1, SQLITE_TRANSIENT)
             bindOptionalText(stmt, index: 5, value: mimeType)
             bindOptionalText(stmt, index: 6, value: originalFileName)
             bindOptionalText(stmt, index: 7, value: localCachePath)
@@ -6272,16 +6281,16 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (name as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (description as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 5, (version as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 6, (importSource as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, (description as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 5, (version as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 6, (importSource as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(stmt, 7, isEnabled ? 1 : 0)
             sqlite3_bind_double(stmt, 8, installedAt.timeIntervalSince1970)
             sqlite3_bind_double(stmt, 9, updatedAt.timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 10, (bodyText as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 10, (bodyText as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6291,8 +6300,8 @@ extension ChatStore {
         let sql = "DELETE FROM remote_skills WHERE id = ? AND device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6306,7 +6315,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var skills: [Skill] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 skills.append(Skill(
                     id: String(cString: sqlite3_column_text(stmt, 0)),
@@ -6337,10 +6346,10 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (fileName as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (content as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (fileName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, (content as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 5, updatedAt.timeIntervalSince1970)
             sqlite3_step(stmt)
         }
@@ -6351,8 +6360,8 @@ extension ChatStore {
         let sql = "DELETE FROM remote_memories WHERE id = ? AND device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6363,7 +6372,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var memories: [RemoteMemory] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
                 memories.append(RemoteMemory(
                     id: String(cString: sqlite3_column_text(stmt, 0)),
@@ -6387,8 +6396,8 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (configJson as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (configJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 3, updatedAt.timeIntervalSince1970)
             sqlite3_step(stmt)
         }
@@ -6399,7 +6408,7 @@ extension ChatStore {
         let sql = "DELETE FROM remote_provider_configs WHERE device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6410,7 +6419,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var result: (String, Date)?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 let json = String(cString: sqlite3_column_text(stmt, 0))
                 let date = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 1))
@@ -6430,8 +6439,8 @@ extension ChatStore {
         """
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (envVarsJson as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (envVarsJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 3, updatedAt.timeIntervalSince1970)
             sqlite3_step(stmt)
         }
@@ -6442,7 +6451,7 @@ extension ChatStore {
         let sql = "DELETE FROM remote_env_vars WHERE device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6453,7 +6462,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var result: (String, Date)?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (deviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 let json = String(cString: sqlite3_column_text(stmt, 0))
                 let date = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 1))
@@ -6493,7 +6502,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var order = 0
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 order = Int(sqlite3_column_int(stmt, 0))
             }
@@ -6508,7 +6517,7 @@ extension ChatStore {
         var stmt: OpaquePointer?
         var ts: Double = 0
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 ts = sqlite3_column_double(stmt, 0)
             }
@@ -6526,7 +6535,7 @@ extension ChatStore {
         var message: RawMessage?
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
                 let msgId = String(cString: sqlite3_column_text(stmt, 0))
                 let sessionId = String(cString: sqlite3_column_text(stmt, 1))

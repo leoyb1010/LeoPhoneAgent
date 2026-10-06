@@ -42,7 +42,7 @@ final class PaperclipWorkspaceStore: ObservableObject {
     private let makeConfiguration: @MainActor () -> URLSessionConfiguration
     private let defaults: UserDefaults
     private let makeCookieVault: @MainActor (PaperclipProfile) -> PaperclipCookieVault
-    private static let profilesKey = "leo.paperclip.profiles.v1"
+    private static let profilesKey = PaperclipProfile.storageKey
     private static let selectionKey = "leo.paperclip.selectedProfile.v1"
 
     init(defaults: UserDefaults = .standard,
@@ -388,8 +388,11 @@ final class PaperclipWorkspaceStore: ObservableObject {
                                                        userID: user.id, issueID: run.issueID)
                 guard let rows = try? await client.runs(reference) else { continue }
                 guard let self, stamp == self.revision else { return }
-                guard let row = rows.first(where: { $0.runId == run.runID }),
-                      let change = self.runWatch.resolve(issueID: run.issueID, runID: run.runID, status: row.status) else { continue }
+                // 运行既不在公司级 live-runs、也不在工单的运行列表里:已经结束、看不到终态记录。
+                // 按「已停止」收尾,不然灵动岛会一直停在「运行中」直到系统 8 小时上限。
+                // (取列表失败则不动,下次刷新再核。完成通知只发成功 / 失败,这里不会误报。)
+                let status = rows.first(where: { $0.runId == run.runID })?.status ?? "cancelled"
+                guard let change = self.runWatch.resolve(issueID: run.issueID, runID: run.runID, status: status) else { continue }
                 self.publish(change)
             }
         }

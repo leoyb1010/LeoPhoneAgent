@@ -29,6 +29,8 @@ extension AIChatViewModel {
         Task {
             let bootStart = CFAbsoluteTimeGetCurrent()
             do {
+                // 首次解包 rootfs 要好几秒:放到后台串行队列做,不卡主线程(以前这个 Task 继承主 actor,整段同步跑在主线程)。
+                try await Self.installRootfsOffMain()
                 try Self.bootKernelIfNeeded()
                 let bootMs = (CFAbsoluteTimeGetCurrent() - bootStart) * 1000
                 RootfsManager.shared.applyDefaultMountOverlay()
@@ -52,6 +54,18 @@ extension AIChatViewModel {
         // #31: localized. The zh text keeps "kernel" so
         // AgentActivityFailureClassifier still routes it to Retry Kernel.
         var errorDescription: String? { String(localized: "Kernel boot failed: \(Int(code))") }
+    }
+
+    nonisolated private static let rootfsInstallQueue = DispatchQueue(label: "leo.rootfs.install", qos: .userInitiated)
+
+    /// 在后台串行队列上解包 rootfs(已装好时立即返回)。多个会话同时启动也只解包一次。
+    nonisolated static func installRootfsOffMain() async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            rootfsInstallQueue.async {
+                do { try RootfsManager.shared.installIfNeeded(); cont.resume() }
+                catch { cont.resume(throwing: error) }
+            }
+        }
     }
 
     static func bootKernelIfNeeded() throws {

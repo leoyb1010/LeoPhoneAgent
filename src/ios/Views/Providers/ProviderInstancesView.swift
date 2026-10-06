@@ -72,19 +72,9 @@ struct ProviderInstancesView: View {
 
             if store.instances.isEmpty {
                 Section {
-                    VStack(spacing: 8) {
-                        Image(systemName: "key.slash")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.quaternary)
-                        Text("No providers configured")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text("Add a provider to get started.")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
+                    LeoEmptyState(systemImage: "key.slash",
+                                  title: String(localized: "No providers configured"),
+                                  message: String(localized: "Add a provider to get started."))
                 }
             }
         }

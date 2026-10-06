@@ -150,7 +150,7 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
             if (authStatus != SFSpeechRecognizerAuthorizationStatusNotDetermined) return;
 
             dispatch_semaphore_t authSem = dispatch_semaphore_create(0);
-            __block SFSpeechRecognizerAuthorizationStatus newStatus;
+            __block SFSpeechRecognizerAuthorizationStatus newStatus = SFSpeechRecognizerAuthorizationStatusNotDetermined;
             [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
                 newStatus = status;
                 dispatch_semaphore_signal(authSem);

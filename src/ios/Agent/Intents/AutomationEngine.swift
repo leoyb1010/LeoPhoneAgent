@@ -197,7 +197,9 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                 for event in eventStore.events(matching: window)
                 where !event.isAllDay && firedEventIds[(event.eventIdentifier ?? "") + event.startDate.description] == nil {
                     firedEventIds[(event.eventIdentifier ?? "") + event.startDate.description] = Date()
-                    await fire(rule, context: String(localized: "Upcoming event: \(event.title ?? "")"))
+                    // 日程标题来自日历(别人发来的邀请也能写),是不受信任的文本:
+                    // 走受限回合(不带发信、删除、远程执行类工具),全自动下也不会被它带着做危险操作。
+                    await fire(rule, context: String(localized: "Upcoming event: \(event.title ?? "")"), restricted: true)
                     break
                 }
             default: break
@@ -206,13 +208,18 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
     }
 
     /// [D4] 安静任务(插电 + 联网的 BGProcessingTask)里调用。不拉保活。
-    func fireNightChargingRules() async {
+    /// 走 ContextTurnRunner:系统收回后台时间(任务被取消)立刻停,并且计入安静任务的每日 token 预算。
+    /// 返回这些规则回合一共用掉的 token。
+    func fireNightChargingRules(tokenBudget: Int) async -> Int {
         let now = Date()
         let hour = Calendar.current.component(.hour, from: now)
-        guard hour >= 22 || hour < 6 else { return }
+        guard hour >= 22 || hour < 6 else { return 0 }
+        var used = 0
         for rule in AutomationStore.shared.rules where rule.trigger == .nightCharging && rule.canFire(now: now) {
-            await fire(rule, context: nil, keepAlive: false)
+            if Task.isCancelled || used >= tokenBudget { break }
+            used += await fire(rule, context: nil, keepAlive: false, quietBudget: tokenBudget - used)
         }
+        return used
     }
 
     /// [D1][D2] 外部情境信号命中的规则。不等回合跑完(调用方要 3 秒内返回)。
@@ -249,8 +256,10 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// `quietBudget` 非 nil:安静任务里跑,回合可被取消、超预算即停;返回用掉的 token(其余路径返回 0)。
+    @discardableResult
     private func fire(_ rule: AutomationRule, context: String?, restricted: Bool = false,
-                      locked: Bool = false, keepAlive: Bool = true) async {
+                      locked: Bool = false, keepAlive: Bool = true, quietBudget: Int? = nil) async -> Int {
         // Claim the attempt before awaiting dispatch. Failed starts keep the
         // existing 30-minute cooldown so reconciliation cannot retry endlessly.
         AutomationStore.shared.markFired(id: rule.id)
@@ -259,21 +268,31 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
         DiagnosticRing.shared.record(.contextDecision, entryId: "rule",
                                      message: "rule=\(rule.name) trigger=\(rule.trigger.title) tier=\(tier)"
                                         + (tier < rule.tier ? " 锁屏降档" : ""))
-        guard tier > AutomationRule.Tier.logOnly else { return }
+        guard tier > AutomationRule.Tier.logOnly else { return 0 }
+        // 占位 id 只撑到真正的会话开跑;以前从不清除,每触发一次规则,静音音频 / 定位保活就一直开到进程被杀。
+        let placeholder = "intent-eager:automation-\(rule.id)"
+        var armedPlaceholder = false
+        defer {
+            if armedPlaceholder { SessionActivityTracker.shared.setInactive(placeholder, haptic: false, source: "automation.cleanup") }
+        }
         if keepAlive {
             // [T-automation-keepalive] A region wake grants seconds; every other
             // background entry point arms the keep-alive first — so do we.
-            _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
-                sessionId: "intent-eager:automation-\(rule.id)", caller: "automation")
+            armedPlaceholder = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
+                sessionId: placeholder, caller: "automation").armed
         }
         logger.info("firing rule \(rule.name) tier=\(tier)")
         let speak = tier >= AutomationRule.Tier.speak
-        if restricted {
+        if restricted || quietBudget != nil {
             let body = rule.quickTaskId.flatMap { QuickTaskStore.shared.definition(for: $0)?.renderedPrompt() }
                 ?? rule.prompt ?? ""
-            guard !body.isEmpty else { return }
+            guard !body.isEmpty else { return 0 }
+            // 夜间规则是你自己写的任务:保留完整工具(和以前一样),只是改成可取消、受预算约束。
             let outcome = await ContextTurnRunner.run(
-                prompt: context.map { "\($0)\n\n\(body)" } ?? body, source: "context")
+                prompt: context.map { "\($0)\n\n\(body)" } ?? body,
+                source: quietBudget == nil ? "context" : "quiet",
+                blocksSideEffectTools: restricted,
+                shouldStop: quietBudget.map { limit in { $0 >= limit } })
             if speak {
                 ScheduledTaskRunner.notify(
                     title: outcome.started ? String(localized: "Automation finished") : String(localized: "Automation failed to start"),
@@ -281,11 +300,11 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             } else if let sid = outcome.sessionId {
                 SessionBadgeStore.shared.pushFront(.unread, for: sid)
             }
-            return
+            return outcome.tokens
         }
         if let quickTaskId = rule.quickTaskId {
             let started = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
-            guard speak || !started else { return }
+            guard speak || !started else { return 0 }
             ScheduledTaskRunner.notify(
                 title: started ? String(localized: "Automation started") : String(localized: "Automation failed to start"),
                 body: started ? rule.name : String(localized: "\(rule.name) did not start. Open Automations and check its Quick Task and provider settings."),
@@ -295,10 +314,11 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             await WatchAskRunner.run(
                 requestId: "automation-\(rule.id)",
                 prompt: fullPrompt, sessionId: nil)
-            guard speak else { return }
+            guard speak else { return 0 }
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation finished"),
                 body: rule.name, sessionId: nil, gated: false)
         }
+        return 0
     }
 }

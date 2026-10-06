@@ -1097,11 +1097,10 @@ final class VoiceInputViewModel: ObservableObject {
     private func applyLiveSnapshot(_ snap: AppleLiveTranscriber.Snapshot, token: Int) {
         guard token == liveToken, !isEditingTranscript else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        if snap.finalized != liveCaptionFinal || snap.volatile != liveCaptionVolatile {
-            lastCaptionChangeUptime = now
-        }
-        liveCaptionFinal = snap.finalized
-        liveCaptionVolatile = snap.volatile
+        // 只在真的变了才写:两个都是 @Published,而 AIChatView 持有这个 VM,
+        // 每写一次就重算一遍整个对话页。
+        if snap.finalized != liveCaptionFinal { liveCaptionFinal = snap.finalized; lastCaptionChangeUptime = now }
+        if snap.volatile != liveCaptionVolatile { liveCaptionVolatile = snap.volatile; lastCaptionChangeUptime = now }
         if !liveFirstCharLogged, !snap.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             liveFirstCharLogged = true
             VoiceLog.latency("caption.first", ms: (now - speechOnsetUptime) * 1000)
@@ -1144,7 +1143,7 @@ final class VoiceInputViewModel: ObservableObject {
         let base = String(transcript.dropLast(suffix.count))
         let replacement = base.isEmpty ? text : " " + text
         guard replacement != suffix else { return }
-        withAnimation(.easeIn(duration: 0.25)) { transcript = base + replacement }
+        withAnimation(LeoMotion.standardEase()) { transcript = base + replacement }
         onTranscript?(transcript)
     }
 

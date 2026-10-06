@@ -119,7 +119,15 @@ extension AIChatViewModel {
             }
             // Scope the kill to THIS session — see [T-bg-expiry-cross-session-kill].
             self.stopCurrentCommand(scope: .thisSessionOnly, byUser: false)
-            // Must end the background task to avoid termination.
+            // Must end the background task to avoid termination — and synchronously,
+            // inside this handler: endBackgroundProcessing() only ends it after
+            // several awaits (Live Activity, ChatStore lookup, notification), by
+            // which point the expiry deadline has passed and iOS kills the app.
+            let expiringId = self.backgroundTaskID
+            self.backgroundTaskID = .invalid
+            if expiringId != .invalid {
+                UIApplication.shared.endBackgroundTask(expiringId)
+            }
             self.endBackgroundProcessing()
         }
         logger.info("[BKA][BGTask] started id=\(self.backgroundTaskID.rawValue) sessions=\(sessions)")
@@ -609,6 +617,11 @@ extension AIChatViewModel {
 
         // Suspend until the user finishes or timeout fires
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            // 两个并发的 browser_use 同时进入接管:直接覆盖会让前一个 continuation 永远等不到恢复
+            // (停止和 5 分钟超时都只认最新那个),整个回合与它占的并发名额一起卡死。先放行前一个。
+            if let previous = self.midActionTakeoverContinuation {
+                previous.resume()
+            }
             self.midActionTakeoverContinuation = continuation
         }
 

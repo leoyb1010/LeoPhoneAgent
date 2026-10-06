@@ -1758,15 +1758,19 @@ private let logger = AppLogger(category: "ModelUseOffload")
     /// Read a file given a Linux-side path. Tries the iSH rootfs data
     /// directory first (where bind-mounted /var/minis/* and /tmp/* land
     /// for direct host access), then the literal host path.
+    /// 路径里带 ".." 一律不读(能爬出 rootfs、读到别的会话或 App 私有文件再发给模型);
+    /// 字面宿主路径也只认 rootfs 数据目录和会话目录(MinisChat)里面的。
     private static func readImageFile(linuxPath: String) -> Data? {
+        guard !linuxPath.split(separator: "/").contains("..") else { return nil }
+        let dataRoot = RootfsManager.shared.dataPath.standardizedFileURL.path
         let hostPath = RootfsManager.shared.dataPath.appendingPathComponent(linuxPath).path
         if let data = FileManager.default.contents(atPath: hostPath) {
             return data
         }
-        if let data = FileManager.default.contents(atPath: linuxPath) {
-            return data
-        }
-        return nil
+        let literal = URL(fileURLWithPath: linuxPath).standardizedFileURL.path
+        let sessionRoot = AIChatViewModel.minisPersistentBase.standardizedFileURL.path
+        guard [dataRoot, sessionRoot].contains(where: { literal.hasPrefix($0 + "/") }) else { return nil }
+        return FileManager.default.contents(atPath: literal)
     }
 
     /// Infer image MIME from a path/URL's extension. Defaults to PNG

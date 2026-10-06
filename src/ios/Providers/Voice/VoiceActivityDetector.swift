@@ -157,7 +157,14 @@ final class VoiceActivityDetector: NSObject {
     func start() throws {
         guard !isRunning else { return }
         try configureSession()
-        try setupEngineAndVAD()
+        do {
+            try setupEngineAndVAD()
+        } catch {
+            // 已经占了 .capture、可能装了一半的 tap:不撤掉的话,朗读一直被压着、静音保活一直停着,
+            // 下次 start() 再装 tap 也会失败,麦克风要等面板重建才恢复。
+            tearDown()
+            throw error
+        }
         // `audioEngine.start()` can throw an Objective-C NSException (not a Swift
         // Error) when the engine/route is in a bad state — Swift `try` can't
         // catch it and it crashes via SIGABRT. Wrap in noff_try_objc.
@@ -167,6 +174,7 @@ final class VoiceActivityDetector: NSObject {
         }
         if let engineError {
             VoiceLog.log("audioEngine start failed: \(engineError.localizedDescription)")
+            tearDown()
             throw engineError
         }
         guard started else {
@@ -494,6 +502,8 @@ final class VoiceActivityDetector: NSObject {
 
         // 512-frame buffer (~10 ms @ 48 kHz) matches the VAD frame size.
         // installTap can also throw an ObjC NSException — wrap it.
+        // A tap left behind by an earlier failed start makes installTap raise again.
+        _ = noff_try_objc { inputNode.removeTap(onBus: 0) }
         let installed = noff_try_objc {
             inputNode.installTap(onBus: 0, bufferSize: 512, format: inputFormat) { [weak self] buffer, _ in
                 self?.processAudioBuffer(buffer)

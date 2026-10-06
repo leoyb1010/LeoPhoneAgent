@@ -202,7 +202,12 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         // A dedicated synthesizer per write() call — the shared `synthesizer` is
         // used for live speak(); mixing write() onto it can drop callbacks.
         let writer = AVSpeechSynthesizer()
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+        // 只等「结束」那个零长度缓冲是不够的:有的文本(只有符号、表情)系统根本不发它,
+        // 以前这里就永久挂住,整条朗读队列跟着卡死。按文本长度给一个上限,取消时停掉合成。
+        let lifetime = SpeechRequestLifetime<Data>()
+        let timeout = SystemSpeechPolicy.synthesisTimeout(characters: request.input.count)
+        return try await lifetime.value(timeoutSeconds: timeout) { lifetime in
+            lifetime.onFinish { writer.stopSpeaking(at: .immediate) }
             // Collect the raw synthesizer buffers, then serialize them to ONE WAV
             // (a per-buffer header produced several concatenated WAVs → AVAudioPlayer
             // played almost nothing — the old "Quick Test made no sound" bug).
@@ -223,11 +228,7 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
                     let collected = buffers
                     lock.unlock()
                     _ = writer   // keep the writer alive until the end sentinel
-                    do {
-                        continuation.resume(returning: try Self.encodeWAV(from: collected))
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
+                    lifetime.finish(Result { try Self.encodeWAV(from: collected) })
                     return
                 }
                 buffers.append(pcmBuffer)

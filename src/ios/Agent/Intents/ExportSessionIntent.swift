@@ -58,7 +58,9 @@ struct ExportSessionIntent: AppIntent {
             file = IntentFile(data: Data(markdown.utf8), filename: "session-\(stamp).md",
                               type: UTType(filenameExtension: "md") ?? .plainText)
         case .plainText:
-            file = IntentFile(data: Data(WatchTextSanitizer.plain(markdown).utf8), filename: "session-\(stamp).txt",
+            // 长会话去 Markdown 很慢(App 内导出同样放在后台线程做),不占主线程。
+            let plain = await Task.detached(priority: .userInitiated) { WatchTextSanitizer.plain(markdown) }.value
+            file = IntentFile(data: Data(plain.utf8), filename: "session-\(stamp).txt",
                               type: .plainText)
         }
         return .result(value: file)

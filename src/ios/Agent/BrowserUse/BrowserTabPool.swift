@@ -720,7 +720,9 @@ final class BrowserTabPool: ObservableObject {
         // 一律安全拒绝而不是挂死。
         if let credCategory = Self.sensitiveCategory(for: input.action) {
             let host = gateHost(for: input.tabId)
-            let outcome = await SensitiveToolGate.shared.authorize(credCategory, host: host)
+            // 带上本池的会话:「本次会话允许」只对这个会话生效,删会话时也能一并清掉
+            // (不带时授权键是 "|cookie|host",对所有会话、整个进程都有效)。
+            let outcome = await SensitiveToolGate.shared.authorize(credCategory, host: host, sessionId: sessionId)
             if !outcome.isAllowed {
                 // Cookie 读写属于后台硬拒类别,拒绝原因由闸自己回,不再靠
                 // "当前是不是前台"去猜(切后台的一瞬间两边判断会打架)。

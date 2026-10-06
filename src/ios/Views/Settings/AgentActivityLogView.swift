@@ -78,19 +78,9 @@ struct AgentActivityLogView: View {
             }
 
             if events.isEmpty {
-                VStack(spacing: LeoTheme.Spacing.xs) {
-                    Image(systemName: "waveform.path.ecg")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                    Text("No Activity Yet")
-                        .font(.headline)
-                    Text("New agent runs will appear here.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, LeoTheme.Spacing.xl)
-                .listRowBackground(Color.clear)
+                LeoEmptyState(systemImage: "waveform.path.ecg",
+                              title: String(localized: "No Activity Yet"),
+                              message: String(localized: "New agent runs will appear here."))
             } else {
                 Section("Recent Events") {
                     ForEach(events) { event in

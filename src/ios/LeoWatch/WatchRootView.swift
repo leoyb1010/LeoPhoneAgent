@@ -385,7 +385,8 @@ private struct ReplySheet: View {
                             }
                             .accessibilityLabel("追问")
                         }
-                        if let sessionId = client.history.first?.sessionId, !sessionId.isEmpty {
+                        // 失败的回复不进历史:那时 history.first 是上一个对话,不能拿它去「在 iPhone 上继续」。
+                        if !client.lastReplyFailed, let sessionId = client.history.first?.sessionId, !sessionId.isEmpty {
                             ContinueOnPhoneButton(sessionId: sessionId)
                         }
                     } else if isWaiting {

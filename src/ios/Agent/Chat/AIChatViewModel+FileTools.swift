@@ -108,6 +108,11 @@ extension AIChatViewModel {
     /// to get the actual host URL, avoiding races when mounts switch between concurrent sessions.
     /// Falls back to resolveHostPath for non-/var/minis/ paths (e.g. /tmp, /root).
     func resolvePathForDirectRead(_ linuxPath: String) async -> URL? {
+        // 挂载表与各回退都是字符串拼接,".." 会逃出会话沙箱(读写 App 私有文件);一律拒绝。
+        guard !MinisURLPathDecoding.hasParentTraversal(linuxPath) else {
+            logger.notice("📂[RESOLVE] rejected path with '..'")
+            return nil
+        }
         if linuxPath.hasPrefix("/var/minis/") || linuxPath == "/var/minis" {
             if let resolved = await ISHExecutionCoordinator.shared.hostURL(for: linuxPath) {
                 let exists = FileManager.default.fileExists(atPath: resolved.path)
@@ -199,6 +204,8 @@ extension AIChatViewModel {
         guard sqlite3_open_v2(metaDBPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
               let db else { return }
         defer { sqlite3_close(db) }
+        // iSH 的 fakefs 自己也持有这个库的连接:不设等待,任何重叠都会立刻 BUSY,元数据写入被悄悄跳过。
+        sqlite3_busy_timeout(db, 5_000)
 
         // Check if path already exists
         var checkStmt: OpaquePointer?

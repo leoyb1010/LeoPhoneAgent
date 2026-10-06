@@ -451,23 +451,12 @@ enum RequestBodyPatcher {
 
     // MARK: - Structured tool result images
 
-    private static let imageLock = NSLock()
-    private static var _toolResultImages: [String: (data: Data, mimeType: String)] = [:]
-
-    /// Set pending tool result images (called from AnthropicAgentProvider before streaming).
-    static func setToolResultImages(_ images: [String: (data: Data, mimeType: String)]) {
-        imageLock.lock()
-        _toolResultImages = images
-        imageLock.unlock()
-    }
-
-    /// Atomically take and clear the pending images.
-    private static func takeToolResultImages() -> [String: (data: Data, mimeType: String)] {
-        imageLock.lock()
-        defer { imageLock.unlock() }
-        let images = _toolResultImages
-        _toolResultImages.removeAll()
-        return images
+    // 每个请求的附加设置见 AnthropicRequestSettingsRegistry(按请求登记,经 stop sequence 标记带进请求体)。
+    static func extractSettings(from request: NSMutableURLRequest) -> AnthropicRequestSettings? {
+        guard let body = request.httpBody,
+              let (settings, newBody) = AnthropicRequestSettingsRegistry.extract(fromBody: body) else { return nil }
+        request.httpBody = newBody
+        return settings
     }
 
     /// Rewrites tool_result blocks that have associated images (looked up by tool_use_id)
@@ -475,9 +464,9 @@ enum RequestBodyPatcher {
     ///
     /// SwiftAnthropic encodes `.toolResult(id, content)` as a string, but the API
     /// accepts an array of content blocks for vision. This replaces the string content
-    /// using structured image data passed via `setToolResultImages()`.
-    static func patchToolResultsWithImages(into request: NSMutableURLRequest) {
-        let images = takeToolResultImages()
+    /// using structured image data registered with the request (`register(_:)`).
+    static func patchToolResultsWithImages(into request: NSMutableURLRequest, settings: AnthropicRequestSettings?) {
+        let images = settings?.toolResultImages ?? [:]
         guard !images.isEmpty else { return }
 
         guard let body = request.httpBody,
@@ -546,99 +535,7 @@ enum RequestBodyPatcher {
 
     // MARK: - Thinking config
 
-    private static let thinkingLock = NSLock()
-    private static var _thinkingBudget: Int = 0
-    private static var _thinkingEffort: String? = nil
-    private static var _thinkingDisabled: Bool = false
-
-    /// Set thinking budget tokens for the next request (0 = disabled).
-    /// Used for legacy Claude models (<= 4.5) that take `thinking.type="enabled"`
-    /// + `budget_tokens`.
-    static func setThinkingBudget(_ budget: Int) {
-        thinkingLock.lock()
-        _thinkingBudget = budget
-        thinkingLock.unlock()
-    }
-
-    /// Set adaptive thinking effort for the next request (nil = unset).
-    /// Used for Claude 4.6+ which take `thinking.type="adaptive"` +
-    /// `output_config.effort = low|medium|high|xhigh|max` and ignore the
-    /// older budget-based form.
-    static func setThinkingEffort(_ effort: String?) {
-        thinkingLock.lock()
-        _thinkingEffort = effort
-        thinkingLock.unlock()
-    }
-
-    /// Explicitly disable thinking for the next request. Needed for adaptive
-    /// models (Claude 4.6+/5) whose SERVER default is thinking-on when the
-    /// request has no thinking field — omission is not "off" there.
-    static func setThinkingDisabled() {
-        thinkingLock.lock()
-        _thinkingDisabled = true
-        thinkingLock.unlock()
-    }
-
-    private static func takeThinkingDisabled() -> Bool {
-        thinkingLock.lock()
-        defer { thinkingLock.unlock() }
-        let d = _thinkingDisabled
-        _thinkingDisabled = false
-        return d
-    }
-
-    private static func takeThinkingBudget() -> Int {
-        thinkingLock.lock()
-        defer { thinkingLock.unlock() }
-        let b = _thinkingBudget
-        _thinkingBudget = 0
-        return b
-    }
-
-    private static func takeThinkingEffort() -> String? {
-        thinkingLock.lock()
-        defer { thinkingLock.unlock() }
-        let e = _thinkingEffort
-        _thinkingEffort = nil
-        return e
-    }
-
     // MARK: - Compat-proxy reasoning echo
-
-    private static let reasoningEchoLock = NSLock()
-    /// One entry per assistant message in chronological order. Non-nil values
-    /// are echoed back as a synthesized `{"type":"thinking","thinking":...}`
-    /// content block at the head of the corresponding assistant message.
-    /// Drained by the next request (single-shot like the other patcher state).
-    private static var _reasoningHistory: [String?]? = nil
-    /// When true, assistant turns with nil/empty reasoning still get an empty
-    /// `{type:"thinking", thinking:""}` block prepended. Required by
-    /// compat-proxies (e.g. DeepSeek V4) that demand the field be present on
-    /// every assistant turn once any thinking has occurred — interrupted
-    /// streams or cross-provider sessions otherwise produce 400s.
-    private static var _reasoningInjectPlaceholder: Bool = false
-
-    /// Stash the captured `reasoningContent` for each assistant turn (in
-    /// order). Called by AnthropicAgentProvider just before kicking off the
-    /// SDK request when the configured endpoint isn't the official one and
-    /// thinking is enabled — see AnthropicProvider.isOfficialAnthropicEndpoint
-    /// for why this is gated.
-    static func setReasoningHistory(_ history: [String?]?, injectPlaceholder: Bool = false) {
-        reasoningEchoLock.lock()
-        _reasoningHistory = history
-        _reasoningInjectPlaceholder = injectPlaceholder
-        reasoningEchoLock.unlock()
-    }
-
-    private static func takeReasoningHistory() -> (history: [String?]?, injectPlaceholder: Bool) {
-        reasoningEchoLock.lock()
-        defer { reasoningEchoLock.unlock() }
-        let h = _reasoningHistory
-        let p = _reasoningInjectPlaceholder
-        _reasoningHistory = nil
-        _reasoningInjectPlaceholder = false
-        return (h, p)
-    }
 
     /// Anthropic-compat proxies (DeepSeek's deepseek-v4-pro etc.) reject
     /// history requests where a previous assistant turn produced a thinking
@@ -648,8 +545,9 @@ enum RequestBodyPatcher {
     /// Synthesizes a `{type:"thinking", thinking:"..."}` block at the head
     /// of each assistant message that had captured reasoning content,
     /// satisfying the compat-proxy requirement without forging signatures.
-    static func injectThinkingBlocksForCompatProxy(into request: NSMutableURLRequest) {
-        let (history, injectPlaceholder) = takeReasoningHistory()
+    static func injectThinkingBlocksForCompatProxy(into request: NSMutableURLRequest, settings: AnthropicRequestSettings?) {
+        let history = settings?.reasoningHistory
+        let injectPlaceholder = settings?.reasoningInjectPlaceholder ?? false
         guard history != nil || injectPlaceholder else { return }
         let h = history ?? []
 
@@ -714,10 +612,10 @@ enum RequestBodyPatcher {
     ///
     /// In both cases temperature handling follows AnthropicProvider.modelRejectsTemperature
     /// — Claude 4.6+ rejects temperature entirely, so we drop it.
-    static func injectThinkingConfig(into request: NSMutableURLRequest) {
-        let budget = takeThinkingBudget()
-        let effort = takeThinkingEffort()
-        let disabled = takeThinkingDisabled()
+    static func injectThinkingConfig(into request: NSMutableURLRequest, settings: AnthropicRequestSettings?) {
+        let budget = settings?.thinkingBudget ?? 0
+        let effort = settings?.thinkingEffort
+        let disabled = settings?.thinkingDisabled ?? false
         // Nothing to do if the caller didn't set any thinking intent for this request.
         guard budget > 0 || effort != nil || disabled else { return }
 
@@ -876,13 +774,14 @@ private final class EagerStreamingURLProtocol: URLProtocol, URLSessionDataDelega
         let mutable = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: "EagerHandled", in: mutable)
         RequestBodyPatcher.materializeBodyStream(mutable)
+        let requestSettings = RequestBodyPatcher.extractSettings(from: mutable)
         RequestBodyPatcher.normalizeKeyOrder(in: mutable)
         RequestBodyPatcher.injectToolsCacheControl(into: mutable)
         RequestBodyPatcher.injectEagerInputStreaming(into: mutable)
-        RequestBodyPatcher.patchToolResultsWithImages(into: mutable)
+        RequestBodyPatcher.patchToolResultsWithImages(into: mutable, settings: requestSettings)
         RequestBodyPatcher.injectCacheTTL(into: mutable)
-        RequestBodyPatcher.injectThinkingConfig(into: mutable)
-        RequestBodyPatcher.injectThinkingBlocksForCompatProxy(into: mutable)
+        RequestBodyPatcher.injectThinkingConfig(into: mutable, settings: requestSettings)
+        RequestBodyPatcher.injectThinkingBlocksForCompatProxy(into: mutable, settings: requestSettings)
 
         // Remove stale Content-Length — URLSession will recalculate from httpBody
         mutable.setValue(nil, forHTTPHeaderField: "Content-Length")
@@ -1070,13 +969,14 @@ private final class DualAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
 
         // Apply same patching as EagerStreamingURLProtocol
         RequestBodyPatcher.materializeBodyStream(mutable)
+        let requestSettings = RequestBodyPatcher.extractSettings(from: mutable)
         RequestBodyPatcher.normalizeKeyOrder(in: mutable)
         RequestBodyPatcher.injectToolsCacheControl(into: mutable)
         RequestBodyPatcher.injectEagerInputStreaming(into: mutable)
-        RequestBodyPatcher.patchToolResultsWithImages(into: mutable)
+        RequestBodyPatcher.patchToolResultsWithImages(into: mutable, settings: requestSettings)
         RequestBodyPatcher.injectCacheTTL(into: mutable)
-        RequestBodyPatcher.injectThinkingConfig(into: mutable)
-        RequestBodyPatcher.injectThinkingBlocksForCompatProxy(into: mutable)
+        RequestBodyPatcher.injectThinkingConfig(into: mutable, settings: requestSettings)
+        RequestBodyPatcher.injectThinkingBlocksForCompatProxy(into: mutable, settings: requestSettings)
         mutable.setValue(nil, forHTTPHeaderField: "Content-Length")
 
         #if DEBUG

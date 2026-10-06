@@ -67,6 +67,20 @@ int main(void) {
     CHECK(register_production("apple-contacts") == 0 && installed_count == 1,
           "identical registration is idempotent");
     CHECK(register_production("apple-registration-failure") == -1, "backend registration failure propagates");
+    // Paths with a ".." component escape the rootfs/session folders after the
+    // kernel's plain host-path concatenation: rejected before authorization.
+    decision = 0;
+    char *escape[] = {"apple-contacts", "--image", "/var/minis/workspace/../../../Library/x.db", NULL};
+    authorized_command[0] = 0;
+    CHECK(installed[0](3, escape, -1, -1, -1) == 2 && calls == 1 && authorized_command[0] == 0,
+          "absolute '..' path never reaches authorization or the handler");
+    char *relative[] = {"apple-contacts", "../../Library/x.db", NULL};
+    CHECK(installed[0](2, relative, -1, -1, -1) == 2 && calls == 1, "relative '..' path rejected");
+    char *benign[] = {"apple-contacts", "/var/minis/workspace/a..b/c", "what does .. mean", NULL};
+    CHECK(installed[0](3, benign, -1, -1, -1) == 17 && calls == 2, "names containing dots still run");
+    CHECK(noff_arg_has_parent_traversal("/a/..") && !noff_arg_has_parent_traversal("/a/.../b"),
+          "component-exact traversal detection");
+    decision = 3;
     char names[NOFF_DISPATCH_CAPACITY][48];
     for (int i = 1; i < NOFF_DISPATCH_CAPACITY; i++) {
         snprintf(names[i], sizeof(names[i]), "apple-test-%d", i);

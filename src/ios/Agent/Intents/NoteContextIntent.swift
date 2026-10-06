@@ -61,6 +61,10 @@ struct NoteContextIntent: AppIntent {
         let name = (signal.signalName ?? customName ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return .result() }
+        // 开始 / 结束专注:记下起止时间,结束时的专注收尾卡片要用。
+        if signal == .focusStart || signal == .focusEnd {
+            LeoFocusState.recordShortcut(start: signal == .focusStart)
+        }
         ContextSignalCenter.shared.enqueue(name, source: "intent")
         // 决策和规则匹配通常不到 1 秒;最多等 2.5 秒就返回,剩下的留在队列里,下次进前台接着处理。
         let work = Task { await ContextSignalCenter.shared.processPending() }

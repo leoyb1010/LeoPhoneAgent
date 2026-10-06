@@ -70,9 +70,6 @@ struct SettingsHomeView: View {
     static var groups: [SettingsGroup] {
         [
             SettingsGroup(id: "device", title: "我的设备", entries: [
-                SettingsEntry("执行后端", keywords: "paperclip 服务器 本机 工作区 登录 组织",
-                              icon: "server.rack", color: .blue,
-                              hint: "iOS 可选本机或独立 Paperclip 服务器") { PaperclipBackendSettingsView() },
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
                               icon: "desktopcomputer", color: .teal,
                               hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
@@ -89,12 +86,20 @@ struct SettingsHomeView: View {
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
                               icon: "server.rack", color: .gray,
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
+                // [T-local-first] 本机是默认;Paperclip 是可选的第二工作区,放在本组最后。
+                SettingsEntry("服务器任务", keywords: "paperclip 服务器 本机 工作区 执行后端 登录 组织 工单",
+                              icon: "network", color: .blue,
+                              hint: "可选：连接你自己的 Paperclip 服务器，默认都在本机") { PaperclipBackendSettingsView() },
             ]),
             SettingsGroup(id: "agent", title: "Agent", entries: [
                 SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
                               icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
+                // 1.57 的实时出字、自动改字、热词、语音度量都在这一页;以前只能从 AI 服务商里翻到。
+                SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
+                              icon: "waveform", color: .purple,
+                              hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
                 SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact",
                               icon: "brain.head.profile", color: .indigo) { ThinkingAndModelSlotsView() },
                 SettingsEntry("Jev 快速判断", keywords: "jev typesafe system one 快速判断 分类 打分",
@@ -232,18 +237,8 @@ struct SettingsHomeView: View {
         let hits = groups.flatMap(\.entries).filter(matches)
         return VStack(spacing: 0) {
             if hits.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.title2)
-                        .foregroundStyle(.tertiary)
-                    Text("没有匹配的设置项")
-                        .font(.subheadline.weight(.semibold))
-                    Text("试试「模型」、「Mac」、「藏宝阁」或「权限」")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
+                LeoEmptyState(systemImage: "magnifyingglass", title: String(localized: "没有匹配的设置项"),
+                              message: String(localized: "试试「模型」、「Mac」、「藏宝阁」或「权限」"))
             } else {
                 ForEach(Array(hits.enumerated()), id: \.element.id) { index, entry in
                     SettingsRow(entry: entry)

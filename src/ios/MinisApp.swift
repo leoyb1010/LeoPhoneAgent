@@ -112,6 +112,9 @@ struct MinisApp: App {
         // [T-voice-input-mode-preference-ios] Pin the lazy static to the real
         // launch instant.
         _ = Self.processLaunchedAt
+        // [T-local-first] 每次冷启动都从本机开始;上次停在服务器任务页(或点过它的通知、灵动岛、
+        // Spotlight)不该让下次打开还落在那里。深链/通知在 init 之后才处理,照常切过去。
+        IOSExecutionBackend.selectLocal()
         // [T-perf-1.39] 度量最先起:冷启动计时、回前台首帧、主线程卡顿计数。
         LeoPerf.start()
         FullAutoLog.install()

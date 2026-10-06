@@ -25,9 +25,9 @@ if [ "$#" -gt 0 ]; then
 else
   # 按 UDID 格式提取(新机型是 8-16 位:00008160-00084DCE3C200036;旧的是 8-4-4-4-12):设备名里含空格(如 "iPad Pro 13-inch"),按列取字段会
   # 抓到型号词而不是 UDID。另外 "unavailable" 里含 "available" 子串 ——
-  # 不先排掉,离线的 Apple Watch 会被当成可装机目标。
+  # 不先排掉,离线的 Apple Watch 会被当成可装机目标。在线状态可能显示为 available (paired) 或 connected,两种都算。
   udids=$(xcrun devicectl list devices 2>/dev/null \
-    | grep -i physical | grep -vi unavailable | grep -i 'available' \
+    | grep -i physical | grep -vi unavailable | grep -iE 'available|connected' \
     | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})')
 fi
 [ -n "$udids" ] || { echo "没有在线真机" >&2; exit 1; }
@@ -53,7 +53,7 @@ codesign --verify --deep --strict "$app" || exit 1
 # 在线的配对手表总是一起装;它们不在命令行参数里也会补上。
 watch_app=$(ls -d "$app"/Watch/*.app 2>/dev/null | head -1 || true)
 devices=$(xcrun devicectl list devices 2>/dev/null || true)
-watch_udids=$(printf '%s\n' "$devices" | grep -i physical | grep -vi unavailable | grep -i 'available' | grep -i 'Watch' \
+watch_udids=$(printf '%s\n' "$devices" | grep -i physical | grep -vi unavailable | grep -iE 'available|connected' | grep -i 'Watch' \
   | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})' || true)
 if [ -n "$watch_app" ]; then
   for w in $watch_udids; do
