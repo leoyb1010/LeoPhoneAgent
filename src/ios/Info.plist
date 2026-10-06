@@ -5,6 +5,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.leoyuan.leophoneagent.agent.*</string>
+		<string>com.leoyuan.leophoneagent.quiet</string>
 	</array>
 	<key>LeoRelayApiRoot</key>
 	<string>$(LEO_RELAY_API_ROOT)</string>

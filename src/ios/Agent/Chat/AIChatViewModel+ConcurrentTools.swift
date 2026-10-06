@@ -218,6 +218,28 @@ extension AIChatViewModel {
             return "{}"
         }()
 
+        // [D2][D4] 情境信号 / 安静任务的回合没有这些工具;模型硬调也挡回去(降为第 1 档等用户解锁)。
+        if blocksSideEffectTools, ContextToolPolicy.blockedTools.contains(tu.name) {
+            let modelMessage = "This turn was started by a context signal or a quiet background task: sending, deleting and remote execution are not available. Write what still needs doing in your reply; the user will continue after unlocking."
+            let uiMessage = "情境回合不执行此类工具"
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = uiMessage
+                messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: uiMessage)
+            }
+            let blockedSnap = ToolSnapshot(type: .text, text: modelMessage, mediaRef: nil, duration: nil)
+            let item = ToolSnapshotItem(
+                id: tu.id, toolName: tu.name, snapshot: blockedSnap,
+                mediaResolver: await ChatStore.shared.mediaFileURLResolver()
+            )
+            return ToolExecOutcome(
+                toolId: tu.id, toolName: tu.name,
+                resultPart: .toolResult(id: tu.id, name: tu.name, content: modelMessage, isError: true),
+                snapshotEntry: (toolName: tu.name, snapshot: blockedSnap),
+                snapshotItem: item,
+                cancelled: false
+            )
+        }
+
         if let category = SensitiveToolGate.Category.forToolName(tu.name) {
             let host = SensitiveToolGate.Category.hostHint(tool: tu.name, args: toolArgs)
             // [T-gate-scope] 展示用的 host 和授权用的 scope 分开传:本机 shell /

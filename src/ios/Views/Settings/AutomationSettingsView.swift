@@ -16,6 +16,10 @@ struct AutomationSettingsView: View {
     @State private var showEditor = false
     @State private var editingRule: AutomationRule?
     @State private var pendingDeleteIds: [String]?
+    // [D4][D6] 情境层设置
+    @AppStorage(QuietTaskBudget.enabledKey) private var quietEnabled = true
+    @AppStorage(QuietTaskBudget.limitKey) private var quietBudget = QuietTaskBudget.defaultLimit
+    @AppStorage(ContextKeys.proactiveSpeechEnabled) private var proactiveSpeech = false
 
     var body: some View {
         List {
@@ -31,6 +35,19 @@ struct AutomationSettingsView: View {
                 }
             } footer: {
                 Text("Location rules wake the agent when you arrive or leave (may take a few minutes — iOS decides). Event and charging rules fire when the app reconciles. A rule auto-pauses once its 👎 outnumber its 👍 by three. Time-of-day rules live in Scheduled Tasks.")
+            }
+            Section {
+                Toggle("安静任务", isOn: $quietEnabled)
+                    .onChange(of: quietEnabled) { QuietTaskScheduler.shared.schedule() }
+                Stepper(value: $quietBudget, in: 5_000...200_000, step: 5_000) {
+                    LabeledContent("每日 token 预算", value: "\(quietBudget)")
+                }
+                LabeledContent("今天已用", value: "\(QuietTaskScheduler.shared.budget.used)")
+                Toggle("到家时主动提醒", isOn: $proactiveSpeech)
+            } header: {
+                Text("情境层")
+            } footer: {
+                Text("安静任务在插电、联网、空闲时(通常夜里充电)由系统安排:「夜间充电」规则、过去 24 小时的对话摘要、每周一次记忆整理。预算用完即停,结果放进会话列表的「未分组」,不推送。低电量模式不跑。「到家时主动提醒」每天最多 3 次,只在本机模型可用、刚中断的任务值得提醒时出声;建议先看两周决策日志再打开。")
             }
         }
         .navigationTitle(Text("Automations"))
@@ -119,6 +136,18 @@ private struct AutomationEditSheet: View {
                         Text("Leaving current location").tag(TriggerKind.leaveHere)
                         Text("Before calendar events").tag(TriggerKind.beforeEvent)
                         Text("Charging at night").tag(TriggerKind.nightCharging)
+                        Text("情境信号").tag(TriggerKind.signal)
+                    }
+                    if model.triggerKind == .signal {
+                        Picker("信号", selection: $model.signalName) {
+                            ForEach(AutomationEditModel.presetSignals, id: \.self) { Text($0).tag($0) }
+                            Text("自定义").tag("")
+                        }
+                        if model.signalName.isEmpty || !AutomationEditModel.presetSignals.contains(model.signalName) {
+                            TextField("自定义信号名", text: $model.customSignal)
+                        }
+                        Text("由快捷指令「记下此刻」或专注模式过滤条件送进来。情境触发的回合不发信、不删除、不远程执行;锁屏时只准备不通知。")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     if model.triggerKind == .arriveHere || model.triggerKind == .leaveHere {
                         LabeledContent(String(localized: "Place name")) {
@@ -154,6 +183,15 @@ private struct AutomationEditSheet: View {
                                 .font(.caption)
                         }
                     }
+                }
+                Section {
+                    Picker("档位", selection: $model.tier) {
+                        Text("只记录").tag(AutomationRule.Tier.logOnly)
+                        Text("准备,不通知").tag(AutomationRule.Tier.prepare)
+                        Text("跑完通知").tag(AutomationRule.Tier.speak)
+                    }
+                } footer: {
+                    Text("只记录:写进诊断日志,不执行。准备:执行,结果放进会话列表,不打扰。")
                 }
                 Section(String(localized: "Action")) {
                     Picker(String(localized: "Run"), selection: $model.useQuickTask) {
@@ -191,7 +229,7 @@ private struct AutomationEditSheet: View {
     }
 }
 
-private enum TriggerKind: Hashable { case arriveHere, leaveHere, beforeEvent, nightCharging }
+private enum TriggerKind: Hashable { case arriveHere, leaveHere, beforeEvent, nightCharging, signal }
 
 @MainActor
 private final class AutomationEditModel: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -205,6 +243,16 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
     @Published var capturedLocation: CLLocation?
     @Published var calendarAuthorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
     @Published var locationFailed = false
+    @Published var signalName = ContextSignalName.home
+    @Published var customSignal = ""
+    @Published var tier = AutomationRule.Tier.speak
+
+    static let presetSignals = [ContextSignalName.home, ContextSignalName.leave, ContextSignalName.car,
+                                ContextSignalName.focusStart, ContextSignalName.focusEnd]
+    private var resolvedSignal: String {
+        let preset = Self.presetSignals.contains(signalName) ? signalName : ""
+        return (preset.isEmpty ? customSignal : preset).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private let existing: AutomationRule?
     var isEditing: Bool { existing != nil }
@@ -215,6 +263,7 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
         super.init()
         guard let existing else { return }
         name = existing.name
+        tier = existing.tier
         switch existing.trigger {
         case .arriveLocation(let lat, let lon, _, let place):
             triggerKind = .arriveHere
@@ -229,6 +278,9 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
             minutesBefore = minutes
         case .nightCharging:
             triggerKind = .nightCharging
+        case .signal(let name):
+            triggerKind = .signal
+            if Self.presetSignals.contains(name) { signalName = name } else { signalName = ""; customSignal = name }
         }
         if let quickTaskId = existing.quickTaskId {
             useQuickTask = true
@@ -258,6 +310,7 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
         if triggerKind == .arriveHere || triggerKind == .leaveHere {
             guard capturedLocation != nil, !placeName.isEmpty else { return false }
         }
+        if triggerKind == .signal, resolvedSignal.isEmpty { return false }
         return useQuickTask ? !quickTaskId.isEmpty : !prompt.isEmpty
     }
 
@@ -290,12 +343,15 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
             trigger = .beforeEvent(minutes: minutesBefore)
         case .nightCharging:
             trigger = .nightCharging
+        case .signal:
+            trigger = .signal(name: resolvedSignal)
         }
         var rule = existing ?? AutomationRule(name: "", trigger: trigger)
         rule.name = name.trimmingCharacters(in: .whitespaces)
         rule.trigger = trigger
         rule.quickTaskId = useQuickTask ? quickTaskId : nil
         rule.prompt = useQuickTask ? nil : prompt
+        rule.tier = tier
         AutomationStore.shared.upsert(rule)
     }
 

@@ -25,42 +25,7 @@ import UIKit
 
 private let logger = AppLogger(category: "Automation")
 
-struct AutomationRule: Codable, Identifiable, Hashable {
-    enum Trigger: Codable, Hashable {
-        case arriveLocation(lat: Double, lon: Double, radius: Double, name: String)
-        case leaveLocation(lat: Double, lon: Double, radius: Double, name: String)
-        case beforeEvent(minutes: Int)
-        case nightCharging
-
-        var title: String {
-            switch self {
-            case .arriveLocation(_, _, _, let name): return String(localized: "Arriving at \(name)")
-            case .leaveLocation(_, _, _, let name): return String(localized: "Leaving \(name)")
-            case .beforeEvent(let minutes): return String(localized: "\(minutes) min before events")
-            case .nightCharging: return String(localized: "Charging at night")
-            }
-        }
-    }
-
-    var id: String = UUID().uuidString.lowercased()
-    var name: String
-    var trigger: Trigger
-    /// Quick task to run; mutually exclusive with `prompt`.
-    var quickTaskId: String?
-    /// Free-form agent prompt (used when quickTaskId is nil).
-    var prompt: String?
-    var isEnabled: Bool = true
-    /// 👍/👎 confidence; at −3 the rule auto-disables.
-    var score: Int = 0
-    var lastFiredAt: Date?
-
-    /// Debounce: one fire per rule per 30 minutes.
-    func canFire(now: Date) -> Bool {
-        guard isEnabled else { return false }
-        if let last = lastFiredAt, now.timeIntervalSince(last) < 30 * 60 { return false }
-        return true
-    }
-}
+// AutomationRule lives in AutomationRule.swift (pure, compiled into MinisLogicTests).
 
 @MainActor
 final class AutomationStore: ObservableObject {
@@ -161,6 +126,8 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
 
     /// Call at launch + whenever rules change: (re)register region monitors.
     func reloadMonitoring() {
+        // [D4] 「夜间充电」规则由安静任务触发;规则变了就重排后台请求。
+        QuietTaskScheduler.shared.schedule()
         let rules = AutomationStore.shared.rules
         let wanted = rules.compactMap(Self.region(for:))
         // `monitoredRegions` is a synchronous round trip to locationd, and the
@@ -215,8 +182,11 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
     }
 
     /// Reconcile tick — call on foreground (same cadence the scheduled-task
-    /// reconciler uses). Handles calendar + charging triggers.
+    /// reconciler uses). Handles calendar triggers; [D4] night charging moved to
+    /// QuietTaskScheduler's BGProcessingTask. [D2] Also drains context signals
+    /// a lock-screen intent queued but could not finish.
     func reconcile() async {
+        defer { Task { await ContextSignalCenter.shared.processPending() } }
         let now = Date()
         for rule in AutomationStore.shared.rules where rule.canFire(now: now) {
             switch rule.trigger {
@@ -230,14 +200,28 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                     await fire(rule, context: String(localized: "Upcoming event: \(event.title ?? "")"))
                     break
                 }
-            case .nightCharging:
-                let charging = UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
-                let hour = Calendar.current.component(.hour, from: now)
-                if charging, hour >= 22 || hour < 6 {
-                    await fire(rule, context: nil)
-                }
             default: break
             }
+        }
+    }
+
+    /// [D4] 安静任务(插电 + 联网的 BGProcessingTask)里调用。不拉保活。
+    func fireNightChargingRules() async {
+        let now = Date()
+        let hour = Calendar.current.component(.hour, from: now)
+        guard hour >= 22 || hour < 6 else { return }
+        for rule in AutomationStore.shared.rules where rule.trigger == .nightCharging && rule.canFire(now: now) {
+            await fire(rule, context: nil, keepAlive: false)
+        }
+    }
+
+    /// [D1][D2] 外部情境信号命中的规则。不等回合跑完(调用方要 3 秒内返回)。
+    /// 情境触发的回合一律不带发信、删除、远程执行类工具;锁屏时最高第 1 档。
+    func handleSignal(_ name: String, locked: Bool) {
+        let now = Date()
+        for rule in AutomationStore.shared.rules where rule.trigger.matchesSignal(name) && rule.canFire(now: now) {
+            AutomationStore.shared.markFired(id: rule.id)
+            Task { await self.fire(rule, context: "情境信号:\(name)", restricted: true, locked: locked) }
         }
     }
 
@@ -265,17 +249,43 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    private func fire(_ rule: AutomationRule, context: String?) async {
+    private func fire(_ rule: AutomationRule, context: String?, restricted: Bool = false,
+                      locked: Bool = false, keepAlive: Bool = true) async {
         // Claim the attempt before awaiting dispatch. Failed starts keep the
         // existing 30-minute cooldown so reconciliation cannot retry endlessly.
         AutomationStore.shared.markFired(id: rule.id)
-        // [T-automation-keepalive] A region wake grants seconds; every other
-        // background entry point arms the keep-alive first — so do we.
-        _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
-            sessionId: "intent-eager:automation-\(rule.id)", caller: "automation")
-        logger.info("firing rule \(rule.name)")
+        // [D1] 档位:0 只记录、1 跑但不通知、2 跑完通知。[D2] 锁屏最高第 1 档,结果等解锁后看。
+        let tier = locked ? min(rule.tier, AutomationRule.Tier.prepare) : rule.tier
+        DiagnosticRing.shared.record(.contextDecision, entryId: "rule",
+                                     message: "rule=\(rule.name) trigger=\(rule.trigger.title) tier=\(tier)"
+                                        + (tier < rule.tier ? " 锁屏降档" : ""))
+        guard tier > AutomationRule.Tier.logOnly else { return }
+        if keepAlive {
+            // [T-automation-keepalive] A region wake grants seconds; every other
+            // background entry point arms the keep-alive first — so do we.
+            _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
+                sessionId: "intent-eager:automation-\(rule.id)", caller: "automation")
+        }
+        logger.info("firing rule \(rule.name) tier=\(tier)")
+        let speak = tier >= AutomationRule.Tier.speak
+        if restricted {
+            let body = rule.quickTaskId.flatMap { QuickTaskStore.shared.definition(for: $0)?.renderedPrompt() }
+                ?? rule.prompt ?? ""
+            guard !body.isEmpty else { return }
+            let outcome = await ContextTurnRunner.run(
+                prompt: context.map { "\($0)\n\n\(body)" } ?? body, source: "context")
+            if speak {
+                ScheduledTaskRunner.notify(
+                    title: outcome.started ? String(localized: "Automation finished") : String(localized: "Automation failed to start"),
+                    body: rule.name, sessionId: outcome.sessionId, gated: false)
+            } else if let sid = outcome.sessionId {
+                SessionBadgeStore.shared.pushFront(.unread, for: sid)
+            }
+            return
+        }
         if let quickTaskId = rule.quickTaskId {
             let started = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
+            guard speak || !started else { return }
             ScheduledTaskRunner.notify(
                 title: started ? String(localized: "Automation started") : String(localized: "Automation failed to start"),
                 body: started ? rule.name : String(localized: "\(rule.name) did not start. Open Automations and check its Quick Task and provider settings."),
@@ -285,6 +295,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             await WatchAskRunner.run(
                 requestId: "automation-\(rule.id)",
                 prompt: fullPrompt, sessionId: nil)
+            guard speak else { return }
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation finished"),
                 body: rule.name, sessionId: nil, gated: false)

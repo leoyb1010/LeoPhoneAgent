@@ -94,6 +94,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // [T-automation-engine] Region wakes relaunch the app in the
         // BACKGROUND — the monitor delegate must exist before iOS delivers
         // the event, not when the settings page happens to appear.
+        // [D4] BGProcessingTask handlers must be registered before launch ends;
+        // reloadMonitoring then submits the quiet-task request.
+        QuietTaskScheduler.shared.register()
         AutomationEngine.shared.reloadMonitoring()
 
         // [T-widget-run-in-place] Teach the shared widget intent how to reach

@@ -416,6 +416,9 @@ extension AIChatViewModel {
             ))
         }
 
+        if blocksSideEffectTools {
+            return ContextToolPolicy.filter(tools, name: \.name)
+        }
         return tools
     }
 
