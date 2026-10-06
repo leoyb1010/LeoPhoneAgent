@@ -139,7 +139,7 @@ final class PaperclipNativeJourneys: XCTestCase {
     }
 
     @MainActor
-    func testBlockedStatusRequiresExplicitUnblockAction() {
+    func testBlockedStatusUnblockActionIsOptionalButKeepsInput() {
         let app = launchTaskFixture()
         openDetail(app)
         chooseStatus("受阻", app)
@@ -147,7 +147,8 @@ final class PaperclipNativeJourneys: XCTestCase {
         scrollTo(action, app)
         let confirm = app.buttons["确认更改状态"]
         XCTAssertTrue(confirm.exists)
-        XCTAssertFalse(confirm.isEnabled, "不能在用户未说明解除阻塞条件时提交")
+        // [A5] 解除条件改为可选:不填时以「等我处理」提交,所以按钮一开始就可用。
+        XCTAssertTrue(confirm.isEnabled, "解除条件可选,未填写时也应能提交(默认「等我处理」)")
         enterText("请确认访问范围", into: action, app: app)
         let textEntered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "请确认访问范围"), object: action)
         let inputResult = XCTWaiter.wait(for: [textEntered], timeout: inputVerificationTimeout)
