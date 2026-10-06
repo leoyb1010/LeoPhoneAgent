@@ -286,6 +286,9 @@ struct AIChatView: View {
     @State private var macHandoffPrompt: String?
     /// [E1] 「存为快捷任务」/「设为定时任务」的小表单。
     @State private var nextStepForm: ReplyNextStep.Request?
+    /// [E2] 从对话生成的技能草稿,非空时打开编辑页。
+    @State private var skillDraft: SkillDraft?
+    @State private var generatingSkillDraft = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
@@ -3562,6 +3565,11 @@ struct AIChatView: View {
             guard let request = note.userInfo?["request"] as? ReplyNextStep.Request else { return }
             handleNextStep(request)
         }
+        .sheet(item: $skillDraft) { draft in
+            SkillDraftEditorView(draft: draft) { name in
+                vm.appendSystemInfo("已保存技能「\(name)」，可在设置 › 技能里管理。", icon: "book.and.wrench")
+            }
+        }
         .sheet(item: $nextStepForm) { request in
             ReplyQuickTaskForm(request: request) { message in
                 vm.appendSystemInfo(message, icon: request.action == .schedule ? "clock.arrow.circlepath" : "bolt")
@@ -5458,7 +5466,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         }
 
         var tailGroup: [UIMenuElement] = [
-            UIAction(title: String(localized: "Save as Skill"),
+            UIAction(title: "从这次对话生成技能",
                      image: UIImage(systemName: "book.and.wrench"),
                      attributes: key.messagesEmpty || key.isProcessing || key.isEditing || key.isLocked
                         ? [.disabled] : []) { _ in coordinator.parent.onDistillSkill() },
@@ -6279,14 +6287,21 @@ extension AIChatView {
     /// [T-skill-evolve] "Teach once": ask the agent to distill THIS session
     /// into a reusable SKILL.md draft, written where the skills importer can
     /// pick it up. Runs through the ordinary loop — visible, correctable.
+    /// [E2] 用当前模型把对话总结成技能草稿(名称、触发场景、步骤),打开编辑页预填,由你确认后保存。
+    /// 不再经对话回合写文件:不占对话、不进上下文。
     func distillCurrentSessionToSkill() {
-        vm.sendDetachedPrompt("""
-        把本会话到目前为止的工作流程提炼成一个可复用技能：
-        1. 起一个短横线小写的技能名（英文）；
-        2. 写出符合规范的 SKILL.md（YAML frontmatter: name/description/version 0.1.0，正文含步骤、注意事项、参数化占位符，去除本次会话的隐私细节）；
-        3. 用 file_write 写入 /var/minis/workspace/skill-drafts/<技能名>/SKILL.md；
-        4. 最后给我一句话总结这个技能做什么，并提醒我可在技能页从该文件安装。
-        """)
+        guard !generatingSkillDraft else { return }
+        generatingSkillDraft = true
+        vm.transientNotice = "正在把这次对话整理成技能草稿…"
+        Task { @MainActor in
+            defer { generatingSkillDraft = false }
+            do {
+                skillDraft = try await vm.generateSkillDraft()
+                vm.transientNotice = nil
+            } catch {
+                vm.transientNotice = "没能生成技能草稿：\(error.localizedDescription)"
+            }
+        }
     }
 }
 

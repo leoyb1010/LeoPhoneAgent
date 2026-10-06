@@ -435,3 +435,52 @@ extension AIChatViewModel {
     }
 
 }
+
+// MARK: - [E2] 从这次对话生成技能
+
+enum SkillDraftError: LocalizedError {
+    case noModel, emptyConversation, unreadable
+    var errorDescription: String? {
+        switch self {
+        case .noModel: return "当前没有可用的模型。"
+        case .emptyConversation: return "这次对话还没有可以提炼的内容。"
+        case .unreadable: return "模型没有给出可用的技能草稿，请再试一次。"
+        }
+    }
+}
+
+extension AIChatViewModel {
+    /// 用当前对话的模型把这次对话总结成技能草稿(名称、触发场景、步骤)。不写任何东西,由编辑页确认后保存。
+    func generateSkillDraft() async throws -> SkillDraft {
+        guard let entry = resolveCurrentEntry() else { throw SkillDraftError.noModel }
+        let turns: [(isUser: Bool, text: String)] = messages.compactMap { message in
+            switch message.role {
+            case .user:
+                return (true, ReplyNextStep.cleanPrompt(message.content))
+            case .assistant:
+                let text = message.blocks
+                    .filter { if case .text = $0.kind { return true }; return false }
+                    .map(\.content).joined(separator: "\n")
+                return (false, text)
+            default:
+                return nil
+            }
+        }
+        let transcript = SkillDraft.transcript(turns)
+        guard !transcript.isEmpty else { throw SkillDraftError.emptyConversation }
+        let provider = await makeAgentProvider(for: entry)
+        let stream = try await provider.streamAgentMessage(
+            messages: [AgentMessage(role: .user, parts: [.text(SkillDraft.prompt(transcript: transcript))])],
+            systemPrompt: SkillDraft.systemPrompt,
+            tools: [],
+            maxTokens: 2048,
+            thinkingLevel: .off)
+        var output = ""
+        for try await event in stream {
+            if case .textDelta(let delta) = event { output += delta }
+        }
+        logger.info("[SkillDraft] model=\(entry.model.id) outputLength=\(output.count)")
+        guard let draft = SkillDraft.parse(output) else { throw SkillDraftError.unreadable }
+        return draft
+    }
+}

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E5E15708A /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
+		E5E15708T /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
+		E5E15709A /* SkillDraftEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15709F /* SkillDraftEditorView.swift */; };
 		E5E15701A /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15701T /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15702A /* ReplyNextStepViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15702F /* ReplyNextStepViews.swift */; };
@@ -783,6 +786,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E5E15708F /* SkillDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/SkillDraft.swift; sourceTree = SOURCE_ROOT; };
+		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
 		E5E15702F /* ReplyNextStepViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Chat/ReplyNextStepViews.swift; sourceTree = SOURCE_ROOT; };
 		E5E15703F /* PaperclipHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipHandoff.swift; sourceTree = SOURCE_ROOT; };
@@ -2429,6 +2434,7 @@
 				E5S000013 /* SessionForkManager.swift */,
 				E5LOCK101 /* SessionLockStore.swift */,
 				E5N0000112F3B941A00049557 /* SkillStore.swift */,
+				E5E15708F /* SkillDraft.swift */,
 				E5CST0002 /* CorrectionStore.swift */,
 				E5RHS0002 /* RemoteHostStore.swift */,
 				E5RSE0002 /* RemoteSSHExecutor.swift */,
@@ -2650,6 +2656,7 @@
 			isa = PBXGroup;
 			children = (
 				E5N0000132F3B941A00049557 /* SkillsManagementView.swift */,
+				E5E15709F /* SkillDraftEditorView.swift */,
 			);
 			path = Skills;
 			sourceTree = "<group>";
@@ -3042,6 +3049,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5E15708T /* SkillDraft.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5E15703T /* PaperclipHandoff.swift in Sources */,
 				E5E15704T /* MacResultInbox.swift in Sources */,
@@ -3132,6 +3140,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5E15708A /* SkillDraft.swift in Sources */,
+				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,
 				E5E15702A /* ReplyNextStepViews.swift in Sources */,
 				E5E15703A /* PaperclipHandoff.swift in Sources */,
