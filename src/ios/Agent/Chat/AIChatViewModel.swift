@@ -2882,6 +2882,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Clear the error on the existing assistant message
         lastMsg.error = nil
         lastMsg.streamInterruptCount = 0
+        lastMsg.recoveredErrors = []
 
         // Remove blocks from the incomplete/interrupted iteration.
         // committedBlockCount tracks how many blocks were fully committed before the
@@ -3385,6 +3386,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Clear interrupt badge on the last assistant message if present
         if let lastAssistant = messages.last(where: { $0.role == .assistant }) {
             lastAssistant.streamInterruptCount = 0
+            lastAssistant.recoveredErrors = []
         }
 
         // Immediate thinking-state prep (see doc comment above).

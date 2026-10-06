@@ -28,9 +28,10 @@ enum NativeActionExecutor {
         }
         // Approve all parts before the first write of a compound action.
         for request in requests {
+            // [A4] 这是在执行你交代的任务(对话、首页、快捷指令都走这里),按 Agent 回合处理。
             let decision = await OffloadPermissionManager.shared.authorize(
                 command: request.command, action: request.action,
-                arguments: request.arguments, sessionId: sessionId)
+                arguments: request.arguments, sessionId: sessionId, source: .agentRun)
             guard decision == .allowed else {
                 return .init(text: decision.message(command: request.command) ?? "操作未授权。",
                              outcome: decision == .cancelled ? .cancelled

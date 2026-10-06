@@ -193,10 +193,22 @@ struct CommandMacIntent: AppIntent {
         }
         let dispatch = structured.map { "\($0.title)\n\n\($0.detail)" } ?? text
         do {
-            _ = try await client.createHarnessSession(
-                harness: cli.rawValue, cwd: "~", prompt: dispatch,
-                thinking: ThinkingRuleStore.lastCarriedRaw())
-            return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。",
+            // [A2] 全自动开着时 Siri / 快捷指令派的 Mac 任务也免审批;Mac 认不出这台 iPhone(403)就照常开,逐项审批。
+            let fullAuto = FullAutoGate.isOn
+            var refused = false
+            do {
+                _ = try await client.createHarnessSession(
+                    harness: cli.rawValue, cwd: "~", prompt: dispatch,
+                    thinking: ThinkingRuleStore.lastCarriedRaw(), fullAuto: fullAuto)
+            } catch GatewayError.http(let status, _)
+                        where HarnessFullAuto.isRefusal(status: status, harnessKey: cli.rawValue, requestedFullAuto: fullAuto) {
+                refused = true
+                _ = try await client.createHarnessSession(
+                    harness: cli.rawValue, cwd: "~", prompt: dispatch,
+                    thinking: ThinkingRuleStore.lastCarriedRaw())
+            }
+            let suffix = refused ? "这台 Mac 没认出这台 iPhone,这次会逐项审批;打开 app 的任务页看修复步骤。" : ""
+            return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。\(suffix)",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
                                                     task: structured?.title ?? text))
         } catch {

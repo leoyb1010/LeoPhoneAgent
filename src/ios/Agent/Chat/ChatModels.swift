@@ -46,6 +46,9 @@ final class ChatMessage: Identifiable, ObservableObject {
     /// Number of mid-stream auto-retries that completed successfully before this turn finished.
     /// Shown as a small badge in the UI. Reset to 0 when the user manually retries.
     @Published var streamInterruptCount: Int = 0
+    /// [B2] 自动重试成功前每次失败的原因(重试前从 `error` 移过来,最多 10 条)。只在本次运行内保留;
+    /// 同样的原因也写进了常开诊断日志(DiagnosticRing 的 llm.error)。
+    @Published var recoveredErrors: [String] = []
     /// Accumulated token usage for this assistant turn.
     @Published var usage: TokenUsage?
     /// Structured metadata for user-attached files (images & documents).

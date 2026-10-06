@@ -18,6 +18,8 @@ final class PaperclipIssueDetailModel: ObservableObject {
     @Published var lastRefreshed: Date?
     @Published private(set) var pendingStatus: PaperclipStatusExpectation?
     @Published private(set) var liveState: PaperclipLiveConnection.State?
+    /// [A6] 回到前台或实时通道重连后的全量补拉完成时递增；视图据此核对待确认的回复草稿。
+    @Published private(set) var recoveryChecks = 0
     private var statusKey: String { "leo.paperclip.status.v1." + reference.id }
     private var liveSubscriptions: Set<AnyCancellable> = []
     private var attachedLive: ObjectIdentifier?
@@ -91,6 +93,13 @@ final class PaperclipIssueDetailModel: ObservableObject {
             guard expected.matches(current) else { throw PaperclipError.statusNotConfirmed }
             pendingStatus = nil; UserDefaults.standard.removeObject(forKey: statusKey); error = nil
         } catch { record(error) }
+    }
+
+    /// [A6] 恢复（回到前台、实时通道重连）后的只读核对：状态写入未知时自动核实一次（失败仍保持待核实、
+    /// 不重发）；回复草稿由视图对照刚补拉的评论核对。
+    func reconcileAfterRecovery() async {
+        if pendingStatus != nil, !busy { await verifyStatus() }
+        recoveryChecks += 1
     }
 
     /// 只读刷新：任务、评论、运行、审批、运行中 run 五个请求并行，各自独立更新，
@@ -237,8 +246,11 @@ final class PaperclipIssueDetailModel: ObservableObject {
         live.$state.sink { [weak self] state in self?.liveState = state }.store(in: &liveSubscriptions)
         live.events.sink { [weak self] event in self?.handle(event) }.store(in: &liveSubscriptions)
         live.reconnected.sink { [weak self] in
-            // 服务器不重放断线期间的事件：每次连上都全量补拉。
-            Task { await self?.refresh(full: true) }
+            // 服务器不重放断线期间的事件：每次连上都全量补拉，再自动核对未知结果的写入。
+            Task {
+                await self?.refresh(full: true)
+                await self?.reconcileAfterRecovery()
+            }
         }.store(in: &liveSubscriptions)
     }
 
@@ -346,6 +358,8 @@ struct PaperclipIssueDetailView: View {
     @State private var logRun: PaperclipRun?
     @State private var positionedConversation = false
     @State private var revealID: String?
+    /// [A6] 已提示过"服务器上还没有这条回复"的请求编号，每条草稿只提示一次。
+    @State private var announcedMissingReply: UUID?
     /// 用户停在底部时，新消息、运行进度到达会自动跟随；往上翻阅时不打扰。
     @State private var nearBottom = true
     @State private var saveTask: Task<Void, Never>?
@@ -433,6 +447,9 @@ struct PaperclipIssueDetailView: View {
                 if pending || !draft.body.isEmpty { draft.save(key: draftKey) }
             }
             .onChange(of: draft.body) { _, _ in scheduleDraftSave() }
+            // [A6] 未知结果的回复：评论到达（含实时推送）时静默确认；恢复后的核对没找到才提示一次。
+            .onChange(of: model.comments) { _, _ in reconcileReply(announceMissing: false) }
+            .onChange(of: model.recoveryChecks) { _, _ in reconcileReply(announceMissing: true) }
             .alert(item: Binding(get: { details ? nil : pendingDecision }, set: { pendingDecision = $0 })) { decisionAlert($0) }
             .confirmationDialog("解除只保存人工核对记录，不会撤销或重发服务器操作", isPresented: $acknowledgeStatus, titleVisibility: .visible) {
                 Button("已核对，解除待核实状态", role: .destructive) { model.acknowledgeStatus() }
@@ -493,6 +510,7 @@ struct PaperclipIssueDetailView: View {
     private func pollLoop() async {
         guard scenePhase == .active else { return }
         await model.refresh(full: true)
+        await model.reconcileAfterRecovery()
         var lastPoll = Date()
         var failureInterval: Double?
         while !Task.isCancelled {
@@ -548,7 +566,13 @@ struct PaperclipIssueDetailView: View {
                     if approval.status == "pending" {
                         PaperclipApprovalCard(approval: approval, requester: requester(approval), note: $decisionNote,
                                               noteFocus: $editingDecision, busy: model.busy) { approve in
-                            pendingDecision = Decision(approval: approval, approve: approve)
+                            let decision = Decision(approval: approval, approve: approve)
+                            // [A5] 全自动下一点即提交;提交后照常做指纹重读与回执核对(见 client.resolve)。
+                            if PaperclipFullAuto.needsDecisionConfirmation(fullAuto: PaperclipFullAuto.isOn) {
+                                pendingDecision = decision
+                            } else {
+                                Task { await apply(decision) }
+                            }
                         }
                     } else {
                         PaperclipResolvedApprovalRow(approval: approval)
@@ -803,6 +827,23 @@ struct PaperclipIssueDetailView: View {
         if outcome == .sent { await model.refresh() }
     }
 
+    /// [A6] 复用只读核对：已写入就解锁草稿；没找到保持锁定，不自动重发。
+    private func reconcileReply(announceMissing: Bool) {
+        switch PaperclipReplyCheck.check(draft, comments: model.comments, userID: model.reference.userID) {
+        case .notPending: break
+        case .confirmed:
+            saveTask?.cancel(); saveTask = nil
+            draft = PaperclipDraft()
+            PaperclipDraft.clear(key: draftKey)
+            model.error = nil
+            announcedMissingReply = nil
+        case .notFound:
+            guard announceMissing, announcedMissingReply != draft.requestID else { return }
+            announcedMissingReply = draft.requestID
+            model.error = "上次回复在服务器上还没找到，草稿保持锁定，没有重新发送。确认没送到后可点「重试同一回复」（不会重复）。"
+        }
+    }
+
     private func apply(_ decision: Decision) async {
         guard !model.busy else { return }
         model.busy = true
@@ -828,10 +869,10 @@ private struct PaperclipStatusDecisionSheet: View {
             Form {
                 Section { Text("将任务设为「\(selected.title)」？") }
                 if selected == .blocked {
-                    Section("解除受阻所需操作") {
-                        TextField("你需要完成什么，任务才能继续", text: $action, axis: .vertical).lineLimit(3...6)
+                    Section("解除受阻所需操作（可不填）") {
+                        TextField("不填默认「\(PaperclipUnblockAction.defaultAction)」", text: $action, axis: .vertical).lineLimit(3...6)
                             .accessibilityIdentifier("paperclip.unblockAction")
-                        Text("责任人是当前登录用户；请填写真实解除条件。最多 2000 个字符。")
+                        Text("责任人是当前登录用户；不填就记为「\(PaperclipUnblockAction.defaultAction)」。最多 2000 个字符。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -844,7 +885,7 @@ private struct PaperclipStatusDecisionSheet: View {
                             if model.pendingStatus != nil || model.error == nil { dismiss() }
                         } catch { model.record(error) }
                     }
-                }.disabled(model.busy || (selected == .blocked && PaperclipUnblockAction.normalized(action) == nil))
+                }.disabled(model.busy || (selected == .blocked && PaperclipUnblockAction.resolved(action) == nil))
             }.navigationTitle("确认状态")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消" as String) { dismiss() }.disabled(model.busy) } }
         }

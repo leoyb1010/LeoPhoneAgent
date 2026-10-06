@@ -1202,6 +1202,18 @@ struct HarnessConsoleView: View {
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .accessibilityValue("已保存 \(driver.journalStatus.durableSeq)，已收到 \(driver.journalStatus.latestSeq)，缺口 \(driver.journalStatus.missingRanges)")
 
+            // [A3] Mac 没认出这台 iPhone、本会话降级为逐项审批:在 Mac 上按步骤处理完,一点恢复全自动。
+            if driver.fullAutoRefused && FullAutoGate.isOn {
+                Button { driver.retryFullAuto() } label: {
+                    Label("Mac 处理好了,恢复全自动", systemImage: "bolt.fill")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 4)
+                .accessibilityIdentifier("harness.retryFullAuto")
+            }
+
             // [T-composer-send-dead] 状态可见:连接中给进度,出错给原因。
             // 以前 lastError 只存不显,失败对用户表现为"点了没反应"。
             if driver.status == "starting" {

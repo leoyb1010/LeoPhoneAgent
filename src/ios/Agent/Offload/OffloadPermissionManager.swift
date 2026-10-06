@@ -379,13 +379,15 @@ final class OffloadPermissionManager: ObservableObject {
     }
 
     func authorize(command: String, action: String, arguments: [String] = [],
-                   sessionId: String?) async -> OffloadPermissionDecision {
-        await authorize(command: command, arguments: [action] + arguments, sessionId: sessionId)
+                   sessionId: String?, source: OffloadInvocationSource? = nil) async -> OffloadPermissionDecision {
+        await authorize(command: command, arguments: [action] + arguments, sessionId: sessionId, source: source)
     }
 
     /// One policy for guest execve and direct Swift/native routes. Session IDs
     /// on the guest path come from the host-issued fs_context, never env/argv.
+    /// `source` 为 nil 时按会话 id 推断([A4]):带宿主发放的会话 id = Agent 回合,没有 = 你在终端里敲的。
     func authorize(command: String, arguments: [String], sessionId: String?,
+                   source: OffloadInvocationSource? = nil,
                    requestID: String = UUID().uuidString,
                    isCancelled: @escaping () -> Bool = { false }) async -> OffloadPermissionDecision {
         guard Self.allCommands.contains(where: { $0.name == command }) else { return .unknownCapability }
@@ -404,8 +406,10 @@ final class OffloadPermissionManager: ObservableObject {
             return .allowed
         }
         // [T-full-auto] 全自动:「询问」一律放行;你设成「不允许」的上面已经挡掉。
-        // 只对正在跑的 Agent 回合生效:你自己在终端里敲(或被链接预填)的命令照旧先问。
-        if FullAutoGate.isOn, let sid, SessionActivityTracker.shared.isActive(sid) {
+        // [A4] 只看来源不看会话是否"正活跃":快捷指令、定时任务、自动化触发的后台回合同样放行;
+        // 你自己在终端里敲(或被链接预填)的命令照旧先问。
+        let origin = source ?? OffloadPermissionPolicy.source(forSessionId: sid)
+        if OffloadPermissionPolicy.fullAutoVerdict(fullAuto: FullAutoGate.isOn, notAllowed: false, source: origin) == .allowed {
             FullAutoGate.announce("\(command) \(arguments.prefix(3).joined(separator: " "))", sessionId: sid)
             return .allowed
         }

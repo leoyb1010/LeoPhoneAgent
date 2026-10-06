@@ -46,6 +46,17 @@ final class SessionActivityTracker: ObservableObject {
     /// instead of independently inferring permission/takeover/background waits.
     @Published private(set) var sessionActivityPhases: [String: AgentActivityPhase] = [:]
     @Published private(set) var sessionActivityReasons: [String: AgentActivityReason] = [:]
+    /// [B3] 打开模型流失败、正在自动重试的会话 → 第几次重试。对话状态卡与灵动岛显示「重连中 · 第 N 次」。
+    @Published private(set) var reconnectAttempts: [String: Int] = [:]
+
+    /// [B3] 进入 / 离开"重连中"(attempt ≤ 0 表示已恢复)。变化时立刻刷新灵动岛,不等 10 秒定时器。
+    func setReconnectAttempt(_ sessionId: String, _ attempt: Int) {
+        let key = draftAliases[sessionId] ?? sessionId
+        let next: Int? = attempt > 0 ? attempt : nil
+        guard reconnectAttempts[key] != next else { return }
+        reconnectAttempts[key] = next
+        BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "reconnect")
+    }
     /// Runtime-only correlation. Events themselves are persisted in the
     /// device-local AgentActivityLog; no prompt or tool payload is retained.
     private var activityRunIds: [String: String] = [:]
@@ -298,6 +309,7 @@ final class SessionActivityTracker: ObservableObject {
         var receiptStored = false
         activeSessions.remove(sessionId)
         sessionToolInfo.removeValue(forKey: sessionId)
+        reconnectAttempts.removeValue(forKey: sessionId)
         if wasPresent { lastOutcomes[sessionId] = finalPhase }
         if wasPresent, let runId = activityRunIds[sessionId] {
             receiptStored = AgentActivityLog.shared.append(AgentActivityEvent(

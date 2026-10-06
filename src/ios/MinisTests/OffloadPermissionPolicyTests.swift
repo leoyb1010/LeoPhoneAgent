@@ -184,4 +184,24 @@ final class OffloadPermissionQueueTests: XCTestCase {
         XCTAssertEqual(result, .timedOut)
         XCTAssertNil(queue.current)
     }
+
+    // [A4] 全自动覆盖所有 Agent 发起的调用(含后台回合);终端里自己敲的仍然先问;不允许始终拦截。
+    func testFullAutoAllowsBackgroundAgentRun() {
+        XCTAssertEqual(OffloadPermissionPolicy.fullAutoVerdict(fullAuto: true, notAllowed: false, source: .agentRun), .allowed)
+    }
+
+    func testFullAutoStillAsksForUserTerminal() {
+        XCTAssertEqual(OffloadPermissionPolicy.fullAutoVerdict(fullAuto: true, notAllowed: false, source: .userTerminal), .ask)
+        XCTAssertEqual(OffloadPermissionPolicy.fullAutoVerdict(fullAuto: false, notAllowed: false, source: .agentRun), .ask)
+    }
+
+    func testNotAllowedIsDisabledEvenInFullAuto() {
+        XCTAssertEqual(OffloadPermissionPolicy.fullAutoVerdict(fullAuto: true, notAllowed: true, source: .agentRun), .disabled)
+    }
+
+    func testSourceIsInferredFromHostIssuedSessionId() {
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "session-1"), .agentRun)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: nil), .userTerminal)
+        XCTAssertEqual(OffloadPermissionPolicy.source(forSessionId: "  "), .userTerminal)
+    }
 }

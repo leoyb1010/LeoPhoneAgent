@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
+#import <UIKit/UIKit.h>
 #import "NativeOffloadUtils.h"
 #import "CoordinateUtils.h"
 #include "kernel/native_offload.h"
@@ -107,7 +108,14 @@ static int cmd_current(int argc, char **argv, int stdout_fd, BOOL compact, BOOL 
         }
 
         CLAuthorizationStatus status = manager.authorizationStatus;
-        if (status == kCLAuthorizationStatusNotDetermined) {
+        if (status == kCLAuthorizationStatusNotDetermined &&
+            UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
+            // [A4] 后台(锁屏、快捷指令、定时任务)弹不出系统授权框:立刻给出明确原因,不空等 15 秒。
+            delegate.error = [NSError errorWithDomain:@"NativeOffload" code:3
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   @"首次使用定位需要在前台授权:请打开 LeoPhoneAgent 允许定位后再试。"}];
+            dispatch_semaphore_signal(delegate.semaphore);
+        } else if (status == kCLAuthorizationStatusNotDetermined) {
             [manager requestWhenInUseAuthorization];
             // Give the auth dialog a moment, then request location
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),

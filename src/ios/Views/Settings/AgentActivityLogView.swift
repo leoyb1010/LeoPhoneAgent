@@ -291,6 +291,12 @@ struct AgentCurrentStatusCard: View {
         isProcessing || isSuspended || canResume || failureReason != nil
     }
 
+    /// [B3] 正在自动重试打开模型流:第几次;恢复后为 nil,卡片回到原状态。
+    private var reconnectAttempt: Int? {
+        guard isProcessing, let resolvedSessionId else { return nil }
+        return tracker.reconnectAttempts[resolvedSessionId]
+    }
+
     var body: some View {
         Group {
             if isVisible {
@@ -393,6 +399,7 @@ struct AgentCurrentStatusCard: View {
     }
 
     private var title: String {
+        if let reconnectAttempt { return LLMRetryPolicy.reconnectingLabel(attempt: reconnectAttempt) }
         if let toolName, phase == .usingTool {
             return AgentToolPresentation.displayName(for: toolName)
         }
@@ -412,6 +419,7 @@ struct AgentCurrentStatusCard: View {
     }
 
     private var subtitle: String {
+        if reconnectAttempt != nil { return String(localized: "连接中断，正在自动重试；恢复后接着做") }
         if let reason {
             return switch reason {
             case .permissionApproval: String(localized: "Review the device capability request")
@@ -444,6 +452,7 @@ struct AgentCurrentStatusCard: View {
     }
 
     private var symbol: String {
+        if reconnectAttempt != nil { return "arrow.triangle.2.circlepath" }
         if let toolName, phase == .usingTool {
             return AgentToolPresentation.symbol(for: toolName)
         }
@@ -463,6 +472,7 @@ struct AgentCurrentStatusCard: View {
     }
 
     private var tint: Color {
+        if reconnectAttempt != nil { return LeoTheme.ColorToken.warning }
         return switch phase {
         case .waitingForUser, .suspended, .waitingForPermission: LeoTheme.ColorToken.warning
         case .failed: LeoTheme.ColorToken.destructive

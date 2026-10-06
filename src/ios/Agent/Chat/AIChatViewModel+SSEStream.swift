@@ -986,6 +986,16 @@ extension AIChatViewModel {
         } catch {
             result.isStreamInterrupted = true
             _streamError = error
+            // [B1] 流中断 / 120 秒停滞(用户取消不记)。
+            if !(error is CancellationError) {
+                let stalled = error is StreamStallError
+                let llm = error as? LLMError
+                DiagnosticRing.shared.record(.llmError, model: provider.model.id, entryId: runMsgId.uuidString,
+                                             error: llm.map { AIChatViewModel.diagnosticUnderlying($0) } ?? error,
+                                             message: stalled ? "[stall] \(Int(stallTimeoutSeconds))s no data"
+                                                 : llm.map { "[mid-stream] " + AIChatViewModel.diagnosticMessage($0) }
+                                                 ?? "[mid-stream] \(error.localizedDescription)")
+            }
         }
         if _streamError != nil {
             await syncThinkingTail(msgIdx: mutableMsgIdx, thinkIdx: currentThinkingBlockIdx, text: result.thinkingText)

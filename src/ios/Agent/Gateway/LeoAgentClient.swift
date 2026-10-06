@@ -34,7 +34,8 @@ enum GatewayEvent: Sendable {
     case toolStarted(tool: String, preview: String?)
     case toolCompleted(tool: String, duration: Double?, isError: Bool)
     case approvalRequest(GatewayApprovalRequest)
-    case approvalResponded(choice: String?, approvalId: String?)
+    /// `auto` 非 nil:[A1] Mac 在全自动下自己应答了这次审批(没有先发 approval.request),内容是工具 / 命令摘要。
+    case approvalResponded(choice: String?, approvalId: String?, auto: String? = nil)
     case runCompleted(output: String?, usage: GatewayUsage?)
     case runFailed(message: String?)
     case runCancelled
@@ -329,8 +330,8 @@ actor LeoAgentClient {
     /// The gateway speaks OpenAI's error envelope: {"error":{"message":…}}.
     private static func errorMessage(from data: Data) -> String? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        if let err = obj["error"] as? [String: Any], let msg = err["message"] as? String { return msg }
-        return obj["message"] as? String
+        // [A3] Mac 认不出这台 iPhone 时 403 带修复步骤,一并带给会话显示。
+        return HarnessFullAuto.errorMessage(from: obj)
     }
 
     private static func json(_ data: Data) throws -> [String: Any] {
@@ -537,7 +538,8 @@ extension GatewayEvent {
                 extras: extras))
         case "approval.responded":
             return .approvalResponded(choice: obj["choice"] as? String,
-                                      approvalId: obj["approval_id"] as? String)
+                                      approvalId: obj["approval_id"] as? String,
+                                      auto: HarnessFullAuto.autoApprovalSummary(obj))
         case "run.completed":
             return .runCompleted(output: obj["output"] as? String,
                                  usage: LeoAgentClient.parseUsage(obj["usage"]))

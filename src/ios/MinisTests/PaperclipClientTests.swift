@@ -214,8 +214,9 @@ final class PaperclipClientTests: XCTestCase {
         let client = try client()
         let ref = PaperclipTaskReference(profileID: client.profile.id, origin: client.profile.origin,
                                          companyID: "company", userID: "human", issueID: "issue")
-        for action in [nil, "", " \n ", String(repeating: "🚀", count: 1001)] as [String?] {
-            do { _ = try await client.setStatus(ref, status: .blocked, unblockAction: action); XCTFail("不允许空白或超长说明") }
+        // [A5] 空白说明改为默认「等我处理」(见 PaperclipContractTests);超长仍在发请求前拒绝。
+        for action in [String(repeating: "🚀", count: 1001)] as [String?] {
+            do { _ = try await client.setStatus(ref, status: .blocked, unblockAction: action); XCTFail("不允许超长说明") }
             catch { XCTAssertEqual(error as? PaperclipError, .unblockActionRequired) }
         }
     }

@@ -1617,7 +1617,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             var icon = AgentLiveActivityManager.sfSymbol(forTool: toolName)
             let displayName = AgentLiveActivityManager.displayName(forTool: toolName)
             let statusText: String
-            if tracker.sessionActivityPhases[sid] == .waitingForPermission {
+            if let attempt = tracker.reconnectAttempts[sid] {
+                // [B3] 打开模型流失败、正在自动重试:说"重连中",恢复后回到原状态。
+                icon = "arrow.triangle.2.circlepath"
+                statusText = LLMRetryPolicy.reconnectingLabel(attempt: attempt)
+            } else if tracker.sessionActivityPhases[sid] == .waitingForPermission {
                 // [T-la-approval] Parked on the permission gate: say so, not "Working…".
                 icon = LiveSessionSnapshot.approvalIcon
                 statusText = String(localized: "等你批准")

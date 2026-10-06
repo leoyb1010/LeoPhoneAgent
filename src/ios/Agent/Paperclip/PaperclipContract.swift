@@ -272,7 +272,7 @@ struct PaperclipStatusExpectation: Codable {
         self.status = status
         self.userID = userID
         if status == .blocked {
-            guard let action = PaperclipUnblockAction.normalized(unblockAction) else { throw PaperclipError.unblockActionRequired }
+            guard let action = PaperclipUnblockAction.resolved(unblockAction) else { throw PaperclipError.unblockActionRequired }
             self.unblockAction = action
         } else { self.unblockAction = nil }
     }
@@ -287,6 +287,8 @@ struct PaperclipStatusExpectation: Codable {
 }
 
 enum PaperclipUnblockAction {
+    /// [A5] 解除条件可不填:空着时默认写这句。
+    static let defaultAction = "等我处理"
     /// 上游 z.string().trim().min(1).max(2000) 按 UTF-16 长度计数。
     static func normalized(_ raw: String?) -> String? {
         guard let raw else { return nil }
@@ -294,6 +296,21 @@ enum PaperclipUnblockAction {
         guard !action.isEmpty, action.utf16.count <= 2_000 else { return nil }
         return action
     }
+    /// [A5] 设为「受阻」时实际发送的解除条件:空 → 默认句;超长仍拒绝(返回 nil)。
+    static func resolved(_ raw: String?) -> String? {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? defaultAction : normalized(trimmed)
+    }
+}
+
+/// [A5] 全自动开着时 Paperclip 审批一点即提交,不再弹二次确认。
+/// 只读全自动这一个布尔(与 FullAutoGate.defaultsKey 同一个键,MinisTests 校验两者一致);
+/// Paperclip 边界内不引用 App 的其他模块,原生审计工程也能单独编译。
+enum PaperclipFullAuto {
+    static let defaultsKey = "permissions.fullAuto.enabled"
+    static var isOn: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+    /// 审批决定要不要再弹「确认批准 / 拒绝？」。
+    static func needsDecisionConfirmation(fullAuto: Bool) -> Bool { !fullAuto }
 }
 
 enum PaperclipLabels {

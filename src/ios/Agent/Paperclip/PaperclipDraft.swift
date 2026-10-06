@@ -82,6 +82,20 @@ struct PaperclipDraft: Codable {
     static func clear(key: String, defaults: UserDefaults = .standard) { defaults.removeObject(forKey: key) }
 }
 
+/// [A6] 回复结果未知（草稿锁定）时的只读核对：服务器上已有同一请求编号、同一作者、同一正文的评论，
+/// 就说明已写入，可以解锁草稿；没有就保持锁定，绝不自动重发（幂等契约不变）。
+enum PaperclipReplyCheck: Equatable {
+    case notPending, confirmed, notFound
+
+    static func check(_ draft: PaperclipDraft, comments: [PaperclipComment], userID: String) -> PaperclipReplyCheck {
+        guard draft.submitted else { return .notPending }
+        let written = comments.contains {
+            $0.clientRequestId == draft.requestID.uuidString && $0.authorUserId == userID && $0.body == draft.body
+        }
+        return written ? .confirmed : .notFound
+    }
+}
+
 /// 发送（创建或回复）后的输入框焦点。
 /// 修复「发送后一直卡住」：以前回复成功后不收起键盘，输入框保持聚焦，只读刷新随之一直暂停。
 /// 成功或结果未知（草稿锁定待核对）时收起键盘；服务器明确拒绝、草稿已解锁可编辑时保留焦点。

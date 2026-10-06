@@ -1,5 +1,18 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.55.0 (152) · 交付即执行 + 看得见 - 2026-10-06
+
+- A2 全自动覆盖所有 Mac CLI：建任务对 claude / codex / grok / zcode 都带 `full_auto`（`HarnessFullAuto`），Siri/快捷指令「指挥一台 Mac」同样带上；关掉全自动时对所有在线 Mac 调用 `/harness/full-auto` 切回。后续消息：LeoPhoneAgent 任务照旧带 true/false，其余 CLI 只在请求全自动时带 true（兼容旧桌面端对这三种 CLI 带 `full_auto` 回 400）。时间线显示中继自动应答的 `approval.responded`（`auto: true`）为「已自动允许 · 工具 · 命令」。
+- A3 Mac 认不出 iPhone：403（及旧桌面端 400）降级为逐项审批时，会话里列出中继返回的 `steps`（老中继用本机内置的具体步骤），控制台新增「Mac 处理好了，恢复全自动」按钮；登记必须在 Mac 上完成（中继 `fix: mac_steps`）。
+- A4 手机能力：全自动放行条件从「会话正活跃」改为「调用来自 Agent 回合」（`OffloadInvocationSource`，原生桥按宿主发放的会话 fs_context 判定，终端 shell 无会话上下文仍先问；首页/对话直达动作按 Agent 回合）；「不允许」照旧拦截；后台首次定位授权立即返回明确错误，不再空等 15 秒。
+- A5 Paperclip：全自动下审批一点即提交（读同一个全自动键 `PaperclipFullAuto`，不引用 App 其他模块，契约审计通过）；受阻解除条件可选，空着默认「等我处理」，超长仍拒绝。
+- A6 Paperclip：回到前台与实时通道重连后自动只读核对——状态写入未知时自动核实一次；回复草稿按请求编号 + 作者 + 正文在评论里找到即解锁，找不到保持锁定并提示一次，不重发。
+- B1 常开诊断日志 `DiagnosticRing`：`Library/Logs/diag-YYYY-MM-DD.jsonl`，保留 7 天、单日 2 MB 上限（超限写一条截断标记），串行队列写入，不记正文；接入请求开始/失败/重试/恢复、流中断与 120 秒停滞。
+- B2 重试成功后保留失败原因：`ChatMessage.recoveredErrors`（本次运行内），消息底部「中途断开 N 次，已自动恢复」可点开看原因；原因同时写进诊断日志。
+- B3 「重连中」：自动重试期间对话状态卡、灵动岛、消息内倒计时显示「重连中 · 第 N 次」，恢复后回到原状态。
+- B4 错误分类：区分 connectionLost / notConnected / timedOut / cancelled / server(status)；未收到字节的 -1005 立刻重试一次不进倒计时，-1009 等网络恢复（最多 60 秒）再重试。
+- 测试：新增 24 项逻辑测试（全自动 7、手机能力 4、Paperclip 2、诊断日志 4、错误分类与重试 7），全量 571 项逻辑测试通过。
+
 ## iOS 1.54.1 (151) · 同步覆盖竞态导致新模型消失 - 2026-10-06
 
 - 根因：本机保存先写 JSON 和内存，SQLite 镜像在写队列里异步落库；iCloud V3 入站合并后的整库重建不等这个队列就 dump SQLite，再整份覆盖内存配置。刷新刚加进来的 `gpt-6.1-sol` 因此被旧库快照抹掉，且没有删除墓碑（真机取证：条目只剩在模型存档里，活动列表在一次整库重写后缺失）。

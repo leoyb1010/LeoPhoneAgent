@@ -14,6 +14,12 @@ final class NetworkMonitor {
 
     private init() {}
 
+    /// [B4] 现在有没有网。监视器还没启动(例如无界面的后台启动)时按"有网"处理,不让重试干等。
+    var isSatisfied: Bool {
+        guard isStarted else { return true }
+        return monitor.currentPath.status == .satisfied
+    }
+
     func start() {
         NSLog("NetworkMonitor: start() called, isStarted=%d", isStarted ? 1 : 0)
         guard !isStarted else { return }

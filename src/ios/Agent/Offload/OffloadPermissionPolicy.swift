@@ -35,6 +35,30 @@ enum OffloadPermissionPolicy {
     static func declinedDenial(command: String) -> String {
         "已拒绝：用户拒绝了本会话的「\(command)」。可在设置中调整：[打开权限](leophoneagent://settings/permissions)"
     }
+
+    /// [A4] 全自动下的放行结论。Agent 回合(含快捷指令、定时任务、自动化触发的无界面回合)一律放行,
+    /// 不再要求会话"正活跃";你自己在终端里敲的命令仍然先问;设成「不允许」的始终拦截。
+    enum FullAutoVerdict: Equatable, Sendable { case allowed, ask, disabled }
+
+    static func fullAutoVerdict(fullAuto: Bool, notAllowed: Bool, source: OffloadInvocationSource) -> FullAutoVerdict {
+        if notAllowed { return .disabled }
+        return fullAuto && source == .agentRun ? .allowed : .ask
+    }
+
+    /// 原生桥上的来源:会话 id 来自宿主发给 Agent 回合的 fs_context(Agent 冒充不了);
+    /// 你在终端里开的 shell 不带会话上下文,没有 id。
+    static func source(forSessionId sid: String?) -> OffloadInvocationSource {
+        guard let sid, !sid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .userTerminal }
+        return .agentRun
+    }
+}
+
+/// [A4] 手机能力调用来自哪里。
+enum OffloadInvocationSource: Equatable, Sendable {
+    /// Agent 回合发起(前台对话、快捷指令、定时任务、自动化规则、首页直达动作)。
+    case agentRun
+    /// 你自己在终端里敲的(或被链接预填进终端的)命令。
+    case userTerminal
 }
 
 // Actual native argv, captured after execve. This is never a shell-text parser.

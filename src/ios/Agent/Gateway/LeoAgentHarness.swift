@@ -100,14 +100,12 @@ extension LeoAgentClient {
 
     // MARK: Control
 
-    /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。只有 LeoPhoneAgent 任务支持,
-    /// 且 Mac 只接受已配对 iPhone 设备钥匙发来的;不接受时返回 403 和原因。
+    /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。[A2] 对所有 CLI 生效(Claude Code / Codex /
+    /// Grok / LeoPhoneAgent);Mac 只接受认得出的 iPhone 发来的,不接受时返回 403 和原因与修复步骤。
     func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil,
                               fullAuto: Bool = false) async throws -> String {
-        var payload: [String: Any] = ["harness": harness, "cwd": cwd]
-        if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
-        if let thinking, !thinking.isEmpty { payload["thinking"] = thinking }
-        if fullAuto { payload["full_auto"] = true }
+        let payload = HarnessFullAuto.createPayload(harness: harness, cwd: cwd, prompt: prompt,
+                                                    thinking: thinking, fullAuto: fullAuto)
         let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
@@ -311,11 +309,12 @@ final class HarnessSessionDriver: ObservableObject {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt,
                         thinking: thinking, fullAuto: fullAuto)
-                } catch GatewayError.http(let status, _) where status == 403 && fullAuto {
-                    // Mac 还不接受这台手机开全自动(中继没认出 iPhone 设备钥匙):照常开,逐项审批。
+                } catch GatewayError.http(let status, let message)
+                            where HarnessFullAuto.isRefusal(status: status, harnessKey: self.harness.key, requestedFullAuto: fullAuto) {
+                    // Mac 还不接受这台手机开全自动(中继没认出 iPhone):照常开,逐项审批,并写明怎么修。
                     await MainActor.run {
                         self.fullAutoRefused = true
-                        self.note(Self.fullAutoRefusedNote)
+                        self.note(HarnessFullAuto.refusedNote(serverMessage: message, status: status))
                     }
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking)
@@ -353,17 +352,23 @@ final class HarnessSessionDriver: ObservableObject {
         }
     }
 
-    static let fullAutoRefusedNote = "这台 Mac 还不接受本机的全自动任务(中继升级后才认得出这台 iPhone),这次会逐项请你审批。"
-
     /// Mac 已经拒过这台手机的全自动(中继还认不出 iPhone):这个会话里不再请求,免得每条消息都提示一遍。
-    private var fullAutoRefused = false
+    /// [A3] 控制台据此显示「恢复全自动」按钮。
+    @Published private(set) var fullAutoRefused = false
 
-    /// 全自动只对 LeoPhoneAgent 任务有意义;Claude Code / Codex / Grok 仍按它们自己的审批走。
-    private var wantsFullAuto: Bool { harness.key == "zcode" && FullAutoGate.isOn && !fullAutoRefused }
+    /// [A2] 全自动对所有 Mac 任务生效(Claude Code / Codex / Grok / LeoPhoneAgent)。
+    private var wantsFullAuto: Bool { HarnessFullAuto.wanted(gateOn: FullAutoGate.isOn, refused: fullAutoRefused) }
 
-    /// 发一条后续消息;LeoPhoneAgent 任务顺带告诉 Mac 全自动开关的当前状态。
+    /// [A3] 在 Mac 上处理完后一键恢复:下一条消息重新请 Mac 切到全自动(Mac 仍认不出会再次 403 并说明)。
+    func retryFullAuto() {
+        guard fullAutoRefused else { return }
+        fullAutoRefused = false
+        note(String(localized: "已恢复全自动请求:下一条消息会请这台 Mac 切回全自动。"))
+    }
+
+    /// 发一条后续消息,顺带告诉 Mac 全自动开关的当前状态(所有 CLI 都带)。
     private func sendSteer(sessionId: String, text: String) async {
-        let fullAuto: Bool? = harness.key == "zcode" ? (FullAutoGate.isOn && !fullAutoRefused) : nil
+        let fullAuto = HarnessFullAuto.steerValue(harnessKey: harness.key, gateOn: FullAutoGate.isOn, refused: fullAutoRefused)
         let entry: HarnessOutbox.Entry
         do {
             // 必须在网络调用前落盘；中继重启、手机杀进程或丢 ACK 都不丢原文。
@@ -397,11 +402,12 @@ final class HarnessSessionDriver: ObservableObject {
             // 请求根本没发出去(没网、地址不对、没授权):明确告知没送到，原文放回输入框。
             guard finishRejectedOutbox(entry) == true else { return }
             steerFailed(text, Self.describe(error))
-        } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
+        } catch GatewayError.http(let status, let message)
+                    where HarnessFullAuto.isRefusal(status: status, harnessKey: harness.key, requestedFullAuto: fullAuto == true) {
             // 明确的拒绝才允许使用新编号降级重发，未知结果永不走此路径。
             guard finishRejectedOutbox(entry) == true else { return }
             fullAutoRefused = true
-            note(Self.fullAutoRefusedNote)
+            note(HarnessFullAuto.refusedNote(serverMessage: message, status: status))
             await sendSteer(sessionId: sessionId, text: text)
         } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
             guard finishRejectedOutbox(entry) == true else { return }
@@ -562,9 +568,9 @@ final class HarnessSessionDriver: ObservableObject {
                 switch HarnessOutbox.relayResolution(result) {
                 case .completed(let http):
                     guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry), claimed else { continue }
-                    if http == 403, entry.fullAuto == true {
+                    if HarnessFullAuto.isRefusal(status: http, harnessKey: harness.key, requestedFullAuto: entry.fullAuto == true) {
                         fullAutoRefused = true
-                        note(Self.fullAutoRefusedNote)
+                        note(HarnessFullAuto.refusedNote(serverMessage: nil, status: http))
                         await sendSteer(sessionId: entry.sessionId, text: entry.text)
                     } else if !(200..<300).contains(http) {
                         steerFailed(entry.text, String(localized: "Mac 拒绝了排队的这条（HTTP \(http)）"))
@@ -581,9 +587,9 @@ final class HarnessSessionDriver: ObservableObject {
                 guard case .completed(let http) = HarnessOutbox.receiptResolution(receipt, requestId: entry.id)
                 else { giveUpIfExhausted(entry); continue }
                 guard let claimed = http >= 400 ? finishRejectedOutbox(entry) : try finishOutbox(entry), claimed else { continue }
-                if http == 403, entry.fullAuto == true {
+                if HarnessFullAuto.isRefusal(status: http, harnessKey: harness.key, requestedFullAuto: entry.fullAuto == true) {
                     fullAutoRefused = true
-                    note(Self.fullAutoRefusedNote)
+                    note(HarnessFullAuto.refusedNote(serverMessage: nil, status: http))
                     await sendSteer(sessionId: entry.sessionId, text: entry.text)
                 } else if !(200..<300).contains(http) {
                     steerFailed(entry.text, "Mac HTTP \(http)")
@@ -875,7 +881,9 @@ final class HarnessSessionDriver: ObservableObject {
                                              sessionId: sid, approval: approval)
             }
             HarnessLiveActivityBridge.shared.refresh()
-        case .approvalResponded(_, let approvalId):
+        case .approvalResponded(_, let approvalId, let auto):
+            // [A1] 全自动:Mac 直接应答,手机上没有审批卡,只在时间线记一笔。
+            if let auto { note(String(localized: "已自动允许 · \(auto)")) }
             if let approvalId {
                 if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
                     WatchBridge.shared.clearApprovalRequest(approvalId: resolved.approvalId)

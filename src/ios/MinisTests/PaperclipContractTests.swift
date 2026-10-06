@@ -3,13 +3,41 @@ import XCTest
 
 final class PaperclipContractTests: XCTestCase {
     func testBlockedExpectationRequiresExplicitBoundOwnerAction() throws {
-        XCTAssertThrowsError(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: "  "))
+        // [A5] 解除条件改为可选:空着时默认「等我处理」;超长仍拒绝。
+        XCTAssertEqual(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: "  ").unblockAction,
+                       PaperclipUnblockAction.defaultAction)
+        XCTAssertEqual(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: nil).unblockAction, "等我处理")
         XCTAssertThrowsError(try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: String(repeating: "😀", count: 1001)))
         let expected = try PaperclipStatusExpectation(status: .blocked, userID: "human", unblockAction: " 核对需求 ")
         let matching = #"{"id":"issue","companyId":"company","title":"任务","status":"blocked","priority":"medium","unblockDescriptor":{"owner":{"userId":"human"},"action":"核对需求"}}"#
         XCTAssertTrue(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.utf8))))
         XCTAssertFalse(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.replacingOccurrences(of: "human", with: "other").utf8))))
         XCTAssertFalse(expected.matches(try JSONDecoder().decode(PaperclipIssue.self, from: Data(matching.replacingOccurrences(of: "核对需求", with: "其他操作").utf8))))
+    }
+
+    /// [A5] 全自动下审批一点即提交,不再二次确认;全自动关着时照旧确认。
+    func testFullAutoSkipsDecisionConfirmation() {
+        XCTAssertFalse(PaperclipFullAuto.needsDecisionConfirmation(fullAuto: true))
+        XCTAssertTrue(PaperclipFullAuto.needsDecisionConfirmation(fullAuto: false))
+    }
+
+    /// [A6] 超时 → 恢复 → 服务器已有该评论:草稿自动解锁;服务器没有:保持锁定。
+    func testUncertainReplyIsConfirmedByReadOnlyCheckAfterRecovery() throws {
+        var draft = PaperclipDraft()
+        draft.body = "补充一下需求"
+        draft.markSubmitted()
+        draft.recordFailure(PaperclipError.uncertain, wasPreviouslySubmitted: false)
+        XCTAssertTrue(draft.submitted)
+        func comment(_ requestID: String, author: String = "human", body: String = "补充一下需求") throws -> PaperclipComment {
+            let json = #"{"id":"c1","companyId":"co","issueId":"i","body":"\#(body)","authorUserId":"\#(author)","clientRequestId":"\#(requestID)"}"#
+            return try JSONDecoder().decode(PaperclipComment.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(PaperclipReplyCheck.check(draft, comments: [], userID: "human"), .notFound)
+        XCTAssertEqual(PaperclipReplyCheck.check(draft, comments: [try comment(UUID().uuidString)], userID: "human"), .notFound)
+        XCTAssertEqual(PaperclipReplyCheck.check(draft, comments: [try comment(draft.requestID.uuidString, author: "other")], userID: "human"), .notFound)
+        XCTAssertEqual(PaperclipReplyCheck.check(draft, comments: [try comment(draft.requestID.uuidString, body: "别的")], userID: "human"), .notFound)
+        XCTAssertEqual(PaperclipReplyCheck.check(draft, comments: [try comment(draft.requestID.uuidString)], userID: "human"), .confirmed)
+        XCTAssertEqual(PaperclipReplyCheck.check(PaperclipDraft(), comments: [], userID: "human"), .notPending)
     }
 
     func testOnlyHTTPSOriginIsAccepted() throws {

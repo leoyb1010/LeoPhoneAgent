@@ -20,22 +20,51 @@ extension AIChatViewModel {
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         var lastError: Error?
         var currentProvider = initialProvider
-        for attempt in 0...Self.retryDelays.count {
-            if attempt > 0 {
-                let delay = Self.retryDelays[attempt - 1]
+        // [B4] attempt = 已用掉的倒计时重试次数;"立刻重试"不占名额,每次请求最多一次。
+        var attempt = 0
+        var immediateUsed = false
+        var skipWait = false
+        let trackerKey = sessionId ?? draftId
+        defer {
+            self.autoRetryAttempt = 0
+            self.autoRetryCountdown = 0
+            if let trackerKey { SessionActivityTracker.shared.setReconnectAttempt(trackerKey, 0) }
+        }
+        while true {
+            if attempt > 0 && !skipWait {
                 self.autoRetryAttempt = attempt
+                // [B3] 状态卡与灵动岛显示「重连中 · 第 N 次」。
+                if let trackerKey { SessionActivityTracker.shared.setReconnectAttempt(trackerKey, attempt) }
                 // Show the network error on the message during countdown
                 if let lastError {
                     let desc = (lastError as? LocalizedError)?.errorDescription ?? String(describing: lastError)
                     chatMessage?.error = desc
                 }
-                for remaining in stride(from: delay, through: 1, by: -1) {
-                    self.autoRetryCountdown = remaining
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                    try Task.checkCancellation()
+                switch LLMRetryPolicy.wait(after: (lastError as? LLMError)?.networkFailure, attempt: attempt,
+                                           immediateUsed: true, delays: Self.retryDelays) {
+                case .untilNetwork(let maxSeconds):
+                    // [B4] 没网:等网络恢复再试,不空转倒计时。
+                    self.autoRetryCountdown = 0
+                    var waited = 0
+                    while !NetworkMonitor.shared.isSatisfied && waited < maxSeconds {
+                        try await Task.sleep(nanoseconds: 1_000_000_000)
+                        try Task.checkCancellation()
+                        waited += 1
+                    }
+                case .countdown(let delay):
+                    for remaining in stride(from: delay, through: 1, by: -1) {
+                        self.autoRetryCountdown = remaining
+                        try await Task.sleep(nanoseconds: 1_000_000_000)
+                        try Task.checkCancellation()
+                    }
+                case .immediate:
+                    break
                 }
                 self.autoRetryCountdown = 0
-                chatMessage?.error = nil
+                // [B2] 清空前把原因收进 recoveredErrors,重试成功后仍看得到。
+                if let chatMessage {
+                    LLMRetryPolicy.recover(error: &chatMessage.error, into: &chatMessage.recoveredErrors)
+                }
 
                 // Re-read current model binding — user may have switched models during countdown
                 if let entry = resolveCurrentEntry() {
@@ -46,6 +75,8 @@ extension AIChatViewModel {
                     }
                 }
             }
+            skipWait = false
+            let started = Date()
             do {
                 var thinkLvl = sessionId.flatMap { ProviderConfigStore.shared.inferenceConfig(for: $0)?.thinkingLevel } ?? .off
                 // [T-fallback-thinking-preclamp] Clamp to the CURRENT entry's
@@ -63,18 +94,50 @@ extension AIChatViewModel {
                     maxTokens: maxTokens,
                     thinkingLevel: thinkLvl
                 )
-                self.autoRetryAttempt = 0
+                if attempt > 0 || immediateUsed {
+                    // [B2] 一次断开已自动恢复:消息底部「中途断开 N 次,已自动恢复」。
+                    chatMessage?.streamInterruptCount += 1
+                    DiagnosticRing.shared.record(.llmSuccess, sessionId: sessionId, model: currentProvider.model.id,
+                                                 attempt: attempt, message: "recovered",
+                                                 durationMs: Int(Date().timeIntervalSince(started) * 1000))
+                }
                 return stream
             } catch let error as LLMError where error.isRetryable {
                 lastError = error
+                DiagnosticRing.shared.record(.llmError, sessionId: sessionId, model: currentProvider.model.id,
+                                             attempt: attempt, error: Self.diagnosticUnderlying(error),
+                                             message: Self.diagnosticMessage(error),
+                                             durationMs: Int(Date().timeIntervalSince(started) * 1000))
+                if LLMRetryPolicy.wait(after: error.networkFailure, attempt: attempt + 1,
+                                       immediateUsed: immediateUsed, delays: Self.retryDelays) == .immediate {
+                    // [B4] 还没收到字节就断开(-1005):换新连接立刻重试一次,不进倒计时。
+                    immediateUsed = true
+                    skipWait = true
+                    DiagnosticRing.shared.record(.llmRetry, sessionId: sessionId, model: currentProvider.model.id,
+                                                 attempt: attempt, message: "immediate after connectionLost")
+                    continue
+                }
+                attempt += 1
+                guard attempt <= Self.retryDelays.count else { break }
+                DiagnosticRing.shared.record(.llmRetry, sessionId: sessionId, model: currentProvider.model.id,
+                                             attempt: attempt, message: Self.diagnosticMessage(error))
                 continue
-            } catch {
-                self.autoRetryAttempt = 0
-                throw error
             }
         }
-        self.autoRetryAttempt = 0
         throw lastError!
+    }
+
+    /// [B1] 诊断日志里的错误码:网络错误取底层 URLError(-1005 / -1009 …),其余用 LLMError 本身。
+    nonisolated static func diagnosticUnderlying(_ error: LLMError) -> Error {
+        if case .networkError(let underlying) = error { return underlying }
+        return error
+    }
+
+    /// [B1][B4] 分类 + 截断后的描述(不含对话正文)。
+    nonisolated static func diagnosticMessage(_ error: LLMError) -> String {
+        let kind = error.networkFailure.map { String(describing: $0) } ?? "provider"
+        let desc = error.errorDescription ?? String(describing: error)
+        return "[\(kind)] " + desc
     }
 
 
@@ -117,6 +180,9 @@ extension AIChatViewModel {
         while true {
             do {
                 logger.info("🔀ROUTE trying entry=\(currentEntryId ?? "nil") provider=\(currentProvider.name) tried=\(triedEntries)")
+                // [B1] 每次请求开始都记一条(不含正文)。
+                DiagnosticRing.shared.record(.llmRequest, sessionId: sessionId, model: currentProvider.model.id,
+                                             entryId: currentEntryId)
                 // First attempt: call provider directly (no auto-retry) so we can
                 // distinguish fallbackable errors from network errors.
                 let currentModel = currentEntryId.flatMap { ProviderConfigStore.shared.entry(for: $0)?.model } ?? model
@@ -172,6 +238,8 @@ extension AIChatViewModel {
                 // Provider-level error (rate limit, invalid key, provider rejection):
                 // immediately try next model in group without retry countdown.
                 logger.error("🔀ROUTE entry=\(currentEntryId ?? "nil") fallbackable error: \(error.localizedDescription)")
+                DiagnosticRing.shared.record(.llmError, sessionId: sessionId, model: currentProvider.model.id,
+                                             entryId: currentEntryId, error: error, message: Self.diagnosticMessage(error))
                 if let eid = currentEntryId, let entry = ProviderConfigStore.shared.entry(for: eid) {
                     let inst = ProviderConfigStore.shared.instance(for: entry.providerInstanceId)?.label ?? entry.model.provider
                     fallbackReasons.append((model: entry.model.displayName, instance: inst, reason: error.fallbackReason))

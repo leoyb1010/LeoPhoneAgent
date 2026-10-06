@@ -692,7 +692,10 @@ private struct BridgedAssistantFooterV3: View {
             }
             Spacer()
             if bridge.autoRetryAttempt > 0 {
-                Text("Retry in \(bridge.autoRetryCountdown)s (\(bridge.autoRetryAttempt)/\(AIChatViewModel.retryDelays.count))")
+                // [B3] 倒计时中显示「重连中 · 第 N 次 · Ns」;没网时不空转倒计时,等网络恢复。
+                Text(bridge.autoRetryCountdown > 0
+                     ? "\(LLMRetryPolicy.reconnectingLabel(attempt: bridge.autoRetryAttempt)) · \(bridge.autoRetryCountdown)s"
+                     : String(localized: "等网络恢复…"))
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
@@ -764,14 +767,26 @@ private struct BridgedAssistantFooterV3: View {
     }
 
     @ViewBuilder
+    /// [B2] 「中途断开 N 次,已自动恢复」,点开看每次的原因(本次运行内;原因也写进了诊断日志)。
     private func streamInterruptBadge(_ count: Int) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "arrow.clockwise").font(.system(size: 9, weight: .semibold))
-            Text("\(count)").font(.system(size: 10, design: .monospaced))
+        Menu {
+            if message.recoveredErrors.isEmpty {
+                Text("原因未保留(重启 App 前的记录在诊断日志里)")
+            } else {
+                ForEach(Array(message.recoveredErrors.enumerated()), id: \.offset) { item in
+                    Text("\(item.offset + 1). \(item.element)")
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.clockwise").font(.system(size: 9, weight: .semibold))
+                Text(LLMRetryPolicy.recoveredSummary(count: count)).font(.system(size: 10))
+            }
+            .foregroundStyle(Color.orange.opacity(0.8))
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(Color.orange.opacity(0.12)).clipShape(Capsule())
         }
-        .foregroundStyle(Color.orange.opacity(0.8))
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(Color.orange.opacity(0.12)).clipShape(Capsule())
+        .accessibilityIdentifier("chat.recoveredErrors")
     }
 
     private func usageSummary(_ u: TokenUsage) -> String {

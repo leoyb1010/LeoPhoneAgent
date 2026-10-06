@@ -30,11 +30,11 @@ final class FullAutoStore: ObservableObject {
         }
     }
 
-    /// 关掉开关时,已升级的 Mac(LeoPhoneAgent 1.2 起)上由这台手机发起、还在全自动跑的任务
+    /// 关掉开关时,各台 Mac 上由这台手机发起、还在全自动跑的任务(所有 CLI,见 [A2])
     /// 一并切回「先问我」。尽力而为:连不上的 Mac 下次收到这台手机的消息时也会按开关切回。
     private static func turnOffOnMacs() {
         Task { @MainActor in
-            for host in GatewayHostStore.shared.activeHosts where host.runsLeoPhoneAgent {
+            for host in GatewayHostStore.shared.activeHosts {
                 guard let client = GatewayHostStore.shared.client(for: host) else { continue }
                 Task {
                     // 手机或中继一时不通就重试几次(1 s、5 s、20 s);都不通时,之后发给这台 Mac 的每条消息也会带上"关"。
