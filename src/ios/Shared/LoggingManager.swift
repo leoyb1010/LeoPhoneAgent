@@ -473,7 +473,7 @@ final class LoggingManager: ObservableObject {
             }
             let memoryMB = Int(ProcessInfo.processInfo.physicalMemory / 1024 / 1024)
             body += "\n## 环境快照\n\n"
-            body += "- App: LOBE \(version) (\(build))\n"
+            body += "- App: LeoBot \(version) (\(build))\n"
             body += "- 系统: \(ProcessInfo.processInfo.operatingSystemVersionString)\n"
             body += "- 设备: \(machine), 内存 \(memoryMB) MB\n"
             body += "- 语言: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String])?.first ?? Locale.preferredLanguages.first ?? "?")\n"

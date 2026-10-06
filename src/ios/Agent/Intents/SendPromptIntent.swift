@@ -7,12 +7,12 @@ import UserNotifications
 /// The agent continues running in the background — use Get Session Status to poll for completion.
 struct SendPromptIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Prompt"
-    static var description = IntentDescription("Sends a prompt to the LOBE AI agent. Returns session info immediately while the task runs in the background.")
+    static var description = IntentDescription("Sends a prompt to the LeoBot AI agent. Returns session info immediately while the task runs in the background.")
     static var openAppWhenRun = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
-    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LOBE?")
+    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoBot?")
     var prompt: String
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the prompt. Accepts output from previous Shortcuts actions (e.g. filtered photos or documents).",
@@ -197,7 +197,7 @@ struct SendPromptIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: String(localized: "LOBE 任务已开始"),
+            title: String(localized: "LeoBot 任务已开始"),
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -206,7 +206,7 @@ struct SendPromptIntent: AppIntent {
             let settle = {
                 await Self.settleRun(
                     sessionId: sid, runId: runId, pendingId: pendingId,
-                    title: String(localized: "LOBE 任务"), notificationId: "shortcut-done")
+                    title: String(localized: "LeoBot 任务"), notificationId: "shortcut-done")
             }
             // [T-ios27-long-running] iOS 27 lets a waiting shortcut outlive the
             // ~30 s intent budget instead of being cut off mid-answer.
@@ -246,7 +246,7 @@ struct SendPromptIntent: AppIntent {
         Task { @MainActor in
             _ = await Self.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LOBE 任务"), notificationId: "shortcut-done")
+                title: String(localized: "LeoBot 任务"), notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(

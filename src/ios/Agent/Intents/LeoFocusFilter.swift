@@ -16,8 +16,8 @@ import Foundation
 import UserNotifications
 
 struct LeoFocusFilter: SetFocusFilterIntent {
-    static var title: LocalizedStringResource = "LOBE 工作模式"
-    static var description: IntentDescription? = IntentDescription("专注开启时告诉 LOBE 你在什么模式，是否静默非紧急通知。")
+    static var title: LocalizedStringResource = "LeoBot 工作模式"
+    static var description: IntentDescription? = IntentDescription("专注开启时告诉 LeoBot 你在什么模式，是否静默非紧急通知。")
     /// 专注常在锁屏时切换;它只写本机状态和诊断日志。
     static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
 

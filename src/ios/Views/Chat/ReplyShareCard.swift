@@ -50,7 +50,7 @@ struct ReplyShareCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                Label("LOBE", systemImage: "sparkles")
+                Label("LeoBot", systemImage: "sparkles")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.accentColor)
                 Spacer()

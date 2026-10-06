@@ -44,7 +44,7 @@ final class ReadOnlyProductAuditUITests: XCTestCase {
         capture("01-current-app-baseline")
         let model = app.buttons["home.model-picker"]
         if !model.exists {
-            let back = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["返回", "Back", "首页", "LOBE", "LeoPhoneAgent"])).firstMatch
+            let back = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["返回", "Back", "首页", "LeoBot", "LeoPhoneAgent"])).firstMatch
             if back.exists && back.isHittable { back.tap(); settle() }
         }
         guard model.waitForExistence(timeout: 5), model.isHittable else {

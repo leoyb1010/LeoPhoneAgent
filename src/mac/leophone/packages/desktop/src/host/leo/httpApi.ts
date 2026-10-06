@@ -311,7 +311,7 @@ export function startLeoHttpApi(deps: {
     }
     if (url.pathname.startsWith("/api/leo/link/direct/") && req.method === "POST") {
       if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
-        json(res, 403, { error: "直连授权只能在 LOBE 界面上操作" });
+        json(res, 403, { error: "直连授权只能在 LeoBot 界面上操作" });
         return;
       }
       try {
@@ -340,7 +340,7 @@ export function startLeoHttpApi(deps: {
       (req.method === "POST" || req.method === "DELETE")
     ) {
       if (!isPairSecret(req.headers["x-leo-pair"] as string | undefined)) {
-        json(res, 403, { error: "配对码只能在 LOBE 界面上生成" });
+        json(res, 403, { error: "配对码只能在 LeoBot 界面上生成" });
         return;
       }
       try {

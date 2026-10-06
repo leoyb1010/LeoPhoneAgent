@@ -49,13 +49,13 @@ struct WebLoadError: Equatable {
              (NSURLErrorDomain, NSURLErrorDNSLookupFailed):
             title = String(localized: "Cannot Open Page")
             message = host.map {
-                String(localized: "LOBE can’t open the page because it can’t find the server “\($0)”.")
-            } ?? String(localized: "LOBE can’t open the page because it can’t find the server.")
+                String(localized: "LeoBot can’t open the page because it can’t find the server “\($0)”.")
+            } ?? String(localized: "LeoBot can’t open the page because it can’t find the server.")
             systemImage = "wifi.exclamationmark"
 
         case (NSURLErrorDomain, NSURLErrorCannotConnectToHost):
             title = String(localized: "Cannot Open Page")
-            message = String(localized: "LOBE can’t open the page because it can’t connect to the server.")
+            message = String(localized: "LeoBot can’t open the page because it can’t connect to the server.")
             systemImage = "wifi.exclamationmark"
 
         case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet),
@@ -82,8 +82,8 @@ struct WebLoadError: Equatable {
              (NSURLErrorDomain, NSURLErrorClientCertificateRequired):
             title = String(localized: "This Connection Is Not Private")
             message = host.map {
-                String(localized: "LOBE can’t verify the identity of the server “\($0)”.")
-            } ?? String(localized: "LOBE can’t verify the identity of the server.")
+                String(localized: "LeoBot can’t verify the identity of the server “\($0)”.")
+            } ?? String(localized: "LeoBot can’t verify the identity of the server.")
             systemImage = "lock.slash"
 
         case (NSURLErrorDomain, NSURLErrorUnsupportedURL),

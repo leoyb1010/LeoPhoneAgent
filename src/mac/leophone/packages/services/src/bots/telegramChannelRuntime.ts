@@ -129,7 +129,7 @@ export function createTelegramChannelRuntime(deps: TelegramChannelRuntimeDeps) {
           provider: "telegram",
           status: "idle",
           messageId: "bots.runtime.telegramLongPollingHandledElsewhere",
-          message: "Telegram long polling is handled by another LOBE window.",
+          message: "Telegram long polling is handled by another LeoBot window.",
           offset: await deps.readTelegramOffset(bot.id),
         });
         await waitFor(BOT_RUNTIME_LOCK_RETRY_MS, signal);

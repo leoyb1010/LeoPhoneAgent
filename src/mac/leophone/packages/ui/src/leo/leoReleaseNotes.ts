@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.8.0",
+    date: "2026-10-06",
+    items: [
+      "正式改名 LeoBot：应用名、菜单栏、程序坞、关于窗口、界面文字、登录页、安装界面和通知全部换成 LeoBot。",
+      "新图标与新标志：一个笑眯眯的小机器人；应用内的标志同步更新，深色主题自动换成米白机器人。",
+      "这是原地升级：设置、登录状态、会话、藏宝阁、手机配对等数据全部保留在原来的位置，新版直接接上。",
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-10-06",
     items: [

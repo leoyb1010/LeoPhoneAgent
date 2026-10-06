@@ -61,7 +61,7 @@ private let logger = AppLogger(category: "FilesOffloadBridge")
         completion: @escaping (NSDictionary?, NSString?) -> Void
     ) {
         guard UIApplication.shared.applicationState == .active else {
-            completion(nil, "LOBE is not in the foreground. Ask the user to open the app, then retry.")
+            completion(nil, "LeoBot is not in the foreground. Ask the user to open the app, then retry.")
             return
         }
         guard activeFolderDelegate == nil, activeFilePickerDelegate == nil else {
@@ -144,7 +144,7 @@ private let logger = AppLogger(category: "FilesOffloadBridge")
         completion: @escaping (NSDictionary?, NSString?) -> Void
     ) {
         guard UIApplication.shared.applicationState == .active else {
-            completion(nil, "LOBE is not in the foreground. Ask the user to open the app, then retry.")
+            completion(nil, "LeoBot is not in the foreground. Ask the user to open the app, then retry.")
             return
         }
         guard activeFolderDelegate == nil, activeFilePickerDelegate == nil else {

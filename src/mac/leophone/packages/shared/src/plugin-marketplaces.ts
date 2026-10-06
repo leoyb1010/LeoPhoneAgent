@@ -46,7 +46,7 @@ export const DEFAULT_PLUGIN_MARKETPLACES: DefaultPluginMarketplace[] = [
     // 懒加载会立即失败而不出网;格式仍是 url,不改变 agent 的解析路径。
     source: "http://127.0.0.1:9/zcode/official-plugin/marketplace.json",
     name: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-    description: "LOBE built-in plugins.",
+    description: "LeoBot built-in plugins.",
     pluginCount: 0,
   },
 ];

@@ -381,7 +381,7 @@ struct AIChatView: View {
     /// Default chat title for sessions without a generated title. Sourced
     /// from SOUL.md (`name`), falls back to "LeoPhoneAgent". Refreshed on .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "LOBE" : SoulStore.cachedMetadata.name
+        ? "LeoBot" : SoulStore.cachedMetadata.name
 
     /// True when any sheet or fullScreenCover is presented (suppress auto-focus to avoid keyboard bugs).
     private var hasOverlayPresented: Bool {
@@ -2074,7 +2074,7 @@ struct AIChatView: View {
                     .padding(.top, legacyLayout ? 0 : 2)
                     .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
                         let n = SoulStore.cachedMetadata.name
-                        soulName = n.isEmpty ? "LOBE" : n
+                        soulName = n.isEmpty ? "LeoBot" : n
                     }
             }
             .buttonStyle(.plain)

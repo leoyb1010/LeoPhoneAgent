@@ -37,12 +37,12 @@ emit() {
     case "$1" in
         http://*|https://*|about:*)
             emit_marker "$1"
-            printf 'Opened in LOBE browser: %s\n' "$1"
+            printf 'Opened in LeoBot browser: %s\n' "$1"
             ;;
         leophoneagent://*)
             # Already a leophoneagent:// URL — pass through.
             emit_marker "$1"
-            printf 'Opened in LOBE preview: %s\n' "$1"
+            printf 'Opened in LeoBot preview: %s\n' "$1"
             ;;
         /var/minis/*)
             # Convert /var/minis/<host>/<path> → leophoneagent://<host>/<path>
@@ -54,7 +54,7 @@ emit() {
                     host="${rel%%/*}"
                     path="${rel#*/}"
                     emit_marker "leophoneagent://$host/$path"
-                    printf 'Opened in LOBE preview: leophoneagent://%s/%s\n' "$host" "$path"
+                    printf 'Opened in LeoBot preview: leophoneagent://%s/%s\n' "$host" "$path"
                     ;;
                 *)
                     # e.g. /var/minis/workspace with no trailing path — a bare

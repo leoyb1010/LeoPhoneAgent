@@ -187,7 +187,7 @@ enum LLMProviderFactory {
         let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase ?? "https://openrouter.ai/api", appendV1Suffix: customBase == nil)
         provider.extraHeaders = [
             "HTTP-Referer": "https://github.com/leoyb1010/LeoPhoneAgent",
-            "X-Title": "LOBE App",
+            "X-Title": "LeoBot App",
         ]
         provider.useOpenRouterCompat = true
         return applyCustomUserAgent(provider, instance: instance, manualToken: manualToken)

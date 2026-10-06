@@ -82,7 +82,7 @@ struct SearchTreasuryIntent: AppIntent {
 @available(iOS 16.0, *)
 struct OpenTreasuryIntent: AppIntent {
     static let title: LocalizedStringResource = "打开藏宝阁"
-    static let description = IntentDescription("打开 LOBE 的藏宝阁。")
+    static let description = IntentDescription("打开 LeoBot 的藏宝阁。")
     static let openAppWhenRun = true
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 

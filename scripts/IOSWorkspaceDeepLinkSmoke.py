@@ -19,7 +19,7 @@ spec = importlib.util.spec_from_file_location('audit_generator', root/'scripts/n
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 router = (root/'src/ios/Shared/DeepLinkRouter.swift').read_text()
-# 改名 LOBE：lobe:// 是 leophoneagent:// 的别名，handle 入口先规范化；规范化函数逐字取自生产代码。
+# 改名 LeoBot：lobe:// 是 leophoneagent:// 的别名，handle 入口先规范化；规范化函数逐字取自生产代码。
 scheme_start = router.index('enum AppURLScheme')
 app_scheme = router[scheme_start:router.index('\n}\n', scheme_start) + 3]
 app_entry = (root/'src/ios/AppDelegate.swift').read_text()
@@ -29,7 +29,7 @@ chat_view = (root/'src/ios/Views/Chat/AIChatView.swift').read_text()
 tap = chat_view[chat_view.index('    private func handleMinisURLTap(_ url: URL)'):]
 assert tap.index('AppURLScheme.canonicalize(url)') < tap.index('guard url.scheme == "leophoneagent"'), 'chat link taps do not accept lobe://'
 info = (root/'src/ios/Info.plist').read_text()
-assert '<string>leophoneagent</string>' in info and '<string>lobe</string>' in info, 'Info.plist must register both URL schemes'
+assert all(f'<string>{x}</string>' in info for x in ('leophoneagent', 'lobe', 'leobot')), 'Info.plist must register leophoneagent, lobe and leobot URL schemes'
 methods = '\n'.join(module.extract_swift_method(router, name)
                     for name in ['handle', 'handleSettings', 'handleWebAppLauncherReturn'])
 quick = (root/'src/ios/Shared/QuickActionRouter.swift').read_text()
@@ -147,12 +147,13 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   let key = "leo.ios.executionBackend.v1"
   func reset() { UserDefaults.standard.set("paperclip", forKey: key); NotificationNavigationStore.shared.pending = nil; DeepLinkCoordinator.shared.pendingSettingsTarget = nil }
   func route(_ value: String) { DeepLinkRouter.handle(url: URL(string: value)!, shareCoordinator: ShareCoordinator()) }
-  // 别名：lobe:// 与 LOBE:// 规范化成 leophoneagent://，其余 scheme 原样不动。
+  // 别名：lobe:// 与 LeoBot:// 规范化成 leophoneagent://，其余 scheme 原样不动。
   expect(AppURLScheme.canonicalize(URL(string: "lobe://settings/providers?x=1")!).absoluteString == "leophoneagent://settings/providers?x=1", "lobe alias not canonicalized")
-  expect(AppURLScheme.canonicalize(URL(string: "LOBE://new")!).absoluteString == "leophoneagent://new", "uppercase LOBE alias not canonicalized")
+  expect(AppURLScheme.canonicalize(URL(string: "LeoBot://new")!).absoluteString == "leophoneagent://new", "uppercase LeoBot alias not canonicalized")
+  expect(AppURLScheme.canonicalize(URL(string: "leobot://settings")!).absoluteString == "leophoneagent://settings", "leobot alias not canonicalized")
   expect(AppURLScheme.canonicalize(URL(string: "leophoneagent://new")!).absoluteString == "leophoneagent://new", "legacy scheme changed")
   expect(AppURLScheme.canonicalize(URL(string: "https://lobe.example/x")!).absoluteString == "https://lobe.example/x", "foreign scheme rewritten")
-  for scheme in ["leophoneagent://", "lobe://"] {
+  for scheme in ["leophoneagent://", "lobe://", "leobot://"] {
    for routeName in ["settings", "settings/providers", "new", "voice"] {
     reset(); route(scheme + routeName)
     expect(UserDefaults.standard.string(forKey: key) == "local", scheme + routeName + " did not route")

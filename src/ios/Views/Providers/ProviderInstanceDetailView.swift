@@ -703,7 +703,7 @@ struct ProviderInstanceDetailView: View {
         } header: {
             Text(String(localized: "Custom User-Agent"))
         } footer: {
-            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LOBE default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."))
+            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoBot default. Useful for relays that only accept specific clients (e.g. \"my-relay-client/1.0\")."))
         }
     }
 

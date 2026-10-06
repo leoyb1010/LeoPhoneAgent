@@ -609,7 +609,7 @@ struct MinisApp: App {
 
     private static let fileProviderDomain = NSFileProviderDomain(
         identifier: NSFileProviderDomainIdentifier("com.leoyuan.leophoneagent.files"),
-        displayName: "LOBE"
+        displayName: "LeoBot"
     )
 
     /// Bumped when we need to force-rebuild the FileProvider domain on next launch
@@ -748,7 +748,7 @@ struct MinisApp: App {
             }
 
             if alreadyRegistered {
-                // 改名 LOBE:已注册的域保留旧显示名;同标识符 add 只更新显示名,不动数据。
+                // 改名 LeoBot:已注册的域保留旧显示名;同标识符 add 只更新显示名,不动数据。
                 if domains.contains(where: { $0.identifier == fileProviderDomain.identifier && $0.displayName != fileProviderDomain.displayName }) {
                     NSFileProviderManager.add(fileProviderDomain) { err in
                         if let err { lifecycleLog.warning("[FileProvider] displayName update failed: \(err.localizedDescription)") }

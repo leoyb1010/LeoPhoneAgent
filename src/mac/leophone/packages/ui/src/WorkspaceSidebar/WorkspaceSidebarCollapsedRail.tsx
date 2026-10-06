@@ -34,7 +34,7 @@ export function WorkspaceSidebarCollapsedRail({
             >
               <img
                 src={appLogoUrl}
-                alt="LOBE"
+                alt="LeoBot"
                 className="size-5 transition-opacity group-hover:opacity-0"
                 draggable={false}
               />

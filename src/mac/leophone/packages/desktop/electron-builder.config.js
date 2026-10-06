@@ -484,7 +484,7 @@ export default {
     zcodeProductFlavor: desktopProductIdentity.flavor,
     homepage: "https://github.com/leoyb1010/LeoPhoneAgent",
     author: {
-      name: "LOBE",
+      name: "LeoBot",
       email: "noreply@leophoneagent.invalid",
     },
   },

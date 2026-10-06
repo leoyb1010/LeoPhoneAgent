@@ -14,7 +14,7 @@ struct AskLeoIntent: AppIntent {
     static let requested = Notification.Name("leo.watch.askRequested")
 
     static var title: LocalizedStringResource = "问 Leo"
-    static var description = IntentDescription("打开 LOBE 并开始语音提问。")
+    static var description = IntentDescription("打开 LeoBot 并开始语音提问。")
     static var openAppWhenRun = true
 
     @MainActor

@@ -17,7 +17,7 @@ import Foundation
 struct RunDueScheduledTasksIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Run Due Scheduled Tasks"
     static var description = IntentDescription(
-        "Runs any LOBE scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
+        "Runs any LeoBot scheduled task whose time has come. Point a Shortcuts personal automation at this to get reliable timed runs."
     )
     static var openAppWhenRun = false
     // Time-of-day automations fire while the phone is locked, and this intent

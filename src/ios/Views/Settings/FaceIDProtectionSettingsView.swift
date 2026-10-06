@@ -34,7 +34,7 @@ struct FaceIDProtectionSettingsView: View {
                 Toggle(isOn: appLockBinding) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Lock App")
-                        Text("Require \(BiometricAuth.biometryDisplayName) to open LOBE.")
+                        Text("Require \(BiometricAuth.biometryDisplayName) to open LeoBot.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }

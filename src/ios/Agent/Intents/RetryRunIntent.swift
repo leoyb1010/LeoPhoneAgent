@@ -186,7 +186,7 @@ struct RetryRunIntent: AppIntent {
 
         ShortcutNotification.post(
             id: "shortcut-retry-\(sid)",
-            title: String(localized: "LOBE：正在重试"),
+            title: String(localized: "LeoBot：正在重试"),
             body: "\(modelName): \(promptPreview)\(targetMessage.content.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -194,7 +194,7 @@ struct RetryRunIntent: AppIntent {
         if waitForResult {
             let settled = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LOBE 重试"), notificationId: "shortcut-retry-done")
+                title: String(localized: "LeoBot 重试"), notificationId: "shortcut-retry-done")
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -214,7 +214,7 @@ struct RetryRunIntent: AppIntent {
         Task { @MainActor in
             _ = await SendPromptIntent.settleRun(
                 sessionId: sid, runId: runId, pendingId: pendingId,
-                title: String(localized: "LOBE 重试"), notificationId: "shortcut-retry-done")
+                title: String(localized: "LeoBot 重试"), notificationId: "shortcut-retry-done")
         }
 
         let result = SendPromptResult(

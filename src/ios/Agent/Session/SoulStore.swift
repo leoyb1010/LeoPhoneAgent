@@ -22,8 +22,11 @@ struct SoulMetadata: Equatable {
     /// Settings preview card). Hard-coded — see comment on `emoji`.
     var displayEmoji: String { "✨" }
 
+    /// 以前版本首启写进 SOUL.md 的默认名；读取时一律当作「默认」，不改文件。
+    static let legacyDefaultNames: Set<String> = ["LeoPhoneAgent", "LOBE"]
+
     static let `default` = SoulMetadata(
-        name: "LOBE",
+        name: "LeoBot",
         // Default emoji is intentionally empty — the UI uses the fixed
         // `displayEmoji` sparkle and serialize() no longer writes the
         // `emoji:` line. Kept on the struct only so the parser can
@@ -80,8 +83,8 @@ enum SoulMDParser {
                 value = String(value.dropFirst().dropLast())
             }
             switch key {
-            // 改名 LOBE:旧版首启写入的默认名 "LeoPhoneAgent" 视作默认,显示/身份都用新名。
-            case "name":  if !value.isEmpty { meta.name = value == "LeoPhoneAgent" ? SoulMetadata.default.name : value }
+            // 改名历史 LeoPhoneAgent → LOBE（1.58.0）→ LeoBot（1.59.0）：旧版首启写入的默认名视作默认，显示/身份都用新名。
+            case "name":  if !value.isEmpty { meta.name = SoulMetadata.legacyDefaultNames.contains(value) ? SoulMetadata.default.name : value }
             case "emoji": if !value.isEmpty { meta.emoji = value }
             case "style": meta.style = value
             case "lang":  if !value.isEmpty { meta.lang = value }
@@ -246,7 +249,7 @@ enum SoulStore {
     /// style / lang) is seeded.
     static let defaultContent: String = """
     ---
-    name: "LOBE"
+    name: "LeoBot"
     style: ""
     lang: "auto"
     ---
@@ -416,7 +419,7 @@ enum SystemPromptBuilder {
         let name: String = {
             let n = (file?.metadata.name ?? SoulMetadata.default.name)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return n.isEmpty ? "LOBE" : n
+            return n.isEmpty ? "LeoBot" : n
         }()
         let style: String = (file?.metadata.style ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -531,12 +534,12 @@ enum SystemPromptBuilder {
 @MainActor
 struct AssistantSoulName: View {
     @State private var name: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "LOBE" : SoulStore.cachedMetadata.name
+        ? "LeoBot" : SoulStore.cachedMetadata.name
     var body: some View {
         Text(name)
             .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
                 let n = SoulStore.cachedMetadata.name
-                name = n.isEmpty ? "LOBE" : n
+                name = n.isEmpty ? "LeoBot" : n
             }
     }
 }

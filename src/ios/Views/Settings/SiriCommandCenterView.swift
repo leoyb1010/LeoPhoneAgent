@@ -68,7 +68,7 @@ struct SiriCommandCenterView: View {
                     Text("小红书这类 app 只给「复制链接」,没有系统分享。配一条快捷指令后,复制完按一下侧键或顶部按钮就存进收藏:")
                     Text("1. 快捷指令 App → 新建快捷指令")
                     Text("2. 加动作「获取剪贴板」")
-                    Text("3. 加动作「收藏到 LB」(搜 LOBE)")
+                    Text("3. 加动作「收藏到 LB」(搜 LeoBot)")
                     Text("4. 命名为「收藏」,再到 系统设置 → 操作按钮 → 快捷指令 里选它")
                     Text("也可以直接在收藏页用剪贴板条 / 右上角「粘贴链接收藏」。")
                         .foregroundStyle(.tertiary)
@@ -79,7 +79,7 @@ struct SiriCommandCenterView: View {
             Section("把「问 Leo」绑到操作按钮(本机有的话)") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("1. 系统设置 → 操作按钮(部分机型才有)")
-                    Text("2. 滑到「快捷指令」,选「Ask LOBE」")
+                    Text("2. 滑到「快捷指令」,选「Ask LeoBot」")
                     Text("3. 之后实体键一按即语音下任务——比嘿 Siri 更快。没有操作按钮时用嘿 Siri 或快捷指令即可。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
@@ -93,7 +93,7 @@ struct SiriCommandCenterView: View {
                     Text("• 「充电时 + 23:00」→ 指挥一台 Mac:跑夜间批处理")
                     Text("• 「到达家」→ Mac 任务汇报")
                     Text("• 「离开公司」→ Mac 任务汇报")
-                    Text("快捷指令 App → 自动化 → 新建,动作里搜 LOBE。")
+                    Text("快捷指令 App → 自动化 → 新建,动作里搜 LeoBot。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
             }

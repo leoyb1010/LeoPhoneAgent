@@ -53,9 +53,9 @@ enum SessionSpotlightIndexer {
         attributes.title = session.title?.isEmpty == false
             ? session.title
             : String(localized: "New Chat")
-        attributes.contentDescription = String(localized: "LOBE conversation")
+        attributes.contentDescription = String(localized: "LeoBot conversation")
         attributes.contentModificationDate = session.updatedAt
-        attributes.keywords = ["LOBE", "LeoPhoneAgent", "Agent", "chat"]
+        attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
 
         let item = CSSearchableItem(
             uniqueIdentifier: session.id,
@@ -108,9 +108,9 @@ enum SessionSpotlightIndexer {
             attributes.title = session.title?.isEmpty == false
                 ? session.title
                 : String(localized: "New Chat")
-            attributes.contentDescription = String(localized: "LOBE conversation")
+            attributes.contentDescription = String(localized: "LeoBot conversation")
             attributes.contentModificationDate = session.updatedAt
-            attributes.keywords = ["LOBE", "LeoPhoneAgent", "Agent", "chat"]
+            attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
             return CSSearchableItem(
                 uniqueIdentifier: session.id,
                 domainIdentifier: domain,

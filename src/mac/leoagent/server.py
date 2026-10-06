@@ -53,7 +53,7 @@ IDENTIFIED_CALLERS = ("master", "iphone", "legacy")
 # 设备钥匙解决不了(钥匙本来就对),所以 fix 固定是 mac_steps:要在 Mac 上做的事。
 DEVICE_NOT_RECOGNIZED_STEPS = [
     "在运行中继的那台 Mac 上，把中继（relay.py）更新到 0.2 或更新版本并重启中继。",
-    "在这台 Mac 上把 LOBE（或 leoagent）更新到最新版，确认它重新连上了中继。",
+    "在这台 Mac 上把 LeoBot（或 leoagent）更新到最新版，确认它重新连上了中继。",
     "回到手机重发这个任务，全自动就会生效。",
 ]
 

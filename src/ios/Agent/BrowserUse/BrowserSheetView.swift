@@ -360,7 +360,7 @@ private struct AgentBrowsingOverlay: View {
                     .opacity(reduceMotion ? 1.0 : (breathing ? 1.0 : 0.3))
                     .shadow(color: Color.accentColor.opacity(reduceMotion ? 0 : (breathing ? 0.8 : 0)), radius: reduceMotion ? 0 : (breathing ? 8 : 0))
 
-                Text("LOBE is browsing")
+                Text("LeoBot is browsing")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
 

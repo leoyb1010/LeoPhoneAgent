@@ -51,7 +51,7 @@ const DESKTOP_ZOOM_MAX_LEVEL = 5;
 
 // [leo] LeoPhoneAgent 没有平台账号：头像菜单只是偏好设置入口，名字固定显示产品名；
 // 账号头像、套餐徽标、Coding Plan 升级、登录/退出入口都已去掉（相关 props 保留仅为兼容调用方）。
-const SIDEBAR_PROFILE_NAME = "LOBE";
+const SIDEBAR_PROFILE_NAME = "LeoBot";
 
 export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterComponent({
   theme,

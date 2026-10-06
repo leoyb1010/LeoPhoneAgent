@@ -46,7 +46,7 @@ class ShareViewController: UIViewController {
     // MARK: - 两种去向
 
     private func presentChoice() {
-        let alert = UIAlertController(title: "分享到 LOBE",
+        let alert = UIAlertController(title: "分享到 LeoBot",
                                       message: nil, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "💬 发到对话", style: .default) { [weak self] _ in
             self?.sendToChat()

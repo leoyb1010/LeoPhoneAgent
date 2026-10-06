@@ -17,7 +17,7 @@ extension AIChatViewModel {
         if #available(iOS 26.0, *) {
             AgentContinuedProcessingManager.shared.begin(
                 sessionKey: continuedKey,
-                title: "LOBE",
+                title: "LeoBot",
                 subtitle: String(localized: "Preparing"),
                 onExpiration: { [weak self] in
                     guard let self else { return }
@@ -881,7 +881,7 @@ final class AgentContinuedProcessingManager {
         run.lastProgress = ContinuedProcessingProgress.next(after: run.lastProgress, events: run.progressEvents)
         guard let task = run.task else { return }
         task.progress.completedUnitCount = run.lastProgress
-        task.updateTitle("LOBE", subtitle: subtitle.isEmpty ? String(localized: "Working") : subtitle)
+        task.updateTitle("LeoBot", subtitle: subtitle.isEmpty ? String(localized: "Working") : subtitle)
     }
 
     /// - Parameter subtitle: what actually happened. The system banner only
@@ -890,7 +890,7 @@ final class AgentContinuedProcessingManager {
         guard let run = runs.removeValue(forKey: sessionKey) else { return }
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: run.identifier)
         if let task = run.task {
-            task.updateTitle("LOBE", subtitle: subtitle)
+            task.updateTitle("LeoBot", subtitle: subtitle)
             task.progress.completedUnitCount = success ? ContinuedProcessingProgress.scale : max(1, run.lastProgress)
             task.setTaskCompleted(success: success)
         }
@@ -915,7 +915,7 @@ final class AgentContinuedProcessingManager {
                 // 还在跑"的来源。把真实状态写进副标题,再按未失败收尾。
                 let stillAlive = BackgroundKeepAliveManager.shared.enhancedBackgroundEffective
                 run.task?.updateTitle(
-                    "LOBE",
+                    "LeoBot",
                     subtitle: stillAlive
                         ? String(localized: "仍在后台运行")
                         : String(localized: "已暂停，回到 App 继续")

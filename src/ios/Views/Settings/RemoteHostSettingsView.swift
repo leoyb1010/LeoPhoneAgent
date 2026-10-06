@@ -212,7 +212,7 @@ private final class HostEditModel: ObservableObject {
                     return first
                 }
                 guard let key = keys.first(where: { $0.hasPrefix("ssh-ed25519 ") }) ?? keys.first else {
-                    hostKeyFetchResult = String(localized: "这台 Mac 的 LOBE 版本还不提供 SSH 公钥，请升级到 1.3.5 或手工粘贴。")
+                    hostKeyFetchResult = String(localized: "这台 Mac 的 LeoBot 版本还不提供 SSH 公钥，请升级到 1.3.5 或手工粘贴。")
                     return
                 }
                 trustedHostKey = key

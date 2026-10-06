@@ -449,7 +449,7 @@ enum WidgetMemoryStore {
 @available(iOS 17.0, *)
 struct StopAllTasksFromWidgetIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop Running Tasks"
-    static let description = IntentDescription("Cancels every running LOBE task.")
+    static let description = IntentDescription("Cancels every running LeoBot task.")
     static let openAppWhenRun = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
@@ -470,7 +470,7 @@ struct RunQuickTaskFromWidgetIntent: LiveActivityIntent {
     static var isDiscoverable: Bool { false }
 
     static let title: LocalizedStringResource = "Run Quick Task"
-    static let description = IntentDescription("Runs a LOBE quick task in the background.")
+    static let description = IntentDescription("Runs a LeoBot quick task in the background.")
     /// Stay out of the way: the point of the widget button is not opening the app.
     static let openAppWhenRun = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
@@ -725,7 +725,7 @@ struct AgentActivityAttributes: ActivityAttributes {
 @available(iOS 18.0, *)
 struct OpenNewChatControlIntent: AppIntent {
     static let title: LocalizedStringResource = "New Chat"
-    static let description = IntentDescription("Opens LOBE on a new conversation.")
+    static let description = IntentDescription("Opens LeoBot on a new conversation.")
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
@@ -737,7 +737,7 @@ struct OpenNewChatControlIntent: AppIntent {
 @available(iOS 18.0, *)
 struct StartVoiceControlIntent: AppIntent {
     static let title: LocalizedStringResource = "Voice Chat"
-    static let description = IntentDescription("Opens LOBE and starts voice input.")
+    static let description = IntentDescription("Opens LeoBot and starts voice input.")
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
@@ -749,7 +749,7 @@ struct StartVoiceControlIntent: AppIntent {
 @available(iOS 18.0, *)
 struct StartCameraControlIntent: AppIntent {
     static let title: LocalizedStringResource = "Camera Chat"
-    static let description = IntentDescription("Opens LOBE with the camera ready.")
+    static let description = IntentDescription("Opens LeoBot with the camera ready.")
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {

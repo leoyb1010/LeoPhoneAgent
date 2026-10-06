@@ -109,7 +109,7 @@ function createLinuxDeepLinkDesktopEntry(params: {
   productName?: string;
   iconName?: string;
 }): string {
-  const productName = params.productName ?? "LOBE";
+  const productName = params.productName ?? "LeoBot";
   const iconName = params.iconName ?? "zcode";
   const command = {
     executablePath: params.executablePath,

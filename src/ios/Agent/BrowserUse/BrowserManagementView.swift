@@ -49,7 +49,7 @@ struct BrowserManagementView: View {
                 clearAllCookies()
             }
         } message: {
-            Text("This will remove all cookies and website data from the LOBE browser.")
+            Text("This will remove all cookies and website data from the LeoBot browser.")
         }
         .task {
             await loadCookies()
@@ -378,7 +378,7 @@ struct BrowserManagementView: View {
         } header: {
             Text("Cookies & Data")
         } footer: {
-            Text("Clearing cookies will sign you out of all websites in the LOBE browser.")
+            Text("Clearing cookies will sign you out of all websites in the LeoBot browser.")
         }
     }
 

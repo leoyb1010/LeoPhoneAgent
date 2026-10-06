@@ -156,7 +156,7 @@ private struct AutomationEditSheet: View {
                         }
                         if model.capturedLocation == nil {
                             if model.locationDenied {
-                                Text("没有定位权限:在系统设置里给 LOBE 打开定位,才能按地点触发。")
+                                Text("没有定位权限:在系统设置里给 LeoBot 打开定位,才能按地点触发。")
                                     .font(.caption).foregroundStyle(.orange)
                             } else if model.locationFailed {
                                 Button("没拿到当前位置,点这里再试一次") { model.retryLocation() }

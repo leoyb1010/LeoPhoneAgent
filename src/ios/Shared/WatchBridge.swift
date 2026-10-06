@@ -457,7 +457,7 @@ final class WatchBridge: NSObject, ObservableObject {
         guard session.activationState == .activated else { return String(localized: "和手表的连接还没准备好，稍后再试。") }
         if !session.isPaired { return String(localized: "这台 iPhone 还没有配对 Apple Watch。") }
         if !session.isWatchAppInstalled {
-            return String(localized: "手表上还没装 LOBE：在 iPhone 的 Watch App 里找到它并安装。")
+            return String(localized: "手表上还没装 LeoBot：在 iPhone 的 Watch App 里找到它并安装。")
         }
         #endif
         return nil

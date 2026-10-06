@@ -164,7 +164,7 @@ enum LeoDeviceNouns {
     static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     static func filesBrowsePath(isPad: Bool = isPad) -> String {
-        isPad ? "我的 iPad → LOBE" : "我的 iPhone → LOBE"
+        isPad ? "我的 iPad → LeoBot" : "我的 iPhone → LeoBot"
     }
 
     static func thisDevice(isPad: Bool = isPad) -> String {

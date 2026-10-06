@@ -14,7 +14,7 @@
 	<key>LeoRelaySSHTarget</key>
 	<string>$(LEO_RELAY_SSH_TARGET)</string>
 	<key>CFBundleDisplayName</key>
-	<string>LOBE</string>
+	<string>LeoBot</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -31,7 +31,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>LOBE Skill</string>
+			<string>LeoBot Skill</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -174,6 +174,7 @@
 			<array>
 				<string>leophoneagent</string>
 				<string>lobe</string>
+				<string>leobot</string>
 			</array>
 		</dict>
 		<dict>
@@ -214,9 +215,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NFCReaderUsageDescription</key>
-	<string>LOBE uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
+	<string>LeoBot uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
 	<key>NSAlarmKitUsageDescription</key>
-	<string>LOBE uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
+	<string>LeoBot uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- [T-ats-tighten] 从全局明文闸(NSAllowsArbitraryLoads)收紧为
@@ -229,47 +230,47 @@
 		<true/>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>LOBE uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
+	<string>LeoBot uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>LOBE uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<string>LeoBot uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>LOBE uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<string>LeoBot uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>LOBE uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<string>LeoBot uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>LOBE uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<string>LeoBot uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>LOBE needs camera access to take photos for AI conversations.</string>
+	<string>LeoBot needs camera access to take photos for AI conversations.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>LOBE uses contacts access so the AI agent can look up, create, or update contacts you explicitly ask it to manage.</string>
+	<string>LeoBot uses contacts access so the AI agent can look up, create, or update contacts you explicitly ask it to manage.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>LOBE uses Face ID to protect locked chat sessions so only you can view their contents.</string>
+	<string>LeoBot uses Face ID to protect locked chat sessions so only you can view their contents.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>LOBE uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
+	<string>LeoBot uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>LOBE uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
+	<string>LeoBot uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
 	<key>NSHomeKitUsageDescription</key>
-	<string>LOBE uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
+	<string>LeoBot uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>LOBE connects to computers on your local network over SSH (Remote Hosts) so the agent can run heavy tasks there.</string>
+	<string>LeoBot connects to computers on your local network over SSH (Remote Hosts) so the agent can run heavy tasks there.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>LOBE uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
+	<string>LeoBot uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>LOBE uses your location to record where agent sessions are started for your session history.</string>
+	<string>LeoBot uses your location to record where agent sessions are started for your session history.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>LOBE needs microphone access for voice-to-text input in chat.</string>
+	<string>LeoBot needs microphone access for voice-to-text input in chat.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>LOBE uses motion data so the AI agent can report your live step count and activity when you ask.</string>
+	<string>LeoBot uses motion data so the AI agent can report your live step count and activity when you ask.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>LOBE needs permission to save videos and images to your photo library.</string>
+	<string>LeoBot needs permission to save videos and images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LOBE allows the AI agent to find, attach, organize, and delete photos or videos when you explicitly request those actions.</string>
+	<string>LeoBot allows the AI agent to find, attach, organize, and delete photos or videos when you explicitly request those actions.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>LOBE uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<string>LeoBot uses reminders access so the AI agent can query and create reminders on your behalf.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>LOBE uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<string>LeoBot uses reminders access so the AI agent can query and create reminders on your behalf.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>LOBE uses speech recognition to convert your voice into text messages.</string>
+	<string>LeoBot uses speech recognition to convert your voice into text messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
@@ -297,7 +298,7 @@
 				<string>public.plain-text</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>LOBE Skill</string>
+			<string>LeoBot Skill</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.leoyuan.leophoneagent.skillmd</string>
 			<key>UTTypeTagSpecification</key>

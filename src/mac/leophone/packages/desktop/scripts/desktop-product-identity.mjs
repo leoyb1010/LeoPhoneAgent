@@ -33,8 +33,8 @@ export const LEO_PRODUCT_IDENTITY_ENV = "ZCODE_PRODUCT_IDENTITY";
 const LEO_IDENTITY = Object.freeze({
   flavor: "production",
   appId: "com.leoyuan.leocodebox",
-  // 对用户显示的名字是 LOBE(LOBE.app / 菜单栏 / Dock);appId、数据目录、更新源都不变,原位升级。
-  productName: "LOBE",
+  // 对用户显示的名字是 LeoBot(LeoBot.app / 菜单栏 / Dock);appId、数据目录、更新源都不变,原位升级。
+  productName: "LeoBot",
   linuxExecutableName: "leophoneagent",
   linuxPackageName: "leophoneagent",
   cuaHelperInstallVariant: null,

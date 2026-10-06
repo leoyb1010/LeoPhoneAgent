@@ -41,7 +41,7 @@ struct SoulSettingsView: View {
 
             Section(String(localized: "Identity")) {
                 LabeledContent(String(localized: "Name")) {
-                    TextField("LOBE", text: $name)
+                    TextField("LeoBot", text: $name)
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)
@@ -158,7 +158,7 @@ struct SoulSettingsView: View {
             Text(SoulMetadata.default.displayEmoji)
                 .font(.system(size: 32))
             VStack(alignment: .leading, spacing: 2) {
-                Text(name.isEmpty ? "LOBE" : name)
+                Text(name.isEmpty ? "LeoBot" : name)
                     .font(.title3.weight(.semibold))
                 if !style.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(style)

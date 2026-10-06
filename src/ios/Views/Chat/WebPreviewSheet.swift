@@ -414,7 +414,7 @@ extension WebViewHolder: WKNavigationDelegate {
         let target = url.scheme.map { "\($0):" } ?? url.absoluteString
         let alert = UIAlertController(
             title: String(localized: "Open in Another App?"),
-            message: String(localized: "This page wants to open a \(target) link outside LOBE."),
+            message: String(localized: "This page wants to open a \(target) link outside LeoBot."),
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
         alert.addAction(UIAlertAction(title: String(localized: "Open"), style: .default) { _ in

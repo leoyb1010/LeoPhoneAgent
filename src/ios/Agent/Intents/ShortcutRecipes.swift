@@ -38,7 +38,7 @@ enum ShortcutRecipes {
             trigger: "到达（家）", action: "记住这个", iCloudLink: "",
             steps: [
                 "打开快捷指令 App › 自动化 › 新建 › 到达，位置选「家」，选「立即运行」。",
-                "添加动作：搜索 LOBE › 「记住这个」，内容填「到家了」。",
+                "添加动作：搜索 LeoBot › 「记住这个」，内容填「到家了」。",
                 "点完成。锁屏也能跑，不会弹出 App。",
             ]),
         ShortcutRecipe(
@@ -47,7 +47,7 @@ enum ShortcutRecipes {
             trigger: "CarPlay 已连接 / 蓝牙已连接（车）", action: "Mac 任务汇报", iCloudLink: "",
             steps: [
                 "自动化 › 新建 › CarPlay（或蓝牙，选你的车），选「已连接」「立即运行」。",
-                "添加动作：LOBE › 「Mac 任务汇报」。",
+                "添加动作：LeoBot › 「Mac 任务汇报」。",
                 "点完成。需要先在 App 里连上 Mac 中继。",
             ]),
         ShortcutRecipe(
@@ -56,7 +56,7 @@ enum ShortcutRecipes {
             trigger: "操作按钮 / 辅助功能 › 触控 › 轻点背面", action: "发送提示（附件）", iCloudLink: "",
             steps: [
                 "快捷指令 › 新建快捷指令：添加「获取最新的截屏」。",
-                "添加 LOBE › 「发送提示」，提示写「解读这张截图」，附件接上一步，打开「等待结果」。",
+                "添加 LeoBot › 「发送提示」，提示写「解读这张截图」，附件接上一步，打开「等待结果」。",
                 "设置 › 操作按钮（或轻点背面）选这条快捷指令。",
             ]),
         ShortcutRecipe(
@@ -65,7 +65,7 @@ enum ShortcutRecipes {
             trigger: "蓝牙已连接（车）", action: "记一条笔记", iCloudLink: "",
             steps: [
                 "自动化 › 新建 › 蓝牙，选你的车，选「已连接」「立即运行」。",
-                "添加「听写文本」，再添加 LOBE › 「记一条笔记」，内容接上一步。",
+                "添加「听写文本」，再添加 LeoBot › 「记一条笔记」，内容接上一步。",
                 "点完成。锁屏状态下也会执行。",
             ]),
         ShortcutRecipe(
@@ -75,7 +75,7 @@ enum ShortcutRecipes {
             steps: [
                 "先在 App › 设置 › 定时任务 里加一个每天 08:00 的「晨报」。",
                 "自动化 › 新建 › 特定时间，08:00 每天，选「立即运行」。",
-                "添加 LOBE › 「运行到点的定时任务」，点完成。",
+                "添加 LeoBot › 「运行到点的定时任务」，点完成。",
             ]),
     ]
 }

@@ -44,7 +44,7 @@ enum PrintHelper {
         let controller = UIPrintInteractionController.shared
         let info = UIPrintInfo.printInfo()
         info.outputType = outputType
-        info.jobName = jobName.isEmpty ? "LOBE" : jobName
+        info.jobName = jobName.isEmpty ? "LeoBot" : jobName
         controller.printInfo = info
         configure(controller)
         controller.present(animated: true) { _, completed, error in

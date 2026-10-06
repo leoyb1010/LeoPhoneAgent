@@ -48,7 +48,7 @@ xcrun notarytool store-credentials leocodebox --apple-id <Apple ID> --team-id 48
 corepack pnpm@10.33.2 typecheck && corepack pnpm@10.33.2 lint && corepack pnpm@10.33.2 architecture:check -- --changed
 ZCODE_ENABLE_MAC_SIGN=1 APPLE_SIGNING_IDENTITY="Developer ID Application: leo yuan (48H5Y3LNUK)" \
   pnpm leo:bundle:mac                # 闸门 + 构建 + 签名(脚本里固定打开签名;不要经 corepack 调,嵌套的 pnpm 会变成 11.x 直接报错)
-bash scripts/leo-notarize-mac.sh packages/desktop/dist/LOBE-<版本>-mac-arm64.dmg
+bash scripts/leo-notarize-mac.sh packages/desktop/dist/LeoBot-<版本>-mac-arm64.dmg
 corepack pnpm@10.33.2 leo:finalize:mac                # manifest + latest-mac.yml
 gh release create v<版本> -R leoyb1010/leocodebox-updates <dmg> <zip> \
   packages/desktop/dist/leophone-manifest-darwin-arm64.json packages/desktop/dist/latest-mac.yml

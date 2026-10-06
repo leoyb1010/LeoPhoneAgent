@@ -284,7 +284,7 @@ final class MCPStore: ObservableObject {
         var command: String?
         var args: [String]?
         var env: [String: String]?
-        var startupTimeoutSeconds: Int?   // LOBE STDIO startup timeout; round-tripped verbatim
+        var startupTimeoutSeconds: Int?   // LeoBot STDIO startup timeout; round-tripped verbatim
     }
 
     func load() {

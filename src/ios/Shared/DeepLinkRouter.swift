@@ -46,14 +46,15 @@ extension Notification.Name {
 /// Unknown settings paths fall back to the Settings home rather than
 /// failing — same as Android — so an LLM-generated link can never
 /// strand the user.
-/// 改名 LOBE 后 `lobe://` 是 `leophoneagent://` 的别名。入口处统一改写成规范 scheme,
+/// 改名 LeoBot 后 `lobe://` 是 `leophoneagent://` 的别名。入口处统一改写成规范 scheme,
 /// 下游所有 `url.scheme == "leophoneagent"` 判断和生成的链接都不用动,旧快捷指令/链接照常可用。
 enum AppURLScheme {
     static let canonical = "leophoneagent"
-    static let alias = "lobe"
+    /// 改名历史：LeoBot（1.58.0）→ LeoBot（1.59.0）。两个别名都保留，已存的链接和快捷指令照常可用。
+    static let aliases: Set<String> = ["lobe", "leobot"]
 
     static func canonicalize(_ url: URL) -> URL {
-        guard url.scheme?.lowercased() == alias,
+        guard let scheme = url.scheme?.lowercased(), aliases.contains(scheme),
               var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         parts.scheme = canonical
         return parts.url ?? url

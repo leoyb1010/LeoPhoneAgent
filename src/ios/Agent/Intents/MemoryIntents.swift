@@ -14,7 +14,7 @@ import UIKit
 
 struct RememberThisIntent: AppIntent {
     static var title: LocalizedStringResource = "记住这个"
-    static var description = IntentDescription("把一句话写进 LOBE 的记忆，以后对话里会自动想起。不会读出已有记忆。")
+    static var description = IntentDescription("把一句话写进 LeoBot 的记忆，以后对话里会自动想起。不会读出已有记忆。")
     static var openAppWhenRun: Bool = false
     static var supportedModes: IntentModes = .background
     static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
@@ -42,7 +42,7 @@ struct RememberThisIntent: AppIntent {
 
 struct RecallMemoryIntent: AppIntent {
     static var title: LocalizedStringResource = "想一想"
-    static var description = IntentDescription("在 LOBE 的记忆里找和问题最相关的 3 条，返回文本。")
+    static var description = IntentDescription("在 LeoBot 的记忆里找和问题最相关的 3 条，返回文本。")
     static var openAppWhenRun: Bool = false
     static var supportedModes: IntentModes = .background
     static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication

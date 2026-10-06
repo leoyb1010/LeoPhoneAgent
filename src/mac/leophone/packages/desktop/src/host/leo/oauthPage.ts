@@ -12,7 +12,7 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LOBE · 订阅账号登录</title>
+<title>LeoBot · 订阅账号登录</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1d1f; --sub:#6e6e73; --line:rgba(0,0,0,.1); --bg:#fbfbfd; --card:#fff; --ok:#1a7f37; --accent:#0a66ff; }
   @media (prefers-color-scheme: dark) { :root { --fg:#f5f5f7; --sub:#98989d; --line:rgba(255,255,255,.12); --bg:#111113; --card:#1c1c1e; --ok:#3fb950; --accent:#4c8dff; } }
@@ -44,7 +44,7 @@ export const OAUTH_PAGE_HTML = `<!doctype html>
 <body>
 <main>
   <h1>订阅账号登录</h1>
-  <p class="lead">用你已有的订阅（ChatGPT、GitHub Copilot、OpenCode Go 等）驱动 LOBE。凭据只存在这台 Mac 的 ~/.leoagent/oauth，请求直接发到各家官方接口，中间没有别的服务。登录后回到 LOBE，在模型选择里找「订阅账号」即可。</p>
+  <p class="lead">用你已有的订阅（ChatGPT、GitHub Copilot、OpenCode Go 等）驱动 LeoBot。凭据只存在这台 Mac 的 ~/.leoagent/oauth，请求直接发到各家官方接口，中间没有别的服务。登录后回到 LeoBot，在模型选择里找「订阅账号」即可。</p>
   <p class="lead">Claude 订阅不在这里：Anthropic 只允许在官方 Claude Code 里用订阅登录。要用 Claude，请在「模型供应商」里填 API Key，或在手机上远程开这台 Mac 上你自己登录的官方 claude CLI。GitHub Copilot 登录时会替你开启 Copilot 的模型使用策略。</p>
   <div id="list"><p class="muted">正在读取…</p></div>
   <div id="flow"></div>
@@ -140,7 +140,7 @@ async function pollFlow(flowId) {
   } else if (flow.prompt) {
     promptHtml = \`<p>\${esc(flow.prompt.message)}</p><input id="answer" type="\${flow.prompt.type === "secret" ? "password" : "text"}" placeholder="\${esc(flow.prompt.placeholder || "")}" /><button class="primary" id="send">提交</button>\`;
   }
-  const status = flow.status === "done" ? '<p style="color:var(--ok)">登录成功。回到 LOBE，模型选择里已经能看到这家的模型。</p>'
+  const status = flow.status === "done" ? '<p style="color:var(--ok)">登录成功。回到 LeoBot，模型选择里已经能看到这家的模型。</p>'
     : flow.status === "error" ? \`<p class="err">登录失败：\${esc(flow.error)}</p>\`
     : flow.status === "cancelled" ? '<p class="muted">已取消。</p>' : "";
   const hadFocus = document.activeElement && document.activeElement.id === "answer";
@@ -161,8 +161,8 @@ async function pollFlow(flowId) {
   if (flow.status !== "running") { clearInterval(polling); renderList(); }
 }
 
-if (!TOKEN) document.getElementById("list").innerHTML = '<p class="err">请从 LOBE 里点「订阅账号登录」打开这个页面（应用重启后要重新打开）。</p>';
-else renderList().catch((e) => { document.getElementById("list").innerHTML = '<p class="err">' + esc(e.message === "forbidden" ? "这个页面已失效（应用重启过），请回到 LOBE 重新打开订阅账号登录。" : e.message) + "</p>"; });
+if (!TOKEN) document.getElementById("list").innerHTML = '<p class="err">请从 LeoBot 里点「订阅账号登录」打开这个页面（应用重启后要重新打开）。</p>';
+else renderList().catch((e) => { document.getElementById("list").innerHTML = '<p class="err">' + esc(e.message === "forbidden" ? "这个页面已失效（应用重启过），请回到 LeoBot 重新打开订阅账号登录。" : e.message) + "</p>"; });
 if (TOKEN) resumeFlow();
 </script>
 </body>

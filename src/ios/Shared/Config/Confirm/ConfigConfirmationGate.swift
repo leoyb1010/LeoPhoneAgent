@@ -198,8 +198,8 @@ final class ConfigConfirmationGate: ObservableObject {
             content.body = caption
         } else {
             content.body = change.items.count > 1
-                ? String(localized: "\(change.items.count) 项改动等你确认，打开 LOBE 批准或拒绝。")
-                : String(localized: "有一项改动等你确认，打开 LOBE 批准或拒绝。")
+                ? String(localized: "\(change.items.count) 项改动等你确认，打开 LeoBot 批准或拒绝。")
+                : String(localized: "有一项改动等你确认，打开 LeoBot 批准或拒绝。")
         }
         content.sound = .default
         content.categoryIdentifier = Self.notifyCategoryId

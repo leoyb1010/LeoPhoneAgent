@@ -31,7 +31,7 @@ func cloudKitProblemDescription(_ error: Error) -> String {
     case .serverRejectedRequest:
         return "iCloud 拒绝了这次请求（错误 15）。单凭这个错误码不能确定是容器配置、账户状态还是服务端异常。未确认上传的改动会保留在本机；请查看具体失败类型和下面的请求编号。\n详情:\(detail)"
     case .notAuthenticated:
-        return "这台设备没有登录 iCloud,或者在 设置 → Apple 账户 → iCloud 里关掉了 LOBE。\n详情:\(detail)"
+        return "这台设备没有登录 iCloud,或者在 设置 → Apple 账户 → iCloud 里关掉了 LeoBot。\n详情:\(detail)"
     case .networkUnavailable, .networkFailure:
         return "连不上 iCloud,检查网络后再点「重新检查」。\n详情:\(detail)"
     case .quotaExceeded:

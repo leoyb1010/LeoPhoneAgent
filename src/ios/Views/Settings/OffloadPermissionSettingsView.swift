@@ -362,11 +362,11 @@ private struct SupplementalCapability: Identifiable {
     static let all: [SupplementalCapability] = [
         .init(id: "camera", title: "Camera", systemImage: "camera", summary: "Capture images for a conversation", actions: ["Take a photo", "Scan visual context", "Attach media to a task"], dataDestination: "Captured media stays in the current conversation and is sent only to its selected AI provider when used."),
         .init(id: "microphone", title: "Microphone", systemImage: "mic", summary: "Voice input and audio capture", actions: ["Start voice input", "Transcribe speech", "Attach recorded audio"], dataDestination: "Audio is processed by the configured transcription path. The transcript enters the current conversation."),
-        .init(id: "shortcuts", title: "Siri & Shortcuts", systemImage: "shortcuts", summary: "Start, inspect, and continue Agent tasks", actions: ["Ask LOBE", "Run a quick task", "List and open sessions"], dataDestination: "Shortcut inputs are handled by the app and the AI provider selected for the resulting session."),
-        .init(id: "widget", title: "Widgets & Live Activities", systemImage: "rectangle.3.group", summary: "Home Screen, Lock Screen, and Dynamic Island status", actions: ["See task state", "Open the active session", "Jump to voice input"], dataDestination: "A privacy-aware task snapshot is stored in the LOBE App Group. Live Activity content follows Task Status Privacy."),
+        .init(id: "shortcuts", title: "Siri & Shortcuts", systemImage: "shortcuts", summary: "Start, inspect, and continue Agent tasks", actions: ["Ask LeoBot", "Run a quick task", "List and open sessions"], dataDestination: "Shortcut inputs are handled by the app and the AI provider selected for the resulting session."),
+        .init(id: "widget", title: "Widgets & Live Activities", systemImage: "rectangle.3.group", summary: "Home Screen, Lock Screen, and Dynamic Island status", actions: ["See task state", "Open the active session", "Jump to voice input"], dataDestination: "A privacy-aware task snapshot is stored in the LeoBot App Group. Live Activity content follows Task Status Privacy."),
         .init(id: "icloud", title: "iCloud & CloudKit", systemImage: "icloud", summary: "Optional session, settings, and file synchronization", actions: ["Sync supported records", "Back up app data", "Continue across personal devices"], dataDestination: "When enabled, supported records and provider configuration are stored in your private iCloud account."),
         .init(id: "files-share", title: "Files & Share", systemImage: "folder.badge.plus", summary: "Files app integration and Share Sheet intake", actions: ["Browse app files", "Import shared content", "Expose supported workspace folders"], dataDestination: "Files remain in the app container, shared App Group, or folders you explicitly select."),
-        .init(id: "background-processing", title: "Background Processing", systemImage: "clock.arrow.circlepath", summary: "Continue user-started Agent work after locking", actions: ["Report progress", "Handle system expiration", "Resume interrupted work"], dataDestination: "Task state remains device-local. iOS can still stop work under resource pressure; LOBE preserves a recovery state."),
+        .init(id: "background-processing", title: "Background Processing", systemImage: "clock.arrow.circlepath", summary: "Continue user-started Agent work after locking", actions: ["Report progress", "Handle system expiration", "Resume interrupted work"], dataDestination: "Task state remains device-local. iOS can still stop work under resource pressure; LeoBot preserves a recovery state."),
     ]
 }
 
@@ -384,7 +384,7 @@ private struct NativeCapabilitiesCenterView: View {
                 LabeledContent("Needs attention", value: "\(attentionCount)")
                     .foregroundStyle(attentionCount == 0 ? Color.primary : Color.orange)
             } footer: {
-                Text("Status checks never request access. LOBE asks only when you use a capability. Health read access is selected per data type and cannot be fully queried by apps.")
+                Text("Status checks never request access. LeoBot asks only when you use a capability. Health read access is selected per data type and cannot be fully queried by apps.")
             }
 
             Section("Personal Data") {

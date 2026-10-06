@@ -37,7 +37,7 @@ struct AIDataSharingConsentView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("We Do Not Collect Your Data")
                                 .font(.headline)
-                            Text("LOBE does not operate an application server. Your data stays on your device unless you enable iCloud Sync, choose an AI provider, or invoke a device capability that communicates with another service.")
+                            Text("LeoBot does not operate an application server. Your data stays on your device unless you enable iCloud Sync, choose an AI provider, or invoke a device capability that communicates with another service.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Text("However, when you add a third-party AI provider and use it for conversations, the following data may be sent directly from your device to that provider's servers:")

@@ -17,7 +17,7 @@ const enUS: Record<string, string> = {
   "startPlan.recommendation.dismiss": "Don’t show again",
   "occupationOnboarding.stepMode": "UI mode",
   "occupationOnboarding.modeTitle": "Choose your UI mode",
-  "occupationOnboarding.modeDescription": "How would you like LOBE to show its work?",
+  "occupationOnboarding.modeDescription": "How would you like LeoBot to show its work?",
   "occupationOnboarding.coding": "Coding mode",
   "occupationOnboarding.codingDescription":
     "I want to see code, command output, and change details throughout the development process.",
@@ -66,27 +66,27 @@ const enUS: Record<string, string> = {
   "occupationOnboarding.migration": "Migrate conversations",
   "occupationOnboarding.migrationDescription": "Migrate conversation history from Claude Code",
   "occupationOnboarding.memory": "Enable Workspace Memory",
-  "occupationOnboarding.memoryDescription": "Let LOBE remember your preferences and work context.",
+  "occupationOnboarding.memoryDescription": "Let LeoBot remember your preferences and work context.",
   "occupationOnboarding.suggestions": "Enable proactive task suggestions",
   "occupationOnboarding.suggestionsDescription":
     "Show suggestions in new conversations. Click to fill the composer.",
   "occupationOnboarding.close": "Exit onboarding",
-  "startup.global.silent": "Starting LOBE",
+  "startup.global.silent": "Starting LeoBot",
   "startup.global.upgrading": "Upgrading local data",
   "startup.global.initializing": "Initializing local data",
   "startup.global.waiting": "Waiting for database preparation",
   "startup.global.saving": "Saving updates",
   "startup.global.finishing": "Finishing startup",
   "startup.global.servicesFailed":
-    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen LOBE.",
+    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen LeoBot.",
   "startup.global.starting": "Preparing local data",
   "startup.global.preparing_host_storage": "Preparing task index",
   "startup.global.preparing_session_storage": "Preparing chat history",
-  "startup.global.starting_services": "Starting LOBE",
+  "startup.global.starting_services": "Starting LeoBot",
   "startup.global.ready": "Local data is ready",
   "startup.global.failed": "Startup preparation failed",
   "startup.global.help":
-    "LOBE will open when preparation finishes. Large histories may take longer. Please keep the app running.",
+    "LeoBot will open when preparation finishes. Large histories may take longer. Please keep the app running.",
   "startup.global.diagnostic": "Diagnostic ID",
   "startup.global.copy": "Copy diagnostics",
   "startup.global.exit": "Exit",
@@ -107,15 +107,15 @@ const enUS: Record<string, string> = {
   "startup.global.error.open_failed":
     "The database could not be opened. Check that the data directory exists and is accessible, then retry.",
   "startup.global.error.lock_timeout":
-    "Waiting for the database write lock timed out. Another LOBE or CLI process may be updating data. Retry after it finishes.",
+    "Waiting for the database write lock timed out. Another LeoBot or CLI process may be updating data. Retry after it finishes.",
   "startup.global.error.sql_failed":
     "Preparation did not finish. Copy the diagnostics and check the logs. Resolve the issue, then retry manually. The app will not retry automatically.",
   "startup.global.error.startup_status_timeout":
-    "No startup status was received. Exit and reopen LOBE. If it fails again, provide the diagnostics to support.",
+    "No startup status was received. Exit and reopen LeoBot. If it fails again, provide the diagnostics to support.",
   "startup.global.error.transport_closed":
-    "The preparation process exited or disconnected. Exit and reopen LOBE to check the migration records again.",
+    "The preparation process exited or disconnected. Exit and reopen LeoBot to check the migration records again.",
   "startup.global.error.unsupported_runtime":
-    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen LOBE.",
+    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen LeoBot.",
 
   "startup.database.checking": "Checking history",
   "startup.database.waiting_for_lock": "Waiting for another window to prepare data",
@@ -166,7 +166,7 @@ const enUS: Record<string, string> = {
   "offPeak.chatCreated.queuedAt": "#{position} in queue",
   "offPeak.chatCreated.open": "Go to idle-time tasks",
   "settings.computerUse.disabledToast":
-    "Computer Use is disabled. Existing conversations require a LOBE restart to take effect.",
+    "Computer Use is disabled. Existing conversations require a LeoBot restart to take effect.",
   "settings.modelProvider.connectionUnavailableNotice": "The current plan is unavailable.",
   "settings.modelProvider.switchConnection": "Switch to “{connection}”",
   "settings.modelProvider.connectionSuggestionStale":
@@ -203,7 +203,7 @@ const enUS: Record<string, string> = {
   "conversationShare.permission.linkViewerHint": "Cannot import and continue",
   "conversationShare.permission.linkViewerSummary": "Link holders can view",
   "conversationShare.permission.linkEditor": "Anyone with the link can import and continue",
-  "conversationShare.permission.linkEditorHint": "Import into LOBE",
+  "conversationShare.permission.linkEditorHint": "Import into LeoBot",
   "conversationShare.permission.linkEditorSummary": "Link holders can import and continue",
   "conversationShare.permission.privateSummary": "Only me",
   "conversationShare.openLink": "Open share page",
@@ -430,7 +430,7 @@ const enUS: Record<string, string> = {
   "conversationShare.import.committing": "Creating the shared conversation",
   "conversationShare.import.complete": "Share import complete",
   "conversationShare.import.loginRequired":
-    "This share cannot be imported anonymously. Sign in to LOBE and try again",
+    "This share cannot be imported anonymously. Sign in to LeoBot and try again",
   "conversationShare.import.notFound": "The share is unavailable for this account",
   "conversationShare.import.expired": "The share expired. Ask the author to create a new one",
   "conversationShare.import.integrityFailed": "Share file verification failed; import stopped",
@@ -554,7 +554,7 @@ const enUS: Record<string, string> = {
   "confirmDialog.projectRemoveDescription":
     "Project “{projectName}” will be removed from the sidebar, but files on disk will remain untouched.",
   "bots.title": "Bots",
-  "bots.description": "Connect external chats and webhooks to LOBE bots.",
+  "bots.description": "Connect external chats and webhooks to LeoBot bots.",
   "bots.listTitle": "Bots",
   "bots.addBot": "New bot",
   "bots.addBinding": "Add binding",
@@ -608,9 +608,9 @@ const enUS: Record<string, string> = {
   "bots.setup.guide.weixin.create.1":
     "Start Weixin QR login, scan the QR code with Weixin, then confirm on your phone.",
   "bots.setup.guide.weixin.create.2":
-    "LOBE saves the bot_token returned by iLink automatically; after scanning, send any message to the bot in Weixin to activate the chat.",
+    "LeoBot saves the bot_token returned by iLink automatically; after scanning, send any message to the bot in Weixin to activate the chat.",
   "bots.setup.guide.weixin.create.3":
-    "LOBE uses a built-in iLink client: `/ilink/bot/getupdates` for long polling and `/ilink/bot/sendmessage` for replies.",
+    "LeoBot uses a built-in iLink client: `/ilink/bot/getupdates` for long polling and `/ilink/bot/sendmessage` for replies.",
   "bots.setup.guide.weixin.bind.1": "Open the Weixin direct chat you want to bind.",
   "bots.setup.guide.weixin.bind.2": "Send {command}.",
   "bots.setup.guide.weixin.bind.3":
@@ -627,13 +627,13 @@ const enUS: Record<string, string> = {
   "bots.setup.guide.feishu.bind.3":
     "Return here after the bind succeeds to finish the workspace and CLI defaults.",
   "bots.setup.guide.webhook.create.1":
-    "Webhook mode does not require a native bot in the third-party product; your integration only needs to POST messages to LOBE.",
+    "Webhook mode does not require a native bot in the third-party product; your integration only needs to POST messages to LeoBot.",
   "bots.setup.guide.webhook.create.2":
     "Set a shared secret first; add an outbound webhook URL as well if you want asynchronous replies pushed back.",
   "bots.setup.guide.webhook.create.3":
     "Keep one stable userId per external user so binding and future context resolve to the same person.",
   "bots.setup.guide.webhook.bind.1":
-    "POST a private-message callback to LOBE's `/api/bots/webhook` endpoint.",
+    "POST a private-message callback to LeoBot's `/api/bots/webhook` endpoint.",
   "bots.setup.guide.webhook.bind.2":
     'The payload should at least include this botId, a stable userId, `chatType: "private"`, and set text to {command}.',
   "bots.setup.guide.webhook.bind.3":
@@ -772,7 +772,7 @@ const enUS: Record<string, string> = {
   "bots.runtime.telegramLongPollingStarting": "Telegram long polling is starting.",
   "bots.runtime.telegramLongPollingStopped": "Telegram long polling is stopped.",
   "bots.runtime.telegramLongPollingHandledElsewhere":
-    "Telegram long polling is handled by another LOBE window.",
+    "Telegram long polling is handled by another LeoBot window.",
   "bots.runtime.telegramTokenMissing": "Telegram bot credential is missing.",
   "bots.runtime.telegramPollingFailedRetrying": "Telegram polling failed; retrying.",
   "bots.runtime.feishuWebSocketStarting": "Feishu WebSocket is starting.",
@@ -860,14 +860,14 @@ const enUS: Record<string, string> = {
   "bots.deleteFailed": "Failed to delete bot: {error}",
 
   // Welcome / Login
-  "welcome.title": "Welcome to LOBE",
+  "welcome.title": "Welcome to LeoBot",
   "welcome.username": "Username",
   "welcome.password": "Password",
   "welcome.login": "Login",
   "welcome.loggingIn": "Logging in...",
   "welcome.loginFailed": "Login failed",
-  "login.title": "Welcome to LOBE",
-  "login.description": "Add a model to start using LOBE",
+  "login.title": "Welcome to LeoBot",
+  "login.description": "Add a model to start using LeoBot",
   "login.oauth.activeProviderHint":
     "Current active provider: {provider}. Signing in again replaces the current identity.",
   "login.oauth.loadingProviders": "Loading account providers...",
@@ -910,7 +910,7 @@ const enUS: Record<string, string> = {
   "app.currentTheme": "Current: {theme}",
   "app.login": "Connect",
   "app.logout": "Disconnect",
-  "logout.confirm.title": "Disconnect and restart LOBE?",
+  "logout.confirm.title": "Disconnect and restart LeoBot?",
   "logout.confirm.descriptionWithRunningSessions":
     "{count} session(s) are currently running. Disconnecting will interrupt them and restart the app.",
   "logout.confirm.descriptionDefault":
@@ -1056,7 +1056,7 @@ const enUS: Record<string, string> = {
   "modelTrajectory.refresh": "Refresh",
   "modelTrajectory.close": "Close",
   "modelTrajectory.loading": "Loading trajectory…",
-  "modelTrajectory.empty": "No model calls recorded (only LOBE Agent writes model-io)",
+  "modelTrajectory.empty": "No model calls recorded (only LeoBot Agent writes model-io)",
   "modelTrajectory.error": "Failed to load trajectory",
   "modelTrajectory.truncatedNotice": "Too many records, showing the most recent calls",
   "modelTrajectory.summaryCalls": "{count} calls",
@@ -1518,7 +1518,7 @@ const enUS: Record<string, string> = {
   "titleBar.menu.view.actualSize": "Actual size",
   "titleBar.menu.view.zoomIn": "Zoom in",
   "titleBar.menu.view.zoomOut": "Zoom out",
-  "titleBar.menu.help.about": "About LOBE",
+  "titleBar.menu.help.about": "About LeoBot",
   "titleBar.menu.help.checkForUpdates": "Check for updates",
   "titleBar.menu.help.feedback": "Feedback",
   "sidebar.menu.community": "Community",
@@ -1571,7 +1571,7 @@ const enUS: Record<string, string> = {
   "update.toast.ready": "v{version} downloaded, restart to install",
   "update.toast.devSkipped": "Updates are disabled in dev builds",
   "update.toast.error": "Update check failed: {error}",
-  "forceUpdate.title": "Update LOBE to continue",
+  "forceUpdate.title": "Update LeoBot to continue",
   "forceUpdate.description":
     "Your current version v{currentVersion} is below the minimum supported version v{minimalVersion}. Update first before continuing with this client.",
   "forceUpdate.currentVersion": "Current version",
@@ -1654,7 +1654,7 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.notConnected": "Not connected",
   "workspaceSidebar.empty": "No workspaces yet. Open a workspace to get started.",
   "workspaceSidebar.unavailableLocalDirectory":
-    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart LOBE to continue.",
+    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart LeoBot to continue.",
   "workspaceSidebar.showSidebar": "Toggle sidebar",
   "workspaceSidebar.hideSidebar": "Toggle sidebar",
   "workspaceSidebar.toggleSidebar": "Toggle sidebar",
@@ -1697,7 +1697,7 @@ const enUS: Record<string, string> = {
   "ssh.assetInstallMode.local-download-upload": "Download locally, then upload",
   "ssh.assetInstallMode.remote-download": "Download on remote server",
   "ssh.assetInstallModeDescription":
-    "Remote server download reduces upload waiting, but the server must reach the LOBE CDN and have download, extract, and checksum tools.",
+    "Remote server download reduces upload waiting, but the server must reach the LeoBot CDN and have download, extract, and checksum tools.",
   "ssh.password": "Password",
   "ssh.passwordPlaceholder": "Enter your SSH password",
   "ssh.privateKey": "Private key",
@@ -1740,7 +1740,7 @@ const enUS: Record<string, string> = {
     "We are establishing the {method} connection. You can follow the live setup progress here.",
   "webRemoteControl.trigger": "Mobile remote control",
   "webRemoteControl.title": "Mobile remote control",
-  "webRemoteControl.description": "Control this Mac from the LOBE phone app or chat bots.",
+  "webRemoteControl.description": "Control this Mac from the LeoBot phone app or chat bots.",
   "webRemoteControl.botChannel.title": "Use a bot channel",
   "webRemoteControl.botChannel.description": "Connect a chat bot for longer-running mobile access.",
   "webRemoteControl.botChannel.weixin.title": "Weixin",
@@ -1964,7 +1964,7 @@ const enUS: Record<string, string> = {
   "chat.changeSummary.reverted": "Undone",
   "chat.changeSummary.rewindDialog.title": "Undo file changes",
   "chat.changeSummary.rewindDialog.description":
-    "LOBE checks current file content again before writing. If another process changed a file, no files will be written.",
+    "LeoBot checks current file content again before writing. If another process changed a file, no files will be written.",
   "chat.changeSummary.rewindDialog.loading": "Checking reversible files…",
   "chat.changeSummary.rewindDialog.safeTitle": "Safe to undo {count}",
   "chat.changeSummary.rewindDialog.unsafeTitle": "Unsafe to undo {count}",
@@ -2136,7 +2136,7 @@ const enUS: Record<string, string> = {
     "When launching the built-in terminal, inherit login shell environment, proxy, Kubernetes variables, and local terminal font when possible.",
   "settings.terminalFontFamily": "Terminal font",
   "settings.terminalFontFamilyDescription":
-    "Leave blank to auto-detect system terminal settings; set a value to override the LOBE terminal font.",
+    "Leave blank to auto-detect system terminal settings; set a value to override the LeoBot terminal font.",
   "settings.terminalFontFamilyPlaceholder": "Leave blank to inherit, e.g. MesloLGS NF, monospace",
   "settings.integratedTerminalShell": "Integrated terminal shell",
   "settings.integratedTerminalShellDescription":
@@ -2253,7 +2253,7 @@ const enUS: Record<string, string> = {
     "Group consecutive Write, Edit, and ApplyPatch calls into a Changes section.",
   "settings.zcodeInteractionBehavior": "Interaction behavior",
   "settings.zcodeInteractionBehaviorDescription":
-    "While LOBE is running, add follow-up actions to the queue or guide them to run after the next tool call.",
+    "While LeoBot is running, add follow-up actions to the queue or guide them to run after the next tool call.",
   "settings.zcodeInteractionBehavior.option.queue": "Queue",
   "settings.zcodeInteractionBehavior.option.guide": "Guide",
   "settings.askUserQuestionAutoResolution": "Automatically continue questions",
@@ -2283,7 +2283,7 @@ const enUS: Record<string, string> = {
   "settings.dataBaseDirCopying": "Copying data, please do not close the app...",
   "settings.dataBaseDirCopyFailed": "Data copy failed. Path was not changed.",
   "settings.dataBaseDirForbiddenInstallDir":
-    "The data directory cannot be the LOBE installation folder on Windows. Choose a folder outside the app install location.",
+    "The data directory cannot be the LeoBot installation folder on Windows. Choose a folder outside the app install location.",
   "settings.dataBaseDirRestartRequired": "Data saved. Please restart the app to take effect.",
   "settings.locale.system": "System default",
   "settings.locale.zh-CN": "中文简体",
@@ -2299,7 +2299,7 @@ const enUS: Record<string, string> = {
   "settings.migration.title": "Migration",
   "settings.migration.sectionTitle": "Claude History Migration",
   "settings.migration.sectionDescription":
-    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching LOBE task lists.",
+    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching LeoBot task lists.",
   "settings.migration.badge.localOnly": "Local Claude records",
   "settings.migration.badge.manualOnly": "Manual only",
   "settings.migration.currentWorkspace": "Current workspace",
@@ -2353,14 +2353,14 @@ const enUS: Record<string, string> = {
   "settings.usageTitle": "Usage stats",
   "settings.usageDescription":
     "Review rough activity and model usage aggregated from local sessions.",
-  "resourceManager.storage.summaryTotal": "Total used by LOBE",
+  "resourceManager.storage.summaryTotal": "Total used by LeoBot",
   "resourceManager.storage.scanning": "Calculating…",
   "resourceManager.storage.lastScanned": "Last calculated {time}",
   "resourceManager.storage.idle": "Not calculated yet",
   "resourceManager.storage.failed": "Calculation failed",
   "resourceManager.storage.rescan": "Recalculate",
   "resourceManager.storage.disk": "Disk",
-  "resourceManager.storage.diskUsage": "LOBE uses {used}",
+  "resourceManager.storage.diskUsage": "LeoBot uses {used}",
   "resourceManager.storage.diskFree": "{free} free of {total}",
   "resourceManager.storage.diskUnknown": "Disk capacity unavailable",
   "resourceManager.storage.roots": "Data directories",
@@ -2428,7 +2428,7 @@ const enUS: Record<string, string> = {
   "settings.embeddedBrowserAllowInsecureCertificatesSavedHint":
     "Certificate setting saved. Restart the app to take effect.",
   "settings.browser.data.section": "Browser data",
-  "settings.browser.desktopOnly": "Browser data can only be managed in the LOBE desktop app.",
+  "settings.browser.desktopOnly": "Browser data can only be managed in the LeoBot desktop app.",
   "settings.browser.import.title": "Import Chrome sign-in state",
   "settings.browser.import.description":
     "Bring your Chrome sign-in state into the built-in browser once, so the AI can open sites you are already signed in to and work more smoothly.",
@@ -2446,13 +2446,13 @@ const enUS: Record<string, string> = {
   "settings.browser.import.elevationCancelled":
     "Windows administrator access was canceled. No cookies were imported.",
   "settings.browser.import.helperVerificationFailed":
-    "LOBE could not verify its Windows secure import component. Reinstall or update LOBE before importing cookies.",
+    "LeoBot could not verify its Windows secure import component. Reinstall or update LeoBot before importing cookies.",
   "settings.browser.import.appBoundFailed":
     "Windows could not unlock Chrome's App-Bound cookies. No cookies were imported.",
   "settings.browser.import.adminConfirmTitle":
     "Allow administrator access to import Chrome cookies?",
   "settings.browser.import.adminConfirmDescription":
-    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, LOBE will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
+    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, LeoBot will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
   "settings.browser.import.adminConsent":
     "I confirm administrator access for this cookie import only",
   "settings.browser.import.adminConfirmAction": "Continue and request access",
@@ -2511,7 +2511,7 @@ const enUS: Record<string, string> = {
   "settings.previewBadge.dark": "Dark",
   "settings.modelProviderTitle": "Model settings",
   "settings.mcpTitle": "MCP Servers",
-  "settings.mcp.description": "Manage MCP server configurations used by LOBE Agent.",
+  "settings.mcp.description": "Manage MCP server configurations used by LeoBot Agent.",
   "settings.mcp.create.open": "Add MCP server",
   "settings.mcp.import.open": "Import MCP servers from external agents",
   "settings.mcp.import.action": "Import",
@@ -2588,7 +2588,7 @@ const enUS: Record<string, string> = {
     "This plugin MCP server is loaded but not currently connected.",
   "settings.mcp.host.active": "Host built-in",
   "settings.mcp.host.activeDescription":
-    "LOBE provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
+    "LeoBot provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
   "settings.mcp.plugin.disabled": "Plugin disabled",
   "settings.mcp.plugin.disabledDescription":
     "This MCP server is built into a plugin. Enable the plugin to load it.",
@@ -2600,7 +2600,7 @@ const enUS: Record<string, string> = {
     "Open authorization to finish connecting this plugin MCP server.",
   "settings.mcp.oauth.openAuthorization": "Open authorization",
   "settings.mcp.statusOnlyUnsupported":
-    "This LOBE Agent cannot refresh OAuth status. Upgrade or restart LOBE, then reopen MCP settings to run a full refresh.",
+    "This LeoBot Agent cannot refresh OAuth status. Upgrade or restart LeoBot, then reopen MCP settings to run a full refresh.",
   "settings.mcp.refreshFailed": "Failed to refresh MCP status: {error}",
   "settings.mcp.status.toolCount": "{count} tools",
   "settings.mcp.status.connectedReason": "Connected and available.",
@@ -2627,7 +2627,7 @@ const enUS: Record<string, string> = {
   "settings.mcp.failure.official_origin_untrusted":
     "The MCP server URL failed the security check. The connection was blocked.",
   "settings.mcp.failure.not_authenticated":
-    "You are not signed in. Sign in to LOBE to use this MCP server.",
+    "You are not signed in. Sign in to LeoBot to use this MCP server.",
   "settings.mcp.failure.coding_plan_required":
     "This account has no Coding Plan. Purchase or configure a Coding Plan to use this MCP server.",
   "settings.mcp.failure.server_not_found":
@@ -2697,7 +2697,7 @@ const enUS: Record<string, string> = {
   "settings.mcpServers.import.targetLabel": "Import target",
   "settings.mcpServers.import.target.global": "Import to Global",
   "settings.mcpServers.import.target.project": "Import to Project",
-  "settings.mcpServers.import.importing": "Importing MCP servers into LOBE",
+  "settings.mcpServers.import.importing": "Importing MCP servers into LeoBot",
   "settings.mcpServers.import.imported": "Imported",
   "settings.mcpServers.import.skipped": "Skipped",
   "settings.mcpServers.import.failed": "Failed",
@@ -2828,7 +2828,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.trial.label": "Trial period",
   "settings.modelProvider.startPlan.highlight.trial.value": "5 calendar days",
   "settings.modelProvider.startPlan.highlight.trial.description":
-    "Timing starts after signing in to LOBE 3.x.",
+    "Timing starts after signing in to LeoBot 3.x.",
   "settings.modelProvider.startPlan.highlight.quota.label": "Daily quota",
   "settings.modelProvider.startPlan.highlight.quota.value": "3M tokens daily",
   "settings.modelProvider.startPlan.highlight.quota.description":
@@ -2838,7 +2838,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.metering.description":
     "Metered only after using platform GLM flagship models.",
   "settings.modelProvider.startPlan.compatibility":
-    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by LOBE automatically.",
+    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by LeoBot automatically.",
   "settings.modelProvider.codingPlan.title": "{provider} - Coding Plan",
   "settings.modelProvider.codingPlan.webview.title": "Upgrade Plan",
   "settings.modelProvider.codingPlan.webview.authInjectFailed":
@@ -2975,7 +2975,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeTitle":
     "Assign members to your team plan",
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeDescription":
-    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in LOBE.",
+    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in LeoBot.",
   "settings.modelProvider.codingPlan.purchase.manageTeamPlan": "Manage team plan",
   "settings.modelProvider.codingPlan.manage": "Manage",
   "settings.modelProvider.planCard.codingPlan": "Coding Plan",
@@ -3357,7 +3357,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.resetForm": "Reset form",
   "settings.modelProvider.fieldHelp": "About {field}",
   "settings.modelProvider.help.contextWindow":
-    "The context capacity the model can process at once, in tokens. LOBE uses this to manage context.\nDo not exceed the model's actual limit.",
+    "The context capacity the model can process at once, in tokens. LeoBot uses this to manage context.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.maxOutputTokens":
     "The maximum number of tokens a single model request may generate.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.inputModalities":
@@ -3373,7 +3373,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.help.advanced":
     "**MFJS tool schema**: Enables Moonshot Flavored JSON Schema compatibility, commonly used by Moonshot's Kimi model API. Enable only when the model API requires this format.",
   "settings.modelProvider.help.followRecommendedConfig":
-    "Matches recommended configuration using the model ID, Base URL, and API format. LOBE continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
+    "Matches recommended configuration using the model ID, Base URL, and API format. LeoBot continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
   "settings.modelProvider.modelDefaultsLoaded": "Smart configuration matched for this model",
   "settings.modelProvider.modelConfigIncomplete": "Model configuration is incomplete",
   "settings.modelProvider.models": "Model list",
@@ -3443,7 +3443,7 @@ const enUS: Record<string, string> = {
   "settings.usage.sourceProvider": "Source: {provider}",
   "settings.usage.billingBanner.title": "{provider} Coding Plan",
   "settings.usage.billingBanner.description":
-    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in LOBE after purchase or setup.",
+    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in LeoBot after purchase or setup.",
   "settings.usage.billingBanner.compactDescription":
     "Connect your {provider} account to sync usage.",
   "settings.usage.billingBanner.buy": "Buy Coding Plan",
@@ -3502,7 +3502,7 @@ const enUS: Record<string, string> = {
   "settings.usage.entitlementFiveHourUsage": "5-hour remaining",
   "settings.usage.entitlementWeeklyUsage": "Weekly remaining",
   "settings.usage.entitlementMonthlyMcpUsage": "Tool calls",
-  "settings.usage.entitlementServerMcpUsage": "LOBE MCP",
+  "settings.usage.entitlementServerMcpUsage": "LeoBot MCP",
   "settings.usage.entitlementResetAt": "Resets {time}",
   "settings.usage.entitlementUsageDetails": "Tool usage detail",
   "settings.usage.entitlementPromptCap": "5-hour prompt pool",
@@ -3560,9 +3560,9 @@ const enUS: Record<string, string> = {
   "sidebar.usage.plan.fiveHour": "5 hours",
   "sidebar.usage.plan.weekly": "Weekly",
   "sidebar.usage.plan.toolCalls": "Tool calls",
-  "sidebar.usage.plan.mcp": "LOBE MCP",
-  "sidebar.usage.plan.zcodeMcp": "LOBE MCP",
-  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for LOBE built-in plugin MCPs",
+  "sidebar.usage.plan.mcp": "LeoBot MCP",
+  "sidebar.usage.plan.zcodeMcp": "LeoBot MCP",
+  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for LeoBot built-in plugin MCPs",
   "chat.planUsage.title": "Plan usage",
   "chat.planUsage.titleWithPlan": "{plan} Plan usage",
   "chat.planUsage.providerFallback": "Current provider",
@@ -3786,10 +3786,10 @@ const enUS: Record<string, string> = {
   "settings.skills.import.mode.copy": "Copy",
   "settings.skills.import.mode.symlink": "Symlink",
   "settings.skills.import.mode.copy.description":
-    "Copy the full skill directory into LOBE. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full skill directory into LeoBot. Later changes in the external agent directory will not sync automatically.",
   "settings.skills.import.mode.symlink.description":
-    "Create a directory link to the external agent skill. LOBE follows later source changes, but the skill depends on that source path remaining available.",
-  "settings.skills.import.importing": "Importing skills into LOBE",
+    "Create a directory link to the external agent skill. LeoBot follows later source changes, but the skill depends on that source path remaining available.",
+  "settings.skills.import.importing": "Importing skills into LeoBot",
   "settings.skills.import.imported": "Imported",
   "settings.skills.import.skipped": "Skipped",
   "settings.skills.import.failed": "Failed",
@@ -3865,7 +3865,7 @@ const enUS: Record<string, string> = {
   "settings.skills.diagnostics.code.skill_not_found": "Skill not found",
   "settings.subagents.title": "Subagents",
   "settings.subagents.description":
-    "Manage user-level subagent Markdown files consumed by LOBE Agent.",
+    "Manage user-level subagent Markdown files consumed by LeoBot Agent.",
   "settings.subagents.workspaceScopeUnsupported":
     "Workspace-level creation or editing is unsupported",
   "settings.subagents.searchPlaceholder": "Search subagents...",
@@ -4007,7 +4007,7 @@ const enUS: Record<string, string> = {
   "settings.plugins.description":
     "Enable or disable installed plugins. Plugins bundle skills, commands, hooks, and MCP servers.",
   "settings.plugins.store.subtitle":
-    "Extend LOBE with skills, commands, and MCP servers from plugins",
+    "Extend LeoBot with skills, commands, and MCP servers from plugins",
   "settings.plugins.store.searchPlaceholder": "Search plugins",
   "settings.plugins.store.searchResults": "Search results ({count})",
   "settings.plugins.store.searchEmpty": "No plugins match your search",
@@ -4214,10 +4214,10 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.mode.copy": "Copy",
   "settings.plugins.import.mode.symlink": "Symlink",
   "settings.plugins.import.mode.copy.description":
-    "Copy the full plugin directory into LOBE and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full plugin directory into LeoBot and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
   "settings.plugins.import.mode.symlink.description":
-    "Create a directory link to the external agent plugin and register it in plugins.dirs. LOBE follows later source changes, but the plugin depends on that source path remaining available.",
-  "settings.plugins.import.importing": "Importing plugins into LOBE",
+    "Create a directory link to the external agent plugin and register it in plugins.dirs. LeoBot follows later source changes, but the plugin depends on that source path remaining available.",
+  "settings.plugins.import.importing": "Importing plugins into LeoBot",
   "settings.plugins.import.imported": "Imported",
   "settings.plugins.import.skipped": "Skipped",
   "settings.plugins.import.failed": "Failed",
@@ -4226,9 +4226,9 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.finish": "Done",
   "settings.commands.title": "Commands",
   "settings.commands.description":
-    "Manage LOBE Agent .md command files. Commands can be invoked with /command-name in chat.",
+    "Manage LeoBot Agent .md command files. Commands can be invoked with /command-name in chat.",
   "settings.commands.sourceFilterLabel": "Source filter",
-  "settings.commands.source.zcodeAgent": "LOBE Agent",
+  "settings.commands.source.zcodeAgent": "LeoBot Agent",
   "settings.commands.add": "New",
   "settings.commands.addNew": "New command",
   "settings.commands.addDescription":
@@ -4288,10 +4288,10 @@ const enUS: Record<string, string> = {
   "settings.commands.import.mode.copy": "Copy",
   "settings.commands.import.mode.symlink": "Symlink",
   "settings.commands.import.mode.copy.description":
-    "Copy the command file into LOBE. Later changes in the external agent file will not sync automatically.",
+    "Copy the command file into LeoBot. Later changes in the external agent file will not sync automatically.",
   "settings.commands.import.mode.symlink.description":
-    "Create a file link to the external agent command. LOBE follows later source changes, but the command depends on that source path remaining available.",
-  "settings.commands.import.importing": "Importing commands into LOBE",
+    "Create a file link to the external agent command. LeoBot follows later source changes, but the command depends on that source path remaining available.",
+  "settings.commands.import.importing": "Importing commands into LeoBot",
   "settings.commands.import.imported": "Imported",
   "settings.commands.import.skipped": "Skipped",
   "settings.commands.import.failed": "Failed",
@@ -4387,8 +4387,8 @@ const enUS: Record<string, string> = {
   "settingsSync.action.rescanning": "Scanning...",
   "settingsSync.action.importSelected": "Import selected",
   "settingsSync.action.importing": "Importing...",
-  "settingsSync.action.finish": "Start using LOBE",
-  "settingsSync.agent.zcode": "LOBE Agent",
+  "settingsSync.action.finish": "Start using LeoBot",
+  "settingsSync.agent.zcode": "LeoBot Agent",
   "settingsSync.agent.claudeCode": "Claude Code",
   "settingsSync.agent.codexCli": "Codex CLI",
   "settingsSync.agent.openCode": "OpenCode",
@@ -4437,17 +4437,17 @@ const enUS: Record<string, string> = {
   "settingsSync.discovery.description":
     "Importable agent settings are no longer scanned automatically.",
   "settingsSync.discovery.helper":
-    "Only missing items will be imported and your current LOBE settings will not be overwritten.",
+    "Only missing items will be imported and your current LeoBot settings will not be overwritten.",
   "settingsSync.discovery.agentCount": "Agents found: {count}",
   "settingsSync.discovery.categoryCount": "Categories found: {count}",
   "settingsSync.discovery.error": "Scan failed: {error}",
   "settingsSync.discovery.continue": "Continue",
-  "onboarding.dialog.title": "Welcome to LOBE",
+  "onboarding.dialog.title": "Welcome to LeoBot",
   "onboarding.dialog.description": "Choose how to start your first session.",
   "onboarding.wizard.label": "Migration guide",
   "onboarding.welcome.eyebrow": "First run setup",
-  "onboarding.welcome.title": "Welcome to LOBE",
-  "onboarding.welcome.start": "Start LOBE",
+  "onboarding.welcome.title": "Welcome to LeoBot",
+  "onboarding.welcome.start": "Start LeoBot",
   "onboarding.welcome.migrate": "Migration Guide",
   "onboarding.welcome.helper":
     "Import existing tool settings now, or skip and continue later from Settings.",
@@ -4469,7 +4469,7 @@ const enUS: Record<string, string> = {
   "onboarding.stepDescription.commandsImport":
     "Import selected commands from external agents before the final migration.",
   "onboarding.stepDescription.migration":
-    "Start migration and wait while LOBE imports your selections.",
+    "Start migration and wait while LeoBot imports your selections.",
   "onboarding.sessions.empty":
     "No workspaces yet. Scan local history, then pick workspaces to migrate.",
   "onboarding.sessions.count": "{count} sessions",
@@ -4487,7 +4487,7 @@ const enUS: Record<string, string> = {
   "onboarding.agentsFile.error": "Could not check AGENTS.md migration status: {error}",
   "onboarding.agentsFile.confirmTitle": "Overwrite default AGENTS.md?",
   "onboarding.agentsFile.confirmDescription":
-    "LOBE will copy {source} to {target}.\nIf the target file already exists, the LOBE default AGENTS configuration will be overwritten.",
+    "LeoBot will copy {source} to {target}.\nIf the target file already exists, the LeoBot default AGENTS configuration will be overwritten.",
   "onboarding.agentsFile.confirmAction": "Overwrite and migrate",
   "onboarding.finish.summary.label.imported": "Imported",
   "onboarding.finish.summary.label.skipped": "Skipped",
@@ -4568,8 +4568,8 @@ const enUS: Record<string, string> = {
   "chat.emptyResult.description":
     "This task finished without any chat content. It may have been stopped before the model produced a response.",
   "chat.placeholder.newTask":
-    "Ask LOBE anything, @ to add context, / for commands or capabilities",
-  "chat.placeholder.newTaskMobile": "Ask LOBE anything…",
+    "Ask LeoBot anything, @ to add context, / for commands or capabilities",
+  "chat.placeholder.newTaskMobile": "Ask LeoBot anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
   "chat.placeholder.loading": "Initializing task...",
@@ -4831,7 +4831,7 @@ const enUS: Record<string, string> = {
   "chat.compact.duplicateBlocked": "A compaction is already running or queued.",
   "chat.modelSwitch.contextWindowGuard.title": "Compress context before switching models",
   "chat.modelSwitch.contextWindowGuard.description":
-    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, LOBE will continue switching models.",
+    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, LeoBot will continue switching models.",
   "chat.modelSwitch.contextWindowGuard.compress": "Compress",
   "chat.modelSwitch.contextWindowGuard.runningBlocked":
     "This conversation has used more context than the target model's available context after reserving maximum output. The conversation must be compressed before switching models, but the current task is still running and context compression cannot run now. Wait for the task to finish, then switch models again.",
@@ -4844,11 +4844,11 @@ const enUS: Record<string, string> = {
     "Computer Use is idle — it will start automatically on first use",
   "chat.toolbar.computerUse.tooltip.starting": "Enabling Computer Use plugin…",
   "chat.toolbar.computerUse.tooltip.ready":
-    "Computer Use ready — just describe what you want LOBE to do",
+    "Computer Use ready — just describe what you want LeoBot to do",
   "chat.toolbar.computerUse.tooltip.permissionRequired":
     "Missing macOS permissions — click to grant",
   "chat.toolbar.computerUse.tooltip.error":
-    "Computer Use enablement failed. Please restart LOBE app and retry, or ask LOBE to investigate the logs",
+    "Computer Use enablement failed. Please restart LeoBot app and retry, or ask LeoBot to investigate the logs",
   "chat.toolbar.computerUse.tooltip.sessionBusy":
     "A conversation is running. Computer Use can't be toggled right now — try again after it finishes.",
   "chat.toolbar.mode.description":
@@ -5152,7 +5152,7 @@ const enUS: Record<string, string> = {
     "Could not reach the local agent; global workflows are unavailable.",
   "workflows.hub.empty.title": "No saved workflows in your open projects yet",
   "workflows.hub.empty.hint":
-    "Design a workflow with LOBE in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
+    "Design a workflow with LeoBot in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
   "workflows.hub.noWorkspace": "Open a workspace to see its workflows.",
   "workflows.hub.loadError": "Could not read workflows: {error}",
   "workflows.hub.invalid": "{count} files could not be read",
@@ -5215,7 +5215,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.description": "Description",
   "workflows.hub.detail.whenToUse": "When to use",
   "workflows.hub.detail.whenToUse.help":
-    "A routing hint for LOBE: when this workflow is the right pick.",
+    "A routing hint for LeoBot: when this workflow is the right pick.",
   "workflows.hub.detail.args": "Arguments",
   "workflows.hub.detail.args.name": "Name",
   "workflows.hub.detail.args.type": "Type",
@@ -5236,7 +5236,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.meta.descriptionRequired": "Description is required",
   "workflows.hub.detail.script": "Script",
   "workflows.hub.detail.script.note":
-    "The script is read-only. To change it, revise it with LOBE in chat and save a new version.",
+    "The script is read-only. To change it, revise it with LeoBot in chat and save a new version.",
   "workflows.hub.detail.script.copy": "Copy script",
   "workflows.hub.detail.loadError": "Could not read this workflow: {reason}",
   "workflows.hub.detail.notFound": "This workflow is no longer in the project.",
@@ -5741,7 +5741,7 @@ const enUS: Record<string, string> = {
   "chat.slash.subagents.title": "Agents",
   "chat.slash.subagents.empty": "No matching agents",
   "chat.slash.emptyUnavailable":
-    "No slash commands have been broadcast for the current LOBE Agent session",
+    "No slash commands have been broadcast for the current LeoBot Agent session",
   "chat.slash.emptyResults": "No matching slash commands",
   // Errors
   "chat.error.connectionLost": "Connection to agent lost",
@@ -5788,9 +5788,9 @@ const enUS: Record<string, string> = {
   "chat.quota.startPlan.concurrentLimit.switchModel":
     "The current model request concurrency limit has been reached. Switch models to continue your current task.",
   "chat.quota.mcp.quotaExhausted":
-    'LOBE MCP "{server}" has used up today\'s quota. It resets tomorrow.',
+    'LeoBot MCP "{server}" has used up today\'s quota. It resets tomorrow.',
   "chat.quota.mcp.codingPlanRequired":
-    'No LOBE MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
+    'No LeoBot MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
   "chat.quota.providerLimited":
     "The current account quota or plan limit has been reached. Upgrade or adjust the plan to continue.",
   "chat.quota.action.upgrade": "Upgrade",
@@ -5991,7 +5991,7 @@ const enUS: Record<string, string> = {
   "resourceManager.cpu": "CPU",
   "resourceManager.memory": "Memory",
   "resourceManager.storage": "Storage",
-  "resourceManager.appUsage": "LOBE",
+  "resourceManager.appUsage": "LeoBot",
   "resourceManager.systemUsage": "System",
   "resourceManager.category.base": "Base services",
   "resourceManager.category.builtinPlugin": "Built-in plugins",
@@ -6235,7 +6235,7 @@ const enUS: Record<string, string> = {
   "feedback.submit.template.section.errorSummaryLine": "Error Summary: {message}",
   "feedback.submit.template.section.errorDetail": "Error Details",
   "feedback.submit.template.section.errorTraceId": "TraceID: {traceId}",
-  "feedback.submit.template.section.copyErrorHeading": "LOBE Error Info",
+  "feedback.submit.template.section.copyErrorHeading": "LeoBot Error Info",
   "feedback.submit.template.section.notProvided": "Not provided",
   "feedback.submit.template.section.remoteLogEmpty": "No connection logs captured",
   "feedback.submit.template.section.taskFeedbackTitle": "Feedback about task: {title}",
@@ -6394,7 +6394,7 @@ const enUS: Record<string, string> = {
   "automations.statusFilter.completed": "Completed",
   "automations.statusFilter.failed": "Failed",
   "automations.statusFilter.empty": "No tasks match this filter",
-  "offPeak.keepAwakeBanner": "Keep your computer awake while LOBE is running a chat.",
+  "offPeak.keepAwakeBanner": "Keep your computer awake while LeoBot is running a chat.",
   "offPeak.sectionTitle": "Idle-time tasks",
   "offPeak.createButton": "Create idle-time task",
   "offPeak.templates.sectionTitle": "Idle-time task template",
@@ -6451,7 +6451,7 @@ const enUS: Record<string, string> = {
   "offPeak.form.titlePlaceholder": "e.g. Nightly refactor",
   "offPeak.form.instructionsLabel": "Instructions",
   "offPeak.form.instructionsPlaceholder":
-    "Describe a task LOBE can work on in the background, including the expected result and any constraints…",
+    "Describe a task LeoBot can work on in the background, including the expected result and any constraints…",
   "offPeak.form.permissionWarning":
     "Idle-time runs are unattended. Actions that need confirmation will pause the task until you respond.",
   "offPeak.form.modelLabel": "Model",
@@ -6646,9 +6646,9 @@ const enUS: Record<string, string> = {
   "automations.runs.nextPage": "Next",
   // CUA (Computer Use)
   "chat.cuaReadiness.toolsNotLoaded":
-    "LOBE Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
+    "LeoBot Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
   "chat.cuaReadiness.toolsPreparing":
-    "LOBE Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
+    "LeoBot Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
   "chat.toolCall.cua.requestAccess": "Check Computer Use access",
   "chat.toolCall.cua.appName": "Computer Use",
   "chat.toolCall.cua.group.completedLabel": "Computer Use",
@@ -6776,9 +6776,9 @@ const enUS: Record<string, string> = {
   "cuaPermission.modal.restartButton": "Restart Helper",
   "cuaPermission.modal.restarting": "Restarting Helper…",
   "cuaPermission.modal.restartFailed": "Couldn't restart Helper: {error}",
-  "cuaPermission.modal.relaunchAppButton": "Restart LOBE",
+  "cuaPermission.modal.relaunchAppButton": "Restart LeoBot",
   "cuaPermission.modal.relaunchAppHint":
-    "Still not working after restarting Helper? Restart LOBE to fully reload the Helper process.",
+    "Still not working after restarting Helper? Restart LeoBot to fully reload the Helper process.",
   "cuaPermission.status.granted": "Granted",
   "cuaPermission.status.missing": "Missing",
   "cuaPermission.status.unknown": "Unknown",
@@ -6792,7 +6792,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.tools.agentUpdateRequired":
     "The connected Agent is too old for a safe readiness check. Update or restart it, then check again.",
   "cuaPermission.tools.untrustedRuntime":
-    "Computer Use tools were found, but they did not come from the verified LOBE plugin. Review the plugin installation, then check again.",
+    "Computer Use tools were found, but they did not come from the verified LeoBot plugin. Review the plugin installation, then check again.",
   "cuaPermission.perm.accessibility": "Accessibility",
   "cuaPermission.perm.accessibility.purpose": "Read/drive UI elements + synthesize input",
   "cuaPermission.perm.screenRecording": "Screen Recording",
@@ -6803,7 +6803,7 @@ const enUS: Record<string, string> = {
     "Please upgrade macOS before using it. Permission setup cannot be completed on older versions.",
   "cuaPermission.ready": "Permissions ready",
   "cuaPermission.ready.sessionValidationHint":
-    "LOBE will verify the Computer Use tools against the exact session when your first session starts.",
+    "LeoBot will verify the Computer Use tools against the exact session when your first session starts.",
   "settings.computerUse.title": "Computer Use",
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":

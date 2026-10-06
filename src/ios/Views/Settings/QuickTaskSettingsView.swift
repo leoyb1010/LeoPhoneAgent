@@ -199,7 +199,7 @@ struct QuickTaskSettingsView: View {
             .filter { !$0.isEmpty }
             .joined(separator: "-")
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent((safeName.isEmpty ? "LOBE-Template" : safeName) + ".leotask.json")
+            .appendingPathComponent((safeName.isEmpty ? "LeoBot-Template" : safeName) + ".leotask.json")
         do {
             try data.write(to: url, options: .atomic)
             shareURL = url
@@ -309,7 +309,7 @@ struct QuickTaskEditorView: View {
             Section("Task") {
                 TextField("Name", text: $name)
                     .textInputAutocapitalization(.sentences)
-                TextField("What should LOBE do?", text: $prompt, axis: .vertical)
+                TextField("What should LeoBot do?", text: $prompt, axis: .vertical)
                     .lineLimit(4...10)
             }
 

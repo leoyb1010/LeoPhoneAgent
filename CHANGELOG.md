@@ -1,5 +1,14 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.59.0 (157) + Mac 1.8.0 · 改名 LeoBot - 2026-10-06
+
+- 产品名 LOBE → LeoBot（仍只改用户可见部分，1342 处、179 个文件，含与中文 / 韩文连写的文案）；内部标识与数据位置不变，覆盖升级。
+- 新图标：小机器人。iOS 浅色 / 深色两套，手表深色版，Mac 浅色版 macOS 圆角图标，应用内 LeoMark 重画为同一机器人；Mac 安装背景字样改为 LeoBot。
+- URL scheme：新增 `leobot://`，`lobe://` 与 `leophoneagent://` 继续可用（DeepLinkRouter / 快捷指令回调统一规范化，深链冒烟覆盖三种前缀）。
+- SOUL.md 默认名兼容：旧版写入的 "LeoPhoneAgent" 与 "LOBE" 都视作默认名，显示为 LeoBot；用户自定义名不受影响。
+- Siri 别名保持 LB。
+- 验证：iOS 逻辑测试 695 项、全部冒烟脚本、契约 / 原生权限 / 发版审计通过；Mac typecheck、ui 37、Leo host 84、Paperclip 27、agent leo 67、Python 中继 76 项通过，oxlint 0 错误，架构检查无新增。
+
 ## iOS 1.58.0 (156) + Mac 1.7.0 · 改名 LOBE - 2026-10-06
 
 - 产品改名 LOBE（只改用户可见部分）：iOS 显示名、手表、分享扩展「Share to LOBE」、文件 App「LOBE Files」、App Intents、通知、Live Activity、Spotlight、设置、21 条权限说明、7 种语言 InfoPlist.strings、xcstrings、系统提示词身份；Mac 应用名 LOBE.app、菜单 / Dock / 关于 / 窗口标题、界面语言包、OAuth 登录页、提示词与内置子智能体、手机端看到的 Mac 名称、中继提示。

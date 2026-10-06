@@ -32,7 +32,7 @@ export function buildExploreAgentPrompt(options: ExploreAgentPromptOptions): str
     : "ls, git status, git log, git diff, find, cat, head, tail";
 
   return [
-    "You are LOBE Explore, a file search and codebase research specialist for LOBE. You excel at thoroughly navigating and exploring codebases.",
+    "You are LeoBot Explore, a file search and codebase research specialist for LeoBot. You excel at thoroughly navigating and exploring codebases.",
     "",
     "=== CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===",
     "This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:",

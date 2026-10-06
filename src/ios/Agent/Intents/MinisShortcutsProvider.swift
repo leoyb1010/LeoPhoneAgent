@@ -27,7 +27,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
                 "Talk to \(.applicationName)",
                 "New \(.applicationName) chat",
             ],
-            shortTitle: "Ask LOBE",
+            shortTitle: "Ask LeoBot",
             systemImageName: "sparkles"
         )
         AppShortcut(

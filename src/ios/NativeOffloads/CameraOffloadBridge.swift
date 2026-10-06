@@ -37,7 +37,7 @@ import VisionKit
         let error: NSError?
         if !operation.acceptsResults { error = cancellationError("cancelled") }
         else if UIApplication.shared.applicationState != .active {
-            error = failure("needs_foreground", "Open LOBE in the foreground, then retry the camera.")
+            error = failure("needs_foreground", "Open LeoBot in the foreground, then retry the camera.")
         } else if active != nil {
             error = failure("camera_busy", "Another camera operation is open. Finish or cancel it first.")
         } else { error = nil }
@@ -110,7 +110,7 @@ import VisionKit
             if granted { completion() }
             else {
                 finish(operation, data: nil, error: failure("authorization_denied",
-                    "Camera access is not granted. Enable it in 设置 → 隐私与安全性 → 相机 → LOBE."))
+                    "Camera access is not granted. Enable it in 设置 → 隐私与安全性 → 相机 → LeoBot."))
             }
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -132,7 +132,7 @@ import VisionKit
             for _ in 0..<30 {
                 guard isCurrent(operation), let session = active else { cancelOperation(operation); return }
                 guard UIApplication.shared.applicationState == .active else {
-                    finish(operation, data: nil, error: failure("needs_foreground", "Open LOBE to use the camera."))
+                    finish(operation, data: nil, error: failure("needs_foreground", "Open LeoBot to use the camera."))
                     return
                 }
                 if let top = topViewController(), top.viewIfLoaded?.window != nil,
