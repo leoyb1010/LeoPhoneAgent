@@ -46,5 +46,29 @@
     "from": "import { isCloudManagedInstance } from \"./cloud-instance.js\";",
     "to": "import { isCloudManagedInstance } from \"./cloud-instance.js\";\nimport { deleteRemainingCompanyRows } from \"./company-deletion-sweep.js\";",
     "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "import { apiCompression } from \"./middleware/api-compression.js\";",
+    "to": "import { apiCompression } from \"./middleware/api-compression.js\";\nimport { StaticCompressionCache, sendCompressedBody, staticUiCompression } from \"./services/static-ui-compression.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "    if (uiDist) {\n      // Hashed asset files (Vite emits them under /assets/<name>.<hash>.<ext>)\n      // never change once built, so they can be cached aggressively.\n      app.use(\n        \"/assets\",",
+    "to": "    if (uiDist) {\n      // 发行层 1.1.8：静态产物源站 brotli/gzip 压缩 + 哈希产物 immutable；index 壳 no-store 并压缩。\n      const staticCompressionCache = new StaticCompressionCache();\n      app.use(staticUiCompression({ root: uiDist, cache: staticCompressionCache }));\n      // Hashed asset files (Vite emits them under /assets/<name>.<hash>.<ext>)\n      // never change once built, so they can be cached aggressively.\n      app.use(\n        \"/assets\",",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "      app.get([\"/\", \"/index.html\"], (_req, res) => {\n        res.type(\"html\").set(\"Cache-Control\", \"no-cache\").send(readBrandedStaticIndexHtml(uiDist));\n      });",
+    "to": "      app.get([\"/\", \"/index.html\"], (req, res) => {\n        res.status(200).set(\"Cache-Control\", \"no-store\");\n        sendCompressedBody(req, res, Buffer.from(readBrandedStaticIndexHtml(uiDist)), \"text/html; charset=utf-8\", staticCompressionCache);\n      });",
+    "expected": 1
+  },
+  {
+    "file": "server/src/app.ts",
+    "from": "        res\n          .status(200)\n          .set(\"Content-Type\", \"text/html\")\n          .set(\"Cache-Control\", \"no-cache\")\n          .end(readBrandedStaticIndexHtml(uiDist));",
+    "to": "        res.status(200).set(\"Cache-Control\", \"no-store\");\n        sendCompressedBody(req, res, Buffer.from(readBrandedStaticIndexHtml(uiDist)), \"text/html; charset=utf-8\", staticCompressionCache);",
+    "expected": 1
   }
 ]

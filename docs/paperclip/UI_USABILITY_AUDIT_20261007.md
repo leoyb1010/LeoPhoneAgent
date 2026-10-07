@@ -21,6 +21,7 @@
 | 中 | 任务详情（进行中且空闲） | `live-runs`/`active-run`/`runs` 每秒各 1 次轮询，每个打开的任务页每秒 3 个请求（线上 10 分钟 554 次请求的主因；实时事件本已由 WebSocket 推送） | 已修：空闲时放宽到 5 秒，有活动运行时仍为 1 秒；本地实测 20 秒内请求由 65 降到 13 |
 | 中 | 审计 → 时间线 | 已终止/已删除的智能体仍计入“智能体”数量，与智能体页不一致 | 已修：服务端为时间线 actor 增加 `archived`，前端不计数并在行标签追加“（已归档）” |
 | 中 | 组织列表 → 新建组织 | 已有组织时点“新建组织”打开的全屏引导向导没有关闭按钮，Esc 也不关闭（Radix 只在 DialogContent 内处理 Esc），只能刷新或后退离开 | 已修：按需打开的向导显示“取消”按钮并响应 Esc；首次引导路由不变 |
+| 中 | 静态资源回源 | 源站不压缩 UI 产物（index-*.js 6.5 MB 原文），Cloudflare 缓存未命中时经隧道首屏 10 s；index.html 为 no-cache | 已修：源站 brotli/gzip（zlib，内存缓存，弱 ETag/304），哈希产物 `public, max-age=31536000, immutable`，index 壳 `no-store` 并压缩；本地实测 index-*.js 6,558,647 → br 1,441,319 / gzip 1,832,111 字节，安全头保持 |
 | 低 | 例行任务详情（不存在 id） | 直接显示服务端英文 404 正文 "Routine not found" | 已修：改走 `userErrorMessage` 中文映射 |
 | 低 | 设计指南页 `/design-guide` | 开发用页面向 `connection-intents/*/setup-options` 发非 UUID id，服务端 500 | 未修（上游内部页，非生产入口） |
 | 低 | 任务详情 | 每次打开请求 `documents/plan` 404（无计划文档为正常情况），服务端记 warn | 未修：前端把 404 视为“无计划”；改服务端语义会影响 iOS 客户端契约，仅建议日志降噪 |
@@ -32,7 +33,7 @@
 ## 结构
 
 - `catalogs/ui-usability.structural.json`（order.json 末位，`after` round2 会话补丁）：main.tsx 重试策略、IssueDetail 横幅/卡片门控与轮询、Timeline 计数、WorkTimelineChart 标签、CloudAccessGate 退出登录、RoutineDetail 错误文案、OnboardingWizard 取消/Esc。
-- `native/ui-usability.patch.json` + `native/server/services/issue-terminal-cleanup.ts`、`company-deletion-sweep.ts`：companies.ts 删除顺序与清扫、routes/issues.ts 取消时收尾、work-timeline.ts 与 shared 类型 `archived`。
+- `native/ui-usability.patch.json` + `native/server/services/issue-terminal-cleanup.ts`、`company-deletion-sweep.ts`：companies.ts 删除顺序与清扫、routes/issues.ts 取消时收尾、work-timeline.ts 与 shared 类型 `archived`、app.ts 静态压缩与缓存头（`static-ui-compression.ts` + 上游 vitest `__tests__/static-ui-compression.test.ts` 6 例）。
 - `tests/ui-usability.test.mjs`：接线、重试策略执行、各补丁位置/内容、候选树核对。
 
 ## 验证

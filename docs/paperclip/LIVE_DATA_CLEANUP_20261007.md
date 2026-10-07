@@ -48,10 +48,13 @@ from heartbeat_runs h join issues i on i.id = (h.context_snapshot->>'issueId')::
 where c.issue_prefix = 'LEO' and i.identifier in ('LEO-11', 'LEO-1')
   and h.status in ('queued', 'scheduled_retry', 'running');
 
--- (d) 其他任务是否被这两个任务阻塞（只读；预期 0 行）
-select b.issue_id, b.blocked_by_issue_id from issue_blockers b
-where b.blocked_by_issue_id in (select i.id from issues i join companies c on c.id = i.company_id
-                                where c.issue_prefix = 'LEO' and i.identifier in ('LEO-11', 'LEO-1'));
+-- (d) 其他任务是否被这两个任务阻塞（只读；预期 0 行）。阻塞关系在 issue_relations（type='blocks'：
+--     issue_id 是阻塞方，related_issue_id 是被阻塞方）；流水线用例另有 pipeline_case_blockers。
+select r.id, r.issue_id as blocker, r.related_issue_id as blocked
+from issue_relations r
+where r.type = 'blocks'
+  and r.issue_id in (select i.id from issues i join companies c on c.id = i.company_id
+                     where c.issue_prefix = 'LEO' and i.identifier in ('LEO-11', 'LEO-1'));
 ```
 
 ### 1.2 处理（状态更新，不删除审计行）
@@ -90,11 +93,16 @@ where r.source_issue_id = i.id and c.issue_prefix = 'LEO' and i.identifier in ('
 commit;
 ```
 
-### 1.3 预期行数
+### 1.3 预期行数（已按 2026-10-07 只读干跑核对）
 
-- (a) 更新 **1** 行（LEO-11 的一条已保存消息）；LEO-1 预期 0。
-- (b1) 更新 **1** 行（LEO-1）；(b2) 更新 **1** 行（LEO-11）。若干跑结果不同，以干跑为准，不要扩大范围。
+- (a) 更新 **1** 行（LEO-11 的一条已保存消息）；LEO-1 为 0。
+- (b1) 更新 **0** 行：LEO-1 唯一的恢复记录已是 `status=cancelled/outcome=cancelled`（cause `stranded_assigned_issue`），没有 active/escalated 记录。
+- (b2) 更新 **1** 行（LEO-11 的 `replay='blocked'` 保留）。若实际行数不同，以干跑为准，不要扩大范围。
 - (c)(d) 预期 0 行；非 0 时停止，先处理运行/阻塞再继续。
+
+### 1.3.1 LEO-1 页面上的 "Automatic recovery blocked / Board decision required"
+
+这不是恢复卡片，而是上游在搁浅时写入任务线程的**系统评论**（`server/src/services/recovery/stranded-notice.ts`：标题 "Automatic recovery blocked"，元数据行 "Recovery action <uuid>"、"Recovery owner: Board decision required"、"Next action …"）。它随恢复记录取消而不会更新或删除；1.1.8 只对已完成/已取消任务隐藏由 `executionBlocker` / `activeRecoveryAction` 驱动的横幅与卡片（后者对 cancelled 记录本就为 null），**不会隐藏线程里的历史评论**。如需去掉：以 board 身份 `DELETE /api/issues/LEO-1/comments/<commentId>`（`commentId` 用 `select id, created_at from issue_comments where issue_id = <LEO-1 id> and body like '%Automatic recovery blocked%'` 取得），或保留作为历史。该评论的中文化由设计侧（server-copy 补丁）处理，只影响新写入的评论。
 
 ### 1.4 UI 核对
 
@@ -107,14 +115,16 @@ commit;
 
 上游表示法：`agents.status = 'terminated'`（`POST /api/agents/:id/terminate`，撤销 API 密钥，智能体页默认隐藏）；硬删除是 `DELETE /api/agents/:id`，会一并删除其运行、评论、唤醒请求，但**不删除** `cost_events`，且 `cost_events.agent_id` 无级联 —— 有费用记录的智能体硬删除会失败。因此"归档"= `terminated`，不要硬删。
 
-- 若两名智能体仍存在（`select id, name, status from agents where company_id = (select id from companies where issue_prefix='LEO') and name in ('Leo的小跟班','LeoHermers')`）：对每个执行 `POST /api/agents/<id>/terminate`（或 SQL `update agents set status='terminated', updated_at=now() where id=<id>`，再 `update agent_api_keys set revoked_at=now() where agent_id=<id> and revoked_at is null`）。
+- 干跑已确认两名智能体均为 `terminated` 且无活跃 API 密钥：**§2 无需改数据**，只需 1.1.8 的代码侧归档展示。
+- 若将来还有需要归档的智能体（`select id, name, status from agents where company_id = (select id from companies where issue_prefix='LEO') and name in ('Leo的小跟班','LeoHermers')`）：对每个执行 `POST /api/agents/<id>/terminate`（或 SQL `update agents set status='terminated', updated_at=now() where id=<id>`，再 `update agent_api_keys set revoked_at=now() where agent_id=<id> and revoked_at is null`）。
 - 若已被硬删除：没有可恢复的行；时间线会显示 "Unknown agent"。
 - 1.1.8 代码侧：审计时间线的 `actors[].archived` 对 `terminated` 或已不存在的智能体为 `true`，时间线"智能体"计数排除它们，行标签追加"（已归档）"；总览/智能体页本来就不计 `terminated`。词元差异来源不同不会"归零"：时间线按 `heartbeat_runs.usage_json`（只含能关联到任务且落在窗口内的运行），费用页按 `cost_events`（含未关联任务、运行已删除的事件）。
 
 ## 3. 已取消任务与项目 "Onboarding" 归档
 
-- 任务：上游没有独立于 `cancelled` 的"归档"状态。LEO-11 已是 `cancelled`（终态，不再执行，1.1.8 不显示恢复横幅）。如需从列表/收件箱隐藏：`PATCH /api/issues/LEO-11` body `{"hiddenAt":"<ISO 时间>"}`（服务端 `updateIssueSchema.hiddenAt`），或仅对当前用户 `POST /api/issues/LEO-11/inbox-archive`。
-- 项目：`PATCH /api/projects/<projectId>` body `{"archivedAt":"<ISO 时间>"}`（UI：项目 → 配置 → 归档项目）。归档后项目列表隐藏，详情页可通过"已归档"入口查看；项目状态仍是手动字段，上游不会在所有任务取消后自动变更，建议同时 `{"status":"cancelled"}`。
+- 任务：上游没有独立于 `cancelled` 的"归档"状态。LEO-11 已是 `cancelled`（终态，不再执行，1.1.8 不显示恢复横幅）。从列表/收件箱隐藏：`PATCH /api/issues/LEO-11` 与 `PATCH /api/issues/LEO-1` body `{"hiddenAt":"<ISO 时间>"}`（服务端 `updateIssueSchema.hiddenAt`，board 会话 + 站点 Origin），或仅对当前用户 `POST /api/issues/<id>/inbox-archive`。
+- `hidden_at` 的作用范围（`server/src/services/issues.ts` 9 处 `hidden_at IS NULL` 过滤与 `issues` 表的部分索引）：任务列表/看板、收件箱（我的/受阻/全部）、侧栏未读与数量徽标、父任务的子任务计数与"仍有阻塞项"判断、依赖就绪计算都不再包含它；直接打开 `/LEO/issues/LEO-11` 仍可查看；审计时间线、运行记录、费用（按 `heartbeat_runs` / `cost_events`）不受影响；没有 UI 控件可取消隐藏，只能再 `PATCH {"hiddenAt": null}`。除此之外没有其它副作用（不改状态、不触发唤醒、不删数据）。
+- 项目 Onboarding：`PATCH /api/projects/<projectId>` body `{"archivedAt":"<ISO 时间>","status":"cancelled"}`（UI：项目 → 配置 → 归档项目；状态是手动字段，上游不会在所有任务取消后自动变更）。归档后项目列表隐藏，直接 URL 仍可查看。
 - 核对：`/LEO/projects` 不再显示 Onboarding；`GET /api/projects/<id>` 返回 `archivedAt` 非空。
 
 ## 4. 回滚

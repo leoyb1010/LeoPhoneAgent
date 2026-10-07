@@ -140,6 +140,25 @@ test('cancelling a task cancels its deferred execution wakes once, after the run
   assert.doesNotMatch(module, /\.delete\(/, 'audit rows are kept; only the status changes');
 });
 
+test('static UI is served compressed with immutable hashed assets and a no-store index shell, mounted after the security headers', { skip: !source }, () => {
+  const app = nativePatched('server/src/app.ts');
+  assert.match(app, /import \{ StaticCompressionCache, sendCompressedBody, staticUiCompression \} from "\.\/services\/static-ui-compression\.js";/);
+  const securityAt = app.indexOf('app.use(nativeSecurityHeaders(');
+  const compressionAt = app.indexOf('app.use(staticUiCompression({ root: uiDist, cache: staticCompressionCache }));');
+  const assetsAt = app.indexOf('app.use(\n        "/assets",');
+  assert.ok(securityAt < 0 || securityAt < compressionAt, 'security headers precede static compression when round3 is applied');
+  assert.ok(compressionAt > 0 && compressionAt < assetsAt, 'compression runs before express.static for /assets');
+  assert.equal(app.split('sendCompressedBody(req, res, Buffer.from(readBrandedStaticIndexHtml(uiDist)), "text/html; charset=utf-8", staticCompressionCache);').length - 1, 2);
+  assert.equal(app.split('res.status(200).set("Cache-Control", "no-store");').length - 1, 2);
+  assert.doesNotMatch(app, /set\("Cache-Control", "no-cache"\)\.send\(readBrandedStaticIndexHtml/);
+  const module = fs.readFileSync(new URL('../native/server/services/static-ui-compression.ts', import.meta.url), 'utf8');
+  assert.match(module, /IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"/);
+  assert.match(module, /brotliCompressSync/);
+  assert.match(module, /gzipSync/);
+  assert.match(module, /urlPath\.split\("\/"\)\.includes\("\.\."\)/, 'traversal guard');
+  assert.ok(fs.existsSync(new URL('../native/server/__tests__/static-ui-compression.test.ts', import.meta.url)));
+});
+
 test('candidate tree carries every usability patch', { skip: !candidate }, () => {
   for (const patch of [...uiCatalog, ...nativePatch]) {
     const text = candidateRead(patch.file);
@@ -148,4 +167,6 @@ test('candidate tree carries every usability patch', { skip: !candidate }, () =>
   }
   assert.equal(candidateRead('server/src/services/issue-terminal-cleanup.ts'), fs.readFileSync(new URL('../native/server/services/issue-terminal-cleanup.ts', import.meta.url), 'utf8'));
   assert.equal(candidateRead('server/src/services/company-deletion-sweep.ts'), fs.readFileSync(new URL('../native/server/services/company-deletion-sweep.ts', import.meta.url), 'utf8'));
+  assert.equal(candidateRead('server/src/services/static-ui-compression.ts'), fs.readFileSync(new URL('../native/server/services/static-ui-compression.ts', import.meta.url), 'utf8'));
+  assert.equal(candidateRead('server/src/__tests__/static-ui-compression.test.ts'), fs.readFileSync(new URL('../native/server/__tests__/static-ui-compression.test.ts', import.meta.url), 'utf8'));
 });

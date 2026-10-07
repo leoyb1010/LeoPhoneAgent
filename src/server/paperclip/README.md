@@ -56,7 +56,7 @@ python3 tests/native-launcher.test.py
 - 1.1.1：取消 OpenCode 新建配置的隐式 OpenRouter 账号绑定，见 [交付记录](../../../docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。
 - 1.1.3：Cursor/Hermes/OpenCode 配置、费用实时刷新与 macOS 数据库启动修复，见 [服务器审计记录](../../../docs/paperclip/SERVER_AUDIT_20261004.md)。
 - 1.1.5：跨标签页账号隔离、CLI 自检、模型选择、分页、文件及备份恢复的两轮审计，见 [记录](../../../docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
-- 1.1.8：全站页面可用性审计（本地 local_trusted 与 authenticated 两种模式、管理员/普通成员/未登录）：未登录与 401/403/404 不再指数重试（登录跳转与“未找到”从约 7 秒降到 0.5 秒内，服务端 4xx 日志减少）；没有组织访问权限的账号可退出登录；删除组织不再因 projects.goal_id / budget_policies 等外键返回 500；已取消任务在取消时收尾等待恢复的已保存消息，且已完成/已取消任务不再显示恢复横幅；空闲任务页轮询由每秒 3 次降到 5 秒一次；审计时间线对已终止/已删除智能体标记“已归档”并不计入数量。见 [审计记录](../../../docs/paperclip/UI_USABILITY_AUDIT_20261007.md) 与 [线上数据清理程序](../../../docs/paperclip/LIVE_DATA_CLEANUP_20261007.md)。
+- 1.1.8：全站页面可用性审计（本地 local_trusted 与 authenticated 两种模式、管理员/普通成员/未登录）：未登录与 401/403/404 不再指数重试（登录跳转与“未找到”从约 7 秒降到 0.5 秒内，服务端 4xx 日志减少）；没有组织访问权限的账号可退出登录；删除组织不再因 projects.goal_id / budget_policies 等外键返回 500；已取消任务在取消时收尾等待恢复的已保存消息，且已完成/已取消任务不再显示恢复横幅；空闲任务页轮询由每秒 3 次降到 5 秒一次；审计时间线对已终止/已删除智能体标记“已归档”并不计入数量；静态 UI 产物源站 brotli/gzip 压缩、哈希产物 immutable、index 壳 no-store。见 [审计记录](../../../docs/paperclip/UI_USABILITY_AUDIT_20261007.md) 与 [线上数据清理程序](../../../docs/paperclip/LIVE_DATA_CLEANUP_20261007.md)。
 - 1.1.6：覆盖门禁恢复为绿；原生 CLI、授权 PTY 与智能体执行子进程剔除服务器私密变量；安全响应头与请求日志降噪；跨标签会话标记冷加载不再重挂载；恢复解压设上限并在备份同目录私有解压；结构补丁显式排序；既有 40 条 UI 测试断言按中文/新契约更新。
 
 macOS 原生服务的 CLI 路径、已有登录和代理继承说明见部署手册；维护方法和验证范围见 [中文化维护说明](docs/LOCALIZATION.zh-CN.md)、[覆盖矩阵](docs/COVERAGE.zh-CN.md)。
