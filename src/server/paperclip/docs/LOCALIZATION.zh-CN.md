@@ -49,6 +49,8 @@ python3 tests/native-launcher.test.py
 
 `PAPERCLIP_SOURCE` 是固定提交的上游 Git 工作区：测试只读取 `git show HEAD:<文件>` 原文并在内存中重放补丁；`PAPERCLIP_CANDIDATE` 是已生成的候选树，用于核对实际写出的文件。只设置前者时，候选产物比对仍会跳过。依赖上游 `ui/node_modules` 的回归需要先在上游树执行 `npx -y pnpm@9.15.4 install --frozen-lockfile`。
 
+可用性修复（1.1.8）同样只走这两条通道：UI 逻辑放在 `catalogs/ui-usability.structural.json`（order.json 末位，依赖 round2 会话补丁的 main.tsx 上下文），后端放在 `native/ui-usability.patch.json` 与 `native/server/services/{issue-terminal-cleanup,company-deletion-sweep}.ts`，回归在 `tests/ui-usability.test.mjs`。
+
 上游自身的 UI 测试仍断言英文文案的，按 `native/ui-test-assertions.patch.json` 以精确上下文改为当前中文或新契约（每条带 `category`/`reason`，只允许改 `ui/src` 下的 `*.test.ts(x)`），由 `apply-native-cli-auth.mjs` 应用和核对；不得删除断言或放宽为任意值。
 
 工具层测试不能替代实际上游编译或浏览器验收。浏览器冒烟使用隔离的本地静态服务器和模拟 API，不访问真实账号，不发送真实认证/密钥，不执行智能体。生产验证须另外覆盖真实登录 Cookie、首次管理员权限、实际任务执行、审批与预算限制、数据库备份/恢复。

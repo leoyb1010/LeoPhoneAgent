@@ -28,13 +28,19 @@
     "zzzz-round1-ui.structural.json",
     "zzzzz-round2-session.structural.json",
     "zzzzz-round2-ui.structural.json",
-    "agent-config-unsaved-edits.structural.json"
+    "agent-config-unsaved-edits.structural.json",
+    "ui-usability.structural.json"
   ],
   "after": [
     {
       "catalog": "zzzzz-round2-session.structural.json",
       "after": "zz-round1-data.structural.json",
       "reason": "round2 会话补丁的上下文（ui/src/api/client.ts 的 beginApiSessionChange、ui/src/api/auth.ts 的 import）由 round1 数据补丁生成；逐对交换验证只有这一处跨 catalog 依赖。"
+    },
+    {
+      "catalog": "ui-usability.structural.json",
+      "after": "zzzzz-round2-session.structural.json",
+      "reason": "可用性补丁修改 ui/src/main.tsx 的 QueryClient 默认选项与 ./api/client 导入行，这两处上下文由 round2 会话补丁生成。"
     }
   ]
 }

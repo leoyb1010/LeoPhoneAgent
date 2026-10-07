@@ -1,0 +1,50 @@
+[
+  {
+    "file": "server/src/services/companies.ts",
+    "from": "        await tx.delete(goals).where(eq(goals.companyId, id));\n        await tx.delete(projects).where(eq(projects.companyId, id));",
+    "to": "        // LeoPhoneAgent：projects.goal_id 引用 goals 且无级联，必须先删项目再删目标，否则删除组织返回 500。\n        await tx.delete(projects).where(eq(projects.companyId, id));\n        await tx.delete(goals).where(eq(goals.companyId, id));",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "import { getExecutionBlocker } from \"../services/execution-blocker.js\";",
+    "to": "import { getExecutionBlocker } from \"../services/execution-blocker.js\";\nimport { cancelDeferredIssueExecutionWakes } from \"../services/issue-terminal-cleanup.js\";",
+    "expected": 1
+  },
+  {
+    "file": "server/src/routes/issues.ts",
+    "from": "            details: { source: \"issue_status_cancelled\", issueId: existing.id },\n          });\n        }\n      }\n",
+    "to": "            details: { source: \"issue_status_cancelled\", issueId: existing.id },\n          });\n        }\n      }\n\n      // LeoPhoneAgent：任务取消后，仍在等待恢复的已保存消息不会再被执行；若不收尾，任务页会永久显示\n      // “N 条消息正在等待恢复处理”，唤醒队列也会一直被遗留的恢复记录挡住。\n      if (issue.status === \"cancelled\" && existing.status !== \"cancelled\") {\n        const discarded = await cancelDeferredIssueExecutionWakes(db, {\n          companyId: existing.companyId,\n          issueId: existing.id,\n        });\n        if (discarded.length > 0) {\n          await logActivity(db, {\n            companyId: existing.companyId,\n            actorType: actor.actorType,\n            actorId: actor.actorId,\n            agentId: actor.agentId,\n            runId: actor.runId,\n            agentApiKeyId: actor.agentApiKeyId,\n            action: \"issue.deferred_wakes_cancelled\",\n            entityType: \"issue\",\n            entityId: existing.id,\n            issueId: existing.id,\n            details: { source: \"issue_status_cancelled\", wakeupRequestIds: discarded },\n          });\n        }\n      }\n",
+    "expected": 1
+  },
+  {
+    "file": "packages/shared/src/types/work-timeline.ts",
+    "from": "  avatarUrl?: string;\n}",
+    "to": "  avatarUrl?: string;\n  /** LeoPhoneAgent：已终止或已删除的智能体（历史记录仍引用它，但不计入当前智能体数量）。 */\n  archived?: boolean;\n}",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/work-timeline.ts",
+    "from": "          .select({ id: agents.id, name: agents.name, icon: agents.icon, appearance: agents.appearance })",
+    "to": "          .select({ id: agents.id, name: agents.name, icon: agents.icon, appearance: agents.appearance, status: agents.status })",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/work-timeline.ts",
+    "from": "        return { id, type, name: agent?.name ?? \"Unknown agent\", avatar: identity.avatarUrl, appearance: identity.appearance, avatarUrl: identity.avatarUrl };",
+    "to": "        // LeoPhoneAgent：已终止（归档）或已删除的智能体仍出现在历史里，但标记为 archived，不计入当前智能体数量。\n        return { id, type, name: agent?.name ?? \"Unknown agent\", archived: !agent || agent.status === \"terminated\", avatar: identity.avatarUrl, appearance: identity.appearance, avatarUrl: identity.avatarUrl };",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/companies.ts",
+    "from": "        await tx.delete(agents).where(eq(agents.companyId, id));\n        const rows = await tx\n          .delete(companies)",
+    "to": "        await tx.delete(agents).where(eq(agents.companyId, id));\n        // LeoPhoneAgent：清单之外仍引用 company_id 的表（预算策略、标签、运行环境等）会让删除以外键错误失败。\n        const sweep = await deleteRemainingCompanyRows(tx, id);\n        if (sweep.unresolved.length > 0) {\n          throw new Error(`Company deletion is blocked by rows that still reference it: ${sweep.unresolved.join(\", \")}`);\n        }\n        const rows = await tx\n          .delete(companies)",
+    "expected": 1
+  },
+  {
+    "file": "server/src/services/companies.ts",
+    "from": "import { isCloudManagedInstance } from \"./cloud-instance.js\";",
+    "to": "import { isCloudManagedInstance } from \"./cloud-instance.js\";\nimport { deleteRemainingCompanyRows } from \"./company-deletion-sweep.js\";",
+    "expected": 1
+  }
+]

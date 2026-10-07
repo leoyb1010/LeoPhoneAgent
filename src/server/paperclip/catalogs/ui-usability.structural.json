@@ -1,0 +1,110 @@
+[
+  {
+    "file": "ui/src/main.tsx",
+    "from": "import { ApiSessionChangedError, subscribeAccountCacheBoundary, completeAccountCacheBoundary, getApiSessionEpoch } from \"./api/client\";",
+    "to": "import { ApiError, ApiSessionChangedError, subscribeAccountCacheBoundary, completeAccountCacheBoundary, getApiSessionEpoch } from \"./api/client\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "import \"./index.css\";\n",
+    "to": "import \"./index.css\";\n\n// LeoPhoneAgent：401/403/404 是确定性的拒绝或不存在。默认的 3 次指数退避重试只会让未登录用户在\n// “正在加载…”停留约 7 秒才跳到登录页、让不存在的任务/智能体页空白约 7 秒，并在服务端日志刷出重复的 4xx。\nfunction shouldRetryQuery(failureCount: number, error: unknown): boolean {\n  if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) return false;\n  return failureCount < 3;\n}\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/main.tsx",
+    "from": "defaultOptions: { queries: { staleTime: 30_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } },",
+    "to": "defaultOptions: { queries: { staleTime: 30_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true, retry: shouldRetryQuery } },",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "              {issue.executionBlocker && (\n                <ExecutionBlockerNotice",
+    "to": "              {/* LeoPhoneAgent：已完成/已取消的任务不再执行，遗留的恢复记录不应再显示恢复横幅与重试按钮。 */}\n              {issue.executionBlocker && issue.status !== \"done\" && issue.status !== \"cancelled\" && (\n                <ExecutionBlockerNotice",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "                  recoveryAction={issue.activeRecoveryAction ?? null}",
+    "to": "                  recoveryAction={issue.status === \"done\" || issue.status === \"cancelled\" ? null : issue.activeRecoveryAction ?? null}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "    queryFn: () => heartbeatsApi.liveRunsForIssue(issueQueryRef),\n    enabled: !!issueId,\n    refetchInterval: 1000,",
+    "to": "    queryFn: () => heartbeatsApi.liveRunsForIssue(issueQueryRef),\n    enabled: !!issueId,\n    // LeoPhoneAgent：空闲时 1 秒轮询三个端点会让每个打开的任务页每秒产生 3 个请求（穿过隧道时尤其明显）；\n    // 运行事件由实时通道推送，空闲时放宽到 5 秒，仅在有活动运行时保持 1 秒。\n    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? 1000 : 5000),",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "    refetchInterval: liveRunCount > 0 ? false : 1000,",
+    "to": "    refetchInterval: liveRunCount > 0 ? false : 5000,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/IssueDetail.tsx",
+    "from": "      hasLiveRuns || issueStatus === \"in_progress\" ? 1000 : false,",
+    "to": "      hasLiveRuns ? 1000 : issueStatus === \"in_progress\" ? 5000 : false,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Timeline.tsx",
+    "from": "    if (actorById.get(span.actorId)?.type === \"agent\") activeAgentIds.add(span.actorId);",
+    "to": "    const spanActor = actorById.get(span.actorId);\n    // LeoPhoneAgent：已归档（已终止或已删除）的智能体不计入“智能体”数量，与智能体页保持一致。\n    if (spanActor?.type === \"agent\" && !spanActor.archived) activeAgentIds.add(span.actorId);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "                  {truncate(row.actor.name, 18)}",
+    "to": "                  {truncate(row.actor.archived ? `${row.actor.name}（已归档）` : row.actor.name, 18)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.tsx",
+    "from": "              {truncate(row.actor.name, 16)}",
+    "to": "              {truncate(row.actor.archived ? `${row.actor.name}（已归档）` : row.actor.name, 16)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.tsx",
+    "from": "import { clearCloudSignInAttempt } from \"@/lib/cloud-sign-in\";\n",
+    "to": "import { clearCloudSignInAttempt } from \"@/lib/cloud-sign-in\";\nimport { useSignOut } from \"@/hooks/useSignOut\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.tsx",
+    "from": "function NoBoardAccessPage() {\n  return (",
+    "to": "function NoBoardAccessPage() {\n  // LeoPhoneAgent：没有组织访问权限的账号此前在这一页没有任何操作，无法退出登录以切换账号，只能手动清除 Cookie。\n  const signOut = useSignOut();\n  return (",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.tsx",
+    "from": "          Use an organization invite or sign in with an account that already belongs to this org.\n        </p>\n      </Card>",
+    "to": "          Use an organization invite or sign in with an account that already belongs to this org.\n        </p>\n        <div className=\"mt-4\">\n          <Button variant=\"outline\" onClick={() => signOut.mutate()} disabled={signOut.isPending}>\n            {signOut.isPending ? \"正在退出…\" : \"退出登录\"}\n          </Button>\n        </div>\n      </Card>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "from": "import { EmptyState } from \"../components/EmptyState\";\n",
+    "to": "import { EmptyState } from \"../components/EmptyState\";\nimport { userErrorMessage } from \"@/i18n/zh-CN\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/RoutineDetail.tsx",
+    "from": "message={error instanceof Error ? error.message : \"We couldn't load this routine.\"}",
+    "to": "message={userErrorMessage(error)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "from": "    if (e.defaultPrevented) return;\n    if (e.key === \"Enter\" && (e.metaKey || e.ctrlKey)) {",
+    "to": "    if (e.defaultPrevented) return;\n    // LeoPhoneAgent：从“新建组织”按需打开的全屏引导没有 DialogContent，Radix 不会处理 Esc；没有退出方式会把用户困在向导里。\n    if (e.key === \"Escape\" && onboardingOpen && !loading) {\n      e.preventDefault();\n      handleClose();\n      return;\n    }\n    if (e.key === \"Enter\" && (e.metaKey || e.ctrlKey)) {",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "from": "          data-testid=\"onboarding-wizard\"\n          className=\"fixed inset-0 z-50 flex\"\n          onKeyDown={handleKeyDown}\n        >\n",
+    "to": "          data-testid=\"onboarding-wizard\"\n          className=\"fixed inset-0 z-50 flex\"\n          onKeyDown={handleKeyDown}\n        >\n          {/* LeoPhoneAgent：按需打开（已有组织时点“新建组织”）的向导必须能关闭；首次引导路由仍无此按钮。 */}\n          {onboardingOpen && (\n            <button\n              type=\"button\"\n              onClick={handleClose}\n              disabled={loading}\n              aria-label=\"关闭引导\"\n              className=\"absolute right-4 top-4 z-10 rounded-md border border-border bg-background px-3 py-1 text-sm text-muted-foreground hover:text-foreground\"\n            >\n              {\"取消\"}\n            </button>\n          )}\n",
+    "expected": 1
+  }
+]
