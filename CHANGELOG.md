@@ -1,5 +1,16 @@
 # LeoPhoneAgent 更新记录
 
+## Paperclip 中文发行层 1.1.8 · 全站 UI 审计与可用性修复 - 2026-10-07
+
+三路并行审计（本机隔离实例真实渲染 450 场景 × 明暗两套、三种身份 × 155 条路由共 465 条功能矩阵、线上站点只读实况 + Mini 日志），修复全部落在发行层并从干净上游重新生成验证。
+
+- 版式：`catalogs/ui-layout-polish.structural.json`（219 条）+ `overlays/zh-cn-layout.css`——「适用对象」等按英文短词预留宽度导致的竖排、工具栏搜索框压按钮、移动端底栏盖住内容、微型字号抬到 11/12px、CJK 字体回退、徽章长标识换行；新建任务改为可见「分配给 [负责人] 在 [项目]」；技能工作室 <1280px 改为标签页；侧栏滚动提示。去重计数：竖排 38→4、遮挡 34→1、无提示截断 508→97。
+- 文案：搜索/⌘K 的裸操作符改为「中文说明 + 语法」可点击示例且编号示例取当前组织前缀；7 处字面量 `&rarr;` 等实体修正；23 处英文语序逐词拼接的计数模板改整句；`catalogs/ui-helper-copy.structural.json` 1049 条 helper 文案规则（插值保留）+ `helper-copy-preserve.json` 180 条登记 + 门禁测试；`native/server-display-copy.patch.json` 26 条服务端恢复通知/排队原因/运行事件中文；相对时间与时长全站统一格式；aria-label/title 中文化。
+- 可用性：`catalogs/ui-usability.structural.json`（18 条）+ `native/ui-usability.patch.json`——删除组织外键无级联导致 500；401/403/404 指数重试使登录跳转 7.5 s→0.5 s、服务端 4xx 刷屏；无组织成员无法退出登录；新建组织向导无法关闭；已取消/已完成任务不再显示恢复横幅与卡片，取消时 deferred 唤醒收尾；任务页轮询 1 s→空闲 5 s（请求量约降 80%）；审计时间线排除已终止智能体并标「已归档」；例行任务 404 中文。
+- 性能：`native/server/services/static-ui-compression.ts`——源站 brotli/gzip（6.5 MB JS → 1.4 MB br）、`/assets/*` immutable、index 壳 no-store，安全头保持。
+- 测试：`native/ui-test-assertions.patch.json` 增至 188 条，17 个上游 UI 测试文件 197/197 通过；发行层测试 91 项；zh-CN vitest 25；server vitest 20（压缩/安全头/缓存）；ui-smoke。全包上游 UI vitest 仍有约 2,637 条英文断言失败（历史遗留，不在门禁）。
+- 线上数据清理程序：`docs/paperclip/LIVE_DATA_CLEANUP_20261007.md`（按只读干跑修正）。
+
 ## iOS 1.59.0 (157) + Mac 1.8.0 · 改名 LeoBot - 2026-10-06
 
 - 产品名 LOBE → LeoBot（仍只改用户可见部分，1342 处、179 个文件，含与中文 / 韩文连写的文案）；内部标识与数据位置不变，覆盖升级。
