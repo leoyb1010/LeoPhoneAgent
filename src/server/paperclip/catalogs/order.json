@@ -29,6 +29,8 @@
     "zzzzz-round2-session.structural.json",
     "zzzzz-round2-ui.structural.json",
     "agent-config-unsaved-edits.structural.json",
+    "ui-layout-polish.structural.json",
+    "ui-helper-copy.structural.json",
     "ui-usability.structural.json"
   ],
   "after": [

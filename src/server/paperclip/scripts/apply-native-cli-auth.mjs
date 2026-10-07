@@ -13,7 +13,7 @@ assert.equal(fs.realpathSync(root),root,'use physical upstream root');
 const lock=JSON.parse(fs.readFileSync(path.join(home,'upstream.lock.json')));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',maxBuffer:20_000_000}).trim(),lock.commit,'unknown upstream commit');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json','round2-cli.patch.json','round2-resources.patch.json','round2-backup.patch.json','ui-usability.patch.json','round3-hardening.patch.json','ui-test-assertions.patch.json'];
+const patchFiles=['backend-api.patch.json','backend-integration.patch.json','costs-realtime.patch.json','backend-db-runtime.patch.json','round1-runtime.patch.json','round1-boundaries.patch.json','visible-pagination.patch.json','round2-cli.patch.json','round2-resources.patch.json','round2-backup.patch.json','ui-usability.patch.json','round3-hardening.patch.json','server-display-copy.patch.json','ui-test-assertions.patch.json'];
 const patches=patchFiles.flatMap(name=>JSON.parse(fs.readFileSync(path.join(home,'native',name))).map(patch=>({...patch,source:name})));
 const targets=new Map();
 // 1.1.6：上游 UI 测试断言补丁只允许改 ui/src 下的 *.test.ts(x)，且只能来自独立的断言补丁文件；

@@ -26,7 +26,10 @@ function check(read) {
   for (const value of ['standard', 'planning', 'ask', '', 'invalid', null]) {
     assert.equal(modes.isIssueWorkMode(value), upstreamModes.isIssueWorkMode(value));
     assert.equal(modes.nextWorkMode(value), upstreamModes.nextWorkMode(value));
-    assert.equal(modes.titleForPendingWorkMode(value), upstreamModes.titleForPendingWorkMode(value));
+    // 1.1.7：提示文字由 ui-helper-copy 中文化；候选树中为中文，重放本 catalog 时仍与上游一致。
+    const title = modes.titleForPendingWorkMode(value), upstreamTitle = upstreamModes.titleForPendingWorkMode(value);
+    assert.equal(Boolean(title), Boolean(upstreamTitle));
+    if (title !== upstreamTitle) assert.match(String(title), /[\u3400-\u9fff]/);
   }
   const assignees = execute(read(assigneeFile));
   const upstreamAssignees = execute(original(assigneeFile));

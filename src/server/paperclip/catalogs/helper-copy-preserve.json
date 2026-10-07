@@ -1,0 +1,902 @@
+[
+ {
+  "file": "ui/src/adapters/dynamic-loader.ts",
+  "text": "Parser worker init timed out",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/adapters/dynamic-loader.ts",
+  "text": "Worker error: ${ev.message}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/adapters/paperclip-runner/index.ts",
+  "text": "Paperclip runner",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/adapters/sandboxed-parser-worker.ts",
+  "text": "Parser module exports no usable parseStdoutLine or createStdoutParser",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/adapters/sandboxed-parser-worker.ts",
+  "text": "Parser init failed: ",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/adapters/transcript.ts",
+  "text": "Chat transcript error: ${errorText}. Falling back for line: ${preview}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/agents.ts",
+  "text": "Retry was skipped.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/announcements.ts",
+  "text": "Announcement request failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/audit.ts",
+  "text": "Export failed: ${res.status}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/auth.ts",
+  "text": "Request failed: ${status}",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/api/auth.ts",
+  "text": "Session change is pending.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/auth.ts",
+  "text": "Session changed before verification.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/auth.ts",
+  "text": "Failed to load profile (${res.status})",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/client.ts",
+  "text": "Request failed: ${res.status}",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/api/health.ts",
+  "text": "Failed to load health (${res.status})",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/health.ts",
+  "text": "Failed to request restart (${res.status})",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/heartbeats.ts",
+  "text": "Trace download failed: ${response.status}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/api/issues.ts",
+  "text": "The queued messages changed. Refresh and try again.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/AgentActionButtons.tsx",
+  "text": "Agent is not ready to duplicate",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/AppErrorBoundary.tsx",
+  "text": "App shell crashed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/AttentionQueueRow.tsx",
+  "text": "Missing issue reference for this decision.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/AttentionQueueRow.tsx",
+  "text": "This decision must be completed from its detail view.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/DecisionTriageStrip.tsx",
+  "text": "This decision has no linked task to route from.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/DocumentAnnotationPanel.tsx",
+  "text": "Document annotation panel requires an annotation target.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueChatThread.tsx",
+  "text": "It arrived paused from an organization import — imported agents stay parked until you resume them.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueChatThread.tsx",
+  "text": "Upload did not return a file URL",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueChatThread.tsx",
+  "text": "Review unavailable",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueChatThread.tsx",
+  "text": "Upload did not return a file URL",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueDocumentsSection.tsx",
+  "text": "Document deletion is not available",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueDocumentsSection.tsx",
+  "text": "Document revision restore is not available",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueDocumentsSection.tsx",
+  "text": "Document locking is not available",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueRunLedger.tsx",
+  "text": "Trace re-run was skipped.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/IssueRunLedger.tsx",
+  "text": "Snoozed from issue run ledger",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/IssueRunLedger.tsx",
+  "text": "Dismissed from issue run ledger",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/MarkdownEditor.tsx",
+  "text": "Markdown rich editor failed; falling back to raw textarea",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/MarkdownEditor.tsx",
+  "text": "No image upload handler",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/NewGoalDialog.tsx",
+  "text": "No organization selected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/OnboardingWizard.tsx",
+  "text": "Approved during onboarding first-agent setup.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/OnboardingWizard.tsx",
+  "text": "Respond with hello.\\",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/OnboardingWizard.tsx",
+  "text": "Respond with hello.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/OnboardingWizard.tsx",
+  "text": "Respond with hello.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/OnboardingWizard.tsx",
+  "text": "Respond with hello.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/PathInstructionsModal.tsx",
+  "text": "Hold the Option (⌥) key — \\",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/PathInstructionsModal.tsx",
+  "text": "Copy as Pathname\\",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/PathInstructionsModal.tsx",
+  "text": "Copy as Pathname\\",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/PathInstructionsModal.tsx",
+  "text": "Copy as path\\",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/PipelineItemBodyDocument.tsx",
+  "text": "Linked body to conversation for comments",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/ProjectProperties.tsx",
+  "text": "Select an organization to create secrets",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace expired",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Raw tracing enabled",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace captured",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace incomplete",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace truncated",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace expired",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace deleted",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace requested",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace off",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace off",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace off",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace deleted",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/ProviderTraceStatusBadge.tsx",
+  "text": "Trace expired",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/RouteErrorBoundary.tsx",
+  "text": "Page render failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/RoutineTriggerCard.tsx",
+  "text": "Created execution issue ",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/SidebarRecentTasks.tsx",
+  "text": "Restarted from Recent Tasks.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/SidebarRecentTasks.tsx",
+  "text": "Paused from Recent Tasks.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "The task is not available for reassignment.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "This queued message is no longer editable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "This queued message is no longer editable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "This question has already been answered or closed.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Cancelling this question is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Submit the answer through the saved question card.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Skipping this interaction is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Queue reordering is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Steering is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Discard is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/TaskChatThread.tsx",
+  "text": "Discard is unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/onboarding/OnboardingCharacter.tsx",
+  "text": "Onboarding character unavailable, showing the still portrait.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/onboarding/OnboardingCharacter.tsx",
+  "text": "Onboarding character palette change failed, showing the still portrait.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/onboarding/OnboardingCharacter.tsx",
+  "text": "Onboarding character transition failed, showing the still portrait.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/RunnerGoalWidget.tsx",
+  "text": "Select an agent to use /goal.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/RunnerGoalWidget.tsx",
+  "text": "Session goals are unsupported by this agent.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/RunnerGoalWidget.tsx",
+  "text": "There is no current session goal to edit.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/RunnerGoalWidget.tsx",
+  "text": "Add an objective after /goal to start a goal.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/TaskChatComposer.tsx",
+  "text": "Upload did not return a file URL",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/TaskChatComposer.tsx",
+  "text": "Attachment was removed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/TaskChatComposer.tsx",
+  "text": "Upload did not return a file URL",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/TaskChatComposer.tsx",
+  "text": "Review unavailable",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-chat/TaskChatRichInput.tsx",
+  "text": "Image uploads are unavailable.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+  "text": "Could not load file (${response.status}).",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+  "text": "The file response is empty.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+  "text": "This file is too large to preview. Download it instead.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+  "text": "This file contains binary data. Download it instead.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/transcript/read-transcript-request.ts",
+  "text": "Run history took too long to load. Retry to load it.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/components/transcript/useLiveRunTranscripts.ts",
+  "text": "Run history could not be loaded",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/connect-flow-preview-main.tsx",
+  "text": "The step advances straight to Review — there is no success screen.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/connect-flow-preview-main.tsx",
+  "text": "Paperclip works with your existing subscription or API keys.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/hooks/useAgentChatNavigation.ts",
+  "text": "Choose an agent from this company.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/hooks/useDocumentAnnotationMutations.ts",
+  "text": "No selection to anchor to.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/hooks/useDocumentAnnotationMutations.ts",
+  "text": "Document has no revision yet.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/hooks/useResourceMemberships.ts",
+  "text": "Select an organization first.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/hooks/useRetryNowMutation.ts",
+  "text": "Missing issue id",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/index.ts",
+  "text": "Failed to initialize i18next",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/locales.ts",
+  "text": "Invalid locale file path: ${path}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/locales.ts",
+  "text": "Missing default locale messages for ${DEFAULT_LOCALE}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/zh-CN.ts",
+  "text": "Invalid email or password",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/zh-CN.ts",
+  "text": "Invalid password",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/zh-CN.ts",
+  "text": "User already exists",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/i18n/zh-CN.ts",
+  "text": "User already exists. Use another email.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/app-brand-assets.ts",
+  "text": "App brand manifest request failed (${response.status})",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/app-brand-assets.ts",
+  "text": "App brand manifest is invalid",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/clipboard.ts",
+  "text": "Clipboard unavailable",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Empty cron field element",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron step",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron range",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron start",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron range",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron range (start > end)",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Invalid cron value",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Empty cron field",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Cron value ${value} out of range",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/cron-fires.ts",
+  "text": "Unable to resolve weekday for ${timeZone}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/external-objects.ts",
+  "text": "Status unavailable",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/issue-monitor.ts",
+  "text": "Invalid monitor date",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/wait-for-stopped-runs.ts",
+  "text": "Stop verification timed out",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Unsupported zip archive: only STORE and DEFLATE entries are supported.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Unsupported zip archive: this browser cannot read compressed zip entries.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Invalid zip archive: unsupported local file header.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Invalid zip archive: truncated local file header.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Unsupported zip archive: data descriptors are not supported.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/lib/zip.ts",
+  "text": "Invalid zip archive: truncated file contents.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/main.tsx",
+  "text": "Paperclip root element is missing",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/AgentChat.tsx",
+  "text": "Agent not found",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/AgentDetail.production.tsx",
+  "text": "Select a company to upload images",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/BoardChat.tsx",
+  "text": "Board chat stream not available",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/BoardChat.tsx",
+  "text": "Board chat error:",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/BoardChat.tsx",
+  "text": "Welcome to **${companyName}**! I'm ${ceoName}, your team lead. I've read through what you shared in the wizard${missionLine}\\n\\n",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/CompanyEnvironments.tsx",
+  "text": "Select an organization to create secrets",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanyExport.tsx",
+  "text": "This is an [Agent Company](https://paperclip.ing) package.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanyExport.tsx",
+  "text": "Retry preview",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanyExport.tsx",
+  "text": "Retry preview",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.production.tsx",
+  "text": "Skill import failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.production.tsx",
+  "text": "Failed to import skill source.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.production.tsx",
+  "text": "Importing skills",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.tsx",
+  "text": "Skill import failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.tsx",
+  "text": "Failed to import skill source.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/CompanySkills.tsx",
+  "text": "Importing skills",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/GoalDetail.tsx",
+  "text": "No organization selected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/InstanceAccess.tsx",
+  "text": "No user selected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/InviteLanding.tsx",
+  "text": "Request failed: 401",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/InviteLanding.tsx",
+  "text": "Request failed: 422",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.tsx",
+  "text": "Approved plan",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.tsx",
+  "text": "Requested changes\\n\\n${reason}",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.tsx",
+  "text": "Requested changes",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/IssueDetail.tsx",
+  "text": "Assignee resumed from the task page",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/PipelineSettings.tsx",
+  "text": "Select an organization to create secrets",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/Pipelines.tsx",
+  "text": "Manual board override from item page: moved from ${detail.stage.name} to ${selectedMoveStage.name}.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/Pipelines.tsx",
+  "text": "Removed from the item detail page.",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/Pipelines.tsx",
+  "text": "Select an organization first.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/ProfileSettings.tsx",
+  "text": "Select an organization before uploading a profile avatar.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/ProjectDetail.tsx",
+  "text": "No organization selected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/RoutineDetail.tsx",
+  "text": "Select an organization to create secrets",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/SkillStudio.tsx",
+  "text": "Restore of v${version.revisionNumber}",
+  "reason": "持久化业务文本、发送给模型的提示词或原始 HTTP 诊断，按契约保留原文"
+ },
+ {
+  "file": "ui/src/pages/Timeline.tsx",
+  "text": "Timeline pagination did not advance",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/Timeline.tsx",
+  "text": "Timeline response was empty",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/Connections.tsx",
+  "text": "Needs attention",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/Connections.tsx",
+  "text": "Not connected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/Connections.tsx",
+  "text": "Not connected",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/Connections.tsx",
+  "text": "Needs attention",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/chat/SetupPrompt.tsx",
+  "text": "Paperclip instance URL: ${instanceOrigin}\\nUse this instance for setup. Do not ask me for its URL again unless it is unavailable or I ask to use a different instance.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/chat/SetupPrompt.tsx",
+  "text": "Paperclip instance URL is unavailable. Ask me for it before starting setup.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/connection-identity.ts",
+  "text": "Dedicated agent",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/connection-identity.ts",
+  "text": "Dedicated agent",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/pages/apps/gateways/panels/OverviewPanel.tsx",
+  "text": "Bearer pcgw_•••_TOKEN",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/bridge.ts",
+  "text": "Plugin bridge hook called outside of a <PluginBridgeContext.Provider>. ",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/bridge.ts",
+  "text": "Ensure the plugin component is rendered within a PluginBridgeScope.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/launchers.tsx",
+  "text": "Plugin launcher render failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/slots.tsx",
+  "text": "Unknown error",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/slots.tsx",
+  "text": "Paperclip plugin React runtime is not initialized.",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/slots.tsx",
+  "text": "Failed to fetch plugin module: ${response.status} ${response.statusText}",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ },
+ {
+  "file": "ui/src/plugins/slots.tsx",
+  "text": "Plugin slot render failed",
+  "reason": "非显示文案：日志/异常/内部键，或整文件为解析器/测试工具"
+ }
+]

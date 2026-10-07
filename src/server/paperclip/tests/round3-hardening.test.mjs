@@ -9,7 +9,7 @@ const testAssertions = readJson('native/ui-test-assertions.patch.json');
 const applyScript = fs.readFileSync(new URL('../scripts/apply-native-cli-auth.mjs', import.meta.url), 'utf8');
 
 test('round3 hardening patch is registered and UI test assertion patches stay inside ui/src test files', () => {
-  assert.match(applyScript, /'round3-hardening\.patch\.json','ui-test-assertions\.patch\.json'/);
+  assert.match(applyScript, /'round3-hardening\.patch\.json','server-display-copy\.patch\.json','ui-test-assertions\.patch\.json'/);
   for (const patch of testAssertions) assert.match(patch.file, /^ui\/src\/[A-Za-z0-9_./-]+\.test\.tsx?$/);
   assert.ok(round3.every(patch => !/\.test\.tsx?$/.test(patch.file) || patch.file === 'server/src/__tests__/http-log-redaction.test.ts'));
 });
