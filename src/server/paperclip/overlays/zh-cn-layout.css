@@ -37,14 +37,29 @@ button,
   overflow-wrap: anywhere;
 }
 
-/* 徽章里的长技术标识（技能名、ID）在卡片里换行显示，而不是撑破卡片或被裁掉；
-   绝对定位的计数角标（底部导航未读数）不受影响。 */
-[data-slot="badge"]:not(.absolute) {
+/* 徽章里的长技术标识（技能名、ID）只在可换行的芯片列表里换行显示，不撑破卡片也不被裁掉；
+   表格、看板与行内的状态徽章保持单行。 */
+[data-slot="badge"] {
   max-width: 100%;
   min-width: 0;
+}
+/* 绝对定位的计数角标（底部导航未读数）：两位数在 11px 字号下被 overflow-hidden 裁掉最后一像素。 */
+[data-slot="badge"].absolute {
+  overflow: visible;
+}
+.flex-wrap > [data-slot="badge"] {
   height: auto;
   white-space: normal;
   text-align: left;
+}
+
+/* 段落里的短强调词（“仅用户”等）不在中文字符之间折行。 */
+p > strong,
+p > b,
+p > em,
+p > span.font-medium,
+li > strong {
+  word-break: keep-all;
 }
 
 /* 正文段落给中文更舒展的行距。 */
@@ -72,4 +87,21 @@ div:has(> [data-slot="collection-toolbar-search"]) {
   #main-content > :last-child {
     padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
+}
+
+/* 主侧栏导航可滚动时给出可见的滚动提示：细滚动条常显，并在内容未到底时
+   用滚动阴影提示下方还有分组（“最近任务”等不会看起来像被底部账号区盖住）。 */
+.primary-sidebar-surface .scrollbar-auto-hide,
+aside .scrollbar-auto-hide {
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  background:
+    linear-gradient(var(--background) 30%, transparent) top / 100% 28px no-repeat local,
+    linear-gradient(transparent, var(--background) 70%) bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, color-mix(in oklab, var(--foreground) 16%, transparent), transparent) top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in oklab, var(--foreground) 16%, transparent), transparent) bottom / 100% 12px no-repeat scroll;
+}
+.primary-sidebar-surface .scrollbar-auto-hide::-webkit-scrollbar-thumb,
+aside .scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--foreground) 22%, transparent) !important;
+  border-radius: 9999px;
 }

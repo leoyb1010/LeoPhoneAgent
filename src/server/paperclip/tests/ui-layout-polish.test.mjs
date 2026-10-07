@@ -13,7 +13,7 @@ const patches = JSON.parse(fs.readFileSync(new URL('../catalogs/ui-layout-polish
 const patched = file => patchedFile(file, patches, { reversible: true });
 const files = [...new Set(patches.map(p => p.file))];
 const interpolations = text => [...new Set([...text.matchAll(/\$\{\s*([A-Za-z_][\w.]*)/g)].map(m => m[1]))];
-const CJK = /[㐀-鿿]/;
+const CJK = /[\u3000-\u303f\u3400-\u9fff\uff00-\uffef\u201c\u201d]/;
 
 test('catalog is registered and every rule targets ui/src with Chinese or layout-only output', () => {
   const order = readJson('catalogs/order.json');
@@ -25,7 +25,7 @@ test('catalog is registered and every rule targets ui/src with Chinese or layout
     { const after = interpolations(p.to); for (const expr of interpolations(p.from)) assert.ok(after.includes(expr), `${p.file}: 插值 ${expr} 丢失`); }
     // 版式类规则只改 className；文案类规则输出含中文。
     const layoutOnly = p.from.replace(/"[^"]*"/g, '""') === p.to.replace(/"[^"]*"/g, '""') && !CJK.test(p.to);
-    if (!layoutOnly) assert.ok(CJK.test(p.to) || /\{"[^"]*"\}|UserRound|useCompany|selectedCompany|displayStatus|\.label\}/.test(p.to), `${p.file}: ${p.to.slice(0, 60)}`);
+    if (!layoutOnly) assert.ok(CJK.test(p.to) || /\{"[^"]*"\}|UserRound|useCompany|selectedCompany|displayStatus|MOBILE_BREAKPOINT|title=\{|\.label\}/.test(p.to), `${p.file}: ${p.to.slice(0, 60)}`);
   }
 });
 
@@ -38,7 +38,8 @@ test('new-issue dialog: the 24px "For" column becomes an icon column with an acc
   assert.ok(!text.includes('<span className="w-6 shrink-0 text-center">For</span>'));
   assert.ok(!/w-6 shrink-0 text-center">[^<{]/.test(text), '没有固定 24px 宽的文字标签');
   assert.ok(text.includes('<UserRound className="h-3.5 w-3.5" aria-hidden />'));
-  assert.ok(text.includes('<span className="sr-only">{"适用对象"}</span>'));
+  assert.ok(text.includes('whitespace-nowrap text-muted-foreground"><UserRound'), '可见的自适应宽度标签');
+  assert.ok(text.includes('<span>{"分配给"}</span>'));
   assert.ok(/import \{[\s\S]*UserRound,[\s\S]*\} from "lucide-react"/.test(text));
 });
 
@@ -87,7 +88,7 @@ test('interaction summaries are Chinese and keep the same counts as upstream', {
 
 test('layout-only rules add shrink-0/whitespace-nowrap/min-w-0 and never change text', { skip: !source }, () => {
   const layoutFiles = ['ui/src/pages/AgentDetail.tsx', 'ui/src/pages/AgentDetail.production.tsx', 'ui/src/components/task-chat/TaskChatMarker.tsx', 'ui/src/components/FrontmatterPanel.tsx', 'ui/src/components/AgentActionButtons.tsx'];
-  const strip = s => s.replace(/className=\{?[^}>]*\}?/g, '').replace(/\s+/g, ' ');
+  const strip = s => s.replace(/className=\{?[^}>]*\}?/g, '').replace(/title=\{[^}]*\}/g, '').replace(/\s+/g, ' ');
   for (const file of layoutFiles) {
     const before = original(file), after = patched(file);
     const layoutRules = patches.filter(p => p.file === file && !CJK.test(p.to));

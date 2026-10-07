@@ -1479,5 +1479,698 @@
       "MembershipAction marks pending actions busy and disabled"
     ],
     "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"1 result\");",
+    "to": "      expect(container.textContent).toContain(\"1 条结果\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Couldn’t run that search\");",
+    "to": "      expect(container.textContent).toContain(\"无法完成此次搜索\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Retry\");",
+    "to": "      expect(container.textContent).toContain(\"重试\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Open Tasks filter view\");",
+    "to": "      expect(container.textContent).toContain(\"打开任务筛选视图\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"No results for\");",
+    "to": "      expect(container.textContent).toContain(\"未找到与“\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Search all scopes\");",
+    "to": "      expect(container.textContent).toContain(\"搜索全部范围\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      suggestionButton = container.querySelector('button[aria-label=\"Insert operator status:todo\"]');",
+    "to": "      suggestionButton = container.querySelector('button[aria-label=\"插入运算符 status:todo\"]');",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Recently updated\");",
+    "to": "      expect(container.textContent).toContain(\"最近更新\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "        button = container.querySelector<HTMLButtonElement>('button[aria-label=\"Remove filter Status: Todo\"]');",
+    "to": "        button = container.querySelector<HTMLButtonElement>('button[aria-label=\"移除筛选条件：状态：待办\"]');",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"No results with these filters\");",
+    "to": "      expect(container.textContent).toContain(\"没有符合这些筛选条件的结果\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"12 results match\");",
+    "to": "      expect(container.textContent).toContain(\"12 个结果匹配\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Loosen a filter\");",
+    "to": "      expect(container.textContent).toContain(\"放宽筛选条件\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"+12 results\");",
+    "to": "      expect(container.textContent).toContain(\"+12 条结果\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Project Timeline\");",
+    "to": "    expect(container.textContent).toContain(\"项目时间线\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Range\");",
+    "to": "    expect(container.textContent).toContain(\"范围\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.querySelector('[aria-label=\"Zoom out\"]')).not.toBeNull();\n    expect(container.querySelector('[aria-label=\"Zoom in\"]')).not.toBeNull();\n    expect(container.querySelector('[aria-label=\"Reset zoom\"]')).not.toBeNull();",
+    "to": "    expect(container.querySelector('[aria-label=\"缩小\"]')).not.toBeNull();\n    expect(container.querySelector('[aria-label=\"放大\"]')).not.toBeNull();\n    expect(container.querySelector('[aria-label=\"重置缩放\"]')).not.toBeNull();",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Runs\");\n    expect(container.textContent).toContain(\"Agents\");\n    expect(container.textContent).toContain(\"Run time\");\n    expect(container.textContent).toContain(\"Tokens used\");\n    expect(container.textContent).toContain(\"45m\");",
+    "to": "    expect(container.textContent).toContain(\"运行记录\");\n    expect(container.textContent).toContain(\"智能体\");\n    expect(container.textContent).toContain(\"运行时长\");\n    expect(container.textContent).toContain(\"已用词元\");\n    expect(container.textContent).toContain(\"45 分钟\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Run time\");\n    expect(container.textContent).toContain(\"2h 0m\");",
+    "to": "    expect(container.textContent).toContain(\"运行时长\");\n    expect(container.textContent).toContain(\"2 小时 0 分钟\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Tokens used\");\n    expect(container.textContent).toContain(\"2K\");",
+    "to": "    expect(container.textContent).toContain(\"已用词元\");\n    expect(container.textContent).toContain(\"2K\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Clear error\");\n    expect(container.textContent).not.toContain(\"Pause\");\n    expect(container.textContent).toContain(\"Run Heartbeat\");",
+    "to": "    expect(container.textContent).toContain(\"清除错误\");\n    expect(container.textContent).not.toContain(\"暂停\");\n    expect(container.textContent).toContain(\"Run Heartbeat\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "      container.querySelector<HTMLButtonElement>('[aria-label=\"Open actions for Alpha Agent\"]')?.click();",
+    "to": "      container.querySelector<HTMLButtonElement>('[aria-label=\"打开 Alpha Agent 的操作菜单\"]')?.click();",
+    "expected": 4,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "      container.querySelector<HTMLButtonElement>('[aria-label=\"Clear error and return agent to idle\"]')?.click();",
+    "to": "      container.querySelector<HTMLButtonElement>('[aria-label=\"清除错误并将智能体恢复为空闲状态\"]')?.click();",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Pause\");\n    expect(container.textContent).not.toContain(\"Clear error\");",
+    "to": "    expect(container.textContent).toContain(\"暂停\");\n    expect(container.textContent).not.toContain(\"清除错误\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "      (button) => button.textContent?.includes(\"Run with provider trace\"),",
+    "to": "      (button) => button.textContent?.includes(\"运行并记录服务提供商通信\"),",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "      .find((button) => button.textContent?.includes(\"Terminate\"));",
+    "to": "      .find((button) => button.textContent?.includes(\"终止\"));",
+    "expected": 3,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Reconnecting to Paperclip\");",
+    "to": "    expect(container.textContent).toContain(\"正在重新连接 Paperclip\");",
+    "expected": 3,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Reconnecting automatically\");",
+    "to": "    expect(container.textContent).toContain(\"正在自动重连\");",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Reconnecting\");",
+    "to": "    expect(container.textContent).toContain(\"正在重新连接\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/CloudAccessGate.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Unable to load Paperclip\");\n    expect(container.textContent).not.toContain(\"reconnect automatically\");",
+    "to": "    expect(container.textContent).toContain(\"无法加载 Paperclip\");\n    expect(container.textContent).not.toContain(\"正在自动重连\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    const chipInput = container.querySelector<HTMLInputElement>('input[aria-label=\"Add tool\"]')!;",
+    "to": "    const chipInput = container.querySelector<HTMLInputElement>('input[aria-label=\"添加工具\"]')!;",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    const valueInput = container.querySelector<HTMLInputElement>('input[aria-label=\"Value for author\"]')!;",
+    "to": "    const valueInput = container.querySelector<HTMLInputElement>('input[aria-label=\"值：author\"]')!;",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    const fieldsTab = findButtonByText(container, \"Fields\");",
+    "to": "    const fieldsTab = findButtonByText(container, \"字段\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    const yaml = container.querySelector<HTMLTextAreaElement>('textarea[aria-label=\"Frontmatter YAML\"]');",
+    "to": "    const yaml = container.querySelector<HTMLTextAreaElement>('textarea[aria-label=\"元信息 YAML\"]');",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    expect(chip?.textContent).toContain(\"issue\");",
+    "to": "    expect(chip?.textContent).toContain(\"项问题\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Expected a list\");",
+    "to": "    expect(container.textContent).toContain(\"此处需要列表\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Live\");",
+    "to": "    expect(container.textContent).toContain(\"实时\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Toggle the app appearance.\");",
+    "to": "    expect(container.textContent).toContain(\"切换应用外观。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "      \"Answered questions\",",
+    "to": "      \"已回答的问题\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.test.ts",
+    "from": "    expect(summarizeLowTrustBoundaryTarget(boundary)).toBe(\"Root issue issue-ro\");",
+    "to": "    expect(summarizeLowTrustBoundaryTarget(boundary)).toBe(\"根任务 issue-ro\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.test.ts",
+    "from": "    expect(summarizeLowTrustBoundaryTarget(boundary)).toBe(\"2 boundaries\");",
+    "to": "    expect(summarizeLowTrustBoundaryTarget(boundary)).toBe(\"2 个边界\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/utils.date-time.test.ts",
+    "from": "    expect(formatDateTime(timestamp)).toBe(\"Sep 7, 2026, 1:02 PM\");",
+    "to": "    expect(formatDateTime(timestamp)).toBe(\"2026年9月7日 13:02\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/utils.date-time.test.ts",
+    "from": "      \"Sep 7, 2026, 1:02:54 PM\",",
+    "to": "      \"2026年9月7日 13:02:54\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Agent\");\n    expect(container.textContent).toContain(\"Status\");",
+    "to": "    expect(container.textContent).toContain(\"智能体\");\n    expect(container.textContent).toContain(\"状态\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"1m 5s\");",
+    "to": "    expect(container.textContent).toContain(\"1 分 5 秒\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.test.tsx",
+    "from": "    const list = container.querySelector('ul[aria-label=\"Recent runs\"]');",
+    "to": "    const list = container.querySelector('ul[aria-label=\"最近运行\"]');",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Clear filters\");",
+    "to": "    expect(container.textContent).toContain(\"清除筛选\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.test.tsx",
+    "from": "    expect(timeAxis?.textContent).toContain(\"Jul 2\");\n    expect(timeAxis?.textContent).toContain(\"AM\");",
+    "to": "    expect(timeAxis?.textContent).toContain(\"7月2日\");\n    expect(timeAxis?.textContent).toContain(\"上午\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.test.tsx",
+    "from": "    expect(timeAxis.textContent).toContain(\"Jul 2\");",
+    "to": "    expect(timeAxis.textContent).toContain(\"7月2日\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/timeline/WorkTimelineChart.test.tsx",
+    "from": "    expect(leftHandle.textContent).toContain(\"Drag left edge\");",
+    "to": "    expect(leftHandle.textContent).toContain(\"拖动左边缘\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatMarker.test.tsx",
+    "from": "    expect(toggle.textContent).toContain(\"5m ago\");",
+    "to": "    expect(toggle.textContent).toContain(\"5 分钟前\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "    const input = container.querySelector('input[aria-label=\"Search query\"]') as HTMLInputElement;",
+    "to": "    const input = container.querySelector('input[aria-label=\"搜索内容\"]') as HTMLInputElement;",
+    "expected": 5,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "      button.textContent?.includes(\"Show 10 more\"),",
+    "to": "      button.textContent?.includes(\"再显示 10 条\"),",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"The server returned 500.\");",
+    "to": "      expect(container.textContent).toContain(\"服务器返回 500。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "      expect(container.textContent).toContain(\"Clear all filters\");",
+    "to": "      expect(container.textContent).toContain(\"清除全部筛选条件\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Showing 10 of 60\");",
+    "to": "    expect(container.textContent).toContain(\"显示 10 / 60 条\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/lib/utils.date-time.test.ts",
+    "from": "    ).toBe(\"Sep 7, 2026, 1:02:55 PM\");",
+    "to": "    ).toBe(\"2026年9月7日 13:02:55\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatMarker.test.tsx",
+    "from": "\"View run\"",
+    "to": "\"查看运行\"",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Showing 50 of 60\");",
+    "to": "    expect(container.textContent).toContain(\"显示 50 / 60 条\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Show 10 more\");",
+    "to": "    expect(container.textContent).toContain(\"再显示 10 条\");",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).not.toContain(\"Show 10 more\");",
+    "to": "    expect(container.textContent).not.toContain(\"再显示 10 条\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Search.test.tsx",
+    "from": "        button = container.querySelector<HTMLButtonElement>('button[aria-label=\"Remove filter Status: Blocked\"]');",
+    "to": "        button = container.querySelector<HTMLButtonElement>('button[aria-label=\"移除筛选条件：状态：受阻\"]');",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.test.tsx",
+    "from": "    expect(document.body.textContent).toContain(\"Reset Sessions\");",
+    "to": "    expect(document.body.textContent).toContain(\"重置会话\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
+  },
+  {
+    "file": "ui/src/pages/Timeline.test.tsx",
+    "from": "      element.textContent?.includes(\"2 runs\") && element.textContent.includes(\"Range\"),",
+    "to": "      element.textContent?.includes(\"2 条运行记录\") && element.textContent.includes(\"范围\"),",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "(see reason)"
+    ],
+    "reason": "ui-layout-polish / ui-helper-copy 将显示文案、无障碍名称与时长/相对时间格式改为中文；断言改为当前中文产物，语义与查询目标保持一致。"
   }
 ]

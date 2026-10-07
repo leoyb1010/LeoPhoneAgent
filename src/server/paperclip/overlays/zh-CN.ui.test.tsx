@@ -78,7 +78,7 @@ describe("Chinese dates, relative time and calendar wording", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now);
-      expect(timeAgo("2026-10-04T11:55:00Z")).toBe("5分钟前");
+      expect(timeAgo("2026-10-04T11:55:00Z")).toBe("5 分钟前");
     } finally { vi.useRealTimers(); }
   });
 });

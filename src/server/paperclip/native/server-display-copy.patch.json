@@ -1,0 +1,210 @@
+[
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "  \"Paperclip could not restore a live execution path for this issue automatically. \" +\n  \"Moving it to `blocked` so it is visible for intervention.\";",
+    "to": "  \"Paperclip 无法自动为此任务恢复可用的执行路径。\" +\n  \"已将其移到“受阻”状态，以便人工介入。\";",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "const DEFAULT_STRANDED_RECOVERY_NOTICE_TITLE = \"Automatic recovery blocked\";",
+    "to": "const DEFAULT_STRANDED_RECOVERY_NOTICE_TITLE = \"自动恢复受阻\";",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "  workspace_validation_failed: \"Workspace validation failed\",\n  configuration_incomplete: \"Configuration incomplete\",\n  execution_review_participant_recovery: \"Review recovery stalled\",",
+    "to": "  workspace_validation_failed: \"工作区校验失败\",\n  configuration_incomplete: \"配置不完整\",\n  execution_review_participant_recovery: \"审查恢复停滞\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "  provider_quota: \"Error: usage limit reached\",\n  claude_auth_required: \"Error: not logged in to Claude\",\n  acpx_auth_required: \"Error: agent login required\",",
+    "to": "  provider_quota: \"错误：已达用量上限\",\n  claude_auth_required: \"错误：尚未登录 Claude\",\n  acpx_auth_required: \"错误：需要智能体登录\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "  workspace_git_scan_timeout: { title: \"Workspace scan timed out\", nextAction: \"Check repository access and server load, then retry the task.\" },\n  workspace_git_scan_saturated: { title: \"Workspace scan queue is full\", nextAction: \"Check server load and the workspace scan queue, then retry the task.\" },\n  workspace_git_scan_output_limit: { title: \"Workspace scan exceeded its limit\", nextAction: \"Check the repository size and workspace scan output limit before retrying the task.\" },\n  workspace_git_scan_failed: { title: \"Workspace scan failed\", nextAction: \"Inspect the failed run and check repository access and integrity before retrying the task.\" },\n  workspace_git_scan_cancelled: { title: \"Workspace scan was cancelled\", nextAction: \"Inspect why workspace preparation was cancelled before retrying the task.\" },",
+    "to": "  workspace_git_scan_timeout: { title: \"工作区扫描超时\", nextAction: \"检查仓库访问权限和服务器负载，然后重试任务。\" },\n  workspace_git_scan_saturated: { title: \"工作区扫描队列已满\", nextAction: \"检查服务器负载和工作区扫描队列，然后重试任务。\" },\n  workspace_git_scan_output_limit: { title: \"工作区扫描超出限制\", nextAction: \"重试任务前请检查仓库大小和工作区扫描输出限制。\" },\n  workspace_git_scan_failed: { title: \"工作区扫描失败\", nextAction: \"重试任务前请检查失败的运行，并确认仓库可访问且完整。\" },\n  workspace_git_scan_cancelled: { title: \"工作区扫描已取消\", nextAction: \"重试任务前请查明工作区准备被取消的原因。\" },",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "    ? \"Paperclip automatically retried dispatch for this assigned `todo` issue during terminal run recovery\"\n    : \"Paperclip automatically retried continuation for this assigned `in_progress` issue during terminal run recovery\";",
+    "to": "    ? \"Paperclip 在终态运行恢复期间已自动重试派发这个已分配的“待办”任务\"\n    : \"Paperclip 在终态运行恢复期间已自动重试继续这个已分配的“进行中”任务\";",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      `${retryDescription}, but it still has no live execution path. ` +\n      \"Moving it to `blocked` so it is visible for intervention.\",\n    title: \"No live execution path\",",
+    "to": "      `${retryDescription}，但它仍然没有可用的执行路径。` +\n      \"已将其移到“受阻”状态，以便人工介入。\",\n    title: \"没有可用的执行路径\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      \"Paperclip stopped before launching the local adapter because the issue workspace failed validation. \" +\n      \"Moving it to `blocked` so the workspace link, cwd, or git checkout can be repaired before resuming.\",\n    title: \"Workspace validation failed\",",
+    "to": "      \"任务工作区未通过校验，Paperclip 在启动本地适配器前已停止。\" +\n      \"已将其移到“受阻”状态，以便在恢复前修复工作区链接、工作目录或 git 检出。\",\n    title: \"工作区校验失败\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      title: \"AI connection needs attention\",\n      body: \"This task paused because its selected AI account is unavailable. Reconnect the account or choose an available connection to continue.\",\n      nextAction: \"Reconnect the selected AI account or choose an available connection, then continue the task.\",",
+    "to": "      title: \"AI 连接需要处理\",\n      body: \"此任务因所选 AI 账号不可用而暂停。重新连接该账号或选择可用的连接后即可继续。\",\n      nextAction: \"重新连接所选 AI 账号或选择可用的连接，然后继续任务。\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "    const pluginKey = readNonEmptyStringField(configurationIncomplete, \"pluginKey\") ?? \"the sandbox provider plugin\";\n    const pluginStatus = readNonEmptyStringField(configurationIncomplete, \"pluginStatus\") ?? \"not ready\";",
+    "to": "    const pluginKey = readNonEmptyStringField(configurationIncomplete, \"pluginKey\") ?? \"沙箱提供方插件\";\n    const pluginStatus = readNonEmptyStringField(configurationIncomplete, \"pluginStatus\") ?? \"未就绪\";",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "        `Paperclip stopped before dispatching the adapter because the sandbox provider plugin \\`${pluginKey}\\` ` +\n        `is in status \\`${pluginStatus}\\` and cannot lease a sandbox. Runs will keep failing the same way until the ` +\n        `plugin is \\`ready\\` again. Moving it to \\`blocked\\` so an operator can ${sandboxProviderPluginRemedy(pluginStatus)} ` +\n        \"before resuming.\",\n      title: \"Configuration incomplete\",",
+    "to": "        `沙箱提供方插件 \\`${pluginKey}\\` 当前状态为 \\`${pluginStatus}\\`，无法租用沙箱，Paperclip 在派发适配器前已停止。` +\n        `在插件恢复为 \\`ready\\` 之前，运行会以同样方式持续失败。` +\n        `已将其移到“受阻”状态，以便操作人员在恢复前${sandboxProviderPluginRemedy(pluginStatus)}` +\n        \"。\",\n      title: \"配置不完整\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      \"Paperclip stopped before dispatching the adapter because required secret/env bindings are missing. \" +\n      \"Moving it to `blocked` so an operator can bind the missing secret(s) before resuming.\",\n    title: \"Configuration incomplete\",",
+    "to": "      \"缺少必需的密钥/环境变量绑定，Paperclip 在派发适配器前已停止。\" +\n      \"已将其移到“受阻”状态，以便操作人员在恢复前绑定缺失的密钥。\",\n    title: \"配置不完整\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      \"Paperclip retried the pending execution-review participant once, but the review stage still has no \" +\n      \"completed decision or live reviewer run. Moving it to `blocked` so the board can inspect the evidence, repair the \" +\n      \"reviewer runtime, restore the review stage, or record an intentional manual resolution.\",\n    title: \"Review recovery stalled\",",
+    "to": "      \"Paperclip 已重试待处理的执行审查参与者一次，但审查阶段仍然没有\" +\n      \"完成的决定或进行中的审查者运行。已将其移到“受阻”状态，以便管理者检查证据、修复\" +\n      \"审查者运行时、恢复审查阶段，或记录有意的人工处置。\",\n    title: \"审查恢复停滞\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "      \"Paperclip cannot continue the pending execution-review participant because the participant is not \" +\n      \"invokable and the review stage has no completed decision or live reviewer run. Moving it to `blocked` \" +\n      \"so the board can inspect the evidence, repair the reviewer runtime, restore the review stage, or record an \" +\n      \"intentional manual resolution.\",\n    title: \"Review recovery stalled\",",
+    "to": "      \"待处理的执行审查参与者无法被调用，且审查阶段没有完成的决定或进行中的审查者运行，\" +\n      \"Paperclip 无法继续。已将其移到“受阻”状态，\" +\n      \"以便管理者检查证据、修复审查者运行时、恢复审查阶段，或记录有意的人工处置。\",\n    title: \"审查恢复停滞\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "    keyValueRow(\"Recovery action\", input.recoveryActionId),\n    input.recoveryOwner\n      ? agentLinkRow(\"Recovery owner\", input.recoveryOwner)\n      : keyValueRow(\n          \"Recovery owner\",\n          \"Board decision required\",\n        ),\n    keyValueRow(\n      \"Next action\",\n      seed?.nextAction ?? (input.recoveryOwner\n        ? \"The recovery owner should either restore a live execution path or record the manual resolution on the source issue\"\n        : \"Inspect the evidence, then retry the original owner, explicitly reassign, repair the execution path, or record an intentional resolution\"),\n    ),",
+    "to": "    keyValueRow(\"恢复操作\", input.recoveryActionId),\n    input.recoveryOwner\n      ? agentLinkRow(\"恢复负责人\", input.recoveryOwner)\n      : keyValueRow(\n          \"恢复负责人\",\n          \"需要管理者决定\",\n        ),\n    keyValueRow(\n      \"下一步\",\n      seed?.nextAction ?? (input.recoveryOwner\n        ? \"恢复负责人应恢复可用的执行路径，或在源任务上记录人工处置\"\n        : \"检查证据，然后重试原负责人、明确重新分配、修复执行路径，或记录有意的处置\"),\n    ),",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "    runRows.push(runLinkRow(\"Source run\", input.sourceRun));\n    const failureCode = input.sourceRun.errorCode?.trim();\n    if (failureCode) runRows.push(keyValueRow(\"Failure code\", failureCode));\n    const failureSummary = input.sourceRun.errorSummary?.trim();\n    if (failureSummary) runRows.push(keyValueRow(\"Failure summary\", failureSummary));",
+    "to": "    runRows.push(runLinkRow(\"源运行\", input.sourceRun));\n    const failureCode = input.sourceRun.errorCode?.trim();\n    if (failureCode) runRows.push(keyValueRow(\"失败代码\", failureCode));\n    const failureSummary = input.sourceRun.errorSummary?.trim();\n    if (failureSummary) runRows.push(keyValueRow(\"失败摘要\", failureSummary));",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/stranded-notice.ts",
+    "from": "    { title: \"Recovery\", rows: recoveryRows },\n    ...(runRows.length > 0 ? [{ title: \"Run evidence\", rows: runRows }] : []),",
+    "to": "    { title: \"恢复\", rows: recoveryRows },\n    ...(runRows.length > 0 ? [{ title: \"运行证据\", rows: runRows }] : []),",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/execution-recovery-resolution.ts",
+    "from": "            ? \"Workspace repair required. Verify safe staging or repair before continuing. Saved work and approval decisions remain in force.\"\n            : \"Automatic recovery stopped. Recorded work is preserved; actions with unverified outcomes will not be repeated.\"\n          : \"Recovery closed because the task's owner, execution, or status changed. No work was replayed.\";",
+    "to": "            ? \"需要修复工作区。继续前请确认暂存安全或先修复。已保存的工作和审批决定仍然有效。\"\n            : \"自动恢复已停止。已记录的工作会保留；结果未经核实的操作不会重复执行。\"\n          : \"任务的负责人、执行或状态已变化，恢复已关闭。没有重放任何工作。\";",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/explicit-native-continuation.ts",
+    "from": "return blocked(\"decision_pending\", \"A pending approval or question must be resolved before this message can start.\");",
+    "to": "return blocked(\"decision_pending\", \"需要先处理待办的审批或问题，这条消息才能开始。\");",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/explicit-native-continuation.ts",
+    "from": "return blocked(\"source_missing\", \"The stopped run could not be identified. Your message is saved.\");",
+    "to": "return blocked(\"source_missing\", \"无法识别已停止的运行。你的消息已保存。\");",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/explicit-native-continuation.ts",
+    "from": "return blocked(\"source_unavailable\", \"The previous execution has not finished or its owner changed. Your message is saved.\");",
+    "to": "return blocked(\"source_unavailable\", \"上一次执行尚未结束或其负责人已变化。你的消息已保存。\");",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/explicit-native-continuation.ts",
+    "from": "return blocked(\"message_predates_stop\", \"This message arrived before the previous run stopped. Send a new message to continue.\");",
+    "to": "return blocked(\"message_predates_stop\", \"这条消息在上一次运行停止前发出。请发送新消息以继续。\");",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/explicit-native-continuation.ts",
+    "from": "return blocked(\"execution_settling\", \"Waiting for the previous run to stop. Your message will start automatically.\");",
+    "to": "return blocked(\"execution_settling\", \"正在等待上一次运行停止，你的消息会自动开始。\");",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/recovery/successful-run-handoff.ts",
+    "from": "              ? agentLinkRow(\"Recovery owner\", input.recoveryOwner)\n              : keyValueRow(\"Recovery owner\", \"Board decision required\"),",
+    "to": "              ? agentLinkRow(\"恢复负责人\", input.recoveryOwner)\n              : keyValueRow(\"恢复负责人\", \"需要管理者决定\"),",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/heartbeat.ts",
+    "from": "          level: \"info\",\n          message: \"run started\",",
+    "to": "          level: \"info\",\n          message: \"运行已开始\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  },
+  {
+    "file": "server/src/services/heartbeat.ts",
+    "from": "              level: \"info\",\n              message: \"run presentation resolved\",",
+    "to": "              level: \"info\",\n              message: \"运行展示方式已确定\",",
+    "expected": 1,
+    "category": "copy",
+    "reason": "服务端生成、在网页中原样显示的恢复/运行提示改为中文；状态码、枚举值、payload 字段与日志事件类型不变。"
+  }
+]

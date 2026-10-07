@@ -86,3 +86,22 @@ CI [37184319250](https://github.com/leoyb1010/LeoPhoneAgent/actions/runs/3718431
 验证（候选树）：`localize verify`、coverage contract、协议不变量、`npm run test:full` 全绿；UI typecheck 与生产构建通过。审计计数（去重，排除侧栏悬停按钮/命令面板滚动区/底栏滚动中经过等固有遮挡）：竖排文字 38 → 11（剩余为技能工作室内 SKILL.md 英文正文片段与 900–1100px 下三栏布局本身过窄）、遮挡 34 → 15（集中在技能工作室 900/1100px 三栏最小宽度 280+240+360px 超出可用空间）、裁切 4 → 8（全部是同一条用户输入的无空格超长英文标题，后一轮多出看板视图场景）、截断 508 → 476、英文文本 667 → 644、混合英文 85 → 75、微型字号 1106 → 1096（条目仍在但字号已整体抬高）。
 
 未覆盖/遗留：搜索结果摘要中的 `Status: in_progress - Priority: medium` 与运行标题 `Connect Anthropic`、活动条目 `environment_lease`、任务错误 `The run failed (configuration_incomplete)` 均为服务端持久化/生成文本；连接器与插件目录描述、技能 SKILL.md 正文、智能体输出为外部内容；`ui/src/lib/*.ts` 仍有约 300 处 helper 生成的英文句子未纳入自动词库（本轮只处理在渲染审计中出现的文件）；技能工作室 900–1100px 的三栏布局需要上游调整最小宽度；目标层级标签与“Routine not found”未在 UI 源码中定位。
+
+## 2026-10-07 第二轮：helper 文案、服务端提示、技能工作室布局与上游测试断言
+
+在第一轮基础上继续，全部落在发行层并可从干净上游重放（`prepare.sh` → `check-upstream.sh` 通过）：
+
+- `catalogs/ui-helper-copy.structural.json`：1049 条整行精确规则，覆盖 `ui/src/lib/*.ts`、`components/task-chat/*.ts`、`pages/*` 等 helper 函数里自动词库不认识的英文显示字面量（工具活动标签 148 条、运行摘要、工作区访问状态 55 条、应用目录文案、技能策略拒绝原因、管道条目说明、JSON 表单校验、文件查看器、队列消息、实验功能开关的 aria-label 等）；规则只改字符串字面量并保留全部 `${}` 插值。未译项逐条登记在 `catalogs/helper-copy-preserve.json`（180 条：日志/异常/内部键、持久化业务文本、发送给模型的提示词、原始 HTTP 诊断）；`tests/ui-helper-copy.test.mjs` 对候选树做门禁扫描，新增的英文句子字面量未入规则或登记即失败
+- `catalogs/ui-layout-polish.structural.json` 扩到 219 条：新建任务对话框标签改为可见的自适应宽度“分配给”（不再隐藏为图标）；技能工作室三栏布局阈值 900→1280px（窄屏改为标签页，900–1100px 不再塌陷/互相遮挡）；搜索筛选芯片与菜单的前缀和枚举值走 `displayStatus`（“状态：待办”而非 `Status: Todo`）；时长与相对时间全站统一为“N 秒 / N 分 N 秒 / N 分钟前”（`timeAgo`、`utils.relativeTime`、搜索结果、任务对话状态胶囊、时间线、运行记录、受阻收件箱）；看板“再显示 N 条 / 显示 N / M 条”、时间线页脚、经验记录句子、文件芯片无障碍名称等拼接模板整句重写；列表行标题、收件箱错误摘要、会话 ID 补 `title` 提示
+- `native/server-display-copy.patch.json`（26 条，登记在 `apply-native-cli-auth.mjs`）：服务端生成后原样显示在网页里的恢复通知标题/正文/下一步、“恢复负责人 / 需要管理者决定”等元数据行、排队消息阻塞原因、运行事件 `run started` / `run presentation resolved` 改为中文；状态码、枚举、payload 字段与事件类型不变
+- `overlays/zh-cn-layout.css`：主侧栏导航细滚动条常显 + 上下滚动阴影（900px 下“最近任务”分组不再像被账号区盖住）；段落内短强调词 keep-all；底部导航计数角标不再裁掉末位数字；徽章换行只作用于可换行芯片列表，表格/看板状态徽章保持单行
+- `native/ui-test-assertions.patch.json` 增至 188 条：Search、AgentActionButtons、FrontmatterPanel、AuditRuns、KanbanBoard、trust-policy-ui、TaskChatMarker、Timeline、CloudAccessGate、WorkTimelineChart、utils.date-time 等本轮与此前轮次失败的上游 UI 测试断言按当前中文产物更新，`vitest run` 这 17 个文件 197/197 通过。整个 `@paperclipai/ui` 包的上游测试仍有大量英文断言失败（本轮之前已存在，见下）
+
+渲染审计（同一本地真实服务、45 场景 × 5 宽度 × 明暗、450 张截图，`pc-ui-A/after`）去重计数 第一轮前 → 本轮后：竖排文字 38 → 4、遮挡 34 → 1、裁切 4 → 8、截断（无提示）508 → 97（另有 384 处带 title/aria-label 的正常截断）、英文文本 667 → 663、混合英文 85 → 75。
+
+剩余项及原因：
+- 英文文本：技能名（`paperclip-board` 等技术标识）、连接器目录描述（服务端 MCP 注册表数据）、插件清单名称/描述/包名（外部插件内容）、适配器 id（中文标签下的技术次要值）、用户输入的长标题/URL、智能体错误输出、SKILL.md 正文片段、本地账号邮箱
+- 混合英文：搜索结果摘要中的智能体续写文本（服务端持久化），以及含品牌名的中文句子（误报）
+- 竖排：技能工作室 SKILL.md 正文在中栏的英文连接词、搜索结果高亮 `<mark>` 跨行（误报）
+- 裁切：用户输入的无空格超长英文标题
+- 上游 UI 包整体 vitest：2637 个失败 / 4697 个通过（本轮前即为英文断言失败，门禁仍以三个 zh-CN 测试文件 + 本轮登记的 17 个文件为准）

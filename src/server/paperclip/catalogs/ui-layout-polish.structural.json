@@ -8,7 +8,7 @@
   {
     "file": "ui/src/components/NewIssueDialog.tsx",
     "from": "<span className=\"w-6 shrink-0 text-center\">For</span>",
-    "to": "<span className=\"w-6 shrink-0 flex items-center justify-center\" title=\"负责人与项目\"><UserRound className=\"h-3.5 w-3.5\" aria-hidden /><span className=\"sr-only\">{\"适用对象\"}</span></span>",
+    "to": "<span className=\"inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-muted-foreground\"><UserRound className=\"h-3.5 w-3.5\" aria-hidden /><span>{\"分配给\"}</span></span>",
     "expected": 1
   },
   {
@@ -945,6 +945,372 @@
     "file": "ui/src/pages/GoalDetail.tsx",
     "from": "          <span className=\"text-xs uppercase text-muted-foreground\">\n            {goal.level}\n          </span>",
     "to": "          <span className=\"text-xs uppercase text-muted-foreground\">\n            {goal.level === \"company\" ? \"组织\" : goal.level === \"team\" ? \"团队\" : goal.level === \"agent\" ? \"智能体\" : goal.level === \"task\" ? \"任务\" : goal.level}\n          </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "const MOBILE_BREAKPOINT = 900;",
+    "to": "const MOBILE_BREAKPOINT = 1280;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx",
+    "from": "\"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors\",",
+    "to": "\"inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatTurn.tsx",
+    "from": "      `${summary.toolCount} tool${summary.toolCount === 1 ? \"\" : \"s\"}`,",
+    "to": "      `${summary.toolCount} 个工具`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/transcript-adapter.ts",
+    "from": "  if (totalSec < 1) return \"1s\";\n  if (totalSec < 60) return `${totalSec}s`;\n  const min = Math.floor(totalSec / 60);\n  const sec = totalSec % 60;\n  return sec === 0 ? `${min}m` : `${min}m ${sec}s`;",
+    "to": "  if (totalSec < 1) return \"1 秒\";\n  if (totalSec < 60) return `${totalSec} 秒`;\n  const min = Math.floor(totalSec / 60);\n  const sec = totalSec % 60;\n  return sec === 0 ? `${min} 分` : `${min} 分 ${sec} 秒`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-chat-messages.ts",
+    "from": "    return `${totalSeconds} second${totalSeconds === 1 ? \"\" : \"s\"}`;",
+    "to": "    return `${totalSeconds} 秒`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-chat-messages.ts",
+    "from": "    return `${totalMinutes} minute${totalMinutes === 1 ? \"\" : \"s\"}`;",
+    "to": "    return `${totalMinutes} 分钟`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-chat-messages.ts",
+    "from": "    return `${hours} hour${hours === 1 ? \"\" : \"s\"}`;\n  }\n  return `${hours} hour${hours === 1 ? \"\" : \"s\"} ${minutes} minute${minutes === 1 ? \"\" : \"s\"}`;",
+    "to": "    return `${hours} 小时`;\n  }\n  return `${hours} 小时 ${minutes} 分钟`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/timeline/layout.ts",
+    "from": "  if (mins >= 1440) return `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`;\n  if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;\n  return `${mins}m`;",
+    "to": "  if (mins >= 1440) return `${Math.floor(mins / 1440)} 天 ${Math.floor((mins % 1440) / 60)} 小时`;\n  if (mins >= 60) return `${Math.floor(mins / 60)} 小时 ${mins % 60} 分钟`;\n  return `${mins} 分钟`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatStatusPill.tsx",
+    "from": "  if (s < 60) return `${s}s`;\n  return `${Math.floor(s / 60)}m ${s % 60}s`;",
+    "to": "  if (s < 60) return `${s} 秒`;\n  return `${Math.floor(s / 60)} 分 ${s % 60} 秒`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatStatusPill.tsx",
+    "from": "  if (s < 60) return `${s.toFixed(1)}s`;\n  return `${Math.floor(s / 60)}m ${(s % 60).toFixed(1)}s`;",
+    "to": "  if (s < 60) return `${s.toFixed(1)} 秒`;\n  return `${Math.floor(s / 60)} 分 ${(s % 60).toFixed(1)} 秒`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/search/SearchResultRow.tsx",
+    "from": "  if (seconds < 60) return \"just now\";\n  const minutes = Math.round(seconds / 60);\n  if (minutes < 60) return `${minutes}m`;\n  const hours = Math.round(minutes / 60);\n  if (hours < 24) return `${hours}h`;\n  const days = Math.round(hours / 24);\n  if (days < 7) return `${days}d`;\n  const weeks = Math.round(days / 7);\n  if (weeks < 5) return `${weeks}w`;\n  const months = Math.round(days / 30);\n  if (months < 12) return `${months}mo`;\n  const years = Math.round(days / 365);\n  return `${years}y`;",
+    "to": "  if (seconds < 60) return \"刚刚\";\n  const minutes = Math.round(seconds / 60);\n  if (minutes < 60) return `${minutes} 分钟前`;\n  const hours = Math.round(minutes / 60);\n  if (hours < 24) return `${hours} 小时前`;\n  const days = Math.round(hours / 24);\n  if (days < 7) return `${days} 天前`;\n  const weeks = Math.round(days / 7);\n  if (weeks < 5) return `${weeks} 周前`;\n  const months = Math.round(days / 30);\n  if (months < 12) return `${months} 个月前`;\n  const years = Math.round(days / 365);\n  return `${years} 年前`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/blockedInbox.ts",
+    "from": "  if (!stoppedSinceAt) return \"stopped\";\n  const then = new Date(stoppedSinceAt).getTime();\n  if (!Number.isFinite(then)) return \"stopped\";\n  const seconds = Math.max(0, Math.round((now - then) / 1000));\n  if (seconds < 60) return \"stopped just now\";\n  if (seconds < 3600) {\n    const m = Math.floor(seconds / 60);\n    return `stopped ${m}m`;\n  }\n  if (seconds < 86_400) {\n    const h = Math.floor(seconds / 3600);\n    return `stopped ${h}h`;\n  }\n  if (seconds < 86_400 * 7) {\n    const d = Math.floor(seconds / 86_400);\n    return `stopped ${d}d`;\n  }\n  if (seconds < 86_400 * 30) {\n    const w = Math.floor(seconds / (86_400 * 7));\n    return `stopped ${w}w`;\n  }\n  const mo = Math.floor(seconds / (86_400 * 30));\n  return `stopped ${mo}mo`;",
+    "to": "  if (!stoppedSinceAt) return \"已停止\";\n  const then = new Date(stoppedSinceAt).getTime();\n  if (!Number.isFinite(then)) return \"已停止\";\n  const seconds = Math.max(0, Math.round((now - then) / 1000));\n  if (seconds < 60) return \"刚刚停止\";\n  if (seconds < 3600) {\n    const m = Math.floor(seconds / 60);\n    return `已停止 ${m} 分钟`;\n  }\n  if (seconds < 86_400) {\n    const h = Math.floor(seconds / 3600);\n    return `已停止 ${h} 小时`;\n  }\n  if (seconds < 86_400 * 7) {\n    const d = Math.floor(seconds / 86_400);\n    return `已停止 ${d} 天`;\n  }\n  if (seconds < 86_400 * 30) {\n    const w = Math.floor(seconds / (86_400 * 7));\n    return `已停止 ${w} 周`;\n  }\n  const mo = Math.floor(seconds / (86_400 * 30));\n  return `已停止 ${mo} 个月`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-item-detail.ts",
+    "from": "const routineName = event.automation?.routine?.title ?? \"the automation\";",
+    "to": "const routineName = event.automation?.routine?.title ?? \"该自动化\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-item-detail.ts",
+    "from": "return `Automation completed — ran ${routineName}${issueLabel ? ` -> ${issueLabel}` : \"\"}.`;",
+    "to": "return `自动化已完成：运行了 ${routineName}${issueLabel ? ` -> ${issueLabel}` : \"\"}。`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-item-detail.ts",
+    "from": "return `Automation needs attention${reason ? ` — ${humanizeReason(reason)}` : \"\"}.`;",
+    "to": "return `自动化需要处理${reason ? `：${humanizeReason(reason)}` : \"\"}。`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Inbox.tsx",
+    "from": "return `Agent join request${joinRequest.agentName ? `: ${joinRequest.agentName}` : \"\"}`;",
+    "to": "return `智能体加入请求${joinRequest.agentName ? `：${joinRequest.agentName}` : \"\"}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/LegacyInbox.tsx",
+    "from": "return `Agent join request${joinRequest.agentName ? `: ${joinRequest.agentName}` : \"\"}`;",
+    "to": "return `智能体加入请求${joinRequest.agentName ? `：${joinRequest.agentName}` : \"\"}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.tsx",
+    "from": "            Show {nextRevealCount} more",
+    "to": "            {\"再显示 \"}{nextRevealCount}{\" 条\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.tsx",
+    "from": "            Showing {visibleIssues.length} of {issues.length}",
+    "to": "            {\"显示 \"}{visibleIssues.length}{\" / \"}{issues.length}{\" 条\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CaseChildrenTree.tsx",
+    "from": "          Show {hiddenCount} more",
+    "to": "          {\"再显示 \"}{hiddenCount}{\" 条\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/WorkspaceFileBrowser.tsx",
+    "from": "<>Showing first {items.length} — refine the search to narrow.</>",
+    "to": "<>{\"仅显示前 \"}{items.length}{\" 项，请缩小搜索范围。\"}</>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "          {progress.decided} of {progress.total} decided",
+    "to": "          {\"已判定 \"}{progress.decided}{\" / \"}{progress.total}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueThreadInteractionCard.tsx",
+    "from": "            {progress.decided} decided · {progress.approved} approved · {progress.rejected} rejected",
+    "to": "            {\"已判定 \"}{progress.decided}{\" · 通过 \"}{progress.approved}{\" · 拒绝 \"}{progress.rejected}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/FinanceBillerCard.tsx",
+    "from": "              {row.eventCount} event{row.eventCount === 1 ? \"\" : \"s\"} across {row.kindCount} kind{row.kindCount === 1 ? \"\" : \"s\"}",
+    "to": "              {row.eventCount}{\" 条记录，分布于 \"}{row.kindCount}{\" 类\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CaseActivityFeed.tsx",
+    "from": "          {filtered.length} of {events.length} events",
+    "to": "          {filtered.length}{\" / \"}{events.length}{\" 条事件\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueBlockedNotice.tsx",
+    "from": "              {doneCount} of {total} done",
+    "to": "              {\"已完成 \"}{doneCount}{\" / \"}{total}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "import type { ParsedSearchQuery } from \"./search-query-parser\";",
+    "to": "import type { ParsedSearchQuery } from \"./search-query-parser\";\nimport { displayStatus } from \"@/i18n/zh-CN\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "function humanize(value: string): string {\n  return value.replace(/_/g, \" \").replace(/\\b\\w/g, (char) => char.toUpperCase());\n}",
+    "to": "function humanize(value: string): string {\n  return displayStatus(value);\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "  if (filters.assigneeAgentId === null) return \"Unassigned\";\n  if (typeof filters.assigneeAgentId === \"string\") {\n    return lookups.agentName(filters.assigneeAgentId) ?? \"Agent\";\n  }\n  if (filters.assigneeUserId) {\n    if (filters.assigneeUserId === lookups.currentUserId) return \"Me\";\n    return lookups.userName(filters.assigneeUserId) ?? \"User\";\n  }\n  return \"Assignee\";",
+    "to": "  if (filters.assigneeAgentId === null) return \"未分配\";\n  if (typeof filters.assigneeAgentId === \"string\") {\n    return lookups.agentName(filters.assigneeAgentId) ?? \"智能体\";\n  }\n  if (filters.assigneeUserId) {\n    if (filters.assigneeUserId === lookups.currentUserId) return \"我\";\n    return lookups.userName(filters.assigneeUserId) ?? \"用户\";\n  }\n  return \"负责人\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Status: ${humanize(status)}`,",
+    "to": "label: `状态：${humanize(status)}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Priority: ${humanize(priority)}`,",
+    "to": "label: `优先级：${humanize(priority)}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Assignee: ${assigneeChipLabel(filters, lookups)}`,",
+    "to": "label: `负责人：${assigneeChipLabel(filters, lookups)}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Project: ${lookups.projectName(filters.projectId) ?? \"Project\"}`,",
+    "to": "label: `项目：${lookups.projectName(filters.projectId) ?? \"项目\"}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Label: ${lookups.labelName(filters.labelId) ?? \"Label\"}`,",
+    "to": "label: `标签：${lookups.labelName(filters.labelId) ?? \"标签\"}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "label: `Updated: ${updatedWithinLabel(filters.updatedWithin)}`,",
+    "to": "label: `更新：${updatedWithinLabel(filters.updatedWithin)}`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Status: ${values.map(humanize).join(\", \")}`;",
+    "to": "return `状态：${values.map(humanize).join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Priority: ${values.map(humanize).join(\", \")}`;",
+    "to": "return `优先级：${values.map(humanize).join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Assignee: ${values.map((id) => lookups.agentName(id) ?? \"Agent\").join(\", \")}`;",
+    "to": "return `负责人：${values.map((id) => lookups.agentName(id) ?? \"智能体\").join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Assignee: ${values.map((id) => (id === lookups.currentUserId ? \"Me\" : lookups.userName(id) ?? \"User\")).join(\", \")}`;",
+    "to": "return `负责人：${values.map((id) => (id === lookups.currentUserId ? \"我\" : lookups.userName(id) ?? \"用户\")).join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Project: ${values.map((id) => lookups.projectName(id) ?? \"Project\").join(\", \")}`;",
+    "to": "return `项目：${values.map((id) => lookups.projectName(id) ?? \"项目\").join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-filters.ts",
+    "from": "return `Label: ${values.map((id) => lookups.labelName(id) ?? \"Label\").join(\", \")}`;",
+    "to": "return `标签：${values.map((id) => lookups.labelName(id) ?? \"标签\").join(\"、\")}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/search/SearchFilterBar.tsx",
+    "from": "import { SearchSortMenu } from \"./SearchSortMenu\";",
+    "to": "import { SearchSortMenu } from \"./SearchSortMenu\";\nimport { displayStatus } from \"@/i18n/zh-CN\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/search/SearchFilterBar.tsx",
+    "from": "function humanize(value: string): string {\n  return value.replace(/_/g, \" \").replace(/\\b\\w/g, (char) => char.toUpperCase());\n}",
+    "to": "function humanize(value: string): string {\n  return displayStatus(value);\n}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.tsx",
+    "from": "  if (seconds < 60) return `${seconds}s`;\n  const minutes = Math.floor(seconds / 60);\n  return `${minutes}m ${seconds % 60}s`;",
+    "to": "  if (seconds < 60) return `${seconds} 秒`;\n  const minutes = Math.floor(seconds / 60);\n  return `${minutes} 分 ${seconds % 60} 秒`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Timeline.tsx",
+    "from": "                {data.spans.length} run{data.spans.length === 1 ? \"\" : \"s\"} ·{\" \"}\n                {new Date(data.window.from).toLocaleString()} to {new Date(data.window.to).toLocaleString()}\n                {data.window.capped ? \" · window capped\" : \"\"}",
+    "to": "                {data.spans.length}{\" 条运行记录\"} ·{\" \"}\n                {new Date(data.window.from).toLocaleString()}{\" 至 \"}{new Date(data.window.to).toLocaleString()}\n                {data.window.capped ? \" · 时间范围已截断\" : \"\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "const stageCopy = toStageName ? ` moving to ${toStageName}` : \"\";",
+    "to": "const stageCopy = toStageName ? `，移至 ${toStageName}` : \"\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "const noteCopy = note ? ` - note: ${note}` : \"\";",
+    "to": "const noteCopy = note ? `（备注：${note}）` : \"\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "      sentence: `${actor} ${reviewVerb(decision)} '${title}'${stageCopy}${noteCopy}.`,",
+    "to": "      sentence: `${actor}${reviewVerb(decision)}“${title}”${stageCopy}${noteCopy}。`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "const fromCopy = fromStageName ? ` from ${fromStageName}` : \"\";",
+    "to": "const fromCopy = fromStageName ? `从 ${fromStageName} ` : \"\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "const toCopy = toStageName ? ` to ${toStageName}` : \"\";",
+    "to": "const toCopy = toStageName ? `移至 ${toStageName}` : \"\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "const reasonCopy = reason ? ` - reason: ${reason}` : \"\";",
+    "to": "const reasonCopy = reason ? `（原因：${reason}）` : \"\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "      sentence: `'${title}' was moved by hand${fromCopy}${toCopy}${reasonCopy}.`,",
+    "to": "      sentence: `“${title}”被手动${fromCopy}${toCopy}${reasonCopy}。`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "    sentence: `'${title}' changed.`,",
+    "to": "    sentence: `“${title}”有变化。`,",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ArtifactFileChip.tsx",
+    "from": "    ? ` line ${workspaceFileRef.line}${workspaceFileRef.column ? ` column ${workspaceFileRef.column}` : \"\"}`",
+    "to": "    ? ` 第 ${workspaceFileRef.line} 行${workspaceFileRef.column ? ` 第 ${workspaceFileRef.column} 列` : \"\"}`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ArtifactFileChip.tsx",
+    "from": "    ? `Open ${workspaceFileRef.displayPath}${lineSuffix} in the file viewer`",
+    "to": "    ? `在文件查看器中打开 ${workspaceFileRef.displayPath}${lineSuffix}`",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/IssueRow.tsx",
+    "from": "            <span\n              data-slot=\"task-row-title\"\n              className={cn(",
+    "to": "            <span\n              data-slot=\"task-row-title\"\n              title={issue.title}\n              className={cn(",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssueRow.tsx",
+    "from": "          <span\n            data-slot=\"task-row-title\"\n            className={cn(\"min-w-0 line-clamp-2 text-sm sm:truncate sm:line-clamp-none\", titleClassName)}",
+    "to": "          <span\n            data-slot=\"task-row-title\"\n            title={issue.title}\n            className={cn(\"min-w-0 line-clamp-2 text-sm sm:truncate sm:line-clamp-none\", titleClassName)}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Inbox.tsx",
+    "from": "<span className=\"truncate max-w-(--sz-300px)\">{displayError}</span>",
+    "to": "<span className=\"truncate max-w-(--sz-300px)\" title={displayError}>{displayError}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "<SummaryRow label=\"Session\"><span className=\"",
+    "to": "<SummaryRow label=\"Session\"><span title={runtimeState?.sessionDisplayId ?? runtimeState?.sessionId ?? undefined} className=\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "    asString(payload.decidedByName) ??\n    \"Someone\"",
+    "to": "    asString(payload.decidedByName) ??\n    \"有人\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/pipeline-learnings.ts",
+    "from": "  if (decision === \"request_changes\") return \"sent back\";\n  if (decision === \"reject\" || decision === \"drop\") return \"declined\";\n  return \"approved\";",
+    "to": "  if (decision === \"request_changes\") return \"退回了\";\n  if (decision === \"reject\" || decision === \"drop\") return \"拒绝了\";\n  return \"通过了\";",
     "expected": 1
   }
 ]
