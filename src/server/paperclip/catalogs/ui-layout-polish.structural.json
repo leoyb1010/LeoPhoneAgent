@@ -1350,18 +1350,6 @@
   "expected": 2
  },
  {
-  "file": "ui/src/pages/DesignGuide.tsx",
-  "from": "action=\"Create Item\"",
-  "to": "action={\"创建条目\"}",
-  "expected": 1
- },
- {
-  "file": "ui/src/pages/DesignGuide.tsx",
-  "from": "action=\"New connection\"",
-  "to": "action={\"新建连接\"}",
-  "expected": 1
- },
- {
   "file": "ui/src/pages/apps/Browse.tsx",
   "from": "label: connectionSetupVerbForApp(row.entry),",
   "to": "label: connectionSetupVerbForApp(row.entry) === \"Add key\" ? \"添加密钥\" : \"连接\",",
