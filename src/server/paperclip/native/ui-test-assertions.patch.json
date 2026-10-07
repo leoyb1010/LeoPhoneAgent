@@ -1,27 +1,5 @@
 [
   {
-    "file": "ui/src/context/CompanyContext.test.tsx",
-    "from": "      // The previous account's entry may still sit in the cache; keying by\n      // account is what makes that harmless, since nothing reads it now.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toMatchObject({\n        companies: [{ id: \"company-1\" }],\n      });",
-    "to": "      // R1 contract: an identity change resets every account-scoped query, so\n      // the previous account's list is no longer held in the cache at all.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toBeUndefined();",
-    "expected": 1,
-    "category": "B",
-    "tests": [
-      "CompanyProvider when the account changes in this tab drops the previous account's selection and re-reads the list"
-    ],
-    "reason": "zz-round1-data.structural.json 在身份切换的 useLayoutEffect 中对账号作用域查询执行 resetQueries，旧账号公司列表数据被主动清除；改为断言旧缓存已为 undefined（比“仍缓存但不读取”更强）。"
-  },
-  {
-    "file": "ui/src/context/CompanyContext.test.tsx",
-    "from": "      // Still cached, still keyed to whom it belongs, still unread.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toMatchObject({\n        companies: [{ id: \"company-1\" }],\n      });",
-    "to": "      // R1 contract: the previous account's list is purged, not merely unread.\n      expect(queryClient.getQueryData(queryKeys.companies.list(\"user-1\"))).toBeUndefined();",
-    "expected": 1,
-    "category": "B",
-    "tests": [
-      "CompanyProvider when the account changes in this tab cannot read another account's cached list at all"
-    ],
-    "reason": "zz-round1-data.structural.json 身份切换时 resetQueries 清除旧账号作用域缓存；断言旧账号列表数据已不存在，而非仅“未被读取”。"
-  },
-  {
     "file": "ui/src/context/LiveUpdatesProvider.hook.test.tsx",
     "from": "      title: \"Agent run failed\", dedupeKey: \"run-status:unrelated-run:failed\",\n      action: { label: \"View run\", href: `/agents/${agentId}/runs/unrelated-run` },",
     "to": "      title: \"智能体的运行已失败\", dedupeKey: \"run-status:unrelated-run:failed\",\n      action: { label: \"查看运行\", href: `/agents/${agentId}/runs/unrelated-run` },",
@@ -638,5 +616,868 @@
     "tests": [
       "AgentConfigForm keeps unsaved edits when an unrelated agent refresh arrives (LeoPhoneAgent)"
     ]
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.test.tsx",
+    "from": "    expect(button?.getAttribute(\"aria-label\")).toBe(\"Switch to light mode\");",
+    "to": "    expect(button?.getAttribute(\"aria-label\")).toBe(\"切换为浅色模式\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "ThemeToggle renders an icon button by default with the 'switch to light' label when current theme is dark"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.test.tsx",
+    "from": "    expect(button?.getAttribute(\"title\")).toBe(\"Switch to light mode\");",
+    "to": "    expect(button?.getAttribute(\"title\")).toBe(\"切换为浅色模式\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "ThemeToggle renders an icon button by default with the 'switch to light' label when current theme is dark"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Switch to light mode\");",
+    "to": "    expect(container.textContent).toContain(\"切换为浅色模式\");",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "ThemeToggle renders an icon button by default with the 'switch to light' label when current theme is dark"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.test.tsx",
+    "from": "    expect(button?.getAttribute(\"aria-label\")).toBe(\"Switch to dark mode\");",
+    "to": "    expect(button?.getAttribute(\"aria-label\")).toBe(\"切换为深色模式\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "ThemeToggle flips label and icon when current theme is light"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(resolverPolicyLabel(\"anyone\")).toBe(\"Anyone\");",
+    "to": "    expect(resolverPolicyLabel(\"anyone\")).toBe(\"任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(resolverPolicyLabel(\"not_creator\")).toBe(\"Anyone except creator\");",
+    "to": "    expect(resolverPolicyLabel(\"not_creator\")).toBe(\"除创建者外的任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience names the excluded creator for an explicit not_creator restriction",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(resolverPolicyLabel(\"human_only\")).toBe(\"Human only\");",
+    "to": "    expect(resolverPolicyLabel(\"human_only\")).toBe(\"仅用户\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps human-only ownership copy explicit"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(resolverPolicyLabel(\"board_or_agents\")).toBe(\"Anyone\");",
+    "to": "    expect(resolverPolicyLabel(\"board_or_agents\")).toBe(\"任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(resolverPolicyLabel(\"board_only\")).toBe(\"Human only\");",
+    "to": "    expect(resolverPolicyLabel(\"board_only\")).toBe(\"仅用户\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps human-only ownership copy explicit"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.label).toBe(\"Anyone\");",
+    "to": "    expect(audience.label).toBe(\"任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.summary).toMatch(/anyone in the organization/i);",
+    "to": "    expect(audience.summary).toMatch(/组织内任何人都可以回复/);",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience does not present an open card as board-required"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.label).toBe(\"Anyone except creator\");",
+    "to": "    expect(audience.label).toBe(\"除创建者外的任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience names the excluded creator for an explicit not_creator restriction",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(addressed.summary).toBe(\"Only you can respond.\");",
+    "to": "    expect(addressed.summary).toBe(\"仅 你 可以回复。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience lowercases a self-referring label inside the summary sentence"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.label).toBe(\"Human only\");",
+    "to": "    expect(audience.label).toBe(\"仅用户\");",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps human-only ownership copy explicit"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.summary).toBe(\"Only Alice can respond.\");",
+    "to": "    expect(audience.summary).toBe(\"仅 Alice 可以回复。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience names one addressed user instead of the whole board"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      .toBe(\"Anyone can respond\");",
+    "to": "      .toBe(\"任何人可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "glanceable audience copy states the open default in one clause",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    }).shortSummary).toBe(\"Anyone except Watchdog can respond\");",
+    "to": "    }).shortSummary).toBe(\"除 Watchdog 外任何人可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeAttentionResolverAudience names the excluded creator the server recorded",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "glanceable audience copy names the excluded creator",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    }).shortSummary).toBe(\"Only the board can respond\");",
+    "to": "    }).shortSummary).toBe(\"仅管理者可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "glanceable audience copy keeps human-only ownership with the board"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience?.label).toBe(\"Anyone\");",
+    "to": "    expect(audience?.label).toBe(\"任何人\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience?.shortSummary).toBe(\"Anyone can respond\");",
+    "to": "    expect(audience?.shortSummary).toBe(\"任何人可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "glanceable audience copy states the open default in one clause",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience?.shortSummary).toBe(\"Anyone except Watchdog can respond\");",
+    "to": "    expect(audience?.shortSummary).toBe(\"除 Watchdog 外任何人可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeAttentionResolverAudience names the excluded creator the server recorded",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "glanceable audience copy names the excluded creator",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Suggested 2 tasks\");",
+    "to": "    })).toBe(\"建议了 2 个任务\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes task and question interactions"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "      .toBe(\"Requested a selection from 3 options\");",
+    "to": "      .toBe(\"请求从 3 个选项中选择\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes checkbox confirmation interactions by count"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Selected “Continue work”\");",
+    "to": "    })).toBe(\"已选择“Continue work”\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers uses a confirmation's explicit rejection action in its receipt"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    expect(buildIssueThreadInteractionSummary(verdictInteraction())).toBe(\"0 of 3 decided\");",
+    "to": "    expect(buildIssueThreadInteractionSummary(verdictInteraction())).toBe(\"已判定 0/3\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "per-item verdict helpers summarizes pending, complete, and superseded verdict cards"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "      ).toBe(\"Ran commands\");",
+    "to": "      ).toBe(\"运行了命令\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary describes command attempts without claiming success (completed)",
+      "completedActivitySummary describes command attempts without claiming success (failed)",
+      "completedActivitySummary describes command attempts without claiming success (in_progress)",
+      "completedActivitySummary describes command attempts without claiming success (interrupted)",
+      "completedActivitySummary describes command attempts without claiming success (pending)",
+      "completedActivitySummary supports canonical operation identity when a native tool has no useful name"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    expect(summary.label).toBe(\"Read files, ran commands\");",
+    "to": "    expect(summary.label).toBe(\"读取了文件、运行了命令\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed",
+      "completedActivitySummary merges retries and hides reasoning, raw targets and output from the summary"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"read\", \"failed\", \"Checked files\"],",
+    "to": "    [\"read\", \"failed\", \"检查了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"read\", \"interrupted\", \"Checked files\"],",
+    "to": "    [\"read\", \"interrupted\", \"检查了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"apply_patch\", \"failed\", \"Worked on files\"],",
+    "to": "    [\"apply_patch\", \"failed\", \"处理了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful apply_patch completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"apply_patch\", \"interrupted\", \"Worked on files\"],",
+    "to": "    [\"apply_patch\", \"interrupted\", \"处理了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful apply_patch completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"read\", \"completed\", \"Read files\"],",
+    "to": "    [\"read\", \"completed\", \"读取了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    [\"apply_patch\", \"completed\", \"Edited files\"],",
+    "to": "    [\"apply_patch\", \"completed\", \"编辑了文件\"],",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful apply_patch completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    ).toBe(\"Read files, edited files\");",
+    "to": "    ).toBe(\"读取了文件、编辑了文件\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed",
+      "completedActivitySummary uses completed work once when a read or edit retry succeeds"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    expect(completedActivitySummary([native]).label).toBe(\"Ran commands\");",
+    "to": "    expect(completedActivitySummary([native]).label).toBe(\"运行了命令\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary describes command attempts without claiming success (completed)",
+      "completedActivitySummary describes command attempts without claiming success (failed)",
+      "completedActivitySummary describes command attempts without claiming success (in_progress)",
+      "completedActivitySummary describes command attempts without claiming success (interrupted)",
+      "completedActivitySummary describes command attempts without claiming success (pending)",
+      "completedActivitySummary supports canonical operation identity when a native tool has no useful name"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    expect(summary.label).toBe(\"Read files, ran commands, and more\");",
+    "to": "    expect(summary.label).toBe(\"读取了文件、运行了命令等\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary bounds many categories while keeping the complete accessible description",
+      "completedActivitySummary does not claim an unsuccessful read completed",
+      "completedActivitySummary merges retries and hides reasoning, raw targets and output from the summary"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "      \"Thought through the task\",",
+    "to": "      \"思考了任务\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not invent tool activity for thoughts-only groups or expose unknown identifiers"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Anyone in the organization except the agent that created it can respond.\",",
+    "to": "      \"组织内除 创建该卡片的智能体 外的任何人都可以回复。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience falls back to a generic creator phrase when the creator label is unknown",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.summary).toBe(\"Only ReleaseBot or a person on the board can respond.\");",
+    "to": "    expect(audience.summary).toBe(\"仅 ReleaseBot 或管理者可以回复。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps addressee ownership copy when a named agent owns the card"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Assigned to ReleaseBot. Only a person on the board can respond — agents cannot resolve this card.\",",
+    "to": "      \"已指派给 ReleaseBot。仅管理者本人可以回复，智能体无法处理此卡片。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps named ownership visible while human_only controls authorization"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"This card runs a governed action, so it stays human-only whatever audience was requested.\",",
+    "to": "      \"此卡片执行受管控的操作，无论请求的受众如何，始终仅限管理者。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience explains a governed-action clamp"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Organization interaction governance narrowed this from Anyone to Human only.\",",
+    "to": "      \"组织交互治理已将范围从“任何人”收窄为“仅用户”。\",",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience carries the narrowing explanation for a company cap",
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience explains a company cap using both audience labels",
+      "describeInteractionAudience keeps human-only ownership copy explicit",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Created before Anyone became the default, so it stays restricted. A new card would be open.\",",
+    "to": "      \"创建于“任何人”成为默认值之前，因此保持受限；新卡片将默认开放。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience describes an open interaction row from server metadata alone",
+      "describeInteractionAudience explains a legacy restricted card that predates the open default",
+      "describeInteractionAudience reads an omitted policy as open company attention",
+      "resolver policy vocabulary labels each canonical policy in plain language",
+      "resolver policy vocabulary maps deprecated board aliases onto canonical copy"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    }).shortSummary).toBe(\"Only CodexCoder or the board can respond\");",
+    "to": "    }).shortSummary).toBe(\"仅 CodexCoder 或管理者可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience names the addressed agent the server recorded",
+      "glanceable audience copy names the addressed responder"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience?.shortSummary).toBe(\"Only CodexCoder or the board can respond\");",
+    "to": "    expect(audience?.shortSummary).toBe(\"仅 CodexCoder 或管理者可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeAttentionResolverAudience names the addressed agent the server recorded",
+      "glanceable audience copy names the addressed responder"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    ).toBe(\"Read files, searched the web, ran commands\");",
+    "to": "    ).toBe(\"读取了文件、搜索了网页、运行了命令\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary classifies native provider tools through the same taxonomy and keeps encounter order",
+      "completedActivitySummary does not claim an unsuccessful read completed"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "      \"Read files, ran commands, searched files, edited files, searched the web\",",
+    "to": "      \"读取了文件、运行了命令、搜索了文件、编辑了文件、搜索了网页\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not claim an unsuccessful read completed",
+      "completedActivitySummary merges retries and hides reasoning, raw targets and output from the summary"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Anyone in the organization can respond — the board or any agent, including the one that asked.\",",
+    "to": "      \"组织内任何人都可以回复：管理者或任意智能体，包括提问者本身。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience reads an omitted policy as open company attention"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.summary).toBe(\"Anyone in the organization except ClaudeCoder can respond.\");",
+    "to": "    expect(audience.summary).toBe(\"组织内除 ClaudeCoder 外的任何人都可以回复。\");",
+    "expected": 2,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience explains a legacy restricted card that predates the open default",
+      "describeInteractionAudience names the excluded creator for an explicit not_creator restriction"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(addressed.shortSummary).toBe(\"Only you can respond\");",
+    "to": "    expect(addressed.shortSummary).toBe(\"仅 你 可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience lowercases a self-referring label inside the summary sentence"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "      \"Only a person on the board can respond — agents cannot resolve this card.\",",
+    "to": "      \"仅管理者本人可以回复，智能体无法处理此卡片。\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps human-only ownership copy explicit"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.shortSummary).toBe(\"Assigned to ReleaseBot · board only\");",
+    "to": "    expect(audience.shortSummary).toBe(\"已指派给 ReleaseBot · 仅管理者\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience keeps named ownership visible while human_only controls authorization"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(audience.shortSummary).toBe(\"Only Alice can respond\");",
+    "to": "    expect(audience.shortSummary).toBe(\"仅 Alice 可回复\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience names one addressed user instead of the whole board"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Accepted 1 of 2 tasks\");",
+    "to": "    })).toBe(\"已接受 1/2 个任务\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes task and question interactions"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Confirmed 2 of 3 options\");",
+    "to": "    })).toBe(\"已确认 2/3 个选项\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes checkbox confirmation interactions by count"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Declined request\");",
+    "to": "    })).toBe(\"已拒绝请求\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers uses a confirmation's explicit rejection action in its receipt"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    }))).toBe(\"3 decided · 2 approved · 1 rejected\");",
+    "to": "    }))).toBe(\"已判定 3 · 通过 2 · 拒绝 1\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "per-item verdict helpers summarizes pending, complete, and superseded verdict cards"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "      \"Used tools\",",
+    "to": "      \"使用了工具\",",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not invent tool activity for thoughts-only groups or expose unknown identifiers"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.test.ts",
+    "from": "    expect(excluded.summary).toBe(\"Anyone in the organization except you can respond.\");",
+    "to": "    expect(excluded.summary).toBe(\"组织内除 你 外的任何人都可以回复。\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "describeInteractionAudience lowercases a self-referring label inside the summary sentence"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Asked 1 question\");",
+    "to": "    })).toBe(\"提出了 1 个问题\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes task and question interactions"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Confirmed with no options selected\");",
+    "to": "    })).toBe(\"已确认（未选择任何选项）\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes checkbox confirmation interactions by count"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    }))).toBe(\"Verdicts expired after comment\");",
+    "to": "    }))).toBe(\"评论后逐项审查已过期\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "per-item verdict helpers summarizes pending, complete, and superseded verdict cards"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.test.ts",
+    "from": "    ).toBe(\"Used connected tools\");",
+    "to": "    ).toBe(\"使用了已连接工具\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "completedActivitySummary does not invent tool activity for thoughts-only groups or expose unknown identifiers"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Answered 1 question\");",
+    "to": "    })).toBe(\"已回答 1 个问题\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes task and question interactions"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Selection expired after target changed\");",
+    "to": "    })).toBe(\"目标变更后选择已过期\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes checkbox confirmation interactions by count"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.test.ts",
+    "from": "    })).toBe(\"Question expired after comment\");",
+    "to": "    })).toBe(\"评论后提问已过期\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "issue thread interaction helpers summarizes task and question interactions"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/MembershipAction.test.tsx",
+    "from": "    expect(button().getAttribute(\"aria-label\")).toBe(\"Leave Growth\");",
+    "to": "    expect(button().getAttribute(\"aria-label\")).toBe(\"退出 Growth\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "MembershipAction renders a leave action for joined resources"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/MembershipAction.test.tsx",
+    "from": "    expect(button().getAttribute(\"aria-label\")).toBe(\"Join Growth\");",
+    "to": "    expect(button().getAttribute(\"aria-label\")).toBe(\"加入 Growth\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "MembershipAction renders a join action for left resources"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.test.tsx",
+    "from": "    expect(container.textContent).toContain(\"Done\");",
+    "to": "    expect(container.textContent).toContain(\"已完成\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "KanbanBoard renders collapsed statuses as rails without cards"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/MembershipAction.test.tsx",
+    "from": "    expect(button().textContent).toContain(\"Leave\");",
+    "to": "    expect(button().textContent).toContain(\"退出\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "MembershipAction renders a leave action for joined resources"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/MembershipAction.test.tsx",
+    "from": "    expect(button().textContent).toContain(\"Join\");",
+    "to": "    expect(button().textContent).toContain(\"加入\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "MembershipAction renders a join action for left resources"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
+  },
+  {
+    "file": "ui/src/components/MembershipAction.test.tsx",
+    "from": "    expect(button().textContent).toContain(\"Joining...\");",
+    "to": "    expect(button().textContent).toContain(\"正在加入…\");",
+    "expected": 1,
+    "category": "C",
+    "tests": [
+      "MembershipAction marks pending actions busy and disabled"
+    ],
+    "reason": "ui-layout-polish.structural.json 将 lib/组件生成的英文显示文案改为中文；断言改为当前中文产物，语义与插值保持一致。"
   }
 ]

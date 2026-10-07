@@ -1,0 +1,950 @@
+[
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "  ScanEye,\n} from \"lucide-react\";",
+    "to": "  ScanEye,\n  UserRound,\n} from \"lucide-react\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/NewIssueDialog.tsx",
+    "from": "<span className=\"w-6 shrink-0 text-center\">For</span>",
+    "to": "<span className=\"w-6 shrink-0 flex items-center justify-center\" title=\"负责人与项目\"><UserRound className=\"h-3.5 w-3.5\" aria-hidden /><span className=\"sr-only\">{\"适用对象\"}</span></span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Search.tsx",
+    "from": "            <span className=\"truncate\">\n              Try <code className=\"rounded bg-muted px-1 py-0.5 text-(length:--text-micro)\">status:todo</code>,{\" \"}\n              <code className=\"rounded bg-muted px-1 py-0.5 text-(length:--text-micro)\">assignee:me</code>,{\" \"}\n              or <code className=\"rounded bg-muted px-1 py-0.5 text-(length:--text-micro)\">updated:&gt;7d</code>.\n            </span>",
+    "to": "            <div className=\"flex flex-wrap items-center gap-1.5\" data-testid=\"search-example-chips\">\n              <span className=\"shrink-0\">{\"试试：\"}</span>\n              {searchOperatorSuggestions(\"\", 7).filter((example) => example.token === \"status:todo\" || example.token === \"assignee:me\" || example.token === \"updated:>7d\").map((example) => (\n                <button\n                  key={example.token}\n                  type=\"button\"\n                  aria-label={`插入示例 ${example.token}`}\n                  onMouseDown={(event) => event.preventDefault()}\n                  onClick={() => {\n                    setDraftQuery(applySearchOperatorSuggestion(draftQuery, example.token));\n                    inputRef.current?.focus();\n                  }}\n                  className=\"inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 hover:bg-accent/60\"\n                >\n                  <span>{example.label}</span>\n                  <code className=\"font-mono text-(length:--text-micro) text-muted-foreground/80\">{example.token}</code>\n                </button>\n              ))}\n            </div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Search.tsx",
+    "from": "}: SearchTabContentProps) {\n  if (showInitialState) {",
+    "to": "}: SearchTabContentProps) {\n  const { selectedCompany } = useCompany();\n  if (showInitialState) {",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Search.tsx",
+    "from": "<code className=\"rounded bg-muted px-1 py-0.5 text-(length:--text-micro)\">PAP-123</code> to jump straight to a task.",
+    "to": "<code className=\"rounded bg-muted px-1 py-0.5 text-(length:--text-micro)\">{`${selectedCompany?.issuePrefix ?? \"PAP\"}-123`}</code> to jump straight to a task.",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"status:todo\", label: \"Open todo tasks\", description: \"Filter by task status\" }",
+    "to": "{ token: \"status:todo\", label: \"待办任务\", description: \"按任务状态筛选\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"status:blocked\", label: \"Blocked tasks\", description: \"Find blocked work\" }",
+    "to": "{ token: \"status:blocked\", label: \"受阻任务\", description: \"查找受阻的工作\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"assignee:me\", label: \"Assigned to me\", description: \"Use your current board user\" }",
+    "to": "{ token: \"assignee:me\", label: \"指派给我\", description: \"使用当前登录用户\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"project:\\\"Paperclip App\\\"\", label: \"Project name\", description: \"Quote multi-word project names\" }",
+    "to": "{ token: \"project:\\\"Paperclip App\\\"\", label: \"按项目\", description: \"含空格的项目名需加引号\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"label:bug\", label: \"Label\", description: \"Filter by issue label\" }",
+    "to": "{ token: \"label:bug\", label: \"按标签\", description: \"按任务标签筛选\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"priority:high\", label: \"High priority\", description: \"Filter by priority\" }",
+    "to": "{ token: \"priority:high\", label: \"高优先级\", description: \"按优先级筛选\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/search-query-parser.ts",
+    "from": "{ token: \"updated:>7d\", label: \"Recently updated\", description: \"Updated in the last 7 days\" }",
+    "to": "{ token: \"updated:>7d\", label: \"最近更新\", description: \"最近 7 天内更新\" }",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Search.tsx",
+    "from": "                  <span className=\"font-mono text-(length:--text-micro)\">{suggestion.token}</span>\n                  <span className=\"hidden text-(length:--text-micro) sm:inline\">{suggestion.description}</span>",
+    "to": "                  <span className=\"text-(length:--text-micro)\">{suggestion.label}</span>\n                  <span className=\"font-mono text-(length:--text-micro) text-muted-foreground/80\">{suggestion.token}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/NotFound.tsx",
+    "from": "const title = scope === \"invalid_company_prefix\" ? \"Organization not found\" : \"Page not found\";",
+    "to": "const title = scope === \"invalid_company_prefix\" ? \"未找到组织\" : \"页面不存在\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/NotFound.tsx",
+    "from": "      ? `No organization matches prefix \"${normalizedPrefix ?? \"unknown\"}\".`\n      : \"This route does not exist.\";",
+    "to": "      ? `没有与前缀“${normalizedPrefix ?? \"未知\"}”匹配的组织。`\n      : \"该地址不存在。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatMarker.tsx",
+    "from": "        <span className=\"font-medium\">{item.label}</span>\n        {item.detail ? (\n          <span className=\"text-muted-foreground\">· {item.detail}</span>",
+    "to": "        <span className=\"shrink-0 whitespace-nowrap font-medium\">{item.label}</span>\n        {item.detail ? (\n          <span className=\"min-w-0 text-muted-foreground\">· {item.detail}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/transcript/RunTranscriptView.tsx",
+    "from": "{block.lines.length} system {block.lines.length === 1 ? \"message\" : \"messages\"}",
+    "to": "{block.lines.length} {\"条系统消息\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ExecutionBlockerNotice.tsx",
+    "from": "<p>{blocker.savedMessageCount} saved {blocker.savedMessageCount === 1 ? \"message is\" : \"messages are\"} waiting for recovery.</p>",
+    "to": "<p>{\"已保存 \"}{blocker.savedMessageCount}{\" 条消息，等待恢复处理。\"}</p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/ThemeToggle.tsx",
+    "from": "const label = isDark ? \"Switch to light mode\" : \"Switch to dark mode\";",
+    "to": "const label = isDark ? \"切换为浅色模式\" : \"切换为深色模式\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "terminal: \"Ran commands\",",
+    "to": "terminal: \"运行了命令\",",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "grep: \"Searched files\",",
+    "to": "grep: \"搜索了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "search: \"Searched files\",",
+    "to": "search: \"搜索了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "read: \"Read files\",",
+    "to": "read: \"读取了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "edit: \"Edited files\",",
+    "to": "edit: \"编辑了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "web: \"Searched the web\",",
+    "to": "web: \"搜索了网页\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "plan: \"Worked on a plan\",",
+    "to": "plan: \"制定了计划\",",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "question: \"Requested input\",",
+    "to": "question: \"请求了输入\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "agent: \"Worked with agents\",",
+    "to": "agent: \"协同了智能体\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "safety: \"Reviewed safety\",",
+    "to": "safety: \"进行了安全审查\",",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "image: \"Worked with images\",",
+    "to": "image: \"处理了图片\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "wait: \"Waited\",",
+    "to": "wait: \"等待\",",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "mcp: \"Used connected tools\",",
+    "to": "mcp: \"使用了已连接工具\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "other: \"Used tools\",",
+    "to": "other: \"使用了工具\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "memory: \"Checked memory\",",
+    "to": "memory: \"查看了记忆\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "model_identity: \"Checked model settings\",",
+    "to": "model_identity: \"检查了模型设置\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "review: \"Worked in review mode\",",
+    "to": "review: \"以审查模式工作\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "hook: \"Ran hooks\",",
+    "to": "hook: \"运行了钩子\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "provider_notice: \"Received a provider update\",",
+    "to": "provider_notice: \"收到了服务商更新\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "workspace_change: \"Worked on files\",",
+    "to": "workspace_change: \"处理了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "workspace_file: \"Referenced files\",",
+    "to": "workspace_file: \"引用了文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "resource: \"Added resources\",",
+    "to": "resource: \"添加了资源\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": ")[family] ?? \"Used tools\";",
+    "to": ")[family] ?? \"使用了工具\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "? \"Checked files\"",
+    "to": "? \"检查了文件\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "? \"Worked on files\"",
+    "to": "? \"处理了文件\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "add(\"Thought through the task\", Brain);",
+    "to": "add(\"思考了任务\", Brain);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "add(\"Activity stopped\", CirclePause);",
+    "to": "add(\"活动已停止\", CirclePause);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "add(\"Recorded usage\", Gauge);",
+    "to": "add(\"记录了用量\", Gauge);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "standard: \"Standard\",\n  low_trust_review: \"Low-trust review\",",
+    "to": "standard: \"标准\",\n  low_trust_review: \"低信任审查\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/trust-policy-ui.ts",
+    "from": "  standard: \"Organization-visible collaboration. This is the default for normal work.\",\n  low_trust_review:\n    \"Contained for hostile or untrusted input. Narrow Paperclip API, quarantined output. Use for PR review and external-content triage.\",",
+    "to": "  standard: \"组织内可见的协作模式，普通工作的默认选择。\",\n  low_trust_review:\n    \"面向恶意或不可信输入的隔离模式：收窄 Paperclip API，输出进入隔离区。适用于 PR 审查和外部内容分流。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/adapters/adapter-display-registry.ts",
+    "from": "label: \"ACPX (retired)\",\n    description: \"Retired standalone ACPX adapter\",",
+    "to": "label: \"ACPX（已停用）\",\n    description: \"已停用的独立 ACPX 适配器\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "const parts = [`${progress.decided} decided`];",
+    "to": "const parts = [`已判定 ${progress.decided}`];",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (progress.approved > 0) parts.push(`${progress.approved} approved`);",
+    "to": "if (progress.approved > 0) parts.push(`通过 ${progress.approved}`);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (progress.rejected > 0) parts.push(`${progress.rejected} rejected`);",
+    "to": "if (progress.rejected > 0) parts.push(`拒绝 ${progress.rejected}`);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (progress.deferred > 0) parts.push(`${progress.deferred} deferred`);",
+    "to": "if (progress.deferred > 0) parts.push(`推迟 ${progress.deferred}`);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"superseded_by_comment\") return \"Verdicts expired after comment\";",
+    "to": "if (outcome === \"superseded_by_comment\") return \"评论后逐项审查已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"stale_target\") return \"Verdicts expired after target changed\";",
+    "to": "if (outcome === \"stale_target\") return \"目标变更后逐项审查已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return \"Verdicts expired\";",
+    "to": "return \"逐项审查已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return `${progress.decided} of ${progress.total} decided`;",
+    "to": "return `已判定 ${progress.decided}/${progress.total}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (administrativeOutcome === \"skipped\") return \"Skipped interaction\";",
+    "to": "if (administrativeOutcome === \"skipped\") return \"已跳过的交互\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (administrativeOutcome === \"withdrawn\") return \"Withdrawn interaction\";",
+    "to": "if (administrativeOutcome === \"withdrawn\") return \"已撤回的交互\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (administrativeOutcome === \"issue_closed\") return \"Expired when issue closed\";",
+    "to": "if (administrativeOutcome === \"issue_closed\") return \"任务关闭时已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (administrativeOutcome === \"addressee_deleted\") return \"Cancelled when addressee was deleted\";",
+    "to": "if (administrativeOutcome === \"addressee_deleted\") return \"接收方被删除时已取消\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return `Accepted ${createdCount} of ${count} tasks`;",
+    "to": "return `已接受 ${createdCount}/${count} 个任务`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return createdCount === 1 ? \"Accepted 1 task\" : `Accepted ${createdCount} tasks`;",
+    "to": "return `已接受 ${createdCount} 个任务`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Rejected 1 task\" : `Rejected ${count} tasks`;",
+    "to": "return `已拒绝 ${count} 个任务`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Suggested 1 task\" : `Suggested ${count} tasks`;",
+    "to": "return `建议了 ${count} 个任务`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (interaction.status === \"accepted\") return \"Confirmed request\";",
+    "to": "if (interaction.status === \"accepted\") return \"已确认请求\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return rejectLabel ? `Selected “${rejectLabel}”` : \"Declined request\";",
+    "to": "return rejectLabel ? `已选择“${rejectLabel}”` : \"已拒绝请求\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"superseded_by_comment\") return \"Confirmation expired after comment\";",
+    "to": "if (outcome === \"superseded_by_comment\") return \"评论后确认已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"stale_target\") return \"Confirmation expired after target changed\";",
+    "to": "if (outcome === \"stale_target\") return \"目标变更后确认已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return \"Confirmation expired\";",
+    "to": "return \"确认已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return \"Requested confirmation\";",
+    "to": "return \"请求确认\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (selectedCount === 0) return \"Confirmed with no options selected\";",
+    "to": "if (selectedCount === 0) return \"已确认（未选择任何选项）\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "      return selectedCount === 1\n        ? `Confirmed 1 of ${optionCount} options`\n        : `Confirmed ${selectedCount} of ${optionCount} options`;",
+    "to": "      return `已确认 ${selectedCount}/${optionCount} 个选项`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (interaction.status === \"rejected\") return \"Declined selection\";",
+    "to": "if (interaction.status === \"rejected\") return \"已拒绝选择\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"superseded_by_comment\") return \"Selection expired after comment\";",
+    "to": "if (outcome === \"superseded_by_comment\") return \"评论后选择已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (outcome === \"stale_target\") return \"Selection expired after target changed\";",
+    "to": "if (outcome === \"stale_target\") return \"目标变更后选择已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return \"Selection expired\";",
+    "to": "return \"选择已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "    return optionCount === 1\n      ? \"Requested a selection from 1 option\"\n      : `Requested a selection from ${optionCount} options`;",
+    "to": "    return `请求从 ${optionCount} 个选项中选择`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (interaction.status === \"accepted\") return `${interaction.payload.serviceName} connected`;",
+    "to": "if (interaction.status === \"accepted\") return `${interaction.payload.serviceName} 已连接`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "if (interaction.status === \"rejected\") return `${interaction.payload.serviceName} declined`;",
+    "to": "if (interaction.status === \"rejected\") return `${interaction.payload.serviceName} 已拒绝`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "        ? `${interaction.payload.serviceName} request superseded`\n        : `${interaction.payload.serviceName} request expired`;",
+    "to": "        ? `${interaction.payload.serviceName} 请求已被取代`\n        : `${interaction.payload.serviceName} 请求已过期`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return `Connect ${interaction.payload.serviceName}`;",
+    "to": "return `连接 ${interaction.payload.serviceName}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Answered 1 question\" : `Answered ${count} questions`;",
+    "to": "return `已回答 ${count} 个问题`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Cancelled 1 question\" : `Cancelled ${count} questions`;",
+    "to": "return `已取消 ${count} 个问题`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Question expired after comment\" : \"Questions expired after comment\";",
+    "to": "return \"评论后提问已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Question expired\" : \"Questions expired\";",
+    "to": "return \"提问已过期\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/issue-thread-interactions.ts",
+    "from": "return count === 1 ? \"Asked 1 question\" : `Asked ${count} questions`;",
+    "to": "return `提出了 ${count} 个问题`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.ts",
+    "from": "  anyone:\n    \"Anyone in the organization can respond — the board or any agent, including the one that asked.\",\n  not_creator:\n    \"Anyone in the organization except the agent that created the card, and its run. Use this when the answer has to come from someone else.\",\n  human_only: \"Only a person on the board can respond. Agents are turned away.\",",
+    "to": "  anyone:\n    \"组织内任何人都可以回复：管理者或任意智能体，包括提问者本身。\",\n  not_creator:\n    \"组织内除创建该卡片的智能体及其运行之外的任何人。当答案必须来自其他人时使用。\",\n  human_only: \"仅管理者本人可以回复，智能体会被拒绝。\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.ts",
+    "from": "  const midSentence = (label: string) => (label === \"You\" ? \"you\" : label);\n  const addressee = midSentence(\n    addresseeLabel?.trim() || (isUserAddressee ? \"the addressed user\" : \"the addressed agent\"),\n  );\n  const creator = midSentence(creatorLabel?.trim() || \"the agent that created it\");",
+    "to": "  const midSentence = (label: string) => (label === \"You\" ? \"你\" : label);\n  const addressee = midSentence(\n    addresseeLabel?.trim() || (isUserAddressee ? \"指定用户\" : \"指定智能体\"),\n  );\n  const creator = midSentence(creatorLabel?.trim() || \"创建该卡片的智能体\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.ts",
+    "from": "    ? `Only ${addressee} can respond.`\n    : policy === \"human_only\"\n    ? `${hasAddressee ? `Assigned to ${addressee}. ` : \"\"}Only a person on the board can respond — agents cannot resolve this card.`\n    : hasAddressee\n      ? `Only ${addressee} or a person on the board can respond.`\n      : policy === \"not_creator\"\n        ? `Anyone in the organization except ${creator} can respond.`\n        : \"Anyone in the organization can respond — the board or any agent, including the one that asked.\";",
+    "to": "    ? `仅 ${addressee} 可以回复。`\n    : policy === \"human_only\"\n    ? `${hasAddressee ? `已指派给 ${addressee}。` : \"\"}仅管理者本人可以回复，智能体无法处理此卡片。`\n    : hasAddressee\n      ? `仅 ${addressee} 或管理者可以回复。`\n      : policy === \"not_creator\"\n        ? `组织内除 ${creator} 外的任何人都可以回复。`\n        : \"组织内任何人都可以回复：管理者或任意智能体，包括提问者本身。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.ts",
+    "from": "    ? `Only ${addressee} can respond`\n    : policy === \"human_only\"\n    ? hasAddressee\n      ? `Assigned to ${addressee} · board only`\n      : \"Only the board can respond\"\n    : hasAddressee\n      ? `Only ${addressee} or the board can respond`\n      : policy === \"not_creator\"\n        ? `Anyone except ${creator} can respond`\n        : \"Anyone can respond\";",
+    "to": "    ? `仅 ${addressee} 可回复`\n    : policy === \"human_only\"\n    ? hasAddressee\n      ? `已指派给 ${addressee} · 仅管理者`\n      : \"仅管理者可回复\"\n    : hasAddressee\n      ? `仅 ${addressee} 或管理者可回复`\n      : policy === \"not_creator\"\n        ? `除 ${creator} 外任何人可回复`\n        : \"任何人可回复\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/lib/interaction-audience.ts",
+    "from": "    ? \"This card runs a governed action, so it stays human-only whatever audience was requested.\"\n    : source === \"company_cap\"\n      ? `Organization interaction governance narrowed this from ${RESOLVER_POLICY_LABELS[requestedPolicy]} to ${RESOLVER_POLICY_LABELS[policy]}.`\n      : provenance === \"legacy_inherited_restriction\"\n        ? \"Created before Anyone became the default, so it stays restricted. A new card would be open.\"\n        : null;",
+    "to": "    ? \"此卡片执行受管控的操作，无论请求的受众如何，始终仅限管理者。\"\n    : source === \"company_cap\"\n      ? `组织交互治理已将范围从“${RESOLVER_POLICY_LABELS[requestedPolicy]}”收窄为“${RESOLVER_POLICY_LABELS[policy]}”。`\n      : provenance === \"legacy_inherited_restriction\"\n        ? \"创建于“任何人”成为默认值之前，因此保持受限；新卡片将默认开放。\"\n        : null;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "<span className=\"text-muted-foreground text-xs\">{label}</span>",
+    "to": "<span className=\"shrink-0 whitespace-nowrap text-muted-foreground text-xs\">{label}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "<div className=\"flex items-center gap-1\">{children}</div>",
+    "to": "<div className=\"flex min-w-0 items-center gap-1\">{children}</div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "<span className=\"ml-auto text-xs text-muted-foreground\">{relativeTime(run.createdAt)}</span>",
+    "to": "<span className=\"ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground\">{relativeTime(run.createdAt)}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "              <span className=\"font-mono text-xs text-muted-foreground\">\n                {task.identifier ?? task.id.slice(0, 8)}\n              </span>",
+    "to": "              <span className=\"shrink-0 font-mono text-xs text-muted-foreground\">\n                {task.identifier ?? task.id.slice(0, 8)}\n              </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "<span className=\"text-muted-foreground text-xs\">{label}</span>",
+    "to": "<span className=\"shrink-0 whitespace-nowrap text-muted-foreground text-xs\">{label}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "<div className=\"flex items-center gap-1\">{children}</div>",
+    "to": "<div className=\"flex min-w-0 items-center gap-1\">{children}</div>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "<span className=\"ml-auto text-xs text-muted-foreground\">{relativeTime(run.createdAt)}</span>",
+    "to": "<span className=\"ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground\">{relativeTime(run.createdAt)}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.production.tsx",
+    "from": "              <span className=\"font-mono text-xs text-muted-foreground\">\n                {task.identifier ?? task.id.slice(0, 8)}\n              </span>",
+    "to": "              <span className=\"shrink-0 font-mono text-xs text-muted-foreground\">\n                {task.identifier ?? task.id.slice(0, 8)}\n              </span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "className=\"max-w-64 truncate text-sm font-mono\"",
+    "to": "className=\"min-w-0 max-w-64 truncate text-sm font-mono\"",
+    "expected": 2
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "<Link className=\"text-xs text-muted-foreground hover:text-foreground\" to={agentDetailHref(agentRouteId, \"runtime\")}>Configure</Link>",
+    "to": "<Link className=\"shrink-0 whitespace-nowrap text-xs text-muted-foreground hover:text-foreground\" to={agentDetailHref(agentRouteId, \"runtime\")}>Configure</Link>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/FrontmatterPanel.tsx",
+    "from": "<span className=\"text-sm font-medium\">Frontmatter</span>",
+    "to": "<span className=\"shrink-0 whitespace-nowrap text-sm font-medium\">Frontmatter</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "<span className=\"font-semibold uppercase tracking-wide\">Advanced</span>",
+    "to": "<span className=\"shrink-0 whitespace-nowrap font-semibold uppercase tracking-wide\">Advanced</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "        <span className=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">\n          {title}",
+    "to": "        <span className=\"shrink-0 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground\">\n          {title}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Turning this off preserves conversations and lets active runs finish, but prevents new messages.\"",
+    "to": "footnote=\"关闭后会保留对话并让进行中的运行完成，但不再接收新消息。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Turning Cases off hides the tab and blocks the case API; existing case data is kept.\"",
+    "to": "footnote=\"关闭案例后会隐藏该标签并停用案例 API；已有案例数据会保留。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Turning this off hides experimental chat setup and connected-task controls. Existing chat connections keep running. AgentMail, GitHub tools, and other tool connectors stay available.\"",
+    "to": "footnote=\"关闭后会隐藏实验性的聊天设置与关联任务控件。已有聊天连接继续运行；AgentMail、GitHub 工具和其他工具连接器仍然可用。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Turning this off hides setup for these connectors. Existing connections keep running.\"",
+    "to": "footnote=\"关闭后会隐藏这些连接器的设置入口，已有连接继续运行。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Enabling Status Cards also enables Summaries.\"",
+    "to": "footnote=\"启用状态卡片会同时启用摘要。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Turning this off restores the legacy shell and navigation. Task and page data are unchanged.\"",
+    "to": "footnote=\"关闭后会恢复旧版界面外壳与导航，任务和页面数据不受影响。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Status Cards requires Summaries. Disabling Summaries also disables Status Cards.\"",
+    "to": "footnote=\"状态卡片依赖摘要；停用摘要会同时停用状态卡片。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "from": "footnote=\"Switching takes effect immediately. No task data is affected.\"",
+    "to": "footnote=\"切换立即生效，不影响任何任务数据。\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/ProfileSettings.tsx",
+    "from": "    ? `Stored in Paperclip file storage for ${selectedCompany.name}.`\n    : \"Select an organization to upload an avatar into Paperclip storage.\";",
+    "to": "    ? `头像保存在 ${selectedCompany.name} 的 Paperclip 文件存储中。`\n    : \"请先选择组织，再把头像上传到 Paperclip 存储。\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/DecisionShelf.tsx",
+    "from": "Idle {idleDays} {idleDays === 1 ? \"day\" : \"days\"}",
+    "to": "{\"空闲 \"}{idleDays}{\" 天\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/EnforcementBanner.tsx",
+    "from": "            <span className=\"font-medium\">{computedCount}</span> governed tool call\n            {computedCount === 1 ? \" was\" : \"s were\"} denied or failed in the last hour. Access is enforced\n            server-side by the tool gateway — open the affected connector to review what was blocked and why.",
+    "to": "            <span className=\"font-medium\">{computedCount}</span>{\" 次受管控的工具调用在过去一小时内被拒绝或失败。访问控制由服务器端工具网关执行，打开相应连接器可查看被阻止的内容和原因。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/IssuePlanDecompositionsSection.tsx",
+    "from": "{created} of {requested} child {requested === 1 ? \"task\" : \"tasks\"} created",
+    "to": "{\"已创建 \"}{created}{\" / \"}{requested}{\" 个子任务\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/OnboardingWizard.tsx",
+    "from": "{savedKeys.options.length} saved API {savedKeys.options.length === 1 ? \"key available\" : \"keys available\"}.",
+    "to": "{savedKeys.options.length}{\" 个已保存的 API 密钥可用。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/new-agent/AgentProviderConnection.tsx",
+    "from": "          {savedKeys.options.length} saved API{\" \"}\n          {savedKeys.options.length === 1 ? \"key available\" : \"keys available\"}.",
+    "to": "          {savedKeys.options.length}{\" 个已保存的 API 密钥可用。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineSaveBar.tsx",
+    "from": "{dirtyCount} unsaved {dirtyCount === 1 ? \"change\" : \"changes\"}",
+    "to": "{dirtyCount}{\" 项未保存的更改\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/RoutineSaveBar.tsx",
+    "from": "              This will revert {dirtyCount} unsaved{\" \"}\n              {dirtyCount === 1 ? \"change\" : \"changes\"} in this section.",
+    "to": "              {\"这将撤销本分区中 \"}{dirtyCount}{\" 项未保存的更改。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatProtocolActivityRow.tsx",
+    "from": "Show {hiddenResultCount} more {hiddenResultCount === 1 ? \"result\" : \"results\"}",
+    "to": "{\"再显示 \"}{hiddenResultCount}{\" 条结果\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/transcript/RunTranscriptView.tsx",
+    "from": "{block.lines.length} log {block.lines.length === 1 ? \"line\" : \"lines\"}",
+    "to": "{block.lines.length} {\"行日志\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanyEnvironments.tsx",
+    "from": "Reassign {agentsUsingEnvironment.length === 1 ? \"agent\" : \"agents\"} to",
+    "to": "{\"将智能体重新分配至\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.tsx",
+    "from": "{attached.length} {attached.length === 1 ? \"agent\" : \"agents\"} attached",
+    "to": "{\"已关联 \"}{attached.length}{\" 个智能体\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/CompanySkills.production.tsx",
+    "from": "{attached.length} {attached.length === 1 ? \"agent\" : \"agents\"} attached",
+    "to": "{\"已关联 \"}{attached.length}{\" 个智能体\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Inbox.tsx",
+    "from": "{dashboard!.agents.error === 1 ? \"agent has\" : \"agents have\"} errors",
+    "to": "{\"个智能体出现错误\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/LegacyInbox.tsx",
+    "from": "{dashboard!.agents.error === 1 ? \"agent has\" : \"agents have\"} errors",
+    "to": "{\"个智能体出现错误\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillSources.tsx",
+    "from": "{skippedCount} selected {skippedCount === 1 ? 'skill has' : 'skills have'} validation errors and will be skipped.",
+    "to": "{\"所选技能中有 \"}{skippedCount}{\" 个存在校验错误，将被跳过。\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/skills/SkillPackagePreview.tsx",
+    "from": "Content audit · {inspection!.warnings.length} {inspection!.warnings.length === 1 ? 'notice' : 'notices'}",
+    "to": "{\"内容审计 · \"}{inspection!.warnings.length}{\" 条提示\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/AuditTab.tsx",
+    "from": "permitted {(permittedNotInstalledCount ?? permittedNotInstalledConnections.length) === 1 ? \"connection\" : \"connections\"} not installed",
+    "to": "{\"个已授权的连接未安装\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/StatusCards/StatusCardTile.tsx",
+    "from": "{card.pendingChangeCount} {card.pendingChangeCount === 1 ? \"change\" : \"changes\"} since last update",
+    "to": "{\"自上次更新以来有 \"}{card.pendingChangeCount}{\" 项更改\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "{reviewCount} {reviewCount === 1 ? \"action is\" : \"actions are\"} waiting for your OK",
+    "to": "{reviewCount}{\" 项操作等待你确认\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "from": "{rowsNeedingAttention.length} {rowsNeedingAttention.length === 1 ? \"connection needs\" : \"connections need\"} attention",
+    "to": "{rowsNeedingAttention.length}{\" 个连接需要处理\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/AppDetail.tsx",
+    "from": "{actionCount} {actionCount === 1 ? \"action\" : \"actions\"} available",
+    "to": "{actionCount}{\" 项操作可用\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/apps/app-detail/SetupPanel.tsx",
+    "from": "Review {count} new {count === 1 ? \"action\" : \"actions\"}",
+    "to": "{\"审查 \"}{count}{\" 项新操作\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/tools/PasteConfigTab.tsx",
+    "from": "We found {drafts.length} {drafts.length === 1 ? \"app\" : \"apps\"} in that config",
+    "to": "{\"在该配置中找到 \"}{drafts.length}{\" 个应用\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/AgentActionButtons.tsx",
+    "from": "className={className ?? \"flex items-center gap-1 sm:gap-2 shrink-0\"}",
+    "to": "className={className ?? \"flex flex-wrap items-center gap-1 sm:gap-2\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "research: \"Searched the web\",",
+    "to": "research: \"搜索了网页\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "delegation: \"Worked with agents\",",
+    "to": "delegation: \"协同了智能体\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "artifact: \"Worked with artifacts\",",
+    "to": "artifact: \"处理了成果文件\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "context: \"Managed context\",",
+    "to": "context: \"管理了上下文\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "      .join(\", \");",
+    "to": "      .join(\"、\");",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/completed-activity-summary.ts",
+    "from": "? `${join(values.slice(0, 2).map((v) => v.label))}, and more`",
+    "to": "? `${join(values.slice(0, 2).map((v) => v.label))}等`",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/CommandPalette.tsx",
+    "from": "              <span className=\"font-mono text-xs\">{chip}</span>",
+    "to": "              <span className=\"text-xs\">{chip === \"assignee:me\" ? \"指派给我\" : chip === \"is:open\" ? \"未完成的任务\" : chip === \"updated:>7d\" ? \"最近 7 天更新\" : chip}</span>\n              <span className=\"ml-2 font-mono text-xs text-muted-foreground\">{chip}</span>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Search.tsx",
+    "from": "Use an identifier shortcut like <code className=\"rounded bg-muted px-1 py-0.5\">PAP-123</code>.",
+    "to": "Use an identifier shortcut like <code className=\"rounded bg-muted px-1 py-0.5\">{`${selectedCompany?.issuePrefix ?? \"PAP\"}-123`}</code>.",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/TaskChatThread.tsx",
+    "from": "return interaction.title ?? \"Connect service\";",
+    "to": "return interaction.title ?? \"连接服务\";",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/task-chat/TaskChatCompactInteractionCard.tsx",
+    "from": "fallbackTitle: \"Connect service\",",
+    "to": "fallbackTitle: \"连接服务\",",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.tsx",
+    "from": "import { cn } from \"../lib/utils\";\n",
+    "to": "import { cn } from \"../lib/utils\";\nimport { displayStatus } from \"@/i18n/zh-CN\";\n",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/KanbanBoard.tsx",
+    "from": "return status.replace(/_/g, \" \").replace(/\\b\\w/g, (c) => c.toUpperCase());",
+    "to": "return displayStatus(status);",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/Secrets.tsx",
+    "from": "                >\n                  {mode}",
+    "to": "                >\n                  {mode === \"folders\" ? \"文件夹\" : \"平铺\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/components/MembershipAction.tsx",
+    "from": "    ? pendingState === \"left\" ? \"Leaving...\" : \"Joining...\"\n    : isLeft ? \"Join\" : \"Leave\";\n  const ariaLabel = `${isLeft ? \"Join\" : \"Leave\"} ${resourceName}`;",
+    "to": "    ? pendingState === \"left\" ? \"正在退出…\" : \"正在加入…\"\n    : isLeft ? \"加入\" : \"退出\";\n  const ariaLabel = `${isLeft ? \"加入\" : \"退出\"} ${resourceName}`;",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/SkillStudio.tsx",
+    "from": "emptyLabel=\"New skill\"",
+    "to": "emptyLabel=\"新建技能\"",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.tsx",
+    "from": "<p className=\"text-xs text-muted-foreground\">Showing the {RUN_LIMIT} most recent routine runs.</p>",
+    "to": "<p className=\"text-xs text-muted-foreground\">{\"最多显示最近 \"}{RUN_LIMIT}{\" 条例行任务运行记录。\"}</p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/audit/AuditRuns.tsx",
+    "from": "<p className=\"text-xs text-muted-foreground\">Showing the {RUN_LIMIT} most recent runs.</p>",
+    "to": "<p className=\"text-xs text-muted-foreground\">{\"最多显示最近 \"}{RUN_LIMIT}{\" 条运行记录。\"}</p>",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/AgentDetail.tsx",
+    "from": "              className=\"rounded-lg border border-border px-3 py-2 text-sm font-medium capitalize hover:bg-accent\"\n            >\n              {section}",
+    "to": "              className=\"rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent\"\n            >\n              {section === \"activity\" ? \"活动记录\" : section === \"runs\" ? \"运行记录\" : section === \"costs\" ? \"费用\" : \"预算\"}",
+    "expected": 1
+  },
+  {
+    "file": "ui/src/pages/GoalDetail.tsx",
+    "from": "          <span className=\"text-xs uppercase text-muted-foreground\">\n            {goal.level}\n          </span>",
+    "to": "          <span className=\"text-xs uppercase text-muted-foreground\">\n            {goal.level === \"company\" ? \"组织\" : goal.level === \"team\" ? \"团队\" : goal.level === \"agent\" ? \"智能体\" : goal.level === \"task\" ? \"任务\" : goal.level}\n          </span>",
+    "expected": 1
+  }
+]

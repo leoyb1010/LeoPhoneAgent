@@ -1,0 +1,75 @@
+/* LeoBot 中文版式叠层（1.1.7）。由 structural-patches.mjs 写入 ui/src/zh-cn-layout.css 并在 index.css 中
+   紧随 @import "tailwindcss" 之后引入。未分层样式优先于 Tailwind utilities，因此这里只放窄范围、
+   针对中文排版的规则：字体回退、最小字号、短标签不按字折行、工具栏搜索框不压住按钮、移动端底栏留白。 */
+
+:root {
+  /* InterVariable 不含汉字，显式声明中日韩回退字体，避免非 macOS 平台落到衬线/系统默认字体。 */
+  --font-sans: "InterVariable", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+  /* 10px/11px 的英文眉题在中文下难以辨认（审计中 385 处）；整体抬高一级，仍保持“极小/微型”层级关系。 */
+  --text-nano: 11px;
+  --text-micro: 12px;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+}
+
+/* 中文没有词间空格，flex 收缩时短标签会逐字竖排。标签类元素只允许在空格/标点处换行。 */
+label,
+dt,
+th,
+kbd,
+summary,
+button,
+[role="tab"],
+[role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="option"],
+[data-slot="badge"],
+[data-slot="breadcrumb-item"],
+[data-slot="dialog-title"],
+[data-slot="card-title"] {
+  word-break: keep-all;
+  /* 超长的技术标识（技能名、ID）仍可在必要时断开，不撑破容器。 */
+  overflow-wrap: anywhere;
+}
+
+/* 徽章里的长技术标识（技能名、ID）在卡片里换行显示，而不是撑破卡片或被裁掉；
+   绝对定位的计数角标（底部导航未读数）不受影响。 */
+[data-slot="badge"]:not(.absolute) {
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  white-space: normal;
+  text-align: left;
+}
+
+/* 正文段落给中文更舒展的行距。 */
+.prose :where(p, li, blockquote),
+[data-slot="dialog-description"],
+[data-slot="card-description"],
+[data-slot="alert-description"] {
+  line-height: 1.65;
+}
+
+/* 列表工具栏：搜索框的固定宽度在 640–900px 下会压住右侧视图/筛选按钮；
+   让工具栏行可换行，搜索框保留可用的最小宽度，按钮组放不下时整体折到下一行。 */
+div:has(> [data-slot="collection-toolbar-search"]) {
+  flex-wrap: wrap;
+}
+[data-slot="collection-toolbar-search"] {
+  min-width: 12rem;
+}
+[data-slot="collection-toolbar-search"] > * {
+  max-width: 100%;
+}
+
+/* 移动端底部导航为固定定位，滚动内容末尾需要同等高度的留白，否则最后几行与指标被底栏盖住。 */
+@media (max-width: 767px) {
+  #main-content > :last-child {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}

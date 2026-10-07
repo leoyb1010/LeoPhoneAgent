@@ -71,6 +71,10 @@ export function applyStructuralPatches({ root, changed, report }) {
   overlay('ui/src/components/ChineseError.tsx', 'ChineseError.tsx');
   overlay('ui/src/components/ChineseFileInput.tsx', 'ChineseFileInput.tsx');
   overlay('ui/src/lib/timeAgo.ts', 'timeAgo.ts');
+  // 1.1.7：中文版式叠层（CJK 字体回退、最小字号、换行与对话框表单布局）。index.css 不是 TS 文件，
+  // 不能由结构 catalog 处理，因此在此用精确上下文插入 @import，样式本身放在 overlays/zh-cn-layout.css。
+  overlay('ui/src/zh-cn-layout.css', 'zh-cn-layout.css');
+  replace('ui/src/index.css', '@import "tailwindcss";\n', '@import "tailwindcss";\n@import "./zh-cn-layout.css";\n');
   replace('ui/src/lib/utils.ts', '"en-US"', '"zh-CN"', 5);
   replace('ui/src/lib/utils.ts', '`${amount}/mo`', '`${amount}/月`');
   replace('ui/src/components/StatusBadge.tsx', 'import type { CSSProperties }', 'import { displayStatus } from "@/i18n/zh-CN";\nimport type { CSSProperties }');

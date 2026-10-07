@@ -70,3 +70,19 @@
 CI [37184319250](https://github.com/leoyb1010/LeoPhoneAgent/actions/runs/37184319250) 的中文服务 job `111383001150` 成功；[工件11296197410](https://github.com/leoyb1010/LeoPhoneAgent/actions/runs/37184319250/artifacts/11296197410) 含登录、审批、智能体、设置、预算5张截图，已逐张查看，主体正常，中文可读，无错误边界或内容遮挡。实际执行了登录/注册切换、401中文提示与诊断展开、智能体创建弹窗打开/关闭、组织名原始输入值、中文文件控件、预算控件及未知API零项断言。该次源码快照为 `fd1f0032a441cfed770608ddfeffca7f922c0049`。
 
 这5张图左下角仍显示上游匿名身份回退 `Board`。最后两处精确源码补丁将**缺少会话姓名时的显示回退**改为中性的“用户”，不暗示管理员权限，保留任何真实姓名（包括恰好名为 Board 的用户）；直接执行两版源码表达式的回归覆盖缺失/空白姓名和真实原名。此最后显示修复的新版像素仍由后续 CI 记录。其他页面不扩大本轮烟测范围。
+
+## 2026-10-07 中文版式与显示整理（1.1.7，catalogs/ui-layout-polish.structural.json）
+
+用户反馈“新建任务后文字乱七八糟”。本轮在隔离的本地真实服务（`PAPERCLIP_HOME` 指向临时目录、内嵌 PostgreSQL、`local_trusted`）上灌入组织/项目/6 个不同适配器与状态的智能体/21 个任务（含评论、子任务、阻塞、标签）/3 条审批/3 条例行任务/40 条费用后，用 Playwright 对 45 个场景 × 5 个宽度（1440/1100/900/640/390）× 明暗主题共 450 张截图做程序化检查（竖排文字、裁切、遮挡 elementFromPoint、原始语法/枚举/UUID、英文残留、微型字号、横向溢出），截图与 findings 存档于审计工作目录 `pc-ui-A/{before,after}`。
+
+修复全部落在发行层，可从干净上游重放：
+
+- `catalogs/ui-layout-polish.structural.json`（158 条精确上下文规则，登记在 `catalogs/order.json` 末位）：新建任务对话框为英文 "For" 预留的 24px 标签列改为图标列并保留 sr-only 中文名；搜索页原始运算符提示改为“中文说明 + 语法”可点击示例芯片，焦点态建议与 ⌘K 快速筛选同样中文在前、语法居次，编号示例使用当前组织前缀而非固定 `PAP`；404 页标题/说明、运行记录系统消息计数、恢复横幅已保存消息、活动摘要步骤标签、交互卡片标题（`lib/issue-thread-interactions.ts`）与回复受众说明（`lib/interaction-audience.ts`）、实验功能页 `footnote` 属性、信任预设说明、主题切换名称、看板列标题（改走 `displayStatus`）、密钥页“文件夹/平铺”、加入/退出按钮、运行记录数量说明、智能体概览“审计”链接、目标层级等 lib/属性/枚举位置的英文改为中文；按英文语序逐词拼接的 23 处计数模板改为整句（如“已保存 3 条消息，等待恢复处理。”“3 条系统消息”）；智能体详情摘要行标签 `shrink-0 whitespace-nowrap`、值容器 `min-w-0`、头部操作按钮组允许换行、任务对话分隔标记标签不换行、技能工作室面板标题不按字换行
+- `overlays/zh-cn-layout.css`（由 `structural-patches.mjs` 写入 `ui/src/zh-cn-layout.css` 并在 `index.css` 紧随 `@import "tailwindcss"` 引入）：中日韩回退字体栈；`--text-nano/--text-micro` 由 10/11px 抬到 11/12px；标签类元素 `word-break: keep-all` + `overflow-wrap: anywhere`；徽章内长技术标识可换行而不撑破卡片（绝对定位计数角标除外）；列表工具栏可换行且搜索框保留最小宽度（640–900px 下不再压住视图/筛选按钮）；移动端主内容末尾预留底部导航高度
+- 词库修正：`&rarr;`/`&gt;`/`&lt;`/`&middot;` 等 7 条译文改为真实字符（原先以字面量 `{"查看全部 &rarr;"}` 渲染出实体文本）
+- `native/ui-test-assertions.patch.json` 新增 72 条 C 类断言（ThemeToggle、interaction-audience、issue-thread-interactions、completed-activity-summary、MembershipAction、KanbanBoard），对应上游测试在候选树全部通过；本轮之前已存在的 35 项上游测试失败（Search 11、AgentActionButtons 7、FrontmatterPanel 5、AuditRuns 2、KanbanBoard 3、trust-policy-ui 2、TaskChatMarker 1 等，均为更早轮次中文化所致）未在本轮处理
+- `tests/ui-layout-polish.test.mjs`：回放规则（上下文唯一、可逆、插值不丢失）、搜索/对话框/交互标题断言，并对候选树做规则级扫描：不允许再出现“中文片段 + 同分支计数三元 + 中文片段”的英文语序拼接模板，不允许字面量中残留 HTML 实体
+
+验证（候选树）：`localize verify`、coverage contract、协议不变量、`npm run test:full` 全绿；UI typecheck 与生产构建通过。审计计数（去重，排除侧栏悬停按钮/命令面板滚动区/底栏滚动中经过等固有遮挡）：竖排文字 38 → 11（剩余为技能工作室内 SKILL.md 英文正文片段与 900–1100px 下三栏布局本身过窄）、遮挡 34 → 15（集中在技能工作室 900/1100px 三栏最小宽度 280+240+360px 超出可用空间）、裁切 4 → 8（全部是同一条用户输入的无空格超长英文标题，后一轮多出看板视图场景）、截断 508 → 476、英文文本 667 → 644、混合英文 85 → 75、微型字号 1106 → 1096（条目仍在但字号已整体抬高）。
+
+未覆盖/遗留：搜索结果摘要中的 `Status: in_progress - Priority: medium` 与运行标题 `Connect Anthropic`、活动条目 `environment_lease`、任务错误 `The run failed (configuration_incomplete)` 均为服务端持久化/生成文本；连接器与插件目录描述、技能 SKILL.md 正文、智能体输出为外部内容；`ui/src/lib/*.ts` 仍有约 300 处 helper 生成的英文句子未纳入自动词库（本轮只处理在渲染审计中出现的文件）；技能工作室 900–1100px 的三栏布局需要上游调整最小宽度；目标层级标签与“Routine not found”未在 UI 源码中定位。
