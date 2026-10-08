@@ -1269,6 +1269,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Public read so the manual `objectWillChange.send()` call sites can gate.
     var isTransitionSuspended: Bool { transitionSuspended }
 
+    /// [T-ios-stream-publish-transition-gap] Publish unless this vm is the
+    /// outgoing side of a navigation transition. Every manual
+    /// `objectWillChange.send()` on a STREAMING path must go through this: the
+    /// four highest-frequency publishers (all in +SSEStream) used to publish
+    /// unconditionally and kept firing across the hosting-view teardown the
+    /// transition guard exists for. Eliding is safe — a suspended vm is
+    /// off-screen, the `messages` mutation has already happened, and
+    /// `setSuspendedForTransition(false)` publishes explicitly on resume.
+    func publishUnlessTransitioning() {
+        guard !transitionSuspended else { return }
+        objectWillChange.send()
+    }
+
     /// True for the synchronous window of `retryFromMessage` /
     /// `retryFromToolBlock`: from the moment we start clearing `canResume` /
     /// truncating `messages` until the DB truncation (`deleteMessagesAfter`)
