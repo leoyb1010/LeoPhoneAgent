@@ -29,7 +29,7 @@ NSString *const NOFF_ERR_INTERNAL_ERROR             = @"internal_error";
 // ── Cooperative cancellation ──
 
 BOOL noff_is_cancelled(void) {
-    return native_offload_handler_cancelled() ? YES : NO;
+    return noff_dispatch_cancelled() ? YES : NO;
 }
 
 long noff_dispatch_semaphore_wait(dispatch_semaphore_t semaphore, dispatch_time_t timeout) {
@@ -139,9 +139,12 @@ int noff_register_authorized_handler(const char *guest_name, native_handler_func
     // All apple-* tools, including future registrations importing this header,
     // use the guarded slots with the permission authorizer.
     BOOL device = strncmp(guest_name, "apple-", 6) == 0;
+    // Each slot also gets its own abort callback, so a guest kill/Ctrl-C can cut
+    // a framework wait short (noff_is_cancelled / noff_dispatch_semaphore_wait).
     return noff_dispatch_register(guest_name, handler,
                                   device ? noff_authorize_native : noff_authorize_paths_only,
-                                  (native_offload_add_handler));
+                                  (native_offload_add_handler),
+                                  native_offload_set_abort_handler);
 }
 
 // ── Argument helpers ──

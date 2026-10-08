@@ -14,11 +14,6 @@
 #include "kernel/native_offload.h"
 #include <stdbool.h>
 
-// Some iSH build configurations provide a generated copy of the kernel header
-// earlier on the include path. Repeat the declaration so this utility remains
-// source-compatible while the generated headers catch up.
-extern bool native_offload_handler_cancelled(void);
-
 // Every app-side registration passes a fixed-identity proxy to the kernel.
 // The macro is defined after the kernel declaration; the implementation uses
 // parenthesized spelling only for the one raw registrar call.
@@ -122,7 +117,9 @@ BOOL noff_try_objc(void (NS_NOESCAPE ^_Nonnull block)(void));
 // ── Cooperative cancellation ──
 
 /// Returns YES after the guest process running the current native handler has
-/// received a terminating signal.
+/// received a terminating signal (SIGKILL/TERM/INT/QUIT/HUP). The kernel's
+/// `native_offload_set_abort_handler` callback marks the handler's dispatch
+/// slot; each invocation starts uncancelled.
 BOOL noff_is_cancelled(void);
 
 /// Drop-in cancellable semaphore wait. It polls the native-handler cancellation

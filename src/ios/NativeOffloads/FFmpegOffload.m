@@ -16,7 +16,9 @@
 #include <signal.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <errno.h>
+#include <time.h>
 #include <math.h>
 #import "NativeOffloadUtils.h"
 #include <FFmpeg/FFmpeg.h>
@@ -221,16 +223,43 @@ static int rewrite_argv_for_videotoolbox(int argc, char **argv) {
 // Concurrent calls corrupt the heap and cause NULL-pointer crashes.
 static pthread_mutex_t ffmpeg_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// ── Run ffmpeg_main on a thread with a full-size stack ──
+// [T-ish-offload-signal-forward] Abandoned-transcode state.
+//
+// A guest kill/Ctrl-C reaches this handler through its dispatch slot's abort
+// callback (noff_is_cancelled). We first ask ffmpeg_main() to unwind through
+// its own cleanup (ffmpeg_request_cancel); that is the normal path and leaves
+// ffmpeg reusable. Only if it does not return within FFMPEG_CANCEL_GRACE_MS
+// (wedged inside VideoToolbox) is the worker orphaned. An orphan still owns
+// ffmpeg's non-thread-safe globals, so every later invocation must fail fast
+// instead of racing it (or blocking on the mutex forever).
+static atomic_bool g_ffmpeg_poisoned = ATOMIC_VAR_INIT(false);
+#define FFMPEG_CANCEL_GRACE_MS 2000
 
+// ── Run ffmpeg_main on a thread with a full-size stack ──
+//
+// Heap-allocated and reference-counted, NOT a stack local: if the wait is
+// abandoned this frame dies while the orphan still writes `ret` and reads
+// `argv`. Whoever finishes last frees.
 struct ffmpeg_thread_ctx {
     int argc;
     char **argv;
     int out_fd;
     int err_fd;
     int ret;
-    atomic_bool finished;
+    atomic_int refcount;   // 2 while both sides hold it
+    bool argv_owned;       // true once the ctx owns an argv copy
 };
+
+static void ffmpeg_ctx_release(struct ffmpeg_thread_ctx *ctx) {
+    if (atomic_fetch_sub_explicit(&ctx->refcount, 1, memory_order_acq_rel) != 1)
+        return;
+    if (ctx->argv_owned && ctx->argv) {
+        for (int i = 0; i < ctx->argc; i++)
+            free(ctx->argv[i]);
+        free(ctx->argv);
+    }
+    free(ctx);
+}
 
 static void *ffmpeg_thread_func(void *arg) {
     struct ffmpeg_thread_ctx *ctx = (struct ffmpeg_thread_ctx *)arg;
@@ -240,12 +269,25 @@ static void *ffmpeg_thread_func(void *arg) {
     ctx->ret = ffmpeg_main(ctx->argc, ctx->argv);
     noff_stdout_fd = -1;
     noff_stderr_fd = -1;
-    atomic_store_explicit(&ctx->finished, true, memory_order_release);
+    ffmpeg_ctx_release(ctx);
     return NULL;
+}
+
+static int ffmpeg_refuse_poisoned(int stderr_fd) {
+    const char *msg =
+        "ffmpeg: a previous ffmpeg operation was aborted and its worker "
+        "could not be stopped; ffmpeg is unavailable until the app is "
+        "restarted\n";
+    if (stderr_fd >= 0) (void)!write(stderr_fd, msg, strlen(msg));
+    NSLog(@"[FFmpegOffload] refusing invocation — poisoned by an earlier abandoned transcode");
+    return 1;
 }
 
 static int ffmpeg_handler(int argc, char **argv,
                           int stdin_fd, int stdout_fd, int stderr_fd) {
+    if (atomic_load_explicit(&g_ffmpeg_poisoned, memory_order_acquire))
+        return ffmpeg_refuse_poisoned(stderr_fd);
+
     // ── Serialize: only one ffmpeg_main() at a time ──
     // A second FFmpeg request must not become an uninterruptible mutex wait.
     int lockError;
@@ -255,6 +297,9 @@ static int ffmpeg_handler(int argc, char **argv,
             return 1;
         }
         if (noff_is_cancelled()) return 130;
+        // A poisoned run holds the mutex forever; fail fast instead of waiting.
+        if (atomic_load_explicit(&g_ffmpeg_poisoned, memory_order_acquire))
+            return ffmpeg_refuse_poisoned(stderr_fd);
         struct timespec pause = { .tv_sec = 0, .tv_nsec = 50 * NSEC_PER_MSEC };
         nanosleep(&pause, NULL);
     }
@@ -289,35 +334,79 @@ static int ffmpeg_handler(int argc, char **argv,
     NSLog(@"[FFmpegOffload] starting (argumentCount=%d)", argc);
 
     // ── Run ffmpeg on a dedicated thread with 8 MB stack ──
-    struct ffmpeg_thread_ctx ctx = {
-        .argc = argc, .argv = argv,
-        .out_fd = stdout_fd, .err_fd = stderr_fd,
-        .ret = 1,
-        .finished = ATOMIC_VAR_INIT(false)
-    };
+    struct ffmpeg_thread_ctx *ctx = calloc(1, sizeof(*ctx));
+    if (ctx == NULL) {
+        dprintf(stderr_fd, "ffmpeg: out of memory\n");
+        noff_av_log_redirect_stop();
+        if (saved_stdin >= 0) { dup2(saved_stdin, STDIN_FILENO); close(saved_stdin); }
+        pthread_mutex_unlock(&ffmpeg_mutex);
+        return 1;
+    }
+    ctx->argc = argc; ctx->argv = argv;
+    ctx->out_fd = stdout_fd; ctx->err_fd = stderr_fd;
+    ctx->ret = 1;
+    ctx->argv_owned = false;          // exec_handler owns argv unless we abandon
+    atomic_init(&ctx->refcount, 2);   // this frame + the worker thread
 
     pthread_t thr;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setstacksize(&attr, 8 * 1024 * 1024);
 
-    int err = pthread_create(&thr, &attr, ffmpeg_thread_func, &ctx);
+    int err = pthread_create(&thr, &attr, ffmpeg_thread_func, ctx);
     pthread_attr_destroy(&attr);
 
+    bool cancellationRequested = false;
+    bool abandoned = false;
     if (err == 0) {
-        BOOL cancellationRequested = NO;
-        while (!atomic_load_explicit(&ctx.finished, memory_order_acquire)) {
+        // Completion is the worker dropping its ctx reference (Darwin has no
+        // pthread_tryjoin_np); the join below then cannot block.
+        uint64_t cancelledAt = 0;
+        while (atomic_load_explicit(&ctx->refcount, memory_order_acquire) != 1) {
             if (!cancellationRequested && noff_is_cancelled()) {
-                cancellationRequested = YES;
+                cancellationRequested = true;
+                cancelledAt = clock_gettime_nsec_np(CLOCK_MONOTONIC);
                 ffmpeg_request_cancel();
             }
-            struct timespec pause = { .tv_sec = 0, .tv_nsec = 50 * NSEC_PER_MSEC };
+            if (cancellationRequested &&
+                clock_gettime_nsec_np(CLOCK_MONOTONIC) - cancelledAt
+                    >= (uint64_t)FFMPEG_CANCEL_GRACE_MS * NSEC_PER_MSEC) {
+                abandoned = true;
+                break;
+            }
+            struct timespec pause = { .tv_sec = 0, .tv_nsec = 20 * NSEC_PER_MSEC };
             nanosleep(&pause, NULL);
         }
-        pthread_join(thr, NULL);
-        if (cancellationRequested) ctx.ret = 130;
+        if (!abandoned) pthread_join(thr, NULL);
     } else {
         dprintf(stderr_fd, "ffmpeg: unable to create worker thread\n");
+        ffmpeg_ctx_release(ctx);   // drop the worker's unused reference
+    }
+
+    if (abandoned) {
+        // Give the orphan its own argv copy: exec_handler frees argv as soon as
+        // we return. Best effort — by the time a transcode can wedge,
+        // ffmpeg_main has already parsed argv into its own structures.
+        char **copy = calloc((size_t)argc + 1, sizeof(char *));
+        if (copy) {
+            for (int i = 0; i < argc; i++)
+                copy[i] = argv[i] ? strdup(argv[i]) : NULL;
+            ctx->argv = copy;
+            ctx->argv_owned = true;
+        }
+        pthread_detach(thr);
+        // Poison BEFORE returning so no later caller can race the orphan.
+        atomic_store_explicit(&g_ffmpeg_poisoned, true, memory_order_release);
+        NSLog(@"[FFmpegOffload] abandoned a wedged ffmpeg_main() %d ms after cancel; "
+              @"worker memory is not reclaimed and ffmpeg is disabled until the app restarts",
+              FFMPEG_CANCEL_GRACE_MS);
+        const char *msg = "\nffmpeg: aborted (worker could not be stopped; "
+                          "ffmpeg unavailable until app restart)\n";
+        if (stderr_fd >= 0) (void)!write(stderr_fd, msg, strlen(msg));
+        // Deliberately skip teardown and keep the mutex held: the orphan still
+        // uses the av_log redirect, stdio fds and ffmpeg's globals.
+        ffmpeg_ctx_release(ctx);
+        return 130;
     }
 
     // ── Restore av_log callback ──
@@ -336,7 +425,9 @@ static int ffmpeg_handler(int argc, char **argv,
 
     pthread_mutex_unlock(&ffmpeg_mutex);
 
-    return ctx.ret;
+    int ret = cancellationRequested ? 130 : ctx->ret;
+    ffmpeg_ctx_release(ctx);
+    return ret;
 }
 
 void ffmpeg_offload_register(void) {

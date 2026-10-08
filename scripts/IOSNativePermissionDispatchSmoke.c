@@ -16,6 +16,29 @@ typedef int (*noff_dispatch_authorizer)(const char *, int, char **, int, int);
 
 static noff_dispatch_handler installed[NOFF_DISPATCH_CAPACITY];
 static int installed_count;
+#ifdef HAS_PERMISSION_DISPATCH
+static noff_dispatch_abort_fn installed_abort[NOFF_DISPATCH_CAPACITY];
+static int abort_count;
+static int register_abort(const char *name, noff_dispatch_abort_fn fn) {
+    (void)name;
+    installed_abort[abort_count++] = fn;
+    return 0;
+}
+// Handler that observes a guest kill mid-run (the kernel calls the abort
+// function from another thread; calling it inline models the same ordering).
+static int cancel_seen = -1;
+static int killed_handler(int argc, char **argv, int in, int out, int err) {
+    (void)argc; (void)argv; (void)in; (void)out; (void)err;
+    int before = noff_dispatch_cancelled();
+    installed_abort[1](9);
+    cancel_seen = noff_dispatch_cancelled();
+    return before == 0 && cancel_seen == 1 ? 130 : 1;
+}
+static int quiet_handler(int argc, char **argv, int in, int out, int err) {
+    (void)argc; (void)argv; (void)in; (void)out; (void)err;
+    return noff_dispatch_cancelled() ? 1 : 0;
+}
+#endif
 static int calls;
 static int decision = 3;
 static char authorized_command[128];
@@ -37,7 +60,7 @@ static int handler(int argc, char **argv, int in, int out, int err) {
 }
 static int register_production(const char *name) {
 #ifdef HAS_PERMISSION_DISPATCH
-    return noff_dispatch_register(name, handler, authorize, register_backend);
+    return noff_dispatch_register(name, handler, authorize, register_backend, register_abort);
 #else
     (void)authorize;
     return register_backend(name, handler);
@@ -62,7 +85,7 @@ int main(void) {
           "direct native entry must use the same authorization");
     CHECK(noff_dispatch_execute("apple-unknown", 2, args, -1, -1, -1) == 3,
           "unknown direct entry fails closed");
-    CHECK(noff_dispatch_register("apple-no-authorizer", handler, NULL, register_backend) == -1,
+    CHECK(noff_dispatch_register("apple-no-authorizer", handler, NULL, register_backend, NULL) == -1,
           "registration without authorizer fails closed");
     CHECK(register_production("apple-contacts") == 0 && installed_count == 1,
           "identical registration is idempotent");
@@ -80,15 +103,29 @@ int main(void) {
     CHECK(installed[0](3, benign, -1, -1, -1) == 17 && calls == 2, "names containing dots still run");
     CHECK(noff_arg_has_parent_traversal("/a/..") && !noff_arg_has_parent_traversal("/a/.../b"),
           "component-exact traversal detection");
+    // Guest-signal cancellation is per slot and per invocation.
+    CHECK(abort_count == 1, "abort callback registered for each slot");
+    CHECK(noff_dispatch_cancelled() == 0, "outside a handler nothing is cancelled");
+    CHECK(noff_dispatch_register("minis-killable", killed_handler, authorize, register_backend, register_abort) == 0
+          && abort_count == 2, "second slot gets its own abort callback");
+    CHECK(installed[1](1, args, -1, -1, -1) == 130 && cancel_seen == 1,
+          "abort during a run cancels that run");
+    CHECK(noff_dispatch_cancelled() == 0, "cancellation does not leak past the invocation");
+    CHECK(installed[0](1, args, -1, -1, -1) == 17, "other slots are unaffected");
+    CHECK(noff_dispatch_register("minis-quiet", quiet_handler, authorize, register_backend, register_abort) == 0,
+          "register quiet slot");
+    installed_abort[1](15);   // stale abort while minis-killable is idle
+    CHECK(installed[2](1, args, -1, -1, -1) == 0, "abort for another slot never cancels this one");
+    CHECK(installed[1](1, args, -1, -1, -1) == 130, "a stale abort never cancels the next run of the slot");
     decision = 3;
     char names[NOFF_DISPATCH_CAPACITY][48];
-    for (int i = 1; i < NOFF_DISPATCH_CAPACITY; i++) {
+    for (int i = 3; i < NOFF_DISPATCH_CAPACITY; i++) {
         snprintf(names[i], sizeof(names[i]), "apple-test-%d", i);
         CHECK(register_production(names[i]) == 0, "bounded registry accepts available slot");
     }
     CHECK(register_production("apple-overflow") == -1 && installed_count == NOFF_DISPATCH_CAPACITY,
           "full registry rejects new capability without registering an unguarded handler");
 #endif
-    puts("PASS: native dispatch denial, fixed identity, cancellation, direct entry, registration bounds");
+    puts("PASS: native dispatch denial, fixed identity, cancellation, guest-signal abort, direct entry, registration bounds");
     return 0;
 }

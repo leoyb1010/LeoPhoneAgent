@@ -1,5 +1,6 @@
 #include "NativeOffloadDispatch.h"
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
@@ -13,6 +14,27 @@ struct entry {
 static struct entry entries[NOFF_DISPATCH_CAPACITY];
 static size_t entry_count;
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Per-slot abort generation. The abort trampoline bumps it from the signalling
+// thread (lock-free, as the kernel contract requires); an invocation records
+// the value on entry and is cancelled once it differs, so a stale abort from an
+// earlier run never cancels a new one and a fresh run never clears a pending
+// abort for a concurrent one.
+static _Atomic unsigned long abort_generation[NOFF_DISPATCH_CAPACITY];
+static _Thread_local long current_slot = -1;
+static _Thread_local unsigned long entry_generation;
+
+int noff_dispatch_cancelled(void) {
+    long slot = current_slot;
+    if (slot < 0 || slot >= NOFF_DISPATCH_CAPACITY) return 0;
+    return atomic_load_explicit(&abort_generation[slot], memory_order_acquire) != entry_generation;
+}
+
+static bool abort_slot(size_t slot, int sig) {
+    (void)sig; // The kernel only forwards terminating signals here.
+    atomic_fetch_add_explicit(&abort_generation[slot], 1, memory_order_acq_rel);
+    return true;
+}
 
 int noff_arg_has_parent_traversal(const char *arg) {
     // Relative paths too: handlers resolve them against the host cwd.
@@ -50,9 +72,16 @@ static int invoke(size_t slot, int argc, char **argv, int in, int out, int err) 
     // Fail closed before any authorizer or handler sees an escaping path.
     int traversal = reject_traversal(entry.name, argc, argv, out);
     if (traversal != 0) return traversal;
+    long saved_slot = current_slot;
+    unsigned long saved_generation = entry_generation;
+    current_slot = (long)slot;
+    entry_generation = atomic_load_explicit(&abort_generation[slot], memory_order_acquire);
     // Never hold a registry/kernel lock across an interactive authorization.
     int decision = entry.authorizer(entry.name, argc, argv, out, err);
-    return decision == 0 ? entry.handler(argc, argv, in, out, err) : decision;
+    int result = decision == 0 ? entry.handler(argc, argv, in, out, err) : decision;
+    current_slot = saved_slot;
+    entry_generation = saved_generation;
+    return result;
 }
 
 #define SLOTS(X) \
@@ -71,13 +100,23 @@ SLOTS(TRAMPOLINE)
 static noff_dispatch_handler trampolines[] = { SLOTS(POINTER) };
 #undef POINTER
 #undef TRAMPOLINE
+#define ABORT_TRAMPOLINE(N) \
+    static bool abort_##N(int sig) { return abort_slot(N, sig); }
+SLOTS(ABORT_TRAMPOLINE)
+#define ABORT_POINTER(N) abort_##N,
+static noff_dispatch_abort_fn abort_trampolines[] = { SLOTS(ABORT_POINTER) };
+#undef ABORT_POINTER
+#undef ABORT_TRAMPOLINE
 #undef SLOTS
 _Static_assert(sizeof(trampolines) / sizeof(trampolines[0]) == NOFF_DISPATCH_CAPACITY,
                "Every registry slot needs a fixed-identity trampoline");
+_Static_assert(sizeof(abort_trampolines) / sizeof(abort_trampolines[0]) == NOFF_DISPATCH_CAPACITY,
+               "Every registry slot needs a fixed abort trampoline");
 
 int noff_dispatch_register(const char *name, noff_dispatch_handler handler,
                            noff_dispatch_authorizer authorizer,
-                           noff_dispatch_registrar registrar) {
+                           noff_dispatch_registrar registrar,
+                           noff_dispatch_abort_registrar abort_registrar) {
     if (!name || !name[0] || strlen(name) >= sizeof(entries[0].name)
         || !handler || !authorizer || !registrar) return -1;
     pthread_mutex_lock(&registry_lock);
@@ -98,8 +137,14 @@ int noff_dispatch_register(const char *name, noff_dispatch_handler handler,
     entries[slot].authorizer = authorizer;
     // The registrar only stores the pointer; it must not invoke synchronously.
     int result = registrar(name, trampolines[slot]);
-    if (result == 0) entry_count++;
-    else memset(&entries[slot], 0, sizeof(entries[slot]));
+    if (result == 0) {
+        entry_count++;
+        // Best effort: without it the tool keeps its bounded deadlines but a
+        // guest kill cannot cut a framework wait short.
+        if (abort_registrar) (void)abort_registrar(name, abort_trampolines[slot]);
+    } else {
+        memset(&entries[slot], 0, sizeof(entries[slot]));
+    }
     pthread_mutex_unlock(&registry_lock);
     return result;
 }

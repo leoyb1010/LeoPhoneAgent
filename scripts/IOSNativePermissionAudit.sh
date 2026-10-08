@@ -38,3 +38,11 @@ clang -std=c11 -Wall -Wextra -Werror \
   scripts/IOSNativePermissionDispatchSmoke.c \
   src/ios/NativeOffloads/NativeOffloadDispatch.c -o "$stage/dispatch-smoke"
 "$stage/dispatch-smoke"
+
+# Kernel side of the offload contract at the current deps/ish pin:
+# generic names (ffmpeg/ffprobe) are only claimed at system bin dirs, exec uses
+# the policy-aware lookup, and the abort-callback API our dispatch slots use exists.
+sh deps/ish/kernel/offload_tests/path_scope/run.sh >/dev/null
+grep -q 'native_offload_lookup_exec(filename, envp, &offload_is_generic)' deps/ish/kernel/exec.c
+grep -q 'int native_offload_set_abort_handler(const char \*guest_name, native_abort_func abort_fn);' deps/ish/kernel/native_offload.h
+echo "PASS: kernel offload path scope policy, exec dispatch, abort-handler API"
