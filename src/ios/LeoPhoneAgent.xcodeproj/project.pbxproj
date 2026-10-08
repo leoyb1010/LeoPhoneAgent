@@ -65,9 +65,11 @@
 		E5SUB0108A /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
 		E5SUB0108T /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
 		E5SUB0109A /* SubAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0109F /* SubAgentStore.swift */; };
+		E5SUB0109T /* SubAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0109F /* SubAgentStore.swift */; };
 		E5SUB0110A /* HelperBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0110F /* HelperBlockView.swift */; };
 		E5SUB0111A /* HelperSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0111F /* HelperSheet.swift */; };
 		E5SUB0112A /* AgentCallbackCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0112F /* AgentCallbackCellView.swift */; };
+		E5SUB0113A /* HelperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0113F /* HelperSettingsView.swift */; };
 		E5C15609A /* ShortcutRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15609F /* ShortcutRecipes.swift */; };
 		E5C15610A /* PaperclipIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15610F /* PaperclipIntents.swift */; };
 		E5C15611A /* ShortcutRecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15611F /* ShortcutRecipesView.swift */; };
@@ -871,6 +873,7 @@
 		E5SUB0110F /* HelperBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperBlockView.swift; sourceTree = "<group>"; };
 		E5SUB0111F /* HelperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSheet.swift; sourceTree = "<group>"; };
 		E5SUB0112F /* AgentCallbackCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCallbackCellView.swift; sourceTree = "<group>"; };
+		E5SUB0113F /* HelperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSettingsView.swift; sourceTree = "<group>"; };
 		E5C15609F /* ShortcutRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ShortcutRecipes.swift; sourceTree = SOURCE_ROOT; };
 		E5C15610F /* PaperclipIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipIntents.swift; sourceTree = SOURCE_ROOT; };
 		E5C15611F /* ShortcutRecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/ShortcutRecipesView.swift; sourceTree = SOURCE_ROOT; };
@@ -2707,6 +2710,7 @@
 				E5LEO0016 /* AgentActivityLogView.swift */,
 				E5LEO0018 /* LeoReleaseNotesView.swift */,
 				E5QTK0012 /* QuickTaskSettingsView.swift */,
+				E5SUB0113F /* HelperSettingsView.swift */,
 				E5SCH014 /* ScheduledTaskSettingsView.swift */,
 				E5C15611F /* ShortcutRecipesView.swift */,
 				E5RHV0002 /* RemoteHostSettingsView.swift */,
@@ -3217,6 +3221,7 @@
 				E5SUB0102T /* AgentCallback.swift in Sources */,
 				E5SUB0103T /* HelperModelIdentity.swift in Sources */,
 				E5SUB0108T /* SubAgentDefinition.swift in Sources */,
+				E5SUB0109T /* SubAgentStore.swift in Sources */,
 				E5MG0003 /* ModelGroup.swift in Sources */,
 				E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
@@ -3680,6 +3685,7 @@
 				E5SUB0110A /* HelperBlockView.swift in Sources */,
 				E5SUB0111A /* HelperSheet.swift in Sources */,
 				E5SUB0112A /* AgentCallbackCellView.swift in Sources */,
+				E5SUB0113A /* HelperSettingsView.swift in Sources */,
 				E5G000002 /* AgentLiveActivityManager.swift in Sources */,
 				E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,

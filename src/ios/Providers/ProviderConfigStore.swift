@@ -1502,6 +1502,8 @@ final class ProviderConfigStore: ObservableObject {
         Self.recordTombstone(in: &config.deletedModelGroups, ids: [groupId])
         guard save() else { return false }
         ModelSwitcher.forget(groupIds: [groupId])
+        // [T-subagent] A sub agent role pinned to this group reverts to Auto.
+        SubAgentStore.shared.clearModelGroup(groupId)
         // [T-icloud-provider-sync-consistency] Explicit V3 delete tombstone —
         // emitV3MarkDirty no longer diff-infers group deletions.
         Task { await ChatStore.shared.markDirty(recordType: "ProviderModelGroupV3", recordId: groupId, operation: "delete") }
