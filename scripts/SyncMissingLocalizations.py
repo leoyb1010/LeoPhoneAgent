@@ -28,6 +28,27 @@ LOCALES = {
     "zh-Hant": "zh-TW",
 }
 
+# Locales importable from upstream (scripts/ImportUpstreamLocalizations.py).
+# Audited only once registered in Info.plist CFBundleLocalizations: an
+# unregistered locale is intentionally absent, not "missing". They are below
+# the 60% user-visible coverage bar today, so none is registered yet.
+PENDING_LOCALES = {
+    "es": "es", "fil": "tl", "hr": "hr", "id": "id", "ms": "ms",
+    "pl": "pl", "pt-BR": "pt", "ro": "ro", "th": "th", "tr": "tr",
+}
+
+
+def _registered_locales() -> set[str]:
+    import plistlib
+    info = Path(__file__).resolve().parents[1] / "src/ios/Info.plist"
+    try:
+        return set(plistlib.loads(info.read_bytes()).get("CFBundleLocalizations", []))
+    except (OSError, plistlib.InvalidFileException):
+        return set()
+
+
+LOCALES.update({k: v for k, v in PENDING_LOCALES.items() if k in _registered_locales()})
+
 KEEP_TERMS = [
     "LeoPhoneAgent", "LeoBot", "Token", "tokens", "token", "iOS", "iCloud", "CloudKit",
     "HomeKit", "HealthKit", "WeatherKit", "App Store", "App Group", "Keychain",
