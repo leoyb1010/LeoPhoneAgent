@@ -100,7 +100,7 @@ struct SettingsHomeView: View {
                 SettingsEntry("语音识别", keywords: "语音 识别 听写 实时出字 改字 热词 度量 离线 语言资源 speech",
                               icon: "waveform", color: .purple,
                               hint: "实时出字、自动改字、热词与离线语言包") { SystemSpeechResourcesView() },
-                SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact",
+                SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact 上下文 裁剪 精简 context trim",
                               icon: "brain.head.profile", color: .indigo) { ThinkingAndModelSlotsView() },
                 SettingsEntry("Jev 快速判断", keywords: "jev typesafe system one 快速判断 分类 打分",
                               icon: "bolt.horizontal.circle.fill", color: .indigo,
@@ -429,6 +429,7 @@ struct ThinkingAndModelSlotsView: View {
     @State private var newMax: ThinkingLevel = .high
     @ObservedObject private var store = ProviderConfigStore.shared
     @AppStorage(AgentModelSlots.compactKey) private var compactId = ""
+    @AppStorage(IncrementalContextTrimmer.enabledKey) private var incrementalTrim = true
 
     var body: some View {
         List {
@@ -474,6 +475,12 @@ struct ThinkingAndModelSlotsView: View {
                 }
             } footer: {
                 Text("只给压缩和标题用一个便宜模型。对话仍走当前会话模型。")
+            }
+
+            Section {
+                Toggle("精简旧上下文", isOn: $incrementalTrim)
+            } footer: {
+                Text("发送时把较早轮次的思考过程清空、过长的工具输出只留开头结尾、很早的工具调用折成一行，只影响发给模型的内容，聊天记录不变。省 token、推迟压缩。")
             }
         }
         .navigationTitle("推理与模型")

@@ -806,7 +806,8 @@ struct AIChatView: View {
         )) {
             Button(String(localized: "Compact"), role: .destructive) {
                 if let id = compactConfirmMessageId {
-                    Task { await vm.compactBefore(id) }
+                    // [T-ios-compact-task-binding] Tracked, so Stop can cancel it.
+                    vm.compactTask = Task { await vm.compactBefore(id) }
                 }
             }
             Button(String(localized: "Cancel"), role: .cancel) {}

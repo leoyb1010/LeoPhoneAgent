@@ -648,7 +648,7 @@ extension AIChatViewModel {
 
         let phase2bElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000 - phase2aElapsed - phase25Elapsed - phase2sigElapsed
         let buildElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000
-        let restoredEstimate = estimateContextTokens()
+        let restoredEstimate = ContextSizeMeter.estimateTokens(loadedHistory)
         logger.info("[SessionLoad] \(sessionId) — Phase 2 build messages: \(String(format: "%.1f", buildElapsed))ms (\(loadedUIMessages.count) UI messages, \(loadedHistory.count) history entries, estimated ~\(restoredEstimate) context tokens)")
         logger.info("[SessionLoad] \(sessionId) — Phase 2 breakdown: [2a iterate: \(String(format: "%.1f", phase2aElapsed)) | 2.5 compact: \(String(format: "%.1f", phase25Elapsed)) | 2sig thoughts: \(String(format: "%.1f", phase2sigElapsed)) | 2b attrStr: \(String(format: "%.1f", phase2bElapsed))]ms")
 
@@ -796,6 +796,11 @@ extension AIChatViewModel {
         // Case B: last history entry is assistant with toolUse parts → model called tools, but they never executed
         // Case C: last history entry is user with synthetic "Continue" message → text streaming was cancelled
         recheckCanResumeFromHistory()
+        // [T-ctx-measure-outbound] Re-seed the size meter's calibration from the
+        // loaded transcript (report ÷ our estimate of the same request, per
+        // model). Also runs after a revert (revertCompact → loadSession), which
+        // is what lets the restored full history be measured at its real size.
+        seedContextCalibration()
 
         let totalElapsed = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
         let totalSinceAppear = (CFAbsoluteTimeGetCurrent() - Self.onAppearTimestamp) * 1000
@@ -1426,7 +1431,10 @@ extension AIChatViewModel {
             StoredTokenUsage(
                 inputTokens: $0.inputTokens, outputTokens: $0.outputTokens,
                 cacheCreationTokens: $0.cacheCreationTokens, cacheReadTokens: $0.cacheReadTokens,
-                latestContextTokens: $0.latestContextTokens
+                latestContextTokens: $0.latestContextTokens,
+                estimatedRequestTokens: $0.estimatedRequestTokens > 0 ? $0.estimatedRequestTokens : nil,
+                estimatedFixedTokens: $0.estimatedFixedTokens > 0 ? $0.estimatedFixedTokens : nil,
+                calibrationModelId: $0.estimatedRequestTokens > 0 ? $0.calibrationModelId : nil
             )
         }
 
@@ -1495,7 +1503,9 @@ extension AIChatViewModel {
     }
 
     func effectiveAgentHistory() -> [AgentMessage] {
-        let result = effectiveAgentHistoryUncounted()
+        // [T-ctx-incremental-trim] Compaction slice → reversible send-time
+        // trim → orphan repair. Never mutates agentHistory.
+        let result = outboundAgentHistory(commitTrim: true)
         // One-line breadcrumb on every inference call so a "summary-only"
         // regression is visible in logs without scraping agent traces.
         logger.info("[Compact] effectiveAgentHistory: returning \(result.count) msg(s) from agentHistory.count=\(self.agentHistory.count) markerId=\(self.cachedLatestMarker?.id.prefix(8) ?? "nil")")
@@ -1620,12 +1630,28 @@ extension AIChatViewModel {
                 preAnchorPruned.removeFirst()
             }
 
-            var result: [AgentMessage] = []
-            result.append(contentsOf: preAnchorPruned)
-
             let postAnchor = (anchorIdx + 1) < agentHistory.count
                 ? Array(agentHistory[(anchorIdx + 1)...])
                 : []
+
+            // [T-ctx-warmup-fit] The warm-up turns are optional context — the
+            // summary already covers them. When keeping all of them would leave
+            // the request over the compact line, drop them oldest-first instead
+            // of producing a compaction that cannot help. Decided ONCE per
+            // marker, then reused, so the request prefix stays stable and the
+            // provider's prompt cache survives.
+            if let drop = warmUpDropByMarker[marker.id] {
+                preAnchorPruned = Array(preAnchorPruned.dropFirst(min(drop, preAnchorPruned.count)))
+            } else {
+                let fitted = trimWarmUpToFit(preAnchorPruned, rest: postAnchor, summaryText: summaryText)
+                if fitted.decided {
+                    warmUpDropByMarker[marker.id] = preAnchorPruned.count - fitted.kept.count
+                }
+                preAnchorPruned = fitted.kept
+            }
+
+            var result: [AgentMessage] = []
+            result.append(contentsOf: preAnchorPruned)
 
             // DIAG: explain how the slice was sized — uses post-prune /
             // post-alignment counts so the log reflects what actually reaches

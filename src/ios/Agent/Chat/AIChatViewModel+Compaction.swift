@@ -17,23 +17,274 @@ extension AIChatViewModel {
     /// a group's stale resolvedEntryId (member since disabled/hidden) judged
     /// capacity by the WRONG member's window, and sessions without a binding
     /// (e.g. iCloud-synced) skipped capacity checks entirely.
-    func checkContextBeforeSend() -> ContextPolicy.CheckResult {
+    func checkContextBeforeSend(site: String = "pre-send") -> ContextPolicy.CheckResult {
         guard let entry = resolveCurrentEntry() else { return .ok }
-        let contextWindow = effectiveContextWindow(for: entry.model)
+        let resolved = resolvedContextWindow(for: entry.model)
+        let contextWindow = resolved.window
         guard contextWindow > 0 else { return .ok }
 
-        let policy = ContextPolicy(contextWindow: contextWindow)
-        let estimated = estimateContextTokens()
-        let result = policy.check(estimatedTokens: estimated, contextWindow: contextWindow)
+        let policy = ContextPolicy(contextWindow: contextWindow, isUserCap: resolved.isUserCap)
+        // [T-ctx-measure-outbound] Judge the request that is about to go out:
+        // the compaction-aware, trimmed outbound history plus system prompt and
+        // tool schemas, scaled by the ratio the provider's own count gave us.
+        // The old `chars / 3.5` over history alone read CJK at a third of its
+        // size and ignored the system prompt, tools and reasoning echo.
+        ensureContextFixedTokens()
+        let m = contextMeasurement()
+        let result = policy.check(estimatedTokens: m.measured, contextWindow: contextWindow)
         let markerInfo: String
-        if let m = cachedLatestMarker {
-            let ageSec = Int(Date().timeIntervalSince(m.createdAt))
-            markerInfo = "marker=\(m.id.prefix(8)) ageSec=\(ageSec) summaryChars=\(m.summary.count)"
+        if let marker = cachedLatestMarker {
+            let ageSec = Int(Date().timeIntervalSince(marker.createdAt))
+            markerInfo = "marker=\(marker.id.prefix(8)) ageSec=\(ageSec) summaryChars=\(marker.summary.count)"
         } else {
             markerInfo = "marker=nil"
         }
-        logger.info("[CompactDiag] checkContextBeforeSend: model=\(entry.model) window=\(contextWindow) estimated=\(estimated) compactThreshold=\(policy.compactThreshold) offloadThreshold=\(policy.offloadThreshold) exhaustedOnly=\(policy.exhaustedOnly) → \(String(describing: result)) | \(markerInfo) | agentHistory.count=\(self.agentHistory.count)")
+        logger.info("[CtxMeter] decide site=\(site) model=\(entry.model.id) history=\(m.history) fixed=\(m.fixed) ratio=\(String(format: "%.3f", m.ratio))(\(m.source)) measured=\(m.measured) threshold=\(policy.compactThreshold) window=\(contextWindow) userCap=\(resolved.isUserCap) → \(String(describing: result)) | \(markerInfo) | agentHistory.count=\(self.agentHistory.count)")
+        if result != .ok {
+            DiagnosticRing.shared.record(.contextDecision, sessionId: sessionId, model: entry.model.id, entryId: "ctx.\(site)",
+                                         message: "\(result) measured=\(m.measured) window=\(contextWindow) ratio=\(String(format: "%.2f", m.ratio))")
+        }
         return result
+    }
+
+    // MARK: - Outbound context measurement [T-ctx-measure-outbound]
+
+    /// The model the next request is judged for — the same resolution the send
+    /// path and the capacity check use.
+    func currentContextModelId() -> String? { resolveCurrentEntry()?.model.id }
+
+    /// Calibration ratio for `modelId` (default: the current model).
+    func contextCalibrationRatio(for modelId: String? = nil) -> Double {
+        ContextSizeMeter.ratio(for: modelId ?? currentContextModelId(),
+                               known: contextCalibrationRatios, lastLearned: lastLearnedCalibration)
+    }
+
+    /// Estimated size of the next request, calibrated. The one number every
+    /// capacity decision reads (compact guard, offload, `max_tokens`).
+    func measureOutboundContextTokens(ratio: Double? = nil) -> Int {
+        contextMeasurement(ratio: ratio).measured
+    }
+
+    /// The measurement with its parts, for the [CtxMeter] logs.
+    struct ContextMeasurement {
+        let history: Int, fixed: Int, ratio: Double, source: String, measured: Int
+    }
+
+    /// Measures exactly what `effectiveAgentHistory()` will send — compaction
+    /// slice plus incremental trim — without committing the trim watermark.
+    func contextMeasurement(ratio override: Double? = nil) -> ContextMeasurement {
+        let history = ContextSizeMeter.estimateTokens(outboundAgentHistory(commitTrim: false))
+        let model = currentContextModelId()
+        let ratio = override ?? contextCalibrationRatio(for: model)
+        let source = override != nil ? "forced"
+            : ContextSizeMeter.ratioSource(for: model, known: contextCalibrationRatios, lastLearned: lastLearnedCalibration)
+        return ContextMeasurement(history: history, fixed: contextFixedTokens, ratio: ratio, source: source,
+                                  measured: ContextSizeMeter.calibrated(history + contextFixedTokens, ratio: ratio))
+    }
+
+    /// The send-time capacity check runs before any agent loop has built this
+    /// turn's system prompt. Without a fixed share the check would judge
+    /// history alone; the loop replaces this with the exact figure for its
+    /// own system prompt and tool list before its first request.
+    func ensureContextFixedTokens() {
+        guard contextFixedTokens == 0, let entry = resolveCurrentEntry() else { return }
+        contextFixedTokens = ContextSizeMeter.estimateFixedTokens(
+            systemPrompt: composeUserSystemPrompt(for: entry.model), tools: makeAgentTools())
+    }
+
+    /// Record the estimate of the request being dispatched, so the provider's
+    /// count for it can calibrate the meter. Returns the calibrated size.
+    @discardableResult
+    func recordContextDispatch(history: [AgentMessage], model: LLMModel) -> Int {
+        lastDispatchEstimate = ContextSizeMeter.estimateTokens(history) + contextFixedTokens
+        lastDispatchModelId = model.id
+        lastDispatchWindow = resolvedContextWindow(for: model).window
+        lastDispatchRatio = contextCalibrationRatio(for: model.id)
+        lastDispatchPredicted = ContextSizeMeter.calibrated(lastDispatchEstimate, ratio: lastDispatchRatio)
+        return lastDispatchPredicted
+    }
+
+    /// Fold in the provider's count for the request recorded by
+    /// `recordContextDispatch`, for the model that actually served it (a group
+    /// fallback may have switched). Returns false when there was nothing to pair.
+    @discardableResult
+    func calibrateContextSize(reportedTokens: Int, servedModelId: String?) -> Bool {
+        guard let sample = ContextSizeMeter.calibrationRatio(reported: reportedTokens,
+                                                             estimated: lastDispatchEstimate) else { return false }
+        let own = servedModelId.flatMap { contextCalibrationRatios[$0] }
+        let updated = ContextSizeMeter.smoothed(previous: own, sample: sample)
+        if let servedModelId { contextCalibrationRatios[servedModelId] = updated }
+        lastLearnedCalibration = updated
+        let err = lastDispatchPredicted > 0
+            ? Double(lastDispatchPredicted - reportedTokens) / Double(reportedTokens) * 100 : 0
+        logger.info("[CtxMeter] actual model=\(servedModelId ?? "?") predicted=\(self.lastDispatchPredicted) reported=\(reportedTokens) err=\(String(format: "%+.1f", err))% estimate=\(self.lastDispatchEstimate) sample=\(String(format: "%.3f", sample)) ratio=\(String(format: "%.3f", self.lastDispatchRatio))→\(String(format: "%.3f", updated))\(own == nil ? " (first own sample)" : "")")
+        LeoPerf.record("ctx.actual", ms: 0, extra: [
+            "model": servedModelId ?? "?", "predicted": lastDispatchPredicted, "reported": reportedTokens,
+            "errPct": (err * 10).rounded() / 10, "ratio": (updated * 1000).rounded() / 1000,
+        ])
+        return true
+    }
+
+    /// A provider rejected the request as too long: ground truth that we
+    /// under-read it. Raise this model's ratio until that request measures at
+    /// least what the provider counted, so the retry compacts instead of being
+    /// rejected again. Returns whether the error was a context-length rejection.
+    @discardableResult
+    func noteContextOverflow(errorText: String, modelId: String?) -> Bool {
+        guard ContextSizeMeter.isContextOverflow(errorText) else { return false }
+        let model = modelId ?? lastDispatchModelId ?? currentContextModelId()
+        let window = lastDispatchWindow > 0
+            ? lastDispatchWindow
+            : (resolveCurrentEntry().map { resolvedContextWindow(for: $0.model).window } ?? 0)
+        let current = contextCalibrationRatio(for: model)
+        let requested = ContextSizeMeter.requestedTokens(inOverflowMessage: errorText)
+        let raised = ContextSizeMeter.ratioAfterOverflow(current: current, estimated: lastDispatchEstimate,
+                                                         requested: requested, window: window)
+        if let model { contextCalibrationRatios[model] = raised }
+        lastLearnedCalibration = raised
+        // The ratio now rests on the provider's own count, so the uncalibrated
+        // send-once is spent: firing it would re-send the rejected request.
+        sentPastExtrapolatedLimitThisLoop = true
+        logger.warning("[CtxMeter] rejected predicted=\(self.lastDispatchPredicted) — provider rejected the request as too long — calibration model=\(model ?? "?") \(String(format: "%.2f", current)) → \(String(format: "%.2f", raised)) (estimated=\(self.lastDispatchEstimate) statedTokens=\(requested.map(String.init) ?? "none") window=\(window))")
+        DiagnosticRing.shared.record(.contextDecision, sessionId: sessionId, model: model, entryId: "ctx.overflow",
+                                     message: "ratio \(String(format: "%.2f", current))→\(String(format: "%.2f", raised)) estimate=\(lastDispatchEstimate) window=\(window)")
+        return true
+    }
+
+    /// Re-derive calibration from the loaded transcript: each assistant turn
+    /// that recorded BOTH its report and our estimate of the same request.
+    /// Only ratios are carried over, never a raw size, so a compaction or
+    /// revert done since cannot make the next decision stale. Reloading the
+    /// SAME session keeps what this view model already learned (a ratio raised
+    /// by a rejection exists only in memory). Returns true when a pair was found.
+    @discardableResult
+    func seedContextCalibration() -> Bool {
+        let sameSession = sessionId != nil && calibrationSessionId == sessionId
+        let learned: ContextSizeMeter.CalibrationState? = sameSession
+            ? .init(ratios: contextCalibrationRatios, lastLearned: lastLearnedCalibration, fixedTokens: contextFixedTokens)
+            : nil
+        let samples = messages.compactMap { msg -> ContextSizeMeter.CalibrationSample? in
+            guard msg.role == .assistant, let usage = msg.usage else { return nil }
+            return .init(reported: usage.latestContextTokens, estimated: usage.estimatedRequestTokens,
+                         fixedTokens: usage.estimatedFixedTokens, modelId: usage.calibrationModelId)
+        }
+        let seeded = ContextSizeMeter.replayCalibration(samples)
+        let state = learned.map { seeded.carryingOver($0) } ?? seeded
+        contextCalibrationRatios = state.ratios
+        lastLearnedCalibration = state.lastLearned
+        contextFixedTokens = state.fixedTokens
+        lastDispatchEstimate = 0
+        lastDispatchModelId = nil
+        lastDispatchWindow = 0
+        if !sameSession {
+            // A spent valve and per-marker warm-up decisions are evidence about
+            // THIS session; they must not carry into another one.
+            sentPastExtrapolatedLimitThisLoop = false
+            warmUpDropByMarker = [:]
+        }
+        calibrationSessionId = sessionId
+        logger.info("[CtxMeter] seed session=\(self.sessionId?.prefix(8) ?? "nil") samples=\(seeded.samples) keptInMemory=\(learned?.ratios.count ?? 0) ratios=\(state.ratios.map { "\($0.key)=\(String(format: "%.3f", $0.value))" }.sorted().joined(separator: ","))")
+        return seeded.samples > 0
+    }
+
+    /// [T-ctx-warmup-fit] Trim a compaction's warm-up turns so the request fits
+    /// under the compact line. Only runs over budget, so a normal compaction's
+    /// request (and its prompt-cache prefix) is unchanged. Drops whole user-TEXT
+    /// turns from the oldest end. Works in raw-estimate units so it can be
+    /// called from inside the measurement without recursing into it.
+    ///
+    /// `decided` is false when there was nothing to measure against yet (no
+    /// entry, unknown window, fixed share not seeded): the caller must not cache
+    /// that as this marker's answer.
+    func trimWarmUpToFit(_ warmUp: [AgentMessage], rest: [AgentMessage], summaryText: String) -> (kept: [AgentMessage], decided: Bool) {
+        guard !warmUp.isEmpty else { return (warmUp, true) }
+        guard let entry = resolveCurrentEntry() else { return (warmUp, false) }
+        let resolved = resolvedContextWindow(for: entry.model)
+        guard resolved.window > 0, contextFixedTokens > 0 else { return (warmUp, false) }
+        let policy = ContextPolicy(contextWindow: resolved.window, isUserCap: resolved.isUserCap)
+        let line = policy.compactThreshold > 0 ? policy.compactThreshold : resolved.window
+        let budget = Int(Double(line) / contextCalibrationRatio(for: entry.model.id)) - contextFixedTokens
+        let restTokens = ContextSizeMeter.estimateTokens(rest) + ContextSizeMeter.estimateTokens(summaryText)
+        guard ContextSizeMeter.estimateTokens(warmUp) + restTokens >= budget else { return (warmUp, true) }
+
+        let drop = ContextSizeMeter.warmUpDrop(
+            sizes: warmUp.map { ContextSizeMeter.estimateTokens(message: $0) },
+            startsTurn: warmUp.map { IncrementalContextTrimmer.startsUserTurn($0) },
+            restTokens: restTokens, budget: budget)
+        logger.info("[CtxMeter] warmup trimmed to fit: kept \(warmUp.count - drop)/\(warmUp.count) message(s) (budget=\(budget) raw tokens)")
+        return (Array(warmUp.dropFirst(drop)), true)
+    }
+
+    /// Compaction can do no more for this request (budget spent, no progress,
+    /// or no anchor). Above the compact THRESHOLD is still sendable — that line
+    /// sits below the window by design — and an over-the-window verdict that
+    /// rests only on the ratio gets one real request.
+    func settleWithoutCompacting() -> (step: ContextPolicy.InLoopStep, measurement: ContextMeasurement) {
+        let m = contextMeasurement()
+        let window = resolveCurrentEntry().map { resolvedContextWindow(for: $0.model).window } ?? 0
+        let step = ContextPolicy.inLoopStep(verdict: .needsCompact, measured: m.measured, rawTokens: m.history + m.fixed,
+                                            window: window, canCompact: false, ratio: m.ratio,
+                                            uncalibratedSendUsed: sentPastExtrapolatedLimitThisLoop)
+        return (step, m)
+    }
+
+    // MARK: - Incremental trimming [T-ctx-incremental-trim]
+
+    /// The history the next request carries: compaction slice → incremental
+    /// trim (when enabled) → orphan repair. `commitTrim` advances the stored
+    /// watermark; measurement passes false so measuring never moves it (the
+    /// plan is deterministic, so the send path then produces the same result).
+    func outboundAgentHistory(commitTrim: Bool) -> [AgentMessage] {
+        let sliced = effectiveAgentHistoryUncounted()
+        let trimmed = applyIncrementalTrim(sliced, commit: commitTrim)
+        return Self.dropOrphanedToolParts(trimmed)
+    }
+
+    func applyIncrementalTrim(_ sliced: [AgentMessage], commit: Bool) -> [AgentMessage] {
+        guard IncrementalContextTrimmer.isEnabled else {
+            if commit { lastContextTrimPlan = .none }
+            return sliced
+        }
+        let previousKey = contextTrimWatermarkSessionId == sessionId ? contextTrimWatermarkKey : nil
+        let plan = IncrementalContextTrimmer.plan(history: sliced, previousKey: previousKey,
+                                                  underPressure: contextUnderTrimPressure(sliced))
+        if commit {
+            if plan.advanced {
+                logger.info("[CtxTrim] watermark → \(plan.watermarkKey?.prefix(8) ?? "nil") boundary=\(plan.boundary) fold=\(plan.foldBoundary) saved≈\(plan.savedTokens) tok (slice=\(sliced.count))")
+            }
+            contextTrimWatermarkKey = plan.watermarkKey
+            contextTrimWatermarkSessionId = sessionId
+            lastContextTrimPlan = plan
+        }
+        guard plan.boundary > 0 else { return sliced }
+        return IncrementalContextTrimmer.apply(sliced, boundary: plan.boundary, foldBoundary: plan.foldBoundary)
+    }
+
+    /// Near the offload line the watermark moves on any saving: a cache miss
+    /// is cheaper than an offload or a compaction. Raw estimate of the
+    /// untrimmed slice — the trimmed measurement would recurse into this.
+    private func contextUnderTrimPressure(_ sliced: [AgentMessage]) -> Bool {
+        guard let entry = resolveCurrentEntry() else { return false }
+        let resolved = resolvedContextWindow(for: entry.model)
+        guard resolved.window > 0 else { return false }
+        let policy = ContextPolicy(contextWindow: resolved.window, isUserCap: resolved.isUserCap)
+        let line = policy.offloadThreshold > 0 ? policy.offloadThreshold : Int(Double(resolved.window) * 0.7)
+        let raw = ContextSizeMeter.calibrated(ContextSizeMeter.estimateTokens(sliced) + contextFixedTokens,
+                                              ratio: contextCalibrationRatio(for: entry.model.id))
+        return raw >= line
+    }
+
+    // MARK: - Outgoing tool pairing [T-ios-compact-orphan-toolcall]
+
+    /// Last line of defence before a history slice becomes a provider request
+    /// (see `OutgoingToolPairing.repair`). Logs loudly: an orphan reaching here
+    /// is a bug upstream of it.
+    static func dropOrphanedToolParts(_ history: [AgentMessage]) -> [AgentMessage] {
+        let repaired = OutgoingToolPairing.repair(history)
+        if repaired.orphanedResults + repaired.orphanedCalls > 0 {
+            logger.warning("[CompactDiag] orphan tool parts in OUTGOING history — repaired. orphanedOutputs=\(repaired.orphanedResults) orphanedCalls=\(repaired.orphanedCalls) historyCount=\(history.count)")
+        }
+        return repaired.history
     }
 
     /// Legacy compatibility — returns true if any intervention is needed before send.
@@ -437,6 +688,14 @@ extension AIChatViewModel {
             appendSystemInfo(String(localized: "正在回复时不能撤销压缩。"), icon: "arrow.uturn.backward")
             return
         }
+        // A manual compaction runs without a live turn. Reverting under it
+        // deleted the current marker just before the compaction wrote a new one
+        // summarising the pre-revert context.
+        guard !isCompacting else {
+            logger.info("[Compact] revert refused: compaction in progress")
+            appendSystemInfo(String(localized: "正在压缩时不能撤销压缩。"), icon: "arrow.uturn.backward")
+            return
+        }
         guard let marker = cachedLatestMarker else {
             logger.info("[Compact] revert: no marker to revert")
             appendSystemInfo(String(localized: "这个对话没有压缩过，不用撤销。"), icon: "arrow.uturn.backward")
@@ -500,12 +759,18 @@ extension AIChatViewModel {
         // In-loop compaction runs inside a live turn: that turn still owns
         // isProcessing (Stop, the Live Activity) and drains its own queue.
         let wasProcessing = isProcessing
+        // [T-ios-compact-model-fallback] Per-RUN state: a model that was out of
+        // quota an hour ago may be fine now. `isCompacting` makes runs
+        // non-overlapping, so a plain reset here is safe.
+        compactFailedEntryIds.removeAll()
 
         // Find the boundary UI message.
         guard let boundaryIndex = messages.firstIndex(where: { $0.id == chatMessageId }) else { return }
         guard boundaryIndex > 0 else { return }
         let boundaryUIMsg = messages[boundaryIndex]
 
+        ensureContextFixedTokens()
+        let compactMeasuredBefore = measureOutboundContextTokens()
         logger.info("[Compact] ━━━ BEGIN compactBefore (Phase B id-first) ━━━")
         logger.info("[Compact] session=\(sessionId.prefix(8)) boundaryIndex=\(boundaryIndex) totalUIMessages=\(self.messages.count) totalHistory=\(self.agentHistory.count)")
 
@@ -700,10 +965,19 @@ extension AIChatViewModel {
             statusMsg.isCompactLoading = false
             return
         } catch {
-            logger.error("[Compact] Summary generation failed type=\(String(describing: type(of: error)))")
+            // Reaching here means the segment retry is EXHAUSTED (or the error
+            // is one splitting cannot fix — offline, timeout, quota on every
+            // candidate). Say which, so the message never claims a retry that
+            // did not happen.
+            let didSegment = Self.isSegmentRetryableError(error)
+            logger.error("[Compact] Summary generation failed (segmented=\(didSegment)) type=\(String(describing: type(of: error)))")
+            DiagnosticRing.shared.record(.contextDecision, sessionId: sessionId, entryId: "ctx.compact.failed",
+                                         error: error, message: didSegment ? "segmented" : "not segmented")
             typedErrorRetry = (error.localizedDescription, .compaction(chatMessageId, includesBoundary: includesBoundary))
             errorMessage = error.localizedDescription
-            statusMsg.content = String(localized: "压缩失败：\(error.localizedDescription)")
+            statusMsg.content = didSegment
+                ? String(localized: "压缩失败(已分段重试):\(error.localizedDescription)")
+                : String(localized: "压缩失败：\(error.localizedDescription)")
             statusMsg.isCompactLoading = false
             return
         }
@@ -724,7 +998,14 @@ extension AIChatViewModel {
         var lcmIdResolved: String? = nil
         var lcmHistoryIdx: Int? = nil
         do {
-            var i = endExclusive - 1
+            // [T-ios-compact-stale-index] Clamp to the CURRENT end of
+            // agentHistory: the summary await can run for minutes, during which
+            // the user can delete messages. `endExclusive - 1` would then index
+            // past the end and trap.
+            var i = min(endExclusive, agentHistory.count) - 1
+            if i != endExclusive - 1 {
+                logger.warning("[Compact] agentHistory shrank during summary generation (endExclusive=\(endExclusive) → count=\(self.agentHistory.count)); clamping the marker walk-back")
+            }
             while i >= 0 {
                 if let id = agentHistory[i].dbMessageId,
                    allRaw.contains(where: { $0.id == id }) {
@@ -853,6 +1134,13 @@ extension AIChatViewModel {
         }
         offloadContextIfNeeded(model: activeModel, lastContextTokens: 0, force: true)
 
+        let compactMeasuredAfter = measureOutboundContextTokens()
+        logger.info("[CtxMeter] compacted marker=\(marker.id.prefix(8)) measured \(compactMeasuredBefore)→\(compactMeasuredAfter)")
+        LeoPerf.record("ctx.compacted", ms: 0, extra: ["before": compactMeasuredBefore, "after": compactMeasuredAfter,
+                                                      "inLoop": wasProcessing, "entries": historyCount])
+        DiagnosticRing.shared.record(.contextDecision, sessionId: sessionId, entryId: "ctx.compacted",
+                                     message: "measured \(compactMeasuredBefore)→\(compactMeasuredAfter) inLoop=\(wasProcessing)")
+
         // Scroll to bottom so the user sees the compact divider and retained messages.
         forceScrollToBottom.send()
 
@@ -907,7 +1195,7 @@ extension AIChatViewModel {
         return lines.joined(separator: "\n")
     }
 
-    /// Summarize messages, automatically splitting into chunks if conversation is too large.
+    /// Summarize messages, automatically splitting into chunks if a summary attempt fails.
     private func generateCompactSummaryWithSplitting(
         messages: [AgentMessage],
         statusMsg: ChatMessage,
@@ -924,76 +1212,126 @@ extension AIChatViewModel {
         do {
             try Task.checkCancellation()
             return try await generateCompactSummary(conversationText: conversationText, statusMsg: statusMsg)
-        } catch let error where isContextTooLargeError(error) && messages.count >= 2 && depth < 3 {
-            // Split messages into two halves and summarize each
+        } catch let error where Self.isSegmentRetryableError(error) && messages.count >= 2 && depth < 3 {
+            // [T-compact-segment-retry-any-error] Split on ANY failure a smaller
+            // request could fix — not only a recognised "context too large"
+            // phrase. The old substring allow-list missed wordings such as
+            // `context_length_exceeded … exceeds the context window`, and every
+            // miss failed the compaction outright. depth < 3 bounds this at 8
+            // leaf calls.
             let mid = messages.count / 2
             let firstHalf = Array(messages[..<mid])
             let secondHalf = Array(messages[mid...])
 
-            logger.info("[Compact] Splitting \(messages.count) messages into \(firstHalf.count) + \(secondHalf.count) (depth=\(depth))")
+            logger.info("[Compact] Retry segments: splitting \(messages.count) messages into \(firstHalf.count) + \(secondHalf.count) (depth=\(depth))")
             statusMsg.content = String(localized: "正在压缩对话…(分段处理)")
 
-            let summary1 = try await generateCompactSummaryWithSplitting(messages: firstHalf, statusMsg: statusMsg, depth: depth + 1)
+            // The previous marker's summary rides with the OLDER half only:
+            // dropping it here (as the code used to) silently erased every
+            // earlier compaction from the new summary whenever a split happened.
+            let summary1 = try await generateCompactSummaryWithSplitting(messages: firstHalf, statusMsg: statusMsg,
+                                                                         previousSummary: previousSummary, depth: depth + 1)
             try Task.checkCancellation()
             let summary2 = try await generateCompactSummaryWithSplitting(messages: secondHalf, statusMsg: statusMsg, depth: depth + 1)
             try Task.checkCancellation()
 
-            // Merge the two summaries into one
-            statusMsg.content = String(localized: "正在压缩对话…(合并摘要)")
-            let mergeInput = """
-            Merge these partial summaries into a single cohesive context summary. \
-            Frame everything as past events (what was asked, what was done) rather than as \
-            ongoing goals or todos — the user's next message will set the current task.
-
-            MUST PRESERVE:
-            - What was done and what was tried, with outcomes (record as past events)
-            - The last thing the user requested in this conversation, and how it was handled
-            - All file paths, identifiers, URLs — copy verbatim
-            - Decisions made and their rationale
-            - Constraints, rules, and user preferences mentioned
-
-            Do NOT carry forward "pending" or "todo" lists that imply standing work — if the user \
-            still wants those, they will say so in their next message.
-
-            PRIORITIZE Part 2 (more recent) over Part 1 (older) when space is tight.
-
-            Part 1:\n\(summary1)
-
-            Part 2:\n\(summary2)
-            """
-            let merged = try await generateCompactSummary(conversationText: mergeInput, statusMsg: statusMsg)
-            return merged
+            // Bisect-merge WITHOUT another LLM call. The old third "merge these
+            // summaries" request was the one unprotected step: if it failed,
+            // the two segments that had just succeeded were thrown away with
+            // it. Each part is capped at 8192 output tokens, so two parts are
+            // nowhere near a context boundary; ordered oldest-first, they carry
+            // the "prefer the newer part" signal positionally.
+            return summary1 + "\n\n" + summary2
         }
     }
 
-    /// Check if an error indicates the input was too large for the model's context window.
-    private func isContextTooLargeError(_ error: Error) -> Bool {
-        let desc = String(describing: error).lowercased()
-        return desc.contains("too many tokens")
-            || desc.contains("context length")
-            || desc.contains("max_tokens")
-            || desc.contains("content is too long")
-            || desc.contains("exceeds the model")
-            || desc.contains("request too large")
-            || desc.contains("prompt is too long")
-            || desc.contains("token limit")
-            || desc.contains("context window")
+    // MARK: - [T-ios-compact-model-fallback] Model fallback for compaction
+
+    /// Candidate entries for a compact call, best first:
+    ///   1. the 「压缩 / 标题」 slot (`resolveSubEntry`, which itself falls back to
+    ///      the session model when no slot is set) — kept from LeoBot's
+    ///      T-compact-slot so the cheap model the user picked does the work;
+    ///   2. the session's main model;
+    ///   3. the rest of the session's group via `ModelGroupRouter` (which skips
+    ///      hidden / disabled / credential-less members), or — for a session
+    ///      pinned to one entry — the default group's members.
+    /// Entries that already failed in this run are dropped.
+    private func compactFallbackCandidates() -> [ModelEntry] {
+        let store = ProviderConfigStore.shared
+        var ordered: [ModelEntry] = []
+        var seen: Set<String> = []
+        func add(_ entry: ModelEntry?) {
+            guard let entry, !seen.contains(entry.id) else { return }
+            seen.insert(entry.id)
+            ordered.append(entry)
+        }
+        add(resolveSubEntry())
+        let primary = resolveCurrentEntry()
+        add(primary)
+
+        let groupId: String?
+        if let sid = sessionId, let binding = store.binding(for: sid),
+           case .group(let gid, _) = binding.primarySource {
+            groupId = gid
+        } else {
+            groupId = store.defaultPrimaryGroupId
+        }
+        if let groupId, let group = store.group(for: groupId), let start = primary ?? ordered.first {
+            var cursor = start.id
+            for _ in 0..<max(1, group.memberEntryIds.count) {
+                guard let nextId = ModelGroupRouter.nextFallback(group: group, currentEntryId: cursor, store: store) else { break }
+                cursor = nextId
+                add(store.entry(for: nextId))
+            }
+        }
+
+        let usable = ordered.filter { !compactFailedEntryIds.contains($0.id) }
+        // Never return empty when something exists: retrying the first one
+        // surfaces its real error instead of a synthetic "no model".
+        return usable.isEmpty ? Array(ordered.prefix(1)) : usable
     }
 
-    /// Call the current LLM to generate a compact summary.
+    /// Generate a compact summary, walking model candidates when one is
+    /// exhausted or failing (quota, auth, provider error). Any other error
+    /// (size, network, timeout, cancellation) belongs to the caller: splitting
+    /// or aborting is the right response there.
     private func generateCompactSummary(conversationText: String, statusMsg: ChatMessage? = nil) async throws -> String {
-        // [T-compact-slot] 压缩这一步用 sub 模型解析,不再用 resolveCurrentEntry()。
-        // 设置里「压缩 / 标题」那个便宜模型槽的文案写着压缩也算,之前却只有标题
-        // 生成调 resolveSubEntry(),压缩照旧烧主模型的钱。resolveSubEntry() 自身
-        // 会在没配槽 / 槽不可用时回落到 resolveCurrentEntry(),所以行为对没配过
-        // 的人完全不变(仍然会 fall back 到默认 group,覆盖 iCloud 同步来的、
-        // 没有本地 provider 绑定的会话)。
-        // 注意:判断"要不要压"的 checkContextBeforeSend() 仍然用当前会话模型 ——
-        // 容量阈值必须按真正服务对话的那个模型的上下文窗口算。
-        guard let entry = resolveSubEntry() else {
+        let candidates = compactFallbackCandidates()
+        guard !candidates.isEmpty else {
             throw NSError(domain: "Compact", code: -1, userInfo: [NSLocalizedDescriptionKey: "No model available for summarization"])
         }
+        var lastError: Error?
+        for (idx, entry) in candidates.enumerated() {
+            do {
+                if idx > 0 {
+                    logger.info("[Compact] falling back to candidate \(idx + 1)/\(candidates.count): \(entry.model.id)")
+                    statusMsg?.content = String(localized: "正在用 \(entry.model.displayName) 压缩对话…")
+                }
+                return try await generateCompactSummaryOnce(conversationText: conversationText, entry: entry, statusMsg: statusMsg)
+            } catch let error as LLMError where error.isFallbackable && !Self.isInputSizeRejection(error) {
+                compactFailedEntryIds.insert(entry.id)
+                lastError = error
+                logger.warning("[Compact] candidate \(entry.model.id) failed (fallbackable): \(error.fallbackReason)")
+                continue
+            }
+        }
+        throw lastError ?? NSError(domain: "Compact", code: -2,
+            userInfo: [NSLocalizedDescriptionKey: "All model candidates failed to summarize"])
+    }
 
+    /// A size rejection — our pre-flight below, or the provider's own
+    /// context-length refusal — is a property of the INPUT, not of the model:
+    /// hand it straight to the split path instead of re-sending the same
+    /// oversized request to every other candidate.
+    private static let preflightTooLargePrefix = "compact input too large"
+    private static func isInputSizeRejection(_ error: LLMError) -> Bool {
+        guard case .providerError(let message) = error else { return false }
+        return message.hasPrefix(preflightTooLargePrefix) || ContextSizeMeter.isContextOverflow(message)
+    }
+
+    /// One compact attempt against one specific entry.
+    private func generateCompactSummaryOnce(conversationText: String, entry: ModelEntry,
+                                            statusMsg: ChatMessage? = nil) async throws -> String {
         let provider = try await Self.makeLLMProvider(for: entry)
         let contextWindow = effectiveContextWindow(for: entry.model)
 
@@ -1027,11 +1365,24 @@ extension AIChatViewModel {
         Be concise but never lose information the agent needs.
         """
 
-        // Estimate input tokens and cap maxTokens to fit in context window
-        let inputEstimate = conversationText.count / 4 + 600  // rough: ~4 chars/token + system prompt
+        // [T-ios-compact-oversize-request] Budget the request BEFORE sending it.
+        // The old `max(1024, min(8192, window - input))` quietly clamped an
+        // impossible request back to 1024 and sent it anyway. Reserve room for
+        // the summary; if the input cannot fit, throw a size error that the
+        // split path handles (each half is re-checked here). Estimated by
+        // character class, so CJK conversations are no longer read at a third
+        // of their size.
+        let compactOutputReserve = 1024
+        let inputEstimate = ContextSizeMeter.estimateTokens(conversationText) + 800
         let maxOutputTokens: Int
         if contextWindow > 0 {
-            maxOutputTokens = max(1024, min(8192, contextWindow - inputEstimate))
+            let available = contextWindow - inputEstimate
+            guard available >= compactOutputReserve else {
+                logger.error("[Compact] pre-flight: input ~\(inputEstimate) tok exceeds window \(contextWindow) (needs \(compactOutputReserve) for output) — not sending")
+                throw LLMError.providerError(
+                    message: "\(Self.preflightTooLargePrefix): ~\(inputEstimate) tokens estimated against a \(contextWindow)-token window")
+            }
+            maxOutputTokens = min(8192, available)
         } else {
             maxOutputTokens = 4096
         }
@@ -1056,28 +1407,73 @@ extension AIChatViewModel {
             temperature: nil   // let provider/model use its default
         )
 
-        var responseText = ""
-        var didTag = false
-        for try await chunk in stream {
-            // Tag the request the FIRST time the stream yields anything —
-            // by then the provider has actually sent the wire request and
-            // pushed it onto LastAPIRequestBody's ring. Tagging before
-            // consuming the stream is too early (streamMessage returns a
-            // lazy AsyncStream — no HTTP request is in flight yet) and
-            // would pin some unrelated earlier ring entry as "compact".
-            #if DEBUG
-            if !didTag {
-                LastAPIRequestBody.shared.tagLatest("compact")
-                didTag = true
+        // [T-ios-compact-no-timeout] Two independent deadlines guard this
+        // stream so `isCompacting` can never stick: the provider sessions only
+        // set an inter-packet idle timeout (600s), so a stream that dribbles a
+        // byte occasionally — or one frozen by app suspension — never trips
+        // anything.
+        //   stall   — 120s since the last chunk (matches the main stream's watchdog)
+        //   overall — 900s wall-clock backstop; long summaries at ~40 tok/s
+        //             legitimately take minutes while data flows.
+        // Enforced by a SEPARATE watchdog task: the failure being fixed is a
+        // stream that stops yielding, where an in-loop check never runs.
+        // Wall-clock dates, so throttled background sleeps delay detection but
+        // never corrupt the decision.
+        let progress = CompactStreamProgress(overallLimit: Self.compactOverallLimit, stallLimit: Self.compactStallLimit)
+        let consumeTask = Task { @MainActor () -> String in
+            var text = ""
+            var didTag = false
+            for try await chunk in stream {
+                try Task.checkCancellation()
+                await progress.touch()
+                // Tag the request the FIRST time the stream yields anything —
+                // by then the provider has actually sent the wire request.
+                #if DEBUG
+                if !didTag {
+                    LastAPIRequestBody.shared.tagLatest("compact")
+                    didTag = true
+                }
+                #else
+                _ = didTag
+                #endif
+                switch chunk {
+                case .text(let delta):
+                    text += delta
+                    statusMsg?.content = String(localized: "正在压缩对话…(\(text.count) 字)")
+                case .finished, .usage, .started:
+                    break
+                }
             }
-            #endif
-            switch chunk {
-            case .text(let delta):
-                responseText += delta
-                statusMsg?.content = String(localized: "正在压缩对话…(\(responseText.count) 字)")
-            case .finished, .usage, .started:
-                break
+            return text
+        }
+        let watchdog = Task {
+            while true {
+                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+                if Task.isCancelled { return }
+                if let breach = await progress.breach() {
+                    await progress.recordBreach(breach)
+                    await MainActor.run { consumeTask.cancel() }
+                    return
+                }
             }
+        }
+        let responseText: String
+        do {
+            // Propagate a user Stop (compactTask.cancel()) into the consumer.
+            responseText = try await withTaskCancellationHandler {
+                try await consumeTask.value
+            } onCancel: {
+                consumeTask.cancel()
+            }
+            watchdog.cancel()
+        } catch {
+            watchdog.cancel()
+            // A cancellation raised BY the watchdog is a timeout, not a user stop.
+            if let breach = await progress.breachReason() {
+                logger.error("[Compact] summary stream timed out (\(breach.logLabel)) model=\(entry.model.id)")
+                throw CompactStreamTimeout(breach: breach)
+            }
+            throw error
         }
 
         guard !responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -1095,3 +1491,4 @@ extension AIChatViewModel {
         AgentMessage(role: .user, parts: [.text(compactSummaryWrappedText(summary))])
     }
 }
+
