@@ -519,7 +519,9 @@ struct ProviderInstanceDetailView: View {
     @ViewBuilder
     private func oauthCredentialView(_ instance: ProviderInstance) -> some View {
         let isAuth = oauthIsAuthenticated(instance)
-        let detail = oauthDetail(instance)
+        // Refresh rejected: the credential is kept, the user signs in again.
+        let needsReauth = isAuth && ProviderKeychainHelper.oauthNeedsReauth(instanceId: instance.id)
+        let detail = needsReauth ? String(localized: "Needs sign-in again") : oauthDetail(instance)
         // Subscribe to auth state changes (Keychain token save/delete)
         let _ = oauthRefreshTrigger
         let _ = store.authRevision
@@ -531,18 +533,35 @@ struct ProviderInstanceDetailView: View {
                         .font(.body)
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(needsReauth ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
                 }
                 Spacer()
                 if isAuth {
                     Circle()
-                        .fill(Color.green)
+                        .fill(needsReauth ? Color.red : Color.green)
                         .frame(width: 8, height: 8)
                 }
             }
 
             HStack(spacing: 12) {
-                if isAuth {
+                if needsReauth {
+                    Button(oauthSignInLabel(instance)) {
+                        if instance.providerType == .kimiCode {
+                            showKimiLogin = true
+                        } else {
+                            Task {
+                                await oauthLogin(instance)
+                                await MainActor.run { oauthRefreshTrigger.toggle() }
+                            }
+                        }
+                    }
+                    .font(.caption.weight(.medium))
+                    Button(String(localized: "Sign Out"), role: .destructive) {
+                        oauthLogout(instance)
+                        oauthRefreshTrigger.toggle()
+                    }
+                    .font(.caption.weight(.medium))
+                } else if isAuth {
                     Button(String(localized: "Copy Token")) {
                         Task { await oauthCopyToken(instance) }
                     }

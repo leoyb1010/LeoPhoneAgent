@@ -361,6 +361,10 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         )?.isEmpty == false {
             return true
         }
+        // [T-oauth-keep-credentials] A sign-in whose refresh was rejected is
+        // kept (not deleted) but unusable: routing skips it exactly as it
+        // skipped the deleted credential before.
+        if ProviderKeychainHelper.oauthNeedsReauth(instanceId: id) { return false }
         // Provider-specific OAuth storage (Codex login, …).
         // Mirrors the diagnostic in MinisApp.swift scenePhase=active.
         switch providerType {
