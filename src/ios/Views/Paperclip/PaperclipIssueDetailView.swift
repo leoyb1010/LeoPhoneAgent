@@ -694,7 +694,8 @@ struct PaperclipIssueDetailView: View {
                 if let issue = model.issue {
                     if model.pendingStatus != nil {
                         // 嵌套系统 Menu 的 disabled 状态不能作为待核实写入的入口边界。
-                        Button("更改任务状态") {}.disabled(true)
+                        // 不可点的说明行（菜单里的 Text 显示为灰色条目），避免空动作按钮。
+                        Text("更改任务状态：等上一次修改核实后再改")
                     } else {
                         Menu("更改任务状态") {
                             ForEach(PaperclipIssueStatus.allCases) { status in

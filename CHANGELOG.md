@@ -1,5 +1,19 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.60.0 (158) · OpenMinis v1.14 能力移植 + Mac 舰队默认隐藏 - 2026-10-09
+
+按 `~/Desktop/OpenMinis_上游能力深度分析与移植方案_20261008.md` 分 7 条线并行移植（上游 `b4c0661d`，基线 `9cf3a855`），逐块择优：上游更好的替换我方实现，我方更好的保留。
+
+- 沙箱内核：`deps/ish` → 上游 `e6521d9c`（丢弃本地独有的 `8d53d6b9`）；`ISHKernel` 采用上游版本并重新接回 5 个原生 offload 注册与日志脱敏；后台 CPU 调速器、按 jetsam 余量的内存准入、线程 CPU 归因（`Diagnostics/ResourceDiagnostics.swift`）；原生 offload 取消改由 App 侧按槽位代号中止；shell 超时返回已有输出；保留 48 个分派槽与 `..` 路径闸门。
+- 同步 / 身份 / 登录 / 语音 / 意图：SessionV2 按 `updatedAt` 轮询（索引未部署时回退）、记录名按 UTF-8 字节校验、`DeviceIdentityResolver` 临时身份、unknownItem / MCPServersV2 / 两段锚定 / 父先子后 / v1 删除死锁 / 按字节分批；OAuth 失效保留凭据标「需要重新登录」；语音与意图可靠性修复；ru InfoPlist。
+- 上下文：`ContextSizeMeter` 校准、`ContextPolicy`、可逆的 `IncrementalContextTrimmer`（「精简旧上下文」默认开）、压缩 2 分钟无数据放弃。
+- 服务商：DeepSeek V4 思考参数根级并列 + deepseek-flash；`Providers/Thinking` 规则引擎（规则仍存 `leo.thinkingRules.v1`，旧行原样读入）；Vision Group 代读图片；Codex 实时目录 401/403 如实报错；prompt cache key 白名单；OpenCode 会话头按请求读取；十余项 4xx/崩溃修复。
+- 渲染与会话列表：`preview_text` / `preview_sort_order` 写时折叠（契约 v4）+ 增量补丁；退役 60fps 监视器；内容键高度 LRU；VM 缓存分池；图片单写入点；日志三级 + 内核详细追踪开关。
+- 子代理：`subagent_task`（等待 / 后台回灌 / 引导 / 取消 / 恢复），隐藏子会话（`parent_session_id`，契约 v5，不同步、不进列表与搜索、不读写记忆、不进备份），审批归父会话，深度 1，并发 3 / 排队 10，回调转义防伪造；设置 › 子代理 角色。
+- 备份与恢复：`minisbak/1`（与安卓互通）、PBKDF2 加密、仅加密包含密钥、逐类别事务与撤销日志、路径穿越 / zip 炸弹 / 篡改防护；思考规则按完整行备份；恢复后重算会话预览。
+- Mac 舰队：`macFleet.enabled` 默认关，设置 → 远程机器「Mac 舰队（高级）」开关；隐藏首页 / 命令面板 / `/mac` / 「发到 Mac」/ Siri 的 Mac 入口；App Shortcuts 用 Paperclip「查工单进度」「读工单结果」替换「指挥 Mac」「Mac 汇报」；审批推送、手表、中继补拉、配对、藏宝阁、Grok、Sync V2、remote_agent 不受影响。
+- 验证：iOS 逻辑测试 695 → 1105 项全部通过；Release 真机构建；Paperclip 契约、深链冒烟、原生权限、全部 IOS*Smoke 通过；`com.openminis|minis://|group.com.openminis` 检索为空。
+
 ## Paperclip 中文发行层 1.1.8 · 全站 UI 审计与可用性修复 - 2026-10-07
 
 三路并行审计（本机隔离实例真实渲染 450 场景 × 明暗两套、三种身份 × 155 条路由共 465 条功能矩阵、线上站点只读实况 + Mini 日志），修复全部落在发行层并从干净上游重新生成验证。
