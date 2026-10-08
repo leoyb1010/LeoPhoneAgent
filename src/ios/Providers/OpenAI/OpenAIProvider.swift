@@ -1,4 +1,5 @@
 import Foundation
+import os
 import os.log
 
 private let logger = AppLogger(category: "OpenAIProvider")
@@ -70,6 +71,18 @@ final class OpenAIProvider: LLMProvider {
     var appendV1Suffix: Bool
     /// Extra HTTP headers to include in every request (e.g. OpenRouter attribution).
     var extraHeaders: [String: String] = [:]
+
+    /// [T-copilot-per-request-headers] Headers that depend on the REQUEST (or on state that
+    /// changes after the provider was built), resolved when each request is assembled and
+    /// handed the outgoing body. Applied after `extraHeaders`, so a key in both wins here.
+    /// OpenCode Go uses it to read the conversation id per request instead of snapshotting
+    /// it at construction (a draft chat has no id yet when its provider is built).
+    var perRequestHeaders: (@Sendable ([String: Any]) -> [String: String])?
+
+    /// [T-thinking-rules-phase2] The provider instance this was built from, so the
+    /// thinking resolver can load user rules pinned to it. nil outside the factory
+    /// (title-gen references, tests) — those resolve against global rules only.
+    var providerInstanceId: String?
 
     /// [T-model-use-image-passthrough GH#62] Arbitrary extra fields merged into the
     /// /images/generations JSON body, so `minis-model-use` can pass provider-specific
@@ -148,10 +161,30 @@ final class OpenAIProvider: LLMProvider {
     /// Gated tightly so official direct endpoints (DeepSeek/GLM/Kimi native,
     /// which DO want their own thinking shape) are never mis-routed: it requires
     /// an explicit Ark base-URL match or the Azure flag, and nothing else.
+    ///   • Venice.ai (`api.venice.ai`) — [OpenMinis#86] its request schema is
+    ///     `additionalProperties: false`, so an unknown root key (`thinking`) is a
+    ///     hard 400 for every model, even with thinking OFF; it accepts root
+    ///     `reasoning_effort` natively.
     var usesUnifiedReasoningEffort: Bool {
         if isAzure { return true }
         guard let base = customBaseURL?.lowercased() else { return false }
         return base.contains("volces") || base.contains("ark.")
+            || base.contains("api.venice.ai")
+    }
+
+    /// [T-ios-cerebras-reasoning-400] Cerebras (OpenMinis#361): a closed assistant
+    /// schema (echoing `reasoning_content` 400s from turn 2 on) and it re-hosts
+    /// qwen-named models that must get root `reasoning_effort`, not `enable_thinking`.
+    var isCerebras: Bool {
+        guard let base = customBaseURL?.lowercased() else { return false }
+        return base.contains("cerebras.ai")
+    }
+
+    /// [OpenMinis#163] xAI's own API, as opposed to a relay serving grok-named models.
+    /// Scopes the "catalog declares no effort tiers → omit reasoning_effort" skip.
+    var isXAI: Bool {
+        guard let base = customBaseURL?.lowercased() else { return false }
+        return base.contains("api.x.ai") || base.contains("//x.ai")
     }
 
     var isOAuth: Bool {
@@ -197,6 +230,40 @@ final class OpenAIProvider: LLMProvider {
         let base = resolvedAPIBase(customBaseURL ?? "https://api.openai.com", appendV1: appendV1Suffix)
         let v1Path = appendV1Suffix ? "/v1" : ""
         return URL(string: URLBuilding.join(base, v1Path, defaultPath))
+    }
+
+    /// [T-ios-custom-endpoint-url-crash] `endpointURL` / `URL(string:)` return nil for a
+    /// base the user typed wrong (a space in the host or port, a non-numeric port, a
+    /// pasted control character), and every call site used to force-unwrap it — a typo
+    /// in the Base URL field crashed the app instead of showing an error.
+    private func requireEndpointURL(defaultPath: String) throws -> URL {
+        guard let url = endpointURL(defaultPath: defaultPath) else { throw invalidEndpointError() }
+        return url
+    }
+
+    /// Same guard for the `streamRaw` sites, which build their URL inline.
+    private func requireURL(_ string: String) throws -> URL {
+        guard let url = URL(string: string) else { throw invalidEndpointError() }
+        return url
+    }
+
+    /// [T-ios-openai-body-oom] Reject a body that would abort the process during
+    /// serialization; see `RequestBodySizeGuard`. Throws a recoverable error the agent
+    /// loop surfaces instead of the app disappearing mid-stream.
+    private func guardRequestBodySize(_ body: [String: Any], context: String) throws {
+        let estimated = RequestBodySizeGuard.estimateSerializedSize(body)
+        let verdict = RequestBodySizeGuard.verdict(estimated: estimated,
+                                                   availableMemory: Int(os_proc_available_memory()))
+        guard let message = RequestBodySizeGuard.message(for: verdict) else { return }
+        logger.error("[\(context)] refusing to serialize request body (~\(estimated / (1024 * 1024))MB): \(verdict)")
+        throw LLMError.providerError(message: message)
+    }
+
+    private func invalidEndpointError() -> LLMError {
+        let shown = customBaseURL ?? "(default)"
+        return LLMError.providerError(
+            message: "Invalid endpoint URL: \(shown). Check the provider's Base URL — it must be a full URL such as https://host:port, with no spaces."
+        )
     }
 
     /// Build the request URL for Azure OpenAI. Mirrors the official
@@ -512,7 +579,7 @@ final class OpenAIProvider: LLMProvider {
             } else {
                 let base = resolvedAPIBase(customBaseURL ?? "https://api.openai.com", appendV1: appendV1Suffix)
                 let v1Path = appendV1Suffix ? "/v1" : ""
-                url = URL(string: URLBuilding.join(base, v1Path, "/responses"))!
+                url = try requireURL(URLBuilding.join(base, v1Path, "/responses"))
             }
             request = URLRequest(url: url)
             let token = try await getToken()
@@ -524,7 +591,7 @@ final class OpenAIProvider: LLMProvider {
             } else {
                 let base = resolvedAPIBase(customBaseURL ?? "https://api.openai.com", appendV1: appendV1Suffix)
                 let v1Path = appendV1Suffix ? "/v1" : ""
-                url = URL(string: URLBuilding.join(base, v1Path, "/chat/completions"))!
+                url = try requireURL(URLBuilding.join(base, v1Path, "/chat/completions"))
             }
             request = URLRequest(url: url)
             let token = try await getToken()
@@ -536,6 +603,20 @@ final class OpenAIProvider: LLMProvider {
         for (key, value) in extraHeaders {
             request.setValue(value, forHTTPHeaderField: key)
         }
+        // [T-copilot-per-request-headers] Resolved now, from this request's body.
+        for (key, value) in perRequestHeaders?(body) ?? [:] {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        // [T-codex-prompt-cache-headers] The ChatGPT backend keys prompt cache on the
+        // conversation identity in these HEADERS, not on `prompt_cache_key` alone (0%
+        // hit rate measured with the body field only). Same id as the body key.
+        if isCodexOAuth, let cacheKey = body["prompt_cache_key"] as? String, !cacheKey.isEmpty {
+            request.setValue(cacheKey, forHTTPHeaderField: "Session_id")
+            request.setValue(cacheKey, forHTTPHeaderField: "Conversation_id")
+        }
+        // [T-ios-openai-body-oom] Must run BEFORE serializing: an out-of-memory inside
+        // JSONSerialization aborts the process and cannot be caught.
+        try guardRequestBodySize(body, context: "streamRaw")
         // Use .sortedKeys so every request with the same body produces byte-identical
         // JSON, letting DeepSeek's prefix-based disk cache match from the 0th token.
         // Without this, Swift's dictionary iteration order randomizes top-level /
@@ -650,7 +731,7 @@ final class OpenAIProvider: LLMProvider {
             url = azure
         } else {
             // [T-model-use-endpoint-override] honor the absolute-path override
-            url = endpointURL(defaultPath: "/chat/completions")!
+            url = try requireEndpointURL(defaultPath: "/chat/completions")
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -659,6 +740,10 @@ final class OpenAIProvider: LLMProvider {
         let token = try await getToken()
         applyKeyAuth(&request, token: token)
         for (key, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        // [T-copilot-per-request-headers] This builder takes `messages`, not a body.
+        for (key, value) in perRequestHeaders?(["messages": messages]) ?? [:] {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
@@ -692,6 +777,8 @@ final class OpenAIProvider: LLMProvider {
             body["model"] = model.id
         }
 
+        // [T-ios-openai-body-oom] See streamRaw — carries the conversation too.
+        try guardRequestBodySize(body, context: "builder")
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
 
         #if DEBUG
@@ -736,7 +823,7 @@ final class OpenAIProvider: LLMProvider {
             // forceResponsesAPI or custom base — use /v1/responses on the
             // configured base. [T-model-use-endpoint-override] honors the
             // absolute-path override (never reaches the Codex branch above).
-            url = endpointURL(defaultPath: "/responses")!
+            url = try requireEndpointURL(defaultPath: "/responses")
         }
 
         var request = URLRequest(url: url)
@@ -757,6 +844,10 @@ final class OpenAIProvider: LLMProvider {
         }
 
         for (key, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        // [T-copilot-per-request-headers] Responses shape: the message list is `input`.
+        for (key, value) in perRequestHeaders?(["input": messages]) ?? [:] {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
@@ -807,6 +898,8 @@ final class OpenAIProvider: LLMProvider {
             body["model"] = model.id
         }
 
+        // [T-ios-openai-body-oom] See streamRaw — carries the conversation too.
+        try guardRequestBodySize(body, context: "builder")
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
 
         #if DEBUG
@@ -1119,7 +1212,7 @@ final class OpenAIProvider: LLMProvider {
             }
             url = u
         } else {
-            url = endpointURL(defaultPath: "/chat/completions")!
+            url = try requireEndpointURL(defaultPath: "/chat/completions")
         }
 
         var request = URLRequest(url: url)
@@ -1133,6 +1226,7 @@ final class OpenAIProvider: LLMProvider {
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
 
         if let bodyObject, method.uppercased() != "GET" {
+            try guardRequestBodySize(bodyObject, context: "rawPassthrough")
             request.httpBody = try JSONSerialization.data(withJSONObject: bodyObject, options: [.sortedKeys])
         }
 
@@ -1225,6 +1319,10 @@ final class OpenAIProvider: LLMProvider {
         // If the user explicitly set response_format, respect it and don't run
         // the b64_json probe/retry below.
         let userSetResponseFormat = imageExtraBody["response_format"] != nil
+
+        // [T-ios-openai-body-oom] Image bodies can inline multi-MB base64 sources via
+        // imageExtraBody. Guarded once; the loop only toggles response_format.
+        try guardRequestBodySize(body, context: "generateImage")
 
         // Try b64_json first; if the provider rejects it, retry without response_format
         var triedWithoutFormat = userSetResponseFormat
@@ -1684,7 +1782,7 @@ final class OpenAIProvider: LLMProvider {
         // Transient server errors: retry same model, do not trigger group fallback.
         let transientStatusCodes: Set<Int> = [500, 502, 503, 504, 529]
         if transientStatusCodes.contains(statusCode) {
-            return .transientError(message: "HTTP \(statusCode): \(body.prefix(200))")
+            return .transientError(message: "HTTP \(statusCode): \(body.prefix(200))", statusCode: statusCode)
         }
 
         // Try to extract error message from JSON body

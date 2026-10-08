@@ -3,6 +3,10 @@ import os.log
 
 private let logger = AppLogger(category: "OpenAIAgent")
 
+/// [T-thinking-rules-phase1] Separate category so the resolution trace can be grepped on
+/// its own — "which rule produced this request" is the first question in any report.
+private let thinkingLogger = AppLogger(category: "Thinking")
+
 /// AgentProvider implementation that wraps OpenAIProvider for the unified agent loop.
 /// Handles both Chat Completions (API key) and Responses API (OAuth/Codex) formats.
 final class OpenAIAgentProvider: AgentProvider {
@@ -24,16 +28,25 @@ final class OpenAIAgentProvider: AgentProvider {
     static let responsesAPIProviderKind: String = "openai-responses"
 
     let provider: OpenAIProvider
-    /// The conversation this provider serves; keys the Responses prompt cache.
+    /// The conversation this provider serves (construction-time value); keys the
+    /// prompt cache when no live `sessionBox` is attached.
     let sessionId: String?
+    /// Live conversation id, read per request (see `ConversationSessionBox`).
+    let sessionBox: ConversationSessionBox?
 
     var name: String { provider.name }
     var model: LLMModel { provider.model }
     var defaultMaxTokens: Int { provider.usesChatCompletionsAPI ? 16_384 : 32_768 }
 
-    init(provider: OpenAIProvider, sessionId: String? = nil) {
+    /// The id to key this request on: the live value when there is one.
+    var currentSessionId: String? {
+        OpenCodeSessionHeader.normalizedSessionId(sessionBox?.value) ?? sessionId
+    }
+
+    init(provider: OpenAIProvider, sessionId: String? = nil, sessionBox: ConversationSessionBox? = nil) {
         self.provider = provider
         self.sessionId = sessionId
+        self.sessionBox = sessionBox
     }
 
     func streamAgentMessageClamped(
@@ -91,6 +104,12 @@ final class OpenAIAgentProvider: AgentProvider {
             "messages": allMessages,
             "stream": true,
         ]
+        // [T-codex-prompt-cache-headers] Same stable per-conversation key the Responses
+        // path sends (GPT-5.6+ needs it for reliable prefix matching); allowlisted.
+        if PromptCacheKey.shouldSend(customBaseURL: provider.customBaseURL, isAzure: provider.isAzure,
+                                     forceResponsesAPI: provider.forceResponsesAPI) {
+            body["prompt_cache_key"] = promptCacheKey(for: messages)
+        }
         if provider.useOpenRouterCompat {
             body["max_tokens"] = maxTokens
         } else {
@@ -124,10 +143,11 @@ final class OpenAIAgentProvider: AgentProvider {
             // the provider-appropriate off value: official OpenAI understands
             // "none"; custom-base vendors get "minimal" (Ark's smallest tier,
             // also a valid OpenAI value, so relays serving gpt models work too).
-            if !provider.isMistral {
-                let offEffort = Self.explicitOffEffort(for: provider, model: model, level: thinkingLevel)
-                Self.injectThinkingParams(into: &body, model: model, level: thinkingLevel, isOpenRouter: provider.useOpenRouterCompat, maxTokens: maxTokens, offEffort: offEffort, unifiedReasoningEffort: provider.usesUnifiedReasoningEffort)
-            }
+            // [T-thinking-rules-phase1] The Mistral prohibition is a RULE inside the
+            // resolver (`mistral-official` → .omitEverything) rather than an `if` around
+            // this call, so the reason shows up in the trace.
+            let offEffort = Self.explicitOffEffort(for: provider, model: model, level: thinkingLevel)
+            Self.injectThinkingParams(into: &body, model: model, level: thinkingLevel, isOpenRouter: provider.useOpenRouterCompat, maxTokens: maxTokens, offEffort: offEffort, unifiedReasoningEffort: provider.usesUnifiedReasoningEffort, isMistral: provider.isMistral, isXAI: provider.isXAI, isDashScope: provider.isDashScope, isCerebras: provider.isCerebras, providerInstanceId: provider.providerInstanceId)
         }
 
         let (lineStream, _) = try await provider.streamRaw(body: body, isResponsesAPI: false)
@@ -145,6 +165,14 @@ final class OpenAIAgentProvider: AgentProvider {
                 // round-trip that empty value back as history rather than fabricating
                 // placeholder text the model would learn to imitate.
                 var sawReasoningFieldEver = false
+                // [T-openai-done-overwrite] GH#263. Set once a finish_reason chunk has
+                // yielded `.done`. OpenRouter/OpenAI follow it with `data: [DONE]`, and the
+                // [DONE] branch used to yield a SECOND `.done(.endTurn)` that won — so a
+                // truncated reply (`length` → .maxTokens) or a content-filter block
+                // (.refusal) was reported as "empty response". The first reason is real.
+                var emittedDone = false
+                // [T-openrouter-reasoning-details] Opaque `reasoning.encrypted` items seen.
+                var encryptedReasoningChunks = 0
                 // [T-ios-think-prefix-live-stream] Parser for content-embedded
                 // <think> prefixes (MiniMax M-series, Qwen, …): streams the
                 // reasoning live and trims the post-</think> body.
@@ -198,8 +226,12 @@ final class OpenAIAgentProvider: AgentProvider {
                             if sawReasoningFieldEver || !reasoningContent.isEmpty {
                                 continuation.yield(.reasoningContent(reasoningContent))
                             }
-                            let reason: AgentStopReason = hasToolCalls ? .toolUse : .endTurn
-                            continuation.yield(.done(stopReason: reason))
+                            // A proxy that sends no finish_reason still needs [DONE] to end the turn.
+                            if !emittedDone {
+                                let reason: AgentStopReason = hasToolCalls ? .toolUse : .endTurn
+                                continuation.yield(.done(stopReason: reason))
+                                emittedDone = true
+                            }
                             break
                         }
 
@@ -258,10 +290,49 @@ final class OpenAIAgentProvider: AgentProvider {
                             reasoningContent += rc
                             if thinkingLevel.isEnabled, !rc.isEmpty { continuation.yield(.thinkingDelta(rc)) }
                         }
-                        // Also check model-specific interleaved field (e.g. "reasoning_details")
+                        // [T-copilot-reasoning-fields] Some gateways stream reasoning as
+                        // `delta.reasoning_text` (the Responses branch already handles
+                        // `response.reasoning_text.delta`); unread, the model's reasoning
+                        // arrived as a blank Thinking block.
+                        if let rc = delta["reasoning_text"] as? String {
+                            sawReasoningField = true
+                            reasoningContent += rc
+                            if thinkingLevel.isEnabled, !rc.isEmpty { continuation.yield(.thinkingDelta(rc)) }
+                        }
+                        // [T-openrouter-reasoning-details] GH#263. OpenRouter also (for some
+                        // models ONLY) streams reasoning as a structured array of
+                        // reasoning.text / reasoning.summary / reasoning.encrypted items.
+                        // When the same chunk already carried string reasoning it is the
+                        // SAME text twice, so the array is read only when it did not.
+                        let chunkHadStringReasoning = ["reasoning_content", "reasoning", "reasoning_text"]
+                            .contains { ((delta[$0] as? String) ?? "").isEmpty == false }
+                        if !chunkHadStringReasoning,
+                           let details = delta["reasoning_details"] as? [[String: Any]] {
+                            for item in details {
+                                let text: String?
+                                switch item["type"] as? String {
+                                case "reasoning.text": text = item["text"] as? String
+                                case "reasoning.summary": text = item["summary"] as? String
+                                case "reasoning.encrypted":
+                                    sawReasoningField = true
+                                    encryptedReasoningChunks += 1
+                                    text = nil
+                                default: text = nil
+                                }
+                                guard let rc = text else { continue }
+                                sawReasoningField = true
+                                reasoningContent += rc
+                                if thinkingLevel.isEnabled, !rc.isEmpty { continuation.yield(.thinkingDelta(rc)) }
+                            }
+                        }
+                        // Also check model-specific interleaved field. `reasoning` and
+                        // `reasoning_text` are consumed above — excluded so they never
+                        // count twice.
                         if thinkingLevel.isEnabled,
                            let field = self.model.interleavedReasoningField,
                            field != "reasoning_content",
+                           field != "reasoning",
+                           field != "reasoning_text",
                            let rc = delta[field] as? String {
                             sawReasoningField = true
                             reasoningContent += rc
@@ -339,7 +410,7 @@ final class OpenAIAgentProvider: AgentProvider {
                             // Flush the think parser's tail (idempotent — the
                             // [DONE] handler may flush again harmlessly).
                             emitParsed(thinkParser.finishTurn())
-                            logger.info("SSE finish_reason=\(fr) hasToolCalls=\(hasToolCalls) emittedTextStart=\(emittedTextStart) reasoningLen=\(reasoningContent.count)")
+                            logger.info("SSE finish_reason=\(fr) hasToolCalls=\(hasToolCalls) emittedTextStart=\(emittedTextStart) reasoningLen=\(reasoningContent.count) encryptedReasoningChunks=\(encryptedReasoningChunks)")
                             // Emit completed tool calls
                             for (_, entry) in toolCallAccum.sorted(by: { $0.key < $1.key }) {
                                 let args = Self.parseJsonToDict(entry.json)
@@ -369,7 +440,10 @@ final class OpenAIAgentProvider: AgentProvider {
                                 reason = .refusal
                             default: reason = hasToolCalls ? .toolUse : .endTurn
                             }
-                            continuation.yield(.done(stopReason: reason))
+                            if !emittedDone {
+                                continuation.yield(.done(stopReason: reason))
+                                emittedDone = true
+                            }
                         }
                     }
                     // Keep this diagnostic metadata-only. Raw SSE lines can
@@ -414,15 +488,25 @@ final class OpenAIAgentProvider: AgentProvider {
             "input": inputMessages,
             // Required for custom/third-party endpoints (e.g. sub2api) that do not
             // synthesize a fallback key server-side — see Wei-Shaw/sub2api#1134.
-            "prompt_cache_key": PromptCacheKey.derive(sessionId: sessionId,
-                                                      firstUserText: Self.firstUserText(in: messages)),
         ]
+        // [T-ios-prompt-cache-key-400] Allowlisted endpoints only (strict gateways 400
+        // on the unknown field). Keyed on the conversation id, read per request.
+        if PromptCacheKey.shouldSend(customBaseURL: provider.customBaseURL, isAzure: provider.isAzure,
+                                     forceResponsesAPI: provider.forceResponsesAPI) {
+            body["prompt_cache_key"] = promptCacheKey(for: messages)
+        }
         // Thinking level → Responses API `reasoning.effort`.
         // Applies to every Responses flavor (Codex OAuth + forceResponsesAPI +
         // custom-base). Previously only Codex honored the user's level, so
         // Responses-API provider types silently ignored thinking settings.
         var reasoningRequested = false
-        if thinkingLevel.isEnabled, let effort = Self.reasoningEffort(for: model, level: thinkingLevel) {
+        // [T-ios-mistral-reasoning-422] Mistral rejects the reasoning parameter outright
+        // (`422 extra_forbidden body.reasoning`). The chat path's rule covered only Chat
+        // Completions; a Mistral instance with the Responses API reached this second
+        // injection site ungated. No reasoning key, and no encrypted-reasoning include.
+        if provider.isMistral {
+            // intentionally empty
+        } else if thinkingLevel.isEnabled, let effort = Self.reasoningEffort(for: model, level: thinkingLevel) {
             // `summary: "auto"` opts in to streaming the human-readable
             // reasoning summary (delivered as `response.reasoning_summary_text.delta`
             // SSE events). Without it the Responses API only returns
@@ -783,6 +867,29 @@ final class OpenAIAgentProvider: AgentProvider {
 
     // MARK: - Prompt Cache Key
 
+    /// The conversation's cache key, resolved per request so a draft chat promoted to a
+    /// real session mid-conversation is picked up without rebuilding the provider.
+    private func promptCacheKey(for messages: [AgentMessage]) -> String {
+        PromptCacheKey.derive(sessionId: currentSessionId,
+                              firstUserText: Self.firstUserText(in: messages),
+                              firstMessageShape: Self.firstMessageShape(in: messages))
+    }
+
+    /// Structural fingerprint of the first message (re-sent verbatim every turn), for
+    /// conversations with no user text yet.
+    private static func firstMessageShape(in messages: [AgentMessage]) -> String? {
+        guard let first = messages.first else { return nil }
+        let shape = first.parts.map { part -> String in
+            switch part {
+            case .text(let t): return "t:\(t.count)"
+            case .toolUse(let id, let name, _): return "tu:\(name):\(id)"
+            case .toolResult(let id, let name, _, _, _, _, _, _): return "tr:\(name):\(id)"
+            case .imageData(_, let mime, _): return "img:\(mime)"
+            }
+        }.joined(separator: "|")
+        return shape.isEmpty ? nil : "\(first.role)|\(shape)"
+    }
+
     private static func firstUserText(in messages: [AgentMessage]) -> String? {
         for msg in messages where msg.role == .user {
             for part in msg.parts {
@@ -826,214 +933,52 @@ final class OpenAIAgentProvider: AgentProvider {
     /// low/medium/high for reasoning_effort and reject "xhigh" outright
     /// (MiMo-2.5/Pro → 400 literal_error; Agnes → 422 unknown variant).
     static func reasoningEffort(for model: LLMModel, level: ThinkingLevel = .medium) -> String? {
-        guard model.supportsReasoning ?? false else { return nil }
-        return switch level {
-        case .off: nil
-        case .low: "low"
-        case .medium: "medium"
-        case .high: "high"
-        case .xhigh: "xhigh"
-        // [T-ios-ultra-effort-clamp] Ultra is a CLIENT-SIDE "Max + multi-agent
-        // orchestration" toggle, not a server reasoning-effort tier. The wire
-        // `reasoning.effort` field tops out at "max": ChatGPT/Codex compact
-        // endpoints reject a literal "ultra" (400 invalid effort / silently
-        // ignored), and CLIProxyAPI / sub2api both send "max" for Ultra (their
-        // forwarding registries list levels only up to "max"; the "ultra" entry
-        // is display-manifest-only and never enters the request body). So clamp
-        // ultra → "max" here. If/when we implement the orchestration layer it
-        // stays a local behavior; the effort string never becomes "ultra".
-        case .max, .ultra: "max"
-        }
+        // [T-ios-ultra-effort-clamp] Ultra is a CLIENT-SIDE "Max + orchestration"
+        // toggle; the wire effort tops out at "max" (see ThinkingRuleResolver.wireEffort).
+        ThinkingRuleResolver.nativeEffort(supportsReasoning: model.supportsReasoning, level: level)
     }
 
-    /// Inject provider-specific thinking parameters into the Chat Completions request body.
-    /// Different OpenAI-compatible providers use different mechanisms:
-    ///   - OpenAI native: `reasoning_effort` (low/medium/high)
-    ///   - Qwen3: `enable_thinking: true` + `thinking_budget` in extra body
-    ///   - DeepSeek/GLM/Kimi/MiniMax: no params needed (model always reasons)
-    /// [T-thinking-off-explicit] `offEffort` is the provider-appropriate wire
-    /// value for "thinking OFF" ("none" for official OpenAI, "minimal" for
-    /// custom-base providers like Volcano Ark whose smallest tier is minimal).
-    /// nil = keep the historical omit-the-field behavior. Only the branches
-    /// where an explicit off value is known-safe consume it; forced-reasoning
-    /// families (DeepSeek pre-V4 / GLM / Kimi / MiniMax) and OpenRouter keep
-    /// omitting, because those backends reject or misinterpret an off tier
-    /// ("Reasoning is mandatory for this endpoint").
-    /// - Parameter unifiedReasoningEffort: [T-unified-reasoning-effort] true when
-    ///   the endpoint (Volcengine Ark / Azure) exposes EVERY model through a single
-    ///   OpenAI `reasoning_effort` surface. When set, the vendor-native id branches
-    ///   (`deepseek-v4` → `thinking:{}`, and the `deepseek/glm/kimi/minimax`
-    ///   self-reasoning skip) are bypassed so those models fall through to the
-    ///   generic `reasoning_effort` path instead. Only Ark/Azure set this, so
-    ///   official direct DeepSeek/GLM/Kimi endpoints keep their native behavior.
-    static func injectThinkingParams(into body: inout [String: Any], model: LLMModel, level: ThinkingLevel, isOpenRouter: Bool = false, maxTokens: Int = 0, offEffort: String? = nil, unifiedReasoningEffort: Bool = false) {
-        let lid = model.id.lowercased()
-        // [T-thinking-off-explicit] Families whose backends validate
-        // reasoning_effort against a STRICT low/medium/high enum and reject
-        // everything else (the same backends the xhigh clamp exists for:
-        // MiMo-2.5/Pro 400s, Agnes 422s). Device test 2026-07-21 (iPhone 11,
-        // api.xiaomimimo.com): `reasoning_effort:"minimal"` killed the whole
-        // request — no reply at all, worse than the vendor-default reasoning
-        // we were trying to avoid. For these, OFF keeps omitting the field.
-        let strictEffortEnum = lid.contains("mimo") || lid.contains("agnes")
-        let offEffort = strictEffortEnum ? nil : offEffort
-
-        // OpenRouter: unified `reasoning` parameter — auto-adapts to backend provider.
-        // When thinking is off, omit the parameter entirely so forced-reasoning models
-        // (DeepSeek R1, Kimi K2.5, etc.) use their default behavior instead of rejecting
-        // `effort: "none"` with "Reasoning is mandatory for this endpoint".
-        if isOpenRouter {
-            guard level.isEnabled else { return }
-            let effort: String = switch level {
-            case .off: "low" // unreachable due to guard above
-            case .low: "low"
-            case .medium: "medium"
-            case .high: "high"
-            case .xhigh: "xhigh"
-            // [T-ios-ultra-effort-clamp] Ultra → "max" on the wire (see
-            // reasoningEffort(for:level:)); "ultra" is a client-side orchestration
-            // concept, never a valid server effort string.
-            case .max, .ultra: "max"
-            }
-            body["reasoning"] = ["effort": effort]
-            return
-        }
-
-        // OpenAI native o-series and GPT-5.x: reasoning_effort
-        if lid.hasPrefix("o1") || lid.hasPrefix("o3") || lid.hasPrefix("o4")
-            || lid.hasPrefix("gpt-5") || lid.hasPrefix("gpt-4") {
-            if let effort = reasoningEffort(for: model, level: level) {
-                body["reasoning_effort"] = effort
-            } else if !level.isEnabled, let offEffort, model.supportsReasoning ?? false {
-                // [T-thinking-off-explicit] OFF must be SENT, not omitted:
-                // with the field missing, each vendor applies its own default
-                // tier (OpenAI "none", Volcano Ark "minimal", others higher) —
-                // user report: toggle off, capture showed no reasoning field
-                // and the server still reasoned. Same supportsReasoning gate
-                // as the enabled path: non-reasoning models (e.g. gpt-4o)
-                // reject the parameter outright.
-                body["reasoning_effort"] = offEffort
-            }
-            return
-        }
-
-        // Qwen3 models: enable_thinking + thinking_budget
-        // DashScope expects these in extra_body; some endpoints accept top-level.
-        // Send both for maximum compatibility.
-        // When off, explicitly disable — Qwen3 thinks by default.
-        if lid.contains("qwen") {
-            let enabled = level.isEnabled
-            var budget: Int = switch level {
-            case .off: 0
-            case .low: 4096
-            case .medium: 16384
-            case .high: 32768
-            case .xhigh, .max, .ultra: 65536
-            }
-            // [T-ios-qwen3-thinking-budget-max-tokens-constraint] (issue #35, #641)
-            // DashScope/Bailian enforces a STRICT `thinking_budget <
-            // max_completion_tokens` and 400s otherwise — equal values are
-            // rejected too ("[16384] must be greater than [16384]"). Our budget
-            // ladder is independent of maxTokens, so xhigh=65536 vs a 64000 max,
-            // or medium=16384 vs a 16384 max, both violate it. Clamp strictly
-            // below max_completion_tokens (== maxTokens) with a margin for the
-            // answer after thinking. The margin and ceiling are computed
-            // relative to maxTokens (which varies per qwen model — 64000,
-            // 16384, …), never a hardcoded threshold, and the ceiling is forced
-            // to at least maxTokens-1 so a tiny maxTokens can't leave the budget
-            // >= max. maxTokens<=0 means "not provided" (e.g. the title-gen
-            // reference) — skip the clamp then.
-            if budget > 0 && maxTokens > 0 {
-                if maxTokens < 2 {
-                    // No room for any positive budget strictly below max — drop
-                    // thinking_budget entirely rather than emit an invalid value.
-                    budget = 0
-                } else {
-                    let margin = max(2048, maxTokens / 8)
-                    // Stay strictly below max; never let the ceiling collapse to
-                    // <=0 when maxTokens is small — fall back to maxTokens-1.
-                    let ceiling = max(1, min(maxTokens - margin, maxTokens - 1))
-                    if budget >= ceiling {
-                        budget = ceiling
-                    }
-                }
-            }
-            body["enable_thinking"] = enabled
-            if budget > 0 { body["thinking_budget"] = budget }
-            body["extra_body"] = [
-                "enable_thinking": enabled,
-                "thinking_budget": budget > 0 ? budget : NSNull(),
-            ] as [String: Any]
-            return
-        }
-
-        // DeepSeek V4 (deepseek-v4-flash / deepseek-v4-pro):
-        // Thinking is ON by default on V4 and must be toggled explicitly via the
-        // `thinking` object — distinct from deepseek-reasoner, which always reasons
-        // with no user-facing toggle. deepseek-chat (V3) and deepseek-reasoner keep
-        // the forced-reasoning path below so existing behavior is preserved.
-        // [T-unified-reasoning-effort] On Volcengine Ark / Azure, deepseek-v4 is
-        // controlled by the platform's uniform `reasoning_effort` field, NOT the
-        // vendor-native `thinking:{}` object — sending the latter leaves thinking
-        // uncontrolled (user report #7). Skip this branch there and fall through
-        // to the generic reasoning_effort path below.
-        if lid.contains("deepseek-v4") && !unifiedReasoningEffort {
-            if level.isEnabled {
-                let effort: String = switch level {
-                case .off, .low, .medium: "high"
-                case .high, .xhigh, .max, .ultra: "max"
-                }
-                body["thinking"] = ["type": "enabled", "reasoning_effort": effort]
-            } else {
-                body["thinking"] = ["type": "disabled"]
-            }
-            return
-        }
-
-        // DeepSeek (pre-V4), GLM, Kimi, MiniMax, etc.:
-        // These models always return reasoning_content when they reason.
-        // No additional params needed — the model ID itself determines thinking.
-        // We just let the response parsing handle reasoning_content / <think> tags.
-        //
-        // [T-unified-reasoning-effort] EXCEPTION: on Volcengine Ark / Azure these
-        // families are re-hosted behind a uniform OpenAI surface that controls
-        // thinking ONLY via `reasoning_effort` (min tier `minimal`) — omitting it
-        // there means the gateway applies its own default and the user's level
-        // (including OFF) is ignored (user reports #6/#8/#9). Fall through to the
-        // generic reasoning_effort path in that case; keep the native skip for
-        // direct vendor endpoints.
-        if !unifiedReasoningEffort,
-           ["deepseek", "glm", "kimi", "minimax"].contains(where: { lid.contains($0) }) {
-            return
-        }
-
-        // [T-reasoning-effort-fallback] Generic fallback for OpenAI-compatible
-        // third-party reasoning models whose IDs match none of the branches
-        // above (e.g. Volcano/Ark "seed" models): inject the standard Chat
-        // Completions `reasoning_effort` field. Tri-state supportsReasoning:
-        // only a hard `false` blocks injection — nil (unknown) lets the user
-        // enable thinking in the UI, so the request must honor that here too.
-        guard model.supportsReasoning != false else { return }
-        if !level.isEnabled {
-            // [T-thinking-off-explicit] Same as the OpenAI-native branch: send
-            // the provider's off tier instead of omitting the field, so the
-            // vendor default (Ark "minimal", etc.) can't silently re-enable
-            // thinking. nil offEffort keeps the historical omit.
-            if let offEffort { body["reasoning_effort"] = offEffort }
-            return
-        }
-        let effort: String = switch level {
-        case .off: "low" // unreachable — level.isEnabled guarded above
-        case .low: "low"
-        case .medium: "medium"
-        case .high: "high"
-        case .xhigh: "xhigh"
-        // [T-ios-ultra-effort-clamp] Ultra → "max" on the wire (see
-        // reasoningEffort(for:level:)); "ultra" is a client-side orchestration
-        // concept, never a valid server effort string.
-        case .max, .ultra: "max"
-        }
-        body["reasoning_effort"] = effort
+    /// Inject the provider-specific thinking parameters for one request.
+    ///
+    /// [T-thinking-rules-phase1] The body used to be a six-branch if-return chain keyed on
+    /// model-id substrings. The logic now lives in `ThinkingRuleResolver` as a rule
+    /// registry (user rules from `ThinkingRuleStore` first, built-in vendor rules after);
+    /// this stays as the call-site-compatible entry point. Pinned by
+    /// ThinkingWireGoldenSnapshotTests / ThinkingRulesRegressionTests.
+    static func injectThinkingParams(into body: inout [String: Any], model: LLMModel, level: ThinkingLevel, isOpenRouter: Bool = false, maxTokens: Int = 0, offEffort: String? = nil, unifiedReasoningEffort: Bool = false, isMistral: Bool = false, isXAI: Bool = false, isDashScope: Bool = false, isCerebras: Bool = false, providerInstanceId: String? = nil) {
+        // Absent an instance id (title-gen references) only GLOBAL user rules apply.
+        let userRules = ThinkingRuleStore.wireRules(for: providerInstanceId)
+        let ctx = ThinkingResolveContext(
+            modelId: model.id,
+            supportsReasoning: model.supportsReasoning,
+            declaredEffortValues: model.reasoningEffortValues,
+            declaresNoEffortTiers: model.declaresNoEffortTiers ?? false,
+            effortDeclarationIsAuthoritative: model.effortDeclarationIsAuthoritative ?? false,
+            isXAI: isXAI,
+            level: level,
+            maxTokens: maxTokens,
+            isOpenRouter: isOpenRouter,
+            usesUnifiedReasoningEffort: unifiedReasoningEffort,
+            isMistral: isMistral,
+            isDashScope: isDashScope,
+            isCerebras: isCerebras,
+            offEffort: offEffort,
+            userRules: userRules
+        )
+        // Metadata only — no prompt, no key, no image.
+        thinkingLogger.debug(
+            "[resolve.in] model=\(model.id) level=\(level.rawValue)"
+            + " supportsReasoning=\(model.supportsReasoning.map(String.init(describing:)) ?? "nil")"
+            + " declaredTiers=\(model.reasoningEffortValues.map { "[\($0.joined(separator: ","))]" } ?? "nil")"
+            + " authoritative=\(model.effortDeclarationIsAuthoritative.map(String.init(describing:)) ?? "nil")"
+            + " offEffort=\(offEffort ?? "nil")"
+            + " endpoint=[openrouter=\(isOpenRouter) unified=\(unifiedReasoningEffort)"
+            + " mistral=\(isMistral) xai=\(isXAI) dashscope=\(isDashScope) cerebras=\(isCerebras)]"
+            + " userRules=\(userRules.count)"
+        )
+        let trace = ThinkingRuleResolver.apply(to: &body, ctx: ctx)
+        // Design §8: which rule won, and whether any gate overrode it, must be inspectable.
+        thinkingLogger.info("[resolve] model=\(model.id) level=\(level.rawValue) \(trace.logLine)")
     }
 
     // MARK: - DashScope Cache Control
@@ -1107,6 +1052,12 @@ final class OpenAIAgentProvider: AgentProvider {
         let modelAlwaysReasons = model.supportsReasoning == true
         let modelMayReason     = model.supportsReasoning ?? true
         let includeReasoning   = (thinkingLevel.isEnabled || modelAlwaysReasons) && modelMayReason
+        // [T-ios-mistral-reasoning-422] / [T-ios-cerebras-reasoning-400] Mistral and
+        // Cerebras validate the assistant message against a CLOSED schema: a
+        // `reasoning_content` field 422s/400s the whole request (turn 1 works, turn 2
+        // onwards always fails after a reasoning model's history). Gated on the ENDPOINT,
+        // so MiMo / DeepSeek keep receiving the field they require.
+        let forbidReasoningField = provider.isMistral || provider.isCerebras
         // Placeholder is a subset of the echo path. Two triggers:
         //  1. forced-reasoning model with thinking enabled (legacy: tool-call turns
         //     where reasoning wasn't captured),
@@ -1177,7 +1128,8 @@ final class OpenAIAgentProvider: AgentProvider {
                 result.append(convertSingleMessageChatCompletions(
                     msg,
                     includeReasoning: includeReasoning,
-                    injectReasoningPlaceholder: placeholderAllowed
+                    injectReasoningPlaceholder: placeholderAllowed,
+                    forbidReasoningField: forbidReasoningField
                 ))
             }
         }
@@ -1353,7 +1305,8 @@ final class OpenAIAgentProvider: AgentProvider {
     private func convertSingleMessageChatCompletions(
         _ msg: AgentMessage,
         includeReasoning: Bool = false,
-        injectReasoningPlaceholder: Bool = false
+        injectReasoningPlaceholder: Bool = false,
+        forbidReasoningField: Bool = false
     ) -> [String: Any] {
         let role = msg.role == .user ? "user" : "assistant"
         var result: [String: Any] = ["role": role]
@@ -1374,7 +1327,8 @@ final class OpenAIAgentProvider: AgentProvider {
         //   - UI default thinkingLevel == .off
         //   - → includeReasoning = false
         //   - → previously the gate dropped the captured rc → 400
-        if msg.role == .assistant {
+        // …and why the OPPOSITE holds for Mistral / Cerebras (`forbidReasoningField`).
+        if msg.role == .assistant, !forbidReasoningField {
             if let rc = msg.reasoningContent {
                 // The Responses-API encrypted-reasoning summary ("Reasoning: N
                 // tokens (encrypted)") is a UI-only string that has no value as
@@ -1435,7 +1389,7 @@ final class OpenAIAgentProvider: AgentProvider {
                 switch part {
                 case .text(let text):
                     contentParts.append(["type": "text", "text": text])
-                case .imageData(let data, let mimeType, _):
+                case .imageData(let data, let mimeType, let linuxPath):
                     if supportsImages {
                         let base64 = data.base64EncodedString()
                         contentParts.append([
@@ -1443,7 +1397,9 @@ final class OpenAIAgentProvider: AgentProvider {
                             "image_url": ["url": "data:\(mimeType);base64,\(base64)"],
                         ])
                     } else {
-                        contentParts.append(["type": "text", "text": "[Image attached but this model does not support vision input]"])
+                        // [T-ios-vision-group-t264 #182] Point the model at read_image
+                        // (with the real path) when a Vision Group is configured.
+                        contentParts.append(["type": "text", "text": VisionGroupText.attachmentPlaceholder(linuxPath: linuxPath)])
                     }
                 default:
                     break
@@ -1463,6 +1419,21 @@ final class OpenAIAgentProvider: AgentProvider {
 
     private func convertMessagesResponsesAPI(_ messages: [AgentMessage]) -> [[String: Any]] {
         var result: [[String: Any]] = []
+
+        // [T-openai-tool-result-image] Tool-result images ride on a synthetic role:"user"
+        // input_image item (function_call_output cannot hold pixels). Emitted inline, with
+        // PARALLEL tool calls they split the run of outputs —
+        //   output(call_01), output(call_02), user(input_image), output(call_03)
+        // — which strict Responses relays reject ("No tool output found for tool call").
+        // Carriers are buffered while a run of outputs is emitted and flushed when it
+        // closes; with a single result the wire bytes are unchanged.
+        var pendingImageCarriers: [[String: Any]] = []
+        func flushImageCarriers() {
+            guard !pendingImageCarriers.isEmpty else { return }
+            result.append(contentsOf: pendingImageCarriers)
+            pendingImageCarriers.removeAll()
+        }
+
         for msg in messages {
             // Replay native reasoning items at the head of this assistant turn.
             // Order matters: Responses API rejects reasoning items that appear
@@ -1491,6 +1462,7 @@ final class OpenAIAgentProvider: AgentProvider {
                             "summary": summary.map { ["type": "summary_text", "text": $0] },
                             "encrypted_content": encrypted,
                         ]
+                        flushImageCarriers()
                         result.append(entry)
                     }
                 }
@@ -1499,6 +1471,7 @@ final class OpenAIAgentProvider: AgentProvider {
                 switch part {
                 case .text(let text):
                     let role = msg.role == .user ? "user" : "assistant"
+                    flushImageCarriers()
                     result.append(["role": role, "content": text])
 
                 case .toolUse(let id, let name, let input):
@@ -1531,6 +1504,7 @@ final class OpenAIAgentProvider: AgentProvider {
                         }
                         entry["id"] = "fc_syn_\(safeCallId.suffix(24))"
                     }
+                    flushImageCarriers()
                     result.append(entry)
 
                 case .toolResult(let id, _, let content, _, let imageData, let imageMime, _, _):
@@ -1550,7 +1524,7 @@ final class OpenAIAgentProvider: AgentProvider {
                        model.capabilities.supportedModalities.contains(.imageInput) {
                         let mime = imageMime ?? "image/jpeg"
                         let base64 = data.base64EncodedString()
-                        result.append([
+                        pendingImageCarriers.append([
                             "role": "user",
                             "content": [
                                 ["type": "input_image", "image_url": "data:\(mime);base64,\(base64)"],
@@ -1558,7 +1532,8 @@ final class OpenAIAgentProvider: AgentProvider {
                         ])
                     }
 
-                case .imageData(let data, let mimeType, _):
+                case .imageData(let data, let mimeType, let linuxPath):
+                    flushImageCarriers()
                     if model.capabilities.supportedModalities.contains(.imageInput) {
                         let base64 = data.base64EncodedString()
                         result.append([
@@ -1567,11 +1542,25 @@ final class OpenAIAgentProvider: AgentProvider {
                                 ["type": "input_image", "image_url": "data:\(mimeType);base64,\(base64)"],
                             ],
                         ])
+                    } else {
+                        // [T-ios-vision-group-t264 #182] The image used to vanish silently
+                        // here; say it was attached and how to read it.
+                        result.append([
+                            "role": msg.role == .user ? "user" : "assistant",
+                            "content": VisionGroupText.attachmentPlaceholder(linuxPath: linuxPath),
+                        ])
                     }
                 }
             }
+            // The run closes at the message boundary too.
+            flushImageCarriers()
         }
-        return result
+        flushImageCarriers()
+        let (repaired, report) = ResponsesToolPairing.sanitize(result)
+        if let report {
+            logger.warning("[sanitize-responses] orphan tool items in OUTGOING request — repaired: \(report)")
+        }
+        return repaired
     }
 
     // MARK: - Tool Conversion

@@ -48,22 +48,33 @@ enum AgentChatCorrectness {
         isAssistant.lastIndex(of: true)
     }
 
-    /// Image attachments must not enter send or enqueue on a text-only model.
-    static func shouldBlockImageAttachments(hasImages: Bool, supportsImageInput: Bool) -> Bool {
-        hasImages && !supportsImageInput
+    /// Image attachments must not enter send or enqueue on a text-only model — unless a
+    /// Vision Group is configured: then the image is saved, the serializer hands the model
+    /// its path, and `read_image` reads it through the group. [T-ios-vision-group #182]
+    static func shouldBlockImageAttachments(hasImages: Bool, supportsImageInput: Bool,
+                                            visionGroupConfigured: Bool = false) -> Bool {
+        hasImages && !supportsImageInput && !visionGroupConfigured
     }
 
-    /// `read_image` is a vision tool. Register it only when the *active* model
-    /// can consume image input — not a leftover default like Haiku.
-    static func shouldRegisterReadImage(supportsImageInput: Bool) -> Bool {
-        supportsImageInput
+    /// `read_image` is registered when the *active* model can consume image input itself
+    /// (not a leftover default like Haiku), or when a Vision Group reads on its behalf.
+    static func shouldRegisterReadImage(supportsImageInput: Bool, visionGroupConfigured: Bool = false) -> Bool {
+        supportsImageInput || visionGroupConfigured
     }
 
     /// Reminder after some attached images were saved to disk but not inlined.
-    /// Non-vision models must not be told to call `read_image` or that they saw the files.
-    static func omittedImageReminder(inlined: Int, total: Int, supportsImageInput: Bool) -> String? {
+    /// Non-vision models are told to use `read_image` only when a Vision Group backs it,
+    /// and never that they saw the files.
+    static func omittedImageReminder(inlined: Int, total: Int, supportsImageInput: Bool,
+                                     visionGroupConfigured: Bool = false) -> String? {
         guard total > inlined else { return nil }
         let omitted = total - inlined
+        if !supportsImageInput, visionGroupConfigured {
+            return "<system-reminder>\(omitted) of \(total) images are saved to disk and not shown to you."
+                + " This model cannot view images; call read_image on a saved path (optionally with a"
+                + " `prompt` asking for the detail you need) to get a description from the Vision Group."
+                + " Do not claim you inspected the pixels yourself.</system-reminder>"
+        }
         if supportsImageInput {
             return "<system-reminder>Only \(inlined) of \(total) images are inlined above."
                 + " The remaining \(omitted) are saved to disk — use read_image to view them."

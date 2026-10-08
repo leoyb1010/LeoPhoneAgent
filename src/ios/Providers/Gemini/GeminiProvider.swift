@@ -589,7 +589,7 @@ final class GeminiProvider: LLMProvider {
         }
         let transientStatusCodes: Set<Int> = [500, 502, 503, 504, 529]
         if transientStatusCodes.contains(http.statusCode) {
-            throw LLMError.transientError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))")
+            throw LLMError.transientError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))", statusCode: http.statusCode)
         }
         throw LLMError.providerError(message: "Gemini API error \(http.statusCode): \(body.prefix(500))")
     }
@@ -616,7 +616,7 @@ final class GeminiProvider: LLMProvider {
             logger.error("Gemini API error \(http.statusCode), responseBytes=\(data?.count ?? 0)")
             let transientStatusCodes: Set<Int> = [500, 502, 503, 504, 529]
             if transientStatusCodes.contains(http.statusCode) {
-                throw LLMError.transientError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))")
+                throw LLMError.transientError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))", statusCode: http.statusCode)
             }
             throw LLMError.providerError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))")
         }

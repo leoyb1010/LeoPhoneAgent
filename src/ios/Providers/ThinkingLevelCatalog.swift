@@ -1,30 +1,21 @@
 import Foundation
 
-/// User-editable thinking ceiling for a model-id prefix. Built-in catalog
-/// stays as fallback; a matching custom rule wins so a new model does not
-/// require a Swift change.
-struct ThinkingRule: Codable, Equatable, Identifiable {
-    var prefix: String
-    var maxLevel: ThinkingLevel
-    var defaultLevel: ThinkingLevel
-    var id: String { prefix.lowercased() }
-}
-
+/// User thinking rules (`ThinkingRule`, kind `.custom`), stored in UserDefaults.
+///
+/// ONE store for both rule jobs: ceiling rules (`maxLevel`, read by
+/// `ThinkingLevelCatalog.declaredMaxLevel`) and wire-shape rules (`wireFormat`, read by
+/// `ThinkingRuleResolver` through `wireRules(for:)`). The key and the legacy row shape
+/// `{prefix, maxLevel, defaultLevel}` are unchanged, so rules saved by older builds load
+/// as-is — no migration step to fail or run twice.
 enum ThinkingRuleStore {
     static let defaultsKey = "leo.thinkingRules.v1"
     static let lastCarriedKey = "leo.lastCarriedThinking"
 
     /// [T-thinking-rules-hot-path] 解码结果按「原始 Data」缓存。
     ///
-    /// `ThinkingLevelCatalog.declaredMaxLevel(for:)` 会调这里,而它被
-    /// AIChatView 在 body 里读(模型标签、思考档位菜单等好几处),流式期间
-    /// 每帧都命中。原来每次都新建一个 JSONDecoder 再 decode 一遍——纯浪费,
-    /// 而且发生在主线程上。
-    /// 缓存刻意用「上次读到的 Data」做判据,而不是靠 save() 主动失效:
-    /// UserDefaults 可能被别处(测试、配置下发、另一个进程)直接改写,
-    /// 基于 Data 比较不会读到陈旧值;读 UserDefaults 本身是进程内缓存,
-    /// 省掉的是 decode。没配过自定义规则时 data 为 nil,直接返回空数组,
-    /// 连比较都不用做。
+    /// `declaredMaxLevel(for:)` 在 AIChatView 的 body 里被读(流式期间每帧都命中),
+    /// 请求组装时 `wireRules(for:)` 也会读。缓存判据是「上次读到的 Data」而不是靠
+    /// save() 主动失效:UserDefaults 可能被别处直接改写,基于 Data 比较不会读到陈旧值。
     private static let cacheLock = NSLock()
     nonisolated(unsafe) private static var cachedRaw: Data?
     nonisolated(unsafe) private static var cachedRules: [ThinkingRule] = []
@@ -40,19 +31,45 @@ enum ThinkingRuleStore {
         cacheLock.lock()
         defer { cacheLock.unlock() }
         if cachedRaw == data { return cachedRules }
-        let rows = (try? JSONDecoder().decode([ThinkingRule].self, from: data)) ?? []
+        let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+        // Unknown/malformed rows are dropped individually, never the whole list.
+        let rules = rows.compactMap(ThinkingRule.fromPersistedJSON)
         cachedRaw = data
-        cachedRules = rows
-        return rows
+        cachedRules = rules
+        return rules
     }
 
     static func save(_ rules: [ThinkingRule]) {
-        let cleaned = rules
-            .map { ThinkingRule(prefix: $0.prefix.trimmingCharacters(in: .whitespacesAndNewlines),
-                                maxLevel: $0.maxLevel,
-                                defaultLevel: min($0.defaultLevel, $0.maxLevel)) }
-            .filter { !$0.prefix.isEmpty }
-        UserDefaults.standard.set(try? JSONEncoder().encode(cleaned), forKey: defaultsKey)
+        let cleaned: [[String: Any]] = rules.compactMap { rule in
+            var r = rule
+            r.kind = .custom
+            if case .modelPattern(let p) = r.scope {
+                let trimmed = p.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                r.scope = .modelPattern(trimmed)
+                if r.label.isEmpty || r.label == p { r.label = trimmed }
+            }
+            guard r.wireFormat != nil || r.maxLevel != nil else { return nil }
+            return r.persistedJSON
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: cleaned, options: [.sortedKeys]) {
+            UserDefaults.standard.set(data, forKey: defaultsKey)
+        }
+    }
+
+    /// The first user ceiling for `modelId` (global rules only — the ceiling API has no
+    /// provider context).
+    static func ceiling(for modelId: String) -> ThinkingLevel? {
+        load().first { $0.maxLevel != nil && $0.providerInstanceId == nil && $0.matches(modelId) }?.maxLevel
+    }
+
+    /// User wire-shape rules that apply to a provider instance, in list order: global
+    /// rules plus the ones pinned to this instance. Empty = built-in behaviour only.
+    static func wireRules(for instanceId: String?) -> [ThinkingRule] {
+        load().filter { rule in
+            rule.wireFormat != nil
+                && (rule.providerInstanceId == nil || rule.providerInstanceId == instanceId)
+        }
     }
 
     static func rememberCarried(_ level: ThinkingLevel) {
@@ -168,12 +185,18 @@ enum ThinkingLevelCatalog {
         // built-in catalog but third-party proxies may return dots
         // (claude-opus-4.8). Normalize to match both.
         ({ Self.normalizedHasPrefix($0, "claude-opus-4") }, .max),
+        // [T-anthropic-opus55-ceiling] Claude Opus 5.x — same ceiling (claude-opus-5-5
+        // is not in the bundled catalog, so without a rule Max never appeared).
+        ({ Self.normalizedHasPrefix($0, "claude-opus-5") }, .max),
+        // [T-deepseek-flash-scope] DeepSeek V4 / bare deepseek-flash accept "max";
+        // the wire path snaps xhigh down to "high" (DeepSeek's ladder is [high,max]).
+        ({ $0.contains("deepseek-flash") || $0.contains("deepseek-v4") }, .max),
     ]
 
     static func declaredMaxLevel(for modelId: String) -> ThinkingLevel? {
         let lid = modelId.lowercased()
-        if let custom = ThinkingRuleStore.load().first(where: { lid.hasPrefix($0.prefix.lowercased()) }) {
-            return custom.maxLevel
+        if let custom = ThinkingRuleStore.ceiling(for: lid) {
+            return custom
         }
         // [T-codex-live-models] 服务端目录里写明的上限优先于内置规则:新模型(GPT-6 等)不用等发版。
         if let live = CodexReasoningCeiling.level(for: lid) { return live }

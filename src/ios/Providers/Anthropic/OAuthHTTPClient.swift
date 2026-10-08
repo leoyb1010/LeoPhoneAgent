@@ -907,16 +907,30 @@ final class EagerStreamingHTTPClient: HTTPClient {
 /// Used for manual OAuth tokens on Anthropic-compatible proxies that may expect either header.
 final class DualAuthHTTPClient: HTTPClient {
     private let underlying: URLSessionHTTPClientAdapter
+    private let perRequestToken: String?
 
     /// - Parameters:
     ///   - customUserAgent: see `EagerStreamingHTTPClient.init`.
-    ///   - extraHeaders: sent on every request (e.g. OpenCode Go's session id).
-    init(customUserAgent: String? = nil, extraHeaders: [String: String] = [:]) {
+    ///   - extraHeaders: sent on every request, fixed at construction.
+    ///   - perRequestHeaders: resolved for EACH request (OpenCode Go's session id, which
+    ///     a draft chat only gets after its provider was built). The SDK's request type
+    ///     is opaque, so the closure is registered under a token carried in a marker
+    ///     header that `DualAuthURLProtocol` swaps for the real headers.
+    init(customUserAgent: String? = nil, extraHeaders: [String: String] = [:],
+         perRequestHeaders: (@Sendable () -> [String: String])? = nil) {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 600
         config.protocolClasses = [DualAuthURLProtocol.self]
         var headers = extraHeaders
         if let ua = customUserAgent { headers["User-Agent"] = ua }
+        if let perRequestHeaders {
+            let token = UUID().uuidString
+            PerRequestHeaderRegistry.shared.register(token, perRequestHeaders)
+            headers[PerRequestHeaderRegistry.markerHeader] = token
+            perRequestToken = token
+        } else {
+            perRequestToken = nil
+        }
         if !headers.isEmpty {
             config.httpAdditionalHeaders = (config.httpAdditionalHeaders ?? [:]).merging(
                 headers as [AnyHashable: Any]) { _, new in new }
@@ -925,12 +939,44 @@ final class DualAuthHTTPClient: HTTPClient {
         self.underlying = URLSessionHTTPClientAdapter(urlSession: session)
     }
 
+    deinit {
+        if let perRequestToken { PerRequestHeaderRegistry.shared.remove(perRequestToken) }
+    }
+
     func data(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
         try await underlying.data(for: request)
     }
 
     func bytes(for request: HTTPRequest) async throws -> (HTTPByteStream, HTTPResponse) {
         try await underlying.bytes(for: request)
+    }
+}
+
+/// Per-request header closures for `DualAuthHTTPClient`, keyed by an opaque token.
+/// The marker header never leaves the device: `DualAuthURLProtocol` strips it.
+final class PerRequestHeaderRegistry: @unchecked Sendable {
+    static let shared = PerRequestHeaderRegistry()
+    static let markerHeader = "X-Leo-Per-Request-Headers"
+
+    private let lock = NSLock()
+    private var closures: [String: @Sendable () -> [String: String]] = [:]
+
+    func register(_ token: String, _ closure: @escaping @Sendable () -> [String: String]) {
+        lock.lock(); closures[token] = closure; lock.unlock()
+    }
+
+    func remove(_ token: String) {
+        lock.lock(); closures.removeValue(forKey: token); lock.unlock()
+    }
+
+    /// Replace the marker on `request` with the headers its closure resolves now.
+    func apply(to request: NSMutableURLRequest) {
+        guard let token = request.value(forHTTPHeaderField: Self.markerHeader) else { return }
+        request.setValue(nil, forHTTPHeaderField: Self.markerHeader)
+        lock.lock(); let closure = closures[token]; lock.unlock()
+        for (key, value) in closure?() ?? [:] {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
     }
 }
 
@@ -959,6 +1005,9 @@ private final class DualAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
     override func startLoading() {
         let mutable = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: "DualAuthHandled", in: mutable)
+
+        // Resolve per-request headers (and strip the marker) before anything else.
+        PerRequestHeaderRegistry.shared.apply(to: mutable)
 
         // Send both x-api-key AND Authorization: Bearer for maximum proxy compatibility.
         // MiniMax Anthropic endpoint requires x-api-key; other proxies require Authorization: Bearer.

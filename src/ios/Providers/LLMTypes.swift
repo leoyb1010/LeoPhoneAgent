@@ -60,9 +60,28 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
     /// nil means the provider uses native thinking blocks (Anthropic) or thought parts (Gemini).
     var interleavedReasoningField: String?
 
+    /// [T-reasoning-effort-data-driven] Effort tiers this model accepts on the wire, from
+    /// the models.dev `reasoning_options` entry of type `effort` (e.g. `["high","max"]`),
+    /// lowercased. nil = the catalog says nothing; the thinking resolver then keeps the
+    /// legacy id heuristics. Only consulted when `effortDeclarationIsAuthoritative`.
+    var reasoningEffortValues: [String]?
+
+    /// [OpenMinis#163] The catalog AFFIRMATIVELY declares no effort tiers (reasons, but
+    /// takes no `reasoning_effort`). Distinct from `reasoningEffortValues == nil`, which
+    /// also means "never heard of it". Optional so older saved models decode as nil.
+    var declaresNoEffortTiers: Bool?
+
+    /// [T-thinking-off-custom-provider] True only when `reasoningEffortValues` came from
+    /// the catalog entry of THIS endpoint (base-URL match or the model's own provider
+    /// key). The cross-provider fallback vote that custom relays resolve through is a
+    /// guess about somebody else's endpoint, so it neither clamps the requested tier nor
+    /// suppresses the user's explicit "thinking off". Optional for Codable compatibility.
+    var effortDeclarationIsAuthoritative: Bool?
+
     init(id: String, displayName: String, provider: String, modalityOverride: ModelModality? = nil,
          contextWindow: Int? = nil, maxOutputTokens: Int? = nil,
-         supportsReasoning: Bool? = nil, interleavedReasoningField: String? = nil) {
+         supportsReasoning: Bool? = nil, interleavedReasoningField: String? = nil,
+         reasoningEffortValues: [String]? = nil, declaresNoEffortTiers: Bool? = nil) {
         self.id = id
         self.displayName = displayName
         self.provider = provider
@@ -71,6 +90,8 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
         self.maxOutputTokens = maxOutputTokens
         self.supportsReasoning = supportsReasoning
         self.interleavedReasoningField = interleavedReasoningField
+        self.reasoningEffortValues = reasoningEffortValues
+        self.declaresNoEffortTiers = declaresNoEffortTiers
     }
 
     // [T-anthropic-context-window] Explicit context/output caps per Anthropic's
@@ -184,32 +205,40 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
 
     // MARK: - OpenAI Models
 
+    // [T-gpt6-astra-effort] `supportsReasoning: true` must be explicit on the GPT-6
+    // family: a brand-new id is not in the bundled models.dev catalog, so enrichment
+    // leaves the flag nil and the offline built-in list sent every thinking level as
+    // the Codex fallback `reasoning.effort: "low"`.
     static let gpt61Sol = LLMModel(
         id: "gpt-6.1-sol",
         displayName: "GPT-6.1-Sol",
         provider: "OpenAI",
-        contextWindow: 272_000
+        contextWindow: 272_000,
+        supportsReasoning: true
     )
 
     static let gpt6Astra = LLMModel(
         id: "gpt-6-astra",
         displayName: "GPT-6-Astra",
         provider: "OpenAI",
-        contextWindow: 272_000
+        contextWindow: 272_000,
+        supportsReasoning: true
     )
 
     static let gpt6Sol = LLMModel(
         id: "gpt-6-sol",
         displayName: "GPT-6-Sol",
         provider: "OpenAI",
-        contextWindow: 272_000
+        contextWindow: 272_000,
+        supportsReasoning: true
     )
 
     static let gpt6Luna = LLMModel(
         id: "gpt-6-luna",
         displayName: "GPT-6-Luna",
         provider: "OpenAI",
-        contextWindow: 272_000
+        contextWindow: 272_000,
+        supportsReasoning: true
     )
 
     static let gpt56Sol = LLMModel(

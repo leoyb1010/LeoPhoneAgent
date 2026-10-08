@@ -20,10 +20,20 @@ enum GeminiModelsAPI {
             while trimmed.hasSuffix("/") { trimmed.removeLast() }
             return trimmed.hasSuffix("/models") ? trimmed : URLBuilding.join(trimmed, "/models")
         } ?? defaultBaseURL
-        var components = URLComponents(string: modelsURL)!
+        // [T-ios-gemini-baseurl-force-unwrap] `modelsURL` comes from the user's editable
+        // Base URL (a pasted space, full-width punctuation or a bidi mark makes it nil).
+        // Force-unwrapping crashed the app at LAUNCH (auto-refresh runs on startup) — a
+        // boot loop. Throw instead; the refresh fails softly and keeps the model list.
+        // Never put the key in the message: `modelsURL` carries no query yet.
+        guard var components = URLComponents(string: modelsURL) else {
+            throw LLMError.providerError(message: "Invalid Gemini base URL: \(modelsURL)")
+        }
         components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
 
-        var request = URLRequest(url: components.url!)
+        guard let url = components.url else {
+            throw LLMError.providerError(message: "Invalid Gemini base URL: \(modelsURL)")
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         logger.info("Fetching Gemini models (API key auth)")
         let models = try await performFetch(request)

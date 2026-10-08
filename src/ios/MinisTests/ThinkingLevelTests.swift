@@ -67,7 +67,7 @@ final class ThinkingLevelTests: XCTestCase {
             }
         }
         ThinkingRuleStore.save([
-            ThinkingRule(prefix: "gpt-5.7-new", maxLevel: .medium, defaultLevel: .low)
+            .ceiling(prefix: "gpt-5.7-new", maxLevel: .medium)
         ])
         XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "gpt-5.7-new-preview"), .medium)
         XCTAssertTrue(ThinkingLevelCatalog.isKnownFamily(for: "gpt-5.7-new-preview"))
@@ -89,14 +89,13 @@ final class ThinkingLevelTests: XCTestCase {
         }
 
         ThinkingRuleStore.save([
-            ThinkingRule(prefix: "cache-probe", maxLevel: .medium, defaultLevel: .low)
+            .ceiling(prefix: "cache-probe", maxLevel: .medium)
         ])
         XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "cache-probe-1"), .medium)
 
         // 绕过 save(),直接改 UserDefaults —— 必须立刻被看到。
-        let raw = try JSONEncoder().encode([
-            ThinkingRule(prefix: "cache-probe", maxLevel: .low, defaultLevel: .low)
-        ])
+        // Legacy row shape written by older builds — must still read as a ceiling rule.
+        let raw = Data(#"[{"prefix":"cache-probe","maxLevel":"low","defaultLevel":"low"}]"#.utf8)
         UserDefaults.standard.set(raw, forKey: key)
         XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "cache-probe-1"), .low)
 

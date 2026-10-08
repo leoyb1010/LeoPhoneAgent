@@ -118612,6 +118612,72 @@
           }
         }
       }
+    },
+    "Vision Group": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision Group"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片识别"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片識別"
+          }
+        }
+      }
+    },
+    "Read images with": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read images with"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代读图片的模型组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代讀圖片的模型組"
+          }
+        }
+      }
+    },
+    "When the current model cannot read images, image-capable models in this group read them on its behalf (up to 3 tried, 90 s each) and pass a description back. This device only.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the current model cannot read images, image-capable models in this group read them on its behalf (up to 3 tried, 90 s each) and pass a description back. This device only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前模型看不了图时，由这个组里能读图的模型代为读图（最多试 3 个，每个 90 秒），把描述交回当前模型。仅本机生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前模型看不了圖時，由這個組裡能讀圖的模型代為讀圖（最多試 3 個，每個 90 秒），把描述交回目前模型。僅本機生效。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

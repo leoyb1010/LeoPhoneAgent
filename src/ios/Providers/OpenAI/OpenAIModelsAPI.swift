@@ -59,8 +59,11 @@ enum OpenAIModelsAPI {
     /// catalog-only models and prune them from groups.
     static func fetchModelsCodexOAuth(instanceId: String, forceRefresh: Bool = false,
                                       instanceHasModels: Bool = true) async throws -> [LLMModel] {
-        // 目录内容随 client_version 变,版本进缓存键:升级后旧目录立即失效,不再等 7 天。
-        let cacheKey = "codex-oauth-\(instanceId)-v\(OpenAIProvider.codexClientVersion)"
+        // [T-codex-model-discovery] Keyed by ACCOUNT as well as instance: re-logging an
+        // instance into another ChatGPT account must not serve the previous account's
+        // catalog. 目录内容随 client_version 变,版本也进缓存键:升级后旧目录立即失效。
+        let accountId = await CodexOAuthManager.shared.accountId(instanceId: instanceId)
+        let cacheKey = "codex-oauth-\(instanceId)-\(accountId ?? "-")-v\(OpenAIProvider.codexClientVersion)"
         if !forceRefresh, let cached = OpenAIModelsCache.load(credential: cacheKey) {
             logger.info("Returning \(cached.count) cached Codex catalog models")
             return cached
@@ -78,7 +81,7 @@ enum OpenAIModelsAPI {
             request.setValue("codex_cli_rs/\(OpenAIProvider.codexClientVersion) (iOS; arm64)", forHTTPHeaderField: "User-Agent")
             request.setValue("codex_cli_rs", forHTTPHeaderField: "Originator")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            if let accountId = await CodexOAuthManager.shared.accountId(instanceId: instanceId) {
+            if let accountId {
                 request.setValue(accountId, forHTTPHeaderField: "Chatgpt-Account-Id")
             }
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -86,15 +89,27 @@ enum OpenAIModelsAPI {
             if (200..<300).contains(status) {
                 let models = parseCodexCatalog(data)
                 if !models.isEmpty {
-                    let result = ModelsDevAPI.enrichModels(models) + [LLMModel.gptImage2]
+                    // [T-codex-model-discovery] The endpoint is the authority for this
+                    // account; models.dev only fills what it left unstated.
+                    let merged = mergeKeepingAuthoritative(fresh: models, enriched: ModelsDevAPI.enrichModels(models))
+                    let result = merged + [LLMModel.gptImage2]
                     OpenAIModelsCache.save(result, credential: cacheKey)
                     logger.info("Codex catalog: \(models.count) models")
                     return result
                 }
                 reason = "目录为空或无法解析"
+            } else if status == 401 || status == 403 {
+                // [T-codex-model-discovery] An auth failure is reported AS one. Serving the
+                // last catalog here showed a healthy-looking picker for an account that can
+                // no longer call anything; the refresh must surface it.
+                let body = String(data: data, encoding: .utf8) ?? ""
+                throw LLMError.invalidAPIKey(detail: "Codex models HTTP \(status): \(String(body.prefix(200)))")
             } else {
                 reason = "HTTP \(status)"
             }
+        } catch let error as LLMError {
+            if case .invalidAPIKey = error { throw error }
+            reason = error.localizedDescription
         } catch {
             reason = error.localizedDescription
         }
@@ -106,6 +121,23 @@ enum OpenAIModelsAPI {
             return fetchModelsOAuth()
         }
         throw ModelRefreshError.catalogUnavailable(reason: reason)
+    }
+
+    /// [T-codex-model-discovery] Combine endpoint truth with models.dev metadata, field by
+    /// field: a value the ENDPOINT stated wins; everything it left nil comes from the
+    /// enriched copy. `enrichModels` treats models.dev as the source of truth and would
+    /// otherwise overwrite fresh endpoint modality/context with a possibly months-stale
+    /// entry. Mutates the enriched copy so its effort-tier fields survive.
+    static func mergeKeepingAuthoritative(fresh: [LLMModel], enriched: [LLMModel]) -> [LLMModel] {
+        let byId = Dictionary(enriched.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return fresh.map { authoritative in
+            guard var merged = byId[authoritative.id] else { return authoritative }
+            if authoritative.contextWindow != nil { merged.contextWindow = authoritative.contextWindow }
+            if authoritative.maxOutputTokens != nil { merged.maxOutputTokens = authoritative.maxOutputTokens }
+            if authoritative.supportsReasoning != nil { merged.supportsReasoning = authoritative.supportsReasoning }
+            if authoritative.modalityOverride != nil { merged.modalityOverride = authoritative.modalityOverride }
+            return merged
+        }
     }
 
     /// `{models:[{slug, display_name, visibility, context_window, input_modalities, supported_reasoning_levels, priority}]}`.

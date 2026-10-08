@@ -98,6 +98,14 @@ struct ModelGroupsView: View {
                 } footer: {
                     Text("Voice Input and Output use the matching audio models in a group. None uses the offline System voice.")
                 }
+                // [T-ios-vision-group #182] Image reading for models that cannot see.
+                Section {
+                    VisionGroupSlotPicker()
+                } header: {
+                    Text("Vision Group")
+                } footer: {
+                    Text("When the current model cannot read images, image-capable models in this group read them on its behalf (up to 3 tried, 90 s each) and pass a description back. This device only.")
+                }
             }
 
             // Agent Loop Models
@@ -352,5 +360,46 @@ private struct GroupRow: View {
             .padding(.vertical, 2)
             .background(color.opacity(0.12))
             .clipShape(Capsule())
+    }
+}
+
+/// [T-ios-vision-group #182] Picks the Vision Group. Only groups holding at least one
+/// image-capable model are selectable; the pointer is local to this device.
+private struct VisionGroupSlotPicker: View {
+    @ObservedObject private var store = ProviderConfigStore.shared
+
+    private func imageMembers(_ group: ModelGroup) -> Int {
+        group.memberEntryIds.compactMap { store.entry(for: $0) }
+            .filter { !$0.isHidden && $0.model.capabilities.supportedModalities.contains(.imageInput) }
+            .count
+    }
+
+    private var selectedName: String {
+        if let id = store.visionGroupId {
+            return store.group(for: id)?.name ?? String(localized: "Unavailable group")
+        }
+        return String(localized: "None", comment: "No group selected")
+    }
+
+    var body: some View {
+        Menu {
+            Picker(selection: Binding(get: { store.visionGroupId }, set: { store.visionGroupId = $0 })) {
+                Text("None", comment: "No group selected").tag(String?.none)
+                ForEach(store.modelGroups) { group in
+                    Text(group.name).tag(Optional(group.id)).disabled(imageMembers(group) == 0)
+                }
+            } label: { EmptyView() }
+        } label: {
+            HStack {
+                Text("Read images with")
+                    .foregroundStyle(Color(UIColor.label))
+                Spacer()
+                Text(selectedName)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 }

@@ -69,6 +69,9 @@ enum LLMProviderFactory {
     /// `manualToken` is the builder's single read of the instance's pasted token.
     @discardableResult
     static func applyCustomUserAgent(_ provider: OpenAIProvider, instance: ProviderInstance, manualToken: String?) -> OpenAIProvider {
+        // Every OpenAI-family builder passes through here: tag the instance so the thinking
+        // resolver can apply user rules pinned to it.
+        if provider.providerInstanceId == nil { provider.providerInstanceId = instance.id }
         // OAuth (Codex) requires its own `codex_cli_rs/...` UA — never touch it.
         guard !provider.isOAuth else { return provider }
         // A user-set per-provider custom UA wins (only honored for
@@ -123,22 +126,34 @@ enum LLMProviderFactory {
     }
 
     /// OpenCode Go: one key, three wire protocols chosen by model family.
-    /// `sessionId` is the conversation's id (Go rejects requests without one);
-    /// calls outside a conversation, such as the connection test, get a fresh id.
-    static func makeOpenCodeGoProvider(instance: ProviderInstance, model: LLMModel, sessionId: String? = nil) -> any LLMProvider {
+    ///
+    /// [T-opencode-dedicated-channel] Go rejects requests without `x-opencode-session`
+    /// and keys its prompt cache on it, so it must be the SAME id on every request of a
+    /// conversation. The id is read PER REQUEST from `sessionBox` (the chat view model
+    /// updates it on draft→session promotion) rather than captured at construction;
+    /// calls outside a conversation (connection test, title generation) fall back to one
+    /// fixed id for this provider's lifetime.
+    static func makeOpenCodeGoProvider(instance: ProviderInstance, model: LLMModel, sessionId: String? = nil,
+                                       sessionBox: ConversationSessionBox? = nil) -> any LLMProvider {
         let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-        let session = [OpenCodeGo.sessionHeader: sessionId.flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString]
+        let fallback = OpenCodeSessionHeader.normalizedSessionId(sessionId) ?? UUID().uuidString
+        let header = OpenCodeGo.sessionHeader
+        let resolve: @Sendable () -> [String: String] = {
+            [header: OpenCodeSessionHeader.resolve(live: sessionBox?.value, fallback: fallback)]
+        }
         switch OpenCodeGo.wireProtocol(for: model.id) {
         case .anthropicMessages:
-            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, extraHeaders: session)
+            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, perRequestHeaders: resolve)
         case .responses:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
             provider.forceResponsesAPI = true
-            provider.extraHeaders.merge(session) { _, new in new }
+            provider.perRequestHeaders = { _ in resolve() }
+            provider.providerInstanceId = instance.id
             return applyCustomUserAgent(provider, instance: instance, manualToken: nil)
         case .chatCompletions:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
-            provider.extraHeaders.merge(session) { _, new in new }
+            provider.perRequestHeaders = { _ in resolve() }
+            provider.providerInstanceId = instance.id
             return applyCustomUserAgent(provider, instance: instance, manualToken: nil)
         }
     }
@@ -247,6 +262,12 @@ enum LLMProviderFactory {
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
             return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance, manualToken: manualToken)
         case .oauth:
+            // [T-kimi-manual-token-ignored] "Configure manually" stores a bearer token
+            // with credentialType .oauth and names Kimi as the use case; it used to be
+            // stored, shown as configured, then ignored ("Kimi: no OAuth token found").
+            if let manualToken {
+                return applyCustomUserAgent(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance, manualToken: manualToken)
+            }
             // Signed-in tokens only go to the official endpoint.
             let iid = instance.id
             let provider = OpenAIProvider(
@@ -255,6 +276,7 @@ enum LLMProviderFactory {
             )
             provider.customBaseURL = officialBase
             provider.appendV1Suffix = true
+            provider.providerInstanceId = iid
             return provider
         }
     }
@@ -284,6 +306,7 @@ enum LLMProviderFactory {
             let provider = OpenAIProvider(oauthTokenProvider: tokenProvider, model: model)
             provider.customBaseURL = officialBase
             provider.appendV1Suffix = false
+            provider.providerInstanceId = iid
             return provider
         }
     }

@@ -637,7 +637,9 @@ extension AIChatViewModel {
             }
 
         case "read_image":
-            if !currentModelSupportsImageInput {
+            // [T-ios-vision-group #182] Same source the registration used.
+            let nativeVision = currentModelSupportsImageInput
+            if !nativeVision && !VisionGroupResolver.isConfigured {
                 toolOutput = "Error: the current model cannot view images. Do not describe this file's pixels. Tell the user to switch to a vision model, or refer only to the path they provided."
                 toolSuccess = false
                 break
@@ -672,8 +674,6 @@ extension AIChatViewModel {
                     resizedH = originalH
                 }
 
-                toolImageData = inferenceData
-                toolImageMimeType = "image/jpeg"
                 if pathArg.hasPrefix("/var/minis/") {
                     toolImageLinuxPath = pathArg
                 } else if pathArg.hasPrefix("leophoneagent://") {
@@ -690,12 +690,52 @@ extension AIChatViewModel {
                     meta += "\nResized for analysis: \(resizedW)x\(resizedH)"
                 }
                 meta += "\nMIME: image/jpeg"
-                toolOutput = meta
-                toolSuccess = true
+                let visionPrompt = (toolArgs["prompt"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if nativeVision {
+                    // Native vision: pixels go to the model, exactly as before.
+                    toolImageData = inferenceData
+                    toolImageMimeType = "image/jpeg"
+                    toolOutput = (visionPrompt?.isEmpty == false) ? meta + "\nRequested focus: \(visionPrompt!)" : meta
+                    toolSuccess = true
+                } else {
+                    // [T-ios-vision-group #182] The Vision Group reads the image and the
+                    // model receives its DESCRIPTION (framed as untrusted data, naming the
+                    // model) — never pixels it cannot decode.
+                    let groupLabel = VisionGroupResolver.groupName()
+                    let pathForUI = pathArg
+                    do {
+                        let outcome = try await VisionGroupResolver.describe(
+                            imageData: inferenceData,
+                            mimeType: "image/jpeg",
+                            customPrompt: visionPrompt,
+                            seed: abs(tu.id.hashValue),
+                            onAttempt: { [weak self] attempt in
+                                guard let self, msgIdx < self.messages.count,
+                                      blockIdx < self.messages[msgIdx].blocks.count else { return }
+                                let retry = attempt.index > 1 ? " — \(attempt.index)/\(attempt.total)" : ""
+                                self.messages[msgIdx].blocks[blockIdx].content =
+                                    "Reading image \(pathForUI) via \(attempt.modelName)\(retry)…"
+                            }
+                        )
+                        toolOutput = meta + "\n\n" + VisionGroupText.framedDescription(
+                            outcome.description, modelName: outcome.modelName, groupName: groupLabel,
+                            question: visionPrompt, priorFailures: outcome.priorFailures)
+                        ctLogger.info("[read_image] vision-group described image (\(outcome.description.count) chars), priorFailures=\(outcome.priorFailures.count)")
+                    } catch {
+                        // A SUCCESSFUL result carrying failure text: an errored tool result
+                        // tends to make models retry in a loop.
+                        let reason = (error as? VisionGroupResolver.VisionError)?.errorDescription
+                            ?? error.localizedDescription
+                        toolOutput = meta + "\n\n" + VisionGroupText.failureText(reason)
+                        ctLogger.error("[read_image] vision-group describe FAILED")
+                    }
+                    toolSuccess = true
+                }
 
                 if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                     messages[msgIdx].blocks[blockIdx].imageFilePath = fileURL.path
-                    messages[msgIdx].blocks[blockIdx].content = meta
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
                 }
             } else {
                 ctLogger.error("[read_image] FAILED pathArg=\(pathArg) resolvedURL=\(resolvedURL?.path ?? "nil")")

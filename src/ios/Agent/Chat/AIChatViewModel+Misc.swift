@@ -122,7 +122,8 @@ extension AIChatViewModel {
         guard !text.isEmpty || !pendingAttachments.isEmpty || treasuryContext?.isEmpty == false else { return }
         if AgentChatCorrectness.shouldBlockImageAttachments(
             hasImages: pendingAttachments.contains(where: { $0.kind == .image }),
-            supportsImageInput: currentModelSupportsImageInput
+            supportsImageInput: currentModelSupportsImageInput,
+            visionGroupConfigured: VisionGroupResolver.isConfigured
         ) {
             appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
             return

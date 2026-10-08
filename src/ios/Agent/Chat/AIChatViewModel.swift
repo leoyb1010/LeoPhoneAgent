@@ -2153,9 +2153,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Keep it until memory/model binding is ready, not just until an id exists.
     var sessionCreationTask: Task<String, Never>?
 
+    /// [T-opencode-dedicated-channel] Thread-safe mirror of `sessionId` that providers
+    /// read per request (OpenCode Go session header, prompt cache key).
+    let conversationSessionBox = ConversationSessionBox()
+
     /// Session ID for persistence integration. Set by the view on appear.
     var sessionId: String? {
         didSet {
+            conversationSessionBox.value = sessionId
             browserTabPool.sessionId = sessionId
             // A new chat just got its session: move the draft to the chat's
             // own key so the next new chat doesn't inherit it.
@@ -2399,7 +2404,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let pendingAttachments = attachments
         if AgentChatCorrectness.shouldBlockImageAttachments(
             hasImages: pendingAttachments.contains(where: { $0.kind == .image }),
-            supportsImageInput: currentModelSupportsImageInput
+            supportsImageInput: currentModelSupportsImageInput,
+            visionGroupConfigured: VisionGroupResolver.isConfigured
         ) {
             appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
             return
@@ -4723,11 +4729,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Set extended cache TTL globally for Anthropic request patching
         RequestBodyPatcher.setExtendedCacheTTL(self.enhancedCacheEnabled)
 
-        // Restore persisted thought signatures for Gemini session resume
-        if let geminiProvider = provider as? GeminiAgentProvider, !pendingThoughtSignatures.isEmpty {
-            geminiProvider.restoreToolCallMetadata(pendingThoughtSignatures)
-            pendingThoughtSignatures = [:]
-        }
+        // [T-gemini-signature-restore] Thought signatures are applied inside
+        // `makeAgentProvider`, so EVERY provider this loop builds (initial, group
+        // fallback, retry re-resolve) gets them, and the session map is not cleared.
 
         var activeGroupId: String?  // non-nil when using a group (enables fallback)
         var activeEntryId: String? = entry.id
@@ -5583,6 +5587,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             var sigMap: [String: String] = [:]
             for tu in toolEntries {
                 if let sig = tu.metadata?.thoughtSignature { sigMap[tu.id] = sig }
+            }
+            // [T-gemini-signature-restore] Keep them on the session too: a provider built
+            // LATER in this run (group fallback) starts with an empty map and would read
+            // the calls this turn just made as unsigned, downgrading them to narration.
+            for (id, sig) in sigMap {
+                pendingThoughtSignatures[id] = ToolCallMetadata(thoughtSignature: sig)
             }
 
             // If no tool uses, this turn is done — persist and break.

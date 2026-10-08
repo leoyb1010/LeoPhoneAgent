@@ -43,6 +43,18 @@ final class GeminiAgentProvider: AgentProvider {
             let task = Task {
                 var emittedTextStart = false
                 var hasToolCalls = false
+                // [T-gemini-thinking-persist] Gemini streams thoughts as `.thinkingDelta`
+                // only, which paints the live block but is never persisted —
+                // `reasoning_content` (what a reloaded session rebuilds the thinking block
+                // from) is fed by `.reasoningContent`. Accumulate and emit ONCE before the
+                // terminal event, like the OpenAI provider does at [DONE].
+                var reasoningAccumulator = ""
+                var emittedReasoning = false
+                func flushReasoning() {
+                    guard !emittedReasoning, !reasoningAccumulator.isEmpty else { return }
+                    emittedReasoning = true
+                    continuation.yield(.reasoningContent(reasoningAccumulator))
+                }
 
                 do {
                     for try await event in stream {
@@ -55,6 +67,7 @@ final class GeminiAgentProvider: AgentProvider {
                             continuation.yield(.textDelta(text))
 
                         case .thinkingDelta(let text):
+                            reasoningAccumulator += text
                             continuation.yield(.thinkingDelta(text))
 
                         case .inlineMedia(let mime, let data):
@@ -86,12 +99,15 @@ final class GeminiAgentProvider: AgentProvider {
                                 default: .endTurn
                                 }
                             }
+                            flushReasoning()
                             continuation.yield(.done(stopReason: mapped))
 
                         case .done:
+                            flushReasoning()
                             continuation.yield(.done(stopReason: hasToolCalls ? .toolUse : .endTurn))
                         }
                     }
+                    flushReasoning()
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: self.provider.mapError(error))
@@ -189,7 +205,13 @@ final class GeminiAgentProvider: AgentProvider {
                         }
                     }
 
-                case .imageData(let data, let mimeType, _):
+                case .imageData(let data, let mimeType, let linuxPath):
+                    // [T-ios-vision-group-t264 #182] Text-only Gemini-family models
+                    // (embedding/TTS ids, relays) get the read_image hint, not pixels.
+                    guard model.capabilities.supportedModalities.contains(.imageInput) else {
+                        parts.append(["text": VisionGroupText.attachmentPlaceholder(linuxPath: linuxPath)])
+                        break
+                    }
                     let base64 = data.base64EncodedString()
                     parts.append(["inlineData": ["mimeType": mimeType, "data": base64]])
                 }

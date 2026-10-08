@@ -73,7 +73,7 @@ enum ModelsDevAPI {
         provider.models.compactMap { (_, model) -> LLMModel? in
             let family = model.family?.lowercased() ?? ""
             if family.contains("embedding") || family.contains("moderation") { return nil }
-            return LLMModel(
+            var built = LLMModel(
                 id: model.id,
                 displayName: model.name ?? model.id,
                 provider: provider.name ?? provider.id,
@@ -81,8 +81,15 @@ enum ModelsDevAPI {
                 contextWindow: model.limit?.context,
                 maxOutputTokens: model.limit?.output,
                 supportsReasoning: model.reasoning,
-                interleavedReasoningField: model.interleaved?.field
+                interleavedReasoningField: model.interleaved?.field,
+                reasoningEffortValues: model.effortValues,
+                declaresNoEffortTiers: model.declaresNoEffortTiers ? true : nil
             )
+            // [T-thinking-off-custom-provider] These models ARE the catalog entry for the
+            // endpoint (matched by base URL), so their effort declaration describes the
+            // endpoint being called.
+            built.effortDeclarationIsAuthoritative = (model.effortValues != nil) ? true : nil
+            return built
         }
     }
 
@@ -99,21 +106,92 @@ enum ModelsDevAPI {
     /// Only fills in fields that are currently nil/unset on the model.
     static func enrichModel(_ model: LLMModel) -> LLMModel {
         guard let registry = loadRegistry() else { return model }
+        guard let match = resolveDevModel(for: model, in: registry) else { return model }
+        return applyDevData(to: model, from: match.model, authoritative: match.authoritative)
+    }
 
-        let keys = providerKeyMap[model.provider] ?? []
-        for key in keys {
-            guard let prov = registry[key], let devModel = prov.models[model.id] else { continue }
-            return applyDevData(to: model, from: devModel)
-        }
+    /// [T-modelsdev-id-normalization] Normalized catalog key; see `ModelsDevKey`.
+    static func normalizedModelKey(_ id: String) -> String {
+        ModelsDevKey.normalized(id)
+    }
 
-        // Fallback: scan all providers for the model ID (handles proxies, custom providers)
-        for (_, prov) in registry {
+    /// Where a catalog match came from. `authoritative` is true only for a hit under the
+    /// model's OWN provider key; the cross-provider vote describes other endpoints.
+    private struct DevModelMatch {
+        let model: ModelsDevModel
+        let authoritative: Bool
+    }
+
+    /// [T-modelsdev-id-normalization] Deterministic catalog resolution shared by
+    /// `enrichModel` and `enrichModels`:
+    ///   1. the model's own provider key — exact id, then normalized id (authoritative);
+    ///   2. every provider by normalized id; among candidates declaring effort tiers the
+    ///      most common set wins (ties: first in sorted provider/id order);
+    ///   3. [T-modelsdev-suffix-alias] longest segment-boundary prefix of the id
+    ///      (`glm-5.3-flash-cpa` → `glm-5-3-flash`), never down to a bare family (`glm-5`).
+    /// Stages 2–3 are non-authoritative.
+    private static func resolveDevModel(
+        for model: LLMModel, in registry: [String: ModelsDevProvider]
+    ) -> DevModelMatch? {
+        let wanted = normalizedModelKey(model.id)
+        for key in providerKeyMap[model.provider] ?? [] {
+            guard let prov = registry[key] else { continue }
             if let devModel = prov.models[model.id] {
-                return applyDevData(to: model, from: devModel)
+                return DevModelMatch(model: devModel, authoritative: true)
+            }
+            for id in prov.models.keys.sorted() where normalizedModelKey(id) == wanted {
+                if let devModel = prov.models[id] {
+                    return DevModelMatch(model: devModel, authoritative: true)
+                }
             }
         }
+        guard let index = stage2Index(for: registry) else { return nil }
+        if let hit = index[wanted] { return hit }
+        return prefixMatch(wanted, in: index)
+    }
 
-        return model
+    private static func prefixMatch(_ wanted: String, in index: [String: DevModelMatch]) -> DevModelMatch? {
+        for candidate in ModelsDevKey.prefixCandidates(of: wanted) {
+            if let hit = index[candidate] {
+                return DevModelMatch(model: hit.model, authoritative: false)
+            }
+        }
+        return nil
+    }
+
+    /// Stage-2 winners keyed by normalized id, rebuilt when the registry timestamp moves.
+    /// Precomputed once rather than rescanning ~6k catalog ids per enriched model.
+    private static var cachedStage2Index: [String: DevModelMatch]?
+    private static var stage2IndexBuiltFrom: Date?
+    /// Enrichment runs from several tasks at once (refreshes, onboarding); the index is
+    /// built and swapped under this lock so two builders never write the static at once.
+    private static let stage2Lock = NSLock()
+
+    private static func stage2Index(for registry: [String: ModelsDevProvider]) -> [String: DevModelMatch]? {
+        stage2Lock.lock()
+        defer { stage2Lock.unlock() }
+        if let cached = cachedStage2Index, stage2IndexBuiltFrom == cacheTimestamp {
+            return cached
+        }
+        var grouped: [String: [ModelsDevModel]] = [:]
+        for key in registry.keys.sorted() {
+            guard let prov = registry[key] else { continue }
+            for id in prov.models.keys.sorted() {
+                guard let devModel = prov.models[id] else { continue }
+                grouped[normalizedModelKey(id), default: []].append(devModel)
+            }
+        }
+        var index: [String: DevModelMatch] = [:]
+        index.reserveCapacity(grouped.count)
+        for (normalized, candidates) in grouped {
+            if let winner = ModelsDevKey.majorityIndex(candidates.map(\.effortValues)) {
+                index[normalized] = DevModelMatch(model: candidates[winner], authoritative: false)
+            }
+        }
+        cachedStage2Index = index
+        stage2IndexBuiltFrom = cacheTimestamp
+        logger.info("[ModelsDev] stage-2 index built: \(index.count) normalized keys")
+        return index
     }
 
     /// The AI SDK package a provider's catalog names for one model (its own
@@ -122,30 +200,21 @@ enum ModelsDevAPI {
         loadRegistry()?[providerKey]?.models[modelId]?.provider?.npm
     }
 
-    /// Enrich an array of models in bulk.
+    /// Enrich an array of models in bulk. Same resolver as `enrichModel`, so a single
+    /// model and a bulk refresh never disagree about the same id.
     static func enrichModels(_ models: [LLMModel]) -> [LLMModel] {
         guard let registry = loadRegistry() else { return models }
         return models.map { model in
-            // Try mapped provider keys first
-            let keys = providerKeyMap[model.provider] ?? []
-            for key in keys {
-                if let prov = registry[key], let devModel = prov.models[model.id] {
-                    return applyDevData(to: model, from: devModel)
-                }
-            }
-            // Fallback scan
-            for (_, prov) in registry {
-                if let devModel = prov.models[model.id] {
-                    return applyDevData(to: model, from: devModel)
-                }
-            }
-            return model
+            guard let match = resolveDevModel(for: model, in: registry) else { return model }
+            return applyDevData(to: model, from: match.model, authoritative: match.authoritative)
         }
     }
 
     // MARK: - Apply models.dev data to LLMModel
 
-    private static func applyDevData(to model: LLMModel, from devModel: ModelsDevModel) -> LLMModel {
+    private static func applyDevData(
+        to model: LLMModel, from devModel: ModelsDevModel, authoritative: Bool = false
+    ) -> LLMModel {
         var result = model
 
         // Modality: models.dev is the source of truth — always apply when available.
@@ -173,6 +242,17 @@ enum ModelsDevAPI {
         // Interleaved reasoning field (e.g. "reasoning_content" for DeepSeek/Kimi)
         if let field = devModel.interleaved?.field {
             result.interleavedReasoningField = field
+        }
+
+        // [T-reasoning-effort-data-driven] Declared effort tiers, plus whether they came
+        // from this model's own provider (only that may clamp or suppress on the wire).
+        if let efforts = devModel.effortValues {
+            result.reasoningEffortValues = efforts
+            result.effortDeclarationIsAuthoritative = authoritative
+        }
+        // [OpenMinis#163] Only set when the catalog says so, never overwrite with false.
+        if devModel.declaresNoEffortTiers {
+            result.declaresNoEffortTiers = true
         }
 
         return result
@@ -360,6 +440,32 @@ private struct ModelsDevModel: Decodable {
     let interleaved: ModelsDevInterleaved?
     /// Per-model provider override (e.g. `{"npm": "@ai-sdk/anthropic"}`).
     let provider: ModelsDevModelProvider?
+    /// [T-reasoning-effort-data-driven] models.dev `reasoning_options`. Lenient: a
+    /// non-array value reads as "no opinion" instead of failing the whole registry.
+    private let reasoningOptionsField: ModelsDevReasoningOptionList?
+    var reasoningOptions: [ModelsDevReasoningOption]? { reasoningOptionsField?.items }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, family, modalities, limit, reasoning, interleaved, provider
+        case reasoningOptionsField = "reasoning_options"
+    }
+
+    /// Effort tiers declared by the catalog, or nil when the model exposes no
+    /// `effort`-type option (`toggle` / `budget_tokens` are different mechanisms).
+    var effortValues: [String]? {
+        guard let opts = reasoningOptions else { return nil }
+        let values = opts.first { $0.type == "effort" }?.values?.map { $0.lowercased() }
+        guard let values, !values.isEmpty else { return nil }
+        return values
+    }
+
+    /// [OpenMinis#163] `reasoning_options` PRESENT but without a usable effort entry:
+    /// the catalog states the model reasons without an effort parameter (xAI
+    /// grok-build-0.1 400s on `reasoning_effort`). Absent options = no opinion.
+    var declaresNoEffortTiers: Bool {
+        guard reasoningOptions != nil else { return false }
+        return effortValues == nil
+    }
 
     /// Convert models.dev modalities to app ModelModality.
     var resolvedModality: ModelModality? {
@@ -402,6 +508,51 @@ private struct ModelsDevModelProvider: Decodable {
 private struct ModelsDevLimit: Decodable {
     let context: Int?
     let output: Int?
+}
+
+/// [T-reasoning-effort-data-driven] One entry of models.dev `reasoning_options`:
+/// `{"type":"toggle"}`, `{"type":"effort","values":[…]}`, `{"type":"budget_tokens",…}`.
+///
+/// `values` is decoded element-wise: models.dev ships null elements
+/// (`[null,"low","medium","high"]`), and one bad element must not fail the whole
+/// registry decode. An entry with an unexpected shape decodes to nil fields.
+private struct ModelsDevReasoningOption: Decodable {
+    let type: String?
+    let values: [String]?
+
+    enum CodingKeys: String, CodingKey { case type, values }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        type = try? container?.decodeIfPresent(String.self, forKey: .type)
+        guard var list = try? container?.nestedUnkeyedContainer(forKey: .values) else {
+            values = nil
+            return
+        }
+        var parsed: [String] = []
+        while !list.isAtEnd {
+            if let s = try? list.decode(String.self) {
+                parsed.append(s)
+            } else if (try? list.decode(AnyDecodableSkip.self)) == nil {
+                break
+            }
+        }
+        values = parsed.isEmpty ? nil : parsed
+    }
+}
+
+/// `reasoning_options` as an array, or nil for any other shape.
+private struct ModelsDevReasoningOptionList: Decodable {
+    let items: [ModelsDevReasoningOption]?
+
+    init(from decoder: Decoder) throws {
+        items = try? decoder.singleValueContainer().decode([ModelsDevReasoningOption].self)
+    }
+}
+
+/// Consumes exactly one value of unknown type so an unkeyed container can skip it.
+private struct AnyDecodableSkip: Decodable {
+    init(from decoder: Decoder) throws {}
 }
 
 /// `interleaved` can be either a bool (`true`) or an object (`{"field": "reasoning_content"}`).
