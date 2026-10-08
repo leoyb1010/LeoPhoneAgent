@@ -532,7 +532,12 @@ class SelfSizingCell: UICollectionViewCell {
             if let key = contentKey,
                let cv = superview as? UICollectionView,
                let layout = cv.collectionViewLayout as? MessageListLayout {
-                layout.recordMeasuredHeight(forKey: key, height: fittingSize.height, boundsWidth: cv.bounds.width)
+                // [T-ios-memo-key-ignores-render-state] Store under the key
+                // qualified by the block's async-attachment render state, so a
+                // height measured with blank formulas / placeholder images can
+                // never be seeded onto the finished layout.
+                layout.recordMeasuredHeight(forKey: Self.renderQualifiedKey(key, for: self),
+                                            height: fittingSize.height, boundsWidth: cv.bounds.width)
             }
         }
         #if DEBUG
@@ -559,6 +564,23 @@ class SelfSizingCell: UICollectionViewCell {
         for sub in view.subviews {
             collectSubtree(sub, into: &out)
         }
+    }
+
+    /// [T-ios-memo-key-ignores-render-state] Append the hosted markdown view's
+    /// async-attachment render signal to a content key. Cells without a
+    /// SelectableMarkdownTextView (headers, footers, tool capsules) keep the
+    /// key unchanged.
+    static func renderQualifiedKey(_ key: String, for cell: UIView) -> String {
+        guard let signal = firstMarkdownRenderSignal(in: cell) else { return key }
+        return "\(key):r\(signal)"
+    }
+
+    private static func firstMarkdownRenderSignal(in view: UIView) -> Int? {
+        if let tv = view as? SelectableMarkdownTextView { return tv.asyncAttachmentRenderSignal() }
+        for sub in view.subviews {
+            if let s = firstMarkdownRenderSignal(in: sub) { return s }
+        }
+        return nil
     }
 
     /// Clear the cached computed height so the next preferredLayoutAttributesFitting

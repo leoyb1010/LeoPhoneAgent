@@ -1415,7 +1415,10 @@ extension CollectionViewMessageListV3 {
                     layout.invalidateMemo(forKey: key)
                 }
 
-                let memo = isStreamingCell ? nil : layout.measuredHeight(forKey: key, width: cvW)
+                // [T-ios-memo-key-ignores-render-state] Read under the SAME
+                // render-qualified key the measure path writes.
+                let memoKey = SelfSizingCell.renderQualifiedKey(key, for: cell)
+                let memo = isStreamingCell ? nil : layout.measuredHeight(forKey: memoKey, width: cvW)
                 if !isStreamingCell {
                     cell.contentKey = key
                 }
