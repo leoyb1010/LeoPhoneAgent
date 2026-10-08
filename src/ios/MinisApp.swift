@@ -1089,7 +1089,9 @@ private enum ApprovalAlertPresenter {
         // [T-approval-vocab] 统一措辞:允许一次 / 本次会话允许 / 拒绝 / 拒绝并停止。
         // 风险只影响标题和说明,不减选项。
         let alert = UIAlertController(
-            title: p.risk == .high ? String(localized: "高风险操作，需要确认") : String(localized: "需要确认"),
+            // [T-subagent] A sub agent's request names the agent in the title.
+            title: p.requester.map { String(localized: "\($0)需要确认") }
+                ?? (p.risk == .high ? String(localized: "高风险操作，需要确认") : String(localized: "需要确认")),
             message: p.risk == .high
                 ? String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。")
                 : String(localized: "有一个任务想\(p.category.humanName)：\(p.host)。"),   // host is a site, a command or a path

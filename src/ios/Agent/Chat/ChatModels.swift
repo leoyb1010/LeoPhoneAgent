@@ -119,6 +119,9 @@ struct QueuedPrompt: Identifiable {
     let attachments: [InputAttachment]
     let timestamp = Date()
     var treasuryContext: String? = nil
+    /// [T-subagent] A sub agent callback: waits for the running plan to converge
+    /// instead of interrupting it at the next tool boundary.
+    var deferUntilIdle = false
 }
 
 /// Token usage for the current assistant turn.
@@ -395,6 +398,8 @@ final class AssistantBlock: Identifiable, ObservableObject {
             return (!path.isEmpty && name != "/" && name.contains(".")) ? name : "Read image"
         case .memoryTool(let action):
             return action.isEmpty ? "Memory" : action
+        case .delegateTool(let title):
+            return title.isEmpty ? "Sub agent" : title
         case .info:
             return ""
         }
@@ -411,6 +416,8 @@ enum AssistantBlockKind: Equatable {
     case browserTool(action: String)
     case readImageTool(path: String)
     case memoryTool(action: String)
+    /// [T-subagent] A `subagent_task` call (delegate or a control action).
+    case delegateTool(title: String)
     case info
 }
 

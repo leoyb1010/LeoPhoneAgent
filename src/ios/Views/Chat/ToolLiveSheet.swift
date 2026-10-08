@@ -647,6 +647,7 @@ struct ToolLiveSheet: View {
         case .browserTool: Image(systemName: "globe")
         case .readImageTool: Image(systemName: "photo")
         case .memoryTool: Image(systemName: "brain.head.profile")
+        case .delegateTool: Image(systemName: "person.2.fill")
         case .info: Image(systemName: "arrow.triangle.2.circlepath")
         case .text: Image(systemName: "text.alignleft")
         case .thinking: Image("ThinkingIcon")
@@ -1896,6 +1897,7 @@ struct ToolLiveSheet: View {
         case .browserTool: return AgentToolPresentation.displayName(for: "browser")
         case .readImageTool: return AgentToolPresentation.displayName(for: "read_image")
         case .memoryTool: return AgentToolPresentation.displayName(for: "memory")
+        case .delegateTool: return String(localized: "子代理")
         case .info, .text, .thinking: return "LeoBot"
         }
     }
@@ -1927,6 +1929,7 @@ struct ToolLiveSheet: View {
         case .browserTool: return .blue
         case .readImageTool: return .purple
         case .memoryTool: return .pink
+        case .delegateTool: return .indigo
         case .info: return .secondary
         case .text: return .primary
         case .thinking: return .blue
@@ -2263,6 +2266,7 @@ private struct ToolPreviewThumbnail: View {
         case .browserTool: return .blue
         case .readImageTool: return .purple
         case .memoryTool: return .pink
+        case .delegateTool: return .indigo
         case .info: return .secondary
         case .text: return .primary
         case .thinking: return .blue

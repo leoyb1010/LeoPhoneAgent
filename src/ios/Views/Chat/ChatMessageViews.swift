@@ -685,7 +685,7 @@ struct ChatMessageRow: View {
             case .text: return !block.content.isEmpty
             case .thinking: return true
             case .info: return true
-            case .shellTool, .fileReadTool, .fileWriteTool, .fileEditTool, .browserTool, .readImageTool, .memoryTool: return true
+            case .shellTool, .fileReadTool, .fileWriteTool, .fileEditTool, .browserTool, .readImageTool, .memoryTool, .delegateTool: return true
             }
         }
     }

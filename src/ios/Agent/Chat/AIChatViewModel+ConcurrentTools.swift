@@ -219,9 +219,11 @@ extension AIChatViewModel {
         }()
 
         // [D2][D4] 情境信号 / 安静任务的回合没有这些工具;模型硬调也挡回去(降为第 1 档等用户解锁)。
-        if blocksSideEffectTools, ContextToolPolicy.blockedTools.contains(tu.name) {
-            let modelMessage = "This turn was started by a context signal or a quiet background task: sending, deleting and remote execution are not available. Write what still needs doing in your reply; the user will continue after unlocking."
-            let uiMessage = "情境回合不执行此类工具"
+        // [T-subagent] A sub agent may not delegate or reach remote execution.
+        let subAgentBlocked = subAgentForbiddenToolMessage(tu.name)
+        if subAgentBlocked != nil || (blocksSideEffectTools && ContextToolPolicy.blockedTools.contains(tu.name)) {
+            let modelMessage = subAgentBlocked ?? "This turn was started by a context signal or a quiet background task: sending, deleting and remote execution are not available. Write what still needs doing in your reply; the user will continue after unlocking."
+            let uiMessage = subAgentBlocked != nil ? "子代理不能使用此工具" : "情境回合不执行此类工具"
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                 messages[msgIdx].blocks[blockIdx].content = uiMessage
                 messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: uiMessage)
@@ -246,9 +248,13 @@ extension AIChatViewModel {
             // 文件写按会话授权一次,remote_* 按主机授权一次。
             let scope = SensitiveToolGate.Category.grantScope(tool: tu.name, args: toolArgs)
             // 风险看完整命令原文(host 可能截断),智能批准据此放行只读命令。
+            // [T-subagent] A sub agent's approval is asked in (and keyed to) its
+            // parent conversation, naming the agent; never in the hidden session.
+            let route = subAgentApprovalRoute
             let outcome = await SensitiveToolGate.shared.authorize(category, host: host, grantScope: scope,
-                                                                   sessionId: sessionId,
-                                                                   riskSubject: toolArgs["command"] as? String)
+                                                                   sessionId: route.sessionId,
+                                                                   riskSubject: toolArgs["command"] as? String,
+                                                                   requester: route.requester)
             if !outcome.isAllowed {
                 // 拒绝原因决定话术:后台硬拒 / 等待超时 / 用户真的说了不。
                 // 之前是按"当前是不是前台"猜的,分级策略下必须按实际结果来。
@@ -966,6 +972,12 @@ extension AIChatViewModel {
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
+
+        // [T-subagent] Sub agents: delegate / status / steer / cancel / resume.
+        case SubAgentTool.name:
+            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            (toolOutput, toolSuccess) = await executeSubAgentTask(args: args, toolUseId: tu.id,
+                                                                  msgIdx: msgIdx, blockIdx: blockIdx)
 
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"

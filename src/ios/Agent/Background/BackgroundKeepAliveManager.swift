@@ -880,6 +880,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     func postBackgroundTaskNotification(sessionTitle: String, responseSummary: String, sessionId: String,
                                         isError: Bool = false, interrupted: Bool = false, wasBackground: Bool? = nil) {
         guard backgroundNotificationsEnabled else { return }
+        // [T-subagent] A hidden sub agent never posts its own notification;
+        // its parent conversation reports the result.
+        guard !ChildSessionIndex.contains(sessionId) else { return }
         // Use the caller-captured snapshot when available (the async Task in
         // endBackgroundProcessing may not run until the app is already active).
         // Fall back to the live check for other call sites.

@@ -52,6 +52,22 @@
 		E5D602T /* ContextDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D602F /* ContextDecision.swift */; };
 		E5D603A /* NoteContextIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D603F /* NoteContextIntent.swift */; };
 		E5D604A /* QuietTaskScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D604F /* QuietTaskScheduler.swift */; };
+		E5SUB0101A /* SubAgentPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0101F /* SubAgentPolicy.swift */; };
+		E5SUB0101T /* SubAgentPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0101F /* SubAgentPolicy.swift */; };
+		E5SUB0102A /* AgentCallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0102F /* AgentCallback.swift */; };
+		E5SUB0102T /* AgentCallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0102F /* AgentCallback.swift */; };
+		E5SUB0103A /* HelperModelIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0103F /* HelperModelIdentity.swift */; };
+		E5SUB0103T /* HelperModelIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0103F /* HelperModelIdentity.swift */; };
+		E5SUB0104A /* AgentJobRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0104F /* AgentJobRegistry.swift */; };
+		E5SUB0105A /* HelperRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0105F /* HelperRunner.swift */; };
+		E5SUB0106A /* ModelTierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0106F /* ModelTierResolver.swift */; };
+		E5SUB0107A /* AIChatViewModel+SubAgents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0107F /* AIChatViewModel+SubAgents.swift */; };
+		E5SUB0108A /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
+		E5SUB0108T /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
+		E5SUB0109A /* SubAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0109F /* SubAgentStore.swift */; };
+		E5SUB0110A /* HelperBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0110F /* HelperBlockView.swift */; };
+		E5SUB0111A /* HelperSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0111F /* HelperSheet.swift */; };
+		E5SUB0112A /* AgentCallbackCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0112F /* AgentCallbackCellView.swift */; };
 		E5C15609A /* ShortcutRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15609F /* ShortcutRecipes.swift */; };
 		E5C15610A /* PaperclipIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15610F /* PaperclipIntents.swift */; };
 		E5C15611A /* ShortcutRecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15611F /* ShortcutRecipesView.swift */; };
@@ -843,6 +859,18 @@
 		E5D602F /* ContextDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ContextDecision.swift; sourceTree = SOURCE_ROOT; };
 		E5D603F /* NoteContextIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/NoteContextIntent.swift; sourceTree = SOURCE_ROOT; };
 		E5D604F /* QuietTaskScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Background/QuietTaskScheduler.swift; sourceTree = SOURCE_ROOT; };
+		E5SUB0101F /* SubAgentPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentPolicy.swift; sourceTree = "<group>"; };
+		E5SUB0102F /* AgentCallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCallback.swift; sourceTree = "<group>"; };
+		E5SUB0103F /* HelperModelIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperModelIdentity.swift; sourceTree = "<group>"; };
+		E5SUB0104F /* AgentJobRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJobRegistry.swift; sourceTree = "<group>"; };
+		E5SUB0105F /* HelperRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRunner.swift; sourceTree = "<group>"; };
+		E5SUB0106F /* ModelTierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelTierResolver.swift; sourceTree = "<group>"; };
+		E5SUB0107F /* AIChatViewModel+SubAgents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+SubAgents.swift"; sourceTree = "<group>"; };
+		E5SUB0108F /* SubAgentDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentDefinition.swift; sourceTree = "<group>"; };
+		E5SUB0109F /* SubAgentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentStore.swift; sourceTree = "<group>"; };
+		E5SUB0110F /* HelperBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperBlockView.swift; sourceTree = "<group>"; };
+		E5SUB0111F /* HelperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSheet.swift; sourceTree = "<group>"; };
+		E5SUB0112F /* AgentCallbackCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCallbackCellView.swift; sourceTree = "<group>"; };
 		E5C15609F /* ShortcutRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ShortcutRecipes.swift; sourceTree = SOURCE_ROOT; };
 		E5C15610F /* PaperclipIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipIntents.swift; sourceTree = SOURCE_ROOT; };
 		E5C15611F /* ShortcutRecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/ShortcutRecipesView.swift; sourceTree = SOURCE_ROOT; };
@@ -1818,6 +1846,8 @@
 				E5D00014 /* ModelGroup.swift */,
 				E5TLC0002 /* ThinkingLevelCatalog.swift */,
 				E5D00015 /* ProviderConfigStore.swift */,
+				E5SUB0108F /* SubAgentDefinition.swift */,
+				E5SUB0109F /* SubAgentStore.swift */,
 				E5D00199 /* ProviderConfigDB.swift */,
 				E5D00016 /* ModelGroupRouter.swift */,
 				E5D00017 /* ProviderMigration.swift */,
@@ -1858,6 +1888,19 @@
 			path = OAuth;
 			sourceTree = "<group>";
 		};
+		E5SUB0100 /* Jobs */ = {
+			isa = PBXGroup;
+			children = (
+				E5SUB0101F /* SubAgentPolicy.swift */,
+				E5SUB0102F /* AgentCallback.swift */,
+				E5SUB0103F /* HelperModelIdentity.swift */,
+				E5SUB0104F /* AgentJobRegistry.swift */,
+				E5SUB0105F /* HelperRunner.swift */,
+				E5SUB0106F /* ModelTierResolver.swift */,
+			);
+			path = Jobs;
+			sourceTree = "<group>";
+		};
 		E53000030 /* Agent */ = {
 			isa = PBXGroup;
 			children = (
@@ -1869,6 +1912,7 @@
 				E57000030 /* BrowserUse */,
 				F1A00010 /* Chat */,
 				E5T000030 /* Intents */,
+				E5SUB0100 /* Jobs */,
 				F1A00016 /* ISH */,
 				F1A00012 /* Markdown */,
 				F1A00011 /* MessageList */,
@@ -2444,6 +2488,7 @@
 				E5VMC0015 /* AIChatViewModel+Persistence.swift */,
 				E5VMC0016 /* AIChatViewModel+BackgroundTask.swift */,
 				E5VMC0017 /* AIChatViewModel+ConcurrentTools.swift */,
+				E5SUB0107F /* AIChatViewModel+SubAgents.swift */,
 				E53000014 /* ChatStore.swift */,
 				E5CSC0011 /* ChatStoreSchemaContract.swift */,
 				BB1000110F700000000000AA /* ContextPolicy.swift */,
@@ -2618,6 +2663,9 @@
 				E5F200011 /* MarkdownPrepRegex.swift */,
 				E5F200012 /* MinisMediaViews.swift */,
 				E5F200013 /* AssistantBlockView.swift */,
+				E5SUB0110F /* HelperBlockView.swift */,
+				E5SUB0111F /* HelperSheet.swift */,
+				E5SUB0112F /* AgentCallbackCellView.swift */,
 				E5F200014 /* ChatMessageViews.swift */,
 				E5F2009B1 /* EquatableContextMenu.swift */,
 		E5RCE0002 /* ReplyContentExtractor.swift */,
@@ -3165,6 +3213,10 @@
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
 				E5CUR0033 /* ToolExecutionLanes.swift in Sources */,
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
+				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
+				E5SUB0102T /* AgentCallback.swift in Sources */,
+				E5SUB0103T /* HelperModelIdentity.swift in Sources */,
+				E5SUB0108T /* SubAgentDefinition.swift in Sources */,
 				E5MG0003 /* ModelGroup.swift in Sources */,
 				E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
@@ -3616,6 +3668,18 @@
 				E5E0000A1 /* ExternalFileImporter.swift in Sources */,
 				E5G000001 /* BackgroundKeepAliveManager.swift in Sources */,
 				E5D604A /* QuietTaskScheduler.swift in Sources */,
+				E5SUB0101A /* SubAgentPolicy.swift in Sources */,
+				E5SUB0102A /* AgentCallback.swift in Sources */,
+				E5SUB0103A /* HelperModelIdentity.swift in Sources */,
+				E5SUB0104A /* AgentJobRegistry.swift in Sources */,
+				E5SUB0105A /* HelperRunner.swift in Sources */,
+				E5SUB0106A /* ModelTierResolver.swift in Sources */,
+				E5SUB0107A /* AIChatViewModel+SubAgents.swift in Sources */,
+				E5SUB0108A /* SubAgentDefinition.swift in Sources */,
+				E5SUB0109A /* SubAgentStore.swift in Sources */,
+				E5SUB0110A /* HelperBlockView.swift in Sources */,
+				E5SUB0111A /* HelperSheet.swift in Sources */,
+				E5SUB0112A /* AgentCallbackCellView.swift in Sources */,
 				E5G000002 /* AgentLiveActivityManager.swift in Sources */,
 				E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,

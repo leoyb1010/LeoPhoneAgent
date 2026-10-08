@@ -228,6 +228,9 @@ final class SensitiveToolGate: ObservableObject {
         /// Shell 类请求的风险等级(弹窗上的标记);其他类别为 nil。
         let risk: CommandRisk?
         let continuation: CheckedContinuation<Outcome, Never>
+        /// [T-subagent] Who is asking when it is not the conversation itself
+        /// (a sub agent, e.g. "子代理「调研」"). Shown in the prompt.
+        var requester: String? = nil
     }
 
     private init() {
@@ -276,7 +279,8 @@ final class SensitiveToolGate: ObservableObject {
     /// - riskSubject: 用来判断风险的**完整**命令行(shell 类)。host 可能被截断,
     ///   截断的命令可能把尾巴上的 `; rm -rf` 藏掉,所以风险一律看完整原文。
     func authorize(_ category: Category, host: String, grantScope: String? = nil,
-                   sessionId: String? = nil, riskSubject: String? = nil) async -> Outcome {
+                   sessionId: String? = nil, riskSubject: String? = nil,
+                   requester: String? = nil) async -> Outcome {
         // [T-full-auto] 全自动:前台后台一律放行,不弹审批。
         if FullAutoGate.isOn {
             FullAutoGate.announce("\(category.humanName) \(host)", sessionId: sessionId)
@@ -318,7 +322,7 @@ final class SensitiveToolGate: ObservableObject {
             let request = PendingApproval(
                 id: requestId,
                 category: category, host: host, grantScope: scope, sessionId: sessionId,
-                risk: risk, continuation: cont)
+                risk: risk, continuation: cont, requester: requester)
             // 灵动岛、首页提醒条、会话行都靠这个阶段知道"在等你批准"。
             self.markWaiting(sessionId)
             if self.pending == nil {
@@ -510,7 +514,7 @@ final class SensitiveToolGate: ObservableObject {
         let privacy = UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true
         content.body = privacy
             ? "「\(request.category.humanName)」在等你批准"
-            : "「\(request.category.humanName)」在等你批准:\(String(request.host.prefix(80)))"
+            : "\(request.requester.map { $0 + " · " } ?? "")「\(request.category.humanName)」在等你批准:\(String(request.host.prefix(80)))"
         content.sound = .default
         content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = Self.notifyCategoryId

@@ -87,6 +87,33 @@ final class ChatStoreSchemaContractTests: XCTestCase {
         XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
     }
 
+    /// [T-subagent] v3 databases gain the nullable child-session columns
+    /// without touching existing rows, and existing sessions stay top-level.
+    func testVersionThreeSchemaGainsChildSessionColumnsWithoutLosingRows() throws {
+        let db = try openTemporaryDatabase()
+        defer { sqlite3_close(db) }
+        _ = try ChatStoreSchemaContract.migrate(db)
+        try execute(db, "DROP INDEX IF EXISTS idx_sessions_parent")
+        try execute(db, "ALTER TABLE sessions DROP COLUMN parent_tool_use_id")
+        try execute(db, "ALTER TABLE sessions DROP COLUMN parent_session_id")
+        try execute(db, "UPDATE chat_store_schema_meta SET contract_version = 3")
+        try execute(db, "INSERT INTO sessions (id, title, model_id, created_at, updated_at) VALUES ('p1', 'Parent', 'm', 1, 1)")
+        XCTAssertTrue(ChatStoreSchemaContract.validate(db).contains("missing column sessions.parent_session_id"))
+
+        let report = try ChatStoreSchemaContract.migrate(db)
+
+        XCTAssertEqual(report.previousVersion, 3)
+        XCTAssertEqual(report.currentVersion, 4)
+        XCTAssertTrue(report.addedColumns.contains("sessions.parent_session_id"))
+        XCTAssertTrue(report.addedColumns.contains("sessions.parent_tool_use_id"))
+        XCTAssertEqual(try scalarInt(db, "SELECT COUNT(*) FROM sessions WHERE id='p1' AND parent_session_id IS NULL"), 1)
+        try execute(db, "INSERT INTO sessions (id, title, model_id, created_at, updated_at, parent_session_id, parent_tool_use_id) VALUES ('c1', 'Child', 'm', 2, 2, 'p1', 'toolu_1')")
+        XCTAssertEqual(try scalarInt(db, "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL"), 1,
+                       "the session-list predicate excludes the child")
+        XCTAssertEqual(try scalarInt(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_sessions_parent'"), 1)
+        XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
+    }
+
     func testValidationReportsIncompleteSchemaBeforeMigration() throws {
         let db = try openTemporaryDatabase()
         defer { sqlite3_close(db) }

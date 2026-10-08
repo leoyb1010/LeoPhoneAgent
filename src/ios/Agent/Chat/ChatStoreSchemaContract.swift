@@ -13,7 +13,8 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 /// version, and can prove that a database is safe before future Artifact tables
 /// are introduced.
 enum ChatStoreSchemaContract {
-    static let currentVersion = 3
+    /// v4: [T-subagent] nullable `sessions.parent_session_id` / `parent_tool_use_id`.
+    static let currentVersion = 4
 
     struct Report: Equatable, Sendable {
         var previousVersion: Int
@@ -58,6 +59,8 @@ enum ChatStoreSchemaContract {
             Column(name: "remote_origin_device_id", definition: "TEXT"),
             Column(name: "pinned_at", definition: "REAL"),
             Column(name: "remote_tombstoned_at", definition: "REAL"),
+            Column(name: "parent_session_id", definition: "TEXT"),
+            Column(name: "parent_tool_use_id", definition: "TEXT"),
         ],
         "messages": [
             Column(name: "id", definition: "TEXT PRIMARY KEY"),
@@ -144,6 +147,7 @@ enum ChatStoreSchemaContract {
 
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, sort_order)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_msg_sess_role_sort ON messages(session_id, role, sort_order DESC)")
+            try execute(db, "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_session ON compact_markers(session_id, created_at)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_first_kept ON compact_markers(session_id, first_kept_message_id)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_artifacts_session_updated ON artifacts(session_id, trashed_at, updated_at DESC)")
