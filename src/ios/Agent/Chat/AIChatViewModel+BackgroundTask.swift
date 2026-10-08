@@ -729,7 +729,12 @@ extension AIChatViewModel {
             switch scope {
             case .thisSessionOnly:
                 if let sid {
-                    Task { await ISHExecutionCoordinator.shared.stopCurrentCommand(sessionId: sid) }
+                    // [T-shell-stop-blocked-by-actor] Kill from the lock-guarded
+                    // pid snapshot instead of queueing on the coordinator actor,
+                    // which is exactly what a wedged guest blocks; the sweep runs
+                    // on killQueue, never on main.
+                    let killed = ISHExecutionCoordinator.stopAllNonisolated(sessionId: sid)
+                    logger.info("⏹️ stopCurrentCommand — signalled \(killed) shell pid(s)")
                 }
                 // No session id ⇒ nothing of OURS can be running (pids only
                 // exist under a real sid) — the old fallback killed every

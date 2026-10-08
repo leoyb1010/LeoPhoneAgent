@@ -537,6 +537,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
                 report += "\nActive sessions:  \(sessions)"
             }
             report += "\nShell running:    \(runningShellCommand ? "yes" : "no")"
+            // [T-resource-diag] Port/thread-churn accounting (fresh read).
+            report += ResourceDiagnostics.crashReportLines()
             report += "\nBG task active:   \(bgTaskActive)"
             if let rem = bgTaskRemaining {
                 if rem < 0 {

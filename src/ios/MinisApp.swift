@@ -425,6 +425,8 @@ struct MinisApp: App {
                 SessionLockStore.shared.evaluateAppLock()
 
                 CrashReporter.shared.onAppLaunch()
+                // [T-resource-diag] 60s port/resource sampler; idempotent, off main.
+                ResourceDiagnostics.start()
                 CrashReporter.shared.updateMarkerPhase(phase: "active")
 
                 _ = SessionBadgeStore.shared

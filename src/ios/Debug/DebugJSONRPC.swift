@@ -2077,6 +2077,9 @@ final class DebugJSONRPC: @unchecked Sendable {
             "dataPath": dataPath.path,
             "rootfsPath": docs.appendingPathComponent("alpine-rootfs").path,
             "bundlePath": bundlePath,
+            // [T-ish-shell-timeout-leak] Reader-thread accounting; liveReaders
+            // should return to 0 between commands.
+            "shellLeakGuard": ISHShellExecutor.leakGuardStatus(),
             "buildDate": buildDate,
         ]
 
