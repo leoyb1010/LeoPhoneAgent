@@ -59,9 +59,14 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
     }
 
     func thinkingRules() async -> [BackupLeoThinkingRuleRecord] {
-        ThinkingRuleStore.load().map {
-            BackupLeoThinkingRuleRecord(prefix: $0.prefix, maxLevel: $0.maxLevel.rawValue,
-                                        defaultLevel: $0.defaultLevel.rawValue)
+        ThinkingRuleStore.load().map { rule in
+            let json = (try? JSONSerialization.data(withJSONObject: rule.persistedJSON, options: [.sortedKeys]))
+                .flatMap { String(data: $0, encoding: .utf8) }
+            return BackupLeoThinkingRuleRecord(
+                prefix: rule.patternText,
+                maxLevel: rule.maxLevel?.rawValue ?? "",
+                defaultLevel: rule.maxLevel.map { min(ThinkingLevel.medium, $0).rawValue } ?? "",
+                ruleId: rule.id, ruleJSON: json)
         }
     }
 
@@ -235,9 +240,14 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
 
     func saveThinkingRules(_ rules: [BackupLeoThinkingRuleRecord]) async {
         let mapped = rules.compactMap { r -> ThinkingRule? in
-            guard let maxLevel = ThinkingLevel(rawValue: r.maxLevel),
-                  let defaultLevel = ThinkingLevel(rawValue: r.defaultLevel) else { return nil }
-            return ThinkingRule(prefix: r.prefix, maxLevel: maxLevel, defaultLevel: defaultLevel)
+            if let json = r.ruleJSON,
+               let obj = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] {
+                // nil = a wire format this build does not know; drop that row only.
+                return ThinkingRule.fromPersistedJSON(obj)
+            }
+            let prefix = r.prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !prefix.isEmpty, let maxLevel = ThinkingLevel(rawValue: r.maxLevel) else { return nil }
+            return .ceiling(prefix: prefix, maxLevel: maxLevel, id: r.ruleId ?? "legacy:\(prefix.lowercased())")
         }
         ThinkingRuleStore.save(mapped)
     }

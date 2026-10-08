@@ -180,4 +180,24 @@ final class BackupMergeTests: XCTestCase {
         XCTAssertEqual(r.added, 1)
         XCTAssertEqual(r.merged.map(\.maxLevel), ["low", "high"])
     }
+
+    func testThinkingRulesCarryWireOnlyRulesAndMergeByRuleId() {
+        let local = [BackupLeoThinkingRuleRecord(prefix: "", maxLevel: "", defaultLevel: "",
+                                                 ruleId: "r1", ruleJSON: "{\"id\":\"r1\"}")]
+        let backup = [BackupLeoThinkingRuleRecord(prefix: "", maxLevel: "", defaultLevel: "",
+                                                  ruleId: "r1", ruleJSON: "{\"id\":\"r1\",\"x\":1}"),
+                      BackupLeoThinkingRuleRecord(prefix: "", maxLevel: "", defaultLevel: "",
+                                                  ruleId: "r2", ruleJSON: "{\"id\":\"r2\"}")]
+        let r = BackupMerge.mergeThinkingRules(local: local, backup: backup)
+        XCTAssertEqual(r.added, 1, "an all-models wire rule has no prefix but must still restore")
+        XCTAssertEqual(r.merged.map(\.id), ["r1", "r2"])
+        XCTAssertEqual(r.merged.first?.ruleJSON, "{\"id\":\"r1\"}", "local copy of the same rule wins")
+    }
+
+    func testLegacyThinkingRuleRowStillDecodes() throws {
+        let legacy = Data(#"{"prefix":"gpt-5","maxLevel":"high","defaultLevel":"medium"}"#.utf8)
+        let rec = try JSONDecoder().decode(BackupLeoThinkingRuleRecord.self, from: legacy)
+        XCTAssertNil(rec.ruleJSON)
+        XCTAssertEqual(rec.id, "gpt-5")
+    }
 }

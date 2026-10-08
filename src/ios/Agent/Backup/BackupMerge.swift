@@ -333,7 +333,7 @@ enum BackupMerge {
         var merged = local
         var ids = Set(local.map(\.id))
         var added = 0
-        for r in backup where !r.prefix.trimmingCharacters(in: .whitespaces).isEmpty && !ids.contains(r.id) {
+        for r in backup where (r.ruleJSON != nil || !r.prefix.trimmingCharacters(in: .whitespaces).isEmpty) && !ids.contains(r.id) {
             merged.append(r); ids.insert(r.id); added += 1
         }
         return (merged, added)

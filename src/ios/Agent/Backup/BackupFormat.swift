@@ -625,11 +625,18 @@ struct BackupSkillRecord: Codable, Sendable, Equatable {
 /// `data/leo_thinking_rules.jsonl`. Upstream's `thinking_rules.jsonl` is a
 /// different (per-instance wire-format) model and is ignored on restore.
 struct BackupLeoThinkingRuleRecord: Codable, Sendable, Equatable {
+    /// Model-id pattern; for ceiling rules a plain prefix (legacy shape).
     var prefix: String
+    /// Ceiling level raw value, "" when the rule only rewrites the wire format.
     var maxLevel: String
     var defaultLevel: String
+    /// Stable rule id (absent in packages written before rules carried one).
+    var ruleId: String? = nil
+    /// The full `ThinkingRule.persistedJSON` row, so wire-format and
+    /// per-provider rules round-trip. Absent in older packages.
+    var ruleJSON: String? = nil
 
-    var id: String { prefix.lowercased() }
+    var id: String { ruleId ?? prefix.lowercased() }
 }
 
 /// `env_vars.json` row — metadata only, never the value.
