@@ -955,14 +955,37 @@ extension CollectionViewMessageListV3 {
         }
 
         // === Height Measurement Cache ===
-        /// Caches measureAttributedStringHeight results by NSAttributedString identity.
-        /// Avoids redundant TextKit layout on repeated snapshots for the same content.
-        private var attrStringHeightCache: [ObjectIdentifier: CGFloat] = [:]
+        /// [T-ios-listsessions-perf] measureAttributedStringHeight results keyed
+        /// by CONTENT (HeightCacheKey) in a 300-entry LRU that survives session
+        /// change. The old identity key missed on every re-render of identical
+        /// text and was cleared on every switch — upstream traced 0.42-0.73 s
+        /// main-thread hangs in applySnapshot to re-measuring a page of long
+        /// blocks from cold. Dropped on memory warning (every entry is a pure
+        /// function of its key; the worst case is a re-measure).
+        private var attrStringHeightCache = HeightLRU(capacity: 300)
         /// [T-ios-user-msg-estimate-tail-jitter] Caches accurate user-bubble
         /// heights keyed by "content|width|fontsize" (user text has no
-        /// cachedAttributedString identity to key on). Cleared alongside
-        /// attrStringHeightCache on session change / font change.
+        /// cachedAttributedString identity to key on). Unbounded, so it is
+        /// still cleared on session change / font change.
         private var userBubbleHeightCache: [String: CGFloat] = [:]
+
+        /// [T-ios-earlier-stream-seed-freeze] Memo for `liveAssistantIds`.
+        /// configureCell runs per cell and the rule walks every message's
+        /// blocks, so without it the busiest frames go O(cells × messages ×
+        /// blocks). Keyed by (last message id, count, streamGeneration);
+        /// streamGeneration is bumped once per snapshot.
+        private var liveIdsMemo: (key: String, ids: Set<UUID>)?
+        private var streamGeneration: Int = 0
+
+        /// Ids of assistant messages whose content can still grow (memoized).
+        private func liveAssistantIds(in messages: [ChatMessage], isProcessing: Bool) -> Set<UUID> {
+            guard isProcessing else { return [] }
+            let key = "\(messages.last?.id.uuidString ?? "-")|\(messages.count)|\(streamGeneration)"
+            if let memo = liveIdsMemo, memo.key == key { return memo.ids }
+            let ids = Self.liveAssistantMessageIds(messages: messages, isProcessing: isProcessing)
+            liveIdsMemo = (key, ids)
+            return ids
+        }
 
         // === Thinking Block Toggle ===
         private var thinkingToggleSub: AnyCancellable?
@@ -1372,9 +1395,21 @@ extension CollectionViewMessageListV3 {
                 // so gate it out entirely. Non-streaming history cells keep the
                 // seed benefit. Clearing contentKey also disables the memo write
                 // on this cell's self-size path.
+                // [T-ios-earlier-stream-seed-freeze] The exclusion covers EVERY
+                // message that can still grow, not just `messages.last`: an
+                // earlier assistant turn keeps producing output through a
+                // running/streaming tool block while a newer turn streams.
+                // Treated as settled history, that message was seeded at a
+                // mid-stream height and froze too short, so the following
+                // blocks were stacked on top of it ("文字与工具卡片重叠").
+                // Same rule as the layout's streamingCellRanges. The live
+                // compact status row grows per delta too.
                 let itemMsgId = Self.messageId(of: item)
-                let isStreamingCell = vm.isProcessing && itemMsgId != nil
-                    && itemMsgId == messages.last?.id && messages.last?.role == .assistant
+                let isLiveCompactRow: Bool = itemMsgId.flatMap { id in
+                    messageIndex[id].flatMap { $0 < messages.count ? messages[$0] : nil }
+                }.map { $0.role == .systemInfo && $0.isCompactLoading } ?? false
+                let isStreamingCell = isLiveCompactRow
+                    || (itemMsgId.map { liveAssistantIds(in: messages, isProcessing: vm.isProcessing).contains($0) } ?? false)
                 if isStreamingCell {
                     cell.contentKey = nil
                     layout.invalidateMemo(forKey: key)
@@ -1829,7 +1864,12 @@ extension CollectionViewMessageListV3 {
                     // a duplicate dispatch from clearing caches that won't be rebuilt.
                     if let msgs = self.vm?.messages {
                         self.viewController?.messageListLayout?.clearHeightCache()
-                        self.attrStringHeightCache.removeAll()
+                        // [T-ios-listsessions-perf] attrStringHeightCache is NOT
+                        // cleared: its key is (content, width, fontSize), so an
+                        // entry from another session only matches byte-identical
+                        // text at the same width and font — correct by
+                        // construction — and reopening a recent session no
+                        // longer re-measures the whole page.
                         self.userBubbleHeightCache.removeAll()
                         // This is the authoritative post-load apply; it carries the
                         // latest messages, so any snapshot deferred during the load
@@ -1850,6 +1890,16 @@ extension CollectionViewMessageListV3 {
                         self.scrollToLastItem()
                     }
                     // Sync reload: keep current scroll position, just update data
+                }
+                .store(in: &subscriptions)
+
+            // 3b. Memory pressure — drop the measured-height LRU (it outlives
+            // session change, so it needs an explicit pressure release).
+            NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.attrStringHeightCache.removeAll()
+                    self?.userBubbleHeightCache.removeAll()
                 }
                 .store(in: &subscriptions)
 
@@ -2404,6 +2454,9 @@ extension CollectionViewMessageListV3 {
             // Remap height cache + set accurate estimates for ALL item types
             if let layout = viewController?.messageListLayout {
                 layout.updateCacheForSnapshot(oldIds: previousSnapshotIds, newIds: newItems)
+                // [T-ios-earlier-stream-seed-freeze] New snapshot ⇒ block set /
+                // tool statuses may have changed; don't reuse the live-id memo.
+                streamGeneration &+= 1
 
                 let cvWidth = viewController?.collectionView.bounds.width ?? 390
                 for (i, item) in newItems.enumerated() {
@@ -2475,17 +2528,30 @@ extension CollectionViewMessageListV3 {
                         switch block.kind {
                         case .text:
                             // Use TextKit layout for accurate height pre-calculation.
-                            // Results are cached by NSAttributedString identity to avoid
-                            // redundant TextKit layout on repeated snapshots.
+                            // [T-ios-listsessions-perf] Cached by CONTENT
+                            // (HeightCacheKey), so a re-render of unchanged text
+                            // hits instead of re-measuring through sizeThatFits.
                             if let attrStr = block.cachedAttributedString {
                                 let textWidth = Self.assistantTextWidth(listWidth: cvWidth, maxContentWidth: maxContentWidth)
-                                let key = ObjectIdentifier(attrStr)
+                                // 16.5 = MarkdownNSRenderer's base size for
+                                // assistant markdown (SelectableMarkdownView), so a
+                                // Dynamic Type change misses instead of colliding.
+                                let key = HeightCacheKey(content: block.content, width: textWidth,
+                                                         fontSize: FontSettings.shared.scaledMessage(16.5))
+                                // Not cached: strings with attachments (an image's
+                                // height is decided at layout time — 200 pt
+                                // placeholder until decode — and the entry would
+                                // follow the message into its next open), and
+                                // still-growing messages (each flush would be a new
+                                // key churning the 300-entry window).
+                                let cacheable = !liveAssistantIds(in: messages, isProcessing: vm.isProcessing).contains(msgId)
+                                    && !attrStr.containsAttachments(in: NSRange(location: 0, length: attrStr.length))
                                 let height: CGFloat
-                                if let cached = attrStringHeightCache[key] {
+                                if cacheable, let cached = attrStringHeightCache[key] {
                                     height = cached
                                 } else {
                                     height = Self.measureAttributedStringHeight(attrStr, width: textWidth)
-                                    attrStringHeightCache[key] = height
+                                    if cacheable { attrStringHeightCache[key] = height }
                                 }
                                 // height includes the text view's 8pt insets;
                                 // +4 = the SwiftUI wrapper's .padding(.vertical, 2)
@@ -2629,19 +2695,9 @@ extension CollectionViewMessageListV3 {
             // offset adjustment, or browse-mode hovering over it gets dragged
             // down by each flush's growth delta.
             if vm.isProcessing {
-                var streamingIds: [UUID] = []
-                if let lastMsg = messages.last, lastMsg.role == .assistant {
-                    streamingIds.append(lastMsg.id)
-                }
-                for msg in messages where msg.role == .assistant && msg.id != messages.last?.id {
-                    let hasLiveTool = msg.blocks.contains { blk in
-                        switch blk.toolStatus {
-                        case .running, .streaming: return true
-                        default: return false
-                        }
-                    }
-                    if hasLiveTool { streamingIds.append(msg.id) }
-                }
+                // [T-ios-earlier-stream-seed-freeze] Shared with the seed/memo
+                // exclusion in configureCell — one rule, one implementation.
+                let streamingIds = Array(liveAssistantIds(in: messages, isProcessing: true))
                 var ranges: [Range<Int>] = []
                 for id in streamingIds {
                     guard let start = newItems.firstIndex(of: .assistantHeader(id)) else { continue }
@@ -2974,6 +3030,29 @@ extension CollectionViewMessageListV3 {
         /// [T-ios-scroll-decel-height-drift] The owning message id for a list
         /// item (used to detect the actively streaming message so its cells are
         /// excluded from the height memo).
+        /// [T-ios-earlier-stream-seed-freeze] Ids of every assistant message
+        /// whose content can still GROW: the newest assistant message, plus any
+        /// earlier one with a running/streaming tool block (queued-turn
+        /// interrupts). Used by both the seed/memo exclusion and the layout's
+        /// streamingCellRanges, which had drifted apart before.
+        static func liveAssistantMessageIds(messages: [ChatMessage], isProcessing: Bool) -> Set<UUID> {
+            guard isProcessing else { return [] }
+            var ids: Set<UUID> = []
+            if let last = messages.last, last.role == .assistant {
+                ids.insert(last.id)
+            }
+            for msg in messages where msg.role == .assistant && msg.id != messages.last?.id {
+                let hasLiveTool = msg.blocks.contains { blk in
+                    switch blk.toolStatus {
+                    case .running, .streaming: return true
+                    default: return false
+                    }
+                }
+                if hasLiveTool { ids.insert(msg.id) }
+            }
+            return ids
+        }
+
         static func messageId(of item: MessageListItem) -> UUID? {
             switch item {
             case .wholeMessage(let id): return id

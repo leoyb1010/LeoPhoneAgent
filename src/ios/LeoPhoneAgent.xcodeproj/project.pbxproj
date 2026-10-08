@@ -612,6 +612,8 @@
 		E5UMP0001 /* UnifiedModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UMP0011 /* UnifiedModelPicker.swift */; };
 		E5V000002 /* AlternateIcons in Resources */ = {isa = PBXBuildFile; fileRef = E5V000012 /* AlternateIcons */; };
 		E5V100001 /* MessageListLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5V100011 /* MessageListLayout.swift */; };
+		E5MHC0001 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
+		E5MHC0002 /* MessageHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MHC0011 /* MessageHeightCache.swift */; };
 		E5V300001 /* CollectionViewMessageListV3.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5V300011 /* CollectionViewMessageListV3.swift */; };
 		E5VC00001 /* VoiceCorrectionDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00011 /* VoiceCorrectionDB.swift */; };
 		E5VC00002 /* PhoneticNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00012 /* PhoneticNormalizer.swift */; };
@@ -1449,6 +1451,7 @@
 		E5UMP0011 /* UnifiedModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedModelPicker.swift; sourceTree = "<group>"; };
 		E5V000012 /* AlternateIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AlternateIcons; path = Resources/AlternateIcons; sourceTree = "<group>"; };
 		E5V100011 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
+		E5MHC0011 /* MessageHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageHeightCache.swift; sourceTree = "<group>"; };
 		E5V300011 /* CollectionViewMessageListV3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionViewMessageListV3.swift; sourceTree = "<group>"; };
 		E5VC00011 /* VoiceCorrectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCorrectionDB.swift; sourceTree = "<group>"; };
 		E5VC00012 /* PhoneticNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneticNormalizer.swift; sourceTree = "<group>"; };
@@ -2473,6 +2476,7 @@
 				E5V300011 /* CollectionViewMessageListV3.swift */,
 				F1A00021 /* MessageListInfrastructure.swift */,
 				E5V100011 /* MessageListLayout.swift */,
+				E5MHC0011 /* MessageHeightCache.swift */,
 			);
 			path = MessageList;
 			sourceTree = "<group>";
@@ -3188,6 +3192,7 @@
 				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
 				E5SLQ0002 /* SessionListQuery.swift in Sources */,
 				E5SRS0002 /* SessionRefreshScheduler.swift in Sources */,
+				E5MHC0002 /* MessageHeightCache.swift in Sources */,
 				E5T5L0003 /* T5ShellBridgeLogic.swift in Sources */,
 				E5T6L0003 /* T6RelayLogic.swift in Sources */,
 				E5SRP0002 /* SyncRetryPolicy.swift in Sources */,
@@ -3403,6 +3408,7 @@
 				E5V300001 /* CollectionViewMessageListV3.swift in Sources */,
 				F1A00020 /* MessageListInfrastructure.swift in Sources */,
 				E5V100001 /* MessageListLayout.swift in Sources */,
+				E5MHC0001 /* MessageHeightCache.swift in Sources */,
 				E5T000001 /* SessionEntity.swift in Sources */,
 				E5T000002 /* ListSessionsIntent.swift in Sources */,
 				E5T000003 /* SendPromptIntent.swift in Sources */,
