@@ -66,7 +66,7 @@ final class WorkerPool {
         // "currently viewed session" away from the Lead and broke its
         // streaming flush/restore gates.
         let previousActive = AIChatViewModel.activeSessionId
-        let vm = ViewModelCache.shared.createDraft()
+        let vm = ViewModelCache.shared.createDraft(pool: .background)
         vm.sessionSource = "orchestration"
         await vm.ensureSessionReturningId()
         AIChatViewModel.activeSessionId = previousActive

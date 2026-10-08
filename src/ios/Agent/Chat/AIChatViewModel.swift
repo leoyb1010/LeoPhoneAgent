@@ -2265,6 +2265,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     // `internal` (not `private`): the +Compaction extension's
     // schedulePostCompactDrain() runs the post-compact queue drain on this
     // task so cancel() can stop it. [T-compact-queued-drain]
+    /// [T-vmcache-pools] Pool this VM joins when `cacheDraft` caches it.
+    var viewModelCachePool: ViewModelCache.PoolKind = .normal
     var currentTask: Task<Void, Never>?
     var compactTask: Task<Void, Never>?
     var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -3865,6 +3867,32 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         pastedBlocks = []
         restoreStashedComposerDraft()
         logger.info("✏️ cancelEdit")
+    }
+
+    /// [T-vmcache-release] What ViewModelCache eviction does instead of
+    /// `cancel()`: drop render state that can be rebuilt from SQLite and stop
+    /// the idle prompt-cache keep-alive. Deliberately NOT touched: currentTask,
+    /// compaction, the prompt queue, SessionActivityTracker — `isEvictable`
+    /// refuses VMs with live work, and if that ever loosens the work survives.
+    @MainActor
+    func releaseForEviction() {
+        releaseRenderState()
+        if let sid = sessionId { CacheKeepAliveManager.shared.cancelKeepAlive(sessionId: sid) }
+        logger.info("♻️ releaseForEviction session=\(self.sessionId ?? "nil") vm=\(self.vmInstanceId) messages=\(self.messages.count)")
+    }
+
+    /// Drop parsed markdown + laid-out attributed strings (and the per-message
+    /// renderers, which live on a static) while keeping message text.
+    /// Everything dropped here is regenerated lazily on the next render.
+    @MainActor
+    func releaseRenderState() {
+        for msg in messages {
+            for block in msg.blocks {
+                if block.cachedAttributedString != nil { block.cachedAttributedString = nil }
+                if block.cachedMarkdown != nil { block.cachedMarkdown = nil }
+            }
+            SelectableMarkdownView.dropRenderer(for: msg.id)
+        }
     }
 
     func cancel(queuePolicy: AgentQueueStopPolicy = .continueQueuedPrompts) {

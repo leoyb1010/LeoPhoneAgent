@@ -6361,8 +6361,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // rects cached.
         if let mid = messageId, let existing = SelectableMarkdownView.rendererCache[mid] {
             coord.renderer = existing
+            SelectableMarkdownView.touchRenderer(mid)
         } else if let mid = messageId {
             SelectableMarkdownView.rendererCache[mid] = coord.renderer
+            SelectableMarkdownView.touchRenderer(mid)
         }
         return coord
     }
@@ -6378,7 +6380,42 @@ struct SelectableMarkdownView: UIViewRepresentable {
     /// state. The cache uses a regular dictionary because the keys are
     /// stable across the chat session and entries are cheap; in practice
     /// it grows at the rate of unique assistant messages in the live chat.
+    /// [T-renderer-cache-bounded] It used to be exactly that — an unbounded
+    /// dictionary on the type, reclaimed by nothing (not leaving a chat, not
+    /// VM eviction, not a memory warning). Now an LRU capped at 80 renderers
+    /// (well past a screenful, so scrolling back never re-parses) and drained
+    /// when a VM releases its render state or on memory pressure.
     @MainActor private static var rendererCache: [UUID: MarkdownNSRenderer] = [:]
+    /// LRU order for `rendererCache`, oldest first.
+    @MainActor private static var rendererLRU: [UUID] = []
+    @MainActor static let rendererCacheCap = 80
+
+    @MainActor
+    private static func touchRenderer(_ id: UUID) {
+        if let i = rendererLRU.firstIndex(of: id) { rendererLRU.remove(at: i) }
+        rendererLRU.append(id)
+        while rendererLRU.count > rendererCacheCap, let oldest = rendererLRU.first {
+            rendererLRU.removeFirst()
+            rendererCache.removeValue(forKey: oldest)
+        }
+    }
+
+    /// Drop one message's renderer (safe for an id never cached). The renderer
+    /// is a cache: the next render for this message builds a fresh one.
+    @MainActor
+    static func dropRenderer(for messageId: UUID) {
+        guard rendererCache.removeValue(forKey: messageId) != nil else { return }
+        if let i = rendererLRU.firstIndex(of: messageId) { rendererLRU.remove(at: i) }
+    }
+
+    /// Drop every cached renderer (memory warning).
+    @MainActor
+    static func dropAllRenderers() -> Int {
+        let n = rendererCache.count
+        rendererCache.removeAll()
+        rendererLRU.removeAll()
+        return n
+    }
 
     func makeUIView(context: Context) -> SelectableMarkdownTextView {
         let textView = SelectableMarkdownTextView()

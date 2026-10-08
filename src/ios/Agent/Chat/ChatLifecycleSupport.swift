@@ -602,7 +602,21 @@ final class SessionConcurrencyManager: ObservableObject {
 final class ViewModelCache {
     static let shared = ViewModelCache()
 
+    /// [T-vmcache-pools] Which LRU pool a cached VM belongs to. Headless
+    /// background runs (quiet tasks, orchestration workers, agent-spawned
+    /// `minis-sessions` chats) must not compete with the conversations the
+    /// user opens: a burst of them used to evict the user's own chats.
+    enum PoolKind: String {
+        /// A conversation the user opens directly (default for every caller).
+        case normal
+        /// A headless run created off-screen; separate, larger cap.
+        case background
+    }
+
     private var cache: [String: AIChatViewModel] = [:]
+    /// Pool membership per session id; absent ⇒ `.normal`. Decided by whoever
+    /// first caches the session and then sticky ([T-vmcache-pool-sticky]).
+    private var poolKinds: [String: PoolKind] = [:]
 
     /// Session IDs in least-recently-used → most-recently-used order. Kept in
     /// sync with `cache`: appended/moved to the end on every access, removed
@@ -619,6 +633,9 @@ final class ViewModelCache {
     /// the VM and re-hydrates messages from SQLite via the normal isNew path.
     /// [T-ios-vmcache-lru-evict]
     private static let softCap: Int = 6
+    /// [T-vmcache-pools] Cap for `.background` VMs: a single burst can hold
+    /// several at once, and each is cheap once its render state is released.
+    private static let backgroundSoftCap: Int = 10
 
     init() {
         // Evict aggressively under memory pressure — same hook BrowserTabPool
@@ -647,7 +664,10 @@ final class ViewModelCache {
     /// For staleness-aware callers (e.g. AIChatView's init), additionally check
     /// `consumeStaleFlag(sessionId:)` AFTER this call and trigger a reload
     /// when it returns true.
-    func getOrCreate(for sessionId: String) -> (vm: AIChatViewModel, isNew: Bool) {
+    func getOrCreate(for sessionId: String, kind: PoolKind = .normal) -> (vm: AIChatViewModel, isNew: Bool) {
+        if kind != .normal, poolKinds[sessionId] == nil, cache[sessionId] == nil {
+            poolKinds[sessionId] = kind
+        }
         if let existing = cache[sessionId] {
             touch(sessionId)
             logger.info("🔄SESSION ViewModelCache HIT session=\(sessionId) vm=\(existing.vmInstanceId) isProcessing=\(existing.isProcessing)")
@@ -701,8 +721,12 @@ final class ViewModelCache {
     }
 
     /// Remove a session's ViewModel from the cache (e.g. on session delete).
+    /// Deliberately still a `cancel()`: this is session DELETION, where the
+    /// conversation's in-flight work really is meant to stop. Capacity-driven
+    /// eviction releases instead (see `evict`).
     func remove(sessionId: String) {
         lruOrder.removeAll { $0 == sessionId }
+        poolKinds.removeValue(forKey: sessionId)
         ComposerDraftStore.remove(key: sessionId)
         AIChatViewModel.saveEnhancedCache(false, for: sessionId)
         if let removed = cache.removeValue(forKey: sessionId) {
@@ -717,14 +741,18 @@ final class ViewModelCache {
     /// Create a fresh (uncached) ViewModel for draft sessions (nil sessionId).
     /// Starts with an empty composer; the chat screen restores the new-chat
     /// draft itself (see `getOrCreate`).
-    func createDraft() -> AIChatViewModel {
+    func createDraft(pool: PoolKind = .normal) -> AIChatViewModel {
         let vm = AIChatViewModel()
+        vm.viewModelCachePool = pool
         logger.info("🔄SESSION ViewModelCache createDraft vm=\(vm.vmInstanceId)")
         return vm
     }
 
     /// Move a draft ViewModel into the cache once its session ID is assigned.
     func cacheDraft(_ vm: AIChatViewModel, sessionId: String) {
+        if vm.viewModelCachePool != .normal, poolKinds[sessionId] == nil {
+            poolKinds[sessionId] = vm.viewModelCachePool
+        }
         cache[sessionId] = vm
         touch(sessionId)
         logger.info("🔄SESSION ViewModelCache cacheDraft session=\(sessionId) vm=\(vm.vmInstanceId)")
@@ -750,16 +778,33 @@ final class ViewModelCache {
         if vm.isProcessing { return false }
         if sessionId == AIChatViewModel.activeSessionId { return false }
         if SessionActivityTracker.shared.activeSessions.contains(sessionId) { return false }
+        // Work that is not `isProcessing` but still lives on this VM: a
+        // compact-then-send turn (isProcessing is false while it compacts —
+        // the quiet / context runners poll exactly these flags), a queued
+        // prompt waiting to drain, or a compaction task in flight. (Not the
+        // turn's task handle: it is only nil'd by cancel(), so a VM that ever
+        // ran a turn would never be evictable again.)
+        if vm.isCompacting || vm.compactAndSendRequestId != nil || vm.postCompactDrainPending { return false }
+        if !vm.promptQueue.isEmpty { return false }
+        if vm.compactTask != nil { return false }
         return true
     }
 
+    /// [T-vmcache-pools] Each pool is swept against its own cap; within a pool
+    /// the order is plain LRU.
     private func evictIfOverCap() {
-        guard cache.count > Self.softCap else { return }
-        var overflow = cache.count - Self.softCap
-        // Walk LRU → MRU, evicting evictable VMs first.
-        for sessionId in lruOrder where overflow > 0 {
+        evictPool(.normal, cap: Self.softCap)
+        evictPool(.background, cap: Self.backgroundSoftCap)
+    }
+
+    private func evictPool(_ kind: PoolKind, cap: Int) {
+        let members = lruOrder.filter { (poolKinds[$0] ?? .normal) == kind && cache[$0] != nil }
+        guard members.count > cap else { return }
+        var overflow = members.count - cap
+        // Walk LRU → MRU within this pool, evicting evictable VMs first.
+        for sessionId in members where overflow > 0 {
             guard let vm = cache[sessionId], isEvictable(sessionId, vm) else { continue }
-            evict(sessionId, vm: vm, reason: "over softCap(\(Self.softCap))")
+            evict(sessionId, vm: vm, reason: "over \(kind.rawValue)Cap(\(cap))")
             overflow -= 1
         }
     }
@@ -772,13 +817,22 @@ final class ViewModelCache {
         for (sessionId, vm) in victims {
             evict(sessionId, vm: vm, reason: "memory warning")
         }
-        logger.info("🔄SESSION ViewModelCache memory-warning evicted \(victims.count) VM(s), \(self.cache.count) remain")
+        // [T-renderer-cache-bounded] Renderers are keyed by message on a
+        // static and survive VM eviction, so drop them explicitly here.
+        let renderers = SelectableMarkdownView.dropAllRenderers()
+        logger.info("🔄SESSION ViewModelCache memory-warning evicted \(victims.count) VM(s), \(self.cache.count) remain, dropped \(renderers) renderer(s)")
     }
 
+    /// [T-vmcache-release] Evicting is a RELEASE, never a cancel. This used to
+    /// call `vm.cancel()` — the full user-Stop path (queue drain restart,
+    /// compaction cancel). A cache-size policy must never reach into running
+    /// work; `isEvictable` already refuses anything live, and if that guard is
+    /// ever loosened the work must SURVIVE. Only rebuildable state is dropped.
     private func evict(_ sessionId: String, vm: AIChatViewModel, reason: String) {
         vm.flushComposerDraft()
-        vm.cancel()
+        vm.releaseForEviction()
         cache.removeValue(forKey: sessionId)
+        poolKinds.removeValue(forKey: sessionId)
         lruOrder.removeAll { $0 == sessionId }
         // Clearing the stale marker too — a rebuilt VM loads fresh from SQLite.
         staleSessionIds.remove(sessionId)
