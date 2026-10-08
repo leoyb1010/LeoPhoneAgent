@@ -467,7 +467,8 @@ private struct ReplyActionBarV3: View {
             // [E1] 下一步:这条回复流到别的功能。5 项,顺序固定。
             if bridge.onNextStep != nil {
                 Menu {
-                    ForEach(ReplyNextStep.visibleMenu(paperclipConfigured: PaperclipProfile.hasSaved())) { action in
+                    ForEach(ReplyNextStep.visibleMenu(paperclipConfigured: PaperclipProfile.hasSaved(),
+                                                          macFleetEnabled: MacFleetFeature.isEnabled())) { action in
                         Button {
                             bridge.onNextStep?(action)
                         } label: { Label(action.title, systemImage: action.symbolName) }

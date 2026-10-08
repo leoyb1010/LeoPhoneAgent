@@ -52,3 +52,9 @@
 "Remember with ${applicationName}" = "Remember with ${applicationName}";
 "Create a Paperclip issue with ${applicationName}" = "Create a Paperclip issue with ${applicationName}";
 "${applicationName} dispatch to Paperclip" = "${applicationName} dispatch to Paperclip";
+
+/* [F-mac-fleet-advanced] Paperclip issue status / result (replace the two Mac fleet shortcuts) */
+"Check a Paperclip issue with ${applicationName}" = "Check a Paperclip issue with ${applicationName}";
+"${applicationName} Paperclip status" = "${applicationName} Paperclip status";
+"Get a Paperclip result with ${applicationName}" = "Get a Paperclip result with ${applicationName}";
+"${applicationName} Paperclip result" = "${applicationName} Paperclip result";

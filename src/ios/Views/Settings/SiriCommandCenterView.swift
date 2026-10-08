@@ -15,14 +15,22 @@ struct SiriCommandCenterView: View {
         var id: String { say }
     }
 
+    /// [F-mac-fleet-advanced] Mac 舰队默认关闭;打开后才显示 Mac 相关的说明。
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
+
     // 别名 LB 已注册(INAlternativeAppNames):短语里的 app 名说「LB」
     // 即可,全名 LeoPhoneAgent 同样有效。
-    private let fleetPhrases: [Phrase] = [
-        Phrase(say: "让LB在Mac上跑", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
-        Phrase(say: "让LB用我的Mac", does: "同上,另一种说法"),
-        Phrase(say: "LB汇报", does: "念出三台 Mac 进行中任务与待审批"),
-        Phrase(say: "LB批准", does: "念出最近一条待审批,确认后批准(需解锁,高风险不经 Siri)"),
-        Phrase(say: "LB停止任务", does: "停掉指定 Mac 上正在跑的任务(多个时先问)"),
+    private let paperclipPhrases: [Phrase] = [
+        Phrase(say: "LB查工单进度", does: "选一个 Paperclip 工单,念出状态和智能体最近一条回复"),
+        Phrase(say: "LB读工单结果", does: "读取工单结果全文,可交给快捷指令的下一个动作"),
+    ]
+
+    /// Mac 动作不再占 Siri 短语名额(上限 10),在快捷指令 App 的动作列表里。
+    private let fleetActions: [Phrase] = [
+        Phrase(say: "指挥一台 Mac", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
+        Phrase(say: "Mac 任务汇报", does: "念出各台 Mac 进行中任务与待审批"),
+        Phrase(say: "批准 Mac 待审批", does: "念出最近一条待审批,确认后批准(需解锁,高风险不经 Siri)"),
+        Phrase(say: "停止 Mac 任务", does: "停掉指定 Mac 上正在跑的任务(多个时先问)"),
     ]
 
     private let chatPhrases: [Phrase] = [
@@ -38,19 +46,29 @@ struct SiriCommandCenterView: View {
         List {
             Section {
                 Label {
-                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键 / 顶部按钮唤起后直接说。\n\n默认在\(LeoDeviceNouns.thisDevice())上做;只有明确说到「Mac」,任务才会派到远端机器。")
+                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键 / 顶部按钮唤起后直接说。\n\n默认都在\(LeoDeviceNouns.thisDevice())上做。")
                         .font(.footnote).foregroundStyle(.secondary)
                 } icon: {
                     Image(systemName: "mic.badge.plus").foregroundStyle(.purple)
                 }
             }
 
-            Section("指挥 Mac(不打开 app)") {
-                ForEach(fleetPhrases) { phraseRow($0) }
-            }
-
             Section("对话与任务") {
                 ForEach(chatPhrases) { phraseRow($0) }
+            }
+
+            Section("服务器任务(Paperclip)") {
+                ForEach(paperclipPhrases) { phraseRow($0) }
+            }
+
+            if macFleetEnabled {
+                Section {
+                    ForEach(fleetActions) { actionRow($0) }
+                } header: {
+                    Text("指挥 Mac(不打开 app)")
+                } footer: {
+                    Text("这几项在快捷指令 App 里:新建快捷指令,搜 LeoBot 加入动作,给快捷指令起个名字,之后对 Siri 说这个名字即可。")
+                }
             }
 
             Section("审批不用打开 App") {
@@ -90,9 +108,12 @@ struct SiriCommandCenterView: View {
                     Text("iOS 不允许 app 代建自动化,照着建只要 1 分钟:")
                     Text("跑任务、审批这类动作现在要先解锁 iPhone：锁屏时触发的自动化（定时、到达、NFC 等）跑不了它们。定时任务请用「运行到点的定时任务」，锁屏也能跑。")
                         .foregroundStyle(.orange)
-                    Text("• 「充电时 + 23:00」→ 指挥一台 Mac:跑夜间批处理")
-                    Text("• 「到达家」→ Mac 任务汇报")
-                    Text("• 「离开公司」→ Mac 任务汇报")
+                    if macFleetEnabled {
+                        Text("• 「充电时 + 23:00」→ 指挥一台 Mac:跑夜间批处理")
+                        Text("• 「到达家」→ Mac 任务汇报")
+                        Text("• 「离开公司」→ Mac 任务汇报")
+                    }
+                    Text("• 「到达家」→ 查 Paperclip 工单进度")
                     Text("快捷指令 App → 自动化 → 新建,动作里搜 LeoBot。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
@@ -100,6 +121,16 @@ struct SiriCommandCenterView: View {
         }
         .navigationTitle("Siri 指挥中心")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func actionRow(_ p: Phrase) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: "「" + p.say + "」")
+                .font(.system(size: 15, weight: .medium))
+            Text(p.does)
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
     }
 
     private func phraseRow(_ p: Phrase) -> some View {

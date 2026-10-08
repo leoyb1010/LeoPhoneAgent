@@ -27,11 +27,34 @@ final class CrossFeatureFlowTests: XCTestCase {
     /// 本机优先:没连过 Paperclip 服务器,「下一步」里不出现「转为服务器任务」。
     @MainActor func testNextStepHidesServerTaskUntilPaperclipConfigured() throws {
         XCTAssertFalse(PaperclipProfile.hasSaved(defaults))
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false), [.collect, .quickTask, .schedule, .mac])
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true), ReplyNextStep.menu)
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false, macFleetEnabled: true),
+                       [.collect, .quickTask, .schedule, .mac])
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: true), ReplyNextStep.menu)
         let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
         defaults.set(try JSONEncoder().encode([profile]), forKey: PaperclipProfile.storageKey)
         XCTAssertTrue(PaperclipProfile.hasSaved(defaults))
+    }
+
+    /// [F] Mac 舰队默认关闭:没打开过就是关,打开后才算开。
+    func testMacFleetFeatureDefaultsOff() {
+        XCTAssertNil(defaults.object(forKey: MacFleetFeature.defaultsKey))
+        XCTAssertFalse(MacFleetFeature.isEnabled(defaults))
+        defaults.set(true, forKey: MacFleetFeature.defaultsKey)
+        XCTAssertTrue(MacFleetFeature.isEnabled(defaults))
+        defaults.set(false, forKey: MacFleetFeature.defaultsKey)
+        XCTAssertFalse(MacFleetFeature.isEnabled(defaults))
+        XCTAssertEqual(MacFleetFeature.defaultsKey, "macFleet.enabled")
+        XCTAssertEqual(MacFleetFeature.disabledMessage, "Mac 舰队已关闭，到 设置 → 远程机器 打开")
+    }
+
+    /// [F] Mac 舰队关闭时「下一步」里没有「发到 Mac」;打开后恢复原样,顺序不变。
+    @MainActor func testNextStepHidesMacUntilFleetEnabled() {
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: false),
+                       [.collect, .quickTask, .schedule, .paperclip])
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false, macFleetEnabled: false),
+                       [.collect, .quickTask, .schedule])
+        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: true), ReplyNextStep.menu)
+        XCTAssertFalse(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: false).contains(.mac))
     }
 
     /// 冷启动回到本机:不管上次停在哪个工作区。

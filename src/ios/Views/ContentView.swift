@@ -373,6 +373,9 @@ struct ContentView: View {
     /// Launch screen preference: 0=Auto, 1=Last Session, 2=New Chat.
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
+    /// [F-mac-fleet-advanced] Mac 舰队默认关闭:首页「Mac 进行中」、Mac 控制台入口跟着隐藏。
+    /// 通知点进 Mac 任务(openMacSession)不看这个开关。
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
     @AppStorage("leo.ios.executionBackend.v1") private var executionBackend = IOSExecutionBackend.local.rawValue
     // Empty means home; a nonempty value is the session that opened Paperclip.
     // The backend is app-wide; its return bookmark must survive a process
@@ -1364,7 +1367,7 @@ struct ContentView: View {
                 // [T-mac-in-main-list] 退后台停掉 Mac 会话轮询:保活场景下
                 // 进程不挂起,否则每 20 秒白打一轮网络。回前台重启,幂等。
                 if phase == .background { MacLiveSessionsStore.shared.stop() }
-                if phase == .active { MacLiveSessionsStore.shared.start() }
+                if phase == .active, MacFleetFeature.isEnabled() { MacLiveSessionsStore.shared.start() }
                 // [T-ios-scenephase-active-sigkill] Defer ALL .active work off the
                 // synchronous callback. Writing @Published (SyncCore.isAppInBackground)
                 // here triggers objectWillChange → SwiftUI view invalidation in the
@@ -1513,6 +1516,16 @@ struct ContentView: View {
         }
     }
 
+    /// Mac 舰队没打开时不提「也可以交给 Mac」。
+    private var homeWorkbenchSubtitle: LocalizedStringKey {
+        switch (isIPad, macFleetEnabled) {
+        case (true, true): return "让此 iPad 帮你分析、查找、写作或执行，也可以交给 Mac。"
+        case (false, true): return "让此 iPhone 帮你分析、查找、写作或执行，也可以交给 Mac。"
+        case (true, false): return "让此 iPad 帮你分析、查找、写作或执行。"
+        case (false, false): return "让此 iPhone 帮你分析、查找、写作或执行。"
+        }
+    }
+
     /// [T-ipad-home-workbench] iPad 打开就能交代任务。没选对话时右边以前只有一句
     /// 「未选择对话」,竖屏侧栏又是收起的,整屏空白。现在这里就是首页:和 iPhone
     /// 首页同一条输入栏(执行位置 · 模型胶囊、/、麦克风),放在可读宽度里、略高于中线。
@@ -1525,8 +1538,7 @@ struct ContentView: View {
                     .foregroundStyle(.tint)
                 Text("交代一个任务")
                     .font(.largeTitle.weight(.bold))
-                Text(isIPad ? "让此 iPad 帮你分析、查找、写作或执行，也可以交给 Mac。"
-                            : "让此 iPhone 帮你分析、查找、写作或执行，也可以交给 Mac。")
+                Text(homeWorkbenchSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1762,7 +1774,7 @@ struct ContentView: View {
         // 1.16.0 把它们挂在了 emptyState 的修饰链上——只要用户有历史会话,
         // emptyState 不进视图树,.task 不跑、cover 不弹,整个功能是死的。
         .task {
-            MacLiveSessionsStore.shared.start()
+            if MacFleetFeature.isEnabled() { MacLiveSessionsStore.shared.start() }
             // [T-treasury-sync] 启动即交换藏宝阁增量变更。原来只挂在
             // 收藏页 onAppear 上——用户不进收藏页,Mac 端就永远是空的
             // (线上实测:装了两个版本,中继上 updated_at 一直是 0)。
@@ -1887,7 +1899,7 @@ struct ContentView: View {
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     /// 1.46.1:标题点一下折叠;每行左滑(或长按)——在跑的「停止」,跑完的「清理」。
     private var macLiveSectionVisible: Bool {
-        homeCardsEnabled && !isSelecting && !macLive.rows.isEmpty
+        macFleetEnabled && homeCardsEnabled && !isSelecting && !macLive.rows.isEmpty
     }
 
     @ViewBuilder
@@ -2537,7 +2549,7 @@ struct ContentView: View {
         // [T-settings-ia] Mac 控制台是主功能,不是设置项——iPad 常驻标题栏(整页面板);
         // iPhone 收进首页胶囊菜单和 "/" 面板。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting, isWideLayout {
+            if !isSelecting, isWideLayout, macFleetEnabled {
                 Button {
                     showMacConsole = true
                 } label: {
@@ -3366,8 +3378,10 @@ struct ContentView: View {
                 runHomeNative(.init(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: ""))
             },
             HomeAction(id: "capabilities", title: "全部能力", icon: "square.grid.2x2", tint: .purple) { activeToolSheet = .capabilities },
-            HomeAction(id: "mac", title: "Mac 控制台", icon: "desktopcomputer", tint: .secondary) { showMacConsole = true },
         ]
+        if macFleetEnabled {
+            list.append(HomeAction(id: "mac", title: "Mac 控制台", icon: "desktopcomputer", tint: .secondary) { showMacConsole = true })
+        }
         if hasAlarms {
             list.append(HomeAction(id: "alarms", title: "闹钟", icon: "alarm", tint: .red) { showAlarmList = true })
         }
@@ -3476,9 +3490,11 @@ struct ContentView: View {
                 Label(isIPad ? "此 iPad（默认）" : "此 iPhone（默认）",
                       systemImage: homeTargetIsIPhone ? "checkmark.circle.fill" : (isIPad ? "ipad" : "iphone"))
             }
-            if !gatewayStore.activeHosts.isEmpty {
+            // [F-mac-fleet-advanced] Mac 舰队没打开时只列 Android 本机 Agent,不列 Mac。
+            let remoteTargets = gatewayStore.activeHosts.filter { macFleetEnabled || $0.isAndroidBody }
+            if !remoteTargets.isEmpty {
                 Section("远程机器") {
-                    ForEach(gatewayStore.activeHosts) { host in
+                    ForEach(remoteTargets) { host in
                         Menu(host.name) {
                             ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
                                 Button(cli.1) {

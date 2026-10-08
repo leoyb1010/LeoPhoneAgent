@@ -49,3 +49,9 @@
 "Remember with ${applicationName}" = "用${applicationName}記住";
 "Create a Paperclip issue with ${applicationName}" = "用${applicationName}派Paperclip工單";
 "${applicationName} dispatch to Paperclip" = "讓${applicationName}給Paperclip派個活";
+
+/* [F-mac-fleet-advanced] Paperclip 工單查進度 / 讀結果(取代 Mac 艦隊的兩句) */
+"Check a Paperclip issue with ${applicationName}" = "用${applicationName}查Paperclip工單進度";
+"${applicationName} Paperclip status" = "${applicationName}查工單進度";
+"Get a Paperclip result with ${applicationName}" = "用${applicationName}讀取Paperclip工單結果";
+"${applicationName} Paperclip result" = "${applicationName}讀工單結果";

@@ -45,9 +45,20 @@ struct GatewaySettingsView: View {
     /// [T-gateway-delete-confirm] 左滑删除待确认的机器。存机器本身,不存行号:
     /// 确认框弹着时列表可能因为刷新变动。删除会连同本机保存的访问密钥一起删掉。
     @State private var pendingDeleteHost: GatewayHost?
+    /// [F-mac-fleet-advanced] Mac 舰队默认关闭;开关只管入口显隐,不动已连接的机器。
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
     var body: some View {
         List {
+            Section {
+                Toggle("Mac 舰队（高级）", isOn: $macFleetEnabled)
+                    .onChange(of: macFleetEnabled) { _, on in
+                        if on { MacLiveSessionsStore.shared.start() } else { MacLiveSessionsStore.shared.stop() }
+                    }
+            } footer: {
+                Text("打开后显示首页「Mac 进行中」、Mac 控制台、/mac 和「发到 Mac」。审批通知、藏宝阁、Grok 登录不受影响。")
+            }
+
             if store.hosts.isEmpty {
                 Section {
                     VStack(spacing: LeoTheme.Spacing.md) {
