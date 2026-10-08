@@ -41486,6 +41486,162 @@
         }
       }
     },
+    "Detail Level": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detailstufe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detail Level"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau de détail"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細レベル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상세 수준"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень детализации"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录详细程度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄詳細程度"
+          }
+        }
+      }
+    },
+    "Verbose": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausführlich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbose"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détaillé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상세"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подробно"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详细"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        }
+      }
+    },
+    "Verbose adds high-frequency traces (filesystem, rendering, context). Useful when reproducing a specific problem — logs grow very quickly, so switch back to Info afterwards.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Ausführlich“ zeichnet hochfrequente Traces auf (Dateisystem, Rendering, Kontext). Hilfreich beim Nachstellen eines Problems – die Logs wachsen sehr schnell, danach wieder auf „Info“ stellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbose adds high-frequency traces (filesystem, rendering, context). Useful when reproducing a specific problem — logs grow very quickly, so switch back to Info afterwards."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mode détaillé ajoute des traces à haute fréquence (système de fichiers, rendu, contexte). Utile pour reproduire un problème — les journaux grossissent très vite, repassez ensuite sur Infos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細では高頻度のトレース（ファイルシステム、描画、コンテキスト）を記録します。問題の再現時に便利ですが、ログがすぐに大きくなるため、終わったら「情報」に戻してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상세 모드는 고빈도 추적(파일 시스템, 렌더링, 컨텍스트)을 기록합니다. 문제를 재현할 때 유용하지만 로그가 매우 빨리 커지므로 끝나면 정보로 되돌리세요."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подробный режим добавляет частые трассировки (файловая система, отрисовка, контекст). Полезно при воспроизведении проблемы — журналы растут очень быстро, затем верните уровень «Информация»."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“详细”会额外记录高频追踪（文件系统、渲染、上下文），适合复现具体问题时使用。日志增长很快，复现完请切回“信息”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「詳細」會額外記錄高頻追蹤（檔案系統、渲染、上下文），適合重現特定問題時使用。日誌成長很快，重現完請切回「資訊」。"
+          }
+        }
+      }
+    },
     "Input": {
       "localizations": {
         "de": {

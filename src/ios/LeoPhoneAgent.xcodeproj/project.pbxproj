@@ -281,6 +281,7 @@
 		E5CR00002 /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00012 /* CrashReporter.swift */; };
 		E5PF00002 /* LeoPerf.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PF00012 /* LeoPerf.swift */; };
 		E5CR00003 /* CrashSignalHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00013 /* CrashSignalHandler.m */; };
+		E5LVT0003 /* LeoVerboseTraceShim.c in Sources */ = {isa = PBXBuildFile; fileRef = E5LVT0013 /* LeoVerboseTraceShim.c */; };
 		E5D00001 /* ProviderTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00011 /* ProviderTypes.swift */; };
 		E5D00002 /* ProviderInstance.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00012 /* ProviderInstance.swift */; };
 		E5D00003 /* ModelEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00013 /* ModelEntry.swift */; };
@@ -1126,6 +1127,8 @@
 		E5PF00012 /* LeoPerf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoPerf.swift; sourceTree = "<group>"; };
 		E5CR00013 /* CrashSignalHandler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CrashSignalHandler.m; sourceTree = "<group>"; };
 		E5CR00014 /* CrashSignalHandler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CrashSignalHandler.h; sourceTree = "<group>"; };
+		E5LVT0013 /* LeoVerboseTraceShim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = LeoVerboseTraceShim.c; sourceTree = "<group>"; };
+		E5LVT0014 /* LeoVerboseTraceShim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LeoVerboseTraceShim.h; sourceTree = "<group>"; };
 		E5D00011 /* ProviderTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderTypes.swift; sourceTree = "<group>"; };
 		E5D00012 /* ProviderInstance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderInstance.swift; sourceTree = "<group>"; };
 		E5D00013 /* ModelEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelEntry.swift; sourceTree = "<group>"; };
@@ -2018,6 +2021,8 @@
 				E5PF00012 /* LeoPerf.swift */,
 				E5CR00014 /* CrashSignalHandler.h */,
 				E5CR00013 /* CrashSignalHandler.m */,
+				E5LVT0014 /* LeoVerboseTraceShim.h */,
+				E5LVT0013 /* LeoVerboseTraceShim.c */,
 			);
 			path = Diagnostics;
 			sourceTree = "<group>";
@@ -3480,6 +3485,7 @@
 				E5CR00002 /* CrashReporter.swift in Sources */,
 				E5PF00002 /* LeoPerf.swift in Sources */,
 				E5CR00003 /* CrashSignalHandler.m in Sources */,
+				E5LVT0003 /* LeoVerboseTraceShim.c in Sources */,
 				E5KVC0003 /* SafeKVCSetTrue.m in Sources */,
 				E5F100001 /* NetworkMonitor.swift in Sources */,
 				E5F100002 /* LLMSessionRegistry.swift in Sources */,

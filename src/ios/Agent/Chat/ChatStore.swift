@@ -407,8 +407,15 @@ actor ChatStore {
         try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: minisBaseURL, withIntermediateDirectories: true)
 
-        openDatabase()
-        createTables()
+        // [T-ios27-scene-create-watchdog] This runs inside the dispatch_once
+        // for `ChatStore.shared`; any thread touching the singleton (the main
+        // thread during scene creation) waits for it. On iOS 27 an NSLog can
+        // park on a libtrace notification round trip, so log lines emitted
+        // here are buffered and flushed after the once token is released.
+        AppLogger.withDeferredLogging {
+            openDatabase()
+            createTables()
+        }
     }
 
     /// Initialize with a custom base URL (for testing).
