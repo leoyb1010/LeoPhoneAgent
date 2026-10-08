@@ -20,8 +20,22 @@ final class PromptCacheKeyTests: XCTestCase {
         XCTAssertNotEqual(a, PromptCacheKey.derive(sessionId: nil, firstUserText: "other"))
     }
 
-    func testNothingStableGivesRandomKey() {
-        XCTAssertNotEqual(PromptCacheKey.derive(sessionId: nil, firstUserText: nil),
-                          PromptCacheKey.derive(sessionId: nil, firstUserText: nil))
+    /// [T-prompt-cache-no-random] A random key guaranteed a cache miss on every turn of a
+    /// text-less conversation. The key is now deterministic across turns.
+    func testNoTextFallsBackToStableShapeKey() {
+        let a = PromptCacheKey.derive(sessionId: nil, firstUserText: nil, firstMessageShape: "user|img:image/png")
+        XCTAssertEqual(a, PromptCacheKey.derive(sessionId: nil, firstUserText: nil, firstMessageShape: "user|img:image/png"))
+        XCTAssertNotEqual(a, PromptCacheKey.derive(sessionId: nil, firstUserText: nil, firstMessageShape: "user|img:image/jpeg"))
+        XCTAssertEqual(PromptCacheKey.derive(sessionId: nil, firstUserText: nil),
+                       PromptCacheKey.derive(sessionId: nil, firstUserText: nil))
+        XCTAssertTrue(PromptCacheKey.derive(sessionId: nil, firstUserText: nil).hasPrefix("minis-"))
+    }
+
+    /// [T-ios-prompt-cache-key-400] Strict-schema gateways 400 on the unknown field.
+    func testOnlyOfficialOpenAIAndForcedResponsesRelaysGetTheKey() {
+        XCTAssertTrue(PromptCacheKey.shouldSend(customBaseURL: nil, isAzure: false, forceResponsesAPI: false))
+        XCTAssertTrue(PromptCacheKey.shouldSend(customBaseURL: "https://relay.example/v1", isAzure: false, forceResponsesAPI: true))
+        XCTAssertFalse(PromptCacheKey.shouldSend(customBaseURL: "https://api.deepseek.com", isAzure: false, forceResponsesAPI: false))
+        XCTAssertFalse(PromptCacheKey.shouldSend(customBaseURL: nil, isAzure: true, forceResponsesAPI: false))
     }
 }

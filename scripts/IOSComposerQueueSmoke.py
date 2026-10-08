@@ -43,7 +43,8 @@ struct Signal { func send() {} }
 struct Logger { func info(_ text: String) {} }
 let logger = Logger()
 enum LeoHaptics { enum Weight { case light }; static func impact(_ weight: Weight) {} }
-enum AgentChatCorrectness { static func shouldBlockImageAttachments(hasImages: Bool, supportsImageInput: Bool) -> Bool { hasImages && !supportsImageInput } }
+enum AgentChatCorrectness { static func shouldBlockImageAttachments(hasImages: Bool, supportsImageInput: Bool, visionGroupConfigured: Bool = false) -> Bool { hasImages && !supportsImageInput && !visionGroupConfigured } }
+enum VisionGroupResolver { static var isConfigured: Bool { false } }
 final class Harness {
  var inputText = "follow up"; var attachments: [InputAttachment] = []
  var isProcessing = true; var currentModelSupportsImageInput = true

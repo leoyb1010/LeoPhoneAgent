@@ -177,6 +177,25 @@
 		E5JV00001 /* Jev.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5JV00002 /* Jev.swift */; };
 		E5CUR0021 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
 		E5CUR0023 /* PromptCacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0022 /* PromptCacheKey.swift */; };
+		E5UPT01A /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		E5UPT01T /* ThinkingRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT01R /* ThinkingRule.swift */; };
+		E5UPT02A /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
+		E5UPT02T /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT02R /* ThinkingWireFormat.swift */; };
+		E5UPT03A /* ThinkingRuleCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT03R /* ThinkingRuleCoding.swift */; };
+		E5UPT03T /* ThinkingRuleCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT03R /* ThinkingRuleCoding.swift */; };
+		E5UPT04A /* ThinkingRuleResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT04R /* ThinkingRuleResolver.swift */; };
+		E5UPT04T /* ThinkingRuleResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT04R /* ThinkingRuleResolver.swift */; };
+		E5UPT05A /* ConversationSessionBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT05R /* ConversationSessionBox.swift */; };
+		E5UPT05T /* ConversationSessionBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT05R /* ConversationSessionBox.swift */; };
+		E5UPT06A /* ModelsDevKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT06R /* ModelsDevKey.swift */; };
+		E5UPT06T /* ModelsDevKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT06R /* ModelsDevKey.swift */; };
+		E5UPT07A /* RequestBodySizeGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT07R /* RequestBodySizeGuard.swift */; };
+		E5UPT07T /* RequestBodySizeGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT07R /* RequestBodySizeGuard.swift */; };
+		E5UPT08A /* ResponsesToolPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT08R /* ResponsesToolPairing.swift */; };
+		E5UPT08T /* ResponsesToolPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT08R /* ResponsesToolPairing.swift */; };
+		E5UPT09A /* VisionGroupText.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT09R /* VisionGroupText.swift */; };
+		E5UPT09T /* VisionGroupText.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT09R /* VisionGroupText.swift */; };
+		E5UPT10A /* VisionGroupResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UPT10R /* VisionGroupResolver.swift */; };
 		E5CUR0031 /* ToolExecutionLanes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0032 /* ToolExecutionLanes.swift */; };
 		E5CUR0033 /* ToolExecutionLanes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CUR0032 /* ToolExecutionLanes.swift */; };
 		E5ST00001 /* CapabilitySelfTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ST00002 /* CapabilitySelfTestView.swift */; };
@@ -1000,6 +1019,16 @@
 		E5UIF06F /* HomeContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Home/HomeContextStrip.swift"; sourceTree = SOURCE_ROOT; };
 		E5JV00002 /* Jev.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Jev/Jev.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0022 /* PromptCacheKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/PromptCacheKey.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT01R /* ThinkingRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRule.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT02R /* ThinkingWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingWireFormat.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT03R /* ThinkingRuleCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleCoding.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT04R /* ThinkingRuleResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/Thinking/ThinkingRuleResolver.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT05R /* ConversationSessionBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ConversationSessionBox.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT06R /* ModelsDevKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelsDevKey.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT07R /* RequestBodySizeGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/RequestBodySizeGuard.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT08R /* ResponsesToolPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/OpenAI/ResponsesToolPairing.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT09R /* VisionGroupText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/VisionGroupText.swift"; sourceTree = SOURCE_ROOT; };
+		E5UPT10R /* VisionGroupResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/VisionGroupResolver.swift"; sourceTree = SOURCE_ROOT; };
 		E5CUR0032 /* ToolExecutionLanes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/ToolExecutionLanes.swift"; sourceTree = SOURCE_ROOT; };
 		E5ST00002 /* CapabilitySelfTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/CapabilitySelfTestView.swift"; sourceTree = SOURCE_ROOT; };
 		E5CPV0002 /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
@@ -1817,6 +1846,14 @@
 				E5D00013 /* ModelEntry.swift */,
 				E5D00014 /* ModelGroup.swift */,
 				E5TLC0002 /* ThinkingLevelCatalog.swift */,
+				E5UPT01R /* ThinkingRule.swift */,
+				E5UPT02R /* ThinkingWireFormat.swift */,
+				E5UPT03R /* ThinkingRuleCoding.swift */,
+				E5UPT04R /* ThinkingRuleResolver.swift */,
+				E5UPT05R /* ConversationSessionBox.swift */,
+				E5UPT06R /* ModelsDevKey.swift */,
+				E5UPT09R /* VisionGroupText.swift */,
+				E5UPT10R /* VisionGroupResolver.swift */,
 				E5D00015 /* ProviderConfigStore.swift */,
 				E5D00199 /* ProviderConfigDB.swift */,
 				E5D00016 /* ModelGroupRouter.swift */,
@@ -2034,6 +2071,8 @@
 				E5UIF06F /* HomeContextStrip.swift */,
 				E5JV00002 /* Jev.swift */,
 				E5CUR0022 /* PromptCacheKey.swift */,
+				E5UPT07R /* RequestBodySizeGuard.swift */,
+				E5UPT08R /* ResponsesToolPairing.swift */,
 				E5CUR0032 /* ToolExecutionLanes.swift */,
 				E5ST00002 /* CapabilitySelfTestView.swift */,
 				E5CPV0002 /* CommandPaletteView.swift */,
@@ -3163,6 +3202,15 @@
 				E5DVC0002 /* DirectDeviceRoute.swift in Sources */,
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
+				E5UPT01T /* ThinkingRule.swift in Sources */,
+				E5UPT02T /* ThinkingWireFormat.swift in Sources */,
+				E5UPT03T /* ThinkingRuleCoding.swift in Sources */,
+				E5UPT04T /* ThinkingRuleResolver.swift in Sources */,
+				E5UPT05T /* ConversationSessionBox.swift in Sources */,
+				E5UPT06T /* ModelsDevKey.swift in Sources */,
+				E5UPT07T /* RequestBodySizeGuard.swift in Sources */,
+				E5UPT08T /* ResponsesToolPairing.swift in Sources */,
+				E5UPT09T /* VisionGroupText.swift in Sources */,
 				E5CUR0033 /* ToolExecutionLanes.swift in Sources */,
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
 				E5MG0003 /* ModelGroup.swift in Sources */,
@@ -3268,6 +3316,16 @@
 				E5UIF06A /* HomeContextStrip.swift in Sources */,
 				E5JV00001 /* Jev.swift in Sources */,
 				E5CUR0021 /* PromptCacheKey.swift in Sources */,
+				E5UPT01A /* ThinkingRule.swift in Sources */,
+				E5UPT02A /* ThinkingWireFormat.swift in Sources */,
+				E5UPT03A /* ThinkingRuleCoding.swift in Sources */,
+				E5UPT04A /* ThinkingRuleResolver.swift in Sources */,
+				E5UPT05A /* ConversationSessionBox.swift in Sources */,
+				E5UPT06A /* ModelsDevKey.swift in Sources */,
+				E5UPT07A /* RequestBodySizeGuard.swift in Sources */,
+				E5UPT08A /* ResponsesToolPairing.swift in Sources */,
+				E5UPT09A /* VisionGroupText.swift in Sources */,
+				E5UPT10A /* VisionGroupResolver.swift in Sources */,
 				E5CUR0031 /* ToolExecutionLanes.swift in Sources */,
 				E5ST00001 /* CapabilitySelfTestView.swift in Sources */,
 				E5CPV0001 /* CommandPaletteView.swift in Sources */,

@@ -553,7 +553,7 @@ actor ProviderConfigDB {
         guard Self.exec(db: db, "DELETE FROM provider_instances") == SQLITE_OK else { return false }
         // Only these selectors/tombstones belong to the snapshot. The UUID alias map and
         // unrelated/future local preferences must survive ordinary model edits.
-        guard Self.exec(db: db, "DELETE FROM provider_local_kv WHERE key IN ('defaultPrimaryGroupId', 'defaultSubGroupId', 'voiceInputGroupId', 'voiceOutputGroupId', 'deletedInstances', 'deletedModelEntries', 'deletedModelGroups')") == SQLITE_OK else { return false }
+        guard Self.exec(db: db, "DELETE FROM provider_local_kv WHERE key IN ('defaultPrimaryGroupId', 'defaultSubGroupId', 'voiceInputGroupId', 'voiceOutputGroupId', 'visionGroupId', 'deletedInstances', 'deletedModelEntries', 'deletedModelGroups')") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_session_bindings") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_session_inference_configs") == SQLITE_OK else { return false }
         guard Self.exec(db: db, "DELETE FROM provider_agent_loop_ids") == SQLITE_OK else { return false }
@@ -654,6 +654,9 @@ actor ProviderConfigDB {
         }
         if let v = config.voiceOutputGroupId {
             guard setLocalKVRow("voiceOutputGroupId", value: v) else { return false }
+        }
+        if let v = config.visionGroupId {
+            guard setLocalKVRow("visionGroupId", value: v) else { return false }
         }
         // Retain local deletion intent across authoritative DB reloads. In
         // particular, a crash before dormant-archive cleanup must not permit
@@ -843,6 +846,7 @@ actor ProviderConfigDB {
         let agentLoopGroups = loadAgentLoopIds(kind: "group")
         let voiceInputGroup = localKV("voiceInputGroupId")
         let voiceOutputGroup = localKV("voiceOutputGroupId")
+        let visionGroup = localKV("visionGroupId")
         func tombstones(_ key: String) -> [ProviderConfigTombstone] {
             guard let json = localKV(key), let data = json.data(using: .utf8),
                   let values = try? decoder.decode([ProviderConfigTombstone].self, from: data) else { return [] }
@@ -860,6 +864,7 @@ actor ProviderConfigDB {
             agentLoopGroupIds: agentLoopGroups,
             voiceInputGroupId: voiceInputGroup,
             voiceOutputGroupId: voiceOutputGroup,
+            visionGroupId: visionGroup,
             sessionInferenceConfigs: inferCfgs,
             deletedInstances: tombstones("deletedInstances"),
             deletedModelEntries: tombstones("deletedModelEntries"),

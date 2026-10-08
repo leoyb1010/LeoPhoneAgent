@@ -435,12 +435,22 @@ struct ThinkingAndModelSlotsView: View {
             Section {
                 ForEach($rules) { $rule in
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("模型 id 前缀", text: $rule.prefix)
+                        TextField("模型 id 前缀", text: $rule.patternText)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        Picker("最高档", selection: $rule.maxLevel) {
+                        Picker("最高档", selection: $rule.ceilingLevel) {
                             ForEach(ThinkingLevel.allCases.filter { $0 != .off }, id: \.self) { level in
                                 Text(level.displayName).tag(level)
+                            }
+                        }
+                        // [T-thinking-rules-phase2] 可选:改写这类模型的思考参数发送方式
+                        // (只作用于 OpenAI 兼容接口)。「跟随内置」= 不覆盖内置厂商规则。
+                        Picker("思考参数", selection: Binding(
+                            get: { ThinkingWireChoice(rule.wireFormat) },
+                            set: { rule.wireFormat = $0.wireFormat }
+                        )) {
+                            ForEach(ThinkingWireChoice.allCases, id: \.self) { choice in
+                                Text(choice.title).tag(choice)
                             }
                         }
                         // 「默认档」删掉了:存下来却没有任何地方读,选了等于没选。新会话沿用上一次的档位。
@@ -454,7 +464,7 @@ struct ThinkingAndModelSlotsView: View {
                     Button("添加") {
                         let prefix = newPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !prefix.isEmpty else { return }
-                        rules.append(ThinkingRule(prefix: prefix, maxLevel: newMax, defaultLevel: min(.medium, newMax)))
+                        rules.append(.ceiling(prefix: prefix, maxLevel: newMax))
                         ThinkingRuleStore.save(rules)
                         newPrefix = ""
                     }
@@ -462,7 +472,7 @@ struct ThinkingAndModelSlotsView: View {
             } header: {
                 Text("推理强度规则")
             } footer: {
-                Text("一行一个模型家族。读不到内置档时在这里写最高档，否则界面显示未知，不会默默降级。")
+                Text("一行一个模型家族（前缀，支持 * 通配）。读不到内置档时在这里写最高档，否则界面显示未知，不会默默降级。「思考参数」用来纠正中转站对思考开关的写法，留在「跟随内置」最稳妥。")
             }
 
             Section {
@@ -538,6 +548,51 @@ struct SettingsSidebar: View {
             if visibleGroups.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
+        }
+    }
+}
+
+/// [T-thinking-rules-phase2] Wire shapes a user may pick for a rule — the subset that is
+/// safe to choose without editing JSON. `.followBuiltIn` leaves the wire shape to the
+/// built-in vendor rules (the rule then only carries a ceiling).
+enum ThinkingWireChoice: Hashable, CaseIterable {
+    case followBuiltIn
+    case reasoningEffort
+    case reasoningEffortNested
+    case deepSeekSibling
+    case qwenRootOnly
+    case omitEverything
+
+    init(_ format: ThinkingWireFormat?) {
+        switch format {
+        case .reasoningEffort?: self = .reasoningEffort
+        case .reasoningEffortNested?: self = .reasoningEffortNested
+        case .deepSeekSibling?: self = .deepSeekSibling
+        case .qwenRootOnly?, .qwenDual?: self = .qwenRootOnly
+        case .omitEverything?: self = .omitEverything
+        default: self = .followBuiltIn
+        }
+    }
+
+    var wireFormat: ThinkingWireFormat? {
+        switch self {
+        case .followBuiltIn: return nil
+        case .reasoningEffort: return .reasoningEffort(offValue: nil)
+        case .reasoningEffortNested: return .reasoningEffortNested(offValue: nil)
+        case .deepSeekSibling: return .deepSeekSibling
+        case .qwenRootOnly: return .qwenRootOnly
+        case .omitEverything: return .omitEverything
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .followBuiltIn: return "跟随内置"
+        case .reasoningEffort: return "reasoning_effort"
+        case .reasoningEffortNested: return "reasoning.effort（嵌套）"
+        case .deepSeekSibling: return "DeepSeek（thinking + reasoning_effort）"
+        case .qwenRootOnly: return "enable_thinking"
+        case .omitEverything: return "不发送思考参数"
         }
     }
 }

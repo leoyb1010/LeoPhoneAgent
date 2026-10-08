@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 import os.log
 
 private let logger = AppLogger(category: "ProviderConfigStore")
@@ -35,6 +36,10 @@ struct ProviderConfig: Codable, Equatable {
     var voiceInputGroupId: String?
     /// Model group used for voice OUTPUT (text-to-speech). Same semantics.
     var voiceOutputGroupId: String?
+    /// [T-ios-vision-group #182] Vision Group: an ordinary ModelGroup whose image-capable
+    /// members read images for a main model that cannot see. Per-device (local-only,
+    /// not synced), like the voice group selectors. nil = no Vision Group.
+    var visionGroupId: String?
     /// Per-session inference settings (thinking toggle, etc.).
     var sessionInferenceConfigs: [String: SessionInferenceConfig]
     /// Soft-delete tombstones. Required to make deletes survive
@@ -50,6 +55,7 @@ struct ProviderConfig: Codable, Equatable {
          sessionBindings: [String: SessionModelBinding],
          agentLoopModelEntryIds: [String] = [], agentLoopGroupIds: [String] = [],
          voiceInputGroupId: String? = nil, voiceOutputGroupId: String? = nil,
+         visionGroupId: String? = nil,
          sessionInferenceConfigs: [String: SessionInferenceConfig] = [:],
          deletedInstances: [ProviderConfigTombstone] = [],
          deletedModelEntries: [ProviderConfigTombstone] = [],
@@ -64,6 +70,7 @@ struct ProviderConfig: Codable, Equatable {
         self.agentLoopGroupIds = agentLoopGroupIds
         self.voiceInputGroupId = voiceInputGroupId
         self.voiceOutputGroupId = voiceOutputGroupId
+        self.visionGroupId = visionGroupId
         self.sessionInferenceConfigs = sessionInferenceConfigs
         self.deletedInstances = deletedInstances
         self.deletedModelEntries = deletedModelEntries
@@ -87,6 +94,7 @@ struct ProviderConfig: Codable, Equatable {
         agentLoopGroupIds = try container.decodeIfPresent([String].self, forKey: .agentLoopGroupIds) ?? []
         voiceInputGroupId = try container.decodeIfPresent(String.self, forKey: .voiceInputGroupId)
         voiceOutputGroupId = try container.decodeIfPresent(String.self, forKey: .voiceOutputGroupId)
+        visionGroupId = try container.decodeIfPresent(String.self, forKey: .visionGroupId)
         sessionInferenceConfigs = try container.decodeIfPresent([String: SessionInferenceConfig].self, forKey: .sessionInferenceConfigs) ?? [:]
         deletedInstances = try container.decodeIfPresent([ProviderConfigTombstone].self, forKey: .deletedInstances) ?? []
         deletedModelEntries = try container.decodeIfPresent([ProviderConfigTombstone].self, forKey: .deletedModelEntries) ?? []
@@ -96,7 +104,7 @@ struct ProviderConfig: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case instances, modelEntries, modelGroups, defaultPrimaryGroupId, defaultSubGroupId
         case sessionBindings, agentLoopModelEntryIds, agentLoopGroupIds, sessionInferenceConfigs
-        case voiceInputGroupId, voiceOutputGroupId
+        case voiceInputGroupId, voiceOutputGroupId, visionGroupId
         case deletedInstances, deletedModelEntries, deletedModelGroups
     }
 
@@ -234,11 +242,12 @@ final class ProviderConfigStore: ObservableObject {
         // group members verbatim — so the JSON's (potentially member-truncated
         // from an older build) snapshot never becomes the persisted/pushed
         // source of truth. [T-icloud-modelgroup-member-loss]
-        let loaded = Self.load(from: fileURL)
+        let loaded = Self.loadDistinguishingUnreadable(from: fileURL)
         self.config = loaded.config
         self.jsonLoadFailed = loaded.failed
         self.lastSavedSnapshot = self.config
         loadModelArchiveAliases()
+        if loaded.unreadable { registerUnreadableRecovery() }
         Self.setupDBAndMigrate(jsonURL: fileURL) { [weak self] db in
             Task { @MainActor in
                 guard let self else { return }
@@ -408,13 +417,24 @@ final class ProviderConfigStore: ObservableObject {
     // MARK: - Persistence
 
     private static func load(from url: URL) -> (config: ProviderConfig, failed: Bool) {
+        let result = loadDistinguishingUnreadable(from: url)
+        return (result.config, result.failed)
+    }
+
+    /// [T-ios-reboot-config-loss] `unreadable` = the file exists but cannot be read —
+    /// the pre-first-unlock file-protection state when iOS relaunches the app in the
+    /// background after a reboot. Recoverable once protected data becomes available.
+    private static func loadDistinguishingUnreadable(from url: URL) -> (config: ProviderConfig, failed: Bool, unreadable: Bool) {
         if !FileManager.default.fileExists(atPath: url.path) {
-            return (.empty, false)
+            return (.empty, false, false)
         }
-        guard let data = try? Data(contentsOf: url),
-              var config = try? JSONDecoder().decode(ProviderConfig.self, from: data) else {
+        guard let data = try? Data(contentsOf: url) else {
+            logger.error("[RebootGuard] provider-config.json exists but is UNREADABLE (locked before first unlock?) — saves refused until it reads")
+            return (.empty, true, true)
+        }
+        guard var config = try? JSONDecoder().decode(ProviderConfig.self, from: data) else {
             logger.error("[B6] provider-config.json exists but decode failed — refusing to treat as empty")
-            return (.empty, true)
+            return (.empty, true, false)
         }
         // Catalog absence is not deletion. Preserve empty custom groups, unresolved
         // members and explicit defaults through cold starts and partial sync. Only
@@ -434,7 +454,47 @@ final class ProviderConfigStore: ObservableObject {
                 }
             }
         }
-        return (config, false)
+        return (config, false, false)
+    }
+
+    // MARK: - [T-ios-reboot-config-loss] Recovery after first unlock
+
+    private var unreadableRecoveryObservers: [NSObjectProtocol] = []
+
+    /// Our [B6] guard already refuses to save over an unreadable file, so nothing is
+    /// lost — but a process launched before first unlock stayed blank (and unable to
+    /// save) until it was killed. Retry the load when protected data becomes available
+    /// and on every activation until it reads.
+    private func registerUnreadableRecovery() {
+        for name in [UIApplication.protectedDataDidBecomeAvailableNotification,
+                     UIApplication.didBecomeActiveNotification] {
+            unreadableRecoveryObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.recoverUnreadableConfig() }
+            })
+        }
+    }
+
+    private func recoverUnreadableConfig() {
+        guard jsonLoadFailed else { return clearUnreadableRecovery() }
+        let reloaded = Self.loadDistinguishingUnreadable(from: fileURL)
+        guard !reloaded.unreadable else { return }   // still locked — keep waiting
+        clearUnreadableRecovery()
+        guard !reloaded.failed else { return }       // readable but corrupt: [B6] keeps guarding
+        // Only adopt the JSON when nothing authoritative replaced the empty seed
+        // meanwhile (the V3 DB dump clears `jsonLoadFailed` itself).
+        config = reloaded.config
+        lastSavedSnapshot = reloaded.config
+        jsonLoadFailed = false
+        ensureVoiceTemplateModels()
+        objectWillChange.send()
+        logger.info("[RebootGuard] provider config recovered after unlock — instances=\(reloaded.config.instances.count) entries=\(reloaded.config.modelEntries.count)")
+    }
+
+    private func clearUnreadableRecovery() {
+        for o in unreadableRecoveryObservers { NotificationCenter.default.removeObserver(o) }
+        unreadableRecoveryObservers.removeAll()
     }
 
     @discardableResult
@@ -1535,6 +1595,9 @@ final class ProviderConfigStore: ObservableObject {
         if let def = config.voiceOutputGroupId, removedGroupIds.contains(def) {
             config.voiceOutputGroupId = nil
         }
+        if let def = config.visionGroupId, removedGroupIds.contains(def) {
+            config.visionGroupId = nil
+        }
         config.agentLoopGroupIds.removeAll { removedGroupIds.contains($0) }
     }
 
@@ -1591,6 +1654,12 @@ final class ProviderConfigStore: ObservableObject {
     var voiceOutputGroupId: String? {
         get { config.voiceOutputGroupId }
         set { config.voiceOutputGroupId = newValue; save() }
+    }
+
+    /// [T-ios-vision-group #182] Vision Group pointer — local-only, like the voice ones.
+    var visionGroupId: String? {
+        get { config.visionGroupId }
+        set { config.visionGroupId = newValue; save() }
     }
 
     /// Ensure a default Voice INPUT group exists and is bound when the user hasn't
@@ -2367,8 +2436,15 @@ final class ProviderConfigStore: ObservableObject {
                 return try await OpenAIModelsAPI.fetchModels(apiKey: manualToken, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
             }
             let hasModels = await MainActor.run { !ProviderConfigStore.shared.visibleEntries(for: instance.id).isEmpty }
-            return try await OpenAIModelsAPI.fetchModelsCodexOAuth(
-                instanceId: instance.id, forceRefresh: forceRefresh, instanceHasModels: hasModels)
+            do {
+                return try await OpenAIModelsAPI.fetchModelsCodexOAuth(
+                    instanceId: instance.id, forceRefresh: forceRefresh, instanceHasModels: hasModels)
+            } catch LLMError.invalidAPIKey(let detail) {
+                // [T-codex-model-discovery] Surface the auth failure as a refresh error that
+                // the fallback chain does not paper over (the generic catch there would
+                // substitute the models.dev OpenAI list); existing entries are kept.
+                throw ModelRefreshError.authFailed(detail: detail)
+            }
         case (.openCodeGo, _):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2441,6 +2517,14 @@ final class ProviderConfigStore: ObservableObject {
             let kimiAppendV1 = customBase == nil ? true : appendV1  // default base …/coding needs /v1 appended
             return try await OpenAIModelsAPI.fetchModels(apiKey: key, baseURL: kimiBase, appendV1Suffix: kimiAppendV1, forceRefresh: forceRefresh, userAgent: ua)
         case (.kimiCode, .oauth):
+            // [T-kimi-manual-token-ignored] A manually-pasted bearer token wins over the
+            // device-flow manager (mirror of the factory branch), like the xAI / OpenRouter
+            // oauth cases above. Without it a manual Kimi instance could not list models.
+            if let manualToken {
+                let kimiBase = customBase ?? "https://api.kimi.com/coding"
+                let kimiAppendV1 = customBase == nil ? true : appendV1
+                return try await OpenAIModelsAPI.fetchModels(apiKey: manualToken, baseURL: kimiBase, appendV1Suffix: kimiAppendV1, forceRefresh: forceRefresh, userAgent: ua)
+            }
             // Signed-in tokens go to the official endpoint only.
             let token = try await KimiOAuthManager.shared.validAccessToken(instanceId: instance.id)
             return try await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: "https://api.kimi.com/coding", appendV1Suffix: true, forceRefresh: forceRefresh, userAgent: nil)
@@ -2614,9 +2698,13 @@ enum ModelRefreshError: LocalizedError {
     case modelsDevNoMatch(warnings: [String])
     /// [T-codex-live-models] ChatGPT 登录的模型目录这次拉不到:保留现有模型,不拿内置清单覆盖。
     case catalogUnavailable(reason: String)
+    /// [T-codex-model-discovery] 目录接口返回 401/403:登录已失效,如实报出,不拿缓存目录掩盖。
+    case authFailed(detail: String)
 
     var errorDescription: String? {
         switch self {
+        case .authFailed(let detail):
+            return "ChatGPT 登录已失效,请重新登录(\(detail))。已保留现有模型。"
         case .catalogUnavailable(let reason):
             return "ChatGPT 模型目录暂时拉不到(\(reason)),已保留现有模型。"
         case .noCredential:

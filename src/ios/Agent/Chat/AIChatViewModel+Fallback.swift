@@ -16,10 +16,14 @@ extension AIChatViewModel {
         systemPrompt: String?,
         tools: [AgentToolDefinition],
         maxTokens: Int,
-        chatMessage: ChatMessage?
+        chatMessage: ChatMessage?,
+        delays: [Int]? = nil
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         var lastError: Error?
         var currentProvider = initialProvider
+        // [T-fallback-503-budget] Caller-chosen budget (short for a server 5xx in a group
+        // with a fallback target); the full ladder otherwise.
+        let retryDelays = delays ?? Self.retryDelays
         // [B4] attempt = 已用掉的倒计时重试次数;"立刻重试"不占名额,每次请求最多一次。
         var attempt = 0
         var immediateUsed = false
@@ -41,7 +45,7 @@ extension AIChatViewModel {
                     chatMessage?.error = desc
                 }
                 switch LLMRetryPolicy.wait(after: (lastError as? LLMError)?.networkFailure, attempt: attempt,
-                                           immediateUsed: true, delays: Self.retryDelays) {
+                                           immediateUsed: true, delays: retryDelays) {
                 case .untilNetwork(let maxSeconds):
                     // [B4] 没网:等网络恢复再试,不空转倒计时。
                     self.autoRetryCountdown = 0
@@ -109,7 +113,7 @@ extension AIChatViewModel {
                                              message: Self.diagnosticMessage(error),
                                              durationMs: Int(Date().timeIntervalSince(started) * 1000))
                 if LLMRetryPolicy.wait(after: error.networkFailure, attempt: attempt + 1,
-                                       immediateUsed: immediateUsed, delays: Self.retryDelays) == .immediate {
+                                       immediateUsed: immediateUsed, delays: retryDelays) == .immediate {
                     // [B4] 还没收到字节就断开(-1005):换新连接立刻重试一次,不进倒计时。
                     immediateUsed = true
                     skipWait = true
@@ -118,7 +122,7 @@ extension AIChatViewModel {
                     continue
                 }
                 attempt += 1
-                guard attempt <= Self.retryDelays.count else { break }
+                guard attempt <= retryDelays.count else { break }
                 DiagnosticRing.shared.record(.llmRetry, sessionId: sessionId, model: currentProvider.model.id,
                                              attempt: attempt, message: Self.diagnosticMessage(error))
                 continue
@@ -336,13 +340,24 @@ extension AIChatViewModel {
                 logger.error("🔀ROUTE entry=\(currentEntryId ?? "nil") non-fallbackable error, using auto-retry: \(error.localizedDescription)")
                 let retryModel = currentEntryId.flatMap { ProviderConfigStore.shared.entry(for: $0)?.model } ?? model
                 do {
+                    // [T-fallback-503-budget] A server 5xx with somewhere to fall back to
+                    // gets the short budget; the router answers "somewhere" with the same
+                    // availability filter the fallback branch uses.
+                    let hasFallbackTarget: Bool = {
+                        guard let gid = activeGroupId, let eid = currentEntryId,
+                              let group = ProviderConfigStore.shared.group(for: gid) else { return false }
+                        return ModelGroupRouter.nextFallback(group: group, currentEntryId: eid,
+                                                             store: ProviderConfigStore.shared) != nil
+                    }()
                     let stream = try await streamWithAutoRetry(
                         provider: currentProvider,
                         messages: messages,
                         systemPrompt: currentSystemPrompt,
                         tools: tools,
                         maxTokens: dynamicMaxTokens(provider: currentProvider, model: retryModel, lastContextTokens: lastContextTokens),
-                        chatMessage: chatMessage
+                        chatMessage: chatMessage,
+                        delays: LLMRetryPolicy.delays(for: error, hasFallbackTarget: hasFallbackTarget,
+                                                      full: Self.retryDelays)
                     )
                     // Auto-retry succeeded
                     let prevEntryId = activeEntryId

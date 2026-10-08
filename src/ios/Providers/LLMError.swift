@@ -6,7 +6,10 @@ enum LLMError: LocalizedError {
     case providerError(message: String)
     /// Transient server-side errors (HTTP 500/502/503/504/529) that should be
     /// retried on the same model rather than triggering a group fallback.
-    case transientError(message: String)
+    /// [T-fallback-503-budget] `statusCode` is the HTTP status the mapping site saw on
+    /// the real response — nil for statusless transients (dropped link, TTFB stall,
+    /// empty response). Structural, never parsed out of a body that may mention "503".
+    case transientError(message: String, statusCode: Int? = nil)
     case decodingError(underlying: Error)
     case rateLimited
     case cancelled
@@ -21,7 +24,7 @@ enum LLMError: LocalizedError {
             return String(localized: "Network error: \(error.localizedDescription)")
         case .providerError(let message):
             return String(localized: "Provider error: \(message)")
-        case .transientError(let message):
+        case .transientError(let message, _):
             return String(localized: "Service temporarily unavailable: \(message)")
         case .decodingError(let error):
             return String(localized: "Decoding error: \(error.localizedDescription)")
@@ -32,6 +35,20 @@ enum LLMError: LocalizedError {
         case .unknown(let error):
             return error.map { String(localized: "Unknown error: \($0.localizedDescription)") } ?? String(localized: "Unknown error")
         }
+    }
+
+    /// [T-fallback-503-budget] The HTTP status behind a transient, when the server
+    /// produced one. nil for every other case.
+    var httpStatusCode: Int? {
+        if case .transientError(_, let code) = self { return code }
+        return nil
+    }
+
+    /// A 5xx the SERVER answered with: this deployment has no capacity right now, and
+    /// another group member probably does — so retry briefly, then fall back.
+    var isServerCapacityTransient: Bool {
+        guard let code = httpStatusCode else { return false }
+        return (500...599).contains(code)
     }
 
     var isNetworkError: Bool {

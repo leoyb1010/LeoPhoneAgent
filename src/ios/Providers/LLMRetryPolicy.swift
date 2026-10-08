@@ -17,7 +17,7 @@ extension LLMError {
     var networkFailure: LLMNetworkFailure? {
         switch self {
         case .networkError(let underlying): return Self.classify(underlying)
-        case .transientError(let message): return .server(status: Self.serverStatus(in: message) ?? 0)
+        case .transientError(let message, let code): return .server(status: code ?? Self.serverStatus(in: message) ?? 0)
         case .cancelled: return .cancelled
         default: return nil
         }
@@ -60,6 +60,19 @@ enum LLMRetryPolicy {
     }
 
     static let networkWaitLimit = 60
+
+    /// [T-fallback-503-budget] Short budget for a 5xx the SERVER answered with, used
+    /// only when the group has another member to fall back to: 2s + 5s instead of the
+    /// full 63s ladder that read as "fallback never happened".
+    static let serverCapacityDelays = [2, 5]
+
+    /// Retry budget on the current model before the group falls back. Statusless
+    /// transients (dropped link, DNS, TTFB stall, empty response) keep the full ladder —
+    /// switching models does not fix them — and so does a session with nowhere to go.
+    static func delays(for error: Error, hasFallbackTarget: Bool, full: [Int]) -> [Int] {
+        guard hasFallbackTarget, (error as? LLMError)?.isServerCapacityTransient == true else { return full }
+        return serverCapacityDelays
+    }
 
     /// - Parameters:
     ///   - failure: 上一次失败的分类。

@@ -9,8 +9,19 @@ extension AIChatViewModel {
     // MARK: - Provider Factory
 
     /// Construct an AgentProvider from a ModelEntry by looking up its ProviderInstance and credential.
+    ///
+    /// [T-gemini-signature-restore] Every provider built for this session's agent loop
+    /// gets the session's recorded Gemini thought signatures here. The metadata map is
+    /// per-instance; the loop builds fresh providers on group fallback and on a model
+    /// switch during a retry countdown, and each used to start blind — misreading signed
+    /// history as unsigned. The session map is NOT cleared: later providers need it too.
     func makeAgentProvider(for entry: ModelEntry) async -> AgentProvider {
-        return await Self.makeAgentProvider(for: entry, sessionId: sessionId)
+        conversationSessionBox.value = sessionId
+        let provider = await Self.makeAgentProvider(for: entry, sessionId: sessionId, sessionBox: conversationSessionBox)
+        if !pendingThoughtSignatures.isEmpty, let gemini = provider as? GeminiAgentProvider {
+            gemini.restoreToolCallMetadata(pendingThoughtSignatures)
+        }
+        return provider
     }
 
     /// Static variant — used by sub-task call sites (title generation, etc.)
@@ -18,7 +29,10 @@ extension AIChatViewModel {
     /// method, since the resolution depends only on global state
     /// (ProviderConfigStore + LLMProviderFactory).
     /// `sessionId` is the conversation the provider serves, when there is one.
-    static func makeAgentProvider(for entry: ModelEntry, sessionId: String? = nil) async -> AgentProvider {
+    /// `sessionBox`, when given, is read PER REQUEST so a draft promoted to a real
+    /// session after the provider was built is still keyed correctly.
+    static func makeAgentProvider(for entry: ModelEntry, sessionId: String? = nil,
+                                  sessionBox: ConversationSessionBox? = nil) async -> AgentProvider {
         let store = ProviderConfigStore.shared
         guard let instance = store.instance(for: entry.providerInstanceId) else {
             logger.error("No ProviderInstance found for entry \(entry.id)")
@@ -33,25 +47,25 @@ extension AIChatViewModel {
         case .gemini:
             return GeminiAgentProvider(provider: LLMProviderFactory.makeGeminiProvider(instance: instance, model: entry.model))
         case .openAI:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model), sessionId: sessionId)
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model), sessionId: sessionId, sessionBox: sessionBox)
         case .openCodeGo:
-            switch LLMProviderFactory.makeOpenCodeGoProvider(instance: instance, model: entry.model, sessionId: sessionId) {
+            switch LLMProviderFactory.makeOpenCodeGoProvider(instance: instance, model: entry.model, sessionId: sessionId, sessionBox: sessionBox) {
             case let anthropic as AnthropicProvider:
                 return AnthropicAgentProvider(provider: anthropic)
             case let openAI as OpenAIProvider:
-                return OpenAIAgentProvider(provider: openAI, sessionId: sessionId)
+                return OpenAIAgentProvider(provider: openAI, sessionId: sessionId, sessionBox: sessionBox)
             default:
                 logger.error("Unexpected OpenCode Go provider type; returning placeholder")
                 return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))
             }
         case .openRouter:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model), sessionId: sessionId)
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model), sessionId: sessionId, sessionBox: sessionBox)
         case .openAIResponses:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model), sessionId: sessionId)
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model), sessionId: sessionId, sessionBox: sessionBox)
         case .xAI:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model), sessionId: sessionId)
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model), sessionId: sessionId, sessionBox: sessionBox)
         case .kimiCode:
-            return OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model), sessionId: sessionId)
+            return OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model), sessionId: sessionId, sessionBox: sessionBox)
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))

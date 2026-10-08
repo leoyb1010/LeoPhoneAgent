@@ -42,7 +42,8 @@ extension AIChatViewModel {
 
     private var shellCommandToolDescription: String {
         var text = "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it."
-        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput,
+                                                         visionGroupConfigured: VisionGroupText.isConfiguredCached) {
             text += " If a command GENERATES an image or chart for the user (matplotlib, ImageMagick, screenshots…), save it under /var/minis/workspace/ and then call read_image on it so the user actually SEES it in the chat — never just claim it was generated."
         } else {
             text += " If a command GENERATES an image or chart, save it under /var/minis/workspace/ so the user can open the file. This model cannot view image pixels — do not claim you inspected the image."
@@ -295,19 +296,34 @@ extension AIChatViewModel {
             ))
         }
 
-        // Only include read_image when the *active* model supports image input.
+        // Only include read_image when the *active* model supports image input — or when
+        // a Vision Group reads images on its behalf [T-ios-vision-group #182].
         // `selectedModel` is a leftover default (Haiku) and is not kept in sync
         // with session bindings — using it here handed vision tools to text-only models.
-        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
+        let nativeVision = currentModelSupportsImageInput
+        // Evaluated unconditionally: this read also refreshes the mirror the
+        // request serializers use for the image placeholder wording.
+        let visionGroupConfigured = VisionGroupResolver.isConfigured
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: nativeVision,
+                                                         visionGroupConfigured: visionGroupConfigured) {
+            // Describe what this model will ACTUALLY receive: pixels, or a written
+            // description from the Vision Group.
+            let readImageDescription = nativeVision
+                ? "Read an image file from the Linux filesystem and return it for visual analysis. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, or any visual output. The image is returned directly for your analysis along with metadata (dimensions, file size)."
+                : "Read an image file from the Linux filesystem and return a written description of it. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, user-attached photos, or any visual output. You cannot see images directly, so the image is analyzed by a separate vision model and you receive its detailed description plus a transcription of any visible text, along with metadata (dimensions, file size). Because you cannot look again yourself, use the optional 'prompt' argument to ask for exactly what you need from the image — that is your only way to follow up on specific details."
+            let promptDescription = nativeVision
+                ? "Optional. A note about what you are looking for in the image. Recorded alongside the result; the image itself is returned to you in full either way."
+                : "Optional. A specific question or instruction about the image, e.g. 'transcribe the table', 'what error message is shown in this screenshot'. This is passed to the vision model that reads the image for you, so ask for exactly the detail you need. If omitted, a generic detailed description with full text transcription is returned."
             tools.append(AgentToolDefinition(
                 name: "read_image",
-                description: "Read an image file from the Linux filesystem and return it for visual analysis. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, or any visual output. The image is returned directly for your analysis along with metadata (dimensions, file size).",
+                description: readImageDescription,
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'View generated bar chart', 'Inspect downloaded screenshot'). Use the same language as the user."),
                     "path": AgentToolParam(type: .string, description: "Linux path (e.g. /var/minis/attachments/chart.png) or leophoneagent:// URL (e.g. leophoneagent://attachments/chart.png)"),
+                    "prompt": AgentToolParam(type: .string, description: promptDescription),
                 ],
                 required: ["tool_title", "path"],
-                propertyOrdering: ["tool_title", "path"]
+                propertyOrdering: ["tool_title", "path", "prompt"]
             ))
         }
 

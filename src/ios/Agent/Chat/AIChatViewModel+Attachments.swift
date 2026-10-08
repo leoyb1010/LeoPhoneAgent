@@ -445,7 +445,8 @@ extension AIChatViewModel {
         if let reminder = AgentChatCorrectness.omittedImageReminder(
             inlined: inlinedImages,
             total: totalImageAttachments,
-            supportsImageInput: canSeeImages
+            supportsImageInput: canSeeImages,
+            visionGroupConfigured: !canSeeImages && VisionGroupResolver.isConfigured
         ) {
             parts.append(.text(reminder))
         }

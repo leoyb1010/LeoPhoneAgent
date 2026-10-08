@@ -116,7 +116,9 @@ final class AnthropicProvider: LLMProvider {
 
     /// Manual token constructor: sends both `x-api-key` and `Authorization: Bearer` headers
     /// for maximum compatibility with third-party proxies and Coding Plan endpoints.
-    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil, extraHeaders: [String: String] = [:]) {
+    /// `perRequestHeaders` is resolved on every request (see `DualAuthHTTPClient`), for
+    /// headers whose value can change after construction — OpenCode Go's session id.
+    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil, extraHeaders: [String: String] = [:], perRequestHeaders: (@Sendable () -> [String: String])? = nil) {
         self.model = model
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
@@ -127,7 +129,8 @@ final class AnthropicProvider: LLMProvider {
             apiKey: manualToken,
             basePath: resolvedBase,
             betaHeaders: nil,
-            httpClient: DualAuthHTTPClient(customUserAgent: customUserAgent, extraHeaders: extraHeaders)
+            httpClient: DualAuthHTTPClient(customUserAgent: customUserAgent, extraHeaders: extraHeaders,
+                                           perRequestHeaders: perRequestHeaders)
         )
     }
 
@@ -412,7 +415,7 @@ final class AnthropicProvider: LLMProvider {
         if status.map({ transientCodes.contains($0) }) ?? lowered.contains("overloaded") {
             let detailedMessage = Self.extractMessageFromBody(capturedBody)
                 ?? Self.extractAPIErrorMessage(from: description)
-            return .transientError(message: detailedMessage)
+            return .transientError(message: detailedMessage, statusCode: status)
         }
 
         // Try to extract a detailed message from the captured error body first,

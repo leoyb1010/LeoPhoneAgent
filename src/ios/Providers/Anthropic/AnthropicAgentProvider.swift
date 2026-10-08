@@ -493,7 +493,13 @@ final class AnthropicAgentProvider: AgentProvider {
                         self.pendingToolResultImages[safeId] = (data: finalData, mimeType: finalMime)
                     }
                     return .toolResult(safeId, content, isError: isError)
-                case .imageData(let data, let mimeType, _):
+                case .imageData(let data, let mimeType, let linuxPath):
+                    // [T-ios-vision-group-t264 #182] Anthropic-compatible relays also serve
+                    // text-only models (MiniMax / Qwen coding plans): substitute the read_image
+                    // hint instead of pixels the model cannot take.
+                    guard self.model.capabilities.supportedModalities.contains(.imageInput) else {
+                        return .text(VisionGroupText.attachmentPlaceholder(linuxPath: linuxPath))
+                    }
                     let finalData = Self.downscaleForAnthropic(data) ?? data
                     let base64 = finalData.base64EncodedString()
                     let mediaType: MessageParameter.Message.Content.ImageSource.MediaType
