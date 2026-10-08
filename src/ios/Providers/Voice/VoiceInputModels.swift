@@ -116,6 +116,10 @@ enum VoiceProviderError: LocalizedError {
     case parseError(String)
     case authError
     case noAudioData
+    /// The audio session could not be activated because another app holds the
+    /// microphone (FaceTime, a phone call, another recorder). "Parse failed:
+    /// Microphone input unavailable" described neither the cause nor the fix.
+    case audioSessionPreempted
 
     var errorDescription: String? {
         switch self {
@@ -137,6 +141,9 @@ enum VoiceProviderError: LocalizedError {
             return String(localized: "Authentication failed, please check the API key", comment: "Voice provider auth error")
         case .noAudioData:
             return String(localized: "No audio data", comment: "Voice provider missing audio")
+        case .audioSessionPreempted:
+            return String(localized: "The microphone is in use by another app (e.g. FaceTime or a phone call). Please try again after it finishes.",
+                          comment: "Voice input failed because another app holds the microphone")
         }
     }
 

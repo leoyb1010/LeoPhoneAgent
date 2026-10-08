@@ -195,6 +195,20 @@ final class SpeechRecognitionManager: ObservableObject {
             return aName.localizedCaseInsensitiveCompare(bName) == .orderedAscending
         }
         self.availableLocales = sorted
+
+        // A call / Siri that kills the engine must show in `state` at once,
+        // not leave "recording" over a dead engine until a tap does nothing.
+        // No auto-resume: tearDown keeps `recognizedText` and hands control back.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .recording else { return }
+                self.tearDown()
+            }
+        }
     }
 
     // MARK: - Language Selection
@@ -269,6 +283,12 @@ final class SpeechRecognitionManager: ObservableObject {
     // MARK: - Recording
 
     func startRecording() throws {
+        // Reconcile against the engine, not the flag: an interruption can leave
+        // `.recording` with nothing running, and this returned silently forever.
+        if state == .recording {
+            guard !audioEngine.isRunning else { return }
+            tearDown()
+        }
         guard state == .idle else { return }
         VoiceOutputState.shared.stop()
 

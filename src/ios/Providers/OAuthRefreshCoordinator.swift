@@ -34,7 +34,7 @@ protocol RefreshableOAuthToken {
 ///      scraped from the body), via the `oauth_http_status=<code>` marker; and
 ///   2. the OAuth `error` field parsed from the JSON body with JSONDecoder.
 ///
-/// A failure is fatal (delete-worthy) only when the token endpoint returned an
+/// A failure is fatal (re-login-worthy) only when the token endpoint returned an
 /// explicit OAuth error code from the provider's known-fatal set. An auth-ish
 /// HTTP status on its own (e.g. a 403 Cloudflare challenge page, a 401 from a
 /// proxy) is treated as transient. Providers pass their own fatal-code set so the differing
@@ -141,7 +141,7 @@ enum OAuthRefreshErrorClassifier {
     ]
 
     /// Structured verdict: is this refresh failure a genuine token-invalid error
-    /// that warrants clearing credentials?
+    /// that warrants marking the instance for re-login?
     ///
     /// - Parameters:
     ///   - error: the thrown error.
@@ -208,12 +208,12 @@ enum OAuthRefreshErrorClassifier {
 /// deterministically without touching the real Keychain or the network.
 enum OAuthRefreshCoordinator {
 
-    /// Decide what storage to use (or whether to clear credentials) after a
+    /// Decide what storage to use (or whether to mark the instance for re-login) after a
     /// refresh attempt threw `error`.
     ///
     /// The critical guard is *compare-before-delete*: on a token-invalid error
-    /// (`invalid_grant` / `refresh_token_reused` / …) we clear the
-    /// stored credentials ONLY when the currently-persisted refresh token is
+    /// (`invalid_grant` / `refresh_token_reused` / …) we mark the
+    /// instance for re-login ONLY when the currently-persisted refresh token is
     /// still the one we failed with. If a concurrent refresh already rotated it
     /// to a new value, this request is stale and returning `current` preserves
     /// the freshly-written token instead of wiping it (the bug that logged users
@@ -226,7 +226,7 @@ enum OAuthRefreshCoordinator {
     ///   - error: the thrown refresh error.
     ///   - isFatal: classifies `error` as "refresh token itself invalid" vs transient.
     ///   - loadCurrent: reads the latest persisted storage (may reflect a concurrent rotation).
-    ///   - deleteCredentials: clears persisted credentials.
+    ///   - markNeedsReauth: flags the instance as needing re-login (credentials are kept).
     ///   - log: optional human-readable trace sink.
     /// - Returns: the storage to continue with.
     /// - Throws: `LLMError.invalidAPIKey` when credentials are genuinely gone /
@@ -238,7 +238,7 @@ enum OAuthRefreshCoordinator {
         error: Error,
         isFatal: (LLMError) -> Bool,
         loadCurrent: () -> T?,
-        deleteCredentials: () -> Void,
+        markNeedsReauth: () -> Void,
         log: ((String) -> Void)? = nil
     ) throws -> T {
         // Re-load the latest persisted state — a concurrent winner may have
@@ -251,8 +251,13 @@ enum OAuthRefreshCoordinator {
                 return current
             }
             let summary = OAuthRefreshErrorClassifier.userFacingSummary(llmError)
-            log?("Refresh token invalid, clearing credentials: \(summary)")
-            deleteCredentials()
+            // [T-oauth-keep-credentials] Never delete on a rejected refresh: the
+            // classifier can misread a transient reply and a wiped credential
+            // cannot be recovered. Mark the instance (UI shows 需要重新登录,
+            // routing skips it); a new credential lapses the mark, and only an
+            // explicit sign-out removes the blob.
+            log?("Refresh token invalid, marking instance for re-login (credentials kept): \(summary)")
+            markNeedsReauth()
             throw LLMError.invalidAPIKey(detail: String(localized: "\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
         }
 
@@ -266,5 +271,17 @@ enum OAuthRefreshCoordinator {
             throw LLMError.invalidAPIKey(detail: String(localized: "Could not renew the \(providerName) sign-in right now. Check your connection and try again.") + " (\(summary))")
         }
         return fallback
+    }
+}
+
+// MARK: - Re-login mark (credentials kept)
+
+/// [T-oauth-keep-credentials] Pure rule for the "需要重新登录" mark: it applies
+/// only while the exact credential a refresh rejected is still stored (any new
+/// sign-in lapses it without a clear step) and no pasted manual token stands in.
+enum OAuthReauthMark {
+    static func applies(mark: String?, storedFingerprint: String?, hasManualToken: Bool) -> Bool {
+        guard let mark, let storedFingerprint, mark == storedFingerprint else { return false }
+        return !hasManualToken
     }
 }

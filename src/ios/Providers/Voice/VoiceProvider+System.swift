@@ -109,6 +109,14 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
     // MARK: - Voice input (offline SFSpeechRecognizer)
 
     func transcribe(_ request: VoiceInputRequest) async throws -> VoiceInputResponse {
+        // A 44-byte WAV header carries no samples. Handing a header-only /
+        // truncated file to Speech reaches AVAssetReaderAudioMixOutput with an
+        // empty track list, which raises on Speech's own queue and aborts the
+        // process — uncatchable, so reject it up front.
+        guard request.audioData.count > 44 else {
+            VoiceLog.log("system ASR rejected: audioData \(request.audioData.count) bytes is too small to contain audio")
+            throw VoiceProviderError.noAudioData
+        }
         let loc = resolveLocale(forLanguage: request.language)
         let requestedLocale = Locale(identifier: request.language ?? locale.identifier)
         let assets: SystemSpeechAvailability
@@ -143,7 +151,13 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         defer { try? FileManager.default.removeItem(at: tmpURL) }
 
         let audioFile = try? AVAudioFile(forReading: tmpURL)
-        let duration = audioFile.map { Double($0.length) / $0.processingFormat.sampleRate }
+        // Same crash guard as above, for a file that writes fine but has no
+        // decodable audio (unreadable container or zero frames).
+        guard let audioFile, audioFile.length > 0 else {
+            VoiceLog.log("system ASR rejected: no decodable audio in \(tmpURL.lastPathComponent)")
+            throw VoiceProviderError.noAudioData
+        }
+        let duration: Double? = Double(audioFile.length) / audioFile.processingFormat.sampleRate
 
         let recognitionRequest = SFSpeechURLRecognitionRequest(url: tmpURL)
         // Report partial results so we can salvage text if the recognizer never

@@ -9,7 +9,10 @@ enum AgentRunResultReader {
               receipt.sessionId == sessionId, receipt.phase == .completed,
               let messageId = receipt.resultMessageId,
               let message = await ChatStore.shared.loadSingleMessage(id: messageId),
-              message.sessionId == sessionId, message.role == .assistant else { return nil }
+              message.sessionId == sessionId, message.role == .assistant,
+              // An internal bridge row is a model-facing instruction; returning
+              // it to a Shortcut or a notification leaks prompt text.
+              !message.isInternalBridge else { return nil }
         return message
     }
 

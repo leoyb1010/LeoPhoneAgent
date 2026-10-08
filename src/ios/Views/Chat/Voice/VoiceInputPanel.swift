@@ -214,6 +214,13 @@ final class VoiceInputViewModel: ObservableObject {
 
     @objc private func appWillEnterForeground() {
         backgroundTimer?.invalidate(); backgroundTimer = nil
+        // Returning from a call is when to notice capture died while away: iOS
+        // does not deliver interruption `.ended` to a suspended app, so the
+        // panel could show "Listening" over a dead engine forever.
+        guard vad.isRunning, !vad.isCapturing else { return }
+        VoiceLog.log("foreground: capture died while backgrounded (interrupted) — resetting to idle")
+        stopListening()
+        startError = String(localized: "Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
     }
 
     // MARK: - Control
@@ -321,7 +328,10 @@ final class VoiceInputViewModel: ObservableObject {
     func handleMainButtonTap() {
         if captureStart.isPending { captureStart.cancel(); return }
         VoiceLog.log("handleMainButtonTap called, state=\(state), vad.isRunning=\(vad.isRunning), isSpeaking=\(vad.isSpeaking), runningDuration=\(String(format: "%.1f", vad.runningDuration))s")
-        if vad.isRunning {
+        // `isCapturing`, not `isRunning`: a missed interruption `.ended` leaves
+        // isRunning over a dead engine, and the PAUSE path then "stopped" a
+        // capture that was already gone — the tap did nothing visible.
+        if vad.isCapturing {
             let wasSpeaking = vad.isSpeaking
             let duration = vad.runningDuration
             // Pausing: flush any in-progress speech to recognition first (so the

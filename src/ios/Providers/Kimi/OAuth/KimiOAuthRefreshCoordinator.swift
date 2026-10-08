@@ -35,7 +35,7 @@ enum KimiOAuthRefreshCoordinator {
     private static let providerName = "Kimi"
 
     /// Classify a refresh error as "refresh token itself invalid" (revoked /
-    /// reused / expired → clear credentials) vs transient (network → keep).
+    /// reused / expired → mark for re-login) vs transient (network → keep).
     /// Pure + in the test target so both the coordinator and its tests share
     /// one classification.
     /// Only an explicit OAuth error code counts; a bare HTTP status or a body
@@ -49,11 +49,11 @@ enum KimiOAuthRefreshCoordinator {
         OAuthRefreshErrorClassifier.isTokenInvalid(error, fatalErrorCodes: fatalErrorCodes)
     }
 
-    /// Decide what storage to use (or whether to clear credentials) after a
+    /// Decide what storage to use (or whether to mark the instance for re-login) after a
     /// refresh attempt threw `error`.
     ///
     /// Critical guard — *compare-before-delete*: on a token-invalid error we
-    /// clear stored credentials ONLY when the currently-persisted refresh token
+    /// mark the instance for re-login ONLY when the currently-persisted refresh token
     /// is still the one we failed with. If a concurrent refresh already rotated
     /// it, this request is stale and returning `current` preserves the
     /// freshly-written token instead of wiping it.
@@ -63,7 +63,7 @@ enum KimiOAuthRefreshCoordinator {
         error: Error,
         isFatal: (LLMError) -> Bool,
         loadCurrent: () -> KimiTokenStorage?,
-        deleteCredentials: () -> Void,
+        markNeedsReauth: () -> Void,
         log: ((String) -> Void)? = nil
     ) throws -> KimiTokenStorage {
         // Re-load the latest persisted state — a concurrent winner may have
@@ -76,8 +76,13 @@ enum KimiOAuthRefreshCoordinator {
                 return current
             }
             let summary = OAuthRefreshErrorClassifier.userFacingSummary(llmError)
-            log?("Refresh token invalid, clearing credentials: \(summary)")
-            deleteCredentials()
+            // [T-oauth-keep-credentials] Never delete on a rejected refresh: the
+            // classifier can misread a transient reply and a wiped credential
+            // cannot be recovered. Mark the instance (UI shows 需要重新登录,
+            // routing skips it); a new credential lapses the mark, and only an
+            // explicit sign-out removes the blob.
+            log?("Refresh token invalid, marking instance for re-login (credentials kept): \(summary)")
+            markNeedsReauth()
             throw LLMError.invalidAPIKey(detail: String(localized: "\(providerName) sign-in has expired. Please sign in again.") + " (\(summary))")
         }
 

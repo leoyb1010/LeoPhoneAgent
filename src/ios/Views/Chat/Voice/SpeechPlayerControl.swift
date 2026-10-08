@@ -165,7 +165,11 @@ struct SpeechPlayerControl: View {
         }
     }
 
-    private func recompute() {
+    /// Pending settle-window descent (see the ratchet at the end of `recompute`).
+    @State private var descentTask: Task<Void, Never>?
+    private static let descentSettleMillis = 1200
+
+    private func recompute(allowDescent: Bool = false) {
         let rf = restingFrame
         guard rf.width > 0 else { return }
         let newLift = placement.requiredLift(forCapsule: rf)
@@ -196,9 +200,38 @@ struct SpeechPlayerControl: View {
         // button is faded out anyway, and freezing it avoids the very jitter we're
         // suppressing. It re-applies the settled value once space recovers.
         guard !shouldHide else { return }
-        if abs(newLift - avoidLift) > 6 {
-            VoiceLog.log("[capsule] APPLY lift \(Int(avoidLift)) → \(Int(newLift)); restingBottom=\(Int(rf.maxY)) → displayBottom=\(Int(rf.maxY - newLift))")
+        // Ratchet with a settle-window descent. During a streaming reply the
+        // obstacles under the capsule oscillate at content rhythm (toolbar
+        // preview, scroll buttons), slower than the debounces, so a faithfully
+        // tracking lift bounced the button ~80 pt about once a second.
+        //   rise: apply immediately — never let UI cover the button;
+        //   fall: apply only after the lower target held for
+        //         `descentSettleMillis`; any interim rise/return cancels it.
+        switch CapsuleLiftRatchet.decide(newLift: Double(newLift), currentLift: Double(avoidLift),
+                                         allowDescent: allowDescent, descentPending: descentTask != nil) {
+        case .rise:
+            descentTask?.cancel()
+            descentTask = nil
+            VoiceLog.log("[capsule] APPLY lift \(Int(avoidLift)) → \(Int(newLift)) (rise); restingBottom=\(Int(rf.maxY)) → displayBottom=\(Int(rf.maxY - newLift))")
             avoidLift = newLift
+        case .descend:
+            descentTask = nil
+            VoiceLog.log("[capsule] APPLY lift \(Int(avoidLift)) → \(Int(newLift)) (settled descent)")
+            avoidLift = newLift
+        case .armDescent:
+            descentTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(Self.descentSettleMillis))
+                guard !Task.isCancelled else { return }
+                descentTask = nil
+                // Re-evaluate from a fresh requiredLift at fire time.
+                recompute(allowDescent: true)
+            }
+        case .cancelPending:
+            // The obstacle returned; a pending descent would undershoot.
+            descentTask?.cancel()
+            descentTask = nil
+        case .waitPending, .none:
+            break
         }
     }
 

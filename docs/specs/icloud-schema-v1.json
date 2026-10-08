@@ -65,6 +65,10 @@
           "QUERYABLE",
           "SORTABLE"
         ],
+        "updatedAt": [
+          "QUERYABLE",
+          "SORTABLE"
+        ],
         "sessionId": [
           "QUERYABLE"
         ]
@@ -505,12 +509,7 @@
           "optional": true
         }
       },
-      "indexes": {
-        "updatedAt": [
-          "QUERYABLE",
-          "SORTABLE"
-        ]
-      }
+      "indexes": {}
     },
     "MCPServerItem": {
       "zone": "minis-secrets",

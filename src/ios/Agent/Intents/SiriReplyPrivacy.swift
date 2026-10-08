@@ -26,3 +26,12 @@ enum SiriReplyPrivacy {
         shouldHide(deviceLocked: deviceLocked, privacyMode: privacyMode, voiceOnly: voiceOnly) ? hiddenReply : text
     }
 }
+
+/// Which models the Shortcuts/Siri picker may OFFER. A disabled provider means
+/// "stop using this account", so its models are not offered for new
+/// automations; an id already picked still resolves (see ModelSelectionEntityQuery).
+enum ShortcutModelOffer {
+    static func isOfferable(isHidden: Bool, providerEnabled: Bool?) -> Bool {
+        !isHidden && providerEnabled == true
+    }
+}

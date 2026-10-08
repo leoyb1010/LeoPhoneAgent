@@ -29,6 +29,7 @@ echo "Checking actual CloudKit transport with SDK: $SDK"
   "$SYNC/SyncableTypeRegistry.swift" \
   "$SYNC/SyncHealth.swift" \
   "$SYNC/SyncRetryPolicy.swift" \
+  "$SYNC/SyncPollPlan.swift" \
   "$SYNC/SyncDeliveryLedger.swift" \
   "$SYNC/UploadPolicy.swift" \
   "$SYNC/CloudKitInboundJournal.swift" \

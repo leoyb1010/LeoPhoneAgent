@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Security
 import os.log
 
@@ -2768,6 +2769,7 @@ enum ProviderKeychainHelper {
         if addStatus == errSecSuccess { markOAuthTokenDeviceOnly(instanceId: instanceId) }
         migrationLock.unlock()
         AppLogger(category: "Keychain").info("write oauthToken instanceId=\(instanceId.prefix(8)) blobLen=\(data.count) addStatus=\(addStatus) caller=\(caller)")
+        if addStatus == errSecSuccess { clearOAuthNeedsReauth(instanceId: instanceId) }
         notifyAuthChanged(instanceId: instanceId)
     }
 
@@ -2915,7 +2917,48 @@ enum ProviderKeychainHelper {
             s2 = SecItemDelete(syncQuery as CFDictionary)
         }
         AppLogger(category: "Keychain").info("delete oauthToken instanceId=\(instanceId.prefix(8)) legacyStatus=\(s1) syncStatus=\(s2) includeICloud=\(includingICloudCopy) caller=\(caller)")
+        clearOAuthNeedsReauth(instanceId: instanceId)
         notifyAuthChanged(instanceId: instanceId)
+    }
+
+    // MARK: - OAuth "needs re-login" mark
+
+    /// [T-oauth-keep-credentials] Set when the token endpoint rejects a
+    /// refresh. Automatic paths never delete an OAuth credential (a misread
+    /// transient reply used to sign users out for good); only an explicit
+    /// sign-out or instance removal deletes it.
+    ///
+    /// Device-local and holds only a SHA-256 fingerprint of the rejected blob,
+    /// never the credential. It applies only while that exact blob is stored,
+    /// so any new sign-in lapses it automatically.
+    private static func oauthNeedsReauthUDKey(instanceId: String) -> String {
+        "oauthNeedsReauthFingerprint.\(instanceId)"
+    }
+
+    static func oauthReauthFingerprint(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func markOAuthNeedsReauth(instanceId: String, caller: String = #function) {
+        guard let data = readOAuthTokenData(instanceId: instanceId, synchronizable: false).0 else { return }
+        UserDefaults.standard.set(oauthReauthFingerprint(data), forKey: oauthNeedsReauthUDKey(instanceId: instanceId))
+        AppLogger(category: "Keychain").warning("mark oauthNeedsReauth instanceId=\(instanceId.prefix(8)) credentials kept caller=\(caller)")
+        notifyAuthChanged(instanceId: instanceId)
+    }
+
+    /// True when the stored sign-in token is the one a refresh rejected and
+    /// no pasted manual token stands in for it. One UserDefaults read when
+    /// unmarked (no Keychain access).
+    static func oauthNeedsReauth(instanceId: String) -> Bool {
+        guard let mark = UserDefaults.standard.string(forKey: oauthNeedsReauthUDKey(instanceId: instanceId)),
+              let data = readOAuthTokenData(instanceId: instanceId, synchronizable: false).0
+        else { return false }
+        return OAuthReauthMark.applies(mark: mark, storedFingerprint: oauthReauthFingerprint(data),
+                                       hasManualToken: loadOAuthString(instanceId: instanceId, account: "manual-oauth-token")?.isEmpty == false)
+    }
+
+    private static func clearOAuthNeedsReauth(instanceId: String) {
+        UserDefaults.standard.removeObject(forKey: oauthNeedsReauthUDKey(instanceId: instanceId))
     }
 
     // MARK: - OAuth Strings (per-instance, e.g. email, project ID)

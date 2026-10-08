@@ -11,7 +11,7 @@ import XCTest
 ///
 /// Each provider covers three scenarios per the spec:
 ///   ① concurrent race — stale fatal error must KEEP a token another caller just rotated
-///   ② genuine invalid — the stored token really is dead → clear + throw
+///   ② genuine invalid — the stored token really is dead → mark for re-login (keep it) + throw
 ///   ③ transient/network — never clear a still-valid token
 final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
 
@@ -25,9 +25,10 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
 
     private final class FakeStore {
         var stored: FakeToken?
-        var deleteCount = 0
+        var markCount = 0
         func load() -> FakeToken? { stored }
-        func delete() { stored = nil; deleteCount += 1 }
+        /// Marking never touches the stored credential.
+        func markNeedsReauth() { markCount += 1 }
     }
 
     private func tok(_ a: String, _ r: String?, _ mins: Double = 60) -> FakeToken {
@@ -84,19 +85,20 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
                 error: p.rotationError,
                 isFatal: p.isFatal,
                 loadCurrent: store.load,
-                deleteCredentials: store.delete
+                markNeedsReauth: store.markNeedsReauth
             )
 
             XCTAssertEqual(result.accessToken, "NEW_ACCESS", "\(p.name): must keep rotated token")
             XCTAssertEqual(result.refreshToken, "NEW_REFRESH", "\(p.name)")
-            XCTAssertEqual(store.deleteCount, 0, "\(p.name): stale error must NOT delete a rotated token")
+            XCTAssertEqual(store.markCount, 0, "\(p.name): stale error must NOT mark a rotated token")
             XCTAssertNotNil(store.stored, "\(p.name)")
         }
     }
 
-    // MARK: - ② Genuine invalid: same token still stored → clear + throw.
+    // MARK: - ② Genuine invalid: same token still stored → mark for re-login,
+    // KEEP the credential, throw. [T-oauth-keep-credentials]
 
-    func testGenuineInvalid_clearsCredentials_allProviders() {
+    func testGenuineInvalid_marksReauthAndKeepsCredentials_allProviders() {
         for p in providers {
             let store = FakeStore()
             store.stored = tok("ACCESS", "SAME_REFRESH")
@@ -109,7 +111,7 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
                     error: p.rotationError,
                     isFatal: p.isFatal,
                     loadCurrent: store.load,
-                    deleteCredentials: store.delete
+                    markNeedsReauth: store.markNeedsReauth
                 ),
                 "\(p.name): a genuine invalid_grant must throw"
             ) { error in
@@ -117,8 +119,9 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
                     return XCTFail("\(p.name): expected invalidAPIKey, got \(error)")
                 }
             }
-            XCTAssertEqual(store.deleteCount, 1, "\(p.name): genuine invalid must clear")
-            XCTAssertNil(store.stored, "\(p.name)")
+            XCTAssertEqual(store.markCount, 1, "\(p.name): genuine invalid must mark the instance for re-login")
+            XCTAssertNotNil(store.stored, "\(p.name): a rejected refresh must never delete the credential")
+            XCTAssertEqual(store.stored?.refreshToken, "SAME_REFRESH", "\(p.name)")
         }
     }
 
@@ -136,11 +139,11 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
                 error: LLMError.networkError(underlying: URLError(.timedOut)),
                 isFatal: p.isFatal,
                 loadCurrent: store.load,
-                deleteCredentials: store.delete
+                markNeedsReauth: store.markNeedsReauth
             )
 
             XCTAssertEqual(result.accessToken, "ACCESS", "\(p.name)")
-            XCTAssertEqual(store.deleteCount, 0, "\(p.name): transient must never delete")
+            XCTAssertEqual(store.markCount, 0, "\(p.name): transient must never mark")
         }
     }
 
@@ -159,12 +162,24 @@ final class OAuthRefreshRaceAllProvidersTests: XCTestCase {
                     error: LLMError.networkError(underlying: URLError(.notConnectedToInternet)),
                     isFatal: p.isFatal,
                     loadCurrent: store.load,
-                    deleteCredentials: store.delete
+                    markNeedsReauth: store.markNeedsReauth
                 ),
                 "\(p.name): transient+expired must throw re-auth"
             )
-            XCTAssertEqual(store.deleteCount, 0, "\(p.name): transient must not delete even when expired")
+            XCTAssertEqual(store.markCount, 0, "\(p.name): transient must not mark even when expired")
         }
+    }
+
+    // MARK: - Re-login mark lapses on any new credential.
+
+    func testReauthMarkAppliesOnlyToTheRejectedCredential() {
+        XCTAssertTrue(OAuthReauthMark.applies(mark: "fp-1", storedFingerprint: "fp-1", hasManualToken: false))
+        XCTAssertFalse(OAuthReauthMark.applies(mark: "fp-1", storedFingerprint: "fp-2", hasManualToken: false),
+                       "a fresh sign-in (different blob) clears the mark without a clear step")
+        XCTAssertFalse(OAuthReauthMark.applies(mark: "fp-1", storedFingerprint: "fp-1", hasManualToken: true),
+                       "a pasted manual token stands in for the rejected sign-in")
+        XCTAssertFalse(OAuthReauthMark.applies(mark: nil, storedFingerprint: "fp-1", hasManualToken: false))
+        XCTAssertFalse(OAuthReauthMark.applies(mark: "fp-1", storedFingerprint: nil, hasManualToken: false))
     }
 
     // MARK: - Provider-specific: xAI/Codex refresh_token_reused is fatal;

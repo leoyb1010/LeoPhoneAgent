@@ -642,34 +642,48 @@ final class MigrationEngine {
         // fix, but defense in depth). If the cloud-side count is wildly
         // smaller than local, abort and leave v1 zone intact for next
         // migration attempt.
-        let localSessions = await ChatStore.shared.allSessionIds().count
-        // countCloudSessionsV2 now returns nil when the COUNT QUERY ITSELF
-        // failed (transient CloudKit error), as distinct from a confirmed
-        // low count. [T-ios-icloud-v1v2-migration-fails] Previously it
-        // returned 0 on error, which tripped the safeguard below and burned
-        // a failure attempt even when the v2 push had actually succeeded —
-        // a plausible "retry keeps failing" loop, since the retry re-pushes
-        // (already drained, fast) then re-hits the same flaky count and
-        // fails again. We now treat an UNKNOWN count as retryable-but-safe:
-        // throw a transient error (so we don't delete the v1 zone on
-        // incomplete info) without claiming the migration is broken.
+        // [v1-delete count deadlock] With a verifiably empty local store the
+        // safeguard threshold is 0 and cannot reject anything, yet the cloud
+        // count query still ran first — under CloudKit throttling it failed,
+        // the phase never advanced, and the retry hit the same throttle.
+        // An unreadable store is never treated as empty.
+        let counts = await ChatStore.shared.localCountsIfReadable()
+        let localSessions: Int
+        switch SyncPollPlan.v1DeleteGate(localSessions: counts?.sessions, localMessages: counts?.messages) {
+        case .deferUnreadable:
+            logger.error("[SyncMigration] phase=v1ZoneDelete: local store unreadable or inconsistent (sessions=\(counts?.sessions ?? -1) messages=\(counts?.messages ?? -1)) — suspending, v1 zone kept")
+            throw MigrationError.deferredUntilNextLaunch(remaining: counts?.messages ?? 0)
+        case .proceedWithoutCount:
+            logger.info("[SyncMigration] phase=v1ZoneDelete: no local sessions or messages — threshold 0, skipping cloud count")
+            try await V1FetcherShim.deleteOwnZone(zoneName: myZoneName)
+            logger.info("[SyncMigration] phase=v1ZoneDelete end: deleted (empty-local path)")
+            s.phase = .lock
+            return
+        case .requiresCloudCount(let n):
+            localSessions = n
+        }
+        // countCloudSessionsV2 returns nil when the COUNT QUERY ITSELF failed
+        // (transient CloudKit error), distinct from a confirmed low count.
         let cloudCount: Int?
         if #available(iOS 17.0, *) {
             cloudCount = await Self.countCloudSessionsV2()
         } else {
             cloudCount = 0
         }
-        guard let actualCloud = cloudCount else {
-            logger.warning("[SyncMigration] phase=v1ZoneDelete: cloud session count unavailable (CK query failed) — deferring v1 zone delete, will retry next attempt (localSessions=\(localSessions))")
-            throw MigrationError.v1FetchFailed(reason: "could not verify v2 cloud session count (CloudKit query failed) — deferring v1 zone delete")
+        switch SyncPollPlan.v1DeleteVerdict(localSessions: localSessions, cloudCount: cloudCount) {
+        case .deferUntilNextLaunch:
+            // A deferral, not a failure: v1FetchFailed burned the 5-attempt cap
+            // in ~2 min, far inside a throttle window, and flipped the whole
+            // migration to failed over something that heals on its own.
+            logger.warning("[SyncMigration] phase=v1ZoneDelete: cloud session count unavailable (CK query failed — likely throttled) — suspending until next launch (localSessions=\(localSessions))")
+            throw MigrationError.deferredUntilNextLaunch(remaining: localSessions)
+        case .abortSafeguard(let minimumCloud):
+            logger.error("[SyncMigration] phase=v1ZoneDelete safeguard tripped: localSessions=\(localSessions) cloudSessions=\(cloudCount ?? -1) min=\(minimumCloud); aborting delete to preserve v1 cloud copy")
+            throw MigrationError.v1FetchFailed(reason: "v2 cloud count (\(cloudCount ?? -1)) far below local (\(localSessions)) — aborting v1 zone delete")
+        case .proceed:
+            break
         }
-        // Allow 50% slack — multi-device fan-in not yet complete is OK,
-        // but >50% missing is a strong "something went wrong" signal.
-        let minimumCloud = max(0, localSessions / 2)
-        if actualCloud < minimumCloud {
-            logger.error("[SyncMigration] phase=v1ZoneDelete safeguard tripped: localSessions=\(localSessions) cloudSessions=\(actualCloud) min=\(minimumCloud); aborting delete to preserve v1 cloud copy")
-            throw MigrationError.v1FetchFailed(reason: "v2 cloud count (\(actualCloud)) far below local (\(localSessions)) — aborting v1 zone delete")
-        }
+        let actualCloud = cloudCount ?? 0
         logger.info("[SyncMigration] phase=v1ZoneDelete safeguard OK: localSessions=\(localSessions) cloudSessions=\(actualCloud)")
 
         try await V1FetcherShim.deleteOwnZone(zoneName: myZoneName)
@@ -883,6 +897,11 @@ enum V1FetcherShim {
                 logger.info("[SyncMigration] deleted v1 zone: \(zoneName)")
             } catch let error as CKError where error.code == .zoneNotFound {
                 logger.info("[SyncMigration] v1 zone already gone: \(zoneName)")
+            } catch let error as CKError where SyncPollPlan.transientCKCodes.contains(error.code.rawValue) {
+                // Throttling / network is not a broken migration; defer to the
+                // next launch instead of burning the failure cap.
+                logger.warning("[SyncMigration] v1 zone delete deferred (transient CK error \(error.code.rawValue))")
+                throw MigrationError.deferredUntilNextLaunch(remaining: 0)
             } catch {
                 throw MigrationError.zoneDeleteFailed(zone: zoneName, reason: error.localizedDescription)
             }

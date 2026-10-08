@@ -3088,6 +3088,22 @@ actor ChatStore {
 
     /// Returns every locally-stored session id (for §3.6.0 scenario E
     /// fullFetch reconciliation).
+    /// Session/message counts, or nil when the store cannot be read (a failed
+    /// prepare must never look like an empty store — the v1 zone delete
+    /// trusts "empty" to skip its cloud-count safeguard).
+    func localCountsIfReadable() -> (sessions: Int, messages: Int)? {
+        func count(_ sql: String) -> Int? {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            guard db != nil, sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK,
+                  sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            return Int(sqlite3_column_int64(stmt, 0))
+        }
+        guard let sessions = count("SELECT COUNT(*) FROM sessions"),
+              let messages = count("SELECT COUNT(*) FROM messages") else { return nil }
+        return (sessions, messages)
+    }
+
     func allSessionIds() -> [String] {
         let sql = "SELECT id FROM sessions"
         var stmt: OpaquePointer?
@@ -5544,6 +5560,19 @@ extension ChatStore {
                 sqlite3_bind_double(stmt, 4, device.lastSeen.timeIntervalSince1970)
                 sqlite3_bind_text(stmt, 5, (device.osVersion as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_text(stmt, 6, (device.uploadTypes.joined(separator: ",") as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                _ = try stepInbound(stmt)
+            }
+            sqlite3_finalize(stmt); stmt = nil
+        }
+    }
+
+    /// Inbound retirement of a peer's previous device id (it re-minted).
+    func deleteSyncDevice(id: String) throws {
+        try withInboundMutation {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            if try prepareInbound("DELETE FROM sync_devices WHERE device_id = ?", &stmt) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 _ = try stepInbound(stmt)
             }
             sqlite3_finalize(stmt); stmt = nil

@@ -213,6 +213,7 @@ private struct InstanceRow: View {
     private struct CredentialStatus: Equatable {
         let configured: Bool
         let summary: String
+        var needsReauth = false
     }
 
     private func computeStatus() -> CredentialStatus {
@@ -227,6 +228,10 @@ private struct InstanceRow: View {
                 return CredentialStatus(configured: false, summary: String(localized: "Retired · needs API key"))
             }
             let ok = instance.isOAuthAuthenticated
+            // Refresh rejected: credentials are kept but the user must sign in again.
+            if ok, ProviderKeychainHelper.oauthNeedsReauth(instanceId: instance.id) {
+                return CredentialStatus(configured: false, summary: String(localized: "Needs sign-in again"), needsReauth: true)
+            }
             return CredentialStatus(configured: ok,
                                     summary: ok ? String(localized: "Authenticated") : String(localized: "Not authenticated"))
         }
@@ -240,7 +245,8 @@ private struct InstanceRow: View {
         let status = cachedStatus ?? computeStatus()
         HStack(spacing: 12) {
             Circle()
-                .fill(status.configured && instance.isEnabled ? Color.green : Color(UIColor.quaternaryLabel))
+                .fill(status.needsReauth ? Color.red
+                      : (status.configured && instance.isEnabled ? Color.green : Color(UIColor.quaternaryLabel)))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -255,7 +261,7 @@ private struct InstanceRow: View {
                         .foregroundStyle(.quaternary)
                     Text(status.summary)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(status.needsReauth ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
                         .lineLimit(1)
                 }
                 if modelCount > 0 {

@@ -126,6 +126,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
 
     private func stageInbound(records: [PortableRecord], deletes: [SyncRecordID]) throws {
         guard let journal = inboundJournal else { throw SyncTransportError.notStarted }
+        // Parents first: a page applies entry by entry in order, so a message
+        // ahead of its session would fail the session guard and cost a
+        // dependency fetch + retry.
+        let records = SyncPollPlan.parentsFirst(records) { $0.id.type }
         var offset = 0
         while offset < records.count {
             let end = min(offset + 50, records.count)
@@ -394,16 +398,35 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     // created months ago, so a `now − 24h` floor never sees them and they stay
     // invisible. These types instead pull their FULL history (no time floor)
     // until they have been anchored once via `configTypeAnchoredKey`.
-    private static let fullHistoryConfigTypes: Set<String> = [
-        "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3",
-        "ProviderConfigV2", "MCPServersV2", "MCPServerItem", "EnvVarItem",
-    ]
+    // MCPServersV2 is no longer polled (never uploaded by any build, so the
+    // type is not in the schema); see SyncPollPlan.recentQueries.
+    private static var fullHistoryConfigTypes: Set<String> { SyncPollPlan.fullHistoryConfigTypes }
     /// Per-type "we have completed at least one full-history pull AND the
     /// consumer was ready to apply it" flag. Until set, the type pulls full
     /// history every run. Keyed `cloudSync.v2.configAnchored.<type>`.
     private static func configTypeAnchoredKey(_ type: String) -> String {
         "cloudSync.v2.configAnchored.\(type)"
     }
+    /// Count fetched by the last clean full-history pull of an un-anchored
+    /// type; anchoring needs a second pull with the same count
+    /// (SyncPollPlan.anchorDecision).
+    private static func configTypeAnchorPendingCountKey(_ type: String) -> String {
+        "cloudSync.v2.configAnchorPendingCount.\(type)"
+    }
+
+    /// Forget the provider types' "history fully pulled" anchors so the next
+    /// fetchRecentV2 re-pulls their full history. Escape hatch for a device
+    /// whose anchor was set from an incomplete (eventually-consistent) pull.
+    static func resetProviderConfigAnchors() {
+        for t in SyncPollPlan.providerAnchorTypes {
+            UserDefaults.standard.removeObject(forKey: configTypeAnchoredKey(t))
+            UserDefaults.standard.removeObject(forKey: configTypeAnchorPendingCountKey(t))
+        }
+        logger.info("[iCloudTrace] provider config anchors reset — next fetchRecentV2 pulls full history")
+    }
+    /// SessionV2 falls back to its createdAt sort key until this date when the
+    /// environment's schema rejects the updatedAt query (index not deployed).
+    private var sessionPollFallbackUntil: Date?
     /// 缺失类型只影响自己的查询；只有服务端明确的提示能限制整个服务。
     private static let retryPolicyKey = "cloudSync.v2.retryPolicy.v1"
     private var retryPolicy = SyncRetryPolicy() {
@@ -440,18 +463,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     // no leading `_`, no trailing `:` for the degenerate empty-id row).
     // Everything else — letters, digits, `/`, `.`, `-`, `_`, spaces, and
     // any printable Unicode incl. Chinese — passes through.
+    // The 255 limit is in UTF-8 BYTES (see SyncPollPlan.isValidRecordName):
+    // `String.count` let long CJK / emoji SessionFileV2 paths through.
     static func isValidCKRecordName(_ name: String) -> Bool {
-        guard !name.isEmpty, name.count <= 255 else { return false }
-        if name.hasPrefix("_") { return false }
-        // Reject the degenerate "type:" with empty id — easy to construct
-        // when a dirty row's id column landed as "" instead of NULL.
-        if name.hasSuffix(":") { return false }
-        // Control characters (C0 range + DEL) are the only illegal bytes in a
-        // POSIX pathname besides the path separator, which we must keep.
-        if name.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7F }) {
-            return false
-        }
-        return true
+        SyncPollPlan.isValidRecordName(name)
     }
 
     /// Render a possibly-dirty recordName safely for logs: caps length and
@@ -812,13 +827,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         // Default (high-volume types: sessions / messages / files) cutoff: the
         // bandwidth-optimised 24h window anchored to the last successful run.
         func cutoffFor(_ type: String) -> Date {
-            if Self.fullHistoryConfigTypes.contains(type),
-               !UserDefaults.standard.bool(forKey: Self.configTypeAnchoredKey(type)) {
-                return .distantPast
-            }
-            let last = UserDefaults.standard.double(forKey: Self.recentFetchLastKey + "." + type)
-            let windowStart = now.addingTimeInterval(-Self.recentFetchWindow)
-            return last > 0 ? max(Date(timeIntervalSince1970: last - 300), windowStart) : windowStart
+            SyncPollPlan.cutoff(
+                type: type, now: now,
+                lastSuccess: UserDefaults.standard.double(forKey: Self.recentFetchLastKey + "." + type),
+                anchored: UserDefaults.standard.bool(forKey: Self.configTypeAnchoredKey(type)))
         }
         // (recordType, fieldName) — use createdAt where present, else
         // updatedAt for records that have no createdAt.
@@ -841,31 +853,18 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         // peer device never arrived (the CKSyncEngine token path did not cover
         // them either). ProviderModelEntryV3 / ProviderModelGroupV3 carry only
         // updatedAt (no createdAt), so sort all V3 types by updatedAt.
-        let typesAndKeys: [(String, String)] = [
-            ("SessionV2", "createdAt"),
-            ("MessageV2", "createdAt"),
-            ("CompactMarkerV2", "createdAt"),
-            ("SessionFileV2", "updatedAt"),
-            ("ArtifactV2", "updatedAt"),
-            ("ArtifactVersionV2", "createdAt"),
-            ("SkillV2", "updatedAt"),
-            ("ProviderConfigV2", "updatedAt"),
-            ("ProviderInstanceV3", "updatedAt"),
-            ("ProviderModelEntryV3", "updatedAt"),
-            ("ProviderModelGroupV3", "updatedAt"),
-            ("MCPServersV2", "updatedAt"),
-            ("MCPServerItem", "updatedAt"),
-            ("EnvVarItem", "updatedAt"),
-            ("SoulV2", "updatedAt"),
-            ("MemoryGlobalV2", "updatedAt"),
-            ("MemoryDailyV2", "updatedAt"),
-        ]
+        let typesAndKeys = SyncPollPlan.recentQueries
         var totalFetched = 0
         var byType: [String: Int] = [:]
         // 只有实际完成的类型才能推进游标或配置锚点；跳过不等于成功。
         var successfulTypes: Set<String> = []
         let registry = SyncableTypeRegistry.shared
-        for (type, dateKey) in typesAndKeys {
+        for (type, primaryKey) in typesAndKeys {
+            var dateKey = primaryKey
+            if let fallback = SyncPollPlan.fallbackDateKey(for: type, primary: primaryKey),
+               let until = sessionPollFallbackUntil, until > Date() {
+                dateKey = fallback
+            }
             guard retryPolicy.isEligible(.query(type), at: Date()) else {
                 logger.debug("[iCloudTrace] query deferred type=\(type)")
                 continue
@@ -962,6 +961,25 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             case .failure(let error):
                 let nse = error as NSError
                 let ck = error as? CKError
+                // A type no device has saved yet is not in CloudKit's schema;
+                // its query fails with unknownItem. That is "zero records",
+                // not an error: it must not back off, block anchoring or
+                // count against the type forever.
+                if SyncPollPlan.isEmptySchemaType(ckCode: ck?.code.rawValue) {
+                    logger.info("[iCloudTrace] fetchRecentV2 type=\(type) not in schema yet — treating as empty")
+                    health.succeeded("query:" + type)
+                    retryPolicy.succeeded(.query(type))
+                    successfulTypes.insert(type)
+                    UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.recentFetchLastKey + "." + type)
+                    continue
+                }
+                // Schema without the new SessionV2.updatedAt index: poll by
+                // createdAt for 6 h instead of losing the type entirely.
+                if ck?.code.rawValue == SyncPollPlan.ckInvalidArgumentsCode,
+                   SyncPollPlan.fallbackDateKey(for: type, primary: primaryKey) != nil, dateKey == primaryKey {
+                    sessionPollFallbackUntil = Date().addingTimeInterval(6 * 3600)
+                    logger.warning("[iCloudTrace] fetchRecentV2 type=\(type) rejected \(primaryKey) (index missing?) — falling back to its createdAt key for 6h")
+                }
                 health.failed("query:" + type, error: nse)
                 logger.warning("[iCloudTrace] fetchRecentV2 type=\(type) field=\(dateKey) failed: code=\(nse.code) ck=\(ck?.code.rawValue ?? -1) desc=\(error.localizedDescription)")
                 retryPolicy.failed(.query(type), at: Date(), jitter: Double.random(in: 0...1))
@@ -1003,8 +1021,19 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
                 logger.info("[iCloudTrace] fetchRecentV2 NOT anchoring \(type) — provider DB not open yet, will re-pull full history next run")
                 continue
             }
-            UserDefaults.standard.set(true, forKey: Self.configTypeAnchoredKey(type))
-            logger.info("[iCloudTrace] fetchRecentV2 anchored config type \(type) (full-history pull complete)")
+            let pendingKey = Self.configTypeAnchorPendingCountKey(type)
+            let fetchedThisRun = byType[type] ?? 0
+            let decision = SyncPollPlan.anchorDecision(
+                previousPendingCount: UserDefaults.standard.object(forKey: pendingKey) as? Int,
+                fetched: fetchedThisRun)
+            if decision.anchor {
+                UserDefaults.standard.set(true, forKey: Self.configTypeAnchoredKey(type))
+                UserDefaults.standard.removeObject(forKey: pendingKey)
+                logger.info("[iCloudTrace] fetchRecentV2 anchored config type \(type) (confirmed: two full-history pulls fetched=\(fetchedThisRun))")
+            } else {
+                UserDefaults.standard.set(decision.pendingCount, forKey: pendingKey)
+                logger.info("[iCloudTrace] fetchRecentV2 NOT anchoring \(type) yet — full-history pull fetched=\(fetchedThisRun), awaiting a confirming run")
+            }
         }
         let breakdown = byType.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
         logger.info("[iCloudTrace] fetchRecentV2 ok total=\(totalFetched) byType=[\(breakdown)] window=\(Int(Self.recentFetchWindow))s")
@@ -1621,20 +1650,51 @@ extension ICloudSharedZoneTransport: CKSyncEngineDelegate {
             // large backlogs; 20 cuts that to a manageable working
             // set per send and lets the dirty queue drain in smaller
             // visible steps for the migration progress UI.
-            let maxBatch = 20
-            let deleteSlice = Array(dels.prefix(maxBatch))
-            let recordSlice = Array(recs.prefix(maxBatch - deleteSlice.count))
-            // Spill overflow back for the next batch.
-            let overflowRecs = Array(recs.dropFirst(recordSlice.count))
+            //
+            // Byte budget instead of a flat 20 (SyncPollPlan.batchCut): the
+            // 2 GB spike tracked payload bytes, not record count, and 20
+            // throttled ordinary text backlogs to a crawl. Outcomes are still
+            // acked per record, so SyncDeliveryLedger is unaffected.
+            let deleteSlice = Array(dels.prefix(SyncPollPlan.maxBatchRecords))
+            let cut = SyncPollPlan.batchCut(
+                hasAsset: recs.map(Self.carriesAsset),
+                bytes: recs.map(Self.estimatedRecordBytes),
+                deleteCount: deleteSlice.count)
+            let recordSlice = cut.selected.map { recs[$0] }
+            // Spill overflow back for the next batch, small records first.
+            let overflowRecs = cut.overflow.map { recs[$0] }
             let overflowDels = Array(dels.dropFirst(deleteSlice.count))
             self.pendingRecords.append(contentsOf: overflowRecs)
             self.pendingDeletes.append(contentsOf: overflowDels)
+            logger.info("[iCloudTrace] batch: kind=\(cut.assets ? "assets" : "records") records=\(recordSlice.count) deletes=\(deleteSlice.count) overflow=\(overflowRecs.count + overflowDels.count)")
             return CKSyncEngine.RecordZoneChangeBatch(
                 recordsToSave: recordSlice,
                 recordIDsToDelete: deleteSlice,
                 atomicByZone: false
             )
         }
+    }
+
+    /// True when any field of the record is a CKAsset.
+    private static func carriesAsset(_ record: CKRecord) -> Bool {
+        record.allKeys().contains { record[$0] is CKAsset }
+    }
+
+    /// Rough outbound cost for the batch cut. Assets use the `<key>_size`
+    /// field the writer records (the file is not opened); an unsized asset
+    /// counts as large so it cannot silently blow the budget.
+    private static func estimatedRecordBytes(_ record: CKRecord) -> Int {
+        var total = 4096
+        for key in record.allKeys() {
+            if record[key] is CKAsset {
+                total += (record[key + "_size"] as? Int) ?? assetInlineThreshold
+            } else if let s = record[key] as? String {
+                total += s.utf8.count
+            } else if let d = record[key] as? Data {
+                total += d.count
+            }
+        }
+        return total
     }
 
     @MainActor

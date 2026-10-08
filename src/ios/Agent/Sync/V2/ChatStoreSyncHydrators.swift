@@ -138,7 +138,8 @@ enum ChatStoreSyncHydrators {
         h.register(
             recordType: "SyncDeviceV2",
             builder: { id in await buildDevice(id: id) },
-            merger: { record in try await mergeDevice(record: record) }
+            merger: { record in try await mergeDevice(record: record) },
+            deletionApplier: { id in try await applyDeviceDeletion(id: id) }
         )
         // SyncCore loads dirty rows with v2Only: true, so the hydrator
         // must register under the V2-suffixed name; otherwise lookup
@@ -1077,6 +1078,16 @@ enum ChatStoreSyncHydrators {
     }
 
     // MARK: - SyncDevice
+
+    /// A peer retired an id it no longer uses. Our own current id is never
+    /// dropped (a restored clone could retire the original): re-announce it.
+    private static func applyDeviceDeletion(id: String) async throws {
+        if id == DeviceIdentity.deviceId {
+            await ChatStore.shared.markDirty(recordType: "SyncDeviceV2", recordId: id)
+            return
+        }
+        try await ChatStore.shared.deleteSyncDevice(id: id)
+    }
 
     private static func mergeDevice(record: PortableRecord) async throws {
         guard let id = stringField(record, "deviceId") else { throw CocoaError(.fileReadCorruptFile) }
