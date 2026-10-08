@@ -80,7 +80,8 @@ extension AIChatViewModel {
         case "shared": base = Self.minisSharedPersistentDir
         case "mcp-servers": base = Self.minisMcpServersPersistentDir
         default:
-            guard let sid = sessionId else { return nil }
+            // [T-subagent] A sub agent's files live in its parent's workspace.
+            guard let sid = subAgentFSSessionId else { return nil }
             base = Self.minisPersistentBase
                 .appendingPathComponent(sid, isDirectory: true)
                 .appendingPathComponent(host, isDirectory: true)
@@ -159,8 +160,9 @@ extension AIChatViewModel {
         // workspace-only rule so build junk stays out of the tray.
         let ext = (path as NSString).pathExtension.lowercased()
         let isImage = Self.inlineImageExtensions.contains(ext)
+        // [T-subagent] A sub agent's outputs land in the parent's artifact tray.
         guard path.hasPrefix("/var/minis/workspace/") || isImage,
-              let sessionId,
+              let sessionId = subAgentFSSessionId,
               let fileURL = await resolvePathForDirectRead(path) else { return nil }
         do {
             return try await ArtifactRepository.shared.capture(
@@ -363,7 +365,7 @@ extension AIChatViewModel {
         // returns nil and we fall back to `resolveHostPath` which writes to
         // the fakefs data/ directory, silently diverging from the real host
         // folder. Force a mount prime here so the lookup hits the real path.
-        if path.hasPrefix("/var/minis/mounts/"), let sid = self.sessionId {
+        if path.hasPrefix("/var/minis/mounts/"), let sid = self.subAgentFSSessionId {
             #if DEBUG
             let beforeSnap = await ISHExecutionCoordinator.shared.debugMountSnapshot()
             print("[FileWrite] ensureMounted BEFORE sid=\(sid) mountedSid=\(beforeSnap.sessionId ?? "<nil>") mountedPaths.count=\(beforeSnap.paths.count) keys=\(Array(beforeSnap.paths.keys))")

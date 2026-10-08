@@ -299,12 +299,15 @@ final class SessionLockStore: ObservableObject {
     /// regardless of the in-app unlock window: those surfaces are readable
     /// without passing the app's own Face ID gate.
     func isHiddenFromSystemSurfaces(_ sessionId: String) -> Bool {
-        globalEnabled && isLocked(sessionId)
+        // [T-subagent] Hidden sub agent sessions never reach a system surface.
+        if ChildSessionIndex.contains(sessionId) { return true }
+        return globalEnabled && isLocked(sessionId)
     }
 
     /// Thread-agnostic read of the same rule for background intent / indexer
     /// code that is not on the main actor.
     nonisolated static func isHiddenFromSystemSurfaces(_ sessionId: String) -> Bool {
+        if ChildSessionIndex.contains(sessionId) { return true }
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: SessionLockDefaultsKey.enabled),
               let data = defaults.data(forKey: SessionLockDefaultsKey.lockedIds),

@@ -107,7 +107,7 @@ struct ContextDecision: Equatable {
 enum ContextToolPolicy {
     static let blockedTools: Set<String> = [
         "shell_execute", "browser_use", "remote_shell", "remote_agent", "dispatch_subtask",
-        "file_write", "file_edit",
+        "file_write", "file_edit", "subagent_task",
     ]
 
     static func filter<T>(_ tools: [T], name: (T) -> String) -> [T] {

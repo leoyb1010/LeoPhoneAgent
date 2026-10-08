@@ -48,8 +48,9 @@ enum SessionListQuery {
     }
 
     /// The session-list SELECT. `whereClause` is "" for the full rebuild and
-    /// " WHERE s.id IN (?,…)" for the incremental patch, so the two paths can
-    /// never decode different layouts.
+    /// " AND s.id IN (?,…)" for the incremental patch, so the two paths can
+    /// never decode different layouts. Hidden sub-agent child sessions
+    /// (`parent_session_id` set) are excluded on both paths. [T-subagent]
     ///
     /// The four candidate subqueries only run for rows whose stored preview is
     /// NULL (written before the column existed): SQLite evaluates a CASE
@@ -93,14 +94,14 @@ enum SessionListQuery {
                    s.origin_device_id, s.last_writer_device_id,
                    (SELECT d.device_name FROM sync_devices d WHERE d.device_id = s.origin_device_id),
                    s.preview_text, s.preview_sort_order
-            FROM sessions s\(whereClause)
+            FROM sessions s WHERE s.parent_session_id IS NULL\(whereClause)
             ORDER BY s.updated_at DESC, s.id DESC
             """
     }
 
-    /// " WHERE s.id IN (?,?,…)" for `count` ids.
+    /// " AND s.id IN (?,?,…)" for `count` ids.
     static func idFilter(count: Int) -> String {
-        " WHERE s.id IN (\(Array(repeating: "?", count: max(1, count)).joined(separator: ",")))"
+        " AND s.id IN (\(Array(repeating: "?", count: max(1, count)).joined(separator: ",")))"
     }
 }
 

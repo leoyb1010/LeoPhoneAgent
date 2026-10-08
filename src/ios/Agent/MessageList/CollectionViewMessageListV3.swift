@@ -289,6 +289,7 @@ private struct BridgedAssistantBlockV3: View {
         case .browserTool: return "assistantBrowserBlock"
         case .readImageTool: return "assistantReadImageBlock"
         case .memoryTool: return "assistantMemoryBlock"
+        case .delegateTool: return "assistantSubAgentBlock"
         case .info: return "assistantInfoBlock"
         }
     }
@@ -831,6 +832,12 @@ private struct BridgedWholeMessageV3: View {
     var maxWidth: CGFloat
 
     var body: some View {
+        // [T-subagent] A sub agent callback renders as a result card, not a user bubble.
+        if message.role == .user, let callback = AgentCallback.parse(message.content) {
+            AgentCallbackCellView(callback: callback)
+                .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
+                .frame(maxWidth: .infinity)
+        } else {
         ChatMessageRow(
             message: message,
             isActiveMessage: false,
@@ -853,6 +860,7 @@ private struct BridgedWholeMessageV3: View {
         .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier(message.role == .user ? "userMessage" : "wholeMessage")
+        }
     }
 }
 
@@ -2719,7 +2727,7 @@ extension CollectionViewMessageListV3 {
                         // stable through the glide. Falls back to the coarse
                         // estimator for compactDivider / systemInfo / empty.
                         if let msg = messages.first(where: { $0.id == msgId }),
-                           msg.role == .user {
+                           msg.role == .user, !AgentCallback.isCallbackText(msg.content) {
                             // Real wrap is bounded by maxContentWidth (the
                             // .frame(maxWidth:) on BridgedWholeMessageV3); using
                             // the wider cvWidth would under-wrap → under-estimate

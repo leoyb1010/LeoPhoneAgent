@@ -443,6 +443,7 @@ extension AIChatViewModel {
                     case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update",
                          "mail_search", "mail_read", "mail_folders", "mail_accounts":
                         .memoryTool(action: name)
+                    case SubAgentTool.name: .delegateTool(title: "")
                     default: .shellTool(command: name)
                     }
                     if name == "file_write" || name == "file_edit" {

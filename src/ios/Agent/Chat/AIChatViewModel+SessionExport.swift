@@ -144,6 +144,7 @@ extension AIChatViewModel {
         case .browserTool(let action): return "browser: \(action)"
         case .readImageTool(let path): return "image: \(path)"
         case .memoryTool(let action): return "memory: \(action)"
+        case .delegateTool(let title): return "subagent: \(title)"
         case .text, .thinking, .info: return "tool"
         }
     }

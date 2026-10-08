@@ -546,6 +546,10 @@ final class SessionConcurrencyManager: ObservableObject {
 
     /// Acquire a processing slot. Returns immediately if under limit, otherwise suspends until a slot opens.
     func acquireSlot(sessionId: String) async throws {
+        // [T-subagent] Sub agents have their own cap (3) and never wait on this
+        // pool: a parent waiting on its child holds a slot, so sharing the pool
+        // could deadlock every parent behind its own children.
+        if ChildSessionIndex.contains(sessionId) { return }
         if runningSessions.count < maxConcurrent {
             runningSessions.insert(sessionId)
             return
@@ -568,6 +572,7 @@ final class SessionConcurrencyManager: ObservableObject {
 
     /// Release a processing slot and resume the next waiting session (FIFO).
     func releaseSlot(sessionId: String) {
+        if ChildSessionIndex.contains(sessionId) { return }
         runningSessions.remove(sessionId)
         resumeNextWaiter()
     }
@@ -777,6 +782,8 @@ final class ViewModelCache {
     private func isEvictable(_ sessionId: String, _ vm: AIChatViewModel) -> Bool {
         if vm.isProcessing { return false }
         if sessionId == AIChatViewModel.activeSessionId { return false }
+        // [T-subagent] A running sub agent and the parent it reports to stay resident.
+        if AgentJobRegistry.shared.pinsSession(sessionId) { return false }
         if SessionActivityTracker.shared.activeSessions.contains(sessionId) { return false }
         // Work that is not `isProcessing` but still lives on this VM: a
         // compact-then-send turn (isProcessing is false while it compacts —

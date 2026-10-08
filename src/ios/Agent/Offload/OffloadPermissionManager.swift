@@ -361,7 +361,10 @@ final class OffloadPermissionManager: ObservableObject {
     /// 自检保留的 id:不能被 minis-sessions-cli、深链当成聊天会话打开或发消息。
     nonisolated static func isReservedSessionId(_ id: String) -> Bool {
         // 和 authorize 一样先去掉首尾空白再比,不能靠前面加个空格绕过去。
-        id.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(selfTestSessionPrefix)
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        // [T-subagent] A hidden sub agent session cannot be opened, messaged or
+        // retried from the CLI or a deep link either.
+        return trimmed.hasPrefix(selfTestSessionPrefix) || ChildSessionIndex.contains(trimmed)
     }
 
     func setAllBypass() {
@@ -408,14 +411,20 @@ final class OffloadPermissionManager: ObservableObject {
         // [T-full-auto] 全自动:「询问」一律放行;你设成「不允许」的上面已经挡掉。
         // [A4] 只看来源不看会话是否"正活跃":快捷指令、定时任务、自动化触发的后台回合同样放行;
         // 你自己在终端里敲(或被链接预填)的命令照旧先问。
-        let origin = source ?? OffloadPermissionPolicy.source(
-            forSessionId: sid, turnActive: sid.map { SessionActivityTracker.shared.isActive($0) } ?? false)
+        // [T-subagent] A sub agent runs in its parent's workspace, so its calls
+        // carry the parent's id: they count as an agent turn only while the
+        // parent's own turn or one of its children's turns is really running.
+        let turnActive = sid.map {
+            SubAgentFullAutoSource.turnActive(sessionActive: SessionActivityTracker.shared.isActive($0),
+                                              runningChildTurns: AgentJobRegistry.shared.runningChildTurns(parent: $0))
+        } ?? false
+        let origin = source ?? OffloadPermissionPolicy.source(forSessionId: sid, turnActive: turnActive)
         if OffloadPermissionPolicy.fullAutoVerdict(fullAuto: FullAutoGate.isOn, notAllowed: false, source: origin) == .allowed {
             FullAutoGate.announce("\(command) \(arguments.prefix(3).joined(separator: " "))", sessionId: sid)
             return .allowed
         }
         // [T-smart-approve] 智能批准:只读、不碰个人数据的能力直接放行(同样只对正在跑的回合)。
-        if FullAutoGate.mode == .smart, invocation.isSmartApprovable, let sid, SessionActivityTracker.shared.isActive(sid) {
+        if FullAutoGate.mode == .smart, invocation.isSmartApprovable, sid != nil, turnActive {
             FullAutoGate.announce(String(localized: "智能批准 · \(command) \(invocation.action)"), sessionId: sid)
             return .allowed
         }

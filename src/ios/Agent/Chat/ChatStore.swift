@@ -61,6 +61,13 @@ struct ChatSession: Identifiable, Codable, Hashable {
     var originDeviceName: String?
     var lastWriterDeviceId: String?
     var pinnedAt: Date?       // non-nil if session is pinned; timestamp of when it was pinned
+    /// [T-subagent] Non-nil for a hidden sub agent (child) session: the
+    /// conversation that delegated it, and the `subagent_task` tool_use id.
+    var parentSessionId: String? = nil
+    var parentToolUseId: String? = nil
+
+    /// [T-subagent] A hidden child session (never listed, synced or surfaced).
+    var isChild: Bool { parentSessionId != nil }
 
     /// Whether this session is from a remote device (read-only).
     var isRemote: Bool { remoteDeviceId != nil }
@@ -581,6 +588,11 @@ actor ChatStore {
         // Derived, device-local state: not in the sync wire format or backups.
         addColumnIfMissing(table: "sessions", column: "preview_text", definition: "TEXT")
         addColumnIfMissing(table: "sessions", column: "preview_sort_order", definition: "INTEGER")
+        // [T-subagent] Hidden child sessions: nullable, device-local (never synced).
+        addColumnIfMissing(table: "sessions", column: "parent_session_id", definition: "TEXT")
+        addColumnIfMissing(table: "sessions", column: "parent_tool_use_id", definition: "TEXT")
+        exec("CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)")
+        ChildSessionIndex.shared.replaceAll(Set(allChildSessionIds()))
         // v2 sync: priority + creation order on dirty rows so migration's
         // 28k+ row backlog never starves freshly-typed user messages.
         // priority: 0 = user-driven (default), 1 = migration backlog
@@ -884,10 +896,11 @@ actor ChatStore {
     // MARK: - Session CRUD
 
     @discardableResult
-    func createSession(modelId: String, title: String? = nil, source: String? = nil) -> ChatSession {
+    func createSession(modelId: String, title: String? = nil, source: String? = nil,
+                       parentSessionId: String? = nil, parentToolUseId: String? = nil) -> ChatSession {
         invalidateSessionListCache()  // FULL: a new row
         let now = Date()
-        let session = ChatSession(
+        var session = ChatSession(
             id: UUID().uuidString,
             title: title,
             category: nil,
@@ -896,6 +909,10 @@ actor ChatStore {
             updatedAt: now,
             source: source
         )
+        session.parentSessionId = parentSessionId
+        session.parentToolUseId = parentToolUseId
+        // [T-subagent] Register before the row exists so no surface can see it first.
+        if parentSessionId != nil { ChildSessionIndex.shared.insert(session.id) }
 
         // [T-memory-enabled-new-session-bug] Explicitly write memory_enabled
         // from the global default. Previously the INSERT omitted the column
@@ -909,7 +926,9 @@ actor ChatStore {
         // their stored value; iCloud-synced sessions (the INSERT at ~L4492)
         // intentionally use the remote record's memory_enabled and are NOT
         // changed.
-        let globalMemoryEnabled = (UserDefaults.standard.object(forKey: "memory.global.enabled") as? Bool) ?? true
+        // [T-subagent] A child session never reads or writes long-term memory.
+        let globalMemoryEnabled = parentSessionId == nil
+            && ((UserDefaults.standard.object(forKey: "memory.global.enabled") as? Bool) ?? true)
 
         // [T-memory-enabled-new-session-bug DIAG] Trace what we read from
         // UserDefaults and what we bind, so a live repro shows whether the
@@ -919,7 +938,7 @@ actor ChatStore {
 
         // preview_text '' = "computed, nothing displayable yet": a brand-new
         // session never needs the NULL backfill path. [T-ios-listsessions-perf]
-        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled, preview_text) VALUES (?, ?, ?, ?, ?, ?, ?, '')"
+        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled, parent_session_id, parent_tool_use_id, preview_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
@@ -929,6 +948,8 @@ actor ChatStore {
             sqlite3_bind_double(stmt, 5, now.timeIntervalSince1970)
             bindOptionalText(stmt, index: 6, value: source)
             sqlite3_bind_int(stmt, 7, globalMemoryEnabled ? 1 : 0)
+            bindOptionalText(stmt, index: 8, value: parentSessionId)
+            bindOptionalText(stmt, index: 9, value: parentToolUseId)
             let rc = sqlite3_step(stmt)
             if rc == SQLITE_DONE { SessionProvenanceStore.createdLocally(db, id: session.id, deviceID: DeviceIdentity.deviceId) }
             memDiagLogger.info("[MemDiag] createSession INSERT step rc=\(rc) (101=DONE) sid=\(session.id.prefix(8))")
@@ -1016,7 +1037,7 @@ actor ChatStore {
     func sessionCount() -> Int {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sessions", -1, &stmt, nil) == SQLITE_OK else { return 0 }
+        guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sessions WHERE parent_session_id IS NULL", -1, &stmt, nil) == SQLITE_OK else { return 0 }
         return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int64(stmt, 0)) : 0
     }
 
@@ -1395,7 +1416,8 @@ actor ChatStore {
                     ORDER BY m2.sort_order DESC LIMIT 1)
             FROM sessions s
             LEFT JOIN messages m ON m.session_id = s.id
-            WHERE s.title LIKE ? ESCAPE '\\' OR m.parts_json LIKE ? ESCAPE '\\'
+            WHERE s.parent_session_id IS NULL
+              AND (s.title LIKE ? ESCAPE '\\' OR m.parts_json LIKE ? ESCAPE '\\')
             GROUP BY s.id
             ORDER BY s.updated_at DESC
             """
@@ -1485,6 +1507,8 @@ actor ChatStore {
             }
         }
 
+        // [T-subagent] Hidden sub agent sessions are not part of the session list.
+        if sessionIds == nil { conditions.append("s.parent_session_id IS NULL") }
         let whereClause = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
         let sql = """
             SELECT s.id, s.title,
@@ -1574,6 +1598,8 @@ actor ChatStore {
             bindIndex += 1
         }
 
+        // [T-subagent] Hidden sub agent sessions stay out of cross-session search.
+        if sessionIds == nil { conditions.append("(s.parent_session_id IS NULL)") }
         let whereClause = conditions.joined(separator: " AND ")
         // [T-search-cli-title] LEFT JOIN sessions so each hit can report its
         // owning session's title to minis-sessions-cli — otherwise the CLI
@@ -1717,7 +1743,7 @@ actor ChatStore {
     }
 
     func getSession(_ id: String) -> ChatSession? {
-        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at FROM sessions WHERE id = ?"
+        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at, parent_session_id, parent_tool_use_id FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
         var session: ChatSession?
 
@@ -1738,6 +1764,8 @@ actor ChatStore {
                     createdAt: createdAt, updatedAt: updatedAt, source: source,
                     pinnedAt: pinnedAt
                 )
+                session?.parentSessionId = sqlite3_column_text(stmt, 8).map { String(cString: $0) }
+                session?.parentToolUseId = sqlite3_column_text(stmt, 9).map { String(cString: $0) }
             }
         }
         sqlite3_finalize(stmt)
@@ -1966,6 +1994,11 @@ actor ChatStore {
         // [T-ios-listsessions-cache] Invalidate here (the low-level row delete)
         // so ALL callers are covered — deleteSession AND deleteSessionLocalOnly.
         invalidateSessionListCache()  // FULL: row set changes
+        // [T-subagent] A conversation's hidden sub agent sessions go with it.
+        for child in childSessionIds(of: id) where child != id {
+            deleteSessionLocalRowsOnly(child)
+        }
+        ChildSessionIndex.shared.remove(id)
         deleteMessages(sessionId: id)
         deleteCompactMarkers(sessionId: id)
         deleteSessionMedia(id)
@@ -2485,7 +2518,8 @@ actor ChatStore {
             }
         }
         logger.info("[ChatStore.interruptedSessionIds] scanned \(lastBySession.count) sessions → \(result.count) interrupted")
-        return result
+        // [T-subagent] Hidden sub agent sessions never carry a paused badge.
+        return result.filter { !ChildSessionIndex.shared.contains($0) }
     }
 
     /// [T-ios-session-paused-badge-hardkill] The interrupted-tail predicate,
@@ -3214,6 +3248,48 @@ actor ChatStore {
         sqlite3_bind_text(stmt, 3, (zoneName as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 4, ("upsert" as NSString).utf8String, -1, SQLITE_TRANSIENT)
         _ = sqlite3_step(stmt)
+    }
+
+    // MARK: - [T-subagent] Child sessions
+
+    /// Direct children of `parentId` (hidden sub agent sessions).
+    func childSessionIds(of parentId: String) -> [String] {
+        stringColumn("SELECT id FROM sessions WHERE parent_session_id = ?", bind: parentId)
+    }
+
+    /// Every hidden child session id (seeds `ChildSessionIndex` on open).
+    func allChildSessionIds() -> [String] {
+        stringColumn("SELECT id FROM sessions WHERE parent_session_id IS NOT NULL AND parent_session_id != ''", bind: nil)
+    }
+
+    private func stringColumn(_ sql: String, bind: String?) -> [String] {
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        var out: [String] = []
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
+        if let bind { sqlite3_bind_text(stmt, 1, (bind as NSString).utf8String, -1, SQLITE_TRANSIENT) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let c = sqlite3_column_text(stmt, 0) { out.append(String(cString: c)) }
+        }
+        return out
+    }
+
+    /// Whether a sync record belongs to a hidden child session.
+    private func isChildSessionRecord(recordType: String, recordId: String) -> Bool {
+        guard !ChildSessionIndex.shared.isEmpty else { return false }
+        switch recordType {
+        case "Session", "SessionV2", "SessionFile", "SessionFileV2":
+            return ChildSessionIndex.shared.contains(recordId)
+        case "Message", "MessageV2":
+            guard let sid = messageSessionId(id: recordId) else { return false }
+            return ChildSessionIndex.shared.contains(sid)
+        case "CompactMarker", "CompactMarkerV2":
+            guard let sid = stringColumn("SELECT session_id FROM compact_markers WHERE id = ?", bind: recordId).first
+            else { return false }
+            return ChildSessionIndex.shared.contains(sid)
+        default:
+            return false
+        }
     }
 
     /// Returns every locally-stored session id (for §3.6.0 scenario E
@@ -4277,6 +4353,11 @@ extension RawMessage {
                     } else {
                         content = "Reading memory..."
                     }
+                case SubAgentTool.name:
+                    // [T-subagent] The block's content becomes the persisted
+                    // JSON payload once the paired tool_result is applied.
+                    kind = .delegateTool(title: extractStringParam("tool_title", from: tu.input))
+                    content = ""
                 default:
                     kind = .shellTool(command: tu.name)
                     content = tu.name
@@ -4548,6 +4629,9 @@ extension ChatStore {
 
     /// Mark a record as needing sync to iCloud. Only active in DEBUG builds.
     func markDirty(recordType: String, recordId: String, operation: String = "upsert", priority: Int = 0) {
+        // [T-subagent] Hidden sub agent sessions are device-local: their rows
+        // never reach iCloud or a Mac replica (the parent keeps the result).
+        if isChildSessionRecord(recordType: recordType, recordId: recordId) { return }
         // DIAG: log every silent early-return so "I added a Skill but
         // no markDirty appears in logs" can be diagnosed without
         // re-instrumenting. Previously both guards returned silently,

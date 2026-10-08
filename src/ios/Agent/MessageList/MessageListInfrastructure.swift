@@ -51,9 +51,17 @@ enum WorkFold {
         }) else { return nil }
         // Text and images stay in the flow: an earlier text block can be the real
         // answer (answer → memory_write ×2 → "已记住。"), and a generated image is output.
-        let hidden = blocks[..<answer].filter { $0.kind != .text && $0.imageFilePath == nil }
+        // [T-subagent] A sub agent card is user-facing (status, stop, result) and stays visible too.
+        let hidden = blocks[..<answer].filter {
+            $0.kind != .text && $0.imageFilePath == nil && !Self.isDelegateBlock($0)
+        }
         guard hidden.filter({ $0.toolStatus != nil }).count >= 2 else { return nil }
         return Set(hidden.map(\.id))
+    }
+
+    static func isDelegateBlock(_ block: AssistantBlock) -> Bool {
+        if case .delegateTool = block.kind { return true }
+        return false
     }
 
     /// Wall-clock span of the tool calls: calls from one response run in parallel,

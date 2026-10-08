@@ -28,11 +28,12 @@ let harness = SearchHarness()
 precondition(sqlite3_open(":memory:", &harness.db) == SQLITE_OK)
 defer { sqlite3_close(harness.db) }
 let sql = #"""
-CREATE TABLE sessions (id TEXT, title TEXT, model_id TEXT, created_at REAL, updated_at REAL, category TEXT);
+CREATE TABLE sessions (id TEXT, title TEXT, model_id TEXT, created_at REAL, updated_at REAL, category TEXT, parent_session_id TEXT);
 CREATE TABLE messages (session_id TEXT, parts_json TEXT, sort_order INT);
-INSERT INTO sessions VALUES ('percent', '100% ready', 'm', 0, 0, NULL), ('number', '1000 ready', 'm', 0, 0, NULL),
- ('underscore', 'a_b', 'm', 0, 0, NULL), ('letter', 'axb', 'm', 0, 0, NULL),
- ('slash', 'a\b', 'm', 0, 0, NULL), ('message', 'body match', 'm', 0, 0, NULL);
+INSERT INTO sessions VALUES ('percent', '100% ready', 'm', 0, 0, NULL, NULL), ('number', '1000 ready', 'm', 0, 0, NULL, NULL),
+ ('underscore', 'a_b', 'm', 0, 0, NULL, NULL), ('letter', 'axb', 'm', 0, 0, NULL, NULL),
+ ('slash', 'a\b', 'm', 0, 0, NULL, NULL), ('message', 'body match', 'm', 0, 0, NULL, NULL),
+ ('hiddenchild', '100% sub agent', 'm', 0, 0, NULL, 'percent');
 INSERT INTO messages VALUES ('message', 'literal 50% and x_y and a\b and O''Reilly', 1);
 """#
 precondition(sqlite3_exec(harness.db, sql, nil, nil, nil) == SQLITE_OK)
@@ -48,7 +49,7 @@ check(#"a\b"#, ["slash", "message"])
 check("O'Reilly", ["message"])
 check("%' OR 1=1 --", [])
 check("", [])
-print("PASS production session search: literal wildcards, backslash, message matches, quotes and empty query")
+print("PASS production session search: literal wildcards, backslash, message matches, quotes, empty query, hidden sub agent sessions excluded")
 '''
 with tempfile.TemporaryDirectory(prefix='leo-session-search-') as folder:
     swift = Path(folder) / 'Search.swift'

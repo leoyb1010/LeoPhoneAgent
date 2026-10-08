@@ -27,7 +27,7 @@ final class SessionListPerfTests: XCTestCase {
     // MARK: - Schema contract
 
     func testContractV4CarriesNullablePreviewColumns() throws {
-        XCTAssertEqual(ChatStoreSchemaContract.currentVersion, 4)
+        XCTAssertGreaterThanOrEqual(ChatStoreSchemaContract.currentVersion, 4)
         XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
         let info = try rows("PRAGMA table_info(sessions)") { stmt in
             (text(stmt, 1) ?? "", text(stmt, 2) ?? "", sqlite3_column_int(stmt, 3), sqlite3_column_type(stmt, 4) == SQLITE_NULL)
@@ -87,6 +87,25 @@ final class SessionListPerfTests: XCTestCase {
         defer { sqlite3_finalize(filtered) }
         XCTAssertEqual(sqlite3_prepare_v2(db, SessionListQuery.sql(whereClause: SessionListQuery.idFilter(count: 3)), -1, &filtered, nil), SQLITE_OK)
         XCTAssertEqual(sqlite3_bind_parameter_count(filtered), 3)
+    }
+
+    /// [T-subagent] Hidden child sessions never reach the sidebar, on the full
+    /// rebuild or the incremental patch.
+    func testChildSessionsExcludedOnFullAndPatchPaths() throws {
+        try insertSession("parent", updatedAt: 1, preview: "")
+        try insertSession("child", updatedAt: 2, preview: "")
+        try exec("UPDATE sessions SET parent_session_id='parent', parent_tool_use_id='toolu_1' WHERE id='child'")
+        let full = try rows(SessionListQuery.sql(whereClause: "")) { text($0, SessionListQuery.Column.id) ?? "" }
+        XCTAssertEqual(full, ["parent"])
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        XCTAssertEqual(sqlite3_prepare_v2(db, SessionListQuery.sql(whereClause: SessionListQuery.idFilter(count: 2)), -1, &stmt, nil), SQLITE_OK)
+        for (i, id) in ["parent", "child"].enumerated() {
+            sqlite3_bind_text(stmt, Int32(i + 1), (id as NSString).utf8String, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        }
+        var patched: [String] = []
+        while sqlite3_step(stmt) == SQLITE_ROW { patched.append(text(stmt, SessionListQuery.Column.id) ?? "") }
+        XCTAssertEqual(patched, ["parent"])
     }
 
     func testCandidateColumnsOnlyMaterialiseForUnbackfilledRows() throws {

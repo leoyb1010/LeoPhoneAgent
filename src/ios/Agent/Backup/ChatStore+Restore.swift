@@ -36,13 +36,15 @@ extension ChatStore {
 
     // MARK: - Export
 
-    /// Live sessions (soft-deleted ones are excluded: restoring them would
-    /// resurrect what the user deleted).
+    /// Live top-level sessions. Soft-deleted ones are excluded (restoring them
+    /// would resurrect what the user deleted), and so are hidden sub-agent
+    /// child sessions: the package format has no parent link, so they would
+    /// come back as ordinary visible chats. [T-subagent]
     func backupSessionIds() -> [String] {
         var ids: [String] = []
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "SELECT id FROM sessions WHERE remote_tombstoned_at IS NULL ORDER BY updated_at DESC",
+        guard sqlite3_prepare_v2(db, "SELECT id FROM sessions WHERE remote_tombstoned_at IS NULL AND parent_session_id IS NULL ORDER BY updated_at DESC",
                                  -1, &stmt, nil) == SQLITE_OK else { return ids }
         while sqlite3_step(stmt) == SQLITE_ROW {
             if let c = sqlite3_column_text(stmt, 0) { ids.append(String(cString: c)) }

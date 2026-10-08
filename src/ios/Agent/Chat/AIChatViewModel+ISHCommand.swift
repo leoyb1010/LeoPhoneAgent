@@ -20,7 +20,8 @@ extension AIChatViewModel {
         let effectiveTimeout = timeout ?? defaultCommandTimeout
         logger.info("Executing command via coordinator timeout=\(Int(effectiveTimeout))s commandLength=\(command.count)")
 
-        guard let sid = sessionId else {
+        // [T-subagent] A sub agent's shell runs in its parent's workspace.
+        guard let sid = subAgentFSSessionId else {
             return CommandResult(output: "Error: no session", exitCode: -1)
         }
 

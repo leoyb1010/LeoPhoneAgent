@@ -1296,6 +1296,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     // MARK: - Browser
     let browserTabPool = BrowserTabPool()
+    /// [T-subagent] Sub agent state (child config, wrap-up, steers). See AIChatViewModel+SubAgents.
+    let subAgentState = SubAgentVMState()
     /// When true, the agent loop pauses at the next checkpoint to let the user operate the browser.
     @Published var browserTakeoverActive = false
 
@@ -1897,6 +1899,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
            let mcpFragment = MCPStore.shared.systemPromptSnippet(for: sid) {
             stable += "\n\n" + mcpFragment
         }
+        // [T-subagent] Child brief, or the sub agent roster for a top-level chat.
+        stable += subAgentPromptFragment
 
         var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
@@ -2461,7 +2465,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // nothing about typing. (text is also written eagerly on switch-to-text
         // in the composer; saveInputModePreference no-ops when unchanged.)
         if !text.isEmpty {
-            SpeechRecognitionManager.saveInputModePreference(voiceUsedInComposition ? "voice" : "text")
+            // [T-subagent] A prompt nobody typed must not teach the composer mode.
+            if !subAgentState.isProgrammaticSend {
+                SpeechRecognitionManager.saveInputModePreference(voiceUsedInComposition ? "voice" : "text")
+            }
         }
 
         // [T-voice-correction-productionize] Harvest typed vocabulary from sent
@@ -2533,7 +2540,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
 
-        LeoHaptics.impact(.light)
+        if !subAgentState.isProgrammaticSend { LeoHaptics.impact(.light) }
         autoRetryAttempt = 0
         autoRetryCountdown = 0
         canResume = false
@@ -3939,6 +3946,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     func cancel(queuePolicy: AgentQueueStopPolicy = .continueQueuedPrompts) {
+        // [T-subagent] Stopping a conversation stops its sub agents (silently).
+        subAgentHandleStop()
         if queuePolicy == .discardQueuedPrompts {
             let queuedIds = Set(promptQueue.map(\.id))
             if !queuedIds.isEmpty {
@@ -4447,6 +4456,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 case .browserTool: return "browser"
                 case .readImageTool: return "readImage"
                 case .memoryTool: return "memory"
+                case .delegateTool: return "subagent"
                 case .info: return "info"
                 }
             }()
@@ -4801,7 +4811,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
         syncSelectedModelFromBinding()
-        let tools = makeAgentTools()
+        var tools = makeAgentTools()
 
         let activeModel = ProviderConfigStore.shared.entry(for: entry.id)?.model ?? selectedModel
         // [T-memory-enabled-new-session-bug DIAG] vm.memoryEnabled is the
@@ -4992,6 +5002,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         loopLabel: while turnCount < Self.maxAgentTurns {
             defer { turnCount += 1 }
             try Task.checkCancellation()
+            // [T-subagent] Child only: wrap-up (tools withdrawn), countdown, steer.
+            if await prepareSubAgentTurn(turnCount: turnCount, msgIdx: &msgIdx) { tools = [] }
             if let sid = self.sessionId {
                 SessionActivityTracker.shared.updateLoopIteration(sid, iteration: turnCount + 1)
             }
@@ -5991,7 +6003,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // it as in-loop context for the previous turn and never gave it its
             // own response (the #579 bug). Breaking → fresh turn avoids the merge
             // entirely while still inserting/un-queuing the message immediately.
-            if !promptQueue.isEmpty {
+            // [T-subagent] A sub agent callback never interrupts the running plan.
+            if hasUserQueuedPrompt {
                 logger.info("📨[QueueInterrupt] \(self.promptQueue.count) queued prompt(s) — interrupting after current tool call to start a standalone turn")
                 self.prevCommittedBlockCount = self.committedBlockCount
                 committedBlockCount = messages[msgIdx].blocks.count
@@ -6448,6 +6461,8 @@ extension AIChatViewModel {
         // acting, and donating for them would train Siri suggestions on the
         // wrong behaviour.
         guard sessionSource != "shortcut" else { return }
+        // [T-subagent] Sub agent briefs and callbacks are the system acting.
+        guard !subAgentState.isProgrammaticSend, !isSubAgentChild else { return }
         Task.detached(priority: .background) {
             // [T-donation-param-trap] `prompt` is a required @Parameter;
             // donating with it unset can trap inside AppIntents rather than

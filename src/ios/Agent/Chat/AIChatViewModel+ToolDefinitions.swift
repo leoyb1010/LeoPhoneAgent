@@ -432,6 +432,9 @@ extension AIChatViewModel {
             ))
         }
 
+        // [T-subagent] subagent_task for top-level chats; children lose delegation / remote tools.
+        tools = applySubAgentTools(tools)
+
         if blocksSideEffectTools {
             return ContextToolPolicy.filter(tools, name: \.name)
         }

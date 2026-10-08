@@ -290,6 +290,7 @@ private extension AssistantBlockKind {
         case .browserTool: "globe"
         case .readImageTool: "photo"
         case .memoryTool: "brain.head.profile"
+        case .delegateTool: "person.2.fill"
         case .info: "arrow.triangle.2.circlepath"
         case .text: "text.alignleft"
         case .thinking: "lightbulb"
