@@ -977,13 +977,21 @@ final class OpenAIAgentProvider: AgentProvider {
         // vendor-native `thinking:{}` object — sending the latter leaves thinking
         // uncontrolled (user report #7). Skip this branch there and fall through
         // to the generic reasoning_effort path below.
-        if lid.contains("deepseek-v4") && !unifiedReasoningEffort {
+        //
+        // [T-deepseek-v4-sibling] The tier is a ROOT SIBLING of `thinking`, not a key
+        // inside it: `{"thinking":{"type":"enabled"},"reasoning_effort":"high"}`.
+        // Nested inside `thinking` it was an unknown key with no root tier at all, so
+        // every V4 request silently ran the vendor default effort. DeepSeek's ladder is
+        // ["high","max"]: low/medium/high/xhigh → "high", max/ultra → "max".
+        // `deepseek-flash` is the bare id DeepSeek now recommends (same V4 Flash backend).
+        if (lid.contains("deepseek-v4") || lid.hasPrefix("deepseek-flash")) && !unifiedReasoningEffort {
             if level.isEnabled {
                 let effort: String = switch level {
-                case .off, .low, .medium: "high"
-                case .high, .xhigh, .max, .ultra: "max"
+                case .off, .low, .medium, .high, .xhigh: "high"
+                case .max, .ultra: "max"
                 }
-                body["thinking"] = ["type": "enabled", "reasoning_effort": effort]
+                body["thinking"] = ["type": "enabled"]
+                body["reasoning_effort"] = effort
             } else {
                 body["thinking"] = ["type": "disabled"]
             }
