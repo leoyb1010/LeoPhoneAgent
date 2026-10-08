@@ -474,6 +474,7 @@
 		E5M000002 /* cmark-gfm-extensions in Frameworks */ = {isa = PBXBuildFile; productRef = E5M000022 /* cmark-gfm-extensions */; };
 		E5M000003 /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
 		E5MDS0003 /* MarkdownStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDS0013 /* MarkdownStripper.swift */; };
+		E5MDS0003T /* MarkdownStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDS0013 /* MarkdownStripper.swift */; };
 		E5MDT0001 /* ModelDisplayTraits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDT0011 /* ModelDisplayTraits.swift */; };
 		E5MNT0001 /* MountedFoldersManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MNT0101 /* MountedFoldersManager.swift */; };
 		E5MNT0002 /* MountedFolderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MNT0102 /* MountedFolderCoordinator.swift */; };
@@ -3178,6 +3179,7 @@
 				E5SHL0002 /* SyncHealth.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
+				E5MDS0003T /* MarkdownStripper.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5AFS0003 /* AgentFileSafety.swift in Sources */,

@@ -1240,6 +1240,12 @@ actor ChatStore {
                 lastToolUse = tu
                 continue
             case .text(var t) where !t.isEmpty:
+                // [T-ios-markdown-preview-cap] Bound the body before the
+                // reminder/attachment strips and the markdown pipeline, all of
+                // which copy the whole string. Only 100 chars survive, so 4096
+                // chars of prose is ample; fenced code and injected blocks are
+                // skipped whole so the cut never lands inside one.
+                t = MarkdownStripper.previewSource(t)
                 t = RawMessage.stripSystemReminders(t)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !t.isEmpty else { continue }
@@ -1252,7 +1258,7 @@ actor ChatStore {
                 t = RawMessage.stripAttachmentMarkers(t)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !t.isEmpty else { continue }
-                let clean = MarkdownStripper.plainText(t)
+                let clean = MarkdownStripper.plainText(t, inlinePassCap: MarkdownStripper.inlinePassCap)
                     .trimmingCharacters(in: .whitespaces)
                 guard !clean.isEmpty else { continue }
                 lastTextPreview = String(clean.prefix(100))
@@ -4210,14 +4216,20 @@ extension RawMessage {
     /// send/compaction paths for the LLM; the UI surfaces real attachments
     /// via `msg.attachments` parsed from the <user-attached-files> XML, so
     /// these tokens are pure noise to the user.
+    /// [T-ios-listsessions-perf] Compiled once: these ran for every session
+    /// on every sidebar refresh and were rebuilt (`uregex_open`) each call.
+    /// NSRegularExpression is immutable and thread-safe for matching.
+    private static let attachmentMarkerRes: [NSRegularExpression] = [
+        #"\[attached [A-Za-z]+:[^\]]*\]"#,
+        #"\[image omitted to save context[^\]]*\]"#,
+    ].map { try! NSRegularExpression(pattern: $0) }
+
     fileprivate static func stripAttachmentMarkers(_ s: String) -> String {
-        let patterns = [
-            #"\[attached [A-Za-z]+:[^\]]*\]"#,
-            #"\[image omitted to save context[^\]]*\]"#,
-        ]
         var out = s
-        for p in patterns {
-            if let re = try? NSRegularExpression(pattern: p) {
+        // Fast path: the markers are ASCII and most messages have neither; a
+        // byte scan for "[" skips both regex passes for the common case.
+        if out.utf8.contains(UInt8(ascii: "[")) {
+            for re in attachmentMarkerRes {
                 let range = NSRange(out.startIndex..., in: out)
                 out = re.stringByReplacingMatches(in: out, range: range, withTemplate: "")
             }
@@ -4242,14 +4254,19 @@ extension RawMessage {
     /// resume/continue, but they should never surface in the chat bubble (or in
     /// copy / edit / share, which read the bubble text).
     static func stripSystemReminders(_ text: String) -> String {
-        guard text.contains("<system-reminder>") || text.contains("<treasury_context") else { return text }
+        // Byte-level guard: `String.contains` bridged to NSString and built
+        // UTF-16 breadcrumbs for every message on every refresh, though most
+        // carry neither block. [T-ios-listsessions-perf]
+        guard MarkdownStripper.utf8Contains(text, "<system-reminder>", withinBytes: Int.max)
+                || MarkdownStripper.utf8Contains(text, "<treasury_context", withinBytes: Int.max)
+        else { return text }
         let ns = text as NSString
         return displayOnlyBlockRegex?.stringByReplacingMatches(
             in: text, range: NSRange(location: 0, length: ns.length), withTemplate: ""
         ) ?? text
     }
 
-    private static let displayOnlyBlockRegex = try? NSRegularExpression(
+    private static let displayOnlyBlockRegex = try? NSRegularExpression( // compiled once
         pattern: "<system-reminder>[\\s\\S]*?</system-reminder>|<treasury_context\\b[^>]*>[\\s\\S]*?</treasury_context>"
     )
 }
