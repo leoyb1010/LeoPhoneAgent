@@ -365,6 +365,17 @@ struct ContentView: View {
     // array, so this mainly prevents redundant Task churn.
     @State private var sessionRefreshInFlight = false
     @State private var sessionRefreshPending = false
+    /// A queued trailing run includes a user-driven request (not just the
+    /// agent-progress notification), so it must not wait out the cooldown.
+    @State private var sessionRefreshPendingUrgent = false
+    /// [T-ios-listsessions-perf] When the last refresh FINISHED; the
+    /// `.sessionDidUpdate` cooldown is measured from completion
+    /// (SessionRefreshScheduler), not from the notification.
+    @State private var lastRefreshFinishedAt: Date?
+    /// When the one outstanding cooldown run is due (nil = none). A Date
+    /// driving `.task(id:)` rather than a stored DispatchWorkItem, so no heap
+    /// closure capturing this view struct outlives the view graph.
+    @State private var sessionRefreshCooldownDeadline: Date?
     /// Whether the initial session load has completed (prevents showing the list before we decide to auto-navigate).
     @State private var didInitialLoad = false
     /// Controls sidebar visibility on iPad (automatic handles iPhone collapse).
@@ -776,12 +787,25 @@ struct ContentView: View {
                 // so the preview keeps up with each tool round without thrashing
                 // `listSessions`.
                 NotificationCenter.default.publisher(for: .sessionDidUpdate)
+                    // [T-ios-listsessions-perf] Only a cheap pre-filter now; the
+                    // real floor is the completion-measured cooldown below.
                     .throttle(for: .seconds(1), scheduler: RunLoop.main, latest: true)
             ) { _ in
                 // [T-ios-state-publish-offmain-crash] force main-thread @State write
                 Task { @MainActor in
-                    refreshSessionList()
+                    refreshSessionList(throttled: true)
                 }
+            }
+            // [T-ios-listsessions-perf] Fires the one deferred cooldown run.
+            .task(id: sessionRefreshCooldownDeadline) {
+                guard let deadline = sessionRefreshCooldownDeadline else { return }
+                let delay = deadline.timeIntervalSinceNow
+                if delay > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                guard !Task.isCancelled else { return }
+                sessionRefreshCooldownDeadline = nil
+                refreshSessionList(throttled: true)
             }
             .onReceive(NotificationCenter.default.publisher(for: .moveInputToSession)) { note in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
@@ -3671,19 +3695,40 @@ struct ContentView: View {
     /// mark one trailing run pending instead of spawning a concurrent Task —
     /// collapsing bursts (navigation + sync + streaming ticks) into at most one
     /// in-flight + one queued run. The ChatStore cache makes a clean run cheap.
+    ///
+    /// [T-ios-listsessions-perf] `throttled` refreshes (the `.sessionDidUpdate`
+    /// stream a running agent emits every tool round) wait out a cooldown
+    /// measured from when the last refresh FINISHED — a 1 s throttle keyed on
+    /// arrival could not bound work that outlasted its own window (upstream
+    /// measured 63 back-to-back rebuilds in an 11-minute run). User-driven
+    /// refreshes (create, rename, delete, sync fetch, navigation) are not
+    /// deferred: they still coalesce through in-flight + one trailing run.
     @MainActor
-    private func refreshSessionList() {
+    private func refreshSessionList(throttled: Bool = false) {
         guard !sessionRefreshInFlight else {
             sessionRefreshPending = true
+            if !throttled { sessionRefreshPendingUrgent = true }
             return
         }
+        if throttled,
+           case .defer(let delay) = SessionRefreshScheduler.decide(now: Date(), lastFinishedAt: lastRefreshFinishedAt) {
+            // Coalesce onto the one outstanding deadline instead of pushing it out.
+            guard sessionRefreshCooldownDeadline == nil else { return }
+            sessionRefreshCooldownDeadline = Date().addingTimeInterval(delay)
+            return
+        }
+        // This run covers any deferred one.
+        sessionRefreshCooldownDeadline = nil
         sessionRefreshInFlight = true
         Task(priority: .utility) { @MainActor in
             sessions = await ChatStore.shared.listSessions()
             sessionRefreshInFlight = false
+            lastRefreshFinishedAt = Date()
             if sessionRefreshPending {
+                let urgent = sessionRefreshPendingUrgent
                 sessionRefreshPending = false
-                refreshSessionList()
+                sessionRefreshPendingUrgent = false
+                refreshSessionList(throttled: !urgent)
             }
         }
     }
