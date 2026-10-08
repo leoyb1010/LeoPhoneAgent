@@ -1464,7 +1464,7 @@ extension CollectionViewMessageListV3 {
             if let existing = cellBridges[message.id] { return existing }
             let bridge = CellStateBridgeV2()
             cellBridges[message.id] = bridge
-            updateBridge(bridge, message: message, in: messages)
+            updateBridge(bridge, message: message, in: messages, isInitialBridgeSetup: true)
             // Forward detailBlock changes to the VC-level sheet presenter
             bridgeSheetSubs[message.id] = bridge.$detailBlock
                 .dropFirst()
@@ -1504,20 +1504,32 @@ extension CollectionViewMessageListV3 {
             ds.apply(snapshot, animatingDifferences: false)
         }
 
-        private func updateBridge(_ bridge: CellStateBridgeV2, message: ChatMessage, in messages: [ChatMessage]) {
+        /// [T-ios-plaf-cache-footer-staleness] The bridge fields that decide
+        /// whether a footer row renders at all (typing / resume banner / retry
+        /// row / usage), reduced to booleans. Compared as a SHAPE so the
+        /// per-second retry countdown tick never re-enters the hosting graph.
+        private struct FooterHeightShape: Equatable {
+            let isActiveMessage: Bool
+            let canResume: Bool
+            let showUsage: Bool
+            let hasRetryRow: Bool
+            init(_ bridge: CellStateBridgeV2) {
+                isActiveMessage = bridge.isActiveMessage
+                canResume = bridge.canResume
+                showUsage = bridge.showUsage
+                hasRetryRow = bridge.autoRetryAttempt != 0
+            }
+        }
+        private var lastFooterShapeByMessage: [UUID: FooterHeightShape] = [:]
+
+        private func updateBridge(_ bridge: CellStateBridgeV2, message: ChatMessage, in messages: [ChatMessage],
+                                  isInitialBridgeSetup: Bool = false) {
             guard let vm else { return }
             let isLast = message.id == messages.last?.id
             let isActive = isLast && vm.isProcessing
-
-            // [T-reply-toolbar] Stream end grows the footer in place (the
-            // action bar appears), but SelfSizingCell's width-keyed cache can
-            // return the stale pre-bar height for in-place content changes --
-            // the documented [T-thinking-collapse-blank] mechanism. Invalidate
-            // the footer item on the active->idle flip so the bar isn't
-            // clipped until an unrelated reconfigure.
-            if bridge.isActiveMessage && !isActive {
-                invalidateFooterHeight(messageId: message.id)
-            }
+            // Compared against the shape recorded by the PREVIOUS call: the
+            // edges that matter happen between calls.
+            let beforeShape = lastFooterShapeByMessage[message.id] ?? FooterHeightShape(bridge)
             bridge.isActiveMessage = isActive
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
@@ -1630,6 +1642,18 @@ extension CollectionViewMessageListV3 {
                 bridge.onDeleteFromHere = message.role == .user ? { deleteFromHere?(message.id) } : nil
             } else {
                 bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil; bridge.onDeleteFromHere = nil
+            }
+
+            // [T-ios-plaf-cache-footer-staleness] If the footer's rendered SHAPE
+            // changed (not just active→idle: resume banner, retry row, usage
+            // row too), its cached height belongs to the old shape — drop it.
+            // Skipped for a fresh bridge: that call runs inside the cell
+            // provider mid-apply, where reconfiguring is a re-entrancy hazard
+            // and the cell is being configured from scratch anyway.
+            let afterShape = FooterHeightShape(bridge)
+            lastFooterShapeByMessage[message.id] = afterShape
+            if !isInitialBridgeSetup, afterShape != beforeShape {
+                invalidateFooterHeight(messageId: message.id)
             }
         }
 
@@ -1972,37 +1996,53 @@ extension CollectionViewMessageListV3 {
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in
                     guard let self else { return }
-                    let len = self.lastAssistantContentLength()
+                    // [T-ios-bg-resume-collapse] Same metric the foreground
+                    // handler compares against (liveContentLength).
+                    let len = self.liveContentLength()
                     self.contentLengthAtBackground = len
                     AppLogger(category: "FGLayout").info("[FGLayout] → background, snapshotLen=\(len)")
                 }
                 .store(in: &subscriptions)
 
-            // 8b. Foreground return — only invalidate layout if ≥200 characters
-            //     accumulated while backgrounded, avoiding unnecessary layout passes
-            //     when the content didn't change meaningfully.
+            // 8b. Foreground return — re-measure the visible cells whose
+            //     content changed while the app was backgrounded.
+            //
+            // [T-ios-bg-resume-collapse] "Running, switched apps, came back:
+            // blocks printed on top of each other." Three gaps closed:
+            //  1. Only the LAYOUT cache was cleared; a visible cell keeps
+            //     answering from its own lastComputedHeight while streaming /
+            //     defer guards are up, so it is cleared too (remeasureVisibleCells).
+            //  2. The ≥200-char gate skipped exactly the small deltas that still
+            //     shift layout (a line of text, a tool finishing, a thinking
+            //     block collapsing). Any change — including a shrink — counts;
+            //     unchanged content still costs nothing.
+            //  3. Only `messages.last` was measured; growth on an earlier
+            //     still-live message was invisible. Now liveContentLength().
+            // The delta is captured synchronously; the re-measure runs after a
+            // yield so it gets its own runloop turn outside the scene
+            // transition (#355: a cold-cache re-measure inside the delivery
+            // tick ran into the watchdog).
             NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in
                     guard let self else { return }
-                    let currentLen = self.lastAssistantContentLength()
+                    let currentLen = self.liveContentLength()
                     let bgLen = self.contentLengthAtBackground ?? currentLen
                     self.contentLengthAtBackground = nil
                     let accumulated = currentLen - bgLen
                     AppLogger(category: "FGLayout").info("[FGLayout] → foreground, bgLen=\(bgLen) currentLen=\(currentLen) accumulated=\(accumulated)")
-                    guard accumulated >= 200 else {
-                        AppLogger(category: "FGLayout").info("[FGLayout] skip layout (accumulated \(accumulated) < 200)")
+                    guard accumulated != 0 else {
+                        AppLogger(category: "FGLayout").info("[FGLayout] skip layout (content unchanged)")
                         return
                     }
-                    AppLogger(category: "FGLayout").info("[FGLayout] invalidating layout for \(self.viewController?.collectionView.indexPathsForVisibleItems.count ?? 0) visible cells")
-                    if let cv = self.viewController?.collectionView,
-                       let layout = self.viewController?.messageListLayout {
-                        for indexPath in cv.indexPathsForVisibleItems {
-                            layout.invalidateHeight(at: indexPath.item)
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard UIApplication.shared.applicationState != .background else {
+                            AppLogger(category: "FGLayout").info("[FGLayout] skip layout (re-backgrounded before yield)")
+                            return
                         }
-                        layout.invalidateLayout()
+                        self.remeasureVisibleCells(reason: "foreground(delta=\(accumulated))")
                     }
-                    self.reconfigureVisibleCells()
                 }
                 .store(in: &subscriptions)
 
@@ -2041,10 +2081,42 @@ extension CollectionViewMessageListV3 {
 
         // MARK: - Content Length Helper
 
-        /// Total character count across all blocks of the last assistant message.
-        private func lastAssistantContentLength() -> Int {
-            guard let msg = vm?.messages.last(where: { $0.role == .assistant }) else { return 0 }
-            return msg.blocks.reduce(0) { $0 + $1.content.count }
+        /// [T-ios-bg-resume-collapse] Content length across EVERY message that
+        /// can still grow (liveAssistantMessageIds), falling back to the last
+        /// assistant message when nothing is processing (a turn that ended
+        /// while backgrounded). UTF-8 length: O(1), and any change is a change.
+        private func liveContentLength() -> Int {
+            guard let vm else { return 0 }
+            let msgs = vm.messages
+            let liveIds = Self.liveAssistantMessageIds(messages: msgs, isProcessing: vm.isProcessing)
+            let considered = liveIds.isEmpty
+                ? msgs.last(where: { $0.role == .assistant }).map { [$0] } ?? []
+                : msgs.filter { liveIds.contains($0.id) }
+            return considered.reduce(0) { acc, m in
+                acc + m.blocks.reduce(0) { $0 + $1.content.utf8.count }
+            }
+        }
+
+        /// [T-ios-bg-resume-collapse] Re-measure every VISIBLE cell from
+        /// scratch: drop the layout's height for it and the cell's own
+        /// lastComputedHeight, reconfigure, then clear the cell side again
+        /// (reconfigure only resets it when the provider actually re-runs).
+        /// Visible cells only — every entry into the hosting graph is a crash
+        /// surface (FB13213926) — and only on a resume / deferred-flush edge.
+        private func remeasureVisibleCells(reason: String) {
+            guard let cv = viewController?.collectionView,
+                  let layout = viewController?.messageListLayout else { return }
+            let visible = cv.indexPathsForVisibleItems
+            for ip in visible {
+                layout.invalidateHeight(at: ip.item)
+                (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
+            }
+            layout.invalidateLayout()
+            reconfigureVisibleCells()
+            for ip in cv.indexPathsForVisibleItems {
+                (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
+            }
+            AppLogger(category: "FGLayout").info("[FGLayout] remeasure reason=\(reason) visibleCells=\(visible.count)")
         }
 
         // MARK: - Streaming Subscription
@@ -2399,6 +2471,7 @@ extension CollectionViewMessageListV3 {
             let removedIds = Set(cellBridges.keys).subtracting(currentIds)
             for id in removedIds { bridgeSheetSubs.removeValue(forKey: id) }
             cellBridges = cellBridges.filter { currentIds.contains($0.key) }
+            lastFooterShapeByMessage = lastFooterShapeByMessage.filter { currentIds.contains($0.key) }
 
             // Build items
             var newItems: [MessageListItem] = []
@@ -2731,6 +2804,17 @@ extension CollectionViewMessageListV3 {
             // avoids expensive UIKit cell creation/layout on redundant snapshots.
             if newItems == previousSnapshotIds {
                 AppLogger(category: "SnapshotDiag").info("[SnapshotDiag] SKIP caller=\(caller) items unchanged (count=\(newItems.count)) — no re-apply")
+                // [T-ios-bg-resume-collapse] / [T-ios-double-loadsession-stale-cells]
+                // A SKIP is wrong for a flush deferred across a suspend window
+                // (block content grew IN PLACE, item ids unchanged) and for the
+                // authoritative post-load apply (bind3 just wiped the layout
+                // caches, but cells keep the previous generation's height).
+                // Only those callers pay; the many-per-second mid-stream SKIPs
+                // stay free.
+                if caller.hasPrefix("flushPending") || caller.hasPrefix("suspend-resume")
+                    || caller == "bind3-sessionLoad" {
+                    remeasureVisibleCells(reason: "skip-after-defer(\(caller))")
+                }
                 return
             }
             let oldSet = Set(previousSnapshotIds)
@@ -4633,6 +4717,14 @@ extension CollectionViewMessageListV3 {
             scrollMode = .userBrowsing
         }
 
+        /// [T-ios-defer-retry-never-consumed] Apply `body` to every hosted
+        /// SelectableMarkdownTextView in a cell's subtree (nested several levels
+        /// inside the UIHostingConfiguration view tree).
+        private static func forEachMarkdownTextView(in view: UIView, _ body: (SelectableMarkdownTextView) -> Void) {
+            if let tv = view as? SelectableMarkdownTextView { body(tv) }
+            for sub in view.subviews { forEachMarkdownTextView(in: sub, body) }
+        }
+
         private func settleAfterInteraction(_ scrollView: UIScrollView) {
             // Re-acquire auto-scroll only when the user settled essentially at
             // the bottom (tight threshold), not merely "near" it. This stops
@@ -4651,6 +4743,14 @@ extension CollectionViewMessageListV3 {
 
             // Re-enable self-sizing so future layout passes use real heights.
             layout.deferSelfSizing = false
+
+            // [T-ios-defer-retry-never-consumed] The defer window is closed:
+            // let every visible markdown view pay a height correction it had
+            // to skip while the window was open, now instead of on its 0.6 s
+            // backstop. Views without debt return on a Bool guard.
+            for cell in cv.visibleCells {
+                Self.forEachMarkdownTextView(in: cell) { $0.consumeDeferredCorrectionIfNeeded() }
+            }
 
             // [SettleJitter] Evidence capture (H1): the flush below re-flows
             // frames from corrected heights but restores only the numeric

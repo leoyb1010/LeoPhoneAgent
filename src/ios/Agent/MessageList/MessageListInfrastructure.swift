@@ -123,6 +123,14 @@ class SelfSizingCell: UICollectionViewCell {
     /// promptly (applyContentConfiguration / clearCachedHeight reset it
     /// to nil unconditionally).
     private var lastMeasureMediaTime: CFTimeInterval?
+    ///
+    /// KEPT at 50 ms on purpose (upstream removed this bound, then needed the
+    /// explicit clears of [T-ios-bg-resume-collapse] /
+    /// [T-ios-plaf-cache-footer-staleness] / [T-ios-defer-retry-never-consumed]
+    /// because an unbounded cell cache froze stale heights). With the bound,
+    /// a cell outside the streaming/defer guards re-measures within 50 ms of
+    /// any change on its own; those explicit clears are ported anyway for the
+    /// guard windows, where this cache is still returned unconditionally.
     private static let measureDedupWindow: CFTimeInterval = 0.050 // 50 ms
 
     /// [T-ios-scroll-decel-height-drift] Pre-seeded height from the layout's

@@ -4514,6 +4514,15 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     /// skipped. Guarantees one post-settle retry of invalidateCellSizeIfNeeded
     /// even if no further UAV/measure call arrives after the glide ends.
     private var pendingDeferredRemeasure = false
+    /// [T-ios-defer-retry-never-consumed] A real height correction was skipped
+    /// during a deferSelfSizing window and is still owed. Paid by
+    /// `consumeDeferredCorrectionIfNeeded()` (called by the message list the
+    /// moment the window closes at settle) or by the bounded backstop timer;
+    /// cleared where the measurement is committed.
+    private var deferredCorrectionPending = false
+    /// Backstop re-arm bound (~6 s of drag); past it the settle hook is the
+    /// only consumer, which is correct — a drag that long always settles.
+    private static let maxDeferredRemeasureAttempts = 10
     /// Records the last time the layout loop tripped the re-entry guard, for
     /// watchdog diagnostics. If this fires many times per second we know the
     /// loop is hot even if we successfully short-circuit it.
@@ -4783,6 +4792,40 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     }
 
     /// Walk up the view hierarchy to find the enclosing UICollectionViewCell.
+    /// [T-ios-defer-retry-never-consumed] Backstop for the settle-driven
+    /// consumer. While the window is still open (finger down), wait another
+    /// interval WITHOUT measuring — the old timer re-ran sizeThatFits every
+    /// 0.6 s only to hit the same skip — and give up after a bounded number of
+    /// attempts, leaving the debt to the settle hook.
+    private func armDeferredRemeasureBackstop(attempt: Int = 0) {
+        guard !pendingDeferredRemeasure else { return }
+        guard attempt < Self.maxDeferredRemeasureAttempts else {
+            cellSizeLogger.info("[invalidateCell] backstop gave up after \(attempt) attempts — settle hook owns the debt")
+            return
+        }
+        pendingDeferredRemeasure = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            self.pendingDeferredRemeasure = false
+            guard self.deferredCorrectionPending else { return }
+            let stillDeferred = (self.findCollectionView()?.collectionViewLayout as? MessageListLayout)?.deferSelfSizing ?? false
+            if stillDeferred {
+                self.armDeferredRemeasureBackstop(attempt: attempt + 1)
+                return
+            }
+            self.invalidateCellSizeIfNeeded()
+        }
+    }
+
+    /// [T-ios-defer-retry-never-consumed] Pay a correction skipped during a
+    /// deferSelfSizing window. Called by the message list at settle, right
+    /// after it clears `deferSelfSizing`. The fingerprint was not consumed by
+    /// the skip, so this re-measures for real.
+    func consumeDeferredCorrectionIfNeeded() {
+        guard deferredCorrectionPending else { return }
+        invalidateCellSizeIfNeeded()
+    }
+
     private func findCell() -> UICollectionViewCell? {
         var view: UIView? = superview
         while let v = view {
@@ -6121,14 +6164,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 // Arm one guaranteed post-settle retry in case no further
                 // measure call arrives after the glide ends.
                 cellSizeLogger.info("[invalidateCell] SKIPPED — deferSelfSizing active (correction NOT consumed, delta=\(String(format: "%+.1f", delta)); will retry)")
-                if !pendingDeferredRemeasure {
-                    pendingDeferredRemeasure = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                        guard let self else { return }
-                        self.pendingDeferredRemeasure = false
-                        self.invalidateCellSizeIfNeeded()
-                    }
-                }
+                deferredCorrectionPending = true
+                armDeferredRemeasureBackstop()
                 return
             }
         }
@@ -6146,6 +6183,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         lastSizedWidth = measureWidth
         lastSizedTableGenSum = tableGenSum
         lastComputedHeight = newHeight
+        deferredCorrectionPending = false
         if let coord = self.delegate as? SelectableMarkdownView.Coordinator {
             // [JitterFix] Key by render width (measureWidth), matching the
             // SwiftUI sizeThatFits cache key. Using textContainer.size.width
