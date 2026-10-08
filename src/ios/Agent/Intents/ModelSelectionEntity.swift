@@ -58,6 +58,16 @@ struct ModelSelectionEntity: AppEntity {
 }
 
 struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
+    /// Offerable in the Shortcuts/Siri picker: not hidden AND owned by an
+    /// enabled provider. Disabling a provider means "stop using this account";
+    /// its models must not be offered for new automations. Applied only to the
+    /// OFFERING paths — `entities(for:)` keeps resolving an id the user already
+    /// picked, so an existing shortcut survives a temporarily disabled provider.
+    @MainActor
+    private func isOfferable(_ entry: ModelEntry, store: ProviderConfigStore) -> Bool {
+        ShortcutModelOffer.isOfferable(isHidden: entry.isHidden,
+                                       providerEnabled: store.instance(for: entry.providerInstanceId)?.isEnabled)
+    }
     typealias Result = IntentItemCollection<ModelSelectionEntity>
 
     @MainActor
@@ -91,7 +101,7 @@ struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
             }
         }
 
-        for entry in store.config.modelEntries where !entry.isHidden {
+        for entry in store.config.modelEntries where isOfferable(entry, store: store) {
             if entry.model.displayName.lowercased().contains(query)
                 || entry.model.id.lowercased().contains(query)
                 || entry.compositeKey.lowercased().contains(query) {
@@ -116,7 +126,7 @@ struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
 
         var seenIds = Set<String>()
         let orderedInstanceIds: [String] = store.config.modelEntries
-            .filter { !$0.isHidden }
+            .filter { isOfferable($0, store: store) }
             .compactMap { entry -> String? in
                 let id = entry.providerInstanceId
                 guard !seenIds.contains(id) else { return nil }
@@ -126,7 +136,7 @@ struct ModelSelectionEntityQuery: EntityQuery, EntityStringQuery {
 
         func providerItems(for instanceId: String) -> [IntentItem<ModelSelectionEntity>] {
             store.config.modelEntries
-                .filter { $0.providerInstanceId == instanceId && !$0.isHidden }
+                .filter { $0.providerInstanceId == instanceId && isOfferable($0, store: store) }
                 .map { entry in
                     IntentItem(
                         ModelSelectionEntity(entry: entry),

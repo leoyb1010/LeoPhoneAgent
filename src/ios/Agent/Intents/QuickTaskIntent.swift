@@ -145,6 +145,10 @@ struct QuickTaskIntent: AppIntent {
             }
         }
 
+        // Headless run: external folder mounts are activated from the root view,
+        // which this process may never build. Wait (bounded) so the agent sees
+        // /var/minis/mounts on a cold or force-quit launch.
+        await MountedFoldersManager.shared.ensureActivated(timeout: 12)
         // [T-widget-stop-eager-placeholder] A Stop tapped while this session was
         // still being created could only see the placeholder id, which has no
         // view model — so it did nothing and the run started anyway, right

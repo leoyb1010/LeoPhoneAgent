@@ -60,6 +60,10 @@ struct FollowUpSessionIntent: AppIntent {
             eagerKeepAliveSkippedReason: eagerResult.skipReason
         )
 
+        // Headless run: external folder mounts are activated from the root view,
+        // which this process may never build. Wait (bounded) so the agent sees
+        // /var/minis/mounts on a cold or force-quit launch.
+        await MountedFoldersManager.shared.ensureActivated(timeout: 12)
         let (vm, isNew) = ViewModelCache.shared.getOrCreate(for: session.id)
         if isNew {
             // loadSession 会把它记成「屏幕上的会话」;追问是后台动作,还原成真正在看的那个。

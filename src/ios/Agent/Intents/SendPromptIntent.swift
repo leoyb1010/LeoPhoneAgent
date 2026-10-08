@@ -92,6 +92,10 @@ struct SendPromptIntent: AppIntent {
             eagerKeepAliveSkippedReason: eagerSkipReason
         )
 
+        // Headless run: external folder mounts are activated from the root view,
+        // which this process may never build. Wait (bounded) so the agent sees
+        // /var/minis/mounts on a cold or force-quit launch.
+        await MountedFoldersManager.shared.ensureActivated(timeout: 12)
         let vm: AIChatViewModel
         let isNewSession: Bool
         if let session = session {

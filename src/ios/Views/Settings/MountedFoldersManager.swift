@@ -423,13 +423,53 @@ final class MountedFoldersManager {
             pushExternalMountSnapshot()
             return
         }
-        Task.detached(priority: .userInitiated) {
+        // One shared pass: a headless intent arriving moments later joins it
+        // instead of resolving the same bookmarks twice. Still fire-and-forget
+        // for the caller.
+        Task { await self.ensureActivated() }
+    }
+
+    // MARK: - Awaitable activation (headless intents)
+
+    private var didCompleteActivationPass = false
+    private var activationPass: Task<Void, Never>?
+
+    /// Resolve every mount and publish the snapshot, returning only when done.
+    /// Headless intents (`openAppWhenRun = false`) never build the root view;
+    /// without waiting here a cold Shortcut run could start the agent before
+    /// any security scope was live and `/var/minis/mounts/<name>` was absent.
+    func ensureActivated() async {
+        if didCompleteActivationPass { return }
+        if let existing = activationPass { await existing.value; return }
+        let snapshot = entries
+        let pass = Task.detached(priority: .userInitiated) {
             for entry in snapshot {
                 await Self.resolveAndCommit(entry: entry)
             }
             await MainActor.run {
-                MountedFoldersManager.shared.pushExternalMountSnapshot()
+                let manager = MountedFoldersManager.shared
+                manager.pushExternalMountSnapshot()
+                manager.didCompleteActivationPass = true
+                manager.activationPass = nil
             }
+        }
+        activationPass = pass
+        await pass.value
+    }
+
+    /// `ensureActivated()` with a ceiling on how long a Shortcut waits. On
+    /// expiry it returns WITHOUT cancelling: the pass keeps running and
+    /// publishes late, so a slow mount still appears mid-run. Polls a flag
+    /// because awaiting the main-actor pass would never let a sleep win.
+    func ensureActivated(timeout: TimeInterval) async {
+        if didCompleteActivationPass { return }
+        Task { await self.ensureActivated() }
+        let deadline = Date().addingTimeInterval(max(0, timeout))
+        while !didCompleteActivationPass && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        if !didCompleteActivationPass {
+            mountLog.warning("ensureActivated(timeout:) gave up after \(Int(timeout))s — run starts without external mounts; the pass continues")
         }
     }
 
