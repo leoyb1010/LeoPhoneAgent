@@ -2239,6 +2239,43 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// of mutating agentHistory. Updated by loadSession, compactBefore, and any
     /// path that writes a new marker.
     var cachedLatestMarker: CompactMarker?
+
+    // MARK: - Context measurement & trimming [T-ctx-measure-outbound] [T-ctx-incremental-trim]
+    /// Calibration for `ContextSizeMeter`: provider count ÷ our estimate of the
+    /// SAME request, per model (a ratio mostly reflects the tokenizer).
+    /// `lastLearnedCalibration` is the newest ratio of any model, borrowed with
+    /// a margin by a model that has none yet. Persisted as (report, estimate)
+    /// pairs on each assistant turn's TokenUsage and replayed on load.
+    var contextCalibrationRatios: [String: Double] = [:]
+    var lastLearnedCalibration: Double? = nil
+    /// The session the in-memory ratios were learned for (see seedContextCalibration).
+    var calibrationSessionId: String? = nil
+    /// [T-ctx-warmup-fit] Per compaction marker: how many leading warm-up
+    /// messages were dropped to fit. Decided once, then reused, so the request
+    /// prefix (and the provider's prompt cache) stays stable across turns.
+    var warmUpDropByMarker: [String: Int] = [:]
+    /// Estimated system prompt + tool schemas of the next request.
+    var contextFixedTokens = 0
+    /// The request in flight: our estimate, the model/window it went to, and
+    /// the prediction, so its usage report can calibrate the meter.
+    var lastDispatchEstimate = 0
+    var lastDispatchModelId: String?
+    var lastDispatchWindow = 0
+    var lastDispatchRatio: Double = 1.0
+    var lastDispatchPredicted = 0
+    /// Whether the one uncalibrated send past an extrapolated "over the window"
+    /// verdict has been spent. Re-armed by an accepted response; a rejection spends it.
+    var sentPastExtrapolatedLimitThisLoop = false
+    /// [T-ctx-incremental-trim] Watermark the last request was trimmed at, and
+    /// the session it belongs to.
+    var contextTrimWatermarkKey: String?
+    var contextTrimWatermarkSessionId: String?
+    /// The trim plan of the request being built, for the per-request [CtxMeter] event.
+    var lastContextTrimPlan: IncrementalContextTrimmer.Plan = .none
+    /// [T-ios-compact-model-fallback] Entries whose compact call already failed
+    /// in THIS compaction run (cleared at the start of each run).
+    var compactFailedEntryIds: Set<String> = []
+
     /// The session's persisted model id (from ChatStore.getSession). Cached at
     /// loadSession time so resolveCurrentEntry can fall back to it without an
     /// async hop to the actor. Empty string means "not yet loaded" — treat as
@@ -4645,6 +4682,20 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     private func runAgentLoop(resumingAt existingMsgIdx: Int? = nil, committedBlocks: Int? = nil) async throws {
+        do {
+            try await runAgentLoopCore(resumingAt: existingMsgIdx, committedBlocks: committedBlocks)
+        } catch {
+            // [T-ctx-measure-outbound] A context-length rejection is ground
+            // truth that our size estimate was too low. Raise the ratio so the
+            // retry / next send compacts instead of being rejected again, then
+            // surface the error exactly as before.
+            let text = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            noteContextOverflow(errorText: text, modelId: nil)
+            throw error
+        }
+    }
+
+    private func runAgentLoopCore(resumingAt existingMsgIdx: Int? = nil, committedBlocks: Int? = nil) async throws {
         // REPRO-DIAG(2026-05-16): bump global round counter and emit a clear
         // BEGIN/END marker so the user can grep `ROUND \d+` to slice the log
         // by attempt. A "round" = one runAgentLoop invocation, which is
@@ -4889,6 +4940,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // that keeps hitting the threshold can't compact forever; when the cap
         // is reached and we're still near capacity, the loop stops as exhausted.
         var compactionsThisLoop = 0
+        // [T-ctx-measure-outbound] Set when an in-loop compaction left the
+        // outbound request no smaller; cleared when a response arrives (new
+        // content may make the next compaction worthwhile again).
+        var lastInLoopCompactionMadeNoProgress = false
         loopLabel: while turnCount < Self.maxAgentTurns {
             defer { turnCount += 1 }
             try Task.checkCancellation()
@@ -4910,9 +4965,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // image bytes are removed first.
             trimOldImagesFromHistory()
 
-            // Context window management: offload old tool content if approaching limit
+            // [T-ctx-measure-outbound] The system prompt and tool schemas ride
+            // on every request; measure them for this iteration so the guards
+            // below and the calibration pair see the real fixed share.
+            contextFixedTokens = ContextSizeMeter.estimateFixedTokens(systemPrompt: userSystemPrompt, tools: tools)
+
+            // Context window management: offload old tool content if approaching limit.
+            // Judged on the outbound measurement, not `turnUsage.latestContextTokens`:
+            // after an in-loop compaction that report describes the pre-compaction request.
             let activeModelForOffload = ProviderConfigStore.shared.entry(for: activeEntryId ?? "")?.model ?? selectedModel
-            offloadContextIfNeeded(model: activeModelForOffload, lastContextTokens: turnUsage.latestContextTokens)
+            offloadContextIfNeeded(model: activeModelForOffload, lastContextTokens: measureOutboundContextTokens())
 
             // [T-chat-auto-compact-inloop] In-loop context guard. checkContext-
             // BeforeSend only runs at the SEND entry point; a single turn that
@@ -4933,26 +4995,75 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // it) — but the overall maxAgentTurns ceiling is NEVER reset by a
             // compaction, or a loop that keeps compacting could run forever and
             // defeat the runaway backstop.
-            switch checkContextBeforeSend() {
+            switch checkContextBeforeSend(site: "in-loop") {
             case .ok:
                 break
             case .needsCompact:
                 let compactAnchorId = messages.last(where: {
                     $0.role != .compactDivider && $0.role != .systemInfo && !$0.isCompactedHistory
                 })?.id
+                // [T-ctx-measure-outbound] A compaction that did not shrink the
+                // outbound request is not retried: only real progress earns
+                // another pass.
                 if compactionsThisLoop < Self.maxInLoopCompactions,
+                   !lastInLoopCompactionMadeNoProgress,
                    let anchorId = compactAnchorId {
                     compactionsThisLoop += 1
-                    logger.info("[Context] In-loop near capacity — auto-compacting (\(compactionsThisLoop)/\(Self.maxInLoopCompactions)) turnCount=\(turnCount)")
+                    let sizeBefore = measureOutboundContextTokens()
+                    logger.info("[Context] In-loop near capacity — auto-compacting (\(compactionsThisLoop)/\(Self.maxInLoopCompactions)) turnCount=\(turnCount) measured=\(sizeBefore)")
                     await compactBefore(anchorId, allowDuringProcessing: true)
-                    // The divider and the folded rows moved the live bubble.
-                    if let moved = messages.firstIndex(where: { $0.id == runMsgId }) { msgIdx = moved }
+                    let sizeAfter = measureOutboundContextTokens()
+                    lastInLoopCompactionMadeNoProgress = sizeAfter >= sizeBefore
+                    logger.info("[Context] In-loop compact result: measured \(sizeBefore) → \(sizeAfter)\(lastInLoopCompactionMadeNoProgress ? " (no progress — will not retry)" : "")")
+                    LeoPerf.record("ctx.compact", ms: 0, extra: ["site": "in-loop", "before": sizeBefore, "after": sizeAfter,
+                                                                  "n": compactionsThisLoop])
+
+                    // [T-ios-inloop-compact-divider-order] The divider lands right
+                    // after the anchor, which in the loop is this run's own
+                    // still-streaming bubble. Seal it and continue in a FRESH
+                    // bubble below the divider, or new output would appear greyed
+                    // inside the "already compacted" region. An empty sealed
+                    // bubble is dropped.
+                    if let sealedIdx = messages.firstIndex(where: { $0.id == runMsgId }) {
+                        let sealed = messages[sealedIdx]
+                        sealed.isAwaitingModelResponse = false
+                        if sealed.blocks.isEmpty && sealed.content.isEmpty {
+                            messages.remove(at: sealedIdx)
+                        }
+                    }
+                    let fresh = ChatMessage(role: .assistant, content: "", blocks: [])
+                    fresh.isAwaitingModelResponse = true
+                    messages.append(fresh)
+                    msgIdx = messages.count - 1
+                    runMsgId = fresh.id
+                    // Blocks already committed belong to the sealed bubble; the
+                    // fresh one starts from zero or the next round would skip
+                    // its first N blocks when syncing to agentHistory.
+                    committedBlockCount = 0
+                    self.committedBlockCount = 0
+                    logger.info("[Context] In-loop compact: continuing in fresh bubble idx=\(msgIdx) below the divider")
                     turnCount -= 1   // cancel this iteration's defer increment
                     continue
                 }
-                // Already compacted the cap this loop and still near capacity —
-                // fall through to the same stop path as exhaustion.
-                logger.info("[Context] In-loop still near capacity after \(compactionsThisLoop) compaction(s) — stopping loop as exhausted")
+                // [T-ctx-measure-outbound] Compaction has done all it can. Above
+                // the compact THRESHOLD is not a reason to abandon the turn —
+                // that line leaves headroom by design — so send while the
+                // request still fits the window, and only stop when it does not.
+                let settle = settleWithoutCompacting()
+                if settle.step == .sendWithinWindow {
+                    logger.info("[Context] In-loop above compact threshold after \(compactionsThisLoop) compaction(s) but within the window — sending")
+                    break
+                }
+                // "Over the window" can be an extrapolation (estimate × a ratio
+                // learned on other content). If the uncalibrated estimate fits,
+                // send once and let the provider decide: success recalibrates, a
+                // rejection raises the ratio (noteContextOverflow).
+                if settle.step == .sendUncalibratedOnce {
+                    sentPastExtrapolatedLimitThisLoop = true
+                    logger.warning("[Context] In-loop: calibrated size is over the window but the raw estimate fits (\(settle.measurement.history + settle.measurement.fixed)) — sending once for the provider to decide (ratio=\(String(format: "%.2f", settle.measurement.ratio)))")
+                    break
+                }
+                logger.info("[Context] In-loop still over the window after \(compactionsThisLoop) compaction(s) — stopping loop as exhausted")
                 fallthrough
             case .exhausted:
                 logger.info("[Context] In-loop exhausted — stopping loop with resumable notice (turnCount=\(turnCount))")
@@ -5030,6 +5141,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // Phase B: route through effectiveAgentHistory() so compact summary is
             // synthesized at inference time instead of baked into agentHistory.
             let contextHistory = effectiveAgentHistory()
+            // [T-ctx-measure-outbound] Record our estimate of THIS request so the
+            // provider's count for it can calibrate the meter. [T-ctx-incremental-trim]
+            // One LeoPerf line per request: tokens before/after trimming, so the
+            // device benefit can be read straight off perf.jsonl.
+            let dispatchPredicted = recordContextDispatch(history: contextHistory, model: activeModel)
+            do {
+                let plan = lastContextTrimPlan
+                let untrimmedTokens = lastDispatchEstimate + plan.savedTokens
+                logger.info("[CtxMeter] dispatch model=\(activeModel.id) estimate=\(self.lastDispatchEstimate) trimSaved=\(plan.savedTokens) ratio=\(String(format: "%.3f", self.lastDispatchRatio)) predicted=\(dispatchPredicted)")
+                LeoPerf.record("ctx.request", ms: 0, extra: [
+                    "model": activeModel.id, "untrimmed": untrimmedTokens, "sent": lastDispatchEstimate,
+                    "trimSaved": plan.savedTokens, "trimAdvanced": plan.advanced, "trimOn": IncrementalContextTrimmer.isEnabled,
+                    "predicted": dispatchPredicted, "ratio": (lastDispatchRatio * 1000).rounded() / 1000,
+                    "window": lastDispatchWindow, "msgs": contextHistory.count,
+                ])
+            }
             let stream = try await streamWithGroupFallback(
                 provider: provider,
                 messages: contextHistory,
@@ -5307,6 +5434,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let stopReason = streamResult.stopReason
             turnUsage = streamResult.turnUsage
             logger.info("📐 Context after API: latestContextTokens=\(turnUsage.latestContextTokens) (in:\(turnUsage.inputTokens) cache_read:\(turnUsage.cacheReadTokens) cache_create:\(turnUsage.cacheCreationTokens))")
+            if turnUsage.latestContextTokens > 0 {
+                // [T-ctx-measure-outbound] Pair the report with our estimate of
+                // the same request, for the model that actually served it (a
+                // group fallback may have switched entries during this call).
+                // The pair is persisted on the turn, so a reopened session
+                // re-seeds its calibration from it.
+                let servedModelId = ProviderConfigStore.shared.entry(for: activeEntryId ?? "")?.model.id ?? activeModel.id
+                if calibrateContextSize(reportedTokens: turnUsage.latestContextTokens, servedModelId: servedModelId) {
+                    turnUsage.estimatedRequestTokens = lastDispatchEstimate
+                    turnUsage.estimatedFixedTokens = contextFixedTokens
+                    turnUsage.calibrationModelId = servedModelId
+                }
+                lastInLoopCompactionMadeNoProgress = false
+                // An accepted request is fresh evidence: the once-per-evidence
+                // uncalibrated send is available again.
+                sentPastExtrapolatedLimitThisLoop = false
+            }
 
             // Track session-level token stats
             let iterationStreamDuration = streamEnd.timeIntervalSince(iterationStreamStart)

@@ -134,6 +134,14 @@ struct TokenUsage {
     var cacheReadTokens: Int = 0
     /// Context size of the latest API call (input + cache_read + cache_creation).
     var latestContextTokens: Int = 0
+    /// [T-ctx-measure-outbound] Our estimate of that same request (history +
+    /// system prompt + tools) and its fixed share. Only the PAIR is useful:
+    /// their ratio calibrates `ContextSizeMeter` for this session and stays
+    /// valid across compaction, trimming, revert and relaunch. 0 = not recorded.
+    var estimatedRequestTokens: Int = 0
+    var estimatedFixedTokens: Int = 0
+    /// The model that served the request the pair describes (ratios are per model).
+    var calibrationModelId: String? = nil
 
     mutating func add(_ u: LLMUsage) {
         // Use max() instead of += to handle providers that emit cumulative usage

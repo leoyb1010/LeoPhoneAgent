@@ -290,6 +290,14 @@ struct StoredTokenUsage: Codable, Hashable {
     var cacheCreationTokens: Int
     var cacheReadTokens: Int
     var latestContextTokens: Int?
+    /// [T-ctx-measure-outbound] Our estimate of that same request and its
+    /// system-prompt-plus-tools share, and the model that served it. Only the
+    /// PAIR with `latestContextTokens` is useful: their ratio calibrates
+    /// `ContextSizeMeter` and is replayed when the session is reopened.
+    /// Optional so older rows (and older builds reading new rows) decode.
+    var estimatedRequestTokens: Int? = nil
+    var estimatedFixedTokens: Int? = nil
+    var calibrationModelId: String? = nil
 }
 
 /// A single message in the conversation (one "turn").
@@ -4190,7 +4198,10 @@ extension RawMessage {
                 outputTokens: usage.outputTokens,
                 cacheCreationTokens: usage.cacheCreationTokens,
                 cacheReadTokens: usage.cacheReadTokens,
-                latestContextTokens: usage.latestContextTokens ?? 0
+                latestContextTokens: usage.latestContextTokens ?? 0,
+                estimatedRequestTokens: usage.estimatedRequestTokens ?? 0,
+                estimatedFixedTokens: usage.estimatedFixedTokens ?? 0,
+                calibrationModelId: usage.calibrationModelId
             )
         }
         msg.streamInterruptCount = streamInterruptCount

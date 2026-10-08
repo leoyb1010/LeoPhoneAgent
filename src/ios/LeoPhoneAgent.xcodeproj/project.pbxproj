@@ -159,6 +159,10 @@
 		E54000AC1 /* DebugSkillGenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000AC2 /* DebugSkillGenerated.swift */; };
 		B02B7ADBAB47BDB33F664A21 /* VoiceProvider+Vendors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB45FC87D39AE9AB4495BE9 /* VoiceProvider+Vendors.swift */; };
 		BB1000100F700000000000AA /* ContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000110F700000000000AA /* ContextPolicy.swift */; };
+		E5CSM0001 /* ContextSizeMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSM0003 /* ContextSizeMeter.swift */; };
+		E5CSM0002 /* ContextSizeMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSM0003 /* ContextSizeMeter.swift */; };
+		E5ICT0001 /* IncrementalContextTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ICT0003 /* IncrementalContextTrimmer.swift */; };
+		E5ICT0002 /* IncrementalContextTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ICT0003 /* IncrementalContextTrimmer.swift */; };
 		E5AFS0001 /* AgentFileSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AFS0002 /* AgentFileSafety.swift */; };
 		E5AFS0003 /* AgentFileSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AFS0002 /* AgentFileSafety.swift */; };
 		BB1000120F700000000000AA /* ContextPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1000110F700000000000AA /* ContextPolicy.swift */; };
@@ -983,6 +987,8 @@
 		B7E2CB0D0D63E6D6FDB45568 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceActivityDetector.swift; sourceTree = "<group>"; };
 		BB1000010F700000000000AA /* MinisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MinisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB1000110F700000000000AA /* ContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextPolicy.swift; sourceTree = "<group>"; };
+		E5CSM0003 /* ContextSizeMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextSizeMeter.swift; sourceTree = "<group>"; };
+		E5ICT0003 /* IncrementalContextTrimmer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncrementalContextTrimmer.swift; sourceTree = "<group>"; };
 		E5AFS0002 /* AgentFileSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFileSafety.swift; sourceTree = "<group>"; };
 		E5TRC0002 /* treasure_item_v1.fixture.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = treasure_item_v1.fixture.json; path = ../shared/treasury/treasure_item_v1.fixture.json; sourceTree = SOURCE_ROOT; };
 		D7656F4130247E4002A3AC0C /* VoiceTextSanitizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceTextSanitizer.swift; sourceTree = "<group>"; };
@@ -2447,6 +2453,8 @@
 				E53000014 /* ChatStore.swift */,
 				E5CSC0011 /* ChatStoreSchemaContract.swift */,
 				BB1000110F700000000000AA /* ContextPolicy.swift */,
+				E5CSM0003 /* ContextSizeMeter.swift */,
+				E5ICT0003 /* IncrementalContextTrimmer.swift */,
 				E5AFS0002 /* AgentFileSafety.swift */,
 				E5FMI0011 /* FileMentionIndex.swift */,
 			);
@@ -3180,6 +3188,8 @@
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
+				E5CSM0002 /* ContextSizeMeter.swift in Sources */,
+				E5ICT0002 /* IncrementalContextTrimmer.swift in Sources */,
 				E5AFS0003 /* AgentFileSafety.swift in Sources */,
 				E5LD00002 /* ToolLoopDetector.swift in Sources */,
 				E5LEO0007 /* AgentActivityModels.swift in Sources */,
@@ -3256,6 +3266,8 @@
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
 				BB1000100F700000000000AA /* ContextPolicy.swift in Sources */,
+				E5CSM0001 /* ContextSizeMeter.swift in Sources */,
+				E5ICT0001 /* IncrementalContextTrimmer.swift in Sources */,
 				E5AFS0001 /* AgentFileSafety.swift in Sources */,
 				AADDA9E12F6ECCF400B66649 /* ThumbnailCache.swift in Sources */,
 				E51000002 /* ContentView.swift in Sources */,

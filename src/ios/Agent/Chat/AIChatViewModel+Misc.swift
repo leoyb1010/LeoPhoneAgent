@@ -308,10 +308,23 @@ extension AIChatViewModel {
     /// the stale mirror until the user re-picked the model. One live lookup
     /// (binding + group) per capacity check is cheap and always current.
     func effectiveContextWindow(for model: LLMModel) -> Int {
-        if let override = activeGroupContextLimit(), override < Int.max {
-            return override
+        resolvedContextWindow(for: model).window
+    }
+
+    /// The window plus whether it came from a user-chosen group cap, which
+    /// `ContextPolicy` needs to pick proportional thresholds ([T-ctx-user-cap]).
+    ///
+    /// The cap is applied as `min(modelWindow, groupLimit)`. A cap set ABOVE
+    /// the model's native window is not a licence to overflow the model — it
+    /// just means "no practical limit" — so it must not raise the ceiling.
+    /// `isUserCap` is therefore true only when the cap actually binds.
+    func resolvedContextWindow(for model: LLMModel) -> (window: Int, isUserCap: Bool) {
+        let native = model.contextWindowTokens
+        guard let override = activeGroupContextLimit(), override > 0, override < Int.max else {
+            return (native, false)
         }
-        return model.contextWindowTokens
+        guard native > 0 else { return (override, true) }
+        return override < native ? (override, true) : (native, false)
     }
 
     /// The bound group's context-limit override for the current session, or nil
