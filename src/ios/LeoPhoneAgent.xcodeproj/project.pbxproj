@@ -32,6 +32,8 @@
 		E5AUD0105T /* TTSAudioData.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0105F /* TTSAudioData.swift */; };
 		E5AUD0104A /* AnthropicRequestSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0104F /* AnthropicRequestSettings.swift */; };
 		E5AUD0104T /* AnthropicRequestSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0104F /* AnthropicRequestSettings.swift */; };
+		E5PSC0001A /* ProviderSendPathCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSC0001F /* ProviderSendPathCache.swift */; };
+		E5PSC0001T /* ProviderSendPathCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PSC0001F /* ProviderSendPathCache.swift */; };
 		E5AUD0103A /* CookieDeletionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0103F /* CookieDeletionPolicy.swift */; };
 		E5AUD0103T /* CookieDeletionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0103F /* CookieDeletionPolicy.swift */; };
 		E5AUD0102A /* SyncConflictPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUD0102F /* SyncConflictPolicy.swift */; };
@@ -838,6 +840,7 @@
 		E5C15602F /* MemoryDailyLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/MemoryDailyLog.swift; sourceTree = SOURCE_ROOT; };
 		E5AUD0105F /* TTSAudioData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/Voice/TTSAudioData.swift; sourceTree = SOURCE_ROOT; };
 		E5AUD0104F /* AnthropicRequestSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/Anthropic/AnthropicRequestSettings.swift; sourceTree = SOURCE_ROOT; };
+		E5PSC0001F /* ProviderSendPathCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/Anthropic/ProviderSendPathCache.swift; sourceTree = SOURCE_ROOT; };
 		E5AUD0103F /* CookieDeletionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/BrowserUse/CookieDeletionPolicy.swift; sourceTree = SOURCE_ROOT; };
 		E5AUD0102F /* SyncConflictPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Sync/V2/SyncConflictPolicy.swift; sourceTree = SOURCE_ROOT; };
 		E5AUD0101F /* ProviderRowStamps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/ProviderRowStamps.swift; sourceTree = SOURCE_ROOT; };
@@ -2528,6 +2531,7 @@
 				E5C15602F /* MemoryDailyLog.swift */,
 				E5AUD0105F /* TTSAudioData.swift */,
 				E5AUD0104F /* AnthropicRequestSettings.swift */,
+				E5PSC0001F /* ProviderSendPathCache.swift */,
 				E5AUD0103F /* CookieDeletionPolicy.swift */,
 				E5AUD0102F /* SyncConflictPolicy.swift */,
 				E5AUD0101F /* ProviderRowStamps.swift */,
@@ -3153,6 +3157,7 @@
 				E5C15602T /* MemoryDailyLog.swift in Sources */,
 				E5AUD0105T /* TTSAudioData.swift in Sources */,
 				E5AUD0104T /* AnthropicRequestSettings.swift in Sources */,
+				E5PSC0001T /* ProviderSendPathCache.swift in Sources */,
 				E5AUD0103T /* CookieDeletionPolicy.swift in Sources */,
 				E5AUD0102T /* SyncConflictPolicy.swift in Sources */,
 				E5AUD0101T /* ProviderRowStamps.swift in Sources */,
@@ -3257,6 +3262,7 @@
 				E5C15602A /* MemoryDailyLog.swift in Sources */,
 				E5AUD0105A /* TTSAudioData.swift in Sources */,
 				E5AUD0104A /* AnthropicRequestSettings.swift in Sources */,
+				E5PSC0001A /* ProviderSendPathCache.swift in Sources */,
 				E5AUD0103A /* CookieDeletionPolicy.swift in Sources */,
 				E5AUD0102A /* SyncConflictPolicy.swift in Sources */,
 				E5AUD0101A /* ProviderRowStamps.swift in Sources */,
