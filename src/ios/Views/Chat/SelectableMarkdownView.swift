@@ -249,6 +249,34 @@ func downsampleImageData(_ data: Data, maxPixelSize: CGFloat = 2048) -> UIImage?
     return UIImage(cgImage: cg)
 }
 
+/// [T-ios-image-single-writer] `maxPixelSize` for decoding a transcript image at
+/// DISPLAY size. Chat images render ≤ 400 pt wide (ImageAttachment.maxImageWidth),
+/// so the sharpest bitmap the screen can show is 400 × scale px wide. Decoding
+/// straight to that replaces the old two-stage pipeline (decode at 2048, then
+/// re-decode from disk inside `attachmentBounds`), whose second stage was a
+/// memory double-spend and the placeholder-stuck race. The thumbnail cap is on
+/// the LONGEST side, so for portrait images it is scaled up to keep the width
+/// sharp, bounded by the old 2048 ceiling. `screenScale` is captured on main.
+func displayTargetPixels(for data: Data, screenScale: CGFloat) -> CGFloat {
+    let widthTargetPx = 400.0 * max(screenScale, 1)
+    let hardCap: CGFloat = 2048
+    let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let src = CGImageSourceCreateWithData(data as CFData, opts),
+          let props = CGImageSourceCopyPropertiesAtIndex(src, 0, opts) as? [CFString: Any],
+          let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+          let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+          w > 0, h > 0 else {
+        return hardCap
+    }
+    var dispW = w, dispH = h
+    if let o = (props[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value, (5...8).contains(o) {
+        swap(&dispW, &dispH)
+    }
+    let aspect = dispH / dispW
+    let longestForSharpWidth = aspect > 1 ? widthTargetPx * aspect : widthTargetPx
+    return min(longestForSharpWidth, hardCap)
+}
+
 /// Renders markdown blocks into an NSAttributedString using a fresh MarkdownNSRenderer.
 /// Intended for one-shot rendering of completed messages (e.g. caching in AIChatViewModel).
 @MainActor
@@ -1284,6 +1312,28 @@ final class CodeBlockAttachment: NSTextAttachment {
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
 
+    /// [T-codeblock-hide-idle-scrollbars] Turn each axis' indicator and bounce
+    /// off when that axis has nothing to scroll (most code blocks fit), and
+    /// disable scrolling outright when neither can move so the inert pan
+    /// recognizer stops catching drags meant for the message list. Compared
+    /// against `scrollHeight` (the frame adds a bottom padding matched by
+    /// contentInset). [T-codeblock-offset-reset] A reused block that shrank to
+    /// fit drops its old offset on the now-fixed axis.
+    private static func syncScrollability(_ scrollView: UIScrollView, contentSize: CGSize,
+                                          visibleWidth: CGFloat, scrollHeight: CGFloat) {
+        let canScrollV = contentSize.height > scrollHeight + 0.5
+        let canScrollH = contentSize.width > visibleWidth + 0.5
+        scrollView.showsVerticalScrollIndicator = canScrollV
+        scrollView.showsHorizontalScrollIndicator = canScrollH
+        scrollView.alwaysBounceVertical = canScrollV
+        scrollView.alwaysBounceHorizontal = canScrollH
+        scrollView.isScrollEnabled = canScrollV || canScrollH
+        var offset = scrollView.contentOffset
+        if !canScrollH { offset.x = 0 }
+        if !canScrollV { offset.y = 0 }
+        if offset != scrollView.contentOffset { scrollView.contentOffset = offset }
+    }
+
     func makeView(width: CGFloat) -> UIView {
         let wrapper = UIView()
         wrapper.backgroundColor = .clear
@@ -1350,6 +1400,8 @@ final class CodeBlockAttachment: NSTextAttachment {
         scrollView.scrollIndicatorInsets = .zero
         scrollView.addSubview(codeTextView)
         scrollView.contentSize = CGSize(width: fittingWidth, height: contentHeight)
+        Self.syncScrollability(scrollView, contentSize: scrollView.contentSize,
+                               visibleWidth: contentWidth, scrollHeight: scrollHeight)
 
         // Auto-scroll to bottom during streaming
         let bottomY = scrollView.contentSize.height - scrollView.bounds.height
@@ -1432,6 +1484,10 @@ final class CodeBlockAttachment: NSTextAttachment {
         let bottomPadding: CGFloat = 12
         let newScrollFrame = CGRect(x: 0, y: topOffset, width: container.frame.width, height: scrollHeight + bottomPadding)
         let totalHeight = topOffset + scrollHeight + bottomPadding
+        // [T-codeblock-hide-idle-scrollbars] Re-evaluate on every update: a
+        // streaming block starts scrolling once it passes maxCodeHeight.
+        Self.syncScrollability(scrollView, contentSize: fitting,
+                               visibleWidth: container.frame.width, scrollHeight: scrollHeight)
 
         // [CodeBlockGrow] Animate the visible code-frame growing taller as more
         // lines stream in, instead of snapping. The wrapper's LOGICAL height is
@@ -3253,10 +3309,15 @@ final class ImageAttachment: NSTextAttachment {
     /// its `UIImageView.image` property).
     fileprivate var needsViewRebuild: Bool = false
     private(set) var loadedImage: UIImage?
-    /// Resolved file URL for lazy re-downsampling (no raw Data in memory).
+    /// Resolved file URL of the loaded source (kept for preview/inspection).
     private var resolvedFileURL: URL?
-    /// The maxPixelSize used for the current loadedImage (0 = initial full load).
-    private var downsampledAtPixelSize: CGFloat = 0
+    /// [T-ios-image-single-writer] Monotonic load generation. Every dispatch
+    /// and every invalidation bumps it; an async completion whose captured
+    /// generation no longer matches is STALE and is dropped instead of writing
+    /// `loadedImage`. Out-of-order completions become impossible by
+    /// construction (the old design had up to three writers racing: initial
+    /// load, cache adoption and N bounds-time re-downsample tasks).
+    private var loadGeneration: Int = 0
     private var isLoading = false
     /// Set when a leophoneagent:// file was not found; allows retry on next render.
     private var fileNotFound = false
@@ -3329,11 +3390,14 @@ final class ImageAttachment: NSTextAttachment {
     func invalidateLoadedImage() {
         loadedImage = nil
         loadedFingerprint = nil
-        downsampledAtPixelSize = 0
         resolvedFileURL = nil
         fileNotFound = false
         retriesRemaining = 15
         needsViewRebuild = true
+        // [T-ios-image-single-writer] Drop any in-flight load's result: its
+        // completion captured the old generation.
+        loadGeneration &+= 1
+        isLoading = false
     }
 
     @available(*, unavailable)
@@ -3357,10 +3421,8 @@ final class ImageAttachment: NSTextAttachment {
         // Quantize the line-fragment width to a 4pt bucket. TextKit can call
         // attachmentBounds many times per layout pass with widths that differ
         // by sub-point floats (e.g. 329.83333 vs 330.0) as the container width
-        // flows through cell self-sizing. Without quantization the downstream
-        // `targetPixels` can toggle across the `downsampledAtPixelSize !=` guard
-        // and re-schedule downsample on every call, which mutates loadedImage
-        // and forces TextKit to re-typeset. Bucket is visually imperceptible.
+        // flows through cell self-sizing; quantizing keeps the returned box
+        // geometry stable across those calls. Visually imperceptible.
         let rawWidth = lineFrag.width
         let width = (rawWidth / 4.0).rounded() * 4.0
         attachmentBoundsCallCount &+= 1
@@ -3368,7 +3430,7 @@ final class ImageAttachment: NSTextAttachment {
         // flooding while still proving cadence vs streaming token rate.
         let cnt = attachmentBoundsCallCount
         if cnt <= 5 || cnt % 50 == 0 {
-            AppLogger(category: "AttachHotPath").info("[IMG][BOUNDS] #\(cnt) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) rawW=\(String(format: "%.1f", rawWidth)) bucketW=\(String(format: "%.0f", width)) hasImg=\(self.loadedImage != nil) sampledAt=\(Int(self.downsampledAtPixelSize))")
+            AppLogger(category: "AttachHotPath").info("[IMG][BOUNDS] #\(cnt) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) rawW=\(String(format: "%.1f", rawWidth)) bucketW=\(String(format: "%.0f", width)) hasImg=\(self.loadedImage != nil)")
         }
 
         if let img = loadedImage {
@@ -3383,41 +3445,12 @@ final class ImageAttachment: NSTextAttachment {
             let maxH = LeoWindowMetrics.layoutHeight / 2
             let h = min(imgWidth * aspect, maxH)
 
-            // Re-downsample if the loaded image is much larger than needed.
-            // Target: 2x the actual display width for retina crispness.
-            // Re-reads from disk (not memory) to avoid holding raw Data in RAM.
-            // Guards:
-            //  - imgWidth >= maxImageWidth * 0.8: only downsample when layout width
-            //    is close to the final display width. TextKit may call attachmentBounds
-            //    with a very small lineFrag during intermediate layout passes; if we
-            //    downsample then, loadedImage is permanently replaced with a tiny
-            //    thumbnail (e.g. 112×200) and never recovers.
-            //  - targetPixels >= 600: absolute minimum to avoid destroying image quality.
-            //  - targetPixels is bucketed to 50pt so sub-point lineFrag jitter
-            //    cannot flip the `downsampledAtPixelSize != targetPixels` guard
-            //    and re-kick downsample on every attachmentBounds call.
-            let rawTargetPixels = imgWidth * 2
-            let targetPixels = (rawTargetPixels / 50.0).rounded() * 50.0
-            if imgWidth >= Self.maxImageWidth * 0.8,
-               targetPixels >= 600,
-               img.size.width > targetPixels * 1.5,
-               downsampledAtPixelSize != targetPixels {
-                AppLogger(category: "AttachHotPath").info("[IMG][BOUNDS][DOWNSAMPLE-FIRE] src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) targetPx=\(Int(targetPixels)) prevPx=\(Int(self.downsampledAtPixelSize)) imgW=\(Int(img.size.width)) bucketW=\(String(format: "%.0f", width))")
-                downsampledAtPixelSize = targetPixels
-                let fileURL = resolvedFileURL
-                Task.detached(priority: .utility) {
-                    guard let url = fileURL, let data = try? Data(contentsOf: url) else { return }
-                    guard let resized = downsampleImageData(data, maxPixelSize: targetPixels) else { return }
-                    await MainActor.run {
-                        AppLogger(category: "AttachHotPath").info("[IMG][BOUNDS][DOWNSAMPLE-APPLY] src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) newSize=\(Int(resized.size.width))x\(Int(resized.size.height)) — ASSIGNS loadedImage on main, will trigger TextKit re-layout")
-                        self.loadedImage = resized
-                        // Do NOT write back to NativeMediaImageCache — the shared
-                        // cache must keep the full-resolution image so that other
-                        // ImageAttachment instances (e.g. after markdown re-parse)
-                        // pick up the crisp original, not a downsampled copy.
-                    }
-                }
-            }
+            // [T-ios-image-single-writer] attachmentBounds is PURE: it measures
+            // and returns. The bounds-time re-downsample that lived here (a
+            // detached decode fired from a TextKit measurement callback at
+            // oscillating widths, assigning `loadedImage` bare when it landed)
+            // was the root of the placeholder-stuck family. Display-size
+            // decoding now happens once, in the load pipeline.
 
             // Return the attachment box as `imgWidth` (already clamped by
             // `maxImageWidth` and the image's own intrinsic width), NOT the
@@ -3467,7 +3500,48 @@ final class ImageAttachment: NSTextAttachment {
         return CGRect(x: 0, y: 0, width: placeholderWidth, height: Self.placeholderHeight)
     }
 
+    /// [T-ios-image-single-writer] The ONLY code path that writes
+    /// `loadedImage`. Every adoption — cache hit, disk decode, HTTP fetch —
+    /// funnels through here on main and is always paired with the refresh
+    /// signal (`onLoad` + size-changed notification): "state changed but no
+    /// signal followed" was the shape of every placeholder-stuck bug here.
+    private func adoptLoaded(_ image: UIImage, fingerprint: String, canonicalSrc: String, via: String) {
+        loadedImage = image
+        loadedFingerprint = fingerprint
+        isLoading = false
+        fileNotFound = false
+        imgLogger.info("[MinisImage][Adopt] via=\(via) src=\(canonicalSrc) size=\(Int(image.size.width))x\(Int(image.size.height))")
+        onLoad?()
+        // Adoption grows the cell (placeholder → image bounds); re-measure even
+        // on the synchronous cache-hit path.
+        NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: canonicalSrc)
+    }
+
     func beginLoadingIfNeeded() {
+        // Canonicalize scheme-less / relative sources to leophoneagent://workspace/…
+        // so the rest of the pipeline (cache key, resolve, fingerprint)
+        // treats them uniformly. Agents writing plain markdown like
+        // `![img](foo.png)` or `![img](subdir/foo.png)` land here.
+        let canonicalSrc = Self.canonicalizeMarkdownImageSource(source)
+        if canonicalSrc != source {
+            imgLogger.info("[MinisImage][Load] canonicalized src=\(self.source) → \(canonicalSrc)")
+        }
+
+        // [T-ios-image-single-writer] Cache first, flags second: the shared
+        // cache is the ground truth for "is this bitmap available"; isLoading
+        // is only scheduling state. With the guard first, a view arriving while
+        // a load was in flight never saw the cache even after that load filled
+        // it — the "first open shows grey boxes, re-enter fixes it" window.
+        // Fingerprint-keyed so an in-place rewrite falls through to a decode.
+        // (Only when nothing is loaded: the fingerprint costs a stat.)
+        if loadedImage == nil {
+            let fpKey = minisMediaCacheKey(for: canonicalSrc)
+            if let cached = NativeMediaImageCache.shared.image(for: fpKey) {
+                adoptLoaded(cached, fingerprint: fpKey, canonicalSrc: canonicalSrc, via: "memory-cache")
+                return
+            }
+        }
+
         guard loadedImage == nil, !isLoading else {
             imgLogger.info("[MinisImage][Load] skip src=\(self.source) alreadyLoaded=\(self.loadedImage != nil) isLoading=\(self.isLoading)")
             return
@@ -3480,32 +3554,12 @@ final class ImageAttachment: NSTextAttachment {
         }
         retriesRemaining -= 1
         isLoading = true
-        // Canonicalize scheme-less / relative sources to leophoneagent://workspace/…
-        // so the rest of the pipeline (cache key, resolve, fingerprint)
-        // treats them uniformly. Agents writing plain markdown like
-        // `![img](foo.png)` or `![img](subdir/foo.png)` land here.
-        let canonicalSrc = Self.canonicalizeMarkdownImageSource(source)
-        if canonicalSrc != source {
-            imgLogger.info("[MinisImage][Load] canonicalized src=\(self.source) → \(canonicalSrc)")
-        }
+        // [T-ios-image-single-writer] Stamp this dispatch; the completion
+        // re-checks it on main and a stale result is dropped.
+        loadGeneration &+= 1
+        let gen = loadGeneration
         let parsedURL = URL(string: canonicalSrc)
-        imgLogger.info("[MinisImage][Load] START src=\(canonicalSrc) scheme=\(parsedURL?.scheme ?? "nil") host=\(parsedURL?.host ?? "nil") path=\(parsedURL?.path ?? "nil") ext=\(parsedURL?.pathExtension ?? "nil") retriesRemaining=\(self.retriesRemaining)")
-
-        // Fingerprint-keyed cache so an in-place rewrite of the same
-        // leophoneagent:// path produces a different key and falls through to
-        // a fresh decode.
-        let fpKey = minisMediaCacheKey(for: canonicalSrc)
-        if let cached = NativeMediaImageCache.shared.image(for: fpKey) {
-            imgLogger.info("[MinisImage][Load] MEMORY CACHE HIT src=\(canonicalSrc) size=\(cached.size.width)x\(cached.size.height)")
-            loadedImage = cached
-            loadedFingerprint = fpKey
-            isLoading = false
-            onLoad?()
-            // Memory-cache hit still grows the cell: placeholder bounds →
-            // image bounds at the recorded size. Cell needs to re-measure.
-            NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: canonicalSrc)
-            return
-        }
+        imgLogger.info("[MinisImage][Load] START gen=\(gen) src=\(canonicalSrc) scheme=\(parsedURL?.scheme ?? "nil") host=\(parsedURL?.host ?? "nil") path=\(parsedURL?.path ?? "nil") ext=\(parsedURL?.pathExtension ?? "nil") retriesRemaining=\(self.retriesRemaining)")
         imgLogger.info("[MinisImage][Load] MEMORY CACHE MISS src=\(canonicalSrc) — will load from disk/network")
 
         let src = canonicalSrc
@@ -3522,6 +3576,8 @@ final class ImageAttachment: NSTextAttachment {
             return
         }
         imgLogger.info("[MinisImage][Load] dispatching async load src=\(src) isMinisURL=\(isMinisURL)")
+        // Captured on main: displayTargetPixels runs off-main.
+        let screenScale = UIScreen.main.scale
         Task.detached(priority: .userInitiated) {
             var fileURL: URL?
             let img: UIImage?
@@ -3532,7 +3588,9 @@ final class ImageAttachment: NSTextAttachment {
                     fileURL = resolved
                     if let data = try? Data(contentsOf: resolved) {
                         imgLogger.info("[MinisImage][Load] read \(data.count) bytes from localPath=\(resolved.path)")
-                        let downsampled = downsampleImageData(data)
+                        // [T-ios-image-single-writer] Decode straight to display
+                        // size — the one and only decode this image gets.
+                        let downsampled = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
                         if let downsampled {
                             imgLogger.info("[MinisImage][Load] downsample OK src=\(src) resultSize=\(downsampled.size.width)x\(downsampled.size.height)")
                         } else {
@@ -3550,9 +3608,8 @@ final class ImageAttachment: NSTextAttachment {
             } else if let url = URL(string: src), url.scheme == "http" || url.scheme == "https" {
                 imgLogger.info("[MinisImage][Load] fetching HTTP(S) url=\(src)")
                 if let data = try? Data(contentsOf: url) {
-                    // HTTP images: no local file URL for re-downsample (network-only)
                     imgLogger.info("[MinisImage][Load] HTTP fetched \(data.count) bytes src=\(src)")
-                    img = downsampleImageData(data)
+                    img = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
                 } else {
                     imgLogger.warning("[MinisImage][Load] HTTP fetch FAILED src=\(src)")
                     img = nil
@@ -3563,7 +3620,7 @@ final class ImageAttachment: NSTextAttachment {
                 fileURL = url
                 if let data = try? Data(contentsOf: url) {
                     imgLogger.info("[MinisImage][Load] file loaded \(data.count) bytes src=\(src)")
-                    img = downsampleImageData(data)
+                    img = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
                 } else {
                     imgLogger.warning("[MinisImage][Load] file load FAILED src=\(src)")
                     img = nil
@@ -3597,28 +3654,35 @@ final class ImageAttachment: NSTextAttachment {
             }
 
             await MainActor.run {
-                self.loadedImage = img
-                self.loadedFingerprint = img != nil ? postLoadKey : nil
+                // [T-ios-image-single-writer] Stale-completion gate. If the
+                // generation moved on (invalidateLoadedImage, or a newer
+                // dispatch), this result belongs to a dead request — drop it.
+                // The bitmap is already in the shared cache above, so the live
+                // generation adopts it from there; nothing stale ever lands.
+                guard gen == self.loadGeneration else {
+                    imgLogger.info("[MinisImage][Load] DROP STALE completion gen=\(gen) current=\(self.loadGeneration) src=\(src)")
+                    return
+                }
                 self.resolvedFileURL = fileURL
-                self.isLoading = false
-                if img == nil && isMinisURL && self.retriesRemaining > 0 {
-                    imgLogger.info("[MinisImage][Load] RETRY scheduled src=\(src) retriesRemaining=\(self.retriesRemaining)")
-                    self.fileNotFound = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                        guard let self, self.fileNotFound else { return }
-                        self.beginLoadingIfNeeded()
-                    }
+                if let img {
+                    self.adoptLoaded(img, fingerprint: postLoadKey, canonicalSrc: src, via: "disk-load")
                 } else {
-                    if img == nil && isMinisURL {
-                        imgLogger.error("[MinisImage][Load] GAVE UP src=\(src) — all retries exhausted")
-                    }
-                    self.onLoad?()
-                    if img != nil {
-                        // Cell-side height re-measure after async image load.
-                        // Mirrors the fix in VideoAttachment — without this,
-                        // the cell stays at the 200pt placeholder height
-                        // until an unrelated event triggers a reconfigure.
-                        NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: src)
+                    self.loadedFingerprint = nil
+                    self.isLoading = false
+                    if isMinisURL && self.retriesRemaining > 0 {
+                        imgLogger.info("[MinisImage][Load] RETRY scheduled src=\(src) retriesRemaining=\(self.retriesRemaining)")
+                        self.fileNotFound = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                            guard let self, self.fileNotFound else { return }
+                            self.beginLoadingIfNeeded()
+                        }
+                    } else {
+                        if isMinisURL {
+                            imgLogger.error("[MinisImage][Load] GAVE UP src=\(src) — all retries exhausted")
+                        }
+                        // Failure still signals so a waiting view renders its
+                        // not-found state instead of a placeholder forever.
+                        self.onLoad?()
                     }
                 }
             }
@@ -4514,6 +4578,15 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     /// skipped. Guarantees one post-settle retry of invalidateCellSizeIfNeeded
     /// even if no further UAV/measure call arrives after the glide ends.
     private var pendingDeferredRemeasure = false
+    /// [T-ios-defer-retry-never-consumed] A real height correction was skipped
+    /// during a deferSelfSizing window and is still owed. Paid by
+    /// `consumeDeferredCorrectionIfNeeded()` (called by the message list the
+    /// moment the window closes at settle) or by the bounded backstop timer;
+    /// cleared where the measurement is committed.
+    private var deferredCorrectionPending = false
+    /// Backstop re-arm bound (~6 s of drag); past it the settle hook is the
+    /// only consumer, which is correct — a drag that long always settles.
+    private static let maxDeferredRemeasureAttempts = 10
     /// Records the last time the layout loop tripped the re-entry guard, for
     /// watchdog diagnostics. If this fires many times per second we know the
     /// loop is hot even if we successfully short-circuit it.
@@ -4783,6 +4856,40 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     }
 
     /// Walk up the view hierarchy to find the enclosing UICollectionViewCell.
+    /// [T-ios-defer-retry-never-consumed] Backstop for the settle-driven
+    /// consumer. While the window is still open (finger down), wait another
+    /// interval WITHOUT measuring — the old timer re-ran sizeThatFits every
+    /// 0.6 s only to hit the same skip — and give up after a bounded number of
+    /// attempts, leaving the debt to the settle hook.
+    private func armDeferredRemeasureBackstop(attempt: Int = 0) {
+        guard !pendingDeferredRemeasure else { return }
+        guard attempt < Self.maxDeferredRemeasureAttempts else {
+            cellSizeLogger.info("[invalidateCell] backstop gave up after \(attempt) attempts — settle hook owns the debt")
+            return
+        }
+        pendingDeferredRemeasure = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            self.pendingDeferredRemeasure = false
+            guard self.deferredCorrectionPending else { return }
+            let stillDeferred = (self.findCollectionView()?.collectionViewLayout as? MessageListLayout)?.deferSelfSizing ?? false
+            if stillDeferred {
+                self.armDeferredRemeasureBackstop(attempt: attempt + 1)
+                return
+            }
+            self.invalidateCellSizeIfNeeded()
+        }
+    }
+
+    /// [T-ios-defer-retry-never-consumed] Pay a correction skipped during a
+    /// deferSelfSizing window. Called by the message list at settle, right
+    /// after it clears `deferSelfSizing`. The fingerprint was not consumed by
+    /// the skip, so this re-measures for real.
+    func consumeDeferredCorrectionIfNeeded() {
+        guard deferredCorrectionPending else { return }
+        invalidateCellSizeIfNeeded()
+    }
+
     private func findCell() -> UICollectionViewCell? {
         var view: UIView? = superview
         while let v = view {
@@ -4903,10 +5010,18 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             for subview in attachmentViews {
                 if subview.frame.contains(location) {
                     // Find the UITextView inside this attachment view
-                    if let codeTV = findCodeTextView(in: subview), codeTV.isScrollEnabled {
+                    // [T-codeblock-hide-idle-scrollbars] Ask the code block's
+                    // SCROLL VIEW what it can scroll. The inner UITextView is
+                    // created with isScrollEnabled = false, so the old check
+                    // was never true and the outer view never yielded a pan.
+                    // Yield only on an axis the block can really scroll.
+                    if let codeScroll = findCodeScrollView(in: subview) {
                         let vel = self.panGestureRecognizer.velocity(in: self)
-                        // If primarily horizontal, let the inner code block handle it
-                        if abs(vel.x) > abs(vel.y) {
+                        let horizontal = abs(vel.x) > abs(vel.y)
+                        let usableH = codeScroll.bounds.height - codeScroll.contentInset.bottom
+                        let canScrollH = codeScroll.contentSize.width > codeScroll.bounds.width + 0.5
+                        let canScrollV = codeScroll.contentSize.height > usableH + 0.5
+                        if (horizontal && canScrollH) || (!horizontal && canScrollV) {
                             return false
                         }
                     }
@@ -4977,10 +5092,11 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         return false
     }
 
-    private func findCodeTextView(in view: UIView) -> UITextView? {
+    /// [T-codeblock-hide-idle-scrollbars] The code block's own UIScrollView.
+    private func findCodeScrollView(in view: UIView) -> UIScrollView? {
         for sub in view.subviews {
-            if let tv = sub as? UITextView { return tv }
-            if let found = findCodeTextView(in: sub) { return found }
+            if let sv = sub as? UIScrollView { return sv }
+            if let found = findCodeScrollView(in: sub) { return found }
         }
         return nil
     }
@@ -5310,6 +5426,30 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
 
     /// Remove all attachment subviews and clear tracking state.
     /// Called when SwiftUI recycles this view for a different message.
+    /// [T-ios-memo-key-ignores-render-state] Vertical space this block's ASYNC
+    /// attachments currently occupy, as a stable integer. The height memo is
+    /// keyed on content length, which a LaTeX render or an image load does not
+    /// change — so a height measured while formulas were blank / images were
+    /// 200 pt placeholders was stored under the SAME key as the finished
+    /// layout and seeded back forever (upstream: 989 pt / 16% deficit). Uses
+    /// the loaded bitmap / thumbnail intrinsic heights (0 until loaded), not
+    /// `bounds` (never written by these attachments).
+    func asyncAttachmentRenderSignal() -> Int {
+        let storage = textStorage
+        guard storage.length > 0 else { return 0 }
+        var total: CGFloat = 0
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length), options: []) { value, _, _ in
+            if let math = value as? MathAttachment {
+                total += math.renderedSize.height
+            } else if let img = value as? ImageAttachment {
+                total += img.loadedImage?.size.height ?? 0
+            } else if let video = value as? VideoAttachment {
+                total += video.thumbnail?.size.height ?? 0
+            }
+        }
+        return Int(total.rounded())
+    }
+
     func clearAllAttachmentViews() {
         for view in attachmentViews { view.removeFromSuperview() }
         attachmentViews.removeAll()
@@ -5719,8 +5859,25 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         #endif
     }
 
-    /// Re-layout attachment views after an async image/video load completes.
+    /// [T-ios-reuse-cachewipe] Burst coalescing: a cell with N formulas /
+    /// images gets N async completions, and each one re-typeset the whole
+    /// storage and invalidated the cell size — upstream logged 7 height
+    /// rewrites in 200 ms oscillating without converging. The work is
+    /// idempotent (rebuilt from current state), so a burst collapses into one
+    /// commit on the next runloop turn.
+    private var isCoalescingRefresh = false
     private func refreshAttachmentViews() {
+        guard !isCoalescingRefresh else { return }
+        isCoalescingRefresh = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isCoalescingRefresh = false
+            self.performRefreshAttachmentViews()
+        }
+    }
+
+    /// Re-layout attachment views after an async image/video load completes.
+    private func performRefreshAttachmentViews() {
         AppLogger(category: "AttachHotPath").info("[REFRESH] entry — async media-load callback fired (image/video/math finished loading); will run updateAttachmentViews + invalidateCellSize")
         guard window != nil else {
             // Detached from window — defer the refresh until re-attach so an
@@ -6121,14 +6278,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 // Arm one guaranteed post-settle retry in case no further
                 // measure call arrives after the glide ends.
                 cellSizeLogger.info("[invalidateCell] SKIPPED — deferSelfSizing active (correction NOT consumed, delta=\(String(format: "%+.1f", delta)); will retry)")
-                if !pendingDeferredRemeasure {
-                    pendingDeferredRemeasure = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                        guard let self else { return }
-                        self.pendingDeferredRemeasure = false
-                        self.invalidateCellSizeIfNeeded()
-                    }
-                }
+                deferredCorrectionPending = true
+                armDeferredRemeasureBackstop()
                 return
             }
         }
@@ -6146,6 +6297,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         lastSizedWidth = measureWidth
         lastSizedTableGenSum = tableGenSum
         lastComputedHeight = newHeight
+        deferredCorrectionPending = false
         if let coord = self.delegate as? SelectableMarkdownView.Coordinator {
             // [JitterFix] Key by render width (measureWidth), matching the
             // SwiftUI sizeThatFits cache key. Using textContainer.size.width
@@ -6361,8 +6513,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // rects cached.
         if let mid = messageId, let existing = SelectableMarkdownView.rendererCache[mid] {
             coord.renderer = existing
+            SelectableMarkdownView.touchRenderer(mid)
         } else if let mid = messageId {
             SelectableMarkdownView.rendererCache[mid] = coord.renderer
+            SelectableMarkdownView.touchRenderer(mid)
         }
         return coord
     }
@@ -6378,7 +6532,42 @@ struct SelectableMarkdownView: UIViewRepresentable {
     /// state. The cache uses a regular dictionary because the keys are
     /// stable across the chat session and entries are cheap; in practice
     /// it grows at the rate of unique assistant messages in the live chat.
+    /// [T-renderer-cache-bounded] It used to be exactly that — an unbounded
+    /// dictionary on the type, reclaimed by nothing (not leaving a chat, not
+    /// VM eviction, not a memory warning). Now an LRU capped at 80 renderers
+    /// (well past a screenful, so scrolling back never re-parses) and drained
+    /// when a VM releases its render state or on memory pressure.
     @MainActor private static var rendererCache: [UUID: MarkdownNSRenderer] = [:]
+    /// LRU order for `rendererCache`, oldest first.
+    @MainActor private static var rendererLRU: [UUID] = []
+    @MainActor static let rendererCacheCap = 80
+
+    @MainActor
+    private static func touchRenderer(_ id: UUID) {
+        if let i = rendererLRU.firstIndex(of: id) { rendererLRU.remove(at: i) }
+        rendererLRU.append(id)
+        while rendererLRU.count > rendererCacheCap, let oldest = rendererLRU.first {
+            rendererLRU.removeFirst()
+            rendererCache.removeValue(forKey: oldest)
+        }
+    }
+
+    /// Drop one message's renderer (safe for an id never cached). The renderer
+    /// is a cache: the next render for this message builds a fresh one.
+    @MainActor
+    static func dropRenderer(for messageId: UUID) {
+        guard rendererCache.removeValue(forKey: messageId) != nil else { return }
+        if let i = rendererLRU.firstIndex(of: messageId) { rendererLRU.remove(at: i) }
+    }
+
+    /// Drop every cached renderer (memory warning).
+    @MainActor
+    static func dropAllRenderers() -> Int {
+        let n = rendererCache.count
+        rendererCache.removeAll()
+        rendererLRU.removeAll()
+        return n
+    }
 
     func makeUIView(context: Context) -> SelectableMarkdownTextView {
         let textView = SelectableMarkdownTextView()
@@ -6546,7 +6735,22 @@ struct SelectableMarkdownView: UIViewRepresentable {
             textView.clearAllAttachmentViews()
         }
 
-        let isNewMessage = !oldMarkdown.isEmpty && !markdown.hasPrefix(oldMarkdown)
+        // [T-ios-reuse-cachewipe] Identity of what we are about to render.
+        // Prefer blockId: one message spans many text views under V3.
+        let contentId = blockId ?? messageId
+        let previousContentId = context.coordinator.lastContentId
+        context.coordinator.lastContentId = contentId
+        let isDifferentContent = contentId != nil && previousContentId != nil && contentId != previousContentId
+        // The prefix test is a sound "content was rewritten" signal DURING
+        // streaming, but it is also trivially true when a cell is recycled onto
+        // an unrelated message — which a large jump (previous-turn button)
+        // does en masse. Upstream field logs: every such recycle dropped the
+        // math cache and tore down every attachment view, so the newly shown
+        // LaTeX re-rendered async and the cell oscillated (57 corrections,
+        // 7733↔8066 pt) with tool cards / tables at stale coordinates. Only a
+        // genuine same-content rewrite takes the destructive path now; a
+        // recycled view takes the normal rebuild path below.
+        let isNewMessage = !oldMarkdown.isEmpty && !markdown.hasPrefix(oldMarkdown) && !isDifferentContent
         if isNewMessage {
             // [WordFade] The storage is about to be rebuilt from scratch; any
             // in-flight fade ranges are stale. Drop them before the rewrite.
@@ -7612,6 +7816,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var lastMarkdown: String = ""
+        /// [T-ios-reuse-cachewipe] Identity of the content this coordinator's
+        /// text view is showing — `blockId` (V3 cell-per-block) else
+        /// `messageId`. Separates "recycled onto different content" from "the
+        /// same content rewritten" for the cache-wipe branch in updateUIView.
+        var lastContentId: UUID? = nil
         var lastRenderedContentHash: Int? = nil
         /// The last render drew a streaming table tail as plain text.
         var lastHadPlainSuffix = false

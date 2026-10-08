@@ -776,7 +776,15 @@ final class AnthropicAgentProvider: AgentProvider {
 
     /// Anthropic supports up to 8000×8000 / 5MB; we standardize at 2000 long edge
     /// across attachments / browser / read_image. Returns nil if already within bounds.
+    /// [T-ios-listsessions-perf] Memoised per image bytes — see
+    /// ProviderSendPathCache.memoizedDownscale.
     private static func downscaleForAnthropic(_ data: Data, maxLongEdge: CGFloat = 2000) -> Data? {
+        ProviderSendPathCache.memoizedDownscale(data, maxLongEdge: maxLongEdge) {
+            computeDownscaleForAnthropic($0, maxLongEdge: maxLongEdge)
+        }
+    }
+
+    private static func computeDownscaleForAnthropic(_ data: Data, maxLongEdge: CGFloat) -> Data? {
         guard let image = UIImage(data: data), let cgImage = image.cgImage else { return nil }
         let pixelW = CGFloat(cgImage.width)
         let pixelH = CGFloat(cgImage.height)

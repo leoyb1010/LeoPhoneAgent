@@ -232,30 +232,13 @@ final class AssistantBlock: Identifiable, ObservableObject {
     /// SwiftUI recomposition.
     var thinkingContentBuffer: String = ""
 
-    // [T-thinking-stream-jank] Perf instrumentation: 1s-windowed delta-rate
-    // summary + per-flush timing, category "ThinkPerf". Cheap (one Date +
-    // counters per delta, one log line per second) so it can stay on in
-    // debug builds while reproducing the long-thinking jank report.
-    private static let perfLogger = AppLogger(category: "ThinkPerf")
-    private var perfWindowStart = Date()
-    private var perfDeltaCount = 0
-    private var perfDeltaBytes = 0
-
+    // [T-thinkperf-release-displaylink] The per-delta ThinkPerf counters
+    // (a Date() + two counters per streamed reasoning token, 60-105/s) were
+    // removed in Debug and Release alike: the jank they were hunting was
+    // fixed by moving the follow trigger to flush pace.
     func appendThinkingDelta(_ delta: String) {
         thinkingContentBuffer += delta
         contentUpdateSeq += 1
-        perfDeltaCount += 1
-        perfDeltaBytes += delta.utf8.count
-        let now = Date()
-        let dt = now.timeIntervalSince(perfWindowStart)
-        if dt >= 1.0 {
-            // [T-log-noise-privacy 2026-07-18] info → debug: fires once per
-            // second per streaming thinking block for the whole stream.
-            Self.perfLogger.debug("[ThinkPerf] deltas/s=\(self.perfDeltaCount) bytes/s=\(self.perfDeltaBytes) bufLen=\(self.thinkingContentBuffer.count) contentLen=\(self.content.count) window=\(String(format: "%.2f", dt))s block=\(self.id.uuidString.prefix(8))")
-            perfWindowStart = now
-            perfDeltaCount = 0
-            perfDeltaBytes = 0
-        }
     }
 
     /// [T-stream-hops] The off-main stream keeps the running thinking text and
@@ -303,18 +286,13 @@ final class AssistantBlock: Identifiable, ObservableObject {
     }
 
     func flushThinkingBuffer() {
-        guard kind == .thinking, thinkingContentBuffer.count > content.count else { return }
-        let t0 = CFAbsoluteTimeGetCurrent()
+        // The buffer only ever extends `content`, so comparing UTF-8 lengths
+        // (O(1) on native strings) answers "is there anything new" without two
+        // full grapheme walks per flush. [T-thinkperf-release-displaylink]
+        // also dropped the per-flush timing log: the copy is the cheap half,
+        // the real cost lands in the SwiftUI update it triggers.
+        guard kind == .thinking, thinkingContentBuffer.utf8.count > content.utf8.count else { return }
         content = thinkingContentBuffer
-        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
-        // The assign itself is a copy; the real cost lands in the SwiftUI
-        // update it triggers. Log both the copy time and the length so slow
-        // flushes can be correlated with hitches.
-        if ms > 4 {
-            Self.perfLogger.info("[ThinkPerf] flush SLOW len=\(self.content.count) copy=\(String(format: "%.1f", ms))ms block=\(self.id.uuidString.prefix(8))")
-        } else {
-            Self.perfLogger.debug("[ThinkPerf] flush len=\(self.content.count) copy=\(String(format: "%.1f", ms))ms")
-        }
     }
     /// Status for tool blocks (nil for text blocks).
     @Published var toolStatus: ToolBlockStatus?

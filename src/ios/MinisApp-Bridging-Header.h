@@ -40,6 +40,7 @@
 
 // Signal/exception handler — captures crash stacks to disk for next-launch report.
 #import "CrashSignalHandler.h"
+#include "LeoVerboseTraceShim.h"
 
 // Safe KVC wrapper — @try/@catch for private WebKit preference keys.
 #import "SafeKVCSetTrue.h"

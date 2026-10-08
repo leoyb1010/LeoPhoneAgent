@@ -196,7 +196,7 @@ enum ContextTurnRunner {
                     blocksSideEffectTools: Bool = true,
                     shouldStop: ((Int) -> Bool)? = nil) async -> Outcome {
         let previousActive = AIChatViewModel.activeSessionId
-        let vm = ViewModelCache.shared.createDraft()
+        let vm = ViewModelCache.shared.createDraft(pool: .background)
         vm.sessionSource = source
         vm.blocksSideEffectTools = blocksSideEffectTools
         _ = await vm.ensureSessionReturningId()

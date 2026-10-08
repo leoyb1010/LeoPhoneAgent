@@ -474,9 +474,17 @@ struct MinisApp: App {
                 // 技能重扫(数据库 + 逐个读 SKILL.md)在主线程上:30 秒内切回来不重复做。
                 if Date().timeIntervalSince(Self.lastForegroundSkillReload) > 30 {
                     Self.lastForegroundSkillReload = Date()
-                    let t0 = CFAbsoluteTimeGetCurrent()
-                    SkillStore.shared.reload()
-                    LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                    // [T-ios-listsessions-perf] Off the first-frame critical
+                    // path: reload() is a synchronous main-actor SQLite query
+                    // plus one SKILL.md read per skill, and scenePhase turns
+                    // .active while the launch frame is still being built.
+                    // Nothing in the first frame reads `skills`; a main-queue
+                    // hop lets the frame commit first.
+                    DispatchQueue.main.async {
+                        let t0 = CFAbsoluteTimeGetCurrent()
+                        SkillStore.shared.reload()
+                        LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                    }
                 }
 
                 if #available(iOS 17.0, *) {

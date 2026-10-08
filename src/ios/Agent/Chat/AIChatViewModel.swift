@@ -1269,6 +1269,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Public read so the manual `objectWillChange.send()` call sites can gate.
     var isTransitionSuspended: Bool { transitionSuspended }
 
+    /// [T-ios-stream-publish-transition-gap] Publish unless this vm is the
+    /// outgoing side of a navigation transition. Every manual
+    /// `objectWillChange.send()` on a STREAMING path must go through this: the
+    /// four highest-frequency publishers (all in +SSEStream) used to publish
+    /// unconditionally and kept firing across the hosting-view teardown the
+    /// transition guard exists for. Eliding is safe — a suspended vm is
+    /// off-screen, the `messages` mutation has already happened, and
+    /// `setSuspendedForTransition(false)` publishes explicitly on resume.
+    func publishUnlessTransitioning() {
+        guard !transitionSuspended else { return }
+        objectWillChange.send()
+    }
+
     /// True for the synchronous window of `retryFromMessage` /
     /// `retryFromToolBlock`: from the moment we start clearing `canResume` /
     /// truncating `messages` until the DB truncation (`deleteMessagesAfter`)
@@ -2294,6 +2307,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     // `internal` (not `private`): the +Compaction extension's
     // schedulePostCompactDrain() runs the post-compact queue drain on this
     // task so cancel() can stop it. [T-compact-queued-drain]
+    /// [T-vmcache-pools] Pool this VM joins when `cacheDraft` caches it.
+    var viewModelCachePool: ViewModelCache.PoolKind = .normal
     var currentTask: Task<Void, Never>?
     var compactTask: Task<Void, Never>?
     var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -3895,6 +3910,32 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         pastedBlocks = []
         restoreStashedComposerDraft()
         logger.info("✏️ cancelEdit")
+    }
+
+    /// [T-vmcache-release] What ViewModelCache eviction does instead of
+    /// `cancel()`: drop render state that can be rebuilt from SQLite and stop
+    /// the idle prompt-cache keep-alive. Deliberately NOT touched: currentTask,
+    /// compaction, the prompt queue, SessionActivityTracker — `isEvictable`
+    /// refuses VMs with live work, and if that ever loosens the work survives.
+    @MainActor
+    func releaseForEviction() {
+        releaseRenderState()
+        if let sid = sessionId { CacheKeepAliveManager.shared.cancelKeepAlive(sessionId: sid) }
+        logger.info("♻️ releaseForEviction session=\(self.sessionId ?? "nil") vm=\(self.vmInstanceId) messages=\(self.messages.count)")
+    }
+
+    /// Drop parsed markdown + laid-out attributed strings (and the per-message
+    /// renderers, which live on a static) while keeping message text.
+    /// Everything dropped here is regenerated lazily on the next render.
+    @MainActor
+    func releaseRenderState() {
+        for msg in messages {
+            for block in msg.blocks {
+                if block.cachedAttributedString != nil { block.cachedAttributedString = nil }
+                if block.cachedMarkdown != nil { block.cachedMarkdown = nil }
+            }
+            SelectableMarkdownView.dropRenderer(for: msg.id)
+        }
     }
 
     func cancel(queuePolicy: AgentQueueStopPolicy = .continueQueuedPrompts) {

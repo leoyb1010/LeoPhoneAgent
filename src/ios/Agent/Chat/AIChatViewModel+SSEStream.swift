@@ -465,7 +465,7 @@ extension AIChatViewModel {
                             block.content = assistantText
                             block.cachedMarkdown = parsed
                             cacheAttributedString(for: block)
-                            objectWillChange.send()
+                            publishUnlessTransitioning()
                             if wasEmpty {
                                 blockContentFilledSignal.send((
                                     messageId: messages[msgIdx].id,
@@ -497,7 +497,7 @@ extension AIChatViewModel {
                         logger.debug("[TOOL:CREATED] \(name) id:\(tuId.prefix(20))")
                         #endif
                         logger.info("[ToolLifecycle] RECEIVED toolId=\(tuId.prefix(20)) tool=\(name) sid=\(self.sessionId?.prefix(8) ?? "nil") appState=\(UIApplication.shared.applicationState == .active ? "fg" : "bg") suspended=\(self.streamingUIUpdatesSuspended) isProcessing=\(self.isProcessing)")
-                        objectWillChange.send()
+                        publishUnlessTransitioning()
                         scrollToBottomSignal.send()
                     }
                     currentStreamingToolId = tuId
@@ -718,7 +718,7 @@ extension AIChatViewModel {
                     logger.debug("[TOOL:STREAMING] \(name) bytes:\(byteCount)")
                     #endif
                     if !hadSummary && blk.toolSummary != nil {
-                        objectWillChange.send()
+                        publishUnlessTransitioning()
                     }
                     if shouldScroll { scrollToBottomSignal.send() }
                 }
@@ -917,7 +917,7 @@ extension AIChatViewModel {
                               thinkIdx < self.messages[msgIdx].blocks.count else { return }
                         self.messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(thinkingSoFar)
                         self.messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
-                        self.objectWillChange.send()
+                        self.publishUnlessTransitioning()
                         if self.isNearBottom { self.scrollToBottomSignal.send() }
                     }
                 }

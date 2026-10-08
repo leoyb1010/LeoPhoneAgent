@@ -644,7 +644,12 @@ extension AIChatViewModel {
                 cacheAttributedString(for: block)
             }
         }
-        let deferredPrecache = Array(assistantMessages.dropLast(eagerCount))
+        // [T-renderer-cache-bounded] Only the last `coldLoadPrecacheTailMessages`
+        // assistant messages are pre-rendered (40 eagerly, the rest deferred);
+        // older ones render lazily on scroll. Rendering a 547-message session's
+        // whole history cost ~3.4× more and kept every attributed string alive.
+        let deferredPrecache = Array(assistantMessages.dropLast(eagerCount)
+            .suffix(max(0, Self.coldLoadPrecacheTailMessages - eagerCount)))
 
         let phase2bElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000 - phase2aElapsed - phase25Elapsed - phase2sigElapsed
         let buildElapsed = (CFAbsoluteTimeGetCurrent() - buildStart) * 1000
@@ -877,6 +882,9 @@ extension AIChatViewModel {
     /// Fills the render cache for blocks loadSession skipped, a few messages at
     /// a time so the main actor stays responsive. Blocks the list reaches first
     /// render themselves; this only saves work for later scrolls.
+    /// Assistant messages pre-rendered on a cold load (tail of the session).
+    static let coldLoadPrecacheTailMessages = 80
+
     func precacheOlderAttributedStrings(_ messages: [ChatMessage], sessionId: String) {
         guard !messages.isEmpty else { return }
         Task { @MainActor [weak self] in

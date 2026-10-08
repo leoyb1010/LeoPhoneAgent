@@ -955,14 +955,37 @@ extension CollectionViewMessageListV3 {
         }
 
         // === Height Measurement Cache ===
-        /// Caches measureAttributedStringHeight results by NSAttributedString identity.
-        /// Avoids redundant TextKit layout on repeated snapshots for the same content.
-        private var attrStringHeightCache: [ObjectIdentifier: CGFloat] = [:]
+        /// [T-ios-listsessions-perf] measureAttributedStringHeight results keyed
+        /// by CONTENT (HeightCacheKey) in a 300-entry LRU that survives session
+        /// change. The old identity key missed on every re-render of identical
+        /// text and was cleared on every switch — upstream traced 0.42-0.73 s
+        /// main-thread hangs in applySnapshot to re-measuring a page of long
+        /// blocks from cold. Dropped on memory warning (every entry is a pure
+        /// function of its key; the worst case is a re-measure).
+        private var attrStringHeightCache = HeightLRU(capacity: 300)
         /// [T-ios-user-msg-estimate-tail-jitter] Caches accurate user-bubble
         /// heights keyed by "content|width|fontsize" (user text has no
-        /// cachedAttributedString identity to key on). Cleared alongside
-        /// attrStringHeightCache on session change / font change.
+        /// cachedAttributedString identity to key on). Unbounded, so it is
+        /// still cleared on session change / font change.
         private var userBubbleHeightCache: [String: CGFloat] = [:]
+
+        /// [T-ios-earlier-stream-seed-freeze] Memo for `liveAssistantIds`.
+        /// configureCell runs per cell and the rule walks every message's
+        /// blocks, so without it the busiest frames go O(cells × messages ×
+        /// blocks). Keyed by (last message id, count, streamGeneration);
+        /// streamGeneration is bumped once per snapshot.
+        private var liveIdsMemo: (key: String, ids: Set<UUID>)?
+        private var streamGeneration: Int = 0
+
+        /// Ids of assistant messages whose content can still grow (memoized).
+        private func liveAssistantIds(in messages: [ChatMessage], isProcessing: Bool) -> Set<UUID> {
+            guard isProcessing else { return [] }
+            let key = "\(messages.last?.id.uuidString ?? "-")|\(messages.count)|\(streamGeneration)"
+            if let memo = liveIdsMemo, memo.key == key { return memo.ids }
+            let ids = Self.liveAssistantMessageIds(messages: messages, isProcessing: isProcessing)
+            liveIdsMemo = (key, ids)
+            return ids
+        }
 
         // === Thinking Block Toggle ===
         private var thinkingToggleSub: AnyCancellable?
@@ -1372,15 +1395,30 @@ extension CollectionViewMessageListV3 {
                 // so gate it out entirely. Non-streaming history cells keep the
                 // seed benefit. Clearing contentKey also disables the memo write
                 // on this cell's self-size path.
+                // [T-ios-earlier-stream-seed-freeze] The exclusion covers EVERY
+                // message that can still grow, not just `messages.last`: an
+                // earlier assistant turn keeps producing output through a
+                // running/streaming tool block while a newer turn streams.
+                // Treated as settled history, that message was seeded at a
+                // mid-stream height and froze too short, so the following
+                // blocks were stacked on top of it ("文字与工具卡片重叠").
+                // Same rule as the layout's streamingCellRanges. The live
+                // compact status row grows per delta too.
                 let itemMsgId = Self.messageId(of: item)
-                let isStreamingCell = vm.isProcessing && itemMsgId != nil
-                    && itemMsgId == messages.last?.id && messages.last?.role == .assistant
+                let isLiveCompactRow: Bool = itemMsgId.flatMap { id in
+                    messageIndex[id].flatMap { $0 < messages.count ? messages[$0] : nil }
+                }.map { $0.role == .systemInfo && $0.isCompactLoading } ?? false
+                let isStreamingCell = isLiveCompactRow
+                    || (itemMsgId.map { liveAssistantIds(in: messages, isProcessing: vm.isProcessing).contains($0) } ?? false)
                 if isStreamingCell {
                     cell.contentKey = nil
                     layout.invalidateMemo(forKey: key)
                 }
 
-                let memo = isStreamingCell ? nil : layout.measuredHeight(forKey: key, width: cvW)
+                // [T-ios-memo-key-ignores-render-state] Read under the SAME
+                // render-qualified key the measure path writes.
+                let memoKey = SelfSizingCell.renderQualifiedKey(key, for: cell)
+                let memo = isStreamingCell ? nil : layout.measuredHeight(forKey: memoKey, width: cvW)
                 if !isStreamingCell {
                     cell.contentKey = key
                 }
@@ -1429,7 +1467,7 @@ extension CollectionViewMessageListV3 {
             if let existing = cellBridges[message.id] { return existing }
             let bridge = CellStateBridgeV2()
             cellBridges[message.id] = bridge
-            updateBridge(bridge, message: message, in: messages)
+            updateBridge(bridge, message: message, in: messages, isInitialBridgeSetup: true)
             // Forward detailBlock changes to the VC-level sheet presenter
             bridgeSheetSubs[message.id] = bridge.$detailBlock
                 .dropFirst()
@@ -1469,20 +1507,32 @@ extension CollectionViewMessageListV3 {
             ds.apply(snapshot, animatingDifferences: false)
         }
 
-        private func updateBridge(_ bridge: CellStateBridgeV2, message: ChatMessage, in messages: [ChatMessage]) {
+        /// [T-ios-plaf-cache-footer-staleness] The bridge fields that decide
+        /// whether a footer row renders at all (typing / resume banner / retry
+        /// row / usage), reduced to booleans. Compared as a SHAPE so the
+        /// per-second retry countdown tick never re-enters the hosting graph.
+        private struct FooterHeightShape: Equatable {
+            let isActiveMessage: Bool
+            let canResume: Bool
+            let showUsage: Bool
+            let hasRetryRow: Bool
+            init(_ bridge: CellStateBridgeV2) {
+                isActiveMessage = bridge.isActiveMessage
+                canResume = bridge.canResume
+                showUsage = bridge.showUsage
+                hasRetryRow = bridge.autoRetryAttempt != 0
+            }
+        }
+        private var lastFooterShapeByMessage: [UUID: FooterHeightShape] = [:]
+
+        private func updateBridge(_ bridge: CellStateBridgeV2, message: ChatMessage, in messages: [ChatMessage],
+                                  isInitialBridgeSetup: Bool = false) {
             guard let vm else { return }
             let isLast = message.id == messages.last?.id
             let isActive = isLast && vm.isProcessing
-
-            // [T-reply-toolbar] Stream end grows the footer in place (the
-            // action bar appears), but SelfSizingCell's width-keyed cache can
-            // return the stale pre-bar height for in-place content changes --
-            // the documented [T-thinking-collapse-blank] mechanism. Invalidate
-            // the footer item on the active->idle flip so the bar isn't
-            // clipped until an unrelated reconfigure.
-            if bridge.isActiveMessage && !isActive {
-                invalidateFooterHeight(messageId: message.id)
-            }
+            // Compared against the shape recorded by the PREVIOUS call: the
+            // edges that matter happen between calls.
+            let beforeShape = lastFooterShapeByMessage[message.id] ?? FooterHeightShape(bridge)
             bridge.isActiveMessage = isActive
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
@@ -1595,6 +1645,18 @@ extension CollectionViewMessageListV3 {
                 bridge.onDeleteFromHere = message.role == .user ? { deleteFromHere?(message.id) } : nil
             } else {
                 bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil; bridge.onDeleteFromHere = nil
+            }
+
+            // [T-ios-plaf-cache-footer-staleness] If the footer's rendered SHAPE
+            // changed (not just active→idle: resume banner, retry row, usage
+            // row too), its cached height belongs to the old shape — drop it.
+            // Skipped for a fresh bridge: that call runs inside the cell
+            // provider mid-apply, where reconfiguring is a re-entrancy hazard
+            // and the cell is being configured from scratch anyway.
+            let afterShape = FooterHeightShape(bridge)
+            lastFooterShapeByMessage[message.id] = afterShape
+            if !isInitialBridgeSetup, afterShape != beforeShape {
+                invalidateFooterHeight(messageId: message.id)
             }
         }
 
@@ -1829,7 +1891,12 @@ extension CollectionViewMessageListV3 {
                     // a duplicate dispatch from clearing caches that won't be rebuilt.
                     if let msgs = self.vm?.messages {
                         self.viewController?.messageListLayout?.clearHeightCache()
-                        self.attrStringHeightCache.removeAll()
+                        // [T-ios-listsessions-perf] attrStringHeightCache is NOT
+                        // cleared: its key is (content, width, fontSize), so an
+                        // entry from another session only matches byte-identical
+                        // text at the same width and font — correct by
+                        // construction — and reopening a recent session no
+                        // longer re-measures the whole page.
                         self.userBubbleHeightCache.removeAll()
                         // This is the authoritative post-load apply; it carries the
                         // latest messages, so any snapshot deferred during the load
@@ -1850,6 +1917,16 @@ extension CollectionViewMessageListV3 {
                         self.scrollToLastItem()
                     }
                     // Sync reload: keep current scroll position, just update data
+                }
+                .store(in: &subscriptions)
+
+            // 3b. Memory pressure — drop the measured-height LRU (it outlives
+            // session change, so it needs an explicit pressure release).
+            NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.attrStringHeightCache.removeAll()
+                    self?.userBubbleHeightCache.removeAll()
                 }
                 .store(in: &subscriptions)
 
@@ -1922,37 +1999,53 @@ extension CollectionViewMessageListV3 {
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in
                     guard let self else { return }
-                    let len = self.lastAssistantContentLength()
+                    // [T-ios-bg-resume-collapse] Same metric the foreground
+                    // handler compares against (liveContentLength).
+                    let len = self.liveContentLength()
                     self.contentLengthAtBackground = len
                     AppLogger(category: "FGLayout").info("[FGLayout] → background, snapshotLen=\(len)")
                 }
                 .store(in: &subscriptions)
 
-            // 8b. Foreground return — only invalidate layout if ≥200 characters
-            //     accumulated while backgrounded, avoiding unnecessary layout passes
-            //     when the content didn't change meaningfully.
+            // 8b. Foreground return — re-measure the visible cells whose
+            //     content changed while the app was backgrounded.
+            //
+            // [T-ios-bg-resume-collapse] "Running, switched apps, came back:
+            // blocks printed on top of each other." Three gaps closed:
+            //  1. Only the LAYOUT cache was cleared; a visible cell keeps
+            //     answering from its own lastComputedHeight while streaming /
+            //     defer guards are up, so it is cleared too (remeasureVisibleCells).
+            //  2. The ≥200-char gate skipped exactly the small deltas that still
+            //     shift layout (a line of text, a tool finishing, a thinking
+            //     block collapsing). Any change — including a shrink — counts;
+            //     unchanged content still costs nothing.
+            //  3. Only `messages.last` was measured; growth on an earlier
+            //     still-live message was invisible. Now liveContentLength().
+            // The delta is captured synchronously; the re-measure runs after a
+            // yield so it gets its own runloop turn outside the scene
+            // transition (#355: a cold-cache re-measure inside the delivery
+            // tick ran into the watchdog).
             NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in
                     guard let self else { return }
-                    let currentLen = self.lastAssistantContentLength()
+                    let currentLen = self.liveContentLength()
                     let bgLen = self.contentLengthAtBackground ?? currentLen
                     self.contentLengthAtBackground = nil
                     let accumulated = currentLen - bgLen
                     AppLogger(category: "FGLayout").info("[FGLayout] → foreground, bgLen=\(bgLen) currentLen=\(currentLen) accumulated=\(accumulated)")
-                    guard accumulated >= 200 else {
-                        AppLogger(category: "FGLayout").info("[FGLayout] skip layout (accumulated \(accumulated) < 200)")
+                    guard accumulated != 0 else {
+                        AppLogger(category: "FGLayout").info("[FGLayout] skip layout (content unchanged)")
                         return
                     }
-                    AppLogger(category: "FGLayout").info("[FGLayout] invalidating layout for \(self.viewController?.collectionView.indexPathsForVisibleItems.count ?? 0) visible cells")
-                    if let cv = self.viewController?.collectionView,
-                       let layout = self.viewController?.messageListLayout {
-                        for indexPath in cv.indexPathsForVisibleItems {
-                            layout.invalidateHeight(at: indexPath.item)
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard UIApplication.shared.applicationState != .background else {
+                            AppLogger(category: "FGLayout").info("[FGLayout] skip layout (re-backgrounded before yield)")
+                            return
                         }
-                        layout.invalidateLayout()
+                        self.remeasureVisibleCells(reason: "foreground(delta=\(accumulated))")
                     }
-                    self.reconfigureVisibleCells()
                 }
                 .store(in: &subscriptions)
 
@@ -1991,10 +2084,42 @@ extension CollectionViewMessageListV3 {
 
         // MARK: - Content Length Helper
 
-        /// Total character count across all blocks of the last assistant message.
-        private func lastAssistantContentLength() -> Int {
-            guard let msg = vm?.messages.last(where: { $0.role == .assistant }) else { return 0 }
-            return msg.blocks.reduce(0) { $0 + $1.content.count }
+        /// [T-ios-bg-resume-collapse] Content length across EVERY message that
+        /// can still grow (liveAssistantMessageIds), falling back to the last
+        /// assistant message when nothing is processing (a turn that ended
+        /// while backgrounded). UTF-8 length: O(1), and any change is a change.
+        private func liveContentLength() -> Int {
+            guard let vm else { return 0 }
+            let msgs = vm.messages
+            let liveIds = Self.liveAssistantMessageIds(messages: msgs, isProcessing: vm.isProcessing)
+            let considered = liveIds.isEmpty
+                ? msgs.last(where: { $0.role == .assistant }).map { [$0] } ?? []
+                : msgs.filter { liveIds.contains($0.id) }
+            return considered.reduce(0) { acc, m in
+                acc + m.blocks.reduce(0) { $0 + $1.content.utf8.count }
+            }
+        }
+
+        /// [T-ios-bg-resume-collapse] Re-measure every VISIBLE cell from
+        /// scratch: drop the layout's height for it and the cell's own
+        /// lastComputedHeight, reconfigure, then clear the cell side again
+        /// (reconfigure only resets it when the provider actually re-runs).
+        /// Visible cells only — every entry into the hosting graph is a crash
+        /// surface (FB13213926) — and only on a resume / deferred-flush edge.
+        private func remeasureVisibleCells(reason: String) {
+            guard let cv = viewController?.collectionView,
+                  let layout = viewController?.messageListLayout else { return }
+            let visible = cv.indexPathsForVisibleItems
+            for ip in visible {
+                layout.invalidateHeight(at: ip.item)
+                (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
+            }
+            layout.invalidateLayout()
+            reconfigureVisibleCells()
+            for ip in cv.indexPathsForVisibleItems {
+                (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
+            }
+            AppLogger(category: "FGLayout").info("[FGLayout] remeasure reason=\(reason) visibleCells=\(visible.count)")
         }
 
         // MARK: - Streaming Subscription
@@ -2349,6 +2474,7 @@ extension CollectionViewMessageListV3 {
             let removedIds = Set(cellBridges.keys).subtracting(currentIds)
             for id in removedIds { bridgeSheetSubs.removeValue(forKey: id) }
             cellBridges = cellBridges.filter { currentIds.contains($0.key) }
+            lastFooterShapeByMessage = lastFooterShapeByMessage.filter { currentIds.contains($0.key) }
 
             // Build items
             var newItems: [MessageListItem] = []
@@ -2404,6 +2530,9 @@ extension CollectionViewMessageListV3 {
             // Remap height cache + set accurate estimates for ALL item types
             if let layout = viewController?.messageListLayout {
                 layout.updateCacheForSnapshot(oldIds: previousSnapshotIds, newIds: newItems)
+                // [T-ios-earlier-stream-seed-freeze] New snapshot ⇒ block set /
+                // tool statuses may have changed; don't reuse the live-id memo.
+                streamGeneration &+= 1
 
                 let cvWidth = viewController?.collectionView.bounds.width ?? 390
                 for (i, item) in newItems.enumerated() {
@@ -2475,17 +2604,30 @@ extension CollectionViewMessageListV3 {
                         switch block.kind {
                         case .text:
                             // Use TextKit layout for accurate height pre-calculation.
-                            // Results are cached by NSAttributedString identity to avoid
-                            // redundant TextKit layout on repeated snapshots.
+                            // [T-ios-listsessions-perf] Cached by CONTENT
+                            // (HeightCacheKey), so a re-render of unchanged text
+                            // hits instead of re-measuring through sizeThatFits.
                             if let attrStr = block.cachedAttributedString {
                                 let textWidth = Self.assistantTextWidth(listWidth: cvWidth, maxContentWidth: maxContentWidth)
-                                let key = ObjectIdentifier(attrStr)
+                                // 16.5 = MarkdownNSRenderer's base size for
+                                // assistant markdown (SelectableMarkdownView), so a
+                                // Dynamic Type change misses instead of colliding.
+                                let key = HeightCacheKey(content: block.content, width: textWidth,
+                                                         fontSize: FontSettings.shared.scaledMessage(16.5))
+                                // Not cached: strings with attachments (an image's
+                                // height is decided at layout time — 200 pt
+                                // placeholder until decode — and the entry would
+                                // follow the message into its next open), and
+                                // still-growing messages (each flush would be a new
+                                // key churning the 300-entry window).
+                                let cacheable = !liveAssistantIds(in: messages, isProcessing: vm.isProcessing).contains(msgId)
+                                    && !attrStr.containsAttachments(in: NSRange(location: 0, length: attrStr.length))
                                 let height: CGFloat
-                                if let cached = attrStringHeightCache[key] {
+                                if cacheable, let cached = attrStringHeightCache[key] {
                                     height = cached
                                 } else {
                                     height = Self.measureAttributedStringHeight(attrStr, width: textWidth)
-                                    attrStringHeightCache[key] = height
+                                    if cacheable { attrStringHeightCache[key] = height }
                                 }
                                 // height includes the text view's 8pt insets;
                                 // +4 = the SwiftUI wrapper's .padding(.vertical, 2)
@@ -2629,19 +2771,9 @@ extension CollectionViewMessageListV3 {
             // offset adjustment, or browse-mode hovering over it gets dragged
             // down by each flush's growth delta.
             if vm.isProcessing {
-                var streamingIds: [UUID] = []
-                if let lastMsg = messages.last, lastMsg.role == .assistant {
-                    streamingIds.append(lastMsg.id)
-                }
-                for msg in messages where msg.role == .assistant && msg.id != messages.last?.id {
-                    let hasLiveTool = msg.blocks.contains { blk in
-                        switch blk.toolStatus {
-                        case .running, .streaming: return true
-                        default: return false
-                        }
-                    }
-                    if hasLiveTool { streamingIds.append(msg.id) }
-                }
+                // [T-ios-earlier-stream-seed-freeze] Shared with the seed/memo
+                // exclusion in configureCell — one rule, one implementation.
+                let streamingIds = Array(liveAssistantIds(in: messages, isProcessing: true))
                 var ranges: [Range<Int>] = []
                 for id in streamingIds {
                     guard let start = newItems.firstIndex(of: .assistantHeader(id)) else { continue }
@@ -2675,6 +2807,17 @@ extension CollectionViewMessageListV3 {
             // avoids expensive UIKit cell creation/layout on redundant snapshots.
             if newItems == previousSnapshotIds {
                 AppLogger(category: "SnapshotDiag").info("[SnapshotDiag] SKIP caller=\(caller) items unchanged (count=\(newItems.count)) — no re-apply")
+                // [T-ios-bg-resume-collapse] / [T-ios-double-loadsession-stale-cells]
+                // A SKIP is wrong for a flush deferred across a suspend window
+                // (block content grew IN PLACE, item ids unchanged) and for the
+                // authoritative post-load apply (bind3 just wiped the layout
+                // caches, but cells keep the previous generation's height).
+                // Only those callers pay; the many-per-second mid-stream SKIPs
+                // stay free.
+                if caller.hasPrefix("flushPending") || caller.hasPrefix("suspend-resume")
+                    || caller == "bind3-sessionLoad" {
+                    remeasureVisibleCells(reason: "skip-after-defer(\(caller))")
+                }
                 return
             }
             let oldSet = Set(previousSnapshotIds)
@@ -2974,6 +3117,29 @@ extension CollectionViewMessageListV3 {
         /// [T-ios-scroll-decel-height-drift] The owning message id for a list
         /// item (used to detect the actively streaming message so its cells are
         /// excluded from the height memo).
+        /// [T-ios-earlier-stream-seed-freeze] Ids of every assistant message
+        /// whose content can still GROW: the newest assistant message, plus any
+        /// earlier one with a running/streaming tool block (queued-turn
+        /// interrupts). Used by both the seed/memo exclusion and the layout's
+        /// streamingCellRanges, which had drifted apart before.
+        static func liveAssistantMessageIds(messages: [ChatMessage], isProcessing: Bool) -> Set<UUID> {
+            guard isProcessing else { return [] }
+            var ids: Set<UUID> = []
+            if let last = messages.last, last.role == .assistant {
+                ids.insert(last.id)
+            }
+            for msg in messages where msg.role == .assistant && msg.id != messages.last?.id {
+                let hasLiveTool = msg.blocks.contains { blk in
+                    switch blk.toolStatus {
+                    case .running, .streaming: return true
+                    default: return false
+                    }
+                }
+                if hasLiveTool { ids.insert(msg.id) }
+            }
+            return ids
+        }
+
         static func messageId(of item: MessageListItem) -> UUID? {
             switch item {
             case .wholeMessage(let id): return id
@@ -4554,6 +4720,14 @@ extension CollectionViewMessageListV3 {
             scrollMode = .userBrowsing
         }
 
+        /// [T-ios-defer-retry-never-consumed] Apply `body` to every hosted
+        /// SelectableMarkdownTextView in a cell's subtree (nested several levels
+        /// inside the UIHostingConfiguration view tree).
+        private static func forEachMarkdownTextView(in view: UIView, _ body: (SelectableMarkdownTextView) -> Void) {
+            if let tv = view as? SelectableMarkdownTextView { body(tv) }
+            for sub in view.subviews { forEachMarkdownTextView(in: sub, body) }
+        }
+
         private func settleAfterInteraction(_ scrollView: UIScrollView) {
             // Re-acquire auto-scroll only when the user settled essentially at
             // the bottom (tight threshold), not merely "near" it. This stops
@@ -4572,6 +4746,14 @@ extension CollectionViewMessageListV3 {
 
             // Re-enable self-sizing so future layout passes use real heights.
             layout.deferSelfSizing = false
+
+            // [T-ios-defer-retry-never-consumed] The defer window is closed:
+            // let every visible markdown view pay a height correction it had
+            // to skip while the window was open, now instead of on its 0.6 s
+            // backstop. Views without debt return on a Bool guard.
+            for cell in cv.visibleCells {
+                Self.forEachMarkdownTextView(in: cell) { $0.consumeDeferredCorrectionIfNeeded() }
+            }
 
             // [SettleJitter] Evidence capture (H1): the flush below re-flows
             // frames from corrected heights but restores only the numeric

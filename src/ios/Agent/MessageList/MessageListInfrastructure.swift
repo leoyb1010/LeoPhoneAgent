@@ -123,6 +123,14 @@ class SelfSizingCell: UICollectionViewCell {
     /// promptly (applyContentConfiguration / clearCachedHeight reset it
     /// to nil unconditionally).
     private var lastMeasureMediaTime: CFTimeInterval?
+    ///
+    /// KEPT at 50 ms on purpose (upstream removed this bound, then needed the
+    /// explicit clears of [T-ios-bg-resume-collapse] /
+    /// [T-ios-plaf-cache-footer-staleness] / [T-ios-defer-retry-never-consumed]
+    /// because an unbounded cell cache froze stale heights). With the bound,
+    /// a cell outside the streaming/defer guards re-measures within 50 ms of
+    /// any change on its own; those explicit clears are ported anyway for the
+    /// guard windows, where this cache is still returned unconditionally.
     private static let measureDedupWindow: CFTimeInterval = 0.050 // 50 ms
 
     /// [T-ios-scroll-decel-height-drift] Pre-seeded height from the layout's
@@ -524,7 +532,12 @@ class SelfSizingCell: UICollectionViewCell {
             if let key = contentKey,
                let cv = superview as? UICollectionView,
                let layout = cv.collectionViewLayout as? MessageListLayout {
-                layout.recordMeasuredHeight(forKey: key, height: fittingSize.height, boundsWidth: cv.bounds.width)
+                // [T-ios-memo-key-ignores-render-state] Store under the key
+                // qualified by the block's async-attachment render state, so a
+                // height measured with blank formulas / placeholder images can
+                // never be seeded onto the finished layout.
+                layout.recordMeasuredHeight(forKey: Self.renderQualifiedKey(key, for: self),
+                                            height: fittingSize.height, boundsWidth: cv.bounds.width)
             }
         }
         #if DEBUG
@@ -551,6 +564,23 @@ class SelfSizingCell: UICollectionViewCell {
         for sub in view.subviews {
             collectSubtree(sub, into: &out)
         }
+    }
+
+    /// [T-ios-memo-key-ignores-render-state] Append the hosted markdown view's
+    /// async-attachment render signal to a content key. Cells without a
+    /// SelectableMarkdownTextView (headers, footers, tool capsules) keep the
+    /// key unchanged.
+    static func renderQualifiedKey(_ key: String, for cell: UIView) -> String {
+        guard let signal = firstMarkdownRenderSignal(in: cell) else { return key }
+        return "\(key):r\(signal)"
+    }
+
+    private static func firstMarkdownRenderSignal(in view: UIView) -> Int? {
+        if let tv = view as? SelectableMarkdownTextView { return tv.asyncAttachmentRenderSignal() }
+        for sub in view.subviews {
+            if let s = firstMarkdownRenderSignal(in: sub) { return s }
+        }
+        return nil
     }
 
     /// Clear the cached computed height so the next preferredLayoutAttributesFitting

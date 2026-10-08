@@ -91,8 +91,21 @@ struct LogManagementView: View {
         List {
             Section {
                 Toggle("Enable Logging", isOn: $loggingManager.isEnabled)
+                if loggingManager.isEnabled {
+                    // [T-ios-log-verbose-tier] Verbose turns on high-frequency
+                    // traces (kernel filesystem, context diagnostics); off by
+                    // default because they grow logs very quickly.
+                    Picker("Detail Level", selection: $loggingManager.level) {
+                        Text("Info").tag(AppLogger.Level.info)
+                        Text("Verbose").tag(AppLogger.Level.verbose)
+                    }
+                }
             } footer: {
-                Text("When enabled, console and shell output is captured to daily files. Privacy Mode masks known environment-variable values, but logs can still contain file paths and task details. Review before sharing.")
+                if loggingManager.isEnabled && loggingManager.level == .verbose {
+                    Text("Verbose adds high-frequency traces (filesystem, rendering, context). Useful when reproducing a specific problem — logs grow very quickly, so switch back to Info afterwards.")
+                } else {
+                    Text("When enabled, console and shell output is captured to daily files. Privacy Mode masks known environment-variable values, but logs can still contain file paths and task details. Review before sharing.")
+                }
             }
 
             Section("Log Files") {

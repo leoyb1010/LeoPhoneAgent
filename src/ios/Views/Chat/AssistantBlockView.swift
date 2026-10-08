@@ -696,97 +696,12 @@ struct ChatInputAppendListener: ViewModifier {
 
 // MARK: - Thinking Block View
 
-/// [T-thinking-stream-jank] Main-thread hitch monitor, active only while an
-/// expanded thinking block is streaming. Logs frame gaps > 100ms together with
-/// the current thinking length so hitches can be correlated with content size.
-/// One shared instance — at most one thinking block streams at a time.
-@MainActor
-final class ThinkingHitchMonitor {
-    static let shared = ThinkingHitchMonitor()
-    private let logger = AppLogger(category: "ThinkPerf")
-    private var displayLink: CADisplayLink?
-    private var lastTimestamp: CFTimeInterval = 0
-    /// Body-eval counter since start (bumped by the view; sampled into hitch logs).
-    var bodyEvalCount = 0
-    var contentLenProvider: (() -> Int)?
-    /// The block that started the monitor. Stops from OTHER blocks are ignored —
-    /// with several thinking blocks in one chat, an older (collapsed / finished)
-    /// block's task(id:) firing false must not kill the live block's monitor.
-    private var ownerId: UUID?
-
-    func start(owner: UUID) {
-        if displayLink != nil {
-            ownerId = owner  // live monitor adopted by the newest streaming block
-            if collapsedAt != nil {
-                collapsedAt = nil  // re-expanded within the grace window
-                logger.info("[ThinkPerf] phase → EXPANDED (re-expand)")
-            }
-            return
-        }
-        ownerId = owner
-        lastTimestamp = 0
-        bodyEvalCount = 0
-        let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
-        link.add(to: .main, forMode: .common)
-        displayLink = link
-        logger.info("[ThinkPerf] hitch-monitor START owner=\(owner.uuidString.prefix(8))")
-    }
-
-    /// When the owner collapses, keep sampling for a grace window so the
-    /// COLLAPSED state's frame stats can be compared A/B against EXPANDED
-    /// under the same interactions. Frame lines are tagged with the phase.
-    private var collapsedAt: CFTimeInterval?
-    private static let collapsedGraceSeconds: CFTimeInterval = 25
-
-    func stop(owner: UUID) {
-        guard displayLink != nil, owner == ownerId else { return }
-        collapsedAt = CACurrentMediaTime()
-        logger.info("[ThinkPerf] phase → COLLAPSED (monitor continues \(Int(Self.collapsedGraceSeconds))s for A/B) bodyEvals=\(self.bodyEvalCount)")
-    }
-
-    private func hardStop() {
-        displayLink?.invalidate()
-        displayLink = nil
-        ownerId = nil
-        collapsedAt = nil
-        logger.info("[ThinkPerf] hitch-monitor STOP bodyEvals=\(self.bodyEvalCount)")
-    }
-
-    // Per-second frame statistics: dropped-frame count (>33ms), worst gap, and
-    // frame count — a per-second FPS/drop summary shows sub-100ms jank the
-    // single HITCH threshold misses.
-    private var statWindowStart: CFTimeInterval = 0
-    private var statFrames = 0
-    private var statDropped = 0
-    private var statWorstMs: Double = 0
-
-    @objc private func tick(_ link: CADisplayLink) {
-        defer { lastTimestamp = link.timestamp }
-        guard lastTimestamp > 0 else { statWindowStart = link.timestamp; return }
-        let gapMs = (link.timestamp - lastTimestamp) * 1000
-        statFrames += 1
-        if gapMs > 33 { statDropped += 1 }
-        if gapMs > statWorstMs { statWorstMs = gapMs }
-        if gapMs > 100 {
-            logger.info("[ThinkPerf] HITCH gap=\(Int(gapMs))ms contentLen=\(self.contentLenProvider?() ?? -1) bodyEvals=\(self.bodyEvalCount)")
-        }
-        let windowDt = link.timestamp - statWindowStart
-        if windowDt >= 1.0 {
-            let fps = Double(statFrames) / windowDt
-            let phase = collapsedAt == nil ? "EXP" : "COL"
-            // [T-log-noise-privacy 2026-07-18] info → debug: per-second frame
-            // stats; the HITCH lines (rare, actionable) stay at info.
-            logger.debug("[ThinkPerf] [\(phase)] frames/s=\(Int(fps)) dropped=\(self.statDropped) worst=\(Int(self.statWorstMs))ms contentLen=\(self.contentLenProvider?() ?? -1) bodyEvals=\(self.bodyEvalCount)")
-            statWindowStart = link.timestamp
-            statFrames = 0
-            statDropped = 0
-            statWorstMs = 0
-        }
-        if let c = collapsedAt, link.timestamp - c > Self.collapsedGraceSeconds {
-            hardStop()
-        }
-    }
-}
+// [T-thinkperf-release-displaylink] The ThinkingHitchMonitor (a 60 fps
+// CADisplayLink that ran for the whole life of an expanded thinking block, in
+// Release too, plus a 25 s "collapsed grace" tail) has been retired. Its tick
+// body was cheap but the per-frame main-thread wake-up kept the CPU out of
+// idle and perturbed the frame timing it claimed to measure. Use Instruments
+// or LeoPerf's scroll.hitch / hang probes instead of a permanent in-app link.
 
 struct ThinkingBlockView: View {
     @ObservedObject var block: AssistantBlock
@@ -869,19 +784,7 @@ struct ThinkingBlockView: View {
                 // [F7] While streaming only the live tail (2K) is laid out, so a
                 // flush re-lays a small Text however long the thinking gets;
                 // once settled the 8K reading window comes back.
-                let slice: (text: Substring, truncated: Bool) = {
-                    // [T-thinking-stream-jank] Time the tail-window slice and count
-                    // body re-evals (eval counter feeds the 1s ThinkPerf summary).
-                    let t0 = CFAbsoluteTimeGetCurrent()
-                    defer {
-                        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
-                        ThinkingHitchMonitor.shared.bodyEvalCount += 1
-                        if ms > 4 {
-                            AppLogger(category: "ThinkPerf").info("[ThinkPerf] slice SLOW took=\(String(format: "%.1f", ms))ms eval#\(ThinkingHitchMonitor.shared.bodyEvalCount)")
-                        }
-                    }
-                    return ThinkingDisplayPolicy.tail(of: block.content, isStreaming: isStreaming)
-                }()
+                let slice = ThinkingDisplayPolicy.tail(of: block.content, isStreaming: isStreaming)
                 let isTruncated = slice.truncated
                 let displayContent = String(slice.text)
 
@@ -915,33 +818,14 @@ struct ThinkingBlockView: View {
                     // pace is ~3-4/s for the same visual result.
                     // utf8.count is O(1) on native strings; .count walked the
                     // whole thinking text on every body evaluation.
-                    .onChange(of: block.content.utf8.count) { _, len in
+                    .onChange(of: block.content.utf8.count) { _, _ in
                         guard isStreaming else { return }
-                        AppLogger(category: "ThinkPerf").debug("[ThinkPerf] scrollTo(flush) contentLen=\(len) seq=\(block.contentUpdateSeq)")
                         withAnimation(LeoMotion.quickEase()) {
                             proxy.scrollTo("thinkingBottom", anchor: .bottom)
                         }
                     }
                 }
             }
-        }
-        // [T-thinking-stream-jank] Hitch monitor runs while this block is
-        // EXPANDED — streaming or static. The refined report says the jank is
-        // tied to the expanded state itself (collapse instantly recovers), so
-        // the monitor must also capture expanded-static interactions (list
-        // scrolling, new messages arriving) to compare against collapsed.
-        .task(id: isExpanded.wrappedValue) {
-            if isExpanded.wrappedValue {
-                ThinkingHitchMonitor.shared.contentLenProvider = { [weak block] in
-                    block?.thinkingContentBuffer.count ?? -1
-                }
-                ThinkingHitchMonitor.shared.start(owner: block.id)
-            } else {
-                ThinkingHitchMonitor.shared.stop(owner: block.id)
-            }
-        }
-        .onDisappear {
-            ThinkingHitchMonitor.shared.stop(owner: block.id)
         }
         .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 12))

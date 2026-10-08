@@ -41,6 +41,9 @@ enum SyncStatus: Equatable {
 
 // MARK: - Data Model
 
+/// [T-ios-listsessions-perf] Lets SessionListPatch splice and re-sort rows.
+extension ChatSession: SessionListRow {}
+
 /// A chat session (conversation thread).
 struct ChatSession: Identifiable, Codable, Hashable {
     let id: String
@@ -393,17 +396,32 @@ actor ChatStore {
     // MB) — every redundant call minted a whole new batch that SwiftUI kept
     // referencing across body passes. With this cache, back-to-back calls with
     // no intervening write return the SAME array (no new Strings). Guarded by
-    // `sessionListCacheDirty`, set true by every list-affecting mutation below.
+    // `sessionListNeedsFullRebuild` / `dirtySessionIds` (see below).
     // ChatStore is an actor, so these fields need no extra locking.
     private var sessionListCache: [ChatSession]?
-    private var sessionListCacheDirty = true
+    /// [T-ios-listsessions-perf] Sessions whose ROW CONTENT changed since the
+    /// cache was built (a new message, a retitle, a model switch). Only these
+    /// are re-queried; every other cached ChatSession value is reused as-is.
+    private var dirtySessionIds: Set<String> = []
+    /// Set when the row SET or ordering rules change — a session created or
+    /// deleted, a pin, an inbound session merge, a device rename. The next
+    /// listSessions() rebuilds fully. Starts true: one full build after launch.
+    private var sessionListNeedsFullRebuild = true
 
-    /// [T-ios-listsessions-cache] Mark the cached session list stale. Called by
-    /// every mutation that can change what listSessions() returns — the row set
-    /// (create/delete), ordering (updated_at via touchSession), or a displayed
-    /// field (title/category/pin/model/preview text from new messages).
+    /// [T-ios-listsessions-cache] FULL invalidation: the next listSessions()
+    /// re-queries every row. Use only where the set of rows or something a
+    /// per-row re-query cannot express can change.
     private func invalidateSessionListCache() {
-        sessionListCacheDirty = true
+        sessionListNeedsFullRebuild = true
+    }
+
+    /// [T-ios-listsessions-perf] Targeted invalidation: only `sessionId`'s row
+    /// content changed (including its updated_at — the patch re-sorts), so the
+    /// next listSessions() re-queries that row and reuses the rest verbatim.
+    /// A full rebuild mints a new ChatSession for every row and makes SwiftUI
+    /// re-diff the whole sidebar; a patch keeps the diff O(changed).
+    private func invalidateSessionListCache(sessionId: String) {
+        dirtySessionIds.insert(sessionId)
     }
 
     init() {
@@ -415,8 +433,15 @@ actor ChatStore {
         try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: minisBaseURL, withIntermediateDirectories: true)
 
-        openDatabase()
-        createTables()
+        // [T-ios27-scene-create-watchdog] This runs inside the dispatch_once
+        // for `ChatStore.shared`; any thread touching the singleton (the main
+        // thread during scene creation) waits for it. On iOS 27 an NSLog can
+        // park on a libtrace notification round trip, so log lines emitted
+        // here are buffered and flushed after the once token is released.
+        AppLogger.withDeferredLogging {
+            openDatabase()
+            createTables()
+        }
     }
 
     /// Initialize with a custom base URL (for testing).
@@ -547,6 +572,13 @@ actor ChatStore {
         // device but kept locally. Non-nil = tombstoned at that timestamp.
         // See SyncV2 §3.3.
         addColumnIfMissing(table: "sessions", column: "remote_tombstoned_at", definition: "REAL")
+        // [T-ios-listsessions-perf] Denormalised sidebar preview, computed when
+        // a message lands (see updateStoredPreview). Nullable with NO DEFAULT
+        // on purpose: NULL means "predates the column", which listSessions
+        // backfills once; '' is the "computed, nothing displayable" sentinel.
+        // Derived, device-local state: not in the sync wire format or backups.
+        addColumnIfMissing(table: "sessions", column: "preview_text", definition: "TEXT")
+        addColumnIfMissing(table: "sessions", column: "preview_sort_order", definition: "INTEGER")
         // v2 sync: priority + creation order on dirty rows so migration's
         // 28k+ row backlog never starves freshly-typed user messages.
         // priority: 0 = user-driven (default), 1 = migration backlog
@@ -851,7 +883,7 @@ actor ChatStore {
 
     @discardableResult
     func createSession(modelId: String, title: String? = nil, source: String? = nil) -> ChatSession {
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: a new row
         let now = Date()
         let session = ChatSession(
             id: UUID().uuidString,
@@ -883,7 +915,9 @@ actor ChatStore {
         let rawObj = UserDefaults.standard.object(forKey: "memory.global.enabled")
         memDiagLogger.info("[MemDiag] createSession sid=\(session.id.prefix(8)) rawDefaults=\(String(describing: rawObj)) resolved=\(globalMemoryEnabled) → bind memory_enabled=\(globalMemoryEnabled ? 1 : 0)")
 
-        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        // preview_text '' = "computed, nothing displayable yet": a brand-new
+        // session never needs the NULL backfill path. [T-ios-listsessions-perf]
+        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled, preview_text) VALUES (?, ?, ?, ?, ?, ?, ?, '')"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
@@ -1008,167 +1042,155 @@ actor ChatStore {
         // same preview Strings, zero new allocations. This is the fix for the
         // hundreds-of-MB StringStorage growth from redundant listSessions()
         // calls (proven via malloc_history).
-        if !sessionListCacheDirty, let cached = sessionListCache {
-            return cached
+        if !sessionListNeedsFullRebuild, let cached = sessionListCache {
+            if dirtySessionIds.isEmpty { return cached }
+            // [T-ios-listsessions-perf] Incremental path: re-query only the
+            // sessions whose content changed and splice them into the cached
+            // array; unchanged rows keep their existing ChatSession values.
+            let t0 = CFAbsoluteTimeGetCurrent()
+            let dirtyCount = dirtySessionIds.count
+            if let patched = patchedSessionList(cached, dirtyIds: dirtySessionIds) {
+                sessionListCache = patched
+                dirtySessionIds.removeAll()
+                // Device measurement: perf.jsonl "sessionList.build" (mode=patch).
+                LeoPerf.record("sessionList.build", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000,
+                               extra: ["mode": "patch", "rows": patched.count, "dirty": dirtyCount])
+                return patched
+            }
+            // The patch could not be built: rebuild rather than serve stale.
         }
-        // Session-list preview policy:
-        //   1. Latest assistant text part that came AFTER the latest user
-        //      text message. This way an in-flight user prompt (or the
-        //      streaming phase, where no assistant text has landed yet)
-        //      shows the user's own prompt instead of the previous turn's
-        //      assistant reply; once the current turn's assistant text
-        //      falls out of streaming and hits the DB it takes over.
-        //      Mid-turn text responses in multi-tool agent loops also land
-        //      here, so the row updates per turn.
-        //   2. Falls back to the latest user text message.
+        // Session-list preview policy (SessionPreviewRule.winner): the latest
+        // assistant message with text or a tool_use, unless the latest user
+        // text message is strictly newer (an in-flight prompt). tool_result
+        // rows carry neither part_flags bit, so they never qualify.
         //
-        // tool_result rows share role='user' but their parts_json has no
-        // `.text` part, so the LIKE filter excludes them from the user-text
-        // subquery — the cutoff "later than latest user text" therefore
-        // correctly ignores tool_result sort_order values.
-        //
-        // LIKE pattern note: we match only `"type":"text"` and NOT
-        // `"type":"text","value":"…"`. Swift's JSONEncoder serializes
-        // KeyedEncodingContainer entries in an unspecified (effectively
-        // hash-bucket) order, so the actual JSON often comes out as
-        // `{"value":"…","type":"text"}` — the keys are NOT guaranteed to be
-        // in declaration order. A `"type":"text","value":"%` pattern would
-        // silently miss most rows (which is how this regressed: only some
-        // legacy rows happened to have type-first ordering and showed a
-        // preview, while newer rows fell back to "No messages yet").
-        // Assistant-side preview row: prefer the most recent assistant message
-        // that has SOMETHING displayable — either a text part OR a tool_use part.
-        // Without the `toolUse` clause, sessions whose last assistant turn is
-        // mid-tool-call (no text yet) fall through to the user-text fallback,
-        // which makes the row look stale; for brand-new sessions where the user
-        // never typed text (e.g. forked / cloud-imported) it shows "No messages
-        // yet" even while a tool is actively running. The extractor below knows
-        // how to summarize a tool_use when no text part exists.
-        // [T-ios-listsessions-part-flags] The filter is now the integer
-        // `part_flags` bitmask instead of `parts_json LIKE '%…%'` scans:
-        //     assistant preview row = latest with (text OR toolUse) → flags & 3
-        //     user preview row      = latest with text              → flags & 1
-        // This exactly reproduces the old LIKE conditions (backfilled +
-        // maintained on every write), and crucially still excludes
-        // tool_result-only user rows (they carry neither bit) — the invariant
-        // the "later than latest user text" cutoff relied on.
-        //
-        // The 4-correlated-subquery SHAPE is kept deliberately: measured on the
-        // real 100k-message / 1772-session DB, swapping LIKE→mask took it from
-        // ~523ms to ~30-58ms (9×), each subquery a fast indexed
-        // `SEARCH … USING idx_msg_sess_role_sort (session_id=? AND role=?)`.
-        // A window-function CTE (方案1) was tried and REJECTED: it materializes
-        // every assistant/user row across the whole table (MATERIALIZE asst),
-        // clocking ~1100ms — 20× slower than the indexed subqueries here.
-        let asstMask = Self.partFlagHasText | Self.partFlagHasToolUse   // 3
-        let userMask = Self.partFlagHasText                            // 1
-        let sql = """
-            SELECT s.id, s.title, s.model_id, s.created_at, s.updated_at, s.category,
-                   (SELECT m.parts_json FROM messages m
-                     WHERE m.session_id = s.id
-                       AND m.role = 'assistant'
-                       AND (m.part_flags & \(asstMask)) != 0
-                     ORDER BY m.sort_order DESC LIMIT 1),
-                   (SELECT m.parts_json FROM messages m
-                     WHERE m.session_id = s.id
-                       AND m.role = 'user'
-                       AND (m.part_flags & \(userMask)) != 0
-                     ORDER BY m.sort_order DESC LIMIT 1),
-                   s.source, s.last_synced_at,
-                   s.remote_origin_device_id, s.pinned_at,
-                   -- sort_order of the picked assistant/user rows, so the Swift
-                   -- layer can prefer whichever is genuinely newer.
-                   (SELECT m.sort_order FROM messages m
-                     WHERE m.session_id = s.id
-                       AND m.role = 'assistant'
-                       AND (m.part_flags & \(asstMask)) != 0
-                     ORDER BY m.sort_order DESC LIMIT 1),
-                   (SELECT m.sort_order FROM messages m
-                     WHERE m.session_id = s.id
-                       AND m.role = 'user'
-                       AND (m.part_flags & \(userMask)) != 0
-                     ORDER BY m.sort_order DESC LIMIT 1)
-                 , s.origin_device_id, s.last_writer_device_id,
-                   (SELECT d.device_name FROM sync_devices d WHERE d.device_id = s.origin_device_id)
-            FROM sessions s ORDER BY s.updated_at DESC
-            """
-            // Note: `remote_tombstoned_at` column still exists on the
-            // table for legacy rows but is no longer consulted. Peer-side
-            // SessionV2 deletes are now applied as hard deletes (the row
-            // and all its children leave SQLite outright) — see
-            // ChatStore.deleteSessionLocalOnly + TombstoneManager.
+        // [T-ios-listsessions-perf] The preview is normally read straight from
+        // `sessions.preview_text`, maintained at message-write time; the four
+        // candidate subqueries (measured 30-58 ms on a 100k-message DB with the
+        // part_flags masks) now only run for rows whose preview is still NULL.
+        let buildStart = CFAbsoluteTimeGetCurrent()
+        let signpost = LeoPerf.signposter.beginInterval("listSessions.full")
+        defer { LeoPerf.signposter.endInterval("listSessions.full", signpost) }
+        let sql = SessionListQuery.sql(whereClause: "")
         var stmt: OpaquePointer?
         var sessions: [ChatSession] = []
+        // Rows whose preview was derived the slow way (NULL column). Written
+        // back AFTER the statement is finalized — never write `sessions` while
+        // stepping a SELECT over it.
+        var previewBackfill: [(id: String, text: String, sortOrder: Int?)] = []
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             while sqlite3_step(stmt) == SQLITE_ROW {
-                let id = String(cString: sqlite3_column_text(stmt, 0))
-                let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
-                let modelId = String(cString: sqlite3_column_text(stmt, 2))
-                let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3))
-                let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
-                let category = sqlite3_column_text(stmt, 5).map { String(cString: $0) }
-                // Latest assistant text (preferred) → latest user text (fallback).
-                let assistantRaw = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
-                let userRaw = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
-                let assistantText = assistantRaw.flatMap { extractTextFromPartsJSON($0) }
-                let userText = userRaw.flatMap { extractTextFromPartsJSON($0) }
-                // sort_order of each picked row (columns 12/13). Prefer whichever
-                // is genuinely newer: assistant wins when its row is at least as
-                // recent (covers mid-tool-call previews); the user message wins
-                // only when the user just sent something the assistant hasn't
-                // answered yet (assistant row is from an earlier turn). This
-                // replaces the dropped SQL pivot clause and is robust to
-                // sort_order re-ranking from iCloud merges.
-                let asstSortOrder: Int? = sqlite3_column_type(stmt, 12) != SQLITE_NULL
-                    ? Int(sqlite3_column_int64(stmt, 12)) : nil
-                let userSortOrder: Int? = sqlite3_column_type(stmt, 13) != SQLITE_NULL
-                    ? Int(sqlite3_column_int64(stmt, 13)) : nil
-                let lastMessage: String? = {
-                    switch (assistantText, userText) {
-                    case let (a?, u?):
-                        // Both present — newer sort_order wins; tie → assistant.
-                        if let ao = asstSortOrder, let uo = userSortOrder, uo > ao { return u }
-                        return a
-                    case let (a?, nil): return a
-                    case let (nil, u?): return u
-                    default: return nil
-                    }
-                }()
-                // [LastMsgDiag removed — T-ios-session-list-equatable-jank]
-                // This per-session diagnostic logged one (or two) lines for
-                // EVERY session on EVERY listSessions() call — ~2900 lines for a
-                // single session-list rebuild on this user's device, ~73% of the
-                // whole log. The NSLog volume + daily-file writes were themselves
-                // a measurable Debug-build drag on the very session-switch path
-                // being profiled, and drowned out every other signal. Dropped;
-                // the last-message extractor logic above is unchanged.
-                let source = sqlite3_column_text(stmt, 8).map { String(cString: $0) }
-                let lastSyncedAt: Date? = sqlite3_column_type(stmt, 9) != SQLITE_NULL
-                    ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9)) : nil
-                let remoteDeviceId = sqlite3_column_text(stmt, 10).map { String(cString: $0) }
-                let pinnedAt: Date? = sqlite3_column_type(stmt, 11) != SQLITE_NULL
-                    ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 11)) : nil
-
-                sessions.append(ChatSession(
-                    id: id, title: title, category: category, modelId: modelId,
-                    createdAt: createdAt, updatedAt: updatedAt, lastMessage: lastMessage,
-                    source: source, lastSyncedAt: lastSyncedAt,
-                    remoteDeviceId: remoteDeviceId,
-                    originDeviceId: sqlite3_column_text(stmt, 14).map { String(cString: $0) },
-                    originDeviceName: sqlite3_column_text(stmt, 16).map { String(cString: $0) },
-                    lastWriterDeviceId: sqlite3_column_text(stmt, 15).map { String(cString: $0) },
-                    pinnedAt: pinnedAt
-                ))
+                guard let idPtr = sqlite3_column_text(stmt, SessionListQuery.Column.id) else { continue }
+                let id = String(cString: idPtr)
+                guard !id.isEmpty else { continue }
+                let decoded = decodeSessionRow(stmt, id: id)
+                sessions.append(decoded.session)
+                if let backfill = decoded.backfill {
+                    previewBackfill.append((id, backfill.text, backfill.sortOrder))
+                }
             }
         }
         sqlite3_finalize(stmt)
 
+        if !previewBackfill.isEmpty {
+            // One transaction for the whole backfill: on the first launch after
+            // the upgrade this is every session. SAVEPOINT so it nests safely.
+            exec("SAVEPOINT preview_backfill")
+            for entry in previewBackfill {
+                storePreview(sessionId: entry.id, text: entry.text, sortOrder: entry.sortOrder)
+            }
+            exec("RELEASE preview_backfill")
+            logger.info("[ChatStore.listSessions] backfilled \(previewBackfill.count) session preview(s)")
+        }
+
         // [T-ios-listsessions-cache] Store the freshly-built list; subsequent
-        // calls return this same array until a mutation invalidates it.
+        // calls return this same array until a mutation invalidates it. A full
+        // rebuild subsumes every pending targeted invalidation.
         sessionListCache = sessions
-        sessionListCacheDirty = false
+        sessionListNeedsFullRebuild = false
+        dirtySessionIds.removeAll()
+        LeoPerf.record("sessionList.build", ms: (CFAbsoluteTimeGetCurrent() - buildStart) * 1000,
+                       extra: ["mode": "full", "rows": sessions.count, "backfilled": previewBackfill.count])
         return sessions
+    }
+
+    /// [T-ios-listsessions-perf] Decode one row of `SessionListQuery.sql` with
+    /// LeoBot's column layout (14-16 = provenance, 17/18 = stored preview).
+    /// `backfill` is non-nil when the stored preview was NULL and was derived
+    /// from the candidate rows; the caller writes it back ('' when nothing is
+    /// displayable) so that row never pays again.
+    private func decodeSessionRow(
+        _ stmt: OpaquePointer?, id: String
+    ) -> (session: ChatSession, backfill: (text: String, sortOrder: Int?)?) {
+        typealias C = SessionListQuery.Column
+        func text(_ col: Int32) -> String? { sqlite3_column_text(stmt, col).map { String(cString: $0) } }
+        func int(_ col: Int32) -> Int? {
+            sqlite3_column_type(stmt, col) != SQLITE_NULL ? Int(sqlite3_column_int64(stmt, col)) : nil
+        }
+        func date(_ col: Int32) -> Date? {
+            sqlite3_column_type(stmt, col) != SQLITE_NULL ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, col)) : nil
+        }
+
+        let lastMessage: String?
+        var backfill: (text: String, sortOrder: Int?)?
+        if sqlite3_column_type(stmt, C.previewText) != SQLITE_NULL {
+            lastMessage = SessionPreviewRule.display(text(C.previewText))
+        } else {
+            let assistant = text(C.assistantParts).flatMap { extractTextFromPartsJSON($0) }
+                .map { SessionPreviewRule.Candidate(text: $0, sortOrder: int(C.assistantSortOrder)) }
+            let user = text(C.userParts).flatMap { extractTextFromPartsJSON($0) }
+                .map { SessionPreviewRule.Candidate(text: $0, sortOrder: int(C.userSortOrder)) }
+            let winner = SessionPreviewRule.winner(assistant: assistant, user: user)
+            lastMessage = winner?.text
+            backfill = (winner?.text ?? "", winner?.sortOrder)
+        }
+
+        let session = ChatSession(
+            id: id, title: text(C.title), category: text(C.category), modelId: text(C.modelId) ?? "",
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, C.createdAt)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, C.updatedAt)),
+            lastMessage: lastMessage,
+            source: text(C.source), lastSyncedAt: date(C.lastSyncedAt),
+            remoteDeviceId: text(C.remoteOriginDeviceId),
+            originDeviceId: text(C.originDeviceId),
+            originDeviceName: text(C.originDeviceName),
+            lastWriterDeviceId: text(C.lastWriterDeviceId),
+            pinnedAt: date(C.pinnedAt)
+        )
+        return (session, backfill)
+    }
+
+    /// [T-ios-listsessions-perf] Re-query only `dirtyIds` and splice them into
+    /// `cached` (SessionListPatch). Returns nil — caller rebuilds fully — when
+    /// the statement cannot be prepared or a dirty row is unknown to the cache.
+    private func patchedSessionList(_ cached: [ChatSession], dirtyIds: Set<String>) -> [ChatSession]? {
+        let ids = Array(dirtyIds)
+        let sql = SessionListQuery.sql(whereClause: SessionListQuery.idFilter(count: ids.count))
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            sqlite3_finalize(stmt)
+            logger.error("[ChatStore.listSessions] incremental prepare failed — full rebuild")
+            return nil
+        }
+        for (i, id) in ids.enumerated() {
+            sqlite3_bind_text(stmt, Int32(i + 1), (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        }
+        var refreshed: [String: ChatSession] = [:]
+        var backfill: [(id: String, text: String, sortOrder: Int?)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idPtr = sqlite3_column_text(stmt, SessionListQuery.Column.id) else { continue }
+            let id = String(cString: idPtr)
+            guard !id.isEmpty else { continue }
+            let decoded = decodeSessionRow(stmt, id: id)
+            refreshed[id] = decoded.session
+            if let b = decoded.backfill { backfill.append((id, b.text, b.sortOrder)) }
+        }
+        sqlite3_finalize(stmt)
+        for entry in backfill {
+            storePreview(sessionId: entry.id, text: entry.text, sortOrder: entry.sortOrder)
+        }
+        return SessionListPatch.apply(cached: cached, dirtyIds: dirtyIds, refreshed: refreshed)
     }
 
     /// Ordered, pre-compiled markdown-stripping regexes for session previews.
@@ -1248,6 +1270,12 @@ actor ChatStore {
                 lastToolUse = tu
                 continue
             case .text(var t) where !t.isEmpty:
+                // [T-ios-markdown-preview-cap] Bound the body before the
+                // reminder/attachment strips and the markdown pipeline, all of
+                // which copy the whole string. Only 100 chars survive, so 4096
+                // chars of prose is ample; fenced code and injected blocks are
+                // skipped whole so the cut never lands inside one.
+                t = MarkdownStripper.previewSource(t)
                 t = RawMessage.stripSystemReminders(t)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !t.isEmpty else { continue }
@@ -1260,7 +1288,7 @@ actor ChatStore {
                 t = RawMessage.stripAttachmentMarkers(t)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !t.isEmpty else { continue }
-                let clean = MarkdownStripper.plainText(t)
+                let clean = MarkdownStripper.plainText(t, inlinePassCap: MarkdownStripper.inlinePassCap)
                     .trimmingCharacters(in: .whitespaces)
                 guard !clean.isEmpty else { continue }
                 lastTextPreview = String(clean.prefix(100))
@@ -1716,7 +1744,7 @@ actor ChatStore {
     }
 
     func updateSessionModelId(_ id: String, modelId: String) {
-        invalidateSessionListCache()
+        invalidateSessionListCache(sessionId: id)  // PER-SESSION: row content
         let sql = "UPDATE sessions SET model_id = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -1732,7 +1760,7 @@ actor ChatStore {
     func updateSessionTitle(_ id: String, title: String, category: String? = nil) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        invalidateSessionListCache(sessionId: id)  // PER-SESSION: row content + updated_at (patch re-sorts)
         let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -1765,7 +1793,7 @@ actor ChatStore {
     func toggleSessionPin(_ id: String) -> Bool {
         guard beginSyncMutation() else { return false }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: pin moves the row between sections
         // Check current pin state
         var isPinned = false
         let checkSql = "SELECT pinned_at FROM sessions WHERE id = ?"
@@ -1851,7 +1879,7 @@ actor ChatStore {
     func deleteSession(_ id: String) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: row set changes
         // Queue cloud deletions BEFORE removing local rows so the SELECTs
         // below can still enumerate child ids. Peers receive op=delete
         // for the session + each child and apply them as hard deletes
@@ -1898,7 +1926,7 @@ actor ChatStore {
                 try FileManager.default.removeItem(at: directory)
             }
         }
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: row set changes
         Task { @MainActor in
             if #available(iOS 17.0, *) { CloudSyncEngine.shared.removeSessionCache(id) }
             SessionBadgeStore.shared.clearAll(for: id)
@@ -1935,7 +1963,7 @@ actor ChatStore {
     private func deleteSessionLocalRowsOnly(_ id: String) {
         // [T-ios-listsessions-cache] Invalidate here (the low-level row delete)
         // so ALL callers are covered — deleteSession AND deleteSessionLocalOnly.
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: row set changes
         deleteMessages(sessionId: id)
         deleteCompactMarkers(sessionId: id)
         deleteSessionMedia(id)
@@ -2037,6 +2065,77 @@ actor ChatStore {
                   operation: "delete")
     }
 
+    // MARK: - Persisted session preview [T-ios-listsessions-perf]
+
+    /// Fold a freshly written message into its session's stored preview
+    /// (SessionPreviewRule.foldSQL). Messages with no displayable part (a
+    /// tool_result, an empty row) leave it alone, exactly the rows the old
+    /// part_flags filter excluded. `partsJSON` is the string just bound into
+    /// the INSERT, so the parts are not encoded twice.
+    private func updateStoredPreview(sessionId: String, partsJSON: String, partFlags: Int,
+                                     isAssistant: Bool, sortOrder: Int) {
+        guard SessionPreviewRule.qualifies(isAssistant: isAssistant, partFlags: partFlags),
+              let preview = extractTextFromPartsJSON(partsJSON) else { return }
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, SessionPreviewRule.foldSQL(isAssistant: isAssistant), -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (preview as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int64(stmt, 2, Int64(sortOrder))
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int64(stmt, 4, Int64(sortOrder))
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+    }
+
+    /// Recompute one session's preview from its messages and store it. Used
+    /// wherever the winning message may have been removed or rewritten
+    /// (deletes, truncation, parts rewrites, inbound merges, repairs) — the
+    /// preview must then move BACKWARDS, which the fold never does.
+    private func recomputeStoredPreview(sessionId: String) {
+        var stmt: OpaquePointer?
+        var winner: SessionPreviewRule.Candidate?
+        if sqlite3_prepare_v2(db, SessionPreviewRule.recomputeSQL, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                func order(_ col: Int32) -> Int? {
+                    sqlite3_column_type(stmt, col) != SQLITE_NULL ? Int(sqlite3_column_int64(stmt, col)) : nil
+                }
+                let assistant = sqlite3_column_text(stmt, 0).map { String(cString: $0) }
+                    .flatMap { extractTextFromPartsJSON($0) }
+                    .map { SessionPreviewRule.Candidate(text: $0, sortOrder: order(2)) }
+                let user = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
+                    .flatMap { extractTextFromPartsJSON($0) }
+                    .map { SessionPreviewRule.Candidate(text: $0, sortOrder: order(3)) }
+                winner = SessionPreviewRule.winner(assistant: assistant, user: user)
+            }
+        }
+        sqlite3_finalize(stmt)
+        storePreview(sessionId: sessionId, text: winner?.text ?? "", sortOrder: winner?.sortOrder)
+    }
+
+    /// Unconditional write of the preview pair ('' = nothing displayable).
+    private func storePreview(sessionId: String, text: String, sortOrder: Int?) {
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, SessionPreviewRule.storeSQL, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (text as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            if let sortOrder { sqlite3_bind_int64(stmt, 2, Int64(sortOrder)) } else { sqlite3_bind_null(stmt, 2) }
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+    }
+
+    /// The session a message belongs to, or nil if the row is gone.
+    private func sessionIdForMessage(_ messageId: String) -> String? {
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, "SELECT session_id FROM messages WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else { return nil }
+        sqlite3_bind_text(stmt, 1, (messageId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let ptr = sqlite3_column_text(stmt, 0) else { return nil }
+        let sid = String(cString: ptr)
+        return sid.isEmpty ? nil : sid
+    }
+
     // MARK: - Message CRUD
 
     func appendMessage(_ message: RawMessage) {
@@ -2046,8 +2145,11 @@ actor ChatStore {
     /// Batch-insert multiple messages in a single SQLite transaction.
     /// This reduces disk I/O by coalescing multiple writes into one fsync.
     func appendMessages(_ messages: [RawMessage]) {
-        invalidateSessionListCache()
         guard !messages.isEmpty else { return }
+        // PER-SESSION: a batch can span sessions; mark each one it touches.
+        for sessionId in Set(messages.map(\.sessionId)) {
+            invalidateSessionListCache(sessionId: sessionId)
+        }
         // Drop assistant messages that carry no content the model could echo back —
         // a stream that aborts before producing any text or tool_use leaves an
         // assistant row with empty parts. On the next turn DeepSeek/OpenAI-compat
@@ -2119,6 +2221,11 @@ actor ChatStore {
                     logger.error("[Store] INSERT step failed rc=\(stepRC) sid=\(message.sessionId.prefix(8)) mid=\(message.id.prefix(8)) so=\(sortOrder) err=\(errMsg)")
                 } else {
                     logger.info("[Store] INSERT ok sid=\(message.sessionId.prefix(8)) mid=\(message.id.prefix(8)) so=\(sortOrder) role=\(message.role.rawValue)")
+                    // [T-ios-listsessions-perf] Fold this message into the
+                    // stored preview inside the same BEGIN IMMEDIATE
+                    // transaction, so the row and its preview never disagree.
+                    updateStoredPreview(sessionId: message.sessionId, partsJSON: partsJSON, partFlags: partFlags,
+                                        isAssistant: message.role == .assistant, sortOrder: sortOrder)
                 }
             } else {
                 let errMsg = String(cString: sqlite3_errmsg(db))
@@ -2398,7 +2505,11 @@ actor ChatStore {
     func deleteMessages(sessionId: String) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        // PER-SESSION: empties one session; the row stays in the list. Every
+        // message is going, so the stored preview goes too ('' = computed,
+        // nothing displayable — NULL would re-trigger the backfill path).
+        invalidateSessionListCache(sessionId: sessionId)
+        defer { storePreview(sessionId: sessionId, text: "", sortOrder: nil) }
         // Mark every message dirty for cloud deletion BEFORE the DELETE so other
         // devices remove them on next sync. Without this, Clear Chat wipes
         // locally but iCloud re-hydrates the rows on the next pull.
@@ -2435,7 +2546,13 @@ actor ChatStore {
     func updateMessageParts(messageId: String, parts: [ContentPart]) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        // PER-SESSION when the row resolves (this runs on every assistant-turn
+        // finalize; a FULL rebuild here would undo the incremental patch on its
+        // hottest path). FULL only if the row cannot be resolved.
+        let previewSession = sessionIdForMessage(messageId)
+        if let sid = previewSession { invalidateSessionListCache(sessionId: sid) } else { invalidateSessionListCache() }
+        // A parts rewrite can move the preview either way: recompute.
+        defer { previewSession.map { recomputeStoredPreview(sessionId: $0) } }
         let partsJSON: String
         do {
             let data = try JSONEncoder().encode(parts)
@@ -2480,7 +2597,10 @@ actor ChatStore {
     func deleteMessagesAfter(sessionId: String, keepCount: Int) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()
+        // PER-SESSION: truncates one session's tail. The truncation can delete
+        // the message the preview came from, so it must move BACKWARDS.
+        invalidateSessionListCache(sessionId: sessionId)
+        defer { recomputeStoredPreview(sessionId: sessionId) }
         // DIAG: snapshot state before delete
         let beforeStats = sessionWriteStats(sessionId: sessionId)
         logger.warning("[EditSync] [DeleteAfter] ENTER sid=\(sessionId.prefix(8)) keepCount=\(keepCount) — before: count=\(beforeStats.count) maxSortOrder=\(beforeStats.maxSortOrder)")
@@ -2972,7 +3092,7 @@ actor ChatStore {
     /// Set or clear the v2 soft-delete tombstone on a session row. Pass
     /// `at = nil` to clear (after a resurrect cascade re-pushes the tree).
     func setSessionTombstone(sessionId: String, at: Date?) {
-        invalidateSessionListCache()
+        invalidateSessionListCache(sessionId: sessionId)  // PER-SESSION: column not shown; row stays
         let sql = "UPDATE sessions SET remote_tombstoned_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
@@ -3462,7 +3582,8 @@ actor ChatStore {
     /// Wraps everything in a single transaction.
     @discardableResult
     func repairSession(sessionId: String) -> RepairReport {
-        invalidateSessionListCache()
+        // PER-SESSION: sort_order rewrite / dedupe within one session.
+        invalidateSessionListCache(sessionId: sessionId)
         var report = RepairReport()
 
         exec("BEGIN IMMEDIATE")
@@ -3552,6 +3673,9 @@ actor ChatStore {
         sqlite3_finalize(mUpdStmt)
 
         exec("COMMIT")
+        // sort_orders were renumbered: re-derive the stored preview pair so
+        // later folds compare against the new numbering. [T-ios-listsessions-perf]
+        if report.sortOrderFixed > 0 { recomputeStoredPreview(sessionId: sessionId) }
 
         if report.hadAnomaly {
             logger.warning("[Repair] session=\(sessionId.prefix(8)) sortOrderFixed=\(report.sortOrderFixed) markersUpgraded=\(report.markersUpgraded) totalRows=\(rows.count)")
@@ -3688,7 +3812,7 @@ actor ChatStore {
     }
 
     private func touchSession(_ sessionId: String) {
-        invalidateSessionListCache()
+        invalidateSessionListCache(sessionId: sessionId)  // PER-SESSION: updated_at moves; patch re-sorts
         let sql = "UPDATE sessions SET updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -4237,14 +4361,20 @@ extension RawMessage {
     /// send/compaction paths for the LLM; the UI surfaces real attachments
     /// via `msg.attachments` parsed from the <user-attached-files> XML, so
     /// these tokens are pure noise to the user.
+    /// [T-ios-listsessions-perf] Compiled once: these ran for every session
+    /// on every sidebar refresh and were rebuilt (`uregex_open`) each call.
+    /// NSRegularExpression is immutable and thread-safe for matching.
+    private static let attachmentMarkerRes: [NSRegularExpression] = [
+        #"\[attached [A-Za-z]+:[^\]]*\]"#,
+        #"\[image omitted to save context[^\]]*\]"#,
+    ].map { try! NSRegularExpression(pattern: $0) }
+
     fileprivate static func stripAttachmentMarkers(_ s: String) -> String {
-        let patterns = [
-            #"\[attached [A-Za-z]+:[^\]]*\]"#,
-            #"\[image omitted to save context[^\]]*\]"#,
-        ]
         var out = s
-        for p in patterns {
-            if let re = try? NSRegularExpression(pattern: p) {
+        // Fast path: the markers are ASCII and most messages have neither; a
+        // byte scan for "[" skips both regex passes for the common case.
+        if out.utf8.contains(UInt8(ascii: "[")) {
+            for re in attachmentMarkerRes {
                 let range = NSRange(out.startIndex..., in: out)
                 out = re.stringByReplacingMatches(in: out, range: range, withTemplate: "")
             }
@@ -4269,14 +4399,19 @@ extension RawMessage {
     /// resume/continue, but they should never surface in the chat bubble (or in
     /// copy / edit / share, which read the bubble text).
     static func stripSystemReminders(_ text: String) -> String {
-        guard text.contains("<system-reminder>") || text.contains("<treasury_context") else { return text }
+        // Byte-level guard: `String.contains` bridged to NSString and built
+        // UTF-16 breadcrumbs for every message on every refresh, though most
+        // carry neither block. [T-ios-listsessions-perf]
+        guard MarkdownStripper.utf8Contains(text, "<system-reminder>", withinBytes: Int.max)
+                || MarkdownStripper.utf8Contains(text, "<treasury_context", withinBytes: Int.max)
+        else { return text }
         let ns = text as NSString
         return displayOnlyBlockRegex?.stringByReplacingMatches(
             in: text, range: NSRange(location: 0, length: ns.length), withTemplate: ""
         ) ?? text
     }
 
-    private static let displayOnlyBlockRegex = try? NSRegularExpression(
+    private static let displayOnlyBlockRegex = try? NSRegularExpression( // compiled once
         pattern: "<system-reminder>[\\s\\S]*?</system-reminder>|<treasury_context\\b[^>]*>[\\s\\S]*?</treasury_context>"
     )
 }
@@ -5342,7 +5477,7 @@ extension ChatStore {
         if SessionActivityTracker.isActiveThreadSafe(sessionId) {
             return .failed(String(localized: "这个对话正在运行，停下后再拉取"))
         }
-        invalidateSessionListCache()
+        invalidateSessionListCache(sessionId: sessionId)  // PER-SESSION: one session's rows are swapped
         iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) START — pulling cloud first, local untouched")
 
         // 1. Cloud first (no local mutation yet). Returns the portables
@@ -5438,6 +5573,8 @@ extension ChatStore {
         // 5. Replay cloud portables through SyncCore (same path normal
         // inbound traffic uses, so hydrators land them in SQLite).
         await SyncCore.shared.applyPortables(portables, transportName: "ForcePull")
+        invalidateSessionListCache(sessionId: sessionId)
+        recomputeStoredPreview(sessionId: sessionId)
         iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) DONE pulled=\(portables.count) localDeleted=\(locallyDeleted)")
         return .applied(pulledFromCloud: portables.count, localDeleted: locallyDeleted)
     }
@@ -5556,6 +5693,9 @@ extension ChatStore {
     // MARK: - Sync Device CRUD
 
     func upsertSyncDevice(_ device: SyncDevice) throws {
+        // FULL: rows show their origin device's name (column 16), a join no
+        // per-row patch would re-run for sessions it did not touch.
+        invalidateSessionListCache()
         try withInboundMutation {
             iCloudLogger.info("[iCloud] upsertSyncDevice: id=\(device.id) name=\(device.deviceName) zone=\(device.zoneName) upload=\(device.uploadTypes)")
             let sql = """
@@ -5675,7 +5815,7 @@ extension ChatStore {
     ///   epoch 0 = explicitly unpinned, positive = pinned timestamp.
     func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, originDeviceId: String? = nil, lastWriterDeviceId: String? = nil) throws {
         try withInboundMutation {
-            invalidateSessionListCache()
+            invalidateSessionListCache()  // FULL: inbound session insert/update (sync)
             // Check if local session exists and its updated_at + pinned_at
             var localUpdatedAt: Double?
             var localPinnedAt: Double?
@@ -5851,7 +5991,7 @@ extension ChatStore {
 
     /// Delete a local session if it originated from the given device (remote deletion propagation).
     func deleteLocalSessionIfFromDevice(id: String, deviceId: String) {
-        invalidateSessionListCache()
+        invalidateSessionListCache()  // FULL: row set changes (sync)
         let sql = "DELETE FROM sessions WHERE id = ? AND remote_origin_device_id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -5883,7 +6023,9 @@ extension ChatStore {
         updatedAt: Date? = nil
     ) throws {
         try withInboundMutation {
-            invalidateSessionListCache()
+            // PER-SESSION: an inbound message changes one session's preview /
+            // order; the session row itself is merged (FULL) by mergeRemoteSession.
+            invalidateSessionListCache(sessionId: sessionId)
             // Defer merging into a session that's actively running locally. While
             // an agent loop is streaming / running tools, the message list is
             // volatile and locally authoritative: appends bump sort_order and
@@ -6092,6 +6234,11 @@ extension ChatStore {
                 }
                 sqlite3_finalize(stmt); stmt = nil
             }
+            // [T-ios-listsessions-perf] An inbound merge can land a message at
+            // any sort_order (even behind local rows) or rewrite a row's parts:
+            // recompute rather than fold forward. Inside the inbound
+            // transaction, so a rollback takes the preview with it.
+            recomputeStoredPreview(sessionId: sessionId)
             // Notify the in-process ViewModel cache that this session's
             // messages have changed via iCloud merge. The foreground-visible
             // VM already reloads via `.cloudSyncDidFetchChanges` at the end
@@ -6208,7 +6355,12 @@ extension ChatStore {
     /// that should propagate across devices.
     func deleteLocalMessage(messageId: String) throws {
         try withInboundMutation {
-            invalidateSessionListCache()
+            // PER-SESSION, resolved BEFORE the delete. A nil lookup means no
+            // local row: the DELETE is a no-op and nothing shown can change —
+            // the common case for inbound tombstone batches (~6.4k per batch),
+            // so it must not cost a FULL rebuild.
+            let previewSession = sessionIdForMessage(messageId)
+            if let sid = previewSession { invalidateSessionListCache(sessionId: sid) }
             let sql = "DELETE FROM messages WHERE id = ?"
             var stmt: OpaquePointer?
             defer { sqlite3_finalize(stmt) }
@@ -6218,6 +6370,7 @@ extension ChatStore {
             }
             let changes = Int(sqlite3_changes(db))
             sqlite3_finalize(stmt); stmt = nil
+            if changes > 0, let sid = previewSession { recomputeStoredPreview(sessionId: sid) }
             if changes > 0 {
                 iCloudLogger.warning("[EditSync] [iCloud] deleteLocalMessage: removed '\(messageId.prefix(8))' from local messages (inbound tombstone applied)")
             } else {
@@ -6533,6 +6686,7 @@ extension ChatStore {
         exec("DELETE FROM remote_provider_configs")
         exec("DELETE FROM remote_env_vars")
         exec("DELETE FROM sync_devices")
+        invalidateSessionListCache()  // FULL: origin device names disappear
     }
 
     // MARK: - Single Message Lookup (for sync)

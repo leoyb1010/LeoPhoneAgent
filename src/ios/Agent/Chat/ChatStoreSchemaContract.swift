@@ -13,7 +13,7 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 /// version, and can prove that a database is safe before future Artifact tables
 /// are introduced.
 enum ChatStoreSchemaContract {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     struct Report: Equatable, Sendable {
         var previousVersion: Int
@@ -58,6 +58,11 @@ enum ChatStoreSchemaContract {
             Column(name: "remote_origin_device_id", definition: "TEXT"),
             Column(name: "pinned_at", definition: "REAL"),
             Column(name: "remote_tombstoned_at", definition: "REAL"),
+            // v4 [T-ios-listsessions-perf]: denormalised sidebar preview.
+            // Nullable, no DEFAULT — NULL = "not computed yet" (backfilled
+            // once by listSessions), '' = "nothing displayable".
+            Column(name: "preview_text", definition: "TEXT"),
+            Column(name: "preview_sort_order", definition: "INTEGER"),
         ],
         "messages": [
             Column(name: "id", definition: "TEXT PRIMARY KEY"),

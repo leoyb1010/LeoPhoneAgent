@@ -78,8 +78,29 @@ final class LoggingManager: ObservableObject {
         return f
     }()
 
+    /// [T-ios-log-verbose-tier] The recorded detail level. Moves the Swift
+    /// threshold and the iSH kernel's stderr traces (captured into the same
+    /// file by `startCapture()`'s dup2) together, so a switch to Info also
+    /// silences the per-entry readdir / path-resolve traces.
+    @Published var level: AppLogger.Level {
+        didSet {
+            AppLogger.level = level
+            Self.applyKernelVerbose(level)
+        }
+    }
+
+    /// Mirror the level into the kernel trace gate. Goes through a C shim
+    /// that is a no-op on iSH builds without `ish_set_verbose_trace`.
+    private static func applyKernelVerbose(_ level: AppLogger.Level) {
+        leo_set_kernel_verbose_trace(level <= .verbose)
+    }
+
     private init() {
         isEnabled = UserDefaults.standard.bool(forKey: "loggingEnabled")
+        level = AppLogger.level
+        // Push unconditionally so the kernel flag can never drift from the
+        // stored level after a restart (it defaults to off).
+        Self.applyKernelVerbose(AppLogger.level)
     }
 
     /// Called at app launch to restore capture if previously enabled.

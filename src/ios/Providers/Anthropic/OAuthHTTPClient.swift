@@ -414,6 +414,7 @@ enum RequestBodyPatcher {
     /// form a stable cached prefix (matching Claude Code's strategy).
     static func injectToolsCacheControl(into request: NSMutableURLRequest) {
         guard let body = request.httpBody,
+              ProviderSendPathCache.bodyMentionsTools(body),  // [T-ios-listsessions-perf]
               var json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
               var tools = json["tools"] as? [[String: Any]],
               !tools.isEmpty else { return }
@@ -430,6 +431,7 @@ enum RequestBodyPatcher {
 
     static func injectEagerInputStreaming(into request: NSMutableURLRequest) {
         guard let body = request.httpBody,
+              ProviderSendPathCache.bodyMentionsTools(body),  // [T-ios-listsessions-perf]
               var json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
               var tools = json["tools"] as? [[String: Any]] else { return }
 
