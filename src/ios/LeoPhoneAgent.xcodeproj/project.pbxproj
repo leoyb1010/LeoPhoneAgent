@@ -578,6 +578,52 @@
 		E5S000002 /* CloudSyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000012 /* CloudSyncEngine.swift */; };
 		E5S000003 /* SessionForkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000013 /* SessionForkManager.swift */; };
 		E5S000004 /* CloudSyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000014 /* CloudSyncSettingsView.swift */; };
+		E5BKP0101 /* BackupActivityLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0001 /* BackupActivityLock.swift */; };
+		E5BKP0102 /* BackupBlobStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0002 /* BackupBlobStore.swift */; };
+		E5BKP0103 /* BackupCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0003 /* BackupCrypto.swift */; };
+		E5BKP0104 /* BackupDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0004 /* BackupDelivery.swift */; };
+		E5BKP0105 /* BackupExportJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0005 /* BackupExportJournal.swift */; };
+		E5BKP0106 /* BackupExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0006 /* BackupExporter.swift */; };
+		E5BKP0107 /* BackupFileTreeExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0007 /* BackupFileTreeExporter.swift */; };
+		E5BKP0108 /* BackupFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0008 /* BackupFormat.swift */; };
+		E5BKP0109 /* BackupHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0009 /* BackupHistory.swift */; };
+		E5BKP0110 /* BackupImporter+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0010 /* BackupImporter+Categories.swift */; };
+		E5BKP0111 /* BackupImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0011 /* BackupImporter.swift */; };
+		E5BKP0112 /* BackupJSONLWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0012 /* BackupJSONLWriter.swift */; };
+		E5BKP0113 /* BackupMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0013 /* BackupMerge.swift */; };
+		E5BKP0114 /* BackupOpenRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0014 /* BackupOpenRouter.swift */; };
+		E5BKP0115 /* BackupPackageReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0015 /* BackupPackageReader.swift */; };
+		E5BKP0116 /* BackupProgressReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0016 /* BackupProgressReporter.swift */; };
+		E5BKP0117 /* BackupRestoreJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0017 /* BackupRestoreJournal.swift */; };
+		E5BKP0118 /* BackupRunController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0018 /* BackupRunController.swift */; };
+		E5BKP0119 /* BackupSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0019 /* BackupSecrets.swift */; };
+		E5BKP0120 /* BackupStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0020 /* BackupStores.swift */; };
+		E5BKP0121 /* BackupZipExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0021 /* BackupZipExtractor.swift */; };
+		E5BKP0122 /* BackupZipWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0022 /* BackupZipWriter.swift */; };
+		E5BKP0123 /* ChatStore+Restore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0023 /* ChatStore+Restore.swift */; };
+		E5BKP0124 /* LiveBackupStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0024 /* LiveBackupStores.swift */; };
+		E5BKP0125 /* BackupHistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0025 /* BackupHistoryDetailView.swift */; };
+		E5BKP0126 /* BackupRestoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0026 /* BackupRestoreView.swift */; };
+		E5BKP0127 /* BackupSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0027 /* BackupSettingsView.swift */; };
+		E5BKP0201 /* BackupActivityLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0001 /* BackupActivityLock.swift */; };
+		E5BKP0202 /* BackupBlobStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0002 /* BackupBlobStore.swift */; };
+		E5BKP0203 /* BackupCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0003 /* BackupCrypto.swift */; };
+		E5BKP0205 /* BackupExportJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0005 /* BackupExportJournal.swift */; };
+		E5BKP0206 /* BackupExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0006 /* BackupExporter.swift */; };
+		E5BKP0207 /* BackupFileTreeExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0007 /* BackupFileTreeExporter.swift */; };
+		E5BKP0208 /* BackupFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0008 /* BackupFormat.swift */; };
+		E5BKP0209 /* BackupHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0009 /* BackupHistory.swift */; };
+		E5BKP0211 /* BackupImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0011 /* BackupImporter.swift */; };
+		E5BKP0210 /* BackupImporter+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0010 /* BackupImporter+Categories.swift */; };
+		E5BKP0212 /* BackupJSONLWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0012 /* BackupJSONLWriter.swift */; };
+		E5BKP0213 /* BackupMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0013 /* BackupMerge.swift */; };
+		E5BKP0215 /* BackupPackageReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0015 /* BackupPackageReader.swift */; };
+		E5BKP0216 /* BackupProgressReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0016 /* BackupProgressReporter.swift */; };
+		E5BKP0217 /* BackupRestoreJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0017 /* BackupRestoreJournal.swift */; };
+		E5BKP0219 /* BackupSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0019 /* BackupSecrets.swift */; };
+		E5BKP0220 /* BackupStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0020 /* BackupStores.swift */; };
+		E5BKP0221 /* BackupZipExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0021 /* BackupZipExtractor.swift */; };
+		E5BKP0222 /* BackupZipWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BKP0022 /* BackupZipWriter.swift */; };
 		E5S000005 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5S000015 /* CloudKit.framework */; };
 		E5S000006 /* SyncDirtyScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000016 /* SyncDirtyScanner.swift */; };
 		E5SD00009 /* ShortcutRunTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SD00019 /* ShortcutRunTracker.swift */; };
@@ -1411,6 +1457,33 @@
 		E5S000012 /* CloudSyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncEngine.swift; sourceTree = "<group>"; };
 		E5S000013 /* SessionForkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionForkManager.swift; sourceTree = "<group>"; };
 		E5S000014 /* CloudSyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncSettingsView.swift; sourceTree = "<group>"; };
+		E5BKP0001 /* BackupActivityLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupActivityLock.swift; sourceTree = "<group>"; };
+		E5BKP0002 /* BackupBlobStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupBlobStore.swift; sourceTree = "<group>"; };
+		E5BKP0003 /* BackupCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCrypto.swift; sourceTree = "<group>"; };
+		E5BKP0004 /* BackupDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupDelivery.swift; sourceTree = "<group>"; };
+		E5BKP0005 /* BackupExportJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExportJournal.swift; sourceTree = "<group>"; };
+		E5BKP0006 /* BackupExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExporter.swift; sourceTree = "<group>"; };
+		E5BKP0007 /* BackupFileTreeExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFileTreeExporter.swift; sourceTree = "<group>"; };
+		E5BKP0008 /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
+		E5BKP0009 /* BackupHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHistory.swift; sourceTree = "<group>"; };
+		E5BKP0010 /* BackupImporter+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupImporter+Categories.swift"; sourceTree = "<group>"; };
+		E5BKP0011 /* BackupImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupImporter.swift; sourceTree = "<group>"; };
+		E5BKP0012 /* BackupJSONLWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupJSONLWriter.swift; sourceTree = "<group>"; };
+		E5BKP0013 /* BackupMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupMerge.swift; sourceTree = "<group>"; };
+		E5BKP0014 /* BackupOpenRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupOpenRouter.swift; sourceTree = "<group>"; };
+		E5BKP0015 /* BackupPackageReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupPackageReader.swift; sourceTree = "<group>"; };
+		E5BKP0016 /* BackupProgressReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupProgressReporter.swift; sourceTree = "<group>"; };
+		E5BKP0017 /* BackupRestoreJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRestoreJournal.swift; sourceTree = "<group>"; };
+		E5BKP0018 /* BackupRunController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRunController.swift; sourceTree = "<group>"; };
+		E5BKP0019 /* BackupSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSecrets.swift; sourceTree = "<group>"; };
+		E5BKP0020 /* BackupStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupStores.swift; sourceTree = "<group>"; };
+		E5BKP0021 /* BackupZipExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupZipExtractor.swift; sourceTree = "<group>"; };
+		E5BKP0022 /* BackupZipWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupZipWriter.swift; sourceTree = "<group>"; };
+		E5BKP0023 /* ChatStore+Restore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatStore+Restore.swift"; sourceTree = "<group>"; };
+		E5BKP0024 /* LiveBackupStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBackupStores.swift; sourceTree = "<group>"; };
+		E5BKP0025 /* BackupHistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHistoryDetailView.swift; sourceTree = "<group>"; };
+		E5BKP0026 /* BackupRestoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRestoreView.swift; sourceTree = "<group>"; };
+		E5BKP0027 /* BackupSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSettingsView.swift; sourceTree = "<group>"; };
 		E5S000015 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		E5S000016 /* SyncDirtyScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDirtyScanner.swift; sourceTree = "<group>"; };
 		E5SD00019 /* ShortcutRunTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRunTracker.swift; sourceTree = "<group>"; };
@@ -1866,6 +1939,7 @@
 				E5LEO0015 /* AgentActivityLog.swift */,
 				E5ART0030 /* Artifacts */,
 				F1A00014 /* Background */,
+				E5BKP0000 /* Backup */,
 				E57000030 /* BrowserUse */,
 				F1A00010 /* Chat */,
 				E5T000030 /* Intents */,
@@ -1880,6 +1954,37 @@
 				E5LD00003 /* ToolLoopDetector.swift */,
 			);
 			path = Agent;
+			sourceTree = "<group>";
+		};
+		E5BKP0000 /* Backup */ = {
+			isa = PBXGroup;
+			children = (
+				E5BKP0001 /* BackupActivityLock.swift */,
+				E5BKP0002 /* BackupBlobStore.swift */,
+				E5BKP0003 /* BackupCrypto.swift */,
+				E5BKP0004 /* BackupDelivery.swift */,
+				E5BKP0005 /* BackupExportJournal.swift */,
+				E5BKP0006 /* BackupExporter.swift */,
+				E5BKP0007 /* BackupFileTreeExporter.swift */,
+				E5BKP0008 /* BackupFormat.swift */,
+				E5BKP0009 /* BackupHistory.swift */,
+				E5BKP0010 /* BackupImporter+Categories.swift */,
+				E5BKP0011 /* BackupImporter.swift */,
+				E5BKP0012 /* BackupJSONLWriter.swift */,
+				E5BKP0013 /* BackupMerge.swift */,
+				E5BKP0014 /* BackupOpenRouter.swift */,
+				E5BKP0015 /* BackupPackageReader.swift */,
+				E5BKP0016 /* BackupProgressReporter.swift */,
+				E5BKP0017 /* BackupRestoreJournal.swift */,
+				E5BKP0018 /* BackupRunController.swift */,
+				E5BKP0019 /* BackupSecrets.swift */,
+				E5BKP0020 /* BackupStores.swift */,
+				E5BKP0021 /* BackupZipExtractor.swift */,
+				E5BKP0022 /* BackupZipWriter.swift */,
+				E5BKP0023 /* ChatStore+Restore.swift */,
+				E5BKP0024 /* LiveBackupStores.swift */,
+			);
+			path = Backup;
 			sourceTree = "<group>";
 		};
 		E5ART0030 /* Artifacts */ = {
@@ -2651,6 +2756,9 @@
 			children = (
 				AA0838A12F3B941A00049557 /* AboutView.swift */,
 				E5C800011 /* AppearanceSettingsSupport.swift */,
+				E5BKP0025 /* BackupHistoryDetailView.swift */,
+				E5BKP0026 /* BackupRestoreView.swift */,
+				E5BKP0027 /* BackupSettingsView.swift */,
 				E5S000014 /* CloudSyncSettingsView.swift */,
 				E5G000013 /* EnhancedBackgroundSettingsView.swift */,
 				E5P000012 /* EnvironmentVariablesView.swift */,
@@ -3167,6 +3275,25 @@
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
 				E5MG0003 /* ModelGroup.swift in Sources */,
 				E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */,
+				E5BKP0201 /* BackupActivityLock.swift in Sources */,
+				E5BKP0202 /* BackupBlobStore.swift in Sources */,
+				E5BKP0203 /* BackupCrypto.swift in Sources */,
+				E5BKP0205 /* BackupExportJournal.swift in Sources */,
+				E5BKP0206 /* BackupExporter.swift in Sources */,
+				E5BKP0207 /* BackupFileTreeExporter.swift in Sources */,
+				E5BKP0208 /* BackupFormat.swift in Sources */,
+				E5BKP0209 /* BackupHistory.swift in Sources */,
+				E5BKP0211 /* BackupImporter.swift in Sources */,
+				E5BKP0210 /* BackupImporter+Categories.swift in Sources */,
+				E5BKP0212 /* BackupJSONLWriter.swift in Sources */,
+				E5BKP0213 /* BackupMerge.swift in Sources */,
+				E5BKP0215 /* BackupPackageReader.swift in Sources */,
+				E5BKP0216 /* BackupProgressReporter.swift in Sources */,
+				E5BKP0217 /* BackupRestoreJournal.swift in Sources */,
+				E5BKP0219 /* BackupSecrets.swift in Sources */,
+				E5BKP0220 /* BackupStores.swift in Sources */,
+				E5BKP0221 /* BackupZipExtractor.swift in Sources */,
+				E5BKP0222 /* BackupZipWriter.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
 				E5PCG0012 /* PaperclipActivityAttributes.swift in Sources */,
 				E5ART0003 /* ArtifactModels.swift in Sources */,
@@ -3694,6 +3821,33 @@
 				E5S000002 /* CloudSyncEngine.swift in Sources */,
 				E5S000003 /* SessionForkManager.swift in Sources */,
 				E5S000004 /* CloudSyncSettingsView.swift in Sources */,
+				E5BKP0101 /* BackupActivityLock.swift in Sources */,
+				E5BKP0102 /* BackupBlobStore.swift in Sources */,
+				E5BKP0103 /* BackupCrypto.swift in Sources */,
+				E5BKP0104 /* BackupDelivery.swift in Sources */,
+				E5BKP0105 /* BackupExportJournal.swift in Sources */,
+				E5BKP0106 /* BackupExporter.swift in Sources */,
+				E5BKP0107 /* BackupFileTreeExporter.swift in Sources */,
+				E5BKP0108 /* BackupFormat.swift in Sources */,
+				E5BKP0109 /* BackupHistory.swift in Sources */,
+				E5BKP0110 /* BackupImporter+Categories.swift in Sources */,
+				E5BKP0111 /* BackupImporter.swift in Sources */,
+				E5BKP0112 /* BackupJSONLWriter.swift in Sources */,
+				E5BKP0113 /* BackupMerge.swift in Sources */,
+				E5BKP0114 /* BackupOpenRouter.swift in Sources */,
+				E5BKP0115 /* BackupPackageReader.swift in Sources */,
+				E5BKP0116 /* BackupProgressReporter.swift in Sources */,
+				E5BKP0117 /* BackupRestoreJournal.swift in Sources */,
+				E5BKP0118 /* BackupRunController.swift in Sources */,
+				E5BKP0119 /* BackupSecrets.swift in Sources */,
+				E5BKP0120 /* BackupStores.swift in Sources */,
+				E5BKP0121 /* BackupZipExtractor.swift in Sources */,
+				E5BKP0122 /* BackupZipWriter.swift in Sources */,
+				E5BKP0123 /* ChatStore+Restore.swift in Sources */,
+				E5BKP0124 /* LiveBackupStores.swift in Sources */,
+				E5BKP0125 /* BackupHistoryDetailView.swift in Sources */,
+				E5BKP0126 /* BackupRestoreView.swift in Sources */,
+				E5BKP0127 /* BackupSettingsView.swift in Sources */,
 				E5S000006 /* SyncDirtyScanner.swift in Sources */,
 				E5W000001 /* PortableRecord.swift in Sources */,
                 E5STRX001 /* SkillSyncTreeTransaction.swift in Sources */,

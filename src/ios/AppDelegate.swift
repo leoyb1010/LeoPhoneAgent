@@ -42,6 +42,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             MountedFoldersManager.shared.activateAll()
         }
+        // Undo a restore category a killed process left half-applied, and
+        // sweep abandoned backup work files.
+        BackupLaunchMaintenance.run()
         // [T-leophone-push] 回到前台时对账 Mac 上错过的审批/终态事件。
         RelayEventCatchUp.shared.activate()
         // [T-live-mission] 向 APNs 注册,把 token 登记到中继——app 完全

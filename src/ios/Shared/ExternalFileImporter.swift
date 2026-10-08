@@ -34,6 +34,14 @@ enum ExternalFileImporter {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
+        // A .minisbak is a LeoBot backup package: route it to restore (staged
+        // now, while the security scope is held) instead of attaching it.
+        if BackupOpenRouter.isBackupPackage(url) {
+            let staged = BackupOpenRouter.stage(url)
+            Task { @MainActor in BackupOpenRouter.presentStaged(staged) }
+            return true
+        }
+
         // [T-skill-share] A .skillmd is a portable skill — install it instead
         // of attaching it to a chat. Only this explicit extension short-circuits;
         // plain .md files keep their existing attach behaviour. A skill steers

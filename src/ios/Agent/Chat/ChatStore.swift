@@ -371,7 +371,9 @@ actor ChatStore {
     /// cleared inside one non-suspending actor call, so an ordinary edit can
     /// never be diverted into a single destination.
     private var seedingDestination: String?
-    private var db: OpaquePointer?
+    /// Readable (not writable) by same-module extensions such as the backup
+    /// restore path in Agent/Backup/ChatStore+Restore.swift.
+    private(set) var db: OpaquePointer?
     /// Base URL for per-session media storage: Library/MinisChat/minis/
     let minisBaseURL: URL
 
@@ -394,7 +396,7 @@ actor ChatStore {
     /// every mutation that can change what listSessions() returns — the row set
     /// (create/delete), ordering (updated_at via touchSession), or a displayed
     /// field (title/category/pin/model/preview text from new messages).
-    private func invalidateSessionListCache() {
+    func invalidateSessionListCache() {
         sessionListCacheDirty = true
     }
 
