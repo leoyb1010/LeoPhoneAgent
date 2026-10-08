@@ -15,7 +15,14 @@ def manifest():
     transport = (SYNC / 'ICloudSharedZoneTransport.swift').read_text()
     zones = dict(re.findall(r'static let (\w+ZoneName)\s*=\s*"([^"]+)"', transport))
     mappings = dict(re.findall(r'"(\w+)":\s+(\w+ZoneName)', transport))
-    queries = dict(re.findall(r'\("(\w+)", "(createdAt|updatedAt)"\)', transport))
+    # Poll keys live in SyncPollPlan; a runtime fallback key (SessionV2 →
+    # createdAt on an un-indexed schema) must stay indexed too.
+    plan = (SYNC / 'SyncPollPlan.swift').read_text()
+    queries = {}
+    for record_type, key in re.findall(r'\("(\w+)", "(createdAt|updatedAt)"\)', transport + plan):
+        queries.setdefault(record_type, set()).add(key)
+    for record_type, key in re.findall(r'type == "(\w+)" && primary == "\w+"\) \? "(createdAt|updatedAt)"', plan):
+        queries.setdefault(record_type, set()).add(key)
     registered = set(re.findall(r'r\.register\((\w+)\.self\)', source))
     result = {}
     kinds = {'string': 'STRING', 'int': 'INT64', 'date': 'TIMESTAMP'}
@@ -32,8 +39,8 @@ def manifest():
         fields['syncSchemaVersion'] = {'type': 'INT64', 'optional': False}
         fields['syncMinimumCompatibleVersion'] = {'type': 'INT64', 'optional': True}
         indexes = {}
-        if record_type in queries:
-            indexes[queries[record_type]] = ['QUERYABLE', 'SORTABLE']
+        for key in sorted(queries.get(record_type, ())):
+            indexes[key] = ['QUERYABLE', 'SORTABLE']
         if record_type in ('SessionV2', 'MessageV2', 'CompactMarkerV2'):
             indexes['sessionId'] = ['QUERYABLE']
         asset = {'SessionFileV2': 'asset', 'ArtifactVersionV2': 'asset', 'SkillV2': 'bundleAsset'}.get(record_type)

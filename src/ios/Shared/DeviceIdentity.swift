@@ -1,6 +1,104 @@
 import Foundation
+import OSLog
 import Security
 import UIKit
+
+/// Pure resolution table for the device id, with the Keychain injected so the
+/// locked-before-first-unlock branch is testable.
+///
+/// After a reboot iOS can relaunch the app in the background BEFORE first
+/// unlock (BGTask, CloudKit push). The item is `AfterFirstUnlockThisDeviceOnly`,
+/// so the read answers `errSecInteractionNotAllowed`, not `errSecItemNotFound`.
+/// The old `static let` treated both as "nothing stored", minted a new UUID,
+/// overwrote the real one (write deletes first) and froze it for the whole
+/// process: wrong `device-<id>` zone, duplicate SyncDevice, own records seen as
+/// a peer's. Rules:
+///   - found & non-blank → memoize.
+///   - absent (or blank/undecodable) → mint, persist, memoize; remember the
+///     previous id (UserDefaults) so sync can retire its ghost record.
+///   - unreadable (any other status) → provisional id, NO write, NO memo.
+///   - mint whose write fails → also provisional: an id that will not survive
+///     relaunch must never tag data (it would be orphaned next launch).
+final class DeviceIdentityResolver: @unchecked Sendable {
+    enum KeychainRead: Equatable {
+        case found(String)
+        /// Confirmed absent (`errSecItemNotFound`) or present but undecodable.
+        case absent
+        /// The Keychain refused to answer; never evidence of absence.
+        case unreadable(OSStatus)
+    }
+
+    static let previousIdKey = "deviceIdentity.previousId"
+    static let retiredIdKey = "deviceIdentity.retiredId"
+    static let provisionalPrefix = "provisional-"
+
+    private let read: () -> KeychainRead
+    private let write: (String) -> Bool
+    private let defaults: UserDefaults
+    private let mint: () -> String
+    private let lock = NSLock()
+    private var cached: String?
+    /// Stable within the process so repeated locked reads agree; never stored.
+    let provisionalId: String
+
+    init(read: @escaping () -> KeychainRead,
+         write: @escaping (String) -> Bool,
+         defaults: UserDefaults = .standard,
+         mint: @escaping () -> String = { UUID().uuidString }) {
+        self.read = read
+        self.write = write
+        self.defaults = defaults
+        self.mint = mint
+        self.provisionalId = Self.provisionalPrefix + UUID().uuidString
+    }
+
+    var deviceId: String {
+        lock.lock(); defer { lock.unlock() }
+        if let cached { return cached }
+        switch read() {
+        case .found(let raw):
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                cached = trimmed
+                defaults.set(trimmed, forKey: Self.previousIdKey)
+                return trimmed
+            }
+            return mintLocked()
+        case .absent:
+            return mintLocked()
+        case .unreadable:
+            return provisionalId
+        }
+    }
+
+    private func mintLocked() -> String {
+        let newId = mint()
+        guard write(newId) else { return provisionalId }
+        cached = newId
+        if let prev = defaults.string(forKey: Self.previousIdKey), prev != newId,
+           !prev.hasPrefix(Self.provisionalPrefix), !prev.isEmpty {
+            defaults.set(prev, forKey: Self.retiredIdKey)
+        }
+        defaults.set(newId, forKey: Self.previousIdKey)
+        return newId
+    }
+
+    /// Resolves first: an empty cache before the first read is not provisional.
+    var isProvisional: Bool {
+        _ = deviceId
+        lock.lock(); defer { lock.unlock() }
+        return cached == nil
+    }
+
+    /// An id replaced by a fresh mint whose cloud device record should be
+    /// retired. Consumed once.
+    func takeRetiredDeviceId() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        let v = defaults.string(forKey: Self.retiredIdKey)
+        if v != nil { defaults.removeObject(forKey: Self.retiredIdKey) }
+        return v
+    }
+}
 
 /// Stable device identity persisted in Keychain (survives app reinstall).
 /// Used for per-device CKRecordZone naming in iCloud sync.
@@ -8,15 +106,24 @@ enum DeviceIdentity {
     private static let keychainService = "com.leoyuan.leophoneagent.device"
     private static let keychainAccount = "deviceId"
 
-    /// Stable UUID for this device, persisted in Keychain.
-    static let deviceId: String = {
-        if let existing = readKeychain() {
-            return existing
-        }
-        let newId = UUID().uuidString
-        writeKeychain(newId)
-        return newId
-    }()
+    private static let resolver = DeviceIdentityResolver(read: readKeychain, write: writeKeychain)
+
+    /// Stable UUID for this device, persisted in Keychain. While the Keychain
+    /// is locked (before first unlock) this is a `provisional-` id that is
+    /// never persisted; sync and provenance must check `isProvisional`.
+    static var deviceId: String { resolver.deviceId }
+
+    /// True when `deviceId` is answering with a throwaway id because the
+    /// Keychain cannot be read yet. Nothing may be written under it.
+    static var isProvisional: Bool { resolver.isProvisional }
+
+    static func isProvisional(_ id: String) -> Bool {
+        id.hasPrefix(DeviceIdentityResolver.provisionalPrefix)
+    }
+
+    /// Previous id to retire after a re-mint (restore to a new device, lost
+    /// Keychain item). Consumed once by SyncV2Bootstrap.
+    static func takeRetiredDeviceId() -> String? { resolver.takeRetiredDeviceId() }
 
     /// Human-readable device name with short ID suffix for disambiguation.
     /// Prefers user-set name (e.g. "Ethan's iPhone") if available (iOS returns it when
@@ -169,32 +276,48 @@ enum DeviceIdentity {
 
     // MARK: - Keychain Helpers
 
-    private static func readKeychain() -> String? {
+    private static func readKeychain() -> DeviceIdentityResolver.KeychainRead {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: keychainAccount,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data, let s = String(data: data, encoding: .utf8) else { return .absent }
+            return .found(s)
+        case errSecItemNotFound:
+            return .absent
+        default:
+            // errSecInteractionNotAllowed (-25308) is the locked-after-reboot
+            // case; any other status gets the same conservative treatment.
+            identityLog.error("deviceId keychain unreadable status=\(status, privacy: .public); using provisional id, nothing written")
+            return .unreadable(status)
+        }
     }
 
-    private static func writeKeychain(_ value: String) {
-        let data = Data(value.utf8)
-        let query: [String: Any] = [
+    private static func writeKeychain(_ value: String) -> Bool {
+        let match: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: keychainAccount,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
-        // Delete any existing entry first
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        // Only reached when the item is absent or blank, so replacing it is safe.
+        SecItemDelete(match as CFDictionary)
+        var add = match
+        add[kSecValueData as String] = Data(value.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(add as CFDictionary, nil)
+        if status != errSecSuccess {
+            identityLog.error("deviceId persist failed status=\(status, privacy: .public); staying provisional")
+            return false
+        }
+        return true
     }
 }
+
+private let identityLog = Logger(subsystem: "com.leoyuan.leophoneagent", category: "DeviceIdentity")

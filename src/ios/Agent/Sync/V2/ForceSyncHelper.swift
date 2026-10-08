@@ -96,7 +96,28 @@ enum ForceSyncHelper {
     static func markProvidersDirty() async -> Int {
         await ChatStore.shared.markDirty(recordType: "ProviderConfig",
                                          recordId: "provider-config")
-        return 1
+        var count = 1
+        // Push side: re-queue every v3 row so a peer whose incremental window
+        // missed them receives them. User-initiated and small (~3 CK batches
+        // for ~1000 rows); the conflict policy still decides on arrival.
+        let store = ProviderConfigStore.shared
+        for inst in store.instances {
+            await ChatStore.shared.markDirty(recordType: "ProviderInstanceV3", recordId: inst.id)
+            count += 1
+        }
+        for entry in store.modelEntries {
+            await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: entry.uuid)
+            count += 1
+        }
+        for group in store.modelGroups {
+            await ChatStore.shared.markDirty(recordType: "ProviderModelGroupV3", recordId: group.id)
+            count += 1
+        }
+        // Pull side: forget the "history fully pulled" anchors so the next
+        // poll re-pulls full provider history; a too-early anchor otherwise
+        // hides older-updatedAt records no matter how often the user syncs.
+        ICloudSharedZoneTransport.resetProviderConfigAnchors()
+        return count
     }
 
     /// Mark SOUL.md dirty for push. Returns 1 when the file exists on

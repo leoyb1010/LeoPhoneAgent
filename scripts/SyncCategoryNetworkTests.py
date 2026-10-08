@@ -26,7 +26,12 @@ struct CKRecord {
  let recordType: String
  let recordID: ID
  init(_ type: String, _ id: String) { recordType = type; recordID = ID(recordName: type + ":" + id) }
+ func allKeys() -> [String] { [] }
+ subscript(key: String) -> Any? { nil }
 }
+final class CKAsset {}
+struct ProbeLog { func info(_ message: String) {} }
+let logger = ProbeLog()
 final class CKSyncEngine {
  struct SendChangesContext {}
  enum PendingRecordZoneChange { case saveRecord(CKRecord.ID), deleteRecord(CKRecord.ID) }
@@ -45,7 +50,8 @@ final class CKSyncEngine {
 @MainActor final class V2Probe {
  var pendingRecords: [CKRecord] = []
  var pendingDeletes: [CKRecord.ID] = []
-''' + method(v2, 'nextRecordZoneChangeBatch') + r'''
+ static let assetInlineThreshold = 750_000
+''' + method(v2, 'nextRecordZoneChangeBatch') + '\n' + method(v2, 'carriesAsset') + '\n' + method(v2, 'estimatedRecordBytes') + r'''
 }
 struct SyncTransportHealth {
  mutating func succeeded(_ operation: String) {}
@@ -165,5 +171,6 @@ with tempfile.TemporaryDirectory(prefix='leo-sync-network-') as temp:
     subprocess.run(['swiftc', '-parse-as-library', '-module-cache-path', str(work / 'cache'), str(policy),
                     str(SYNC / 'PortableRecord.swift'), str(SYNC / 'SyncTransport.swift'),
                     str(SYNC / 'SyncDeliveryLedger.swift'), str(SYNC / 'TailnetSyncTransport.swift'),
+                    str(SYNC / 'SyncPollPlan.swift'),
                     str(probe), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

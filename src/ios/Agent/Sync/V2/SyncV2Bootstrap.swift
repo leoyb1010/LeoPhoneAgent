@@ -55,6 +55,7 @@ enum SyncV2Bootstrap {
     @MainActor private static var periodicTask: Task<Void, Never>?
     @MainActor private static var seedGeneration = 0
     @MainActor private static var didDeferBoot = false
+    @MainActor private static var provisionalRetryTask: Task<Void, Never>?
     /// Backoff for re-trying an unreachable replica; iCloud is not restarted meanwhile.
     @MainActor private static var replicaRetrySeconds: UInt64 = 30
 
@@ -169,6 +170,22 @@ enum SyncV2Bootstrap {
             tailnetStatus = String(localized: "Off")
             return
         }
+        // Before first unlock the Keychain is unreadable and the device id is
+        // provisional. Zone name and SyncDeviceV2 registration would bake it
+        // into every dirty row, so defer; retry on a timer as well as on the
+        // next activation (a background relaunch may never get one).
+        guard !DeviceIdentity.isProvisional else {
+            logger.warning("[SyncCore] sync deferred — device identity is provisional (keychain locked); retrying in 30s")
+            if provisionalRetryTask == nil {
+                provisionalRetryTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    provisionalRetryTask = nil
+                    guard !Task.isCancelled else { return }
+                    requestReconcile()
+                }
+            }
+            return
+        }
         SyncedTypesBootstrap.registerAll()
         await ChatStore.shared.setSyncZoneName(DeviceIdentity.zoneName)
         await ChatStoreSyncHydrators.registerAll()
@@ -209,6 +226,14 @@ enum SyncV2Bootstrap {
         guard !Task.isCancelled else { return }
         SyncDirtyScanner.shared.start()
         await ChatStore.shared.markDirty(recordType: "SyncDeviceV2", recordId: DeviceIdentity.deviceId)
+        // This install re-minted its id (restored to a new device / lost
+        // Keychain item): retire the previous SyncDeviceV2 so peers drop the
+        // ghost row, and tombstone it so a stale echo cannot resurrect it.
+        if let old = DeviceIdentity.takeRetiredDeviceId(), old != DeviceIdentity.deviceId {
+            _ = await ChatStore.shared.recordDeletedRecordTombstone(type: "SyncDeviceV2", id: old)
+            await ChatStore.shared.markDirty(recordType: "SyncDeviceV2", recordId: old, operation: "delete")
+            logger.info("[SyncCore] retiring previous device id \(old.prefix(8)) (op=delete queued)")
+        }
         if isEnabled { await MigrationEngine.shared.runIfNeeded() }
         if let replicaName { startReplicaSeed(replicaName) }
         await SyncCore.shared.sendNow(trigger: .scheduledDebounce)

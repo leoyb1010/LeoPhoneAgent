@@ -39,12 +39,18 @@ enum SessionProvenanceStore {
     }
 
     static func createdLocally(_ db: OpaquePointer?, id: String, deviceID: String) {
+        // A provisional id (Keychain locked before first unlock) is never
+        // persisted; stamping it would leave a creator no device will ever own.
+        guard !isProvisionalDeviceID(deviceID) else { return }
         merge(db, id: id, origin: deviceID, writer: deviceID, acceptsWriter: true)
     }
 
     static func editedLocally(_ db: OpaquePointer?, id: String, deviceID: String) {
+        guard !isProvisionalDeviceID(deviceID) else { return }
         merge(db, id: id, origin: nil, writer: deviceID, acceptsWriter: true)
     }
+
+    static func isProvisionalDeviceID(_ id: String) -> Bool { id.hasPrefix("provisional-") }
 
     @discardableResult
     static func merge(_ db: OpaquePointer?, id: String, origin: String?, writer: String?, acceptsWriter: Bool) -> Bool {

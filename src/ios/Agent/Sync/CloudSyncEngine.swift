@@ -453,6 +453,13 @@ final class CloudSyncEngine: ObservableObject {
             return
         }
         guard syncEngine == nil else { return }
+        // Before first unlock the device id is provisional; starting would
+        // name a `device-provisional-…` zone and orphan the real one. The
+        // scene-active handler runs again after unlock.
+        guard !DeviceIdentity.isProvisional else {
+            logger.warning("[CloudSync] start deferred — device identity is provisional (keychain locked)")
+            return
+        }
 
         logger.info("[CloudSync] Starting sync engine for device \(DeviceIdentity.zoneName)")
 

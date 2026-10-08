@@ -670,7 +670,9 @@ final class SyncCore {
         // have edited them too) but don't count as a visible change, so our own
         // echo doesn't make every open chat reload.
         var visible = 0
-        let allRecords = batch.records
+        // Parents before children (Folder → Session → Message): a message
+        // ahead of its session in one batch would fail the session guard.
+        let allRecords = SyncPollPlan.parentsFirst(batch.records) { $0.id.type }
         let allDeletes = batch.deletes
         let chunkSize = 25
         var i = 0

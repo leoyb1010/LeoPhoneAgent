@@ -103,6 +103,8 @@
         E5SHL0002 /* SyncHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SHL0003 /* SyncHealth.swift */; };
         E5SRP0001 /* SyncRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRP0003 /* SyncRetryPolicy.swift */; };
         E5SRP0002 /* SyncRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRP0003 /* SyncRetryPolicy.swift */; };
+        E5SPP0001 /* SyncPollPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPP0003 /* SyncPollPlan.swift */; };
+        E5SPP0002 /* SyncPollPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPP0003 /* SyncPollPlan.swift */; };
 		0EF3A9F3129DD3B5DB6880DB /* ChatInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE72FB7BDDEFE88EF490860 /* ChatInspector.swift */; };
 		227CA5FA422444E132B384B6 /* LeoCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC6BA9709F38B2477D55C67 /* LeoCommands.swift */; };
 		1002171D84B5B80449161785 /* CommandRisk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B74F300D94BD261002831C /* CommandRisk.swift */; };
@@ -575,6 +577,7 @@
 		E5QTK0002 /* QuickTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTK0012 /* QuickTaskSettingsView.swift */; };
 		E5QTK0003 /* QuickTaskCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTK0011 /* QuickTaskCatalog.swift */; };
 		E5S000001 /* DeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000011 /* DeviceIdentity.swift */; };
+		E5S000001T /* DeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000011 /* DeviceIdentity.swift */; };
 		E5S000002 /* CloudSyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000012 /* CloudSyncEngine.swift */; };
 		E5S000003 /* SessionForkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000013 /* SessionForkManager.swift */; };
 		E5S000004 /* CloudSyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5S000014 /* CloudSyncSettingsView.swift */; };
@@ -880,6 +883,7 @@
         E5PRV0003 /* SessionProvenanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionProvenanceStore.swift; sourceTree = "<group>"; };
         E5SHL0003 /* SyncHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHealth.swift; sourceTree = "<group>"; };
         E5SRP0003 /* SyncRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRetryPolicy.swift; sourceTree = "<group>"; };
+        E5SPP0003 /* SyncPollPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPollPlan.swift; sourceTree = "<group>"; };
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
 		0F5379380323FA8C6477708C /* GroupSlotPicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupSlotPicker.swift; sourceTree = "<group>"; };
 		28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceLog.swift; sourceTree = "<group>"; };
@@ -1209,6 +1213,7 @@
 		E5IP00015 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		E5IP00016 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		E5IP00017 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		E5IP00018 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		E5J000011 /* LoggingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingManager.swift; sourceTree = "<group>"; };
 		E5J000012 /* LogManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManagementView.swift; sourceTree = "<group>"; };
 		E5J000013 /* ConfigAuditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigAuditView.swift; sourceTree = "<group>"; };
@@ -2568,6 +2573,7 @@
 				E5W000013 /* SyncableTypeRegistry.swift */,
 				E5W000014 /* SyncTransport.swift */,
 				E5SRP0003 /* SyncRetryPolicy.swift */,
+				E5SPP0003 /* SyncPollPlan.swift */,
 				E5SHL0003 /* SyncHealth.swift */,
 				E5W000015 /* LANTransport.swift */,
 				E5W000016 /* SyncedTypes.swift */,
@@ -3175,6 +3181,8 @@
 				E5T5L0003 /* T5ShellBridgeLogic.swift in Sources */,
 				E5T6L0003 /* T6RelayLogic.swift in Sources */,
 				E5SRP0002 /* SyncRetryPolicy.swift in Sources */,
+				E5SPP0002 /* SyncPollPlan.swift in Sources */,
+				E5S000001T /* DeviceIdentity.swift in Sources */,
 				E5SHL0002 /* SyncHealth.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
@@ -3706,6 +3714,7 @@
 				E5W000006 /* SyncedTypes.swift in Sources */,
 				E5W000007 /* SyncCore.swift in Sources */,
 				E5SRP0001 /* SyncRetryPolicy.swift in Sources */,
+				E5SPP0001 /* SyncPollPlan.swift in Sources */,
 				E5SHL0001 /* SyncHealth.swift in Sources */,
 				E5W000008 /* SyncCoreHydrators.swift in Sources */,
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
@@ -3862,6 +3871,7 @@
 				E5IP00014 /* ko */,
 				E5IP00015 /* fr */,
 				E5IP00016 /* de */,
+				E5IP00018 /* ru */,
 			);
 			name = InfoPlist.strings;
 			sourceTree = "<group>";
