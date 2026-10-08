@@ -172,6 +172,29 @@ final class BackupMergeTests: XCTestCase {
         XCTAssertEqual(add.first?.note, "n")
     }
 
+    func testDisableMCPServersQuarantinesEveryEntry() {
+        var servers: [String: Any] = ["a": ["url": "https://x", "enabled": true], "b": ["command": "npx"], "c": ["enabled": false]]
+        let n = BackupMerge.disableMCPServers(&servers)
+        XCTAssertEqual(n, 2)
+        for name in ["a", "b", "c"] {
+            XCTAssertEqual((servers[name] as? [String: Any])?["enabled"] as? Bool, false, name)
+        }
+    }
+
+    func testRedactProviderBaseURLsStripsQueryUserinfoFragment() {
+        let root: [String: Any] = ["instances": [
+            ["id": "1", "customBaseURL": "https://u:p@relay.example/v1?key=K#f"],
+            ["id": "2", "customBaseURL": "https://api.openai.com/v1"],
+            ["id": "3"],
+        ]]
+        let (out, n) = BackupMerge.redactProviderBaseURLs(root)
+        XCTAssertEqual(n, 1)
+        let inst = out["instances"] as? [[String: Any]]
+        XCTAssertEqual(inst?[0]["customBaseURL"] as? String, "https://relay.example/v1")
+        XCTAssertEqual(inst?[1]["customBaseURL"] as? String, "https://api.openai.com/v1")
+        XCTAssertNil(inst?[2]["customBaseURL"])
+    }
+
     func testThinkingRulesMergeByPrefixLocalWins() {
         let local = [BackupLeoThinkingRuleRecord(prefix: "GPT-5", maxLevel: "low", defaultLevel: "low")]
         let backup = [BackupLeoThinkingRuleRecord(prefix: "gpt-5", maxLevel: "high", defaultLevel: "high"),

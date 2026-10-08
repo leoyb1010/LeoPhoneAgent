@@ -85,7 +85,7 @@ enum BackupCrypto {
         case "pbkdf2-hmac-sha256":
             let iterations = kdf.iterations ?? pbkdf2Iterations
             // A hostile manifest must not be able to make us spin for hours.
-            guard (1_000...10_000_000).contains(iterations) else { throw CryptoError.unsupportedKDF(kdf.alg) }
+            guard (1_000...2_000_000).contains(iterations) else { throw CryptoError.unsupportedKDF(kdf.alg) }
             return Keys(kek: try pbkdf2(passphrase: passphrase, salt: salt, iterations: iterations))
         default:
             throw CryptoError.unsupportedKDF(kdf.alg)

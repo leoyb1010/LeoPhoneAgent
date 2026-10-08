@@ -193,6 +193,9 @@ extension ChatStore {
                     Self.bind(st, 10, s.pinnedAt?.timeIntervalSince1970)
                 }
                 result.sessionsInserted += 1
+                // Same provenance as createSession: restored-here rows are
+                // ours, not "creator unknown".
+                SessionProvenanceStore.createdLocally(db, id: s.id, deviceID: DeviceIdentity.deviceId)
             case .update:
                 try run(db, """
                     UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?,
@@ -212,6 +215,14 @@ extension ChatStore {
             // local delete tombstones so the rows aren't dropped as stale echoes.
             try run(db, "DELETE FROM deleted_session_tombstones WHERE session_id = ?") { Self.bind($0, 1, s.id) }
             try run(db, "DELETE FROM deleted_record_tombstones WHERE record_id = ?") { Self.bind($0, 1, s.id) }
+            // A delete still queued for upload (session deleted offline, then
+            // restored) would otherwise win over the restore: markDirty keeps an
+            // existing 'delete' row, so the peer would drop the session again.
+            try run(db, """
+                DELETE FROM sync_dirty_records WHERE operation = 'delete'
+                  AND (record_id = ?1 OR record_id IN (SELECT id FROM messages WHERE session_id = ?1)
+                       OR record_id IN (SELECT id FROM compact_markers WHERE session_id = ?1))
+                """) { Self.bind($0, 1, s.id) }
             applied.insert(s.id)
             result.changedSessionIds.append(s.id)
         }

@@ -447,10 +447,16 @@ extension BackupImporter {
         guard let backup = jsonObject(p.dataDir.appendingPathComponent("mcp_servers.json")) else { return r }
         let localData = await target.mcpServersJSON()
         let local = localData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        let merged = BackupMerge.mergeMCPServers(local: local, backup: backup)
+        var merged = BackupMerge.mergeMCPServers(local: local, backup: backup)
         r.imported = merged.plan.added.count
         r.updated = merged.plan.replaced.count
         r.keptLocal = merged.plan.kept.count
+        // An unencrypted package carries no proof of origin: anyone can hand
+        // one over with a server whose headers/env reference `$$API_KEY`, and
+        // the model would call it on the next turn, leaking the real value.
+        // Imported servers from such a package land DISABLED; the user turns
+        // each one on after looking at it.
+        let quarantined = !p.wasEncrypted ? BackupMerge.disableMCPServers(&merged.toApply) : 0
         if !merged.toApply.isEmpty {
             let data = try JSONSerialization.data(withJSONObject: ["mcpServers": merged.toApply])
             try await target.applyMCPServers(data)
@@ -460,6 +466,9 @@ extension BackupImporter {
         }
         if !merged.plan.needsSecrets.isEmpty {
             r.needsAttention.append(String(localized: "\(merged.plan.needsSecrets.count) 个 MCP 服务器需要重新填写密钥"))
+        }
+        if quarantined > 0 {
+            r.needsAttention.append(String(localized: "未加密备份无法验证来源：导入的 \(quarantined) 个 MCP 服务器已保持停用，请在 设置 › MCP 里逐个检查后再启用"))
         }
         return r
     }

@@ -39,7 +39,7 @@ enum BackupFormat {
         static let maxTotalUncompressedBytes: Int64 = 64 * 1024 * 1024 * 1024
         /// Deflated members only exist in legacy packages and are always small
         /// metadata; anything larger is treated as hostile.
-        static let maxDeflatedEntryBytes: Int64 = 256 * 1024 * 1024
+        static let maxDeflatedEntryBytes: Int64 = 32 * 1024 * 1024   // legacy deflate members are small metadata; whole-buffer inflate must not jetsam the phone
         /// A JSONL/JSON member we read into memory. Shards are ≤ 64 MB by format.
         static let maxDataFileBytes: Int64 = 96 * 1024 * 1024
         static let maxEntryNameBytes = 1024

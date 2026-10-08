@@ -52,7 +52,8 @@ final class BackupRoundTripTests: XCTestCase {
         try w.write("global memory", to: "GLOBAL.md", under: w.memoryRoot(), mtime: t0)
         try w.write("2026-10-01 log", to: "2026-10-01.md", under: w.memoryRoot(), mtime: t0)
         w.providerJSON = try JSONSerialization.data(withJSONObject: [
-            "instances": [["id": "inst-1", "label": "OpenAI", "providerType": "openAI"]],
+            "instances": [["id": "inst-1", "label": "OpenAI", "providerType": "openAI",
+                           "customBaseURL": "https://relay.example/v1?key=RELAYQUERYSECRET"]],
             "modelEntries": [["uuid": "e1", "providerInstanceId": "inst-1", "model": ["id": "gpt-5"]]],
             "modelGroups": [["id": "g1", "name": "Default", "memberEntryIds": ["inst-1/gpt-5"]]],
             "defaultPrimaryGroupId": "g1",
@@ -106,7 +107,7 @@ final class BackupRoundTripTests: XCTestCase {
 
         // No secret may appear anywhere in the bytes of an unencrypted package.
         let bytes = try Data(contentsOf: summary.packageURL)
-        for secret in [secretKey, secretEnv, secretHeader, "key=abc"] {
+        for secret in [secretKey, secretEnv, secretHeader, "key=abc", "RELAYQUERYSECRET"] {
             XCTAssertNil(bytes.range(of: Data(secret.utf8)), "plaintext secret leaked: \(secret)")
         }
         let names = try BackupPackageReader.listEntries(at: summary.packageURL).map(\.name)
@@ -131,6 +132,8 @@ final class BackupRoundTripTests: XCTestCase {
 
         let providers = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(b.providerJSON)) as? [String: Any])
         XCTAssertEqual((providers["instances"] as? [[String: Any]])?.first?["id"] as? String, "inst-1")
+        XCTAssertEqual((providers["instances"] as? [[String: Any]])?.first?["customBaseURL"] as? String,
+                       "https://relay.example/v1", "relay base URL loses its query in an unencrypted package")
         XCTAssertTrue(b.apiKeys.isEmpty, "secrets are excluded without a passphrase")
         XCTAssertEqual(b.envEntries.map(\.key), ["GITHUB_TOKEN"])
         XCTAssertEqual(b.envValues["GITHUB_TOKEN"], "", "the variable comes back without its value")
@@ -142,6 +145,9 @@ final class BackupRoundTripTests: XCTestCase {
         XCTAssertEqual((remote["headers"] as? [String: String])?["Authorization"], "")
         XCTAssertEqual(remote["url"] as? String, "https://mcp.example.com/sse")
         XCTAssertNil(remote[BackupMerge.redactionMarker], "bookkeeping marker never reaches the store")
+        XCTAssertEqual(remote["enabled"] as? Bool, false, "unverifiable origin: imported MCP servers stay disabled")
+        XCTAssertEqual((servers["local"] as? [String: Any])?["enabled"] as? Bool, false)
+        XCTAssertTrue(report(r, .mcpServers)?.needsAttention.contains { $0.contains("停用") } ?? false)
         XCTAssertEqual(((servers["local"] as? [String: Any])?["env"] as? [String: String])?["HOME_DIR"], "$HOME",
                        "variable references are not secrets and survive")
     }
@@ -173,6 +179,11 @@ final class BackupRoundTripTests: XCTestCase {
         let servers = try XCTUnwrap((JSONSerialization.jsonObject(with: Data(contentsOf: b.mcpServersFile())) as? [String: Any])?["mcpServers"] as? [String: Any])
         XCTAssertEqual(((servers["remote"] as? [String: Any])?["headers"] as? [String: String])?["Authorization"], secretHeader,
                        "an encrypted package keeps MCP secrets intact")
+        XCTAssertNotEqual((servers["remote"] as? [String: Any])?["enabled"] as? Bool, false,
+                          "a passphrase-authenticated package is not quarantined")
+        let providers = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(b.providerJSON)) as? [String: Any])
+        XCTAssertEqual((providers["instances"] as? [[String: Any]])?.first?["customBaseURL"] as? String,
+                       "https://relay.example/v1?key=RELAYQUERYSECRET", "encrypted package keeps the relay URL intact")
     }
 
     func testWrongOrMissingPassphraseIsRefusedBeforeUnpacking() async throws {

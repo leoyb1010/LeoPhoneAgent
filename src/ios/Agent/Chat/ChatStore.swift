@@ -898,7 +898,9 @@ actor ChatStore {
     @discardableResult
     func createSession(modelId: String, title: String? = nil, source: String? = nil,
                        parentSessionId: String? = nil, parentToolUseId: String? = nil) -> ChatSession {
-        invalidateSessionListCache()  // FULL: a new row
+        // A hidden child session is excluded by the list SQL, so it never
+        // changes the visible row set. [T-subagent]
+        if parentSessionId == nil { invalidateSessionListCache() }  // FULL: a new row
         let now = Date()
         var session = ChatSession(
             id: UUID().uuidString,
@@ -1119,11 +1121,15 @@ actor ChatStore {
         if !previewBackfill.isEmpty {
             // One transaction for the whole backfill: on the first launch after
             // the upgrade this is every session. SAVEPOINT so it nests safely.
-            exec("SAVEPOINT preview_backfill")
+            // Writes take the lock up front (BEGIN IMMEDIATE) like every other
+            // write path; fall back to a SAVEPOINT only when a transaction is
+            // already open on this connection.
+            let nested = sqlite3_get_autocommit(db) == 0
+            exec(nested ? "SAVEPOINT preview_backfill" : "BEGIN IMMEDIATE")
             for entry in previewBackfill {
                 storePreview(sessionId: entry.id, text: entry.text, sortOrder: entry.sortOrder)
             }
-            exec("RELEASE preview_backfill")
+            exec(nested ? "RELEASE preview_backfill" : "COMMIT")
             logger.info("[ChatStore.listSessions] backfilled \(previewBackfill.count) session preview(s)")
         }
 
@@ -1944,18 +1950,29 @@ actor ChatStore {
         let directories = try ["browser", "attachments", "images", "generated"].map {
             try SyncFileSafety.destination(root: minisBaseURL, relativePath: "\(id)/\($0)")
         }
+        // [T-subagent] Hidden child sessions are device-local, so the peer's
+        // delete never names them; drop them with their parent like the local
+        // delete path does.
+        let children = childSessionIds(of: id).filter { $0 != id }
         try withInboundMutation {
-            for (table, key) in [("messages", "session_id"), ("compact_markers", "session_id"), ("sessions", "id")] {
-                var statement: OpaquePointer?
-                defer { sqlite3_finalize(statement) }
-                _ = try prepareInbound("DELETE FROM \(table) WHERE \(key) = ?", &statement)
-                sqlite3_bind_text(statement, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
-                _ = try stepInbound(statement)
+            for victim in children + [id] {
+                for (table, key) in [("messages", "session_id"), ("compact_markers", "session_id"), ("sessions", "id")] {
+                    var statement: OpaquePointer?
+                    defer { sqlite3_finalize(statement) }
+                    _ = try prepareInbound("DELETE FROM \(table) WHERE \(key) = ?", &statement)
+                    sqlite3_bind_text(statement, 1, (victim as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                    _ = try stepInbound(statement)
+                }
             }
             for directory in directories where FileManager.default.fileExists(atPath: directory.path) {
                 try FileManager.default.removeItem(at: directory)
             }
         }
+        for child in children {
+            deleteSessionMedia(child)
+            ChildSessionIndex.shared.remove(child)
+        }
+        ChildSessionIndex.shared.remove(id)
         invalidateSessionListCache()  // FULL: row set changes
         Task { @MainActor in
             if #available(iOS 17.0, *) { CloudSyncEngine.shared.removeSessionCache(id) }
@@ -1998,10 +2015,12 @@ actor ChatStore {
         for child in childSessionIds(of: id) where child != id {
             deleteSessionLocalRowsOnly(child)
         }
-        ChildSessionIndex.shared.remove(id)
         deleteMessages(sessionId: id)
         deleteCompactMarkers(sessionId: id)
         deleteSessionMedia(id)
+        // Only now: while the rows above are deleted, markDirty must still see
+        // this id as a child so no delete record is enqueued for it.
+        ChildSessionIndex.shared.remove(id)
 
         let sql = "DELETE FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
@@ -3278,8 +3297,13 @@ actor ChatStore {
     private func isChildSessionRecord(recordType: String, recordId: String) -> Bool {
         guard !ChildSessionIndex.shared.isEmpty else { return false }
         switch recordType {
-        case "Session", "SessionV2", "SessionFile", "SessionFileV2":
+        case "Session", "SessionV2":
             return ChildSessionIndex.shared.contains(recordId)
+        case "SessionFile", "SessionFileV2":
+            // Record ids are "<sessionId>:<relativePath>"; a child's workspace
+            // files must stay device-local like the rest of the child.
+            let sid = recordId.split(separator: ":", maxSplits: 1).first.map(String.init) ?? recordId
+            return ChildSessionIndex.shared.contains(sid)
         case "Message", "MessageV2":
             guard let sid = messageSessionId(id: recordId) else { return false }
             return ChildSessionIndex.shared.contains(sid)

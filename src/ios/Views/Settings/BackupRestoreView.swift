@@ -171,7 +171,19 @@ struct BackupRestoreView: View {
         } header: {
             Text("选择要恢复的内容")
         } footer: {
-            Text("已通过完整性校验（\(prepared.integrityChecked) 个文件）\(prepared.wasEncrypted ? String(localized: "，已解密") : "")。")
+            if prepared.wasEncrypted {
+                Text("已解密并通过完整性校验（\(prepared.integrityChecked) 个文件）。")
+            } else {
+                Text("已确认 \(prepared.integrityChecked) 个文件未损坏。未加密的备份无法验证来源，任何人都能制作一份。")
+            }
+        }
+        if !prepared.wasEncrypted {
+            Section {
+                Label("这份备份没有加密，无法确认它来自你自己的设备。恢复会把包里的 MCP 服务器、技能、模型服务商和环境变量并入本机，模型之后会使用它们。只恢复你信任来源的备份；MCP 服务器会先保持停用，请逐个检查后再启用。",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(LeoTheme.ColorToken.warning)
+            }
         }
         if !plan.warnings.isEmpty {
             Section("注意") {
@@ -284,7 +296,13 @@ struct BackupRestoreView: View {
             do {
                 let prepared = try await importer.open(packageURL: packageURL, passphrase: pass.isEmpty ? nil : pass)
                 let plan = await importer.analyze(prepared)
-                selected = Set(plan.categories.map(\.category))
+                var initial = Set(plan.categories.map(\.category))
+                if !prepared.wasEncrypted {
+                    // Unverifiable origin: the categories the model acts on are
+                    // opt-in, not default.
+                    initial.subtract([.mcpServers, .skills, .providers, .environmentVariables])
+                }
+                selected = initial
                 phase = .ready(prepared, plan)
             } catch {
                 self.error = error.localizedDescription

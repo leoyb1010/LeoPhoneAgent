@@ -299,6 +299,39 @@ enum BackupMerge {
         return (r, count)
     }
 
+    /// Mark every server in `servers` disabled (restore quarantine for
+    /// packages whose origin cannot be verified). Returns how many were touched.
+    @discardableResult
+    static func disableMCPServers(_ servers: inout [String: Any]) -> Int {
+        var n = 0
+        for (name, raw) in servers {
+            guard var e = raw as? [String: Any] else { continue }
+            if (e["enabled"] as? Bool) != false { e["enabled"] = false; n += 1 }
+            servers[name] = e
+        }
+        return n
+    }
+
+    /// Unencrypted export: strip query / userinfo / fragment from every
+    /// provider instance's `customBaseURL` (relays put keys there).
+    static func redactProviderBaseURLs(_ root: [String: Any]) -> (redacted: [String: Any], count: Int) {
+        guard let instances = root["instances"] as? [[String: Any]] else { return (root, 0) }
+        var count = 0
+        let cleaned: [[String: Any]] = instances.map { inst in
+            guard let url = inst["customBaseURL"] as? String, var comps = URLComponents(string: url),
+                  comps.query != nil || comps.user != nil || comps.password != nil || comps.fragment != nil
+            else { return inst }
+            comps.query = nil; comps.user = nil; comps.password = nil; comps.fragment = nil
+            var e = inst
+            e["customBaseURL"] = comps.string ?? ""
+            count += 1
+            return e
+        }
+        var r = root
+        r["instances"] = cleaned
+        return (r, count)
+    }
+
     static func isVariableReference(_ s: String) -> Bool {
         s.range(of: #"^\$\$?(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$"#, options: .regularExpression) != nil
     }

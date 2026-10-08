@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -343,7 +344,15 @@ static int ffmpeg_handler(int argc, char **argv,
         return 1;
     }
     ctx->argc = argc; ctx->argv = argv;
-    ctx->out_fd = stdout_fd; ctx->err_fd = stderr_fd;
+    // [T-ffmpeg-orphan-fd] The worker writes through PRIVATE duplicates, not
+    // the kernel's pipe fds. The kernel closes stdout_fd/stderr_fd the moment
+    // this handler returns; an abandoned worker would then keep writing to
+    // those NUMBERS after another session reused them (cross-session output
+    // leak). Our duplicates are closed on the normal path and, on abandon,
+    // redirected in place to /dev/null and never closed, so the numbers can
+    // never be recycled under the orphan.
+    ctx->out_fd = stdout_fd >= 0 ? dup(stdout_fd) : -1;
+    ctx->err_fd = stderr_fd >= 0 ? dup(stderr_fd) : -1;
     ctx->ret = 1;
     ctx->argv_owned = false;          // exec_handler owns argv unless we abandon
     atomic_init(&ctx->refcount, 2);   // this frame + the worker thread
@@ -380,6 +389,9 @@ static int ffmpeg_handler(int argc, char **argv,
         if (!abandoned) pthread_join(thr, NULL);
     } else {
         dprintf(stderr_fd, "ffmpeg: unable to create worker thread\n");
+        if (ctx->out_fd >= 0) close(ctx->out_fd);
+        if (ctx->err_fd >= 0) close(ctx->err_fd);
+        ctx->out_fd = ctx->err_fd = -1;
         ffmpeg_ctx_release(ctx);   // drop the worker's unused reference
     }
 
@@ -403,11 +415,30 @@ static int ffmpeg_handler(int argc, char **argv,
         const char *msg = "\nffmpeg: aborted (worker could not be stopped; "
                           "ffmpeg unavailable until app restart)\n";
         if (stderr_fd >= 0) (void)!write(stderr_fd, msg, strlen(msg));
-        // Deliberately skip teardown and keep the mutex held: the orphan still
-        // uses the av_log redirect, stdio fds and ffmpeg's globals.
+        // Deliberately skip the av_log teardown and keep the mutex held: the
+        // orphan still uses the av_log redirect and ffmpeg's globals. Its
+        // output fds are parked on /dev/null IN PLACE (same numbers, never
+        // closed) so nothing it writes can land in another session's pipe.
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            if (ctx->out_fd >= 0) dup2(devnull, ctx->out_fd);
+            if (ctx->err_fd >= 0) dup2(devnull, ctx->err_fd);
+            close(devnull);
+        }
+        // Process-global stdin must not stay pointed at this session's guest
+        // stdin; stdin_interaction is 0 so the orphan never reads it.
+        if (saved_stdin >= 0) { dup2(saved_stdin, STDIN_FILENO); close(saved_stdin); }
+        sigaction(SIGINT,  &saved_sigint,  NULL);
+        sigaction(SIGTERM, &saved_sigterm, NULL);
+        sigaction(SIGPIPE, &saved_sigpipe, NULL);
         ffmpeg_ctx_release(ctx);
         return 130;
     }
+
+    // Normal path: the worker is done with our private duplicates.
+    if (ctx->out_fd >= 0) close(ctx->out_fd);
+    if (ctx->err_fd >= 0) close(ctx->err_fd);
+    ctx->out_fd = ctx->err_fd = -1;
 
     // ── Restore av_log callback ──
     noff_av_log_redirect_stop();

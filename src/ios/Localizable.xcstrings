@@ -120308,6 +120308,94 @@
           }
         }
       }
+    },
+    "未加密备份无法验证来源：导入的 %lld 个 MCP 服务器已保持停用，请在 设置 › MCP 里逐个检查后再启用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unencrypted backups can't prove their origin: the %lld imported MCP servers were left disabled. Review each one under Settings › MCP before enabling it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密备份无法验证来源：导入的 %lld 个 MCP 服务器已保持停用，请在 设置 › MCP 里逐个检查后再启用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密備份無法驗證來源：匯入的 %lld 個 MCP 伺服器已保持停用，請在 設定 › MCP 裡逐個檢查後再啟用"
+          }
+        }
+      }
+    },
+    "已解密并通过完整性校验（%lld 个文件）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrypted and integrity-checked (%lld files)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已解密并通过完整性校验（%lld 个文件）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已解密並通過完整性校驗（%lld 個檔案）。"
+          }
+        }
+      }
+    },
+    "已确认 %lld 个文件未损坏。未加密的备份无法验证来源，任何人都能制作一份。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld files verified undamaged. An unencrypted backup can't prove where it came from; anyone can make one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已确认 %lld 个文件未损坏。未加密的备份无法验证来源，任何人都能制作一份。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已確認 %lld 個檔案未損壞。未加密的備份無法驗證來源，任何人都能製作一份。"
+          }
+        }
+      }
+    },
+    "这份备份没有加密，无法确认它来自你自己的设备。恢复会把包里的 MCP 服务器、技能、模型服务商和环境变量并入本机，模型之后会使用它们。只恢复你信任来源的备份；MCP 服务器会先保持停用，请逐个检查后再启用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This backup is not encrypted, so it can't be confirmed as coming from your own device. Restoring merges its MCP servers, skills, model providers and environment variables into this device, and the model will use them afterwards. Only restore backups from a source you trust; MCP servers stay disabled until you review and enable each one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这份备份没有加密，无法确认它来自你自己的设备。恢复会把包里的 MCP 服务器、技能、模型服务商和环境变量并入本机，模型之后会使用它们。只恢复你信任来源的备份；MCP 服务器会先保持停用，请逐个检查后再启用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這份備份沒有加密，無法確認它來自你自己的裝置。還原會把包裡的 MCP 伺服器、技能、模型服務商和環境變數併入本機，模型之後會使用它們。只還原你信任來源的備份；MCP 伺服器會先保持停用，請逐個檢查後再啟用。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -156,7 +156,7 @@ actor BackupExporter {
                 stat = try exportMemory(dataDir: dataDir)
             case .providers:
                 say(String(localized: "正在导出服务商…"), false)
-                stat = try await exportProviders(dataDir: dataDir)
+                stat = try await exportProviders(dataDir: dataDir, encrypted: encrypted)
             case .mcpServers:
                 say(String(localized: "正在导出 MCP 服务器…"), false)
                 stat = try exportMCPServers(dataDir: dataDir, encrypted: encrypted, state: &state)
@@ -380,8 +380,15 @@ actor BackupExporter {
 
     // MARK: - Providers
 
-    private func exportProviders(dataDir: URL) async throws -> BackupManifest.CategoryStat? {
-        guard let data = await source.providerConfigJSON() else { return nil }
+    private func exportProviders(dataDir: URL, encrypted: Bool) async throws -> BackupManifest.CategoryStat? {
+        guard var data = await source.providerConfigJSON() else { return nil }
+        if !encrypted,
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Custom relay base URLs often carry the key in the query
+            // (`?key=`) or as userinfo; an unencrypted package must not.
+            let (clean, touched) = BackupMerge.redactProviderBaseURLs(root)
+            if touched > 0 { data = try JSONSerialization.data(withJSONObject: clean, options: [.sortedKeys]) }
+        }
         let url = dataDir.appendingPathComponent("provider_config.json")
         try data.write(to: url, options: .atomic)
         var bytes = Int64(data.count)
