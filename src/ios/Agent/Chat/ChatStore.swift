@@ -382,7 +382,9 @@ actor ChatStore {
     /// cleared inside one non-suspending actor call, so an ordinary edit can
     /// never be diverted into a single destination.
     private var seedingDestination: String?
-    private var db: OpaquePointer?
+    /// Readable (not writable) by same-module extensions such as the backup
+    /// restore path in Agent/Backup/ChatStore+Restore.swift.
+    private(set) var db: OpaquePointer?
     /// Base URL for per-session media storage: Library/MinisChat/minis/
     let minisBaseURL: URL
 
@@ -411,7 +413,7 @@ actor ChatStore {
     /// [T-ios-listsessions-cache] FULL invalidation: the next listSessions()
     /// re-queries every row. Use only where the set of rows or something a
     /// per-row re-query cannot express can change.
-    private func invalidateSessionListCache() {
+    func invalidateSessionListCache() {
         sessionListNeedsFullRebuild = true
     }
 
@@ -2091,7 +2093,7 @@ actor ChatStore {
     /// wherever the winning message may have been removed or rewritten
     /// (deletes, truncation, parts rewrites, inbound merges, repairs) — the
     /// preview must then move BACKWARDS, which the fold never does.
-    private func recomputeStoredPreview(sessionId: String) {
+    func recomputeStoredPreview(sessionId: String) {
         var stmt: OpaquePointer?
         var winner: SessionPreviewRule.Candidate?
         if sqlite3_prepare_v2(db, SessionPreviewRule.recomputeSQL, -1, &stmt, nil) == SQLITE_OK {

@@ -41,6 +41,18 @@
 				<string>com.leoyuan.leophoneagent.skillmd</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>LeoBot Backup</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.leoyuan.leophoneagent.minisbak</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleIcons</key>
 	<dict>
@@ -306,6 +318,24 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>skillmd</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LeoBot Backup</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.leoyuan.leophoneagent.minisbak</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>minisbak</string>
 				</array>
 			</dict>
 		</dict>
