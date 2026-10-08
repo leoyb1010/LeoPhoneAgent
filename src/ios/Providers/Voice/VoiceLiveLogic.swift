@@ -288,3 +288,39 @@ enum VoiceHotwords {
         }
     }
 }
+
+/// Which voice a TTS vendor should speak with. For Azure and Xunfei the model
+/// entries ARE voice names, and the reply player hands the entry over as
+/// `model`; reading only `voice` silently fell back to the default voice for
+/// every reply ("every voice tests fine, playback is always the default").
+enum TTSVoiceSelection {
+    static func azure(voice: String?, model: String?) -> String? {
+        if let v = voice, !v.isEmpty { return v }
+        if let m = model, !m.isEmpty { return m }
+        return nil
+    }
+
+    /// `iat` is Xunfei's ASR entry, never a voice.
+    static func xunfei(voice: String?, model: String?, fallback: String) -> String {
+        if let v = voice, !v.isEmpty { return v }
+        if let m = model, !m.isEmpty, m != "iat" { return m }
+        return fallback
+    }
+}
+
+/// Read-aloud capsule lift ratchet: rise at once (never let UI cover the
+/// button), descend only after the lower target held for a settle window, so a
+/// streaming reply's oscillating obstacles cannot bounce it up and down.
+enum CapsuleLiftRatchet {
+    enum Action: Equatable { case rise, descend, armDescent, waitPending, cancelPending, none }
+
+    static func decide(newLift: Double, currentLift: Double, allowDescent: Bool, descentPending: Bool) -> Action {
+        let delta = newLift - currentLift
+        if delta > 6 { return .rise }
+        if delta < -6 {
+            if allowDescent { return .descend }
+            return descentPending ? .waitPending : .armDescent
+        }
+        return descentPending ? .cancelPending : .none
+    }
+}

@@ -45,10 +45,18 @@ final class VoiceActivityDetector: NSObject {
     weak var delegate: VoiceActivityDelegate?
 
     private(set) var isRunning = false
+    /// Audio is ACTUALLY being captured (vs `isRunning`, which survives an
+    /// interruption so capture can resume). Start/stop decisions use this.
+    var isCapturing: Bool { isRunning && audioEngine.isRunning }
     private(set) var isSpeaking = false
 
     private let logger = AppLogger(category: "VAD")
-    private let audioEngine = AVAudioEngine()
+    /// `var`: the engine must be REPLACEABLE. `inputNode` binds to the hardware
+    /// input on first touch and caches it; after a background trip (session
+    /// deactivated, keep-alive re-activates as `.playback`) that binding goes
+    /// stale and every later `inputFormat` reads 0 ch / 0 Hz even once the
+    /// session is `.record` again. Only a fresh engine re-binds.
+    private var audioEngine = AVAudioEngine()
     private let vadQueue = DispatchQueue(label: "com.leoyuan.leophoneagent.vad", qos: .userInteractive)
     private var vad: VADWrapper?
 
@@ -155,7 +163,16 @@ final class VoiceActivityDetector: NSObject {
 
     /// Begin listening. Caller must hold microphone permission first.
     func start() throws {
-        guard !isRunning else { return }
+        // `isRunning` is not proof capture is live: an interruption whose
+        // `.ended` never arrives (iOS does not deliver it to a suspended app —
+        // answering FaceTime backgrounds us) leaves isRunning with a dead
+        // engine, and a bare `guard !isRunning` made every later tap a silent
+        // no-op ("voice input never works again after a call"). Trust the engine.
+        if isRunning {
+            guard !audioEngine.isRunning else { return }   // genuinely capturing
+            VoiceLog.log("start(): stale isRunning with a stopped engine — reclaiming")
+            tearDown()
+        }
         try configureSession()
         do {
             try setupEngineAndVAD()
@@ -220,12 +237,16 @@ final class VoiceActivityDetector: NSObject {
         switch type {
         case .began:
             if isRunning {
+                // Arm the resume FIRST, even when the engine still looks alive:
+                // iOS posts `.began` before it has necessarily stopped us, and
+                // the old "spurious, ignore" left nothing for `.ended` to resume
+                // — the detector stayed "running" over a dead engine.
+                interruptedWhileRunning = true
                 if audioEngine.isRunning {
-                    VoiceLog.log("audio interruption BEGAN — but engine still running (spurious), ignoring")
+                    VoiceLog.log("audio interruption BEGAN — engine still running; armed resume, keeping capture")
                     return
                 }
                 VoiceLog.log("audio interruption BEGAN — engine stopped, pausing capture")
-                interruptedWhileRunning = true
                 tearDownEngineOnly()
             }
         case .ended:
@@ -236,7 +257,10 @@ final class VoiceActivityDetector: NSObject {
             VoiceLog.log("audio interruption ENDED (shouldResume=\(shouldResume), wasRunning=\(interruptedWhileRunning))")
             if interruptedWhileRunning {
                 interruptedWhileRunning = false
-                if shouldResume { attemptResume() }
+                if isRunning, audioEngine.isRunning {
+                    // `.began` arms even when the engine survived; nothing to rebuild.
+                    VoiceLog.log("audio interruption ENDED — engine never stopped, nothing to rebuild")
+                } else if shouldResume { attemptResume() }
                 else { fullStopFromInterruption() }
             }
         @unknown default:
@@ -265,6 +289,11 @@ final class VoiceActivityDetector: NSObject {
         // Tear any partial state, then re-run the start internals.
         tearDownEngineOnly()
         do {
+            // Give back the claims this capture already holds before taking them
+            // again: tearDownEngineOnly keeps both, so every interrupt→resume
+            // cycle leaked one keep-alive suspend (pinning the background track
+            // off for the rest of the app's life).
+            releaseSessionClaims()
             try configureSession()
             try setupEngineAndVAD()
             var engineError: Error?
@@ -380,6 +409,11 @@ final class VoiceActivityDetector: NSObject {
     }
 
     private func flushCapturedSegment(reason: SegmentEndReason) {
+        // A manual flush bypasses the VAD library, so `voiceEnded()` never fires
+        // and the tap kept appending ~0.1 s of residue that made the NEXT
+        // recording look like a resume and skip its start back-fill (clipped
+        // first syllables). `.maxLengthReached` keeps the utterance open.
+        if reason == .manualFlush { isSpeaking = false }
         captureLock.lock()
         let samples = captureSamples
         let rate = captureSampleRate
@@ -438,9 +472,21 @@ final class VoiceActivityDetector: NSObject {
         vad = nil
         isRunning = false
         isSpeaking = false
-        // End the capture intent — the coordinator drops `.capture` and either
-        // re-applies a lower-priority intent's profile (e.g. reply TTS) or
-        // deactivates the session, letting other audio resume.
+        // Drop segment residue so the next start() begins clean; an in-flight
+        // tap callback can land between a flush and the engine stopping.
+        // (tearDownEngineOnly keeps samples on purpose — resume needs them.)
+        captureLock.lock()
+        captureSamples.removeAll(keepingCapacity: true)
+        samplesSinceSegmentEnd = 0
+        captureLock.unlock()
+        releaseSessionClaims()
+    }
+
+    /// Drop the claims `configureSession()` took: end `.capture` (the
+    /// coordinator re-applies a lower intent or deactivates) and give back the
+    /// keep-alive suspend. Both are idempotent (`end` no-ops when not held,
+    /// resume clamps at 0), so the resume path can call this before re-claiming.
+    private func releaseSessionClaims() {
         MainActor.assumeIsolated {
             AudioSessionCoordinator.shared.end(.capture)
             BackgroundKeepAliveManager.shared.resumeSilentAudioForMedia(caller: "VAD.capture")
@@ -455,11 +501,14 @@ final class VoiceActivityDetector: NSObject {
         // the `.capture` intent makes it apply `.record/.measurement` + activate;
         // we no longer call setCategory/setActive directly (that caused last-wins
         // races with TTS / keep-alive). All call sites run on the main actor.
+        // beginAndWait, not begin: the profile is applied on a background
+        // queue and setupEngineAndVAD reads inputFormat right after.
+        var applied = false
         MainActor.assumeIsolated {
             BackgroundKeepAliveManager.shared.suspendSilentAudioForMedia(caller: "VAD.capture")
-            AudioSessionCoordinator.shared.begin(.capture)
+            applied = AudioSessionCoordinator.shared.beginAndWait(.capture)
         }
-        VoiceLog.log("AVAudioSession: begin(.capture)")
+        VoiceLog.log("AVAudioSession: begin(.capture) applied=\(applied)")
     }
 
     private func setupEngineAndVAD() throws {
@@ -467,19 +516,36 @@ final class VoiceActivityDetector: NSObject {
         // re-estimated from this environment.
         smoothedGain = 1.0
         noiseFloorRMS = 0.003
-        let inputNode = audioEngine.inputNode
+        var inputNode = audioEngine.inputNode
         // Use the node's INPUT bus format for the tap. Using outputFormat(forBus:)
         // can disagree with the tap-able bus format when the hardware route runs
         // at a non-48k rate (e.g. 24 kHz after a Bluetooth / TTS route change),
         // and installTap then throws "Failed to create tap due to format
         // mismatch". The input-bus format is what installTap actually accepts.
-        let inputFormat = inputNode.inputFormat(forBus: 0)
+        var inputFormat = inputNode.inputFormat(forBus: 0)
+        VoiceLog.log("installTap: format=\(inputFormat.channelCount)ch \(Int(inputFormat.sampleRate))Hz")
+        // 0 ch here is usually a stale input binding (see `audioEngine`), not a
+        // missing mic: the session is already `.record`. Rebuild once and
+        // re-read; a genuinely taken mic reads 0 ch again and still fails below.
+        if inputFormat.channelCount == 0 || inputFormat.sampleRate == 0 {
+            VoiceLog.log("input format invalid — rebuilding AVAudioEngine and retrying")
+            audioEngine.stop()
+            _ = noff_try_objc { self.audioEngine.inputNode.removeTap(onBus: 0) }
+            audioEngine = AVAudioEngine()
+            inputNode = audioEngine.inputNode
+            inputFormat = inputNode.inputFormat(forBus: 0)
+            VoiceLog.log("after engine rebuild: format=\(inputFormat.channelCount)ch \(Int(inputFormat.sampleRate))Hz")
+        }
         let sampleRate = inputFormat.sampleRate
         captureSampleRate = sampleRate
-        // A 0-channel format means the input node isn't ready (session not
-        // active / route mid-change). Installing a tap with it crashes.
-        VoiceLog.log("installTap: format=\(inputFormat.channelCount)ch \(Int(sampleRate))Hz")
+        // A 0-channel format means the input node isn't ready. Installing a tap
+        // with it crashes.
         guard inputFormat.channelCount > 0, sampleRate > 0 else {
+            if let applyError = AudioSessionCoordinator.lastApplyError {
+                // Session never activated: another app owns the mic.
+                VoiceLog.log("ERROR: microphone unavailable — session activation failed: \(applyError.localizedDescription)")
+                throw VoiceProviderError.audioSessionPreempted
+            }
             VoiceLog.log("ERROR: microphone input unavailable (0 channels / 0 Hz)")
             throw VoiceProviderError.parseError("Microphone input unavailable")
         }

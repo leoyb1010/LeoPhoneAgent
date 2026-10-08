@@ -373,7 +373,9 @@ final class XunfeiVoiceProvider: VoiceProvider {
         ws.resume()
         defer { ws.cancel(with: .normalClosure, reason: nil) }
 
-        let voice = (request.voice?.isEmpty == false) ? request.voice! : Self.defaultTTSVoice
+        // Xunfei TTS entries are voice names (xiaoyan…) passed as `model`;
+        // reading only `voice` always spoke with the default voice.
+        let voice = TTSVoiceSelection.xunfei(voice: request.voice, model: request.model, fallback: Self.defaultTTSVoice)
         let textB64 = Data(request.input.utf8).base64EncodedString()
         let body: [String: Any] = [
             "common": ["app_id": appId],
@@ -741,7 +743,10 @@ final class AzureTTSVoiceProvider: VoiceProvider {
         guard let url = URL(string: urlStr) else {
             throw VoiceProviderError.parseError("Invalid URL: \(urlStr)")
         }
-        let voice = request.voice ?? defaultVoiceOutputVoice()
+        // Azure model entries ARE voice names (zh-CN-YunxiNeural…), and the
+        // reply player passes the entry as `model`. Reading only `voice` made
+        // every reply fall back to the default female voice.
+        let voice = TTSVoiceSelection.azure(voice: request.voice, model: request.model) ?? defaultVoiceOutputVoice()
         let parts = voice.split(separator: "-", maxSplits: 2)
         let lang = parts.count >= 2 ? "\(parts[0])-\(parts[1])" : "en-US"
         let escaped = request.input
