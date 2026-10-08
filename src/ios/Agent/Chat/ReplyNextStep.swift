@@ -45,9 +45,16 @@ enum ReplyNextStep {
     /// 菜单项最多 5 个,顺序固定。
     static let menu: [Action] = [.collect, .quickTask, .schedule, .mac, .paperclip]
 
-    /// 实际显示的菜单:没连过 Paperclip 服务器时不出现「转为服务器任务」(本机优先,不把人引到空的连接页)。
-    static func visibleMenu(paperclipConfigured: Bool) -> [Action] {
-        paperclipConfigured ? menu : menu.filter { $0 != .paperclip }
+    /// 实际显示的菜单:没连过 Paperclip 服务器时不出现「转为服务器任务」(本机优先,不把人引到空的连接页);
+    /// Mac 舰队没打开时不出现「发到 Mac」。
+    static func visibleMenu(paperclipConfigured: Bool, macFleetEnabled: Bool) -> [Action] {
+        menu.filter { action in
+            switch action {
+            case .paperclip: return paperclipConfigured
+            case .mac: return macFleetEnabled
+            default: return true
+            }
+        }
     }
 
     /// 这一轮:用户的提示 + Agent 的回复(纯文本)。

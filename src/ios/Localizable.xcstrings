@@ -118834,6 +118834,226 @@
           }
         }
       }
+    },
+    "Mac 舰队（高级）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac Fleet (Advanced)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 舰队（高级）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 艦隊（進階）"
+          }
+        }
+      }
+    },
+    "打开后显示首页「Mac 进行中」、Mac 控制台、/mac 和「发到 Mac」。审批通知、藏宝阁、Grok 登录不受影响。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, shows Mac In Progress on Home, the Mac Console, /mac and Send to Mac. Approval notifications, Treasury and Grok sign-in are not affected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开后显示首页「Mac 进行中」、Mac 控制台、/mac 和「发到 Mac」。审批通知、藏宝阁、Grok 登录不受影响。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開後顯示首頁「Mac 進行中」、Mac 控制台、/mac 和「發到 Mac」。審批通知、藏寶閣、Grok 登入不受影響。"
+          }
+        }
+      }
+    },
+    "让此 iPad 帮你分析、查找、写作或执行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let this iPad analyze, find, write or act for you."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让此 iPad 帮你分析、查找、写作或执行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讓此 iPad 幫你分析、查找、寫作或執行。"
+          }
+        }
+      }
+    },
+    "让此 iPhone 帮你分析、查找、写作或执行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let this iPhone analyze, find, write or act for you."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让此 iPhone 帮你分析、查找、写作或执行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讓此 iPhone 幫你分析、查找、寫作或執行。"
+          }
+        }
+      }
+    },
+    "服务器任务(Paperclip)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server Tasks (Paperclip)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器任务(Paperclip)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伺服器任務(Paperclip)"
+          }
+        }
+      }
+    },
+    "这几项在快捷指令 App 里:新建快捷指令,搜 LeoBot 加入动作,给快捷指令起个名字,之后对 Siri 说这个名字即可。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These live in the Shortcuts app: create a shortcut, search LeoBot to add the action, name the shortcut, then say that name to Siri."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这几项在快捷指令 App 里:新建快捷指令,搜 LeoBot 加入动作,给快捷指令起个名字,之后对 Siri 说这个名字即可。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這幾項在捷徑 App 裡：新增捷徑，搜尋 LeoBot 加入動作，替捷徑取個名字，之後對 Siri 說這個名字即可。"
+          }
+        }
+      }
+    },
+    "• 「到达家」→ 查 Paperclip 工单进度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• “Arrive Home” → Check a Paperclip issue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• 「到达家」→ 查 Paperclip 工单进度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• 「到達家」→ 查 Paperclip 工單進度"
+          }
+        }
+      }
+    },
+    "以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键 / 顶部按钮唤起后直接说。\n\n默认都在%@上做。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say any of these to Siri. Start with “Hey Siri”, or hold the side / top button and speak.\n\nEverything runs on %@ by default."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键 / 顶部按钮唤起后直接说。\n\n默认都在%@上做。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下每一句都可以直接對 Siri 說。前面加「嘿 Siri」，或長按側邊按鈕 / 頂部按鈕喚起後直接說。\n\n預設都在%@上做。"
+          }
+        }
+      }
+    },
+    "查工单进度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue Status"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查工单进度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查工單進度"
+          }
+        }
+      }
+    },
+    "读工单结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue Result"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读工单结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讀工單結果"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

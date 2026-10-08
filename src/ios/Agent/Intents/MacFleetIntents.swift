@@ -8,6 +8,9 @@
 //  不打开 app;结果由 Siri 念出来。地基全是现成的:GatewayHostStore
 //  提供主机与 client,中继 API 提供会话/审批/停止。
 //
+//  [F-mac-fleet-advanced] 舰队关闭(默认)时「指挥一台 Mac」「Mac 任务汇报」只回一句怎么打开;
+//  批准 / 停止 / 打开 Mac 任务不看开关(审批与通知不受影响)。
+//
 //  实体:三台 Mac 是 AppEntity(Siri 听得懂"在 Studio 上"),CLI 是
 //  AppEnum(claude/codex/grok)。参数缺失时 Siri 自动追问补槽。
 //
@@ -160,6 +163,12 @@ struct CommandMacIntent: AppIntent {
     /// [E5] 返回开工的那个 Mac 任务(可接「打开 Mac 任务」);没开成返回空。
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<MacTaskEntity?> & ProvidesDialog & ShowsSnippetView {
+        // [F-mac-fleet-advanced] 舰队关闭时不派活,告诉用户去哪打开。
+        guard MacFleetFeature.isEnabled() else {
+            return .result(value: nil, dialog: IntentDialog(stringLiteral: MacFleetFeature.disabledMessage),
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
+                                                    task: MacFleetFeature.disabledMessage, ok: false))
+        }
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == mac.id }),
               let client = GatewayHostStore.shared.client(for: host) else {
@@ -314,6 +323,11 @@ struct MacFleetStatusIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        // [F-mac-fleet-advanced] 舰队关闭时不扫描,告诉用户去哪打开。
+        guard MacFleetFeature.isEnabled() else {
+            return .result(dialog: IntentDialog(stringLiteral: MacFleetFeature.disabledMessage),
+                           view: FleetStatusSnippet(rows: []))
+        }
         let hosts = GatewayHostStore.shared.activeHosts
         guard !hosts.isEmpty else {
             return .result(dialog: "还没有配置任何机器。去 app 里「设置 → 远程机器」一键添加。",

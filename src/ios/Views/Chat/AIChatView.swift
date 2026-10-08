@@ -3545,6 +3545,7 @@ struct AIChatView: View {
             showQuickTaskPicker = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenMacSwitch, object: vm)) { _ in
+            guard MacFleetFeature.isEnabled() else { return }
             macHandoffPrompt = nil
             showMacSwitchDialog = true
         }
@@ -3613,6 +3614,10 @@ struct AIChatView: View {
         case .quickTask, .schedule:
             nextStepForm = request
         case .mac:
+            guard MacFleetFeature.isEnabled() else {
+                vm.appendSystemInfo(MacFleetFeature.disabledMessage, icon: "desktopcomputer")
+                return
+            }
             macHandoffPrompt = ReplyNextStep.macTaskText(prompt: request.prompt,
                                                          reply: WatchTextSanitizer.plain(request.reply))
             showMacSwitchDialog = true

@@ -171,7 +171,9 @@ extension AIChatViewModel {
     /// the install. [T-skill-slash a88ea8f9]
     var filteredSlashCommands: [SlashCommand] {
         let filter = slashFilter.lowercased()
-        var commands = Self.availableSlashCommands.map { cmd -> SlashCommand in
+        // [F-mac-fleet-advanced] Mac 舰队没打开时菜单里不列 /mac(手打 /mac 会给出打开方法)。
+        let macFleetEnabled = MacFleetFeature.isEnabled()
+        var commands = Self.availableSlashCommands.filter { macFleetEnabled || $0.id != "mac" }.map { cmd -> SlashCommand in
             if cmd.id == "memory" {
                 let status = memoryEnabled ? "已开" : "已关"
                 return SlashCommand(id: cmd.id, icon: cmd.icon, title: cmd.title, subtitle: "记忆\(status) · 点按切换")
@@ -429,6 +431,10 @@ extension AIChatViewModel {
         case "tasks":
             NotificationCenter.default.post(name: .leoOpenQuickTaskPicker, object: self)
         case "mac":
+            guard MacFleetFeature.isEnabled() else {
+                appendSystemInfo(MacFleetFeature.disabledMessage, icon: "desktopcomputer")
+                break
+            }
             NotificationCenter.default.post(name: .leoOpenMacSwitch, object: self)
         case "auto":
             let on = !FullAutoStore.shared.enabled

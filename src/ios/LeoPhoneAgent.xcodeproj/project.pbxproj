@@ -575,6 +575,8 @@
 		E5RDR9001 /* LeoReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RDR9002 /* LeoReaderView.swift */; };
 		E5PIN9001 /* ModelPinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PIN9002 /* ModelPinStore.swift */; };
 		E5MLS9001 /* MacLiveSessionsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MLS9002 /* MacLiveSessionsStore.swift */; };
+		E5MFF9001 /* MacFleetFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFF9002 /* MacFleetFeature.swift */; };
+		E5MFF9003 /* MacFleetFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFF9002 /* MacFleetFeature.swift */; };
 		E5XTR9001 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5XTR9002 /* ArticleExtractor.swift */; };
 		E5CSI0001 /* CollectionSearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSI0002 /* CollectionSearchIndex.swift */; };
 		E5LBV0001 /* LocalBrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBV0002 /* LocalBrainSettingsView.swift */; };
@@ -1484,6 +1486,7 @@
 		E5RDR9002 /* LeoReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/LeoReaderView.swift"; sourceTree = SOURCE_ROOT; };
 		E5PIN9002 /* ModelPinStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelPinStore.swift"; sourceTree = SOURCE_ROOT; };
 		E5MLS9002 /* MacLiveSessionsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/MacLiveSessionsStore.swift"; sourceTree = SOURCE_ROOT; };
+		E5MFF9002 /* MacFleetFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/MacFleetFeature.swift"; sourceTree = SOURCE_ROOT; };
 		E5XTR9002 /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/ArticleExtractor.swift"; sourceTree = SOURCE_ROOT; };
 		E5CSI0002 /* CollectionSearchIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/CollectionSearchIndex.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBV0002 /* LocalBrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/LocalBrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
@@ -2471,6 +2474,7 @@
 				E5RDR9002 /* LeoReaderView.swift */,
 				E5PIN9002 /* ModelPinStore.swift */,
 				E5MLS9002 /* MacLiveSessionsStore.swift */,
+				E5MFF9002 /* MacFleetFeature.swift */,
 				E5XTR9002 /* ArticleExtractor.swift */,
 				E5CSI0002 /* CollectionSearchIndex.swift */,
 				E5LBV0002 /* LocalBrainSettingsView.swift */,
@@ -3314,6 +3318,7 @@
 			files = (
 				E5E15708T /* SkillDraft.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
+				E5MFF9003 /* MacFleetFeature.swift in Sources */,
 				E5E15703T /* PaperclipHandoff.swift in Sources */,
 				E5E15704T /* MacResultInbox.swift in Sources */,
 				E5E15705T /* WatchContinueOnPhone.swift in Sources */,
@@ -3671,6 +3676,7 @@
 				E5RDR9001 /* LeoReaderView.swift in Sources */,
 				E5PIN9001 /* ModelPinStore.swift in Sources */,
 				E5MLS9001 /* MacLiveSessionsStore.swift in Sources */,
+				E5MFF9001 /* MacFleetFeature.swift in Sources */,
 				E5XTR9001 /* ArticleExtractor.swift in Sources */,
 				E5CSI0001 /* CollectionSearchIndex.swift in Sources */,
 				E5LBV0001 /* LocalBrainSettingsView.swift in Sources */,

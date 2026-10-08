@@ -61,9 +61,19 @@ struct SettingsHomeView: View {
     @AppStorage("settings.group.agent") private var openAgent = true
     @AppStorage("settings.group.general") private var openGeneral = false
     @AppStorage("settings.group.data") private var openData = false
+    /// 只为在开关变化时重画(groups 是静态的,直接读 UserDefaults)。
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var groups: [SettingsGroup] { Self.groups }
+
+    /// [F-mac-fleet-advanced] Mac 舰队没打开时不显示「Mac 控制台」。
+    private static var macConsoleEntries: [SettingsEntry] {
+        guard MacFleetFeature.isEnabled() else { return [] }
+        return [SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
+                              icon: "terminal.fill", color: .teal,
+                              hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() }]
+    }
 
     // ── 分组数据(个人版信息架构)────────────────────────────────────────
     /// 单列首页和 iPad 双栏的侧栏共用这一份。
@@ -73,9 +83,7 @@ struct SettingsHomeView: View {
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
                               icon: "desktopcomputer", color: .teal,
                               hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
-                SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
-                              icon: "terminal.fill", color: .teal,
-                              hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() },
+            ] + macConsoleEntries + [
                 SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
                               icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
                 SettingsEntry("Apple Watch", keywords: "手表 watch 蜂窝 直连 独立 模型 cellular",
@@ -510,6 +518,8 @@ struct SettingsSidebar: View {
     @Binding var orchestrationEnabled: Bool
     let onFeedback: () -> Void
     @State private var query = ""
+    /// 只为在开关变化时重画(groups 是静态的,直接读 UserDefaults)。
+    @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
     private var visibleGroups: [SettingsGroup] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)

@@ -87,33 +87,26 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         // @IntentParameterDependency causes an iOS 16 launch crash
         // (Swift metadata resolution). It remains available in Shortcuts
         // via the "All Actions" list.
-        // [T-siri-fleet] OpenSessionIntent 不再占 App Shortcut 名额(上限 10,
-        // 让给 Mac 舰队四件套;它在快捷指令 App 的动作列表里仍然可用)。
+        // [T-siri-fleet] OpenSessionIntent 不再占 App Shortcut 名额(上限 10;它在快捷指令 App 的动作列表里仍然可用)。
+        // [F-mac-fleet-advanced] Mac 舰队改为默认关闭的高级功能,「指挥一台 Mac」「Mac 任务汇报」让出两个名额
+        // 给 Paperclip 工单的「查进度」「读结果」;两个 Mac 动作仍在快捷指令 App 的动作列表里,舰队关闭时会说明怎么打开。
         AppShortcut(
-            // [T-local-first] 只保留**明确点名 Mac** 的说法。
-            //
-            // 之前把"让LB干活"这种通用说法也挂在这里,结果随口一句
-            // 简单任务就被派到远端 Mac 上跑——违反"本机优先、明确指令
-            // 才上 Mac"的预期。通用说法现在归 SendPromptIntent(本机后台)。
-            intent: CommandMacIntent(),
+            intent: PaperclipIssueStatusIntent(),
             phrases: [
-                "Command a Mac with \(.applicationName)",
-                "Ask \(.applicationName) to command a Mac",
-                "\(.applicationName) run this on a Mac",
-                "\(.applicationName) use my Mac",
+                "Check a Paperclip issue with \(.applicationName)",
+                "\(.applicationName) Paperclip status",
             ],
-            shortTitle: "指挥一台 Mac",
-            systemImageName: "desktopcomputer"
+            shortTitle: "查工单进度",
+            systemImageName: "paperclip.circle"
         )
         AppShortcut(
-            intent: MacFleetStatusIntent(),
+            intent: PaperclipIssueResultIntent(),
             phrases: [
-                "\(.applicationName) fleet report",
-                "Ask \(.applicationName) for a report",
-                "Check \(.applicationName) Macs",
+                "Get a Paperclip result with \(.applicationName)",
+                "\(.applicationName) Paperclip result",
             ],
-            shortTitle: "Mac 任务汇报",
-            systemImageName: "waveform.and.person.filled"
+            shortTitle: "读工单结果",
+            systemImageName: "doc.text.magnifyingglass"
         )
         // [C8] 全自动之后「批准 Mac 待审批」「停止 Mac 任务」很少用,让出两个名额
         // (仍在快捷指令 App 的动作列表里);给「记住这个」和「派 Paperclip 工单」。

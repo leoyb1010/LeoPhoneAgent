@@ -48,12 +48,14 @@ struct CommandPaletteView: View {
                 runQuickTask(task.id)
             })
         }
-        let surfaces: [(String, SettingsDeepLinkTarget, String, String)] = [
+        var surfaces: [(String, SettingsDeepLinkTarget, String, String)] = [
             ("automations", .automations, String(localized: "Automations"), "bolt.badge.clock"),
             ("mac", .macConsole, String(localized: "Mac 控制台"), "desktopcomputer"),
             ("timeline", .timeline, String(localized: "Agent Timeline"), "list.bullet.rectangle.portrait"),
             ("scheduled", .scheduledTasks, String(localized: "Scheduled Tasks"), "clock.badge.checkmark"),
         ]
+        // [F-mac-fleet-advanced] Mac 舰队没打开时不列 Mac 控制台。
+        if !MacFleetFeature.isEnabled() { surfaces.removeAll { $0.0 == "mac" } }
         for (key, target, title, symbol) in surfaces {
             all.append(Item(id: "p-" + key, title: title,
                             subtitle: String(localized: "Open"), symbol: symbol) {
