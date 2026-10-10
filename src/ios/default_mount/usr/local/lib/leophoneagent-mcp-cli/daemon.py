@@ -41,10 +41,72 @@ from utils import deps  # noqa: E402
 TTL_SECONDS = 600          # per-server idle TTL: 10 minutes
 WATCHDOG_INTERVAL = 30     # TTL scan cadence
 DAEMON_EXIT_GRACE = 60     # after the pool is empty, wait this long before exit
-RPC_TIMEOUT = 300.0        # per-RPC reply timeout (matches transport modules)
-CONN_TIMEOUT = 310.0       # socket recv timeout (slightly above RPC_TIMEOUT)
+RPC_TIMEOUT = 120.0        # per-RPC reply timeout (matches transport/http.py)
+CONN_TIMEOUT = 130.0       # socket recv timeout (slightly above RPC_TIMEOUT)
+# One JSON-RPC line from a stdio server may not exceed this many characters: a
+# server that streams 100 MB without a newline must not grow the daemon without
+# bound. Past it the server is evicted (its stream is no longer line-aligned).
+MAX_LINE_CHARS = 8 * 1024 * 1024
+# A tools/call result handed back to the CLI (and from there into the agent's
+# context) is capped here; longer text is cut with an explicit marker.
+MAX_RESULT_CHARS = 4 * 1024 * 1024
 
 log = logging.getLogger("mcp-daemon")
+
+
+def rpc_error_message(err):
+    """Text of a JSON-RPC error member, whatever shape the server sent."""
+    if isinstance(err, dict):
+        msg = err.get("message")
+        if isinstance(msg, str) and msg:
+            return msg
+        return json.dumps(err, ensure_ascii=False)[:2000]
+    return str(err)[:2000]
+
+
+def cap_tool_result(result, limit=MAX_RESULT_CHARS):
+    """Keep a tools/call result under `limit` characters of JSON. Text parts
+    are cut (with a marker), inline binary payloads and structuredContent are
+    dropped; the result gains `"truncated": true`. Small results pass through."""
+    try:
+        size = len(json.dumps(result, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return result
+    if size <= limit:
+        return result
+    note = "\n…[truncated by leophoneagent-mcp-cli: the tool result exceeded %d MB]" % (limit // (1024 * 1024))
+    if not isinstance(result, dict):
+        text = json.dumps(result, ensure_ascii=False)
+        return {"content": [{"type": "text", "text": text[: limit // 2] + note}], "truncated": True}
+    out = dict(result)
+    out.pop("structuredContent", None)
+    content = out.get("content")
+    if isinstance(content, list):
+        budget = limit // 2  # leave room for JSON escaping of the kept text
+        items = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item = dict(item)
+            text = item.get("text")
+            if isinstance(text, str):
+                if len(text) > budget:
+                    item["text"] = text[:max(budget, 0)] + note
+                    budget = 0
+                else:
+                    budget -= len(text)
+            for key in ("data", "blob"):
+                if isinstance(item.get(key), str) and len(item[key]) > 64 * 1024:
+                    item[key] = ""
+                    item["omitted"] = "%s payload omitted (result too large)" % key
+            items.append(item)
+        out["content"] = items
+    out["truncated"] = True
+    if len(json.dumps(out, ensure_ascii=False)) > limit:
+        text = json.dumps(result, ensure_ascii=False)
+        return {"content": [{"type": "text", "text": text[: limit // 2] + note}],
+                "isError": bool(result.get("isError")), "truncated": True}
+    return out
 
 
 # --- STDIO MCP server subprocess --------------------------------------------
@@ -80,6 +142,8 @@ class MCPServerProcess:
                 stderr=subprocess.DEVNULL,
                 env=env,
                 text=True,
+                encoding="utf-8",
+                errors="replace",  # one bad byte must not kill the reader
                 bufsize=1,
                 start_new_session=True,  # detach from the daemon's process group
             )
@@ -106,10 +170,20 @@ class MCPServerProcess:
 
     def _read_reply(self, want_id, timeout=RPC_TIMEOUT):
         result_box = {}
+        # JSON-RPC lets a server echo the id as a string ("1" for 1); compare
+        # the text form so such a reply is not ignored until the timeout.
+        want = str(want_id)
 
         def reader():
             try:
-                for raw in self.proc.stdout:
+                stdout = self.proc.stdout
+                while True:
+                    raw = stdout.readline(MAX_LINE_CHARS + 1)
+                    if not raw:
+                        break
+                    if len(raw) > MAX_LINE_CHARS:
+                        result_box["oversized"] = True
+                        return
                     raw = raw.strip()
                     if not raw:
                         continue
@@ -117,7 +191,13 @@ class MCPServerProcess:
                         msg = json.loads(raw)
                     except ValueError:
                         continue
-                    if msg.get("id") == want_id:
+                    # Only a JSON object can be a reply; arrays, numbers and
+                    # strings are skipped instead of killing this thread.
+                    if not isinstance(msg, dict):
+                        continue
+                    if "result" not in msg and "error" not in msg:
+                        continue  # a server request / notification, not our reply
+                    if str(msg.get("id")) == want:
                         result_box["msg"] = msg
                         return
             except (OSError, ValueError):
@@ -129,6 +209,10 @@ class MCPServerProcess:
         t.join(timeout)
         if t.is_alive():
             raise MCPError("TIMEOUT", "[%s] no reply after %ss" % (self.name, timeout))
+        if result_box.get("oversized"):
+            raise MCPError("RESPONSE_TOO_LARGE", (
+                "[%s] a reply line exceeded %d MB; the server was stopped"
+                % (self.name, MAX_LINE_CHARS // (1024 * 1024))))
         if "msg" not in result_box:
             raise MCPError("STDIO_CRASH", "[%s] process exited before replying" % self.name)
         return result_box["msg"]
@@ -136,9 +220,8 @@ class MCPServerProcess:
     def _rpc(self, method, params=None, timeout=RPC_TIMEOUT):
         want_id = self._send(method, params)
         reply = self._read_reply(want_id, timeout=timeout)
-        if reply.get("error"):
-            err = reply["error"]
-            raise MCPError("MCP_ERROR", err.get("message", json.dumps(err)))
+        if reply.get("error") is not None:
+            raise MCPError("MCP_ERROR", rpc_error_message(reply["error"]))
         return reply.get("result")
 
     def _handshake(self):
@@ -277,14 +360,25 @@ class MCPPool:
                 self._pool[name] = session
             return session
 
-    def call_with_retry(self, name, fn):
+    def call_with_retry(self, name, fn, retry_timeout=True):
+        """Run fn on the server's session. A crashed session is respawned and
+        retried once. A TIMEOUT is retried only when `retry_timeout` (never for
+        tools/call: the tool may have run, and a second 120 s wait doubles the
+        stall). Any TIMEOUT or oversized reply evicts the session — a reader
+        thread may still be consuming its stdout, so it is not reusable."""
         for attempt in range(2):
             session = self.get(name)
             try:
                 return fn(session)
             except MCPError as exc:
-                if exc.code in ("STDIO_CRASH", "TIMEOUT") and attempt == 0:
-                    log.warning("[%s] %s, retrying", name, exc.code)
+                if exc.code in ("TIMEOUT", "RESPONSE_TOO_LARGE"):
+                    self.evict(name)
+                    if exc.code == "TIMEOUT" and retry_timeout and attempt == 0:
+                        log.warning("[%s] TIMEOUT, retrying", name)
+                        continue
+                    raise
+                if exc.code == "STDIO_CRASH" and attempt == 0:
+                    log.warning("[%s] STDIO_CRASH, retrying", name)
                     self.evict(name)
                     continue
                 raise
@@ -378,8 +472,10 @@ class DaemonServer:
             if cmd == "call":
                 tool = data.get("tool", "")
                 args = data.get("args") or {}
-                result = self.pool.call_with_retry(server, lambda s: s.call_tool(tool, args))
-                return {"ok": True, "result": {"server": server, "tool": tool, "result": result}}
+                result = self.pool.call_with_retry(server, lambda s: s.call_tool(tool, args),
+                                                   retry_timeout=False)
+                return {"ok": True, "result": {"server": server, "tool": tool,
+                                               "result": cap_tool_result(result)}}
 
             if cmd == "ping":
                 start = time.time()

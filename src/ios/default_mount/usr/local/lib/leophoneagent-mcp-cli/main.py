@@ -44,7 +44,7 @@ LOG_PATH = "/var/minis/mcp-servers/mcp-cli.log"
 PID_FILE = "/tmp/leophoneagent-mcp-daemon.pid"
 PORT_FILE = "/tmp/leophoneagent-mcp-daemon.port"  # daemon publishes its 127.0.0.1 port here
 LOCK_FILE = "/tmp/leophoneagent-mcp-daemon.lock"  # cold-start fork guard (one winner forks)
-CONN_TIMEOUT = 310.0  # socket recv timeout, slightly above the 300s RPC timeout
+CONN_TIMEOUT = 310.0  # socket recv timeout: covers a respawn + handshake + one 120s RPC
 LOCK_STALE_SECONDS = 12.0  # reclaim a cold-start lock older than this (crashed start)
 
 
@@ -358,7 +358,24 @@ def cmd_call(args, pretty):
         else:
             _fail("unexpected argument: %s" % token, "PARSE_ERROR", name, pretty)
     result = call_daemon({"cmd": "call", "server": name, "tool": tool, "args": arguments}, pretty)
+    inner = result.get("result") if isinstance(result, dict) else None
+    if isinstance(inner, dict) and inner.get("isError") is True:
+        # MCP reports tool failures in-band (`isError: true`). Surface them as
+        # a failed command so the agent doesn't read an error as a result.
+        _log("ERROR [TOOL_ERROR] %s.%s returned isError" % (name, tool))
+        _emit({"error": _tool_error_text(inner), "code": "TOOL_ERROR", "server": name,
+               "tool": tool, "result": inner}, pretty)
+        sys.exit(1)
     _emit(result, pretty)
+
+
+def _tool_error_text(result):
+    parts = []
+    for item in result.get("content") or []:
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            parts.append(item["text"])
+    text = "\n".join(parts).strip()
+    return text[:2000] if text else "the tool reported an error (isError: true)"
 
 
 def cmd_shutdown(args, pretty):

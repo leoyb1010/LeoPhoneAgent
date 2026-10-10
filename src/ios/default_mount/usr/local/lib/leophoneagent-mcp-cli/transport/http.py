@@ -5,7 +5,8 @@ endpoints (single POST returning either application/json or an SSE
 `text/event-stream` body, both of which we parse for the JSON-RPC reply).
 
 `$ENV_VAR` references in headers (and URL) are expanded from the process
-environment so secrets live in env, not the config file. 5-minute timeout.
+environment so secrets live in env, not the config file. 2-minute timeout;
+response bodies are capped at MAX_BODY_BYTES (read as a stream, aborted past it).
 
 Errors are raised as `MCPError(code, message)`; main.py renders the unified
 {"error","code","server"} envelope.
@@ -20,7 +21,10 @@ try:
 except ImportError:  # pragma: no cover - the sh wrapper installs httpx first
     httpx = None
 
-TIMEOUT_SECONDS = 300  # 5 min
+TIMEOUT_SECONDS = 120  # 2 min
+# A response body larger than this is refused while it streams in, so a 50 MB
+# tool result can't balloon the guest (and then the agent context).
+MAX_BODY_BYTES = 4 * 1024 * 1024
 
 # $VAR and $$VAR both expand from the process env; the UI picker emits $$VAR to
 # make a reference visually explicit. The optional second `$` is consumed in the
@@ -73,10 +77,37 @@ def _expand_headers(headers):
     return out
 
 
-def _parse_response(resp):
+def _rpc_error_message(err):
+    if isinstance(err, dict):
+        msg = err.get("message")
+        if isinstance(msg, str) and msg:
+            return msg
+        return json.dumps(err, ensure_ascii=False)[:2000]
+    return str(err)[:2000]
+
+
+def _read_capped(resp, limit=MAX_BODY_BYTES):
+    """Read a streamed httpx response, refusing bodies over `limit` bytes."""
+    declared = resp.headers.get("content-length")
+    try:
+        if declared is not None and int(declared) > limit:
+            raise MCPError("RESPONSE_TOO_LARGE",
+                           "response of %s bytes exceeds the %d MB limit" % (declared, limit // (1024 * 1024)))
+    except ValueError:
+        pass
+    chunks = []
+    total = 0
+    for chunk in resp.iter_bytes():
+        total += len(chunk)
+        if total > limit:
+            raise MCPError("RESPONSE_TOO_LARGE",
+                           "response exceeded the %d MB limit" % (limit // (1024 * 1024)))
+        chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def _parse_response(ctype, text):
     """Extract the JSON-RPC object from either a JSON body or an SSE stream."""
-    ctype = resp.headers.get("content-type", "")
-    text = resp.text
     if "text/event-stream" in ctype:
         # SSE: pull the last `data:` payload that parses as JSON-RPC.
         result = None
@@ -274,33 +305,36 @@ class HTTPTransport:
         if self._session_id:
             headers["Mcp-Session-Id"] = self._session_id
         try:
-            resp = httpx.post(
-                self.url, json=body, headers=headers, timeout=TIMEOUT_SECONDS
-            )
+            with httpx.stream(
+                "POST", self.url, json=body, headers=headers, timeout=TIMEOUT_SECONDS
+            ) as resp:
+                status = resp.status_code
+                ctype = resp.headers.get("content-type", "")
+                # Capture a session id handed back by the server (streamable-HTTP).
+                sid = resp.headers.get("mcp-session-id")
+                if sid:
+                    self._session_id = sid
+                retry_auth = status == 401 and self.oauth_cfg is not None and not _oauth_retried
+                text = "" if retry_auth else _read_capped(resp)
         except httpx.TimeoutException:
             raise MCPError("TIMEOUT", "request timed out after %ds" % TIMEOUT_SECONDS)
         except httpx.HTTPError as exc:
             raise MCPError("CONNECTION_ERROR", str(exc))
-        # Capture a session id handed back by the server (streamable-HTTP).
-        sid = resp.headers.get("mcp-session-id")
-        if sid:
-            self._session_id = sid
         # [T-mcp-static-oauth] 401 on an oauth server: refresh once and retry
         # the same request; a second 401 falls through to AUTH_REQUIRED via
         # _oauth_access_token(force_refresh=True) on the retry, or to the
         # generic error below if refresh succeeded but the server still 401s.
-        if resp.status_code == 401 and self.oauth_cfg is not None and not _oauth_retried:
+        if retry_auth:
             return self._post(method, params=params, notify=notify, _oauth_retried=True)
-        if resp.status_code >= 400:
+        if status >= 400:
             raise MCPError(
-                "CONNECTION_ERROR", "HTTP %d: %s" % (resp.status_code, resp.text[:200])
+                "CONNECTION_ERROR", "HTTP %d: %s" % (status, text[:200])
             )
         if notify:
             return None
-        rpc = _parse_response(resp)
-        if isinstance(rpc, dict) and rpc.get("error"):
-            err = rpc["error"]
-            raise MCPError("MCP_ERROR", err.get("message", json.dumps(err)))
+        rpc = _parse_response(ctype, text)
+        if isinstance(rpc, dict) and rpc.get("error") is not None:
+            raise MCPError("MCP_ERROR", _rpc_error_message(rpc["error"]))
         return rpc.get("result") if isinstance(rpc, dict) else rpc
 
     def initialize(self):
