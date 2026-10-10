@@ -1,5 +1,11 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.62.0 (160) + Mac mini 资料库网关 · 第二大脑 - 2026-10-10
+
+- **Mac mini 资料库网关**（`~/Library/Application Support/Leo资料库-gateway`，LaunchAgent `com.leo.brain-gateway` 127.0.0.1:8878，经隧道 `https://wenjian.leoyuan.top`）：设备令牌（只存哈希、分权限、可吊销）、每令牌 120 次/分钟、审计、restricted 永不外出、private 需权限、5 分钟签名下载链接；混合检索（资料库 FTS5 + 本机 bge-m3 向量，RRF）；`com.leo.brain-embed` 每 30 分钟增量向量化；39 个测试。
+- **资料库优化**（改前完整备份 `app.bak-20261010-232517` 与数据库在线备份）：检索改为库内排序分页、知识卡走 FTS、新增 8 个索引、结果缓存；摘录以命中为中心；收件箱约 20 秒自动导入；新增本机语音转写任务（音视频可检索）；扫描跳过 node_modules/.git 等。重复检索快 5–15 倍。
+- **iOS**：`BrainClient` + 设置 › 资料库（令牌仅钥匙串，容器文件/深链确认/粘贴三种导入）；藏宝阁四档范围、资料详情与分页正文、下载原件、私密面容 ID、知识卡读写与版本冲突、离线缓存（不含私密）；Agent 工具 brain_search / brain_read / brain_card_save / brain_capture（私密内容不交给云端模型、子代理与安静回合不可用）；录音纪要与藏宝阁「存进资料库」。逻辑测试 1426 → 1471。
+
 ## iOS 1.61.0 (159) · 第三轮：丝滑、加固、录音纪要、提问卡片 - 2026-10-10
 
 按 `~/Desktop/LeoBot_第三轮_审计对抗测试与升级计划_20261010.md` 九路并行落地（r3/L R H S M A F1 F2 V），逻辑测试 1107 → 1426 全部通过，Release 真机构建通过，全部门禁通过。

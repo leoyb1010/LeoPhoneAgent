@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.62.0",
+            date: "2026-10-10",
+            title: "第二大脑：藏宝阁接上 Mac 资料库",
+            highlights: [
+                "藏宝阁接上 Mac mini 上的个人资料库：可切换 全部 / 手机收藏 / 资料库 / 知识卡，一次搜索同时查手机和 Mac 上的文件，看原文片段、跳到页码、下载原件。",
+                "资料库检索结合关键词和语义：问「以前怎么处理 X」这类问题也能找到相关材料，录音和视频里说过的话也能搜到。",
+                "私密资料打开前需要面容 ID，永远不会交给云端模型；受限的凭据类文件不会出现在手机上。",
+                "Agent 能查你的旧资料并标出处（标题 · 位置），也能把对话、产物、录音纪要存进资料库。",
+                "知识卡可以在手机上新建、编辑、看历史版本，在别的设备改过会提醒；没网时知识卡和最近看过的资料照样能读。"
+            ]
+        ),
+        LeoRelease(
             version: "1.61.0",
             date: "2026-10-10",
             title: "更顺 · 更稳 · 录音纪要 · 提问卡片",
