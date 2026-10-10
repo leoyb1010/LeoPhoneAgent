@@ -774,6 +774,12 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     // MARK: - Evaluate State
 
+    /// Re-run the keep-alive decision after a session's activity phase changed
+    /// (e.g. it started or stopped waiting for the user's answer).
+    func reevaluateAfterPhaseChange() {
+        reevaluate(sessions: SessionActivityTracker.shared.activeSessions, enabled: enhancedBackgroundEnabled)
+    }
+
     private func reevaluate(sessions: Set<String>, enabled: Bool) {
         // [T-ios-scenephase-active-sigkill] If we're mid foreground transition
         // (between willEnterForeground and its deferred yield), defer this
@@ -789,7 +795,18 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         }
 
         // Mac 会话只为灵动岛登记在 tracker 里;只有本机在跑的回合才需要本机保活。
-        let localSessions = sessions.subtracting(HarnessLiveActivityBridge.registeredSessionIds)
+        // [T-ask-user] A turn parked on an ask_user question does no work until the
+        // user answers (the answer arrives via notification or relaunch and resumes
+        // the turn), so it must not keep background audio/location alive — an
+        // unanswered question would otherwise drain the battery indefinitely.
+        let tracker = SessionActivityTracker.shared
+        let parkedOnQuestion = Set(sessions.filter {
+            tracker.sessionActivityPhases[$0] == .waitingForUser
+                && tracker.sessionActivityReasons[$0] == .userQuestion
+        })
+        let localSessions = sessions
+            .subtracting(HarnessLiveActivityBridge.registeredSessionIds)
+            .subtracting(parkedOnQuestion)
         let shouldBeActive = !localSessions.isEmpty && enabled
         let sessionList = sessions.prefix(5).joined(separator: ",")
         // [T-ios-log-noise-reduction] INFO→DEBUG: reevaluate runs on every

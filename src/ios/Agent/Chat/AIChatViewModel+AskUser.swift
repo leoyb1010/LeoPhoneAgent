@@ -142,6 +142,7 @@ final class AskUserCenter: ObservableObject {
         tracker.updateActivityPhase(sessionId, phase: waiting ? .waitingForUser : .usingTool,
                                     reason: waiting ? .userQuestion : nil)
         BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "askUser")
+        BackgroundKeepAliveManager.shared.reevaluateAfterPhaseChange()
     }
 
     // MARK: Notification
