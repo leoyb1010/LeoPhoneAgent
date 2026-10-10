@@ -426,6 +426,8 @@ struct RecordingDetailView: View {
                           onToggle: { expandedOutput = expandedOutput == output.id ? nil : output.id },
                           onOpenChat: { RecordingPresenter.openSession(output.sessionId) },
                           onSave: { text in Task { await saveToTreasury(output: output, text: text) } },
+                          onSaveToBrain: BrainStore.shared.isConfigured
+                              ? { text in Task { await saveToBrain(output: output, text: text) } } : nil,
                           onReminders: { text in
                               let items = MinutesActionItemParser.parse(text)
                               if items.isEmpty { toast = String(localized: "纪要里没有找到待办。") }
@@ -467,6 +469,16 @@ struct RecordingDetailView: View {
         if !ok { controller.lastError = String(localized: "没能存入藏宝阁,请重试。") }
     }
 
+    /// [T-brain] 纪要 Markdown 送进资料库收件箱。
+    private func saveToBrain(output: RecordingOutput, text: String) async {
+        do {
+            _ = try await BrainStore.shared.captureText(text, filename: BrainStore.markdownFileName(output.title))
+            toast = String(localized: "已送进资料库收件箱")
+        } catch {
+            controller.lastError = (error as? BrainError)?.message ?? BrainError.network.message
+        }
+    }
+
     private func createReminders(_ items: [MinutesActionItem], title: String) async {
         guard !items.isEmpty else { return }
         if let count = await MinutesGenerator.createReminders(items, recordingTitle: title) {
@@ -497,6 +509,7 @@ private struct OutputRow: View {
     let onToggle: () -> Void
     let onOpenChat: () -> Void
     let onSave: (String) -> Void
+    let onSaveToBrain: ((String) -> Void)?
     let onReminders: (String) -> Void
     let onExport: (String, Bool) -> Void
     let onLoaded: (String) -> Void
@@ -565,6 +578,7 @@ private struct OutputRow: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip("存入藏宝阁", "star") { onSave(text) }
+                if let onSaveToBrain { chip("存进资料库", "tray.and.arrow.up") { onSaveToBrain(text) } }
                 chip("建提醒事项", "checklist") { onReminders(text) }
                 chip("导出 Markdown", "doc.plaintext") { onExport(text, false) }
                 chip("导出 PDF", "doc.richtext") { onExport(text, true) }

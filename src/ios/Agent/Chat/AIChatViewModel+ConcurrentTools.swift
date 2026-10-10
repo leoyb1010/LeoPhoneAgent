@@ -801,6 +801,15 @@ extension AIChatViewModel {
             toolOutput = result.output
             toolSuccess = result.success
 
+        case BrainToolGating.search, BrainToolGating.read, BrainToolGating.cardSave, BrainToolGating.capture:
+            // [T-brain] 结果包成不可信数据;私密资料不交给云端模型。
+            let result = await executeBrainTool(name: tu.name, args: toolArgs)
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
         case "mail_accounts", "mail_folders", "mail_search", "mail_read":
             // [T-mail] 只读 IMAP;结果包在 untrusted 标签里。
             let result: (output: String, success: Bool)

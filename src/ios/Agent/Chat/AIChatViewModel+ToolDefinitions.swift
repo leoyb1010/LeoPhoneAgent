@@ -209,6 +209,9 @@ extension AIChatViewModel {
             propertyOrdering: ["tool_title", "id", "title", "tags", "collection_ids", "pinned", "archived", "reading_state", "annotation"]
         ))
 
+        // [T-brain] 资料库工具:已连接、有人在看的顶层对话才有。
+        tools.append(contentsOf: brainToolDefinitions())
+
         // [T-mail] 只在用户授权了邮箱时注册,没邮箱的用户看不到这几个工具。
         if MailAccountStore.shared.hasEnabledAccounts {
             let titleParam = AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user.")
