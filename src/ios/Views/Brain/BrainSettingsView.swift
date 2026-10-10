@@ -22,6 +22,10 @@ struct BrainSettingsView: View {
 
     var body: some View {
         Form {
+            // 操作结果放在最上面:以前在表单最底部,点了「保存令牌并连接」要往下翻才知道成没成。
+            if let message {
+                Section { Text(message).font(.footnote) }
+            }
             if let pending = store.pendingConnect {
                 Section {
                     Text("收到一个资料库连接链接。确认后,令牌只保存在这台设备的钥匙串里。")
@@ -120,7 +124,7 @@ struct BrainSettingsView: View {
                     ForEach(audit) { entry in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.endpoint).font(.footnote.monospaced())
-                            Text(verbatim: [entry.at, entry.target ?? "", entry.status.map { "HTTP \($0)" } ?? ""]
+                            Text(verbatim: [BrainDisplay.date(entry.at) ?? entry.at, entry.target ?? "", entry.status.map { "HTTP \($0)" } ?? ""]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.caption)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)
@@ -138,9 +142,6 @@ struct BrainSettingsView: View {
                 } footer: { Text("删除本机钥匙串里的令牌,并清空离线缓存。") }
             }
 
-            if let message {
-                Section { Text(message).font(.footnote) }
-            }
         }
         .navigationTitle("资料库")
         .navigationBarTitleDisplayMode(.inline)

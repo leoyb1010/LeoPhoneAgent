@@ -10,6 +10,7 @@
 
 import QuickLook
 import SwiftUI
+import UIKit
 
 // MARK: - Scope picker
 
@@ -92,10 +93,15 @@ final class BrainBrowseModel: ObservableObject {
     @Published var cardsFromCache = false
     @Published var semanticUsed = false
 
+    /// 只有最新一次请求能改 loading / 结果:打字时旧请求被取消后晚到的收尾不能把新状态冲掉。
+    private var generation = 0
+
     func load(scope: BrainBrowseScope, query: String) async {
+        generation += 1
+        let mine = generation
         let store = BrainStore.shared
         guard store.isConfigured, let searchScope = scope.searchScope else {
-            results = []; cards = []; error = nil
+            results = []; cards = []; error = nil; loading = false
             return
         }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -103,22 +109,23 @@ final class BrainBrowseModel: ObservableObject {
             await loadCards()
             return
         }
-        guard !q.isEmpty else { results = []; error = nil; return }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        guard !Task.isCancelled else { return }
+        guard !q.isEmpty else { results = []; error = nil; loading = false; return }
+        // 防抖期间就算「搜索中」:否则每敲一个字都会先闪一下「没有匹配的内容」。
         loading = true
-        defer { loading = false }
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled, mine == generation else { return }
+        defer { if mine == generation { loading = false } }
         do {
             let response = try await store.requireClient().search(
                 q, scope: searchScope, limit: 30,
                 includePrivate: BrainPrivacyPolicy.includePrivateForUI(unlock: store.unlock))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, mine == generation else { return }
             results = response.items.filter { BrainPrivacyPolicy.isListable($0.privacy, unlock: store.unlock) }
             semanticUsed = response.semanticUsed
             error = nil
         } catch is CancellationError {
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, mine == generation else { return }
             results = []
             self.error = (error as? BrainError) ?? .network
         }
@@ -161,29 +168,49 @@ final class BrainBrowseModel: ObservableObject {
 struct BrainBrowseSection: View {
     let scope: BrainBrowseScope
     let query: String
+    /// 下拉刷新时由藏宝阁递增,资料库区块跟着重查。
+    var refreshToken: Int = 0
+    /// 藏宝阁传进来:在当前导航栈里推出资料库设置,不再跳去设置面板(iPad 上会把藏宝阁关掉)。
+    var onOpenSettings: (() -> Void)? = nil
     @ObservedObject private var store = BrainStore.shared
     @StateObject private var model = BrainBrowseModel()
     @State private var creatingCard = false
+    @State private var retryToken = 0
+
+    private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var phase: BrainBrowsePhase {
+        BrainBrowsePhase.resolve(configured: store.isConfigured, scope: scope, query: query,
+                                 loading: model.loading, error: model.error,
+                                 resultCount: scope == .cards && trimmed.isEmpty ? model.cards.count : model.results.count)
+    }
 
     var body: some View {
         Group {
-            if !store.isConfigured {
-                if scope != .all {
+            switch phase {
+            case .notConfigured(let showsPrompt):
+                if showsPrompt {
                     LeoEmptyState(systemImage: "books.vertical",
                                   title: String(localized: "还没有连接资料库"),
                                   message: String(localized: "在「设置 › 资料库」连接 Mac 上的资料库后,这里能搜到你的文件和知识卡。"),
                                   actionTitle: String(localized: "去连接"),
                                   actionSystemImage: "link",
-                                  action: { DeepLinkCoordinator.shared.pendingSettingsTarget = .brain })
+                                  action: openBrainSettings)
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 }
-            } else {
+            default:
                 content
             }
         }
-        .task(id: "\(scope.rawValue)|\(query)|\(store.isConfigured)|\(store.unlock.unlockedThisSession)") {
+        .task(id: "\(scope.rawValue)|\(query)|\(store.isConfigured)|\(store.unlock.unlockedThisSession)|\(refreshToken)|\(retryToken)") {
             await model.load(scope: scope, query: query)
+        }
+        .task(id: "\(store.isConfigured)|\(scope.rawValue)") {
+            // 资料库 / 知识卡范围顶上的一行连接状态:没检测过就检测一次。
+            if store.isConfigured, scope != .phone, scope != .all, store.health == nil, store.statusError == nil {
+                await store.refreshHealth()
+            }
         }
         .sheet(isPresented: $creatingCard) {
             NavigationStack {
@@ -192,14 +219,30 @@ struct BrainBrowseSection: View {
         }
     }
 
+    private func openBrainSettings() {
+        if let onOpenSettings {
+            onOpenSettings()
+        } else {
+            DeepLinkCoordinator.shared.pendingSettingsTarget = .brain
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if scope == .all {
             if !trimmed.isEmpty { sectionHeader(String(localized: "资料库")) }
+        } else if let status = BrainConnectionSummary.text(configured: store.isConfigured, health: store.health,
+                                                         statusError: store.statusError) {
+            Label(status, systemImage: store.statusError == nil && store.health?.ok != false
+                  ? "checkmark.circle" : "exclamationmark.circle")
+                .font(.caption)
+                .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                .padding(.horizontal, 14)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
         }
-        if let error = model.error {
-            offlineOrErrorRow(error)
+        if case .failed(let error) = phase {
+            failedRow(error)
         }
         if scope == .cards && trimmed.isEmpty {
             HStack {
@@ -208,11 +251,15 @@ struct BrainBrowseSection: View {
                 Button {
                     creatingCard = true
                 } label: { Label("新建知识卡", systemImage: "square.and.pencil") }
+                .frame(minHeight: 44)
                 .disabled(model.cardsFromCache)
             }
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
             .padding(.horizontal, 14)
+            if phase == .loading {
+                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+            }
             ForEach(model.cards) { card in
                 brainRowStyle(
                     NavigationLink {
@@ -220,20 +267,15 @@ struct BrainBrowseSection: View {
                     } label: { BrainCardRow(card: card) }
                 )
             }
-            if model.cards.isEmpty && !model.loading && model.error == nil {
-                Text("资料库里还没有知识卡。").font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .listRowBackground(Color.clear)
+            if phase == .empty {
+                hintRow(String(localized: "资料库里还没有知识卡。"))
             }
-        } else if trimmed.isEmpty {
+        } else if phase == .idle {
             if scope == .archive {
-                Text("输入关键词搜索资料库里的文件。").font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .listRowBackground(Color.clear)
-                    .padding(.horizontal, 14)
+                hintRow(String(localized: "输入关键词搜索资料库里的文件。"))
             }
         } else {
-            if model.loading && model.results.isEmpty {
+            if phase == .loading {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
             if !store.unlock.unlockedThisSession {
@@ -242,6 +284,7 @@ struct BrainBrowseSection: View {
                 } label: {
                     Label("同时搜索私密资料(需要面容 ID)", systemImage: "lock.open")
                         .font(.footnote)
+                        .frame(minHeight: 44)
                 }
                 .listRowBackground(Color.clear)
                 .padding(.horizontal, 14)
@@ -258,13 +301,18 @@ struct BrainBrowseSection: View {
                     } label: { BrainResultRow(item: item) }
                 )
             }
-            if model.results.isEmpty && !model.loading && model.error == nil {
-                Text("资料库里没有匹配的内容。").font(.footnote)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    .listRowBackground(Color.clear)
-                    .padding(.horizontal, 14)
+            if phase == .empty {
+                hintRow(String(localized: "资料库里没有匹配的内容。"))
             }
         }
+    }
+
+    private func hintRow(_ text: String) -> some View {
+        Text(text).font(.footnote)
+            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+            .padding(.horizontal, 14)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -277,17 +325,35 @@ struct BrainBrowseSection: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    @ViewBuilder
-    private func offlineOrErrorRow(_ error: BrainError) -> some View {
-        Label(error.isOffline
-              ? (scope == .all ? String(localized: "资料库离线,只显示手机收藏。") : String(localized: "资料库离线,暂时搜不了。"))
-              : error.message,
-              systemImage: error.isOffline ? "icloud.slash" : "exclamationmark.triangle")
-            .font(.footnote)
-            .foregroundStyle(LeoTheme.ColorToken.warning)
-            .padding(.horizontal, 14)
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+    /// 出错一行:说清楚原因,并给下一步(重试 / 去重新连接)。离线时「全部」仍照常显示手机收藏。
+    private func failedRow(_ error: BrainError) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Label(error.isOffline
+                  ? (scope == .all ? String(localized: "资料库离线,只显示手机收藏。") : String(localized: "资料库离线,暂时搜不了。"))
+                  : error.message,
+                  systemImage: error.isOffline ? "icloud.slash" : "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(LeoTheme.ColorToken.warning)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            switch error.recovery {
+            case .retry:
+                Button(String(localized: "重试")) { retryToken += 1 }
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: 44)
+            case .reconnect:
+                Button(String(localized: "去设置")) { openBrainSettings() }
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: 44)
+            case .none:
+                EmptyView()
+            }
+        }
+        .padding(.horizontal, 14)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 }
 
@@ -339,7 +405,8 @@ struct BrainCardRow: View {
                 Text(verbatim: summary).font(.footnote).lineLimit(2)
                     .foregroundStyle(LeoTheme.ColorToken.secondaryText)
             }
-            Text(verbatim: ["v\(card.version)", card.status ?? "", card.category ?? "", card.updatedAt ?? ""]
+            Text(verbatim: ["v\(card.version)", BrainDisplay.status(card.status) ?? "", card.category ?? "",
+                            BrainDisplay.date(card.updatedAt) ?? ""]
                 .filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption2)
                 .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
@@ -384,7 +451,8 @@ struct BrainFileDetailView: View {
     @State private var activeLocator: String?
     @State private var unlocked = false
     @State private var downloading = false
-    @State private var preview: BrainPreviewFile?
+    /// 下载好的原件交给系统快速查看(自带完成与分享:存到文件、隔空投送、用别的 App 打开)。
+    @State private var previewURL: URL?
 
     private var effectivePrivacy: BrainPrivacy { meta?.privacy == .private ? .private : privacy }
 
@@ -408,9 +476,7 @@ struct BrainFileDetailView: View {
                 await reload(locator: initialLocator)
             }
         }
-        .sheet(item: $preview) { file in
-            BrainQuickLook(url: file.url).ignoresSafeArea()
-        }
+        .quickLookPreview($previewURL)
     }
 
     private var content: some View {
@@ -444,6 +510,11 @@ struct BrainFileDetailView: View {
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.footnote).foregroundStyle(LeoTheme.ColorToken.warning)
+                    Button {
+                        self.error = nil
+                        Task { await reload(locator: activeLocator) }
+                    } label: { Label("重试", systemImage: "arrow.clockwise") }
+                    .disabled(loading)
                 }
             }
 
@@ -564,38 +635,9 @@ struct BrainFileDetailView: View {
         defer { downloading = false }
         do {
             let url = try await store.requireClient().downloadOriginal(fileId)
-            preview = BrainPreviewFile(url: url)
+            previewURL = url
         } catch {
             self.error = (error as? BrainError)?.message ?? BrainError.network.message
-        }
-    }
-}
-
-struct BrainPreviewFile: Identifiable {
-    let url: URL
-    var id: String { url.path }
-}
-
-/// QuickLook 自带分享按钮(存到文件、隔空投送、用别的 App 打开)。
-struct BrainQuickLook: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UINavigationController {
-        let controller = QLPreviewController()
-        controller.dataSource = context.coordinator
-        return UINavigationController(rootViewController: controller)
-    }
-
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
-
-    final class Coordinator: NSObject, QLPreviewControllerDataSource {
-        let url: URL
-        init(url: URL) { self.url = url }
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
-        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-            url as NSURL
         }
     }
 }
@@ -619,7 +661,7 @@ struct BrainCardDetailView: View {
                 Section {
                     HStack {
                         Text(verbatim: "v\(card.version)").font(.caption.monospaced())
-                        if let status = card.status { Text(verbatim: status).font(.caption) }
+                        if let status = BrainDisplay.status(card.status) { Text(verbatim: status).font(.caption) }
                         if fromCache { BrainOfflineBadge() }
                         Spacer()
                     }
@@ -633,13 +675,13 @@ struct BrainCardDetailView: View {
                 }
                 if !card.sources.isEmpty {
                     Section("出处") {
-                        ForEach(card.sources, id: \.self) { source in
+                        ForEach(Array(card.sources.enumerated()), id: \.element) { index, source in
+                            let label = BrainDisplay.sourceLabel(index: index, locator: source.locator)
                             NavigationLink {
-                                BrainFileDetailView(fileId: source.fileId, title: source.fileId, privacy: .general,
+                                BrainFileDetailView(fileId: source.fileId, title: label, privacy: .general,
                                                     initialLocator: source.locator)
                             } label: {
-                                Text(verbatim: [source.fileId, source.locator ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.footnote.monospaced())
+                                Text(verbatim: label).font(.footnote)
                             }
                         }
                     }
@@ -654,7 +696,7 @@ struct BrainCardDetailView: View {
                                     Text(verbatim: "v\(entry.version)").font(.footnote.monospaced())
                                     Text(verbatim: entry.title ?? "").font(.footnote).lineLimit(1)
                                     Spacer()
-                                    Text(verbatim: entry.savedAt ?? "").font(.caption2)
+                                    Text(verbatim: BrainDisplay.date(entry.savedAt) ?? "").font(.caption2)
                                         .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                                 }
                             }
@@ -726,6 +768,15 @@ struct BrainCardEditorView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var conflict = false
+    @State private var confirmDiscard = false
+    @State private var loaded = false
+
+    /// 改过但没保存:不让下滑误关,取消先确认。
+    private var isDirty: Bool {
+        guard loaded else { return false }
+        return title != (card?.title ?? "") || bodyText != (card?.body ?? "")
+            || category != (card?.category ?? "") || status != (card?.status ?? "draft")
+    }
 
     var body: some View {
         Form {
@@ -750,22 +801,41 @@ struct BrainCardEditorView: View {
         .navigationTitle(card == nil ? String(localized: "新建知识卡") : String(localized: "编辑知识卡"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("取消") { if isDirty { confirmDiscard = true } else { dismiss() } }
+            }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") { Task { await save() } }
-                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty || bodyText.isEmpty)
+                if saving {
+                    ProgressView()
+                } else {
+                    Button("保存") { Task { await save() } }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty
+                                  || bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
         }
+        .interactiveDismissDisabled(isDirty || saving)
+        .confirmationDialog("放弃这次修改?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("放弃修改", role: .destructive) { dismiss() }
+            Button("继续编辑", role: .cancel) {}
+        }
         .alert("已被其他设备修改", isPresented: $conflict) {
-            Button("重新载入") {
+            Button("拷贝我的修改并重新载入") {
+                UIPasteboard.general.string = bodyText
                 onDone(nil)
                 dismiss()
             }
+            Button("重新载入", role: .destructive) {
+                onDone(nil)
+                dismiss()
+            }
+            Button("继续编辑", role: .cancel) {}
         } message: {
-            Text("这张卡在别处有了新版本。重新载入后再改,你刚才的修改不会覆盖它。")
+            Text("这张卡在别处有了新版本。重新载入后再改,你刚才的修改不会覆盖它;可以先把你写的正文拷贝走。")
         }
         .onAppear {
-            guard let card else { return }
+            defer { loaded = true }
+            guard let card, !loaded else { return }
             title = card.title
             bodyText = card.body
             category = card.category ?? ""

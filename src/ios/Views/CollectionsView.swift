@@ -19,6 +19,7 @@
 import LinkPresentation
 import SafariServices
 import PhotosUI
+import QuickLook
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -99,6 +100,17 @@ struct CollectionsView: View {
     @State private var fullTextSnippets: [String: String] = [:]
     @State private var indexing = false
     @State private var searchTask: Task<Void, Never>?
+    /// 下拉刷新时递增,资料库区块跟着重查(以前只刷新手机收藏)。
+    @State private var brainRefreshToken = 0
+    /// 非图片附件(PDF、文稿…)直接交给系统快速查看,不再只显示一个文件图标。
+    @State private var quickLookURL: URL?
+    /// 资料库设置在当前导航栈里推出来(以前跳设置面板,iPad 上会把藏宝阁整个关掉)。
+    @State private var showBrainSettings = false
+    /// 剪贴板里像不像有链接(系统检测,不触发「允许粘贴」提示)。
+    @State private var clipboardHasLink = false
+    @State private var clipboardChangeCount = 0
+    /// 收过或点了「不收」的那份剪贴板,不再提示。
+    @State private var dismissedClipboardChange: Int?
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -160,26 +172,49 @@ struct CollectionsView: View {
         }
     }
 
+    /// 没连接资料库时按「手机收藏」走,不显示范围切换。
+    private var scope: BrainBrowseScope {
+        BrainBrowseScope.effective(brainScope, configured: brain.isConfigured)
+    }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasActiveFilters: Bool {
+        TreasuryFilterReset.hasActiveFilters(view: treasuryView.rawValue, source: filterSource, showArchived: showArchived)
+    }
+
+    private func clearFilters() {
+        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+            filterSource = nil
+            treasuryView = .all
+            showArchived = false
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let usesSplit = TreasuryWorkspaceLayoutPolicy.usesSplit(
+            // 只有自己当容器(整页面板)时才分栏;被推进别人的导航栈(设置的 iPad 分栏详情页)
+            // 再套一层 NavigationSplitView 会出现两层侧栏、返回键失灵。
+            let usesSplit = onClose != nil && TreasuryWorkspaceLayoutPolicy.usesSplit(
                 width: geometry.size.width,
                 regularWidth: horizontalSizeClass == .regular)
             Group {
                 if usesSplit {
                     NavigationSplitView {
-                        collectionList(usesSplit: true)
+                        collectionList(usesSplit: true, height: geometry.size.height)
                             .toolbar { closeToolbarItem }
                     } detail: {
                         splitReadingDetail
                     }
                 } else if onClose != nil {
                     NavigationStack {
-                        collectionList(usesSplit: false)
+                        collectionList(usesSplit: false, height: geometry.size.height)
                             .toolbar { closeToolbarItem }
                     }
                 } else {
-                    collectionList(usesSplit: false)
+                    collectionList(usesSplit: false, height: geometry.size.height)
                 }
             }
         }
@@ -194,31 +229,39 @@ struct CollectionsView: View {
         }
     }
 
-    private func collectionList(usesSplit: Bool) -> some View {
+    private func collectionList(usesSplit: Bool, height: CGFloat) -> some View {
         // 每次重画只筛一遍(以前 isEmpty 和 ForEach 各算一次,搜索时每个字都把全部条目小写化两遍)。
         let shown = visible
+        let header = TreasuryHeaderPolicy.layout(containerHeight: height, itemCount: items.count,
+                                                 searching: isSearching, editing: editMode.isEditing,
+                                                 showsPhoneItems: scope.showsPhoneItems)
         return List(selection: $selection) {
-            if !editMode.isEditing {
+            if !editMode.isEditing, BrainBrowseScope.showsPicker(configured: brain.isConfigured) {
                 BrainScopePicker(scope: $brainScope)
             }
-            if brainScope.showsPhoneItems {
-            if !editMode.isEditing {
-                treasuryHero
-                captureActions
-                treasuryViewPicker
-                importRow
-            }
+            if scope.showsPhoneItems {
+            // 第一条内容之前的高度有限:概览卡 / 四个新建按钮按 TreasuryHeaderPolicy 收起,
+            // 新建随时可以从标题栏「+」进;来源筛选并进视图胶囊那一行。
+            if header.showsOverview { treasuryHero }
+            if header.showsCaptureGrid { captureActions }
+            if header.showsViewPicker { treasuryViewPicker }
+            importRow
             if items.isEmpty {
                 emptyState
-            } else if shown.isEmpty {
+            } else {
+                if shown.isEmpty {
                 // 判据必须是 visible 而不是 items:切到"查看归档"却没有
                 // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
                 // 筛选胶囊和一片空白,没有任何解释。
                 LeoEmptyState(systemImage: showArchived ? "archivebox" : "magnifyingglass",
                               title: showArchived ? String(localized: "归档里还没有东西") : String(localized: "没有匹配的内容"),
-                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil)
-            } else {
-                if sources.count > 1 { sourceFilter }
+                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil,
+                              actionTitle: hasActiveFilters ? String(localized: "清除筛选") : nil,
+                              actionSystemImage: "line.3.horizontal.decrease.circle",
+                              action: hasActiveFilters ? clearFilters : nil)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                } else {
                 ForEach(shown) { item in
                     // 卡片与上方概览卡同一条左右边线(14pt),内容在卡片里再缩 12pt;
                     // 之前背景是通栏的,列表卡片贴着屏幕边(1.41.0 真机截图)。
@@ -240,17 +283,26 @@ struct CollectionsView: View {
                     })
                     requestDelete(ids)
                 }
+                }
             }
             }
             // [T-brain] 资料库结果:「全部」里跟在手机收藏后面,「资料库 / 知识卡」单独显示。
-            if brainScope != .phone, !editMode.isEditing {
-                BrainBrowseSection(scope: brainScope, query: TreasuryLocalQuery.parse(query).textQuery)
+            if scope != .phone, !editMode.isEditing {
+                BrainBrowseSection(scope: scope, query: TreasuryLocalQuery.parse(query).textQuery,
+                                   refreshToken: brainRefreshToken,
+                                   onOpenSettings: { showBrainSettings = true })
             }
         }
         .environment(\.editMode, $editMode)
         .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "藏宝阁")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索收藏(含正文)")
+        // 进来就能看到搜索框:默认的自动抽屉要先往下拉一下才露出来。
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: Text(scope.searchPrompt))
+        // 搜索时往下翻结果就收起键盘,不让键盘一直挡住下半屏。
+        .scrollDismissesKeyboard(.immediately)
+        .navigationBarBackButtonHidden(editMode.isEditing)
+        .navigationDestination(isPresented: $showBrainSettings) { BrainSettingsView() }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(LeoTheme.ColorToken.groupedBackground)
@@ -277,7 +329,11 @@ struct CollectionsView: View {
                 }
             }
         }
-        .refreshable { reload() }
+        .refreshable {
+            reload()
+            if scope != .phone { brainRefreshToken += 1 }
+        }
+        .quickLookPreview($quickLookURL)
         // [T-treasury-ui] 条目的进出与重排(置顶跳到最前、归档滑走、删除
         // 收起)都走弹簧,不再瞬间跳变。items 是 Equatable,代价可控。
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.3), value: items)
@@ -411,6 +467,13 @@ struct CollectionsView: View {
         .onAppear {
             reload()
             processPendingJobs()
+            refreshClipboardHint()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in
+            refreshClipboardHint()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            refreshClipboardHint()
         }
         .onDisappear { commitPendingDeletion() }
         .confirmationDialog("删除所选的 \(selection.count) 条收藏？", isPresented: $confirmBatchDelete,
@@ -460,7 +523,7 @@ struct CollectionsView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("你的资料库")
+                    Text("你的藏宝阁")
                         .font(.headline.weight(.bold))
                     Text("收藏、笔记、扫描与文件会统一索引，随时交给 Agent 继续工作。")
                         .font(.caption)
@@ -540,10 +603,15 @@ struct CollectionsView: View {
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(treasuryView == view ? Color.orange : LeoTheme.ColorToken.surface,
                                         in: Capsule())
+                            // 胶囊看起来小,点按区域补到 44pt 高。
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(treasuryView == view ? .isSelected : [])
                 }
+                // 来源筛选以前单独占一行胶囊;并进这一行,少占一行高度。
+                if sources.count > 1 { sourceMenuChip }
             }
             .padding(.horizontal, 14)
         }
@@ -596,6 +664,8 @@ struct CollectionsView: View {
             CollectionCard(item: item)
         }
         .buttonStyle(.plain)
+        // 选择模式里点卡片是勾选,不是打开(以前会直接跳去原 App / 浏览器)。
+        .allowsHitTesting(!editMode.isEditing)
         .tag(item.id)
         .contextMenu {
             Button {
@@ -609,6 +679,14 @@ struct CollectionsView: View {
                     UIPasteboard.general.string = item.value
                     flash("链接已复制")
                 } label: { Label("拷贝链接", systemImage: "doc.on.doc") }
+            }
+            switch TreasuryShareItem.payload(for: item) {
+            case .url(let url)?:
+                ShareLink(item: url) { Label("分享…", systemImage: "square.and.arrow.up") }
+            case .text(let text)?:
+                ShareLink(item: text) { Label("分享…", systemImage: "square.and.arrow.up") }
+            case nil:
+                EmptyView()
             }
             Button {
                 sendToAgent(item, prompt: nil)
@@ -691,6 +769,37 @@ struct CollectionsView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if editMode.isEditing {
+            ToolbarItem(placement: .topBarLeading) {
+                let ids = visible.map(\.id)
+                Button(TreasurySelection.allSelected(selection: selection, visibleIDs: ids)
+                       ? String(localized: "取消全选") : String(localized: "全选")) {
+                    selection = TreasurySelection.toggleAll(selection: selection, visibleIDs: ids)
+                }
+                .disabled(ids.isEmpty)
+            }
+        } else if scope.showsPhoneItems {
+            // 新建 / 导入随时可达:四个大按钮只在首次使用或高屏铺开,滚动后也找得到。
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { newNote() } label: { Label("新建笔记", systemImage: "square.and.pencil") }
+                    Button { showImportSheet = true } label: { Label("粘贴链接或文字", systemImage: "doc.on.clipboard") }
+                    Button {
+                        if VNDocumentCameraViewController.isSupported {
+                            showScanner = true
+                        } else {
+                            flash("这台设备不支持文档扫描", isError: true)
+                        }
+                    } label: { Label("扫描文档", systemImage: "doc.viewfinder") }
+                    Divider()
+                    Button { showPhotoPicker = true } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
+                    Button { showFileImporter = true } label: { Label("从文件导入", systemImage: "folder") }
+                } label: {
+                    Image(systemName: "plus")
+                        .accessibilityLabel(Text("添加到藏宝阁"))
+                }
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             if editMode.isEditing {
                 Button("完成") {
@@ -698,22 +807,35 @@ struct CollectionsView: View {
                 }
             } else {
                 Menu {
-                    Button {
-                        withAnimation { showArchived.toggle() }
-                    } label: {
-                        Label(showArchived ? "回到收藏" : "查看归档",
-                              systemImage: showArchived ? "tray.full" : "archivebox")
+                    // 资料库 / 知识卡范围里没有手机收藏可选,进选择模式只会得到一张空列表。
+                    if scope.supportsPhoneEditing {
+                        Button {
+                            withAnimation { showArchived.toggle() }
+                        } label: {
+                            Label(showArchived ? "回到收藏" : "查看归档",
+                                  systemImage: showArchived ? "tray.full" : "archivebox")
+                        }
+                        Button {
+                            withAnimation { editMode = .active }
+                        } label: { Label("选择", systemImage: "checkmark.circle") }
+                        .disabled(items.isEmpty)
+                        Divider()
                     }
                     Button {
-                        withAnimation { editMode = .active }
-                    } label: { Label("选择", systemImage: "checkmark.circle") }
+                        showBrainSettings = true
+                    } label: {
+                        Label(brain.isConfigured ? "资料库设置" : "连接资料库…", systemImage: "books.vertical")
+                    }
                     Divider()
                     Picker("分享时的默认动作", selection: $defaultAction) {
                         Text("每次询问").tag("ask")
                         Text("总是发到对话").tag("chat")
                         Text("总是收藏(不打断)").tag("collect")
                     }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .accessibilityLabel(Text("更多"))
+                }
             }
         }
         ToolbarItem(placement: .bottomBar) {
@@ -724,6 +846,14 @@ struct CollectionsView: View {
                         sendToAgent(chosen, prompt: nil)
                     } label: {
                         Label("发给 Agent", systemImage: "paperplane.fill")
+                    }
+                    .disabled(selection.isEmpty)
+
+                    Button {
+                        archiveSelection()
+                    } label: {
+                        Label(showArchived ? "取消归档" : "归档所选",
+                              systemImage: showArchived ? "tray.and.arrow.up" : "archivebox")
                     }
                     .disabled(selection.isEmpty)
 
@@ -738,25 +868,47 @@ struct CollectionsView: View {
         }
     }
 
-    /// 剪贴板里有链接时的一键收藏条。PasteButton 不触发"允许粘贴"提示。
+    /// 批量归档 / 取消归档:归档本来就能撤回(查看归档里取消),不再二次确认。
+    private func archiveSelection() {
+        let changed = TreasurySelection.archiving(items, ids: selection, archive: !showArchived)
+        for item in changed { CollectionStore.update(item) }
+        let count = changed.count
+        withAnimation {
+            selection = []
+            editMode = .inactive
+        }
+        reload()
+        if count > 0 {
+            flash(showArchived ? String(localized: "已取消归档 \(count) 条") : String(localized: "已归档 \(count) 条"))
+        }
+    }
+
+    /// 剪贴板里像是有链接时的一键收藏条。PasteButton 不触发"允许粘贴"提示。
+    /// 以前只要剪贴板里有任何文字就常驻;现在按 TreasuryClipboardBannerPolicy 只在像链接时出现。
     @ViewBuilder
     private var importRow: some View {
-        if !editMode.isEditing, UIPasteboard.general.hasURLs || UIPasteboard.general.hasStrings {
+        if TreasuryClipboardBannerPolicy.shows(hasProbableLink: clipboardHasLink,
+                                               changeCount: clipboardChangeCount,
+                                               dismissedChangeCount: dismissedClipboardChange,
+                                               searching: isSearching, editing: editMode.isEditing) {
             HStack(spacing: 12) {
                 Image(systemName: "doc.on.clipboard.fill")
                     .font(.system(size: 15))
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
                     .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("剪贴板里有内容").font(.system(size: 14, weight: .semibold))
+                    Text("剪贴板里有链接").font(.subheadline.weight(.semibold))
                     Text("小红书等只给「复制链接」的 app,从这里收")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
                 PasteButton(payloadType: String.self) { strings in
                     let added = strings.reduce(0) { $0 + CollectionStore.ingestText($1) }
                     Task { @MainActor in
+                        dismissedClipboardChange = clipboardChangeCount
                         reload()
                         processPendingJobs()
                         flash(added > 0 ? "已收藏 \(added) 条" : "剪贴板里没有可收藏的内容", isError: added == 0)
@@ -765,9 +917,41 @@ struct CollectionsView: View {
                 .labelStyle(.iconOnly)
                 .buttonBorderShape(.capsule)
                 .tint(.orange)
+                Button {
+                    withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                        dismissedClipboardChange = clipboardChangeCount
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(Text("不收"))
             }
             .padding(.vertical, 2)
             .listRowBackground(Color.orange.opacity(0.07))
+        }
+    }
+
+    /// 只问系统「像不像链接」,不读内容,不弹「允许粘贴」。
+    private func refreshClipboardHint() {
+        let board = UIPasteboard.general
+        clipboardChangeCount = board.changeCount
+        if board.hasURLs {
+            clipboardHasLink = true
+            return
+        }
+        guard board.hasStrings else {
+            clipboardHasLink = false
+            return
+        }
+        let probableWebURL: PartialKeyPath<UIPasteboard.DetectedValues> = \.probableWebURL
+        board.detectPatterns(for: [probableWebURL]) { result in
+            let hasLink = (try? result.get())?.contains(probableWebURL) ?? false
+            Task { @MainActor in clipboardHasLink = hasLink }
         }
     }
 
@@ -781,30 +965,42 @@ struct CollectionsView: View {
         )
     }
 
-    private var sourceFilter: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                filterChip(nil, label: "全部")
-                ForEach(sources, id: \.self) { filterChip($0, label: $0) }
+    private var sourceMenuChip: some View {
+        let active = filterSource != nil
+        return Menu {
+            Button {
+                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { filterSource = nil }
+                LeoHaptics.selection()
+            } label: {
+                if filterSource == nil { Label("全部来源", systemImage: "checkmark") } else { Text("全部来源") }
             }
-        }
-        .listRowSeparator(.hidden)
-    }
-
-    private func filterChip(_ source: String?, label: String) -> some View {
-        let selected = filterSource == source
-        return Button {
-            withAnimation(LeoMotion.snappy()) { filterSource = source }
-            LeoHaptics.selection()
+            Divider()
+            ForEach(sources, id: \.self) { source in
+                Button {
+                    withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { filterSource = source }
+                    LeoHaptics.selection()
+                } label: {
+                    if filterSource == source { Label(source, systemImage: "checkmark") } else { Text(verbatim: source) }
+                }
+            }
         } label: {
-            Text(label)
-                .font(.system(size: 13, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Color.white : .primary)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(selected ? Color.accentColor : Color.secondary.opacity(0.1),
-                            in: Capsule())
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.caption2.weight(.bold))
+                Text(filterSource ?? String(localized: "来源"))
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(active ? Color.white : Color.primary)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(active ? Color.accentColor : LeoTheme.ColorToken.surface, in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(active ? String(localized: "来源:\(filterSource ?? "")") : String(localized: "按来源筛选")))
     }
 
     // MARK: 行为
@@ -1218,7 +1414,14 @@ struct CollectionsView: View {
             return
         }
         guard item.kind == .link else {
-            previewItem = item
+            // 图片 / 扫描件留在预览页(带识别出的文字);其它附件直接系统快速查看,
+            // 以前这里只显示一个文件图标和文件名,打不开也分享不了。
+            if item.kind == .file, let file = CollectionStore.fileURL(named: item.value),
+               !TreasuryFilePreviewPolicy.usesImagePreview(fileName: item.value) {
+                quickLookURL = file
+            } else {
+                previewItem = item
+            }
             return
         }
         Task { @MainActor in
@@ -1812,6 +2015,7 @@ private struct CollectionCard: View {
         HStack(alignment: .top, spacing: 12) {
             thumbnail
                 .frame(width: 60, height: 60)
+                .accessibilityHidden(true)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1834,14 +2038,14 @@ private struct CollectionCard: View {
                             .font(.system(size: 10)).foregroundStyle(.orange)
                     }
                     Text(displayTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
                 if let summary = item.summary, !summary.isEmpty {
                     Text(summary)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -1850,21 +2054,25 @@ private struct CollectionCard: View {
                     HStack(spacing: 5) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(.teal.opacity(0.6)).frame(width: 2)
-                        Text(note).font(.system(size: 12)).foregroundStyle(.teal)
+                        Text(note).font(.caption).foregroundStyle(.teal)
                             .lineLimit(1)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 6) {
                     Text(item.sourceLabel)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
                         .foregroundStyle(leoSourceColor(item.sourceLabel))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(leoSourceColor(item.sourceLabel).opacity(0.13), in: Capsule())
                     Text(leoRelativeDate(item.updatedAt))
-                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                     ForEach(item.tags.prefix(2), id: \.self) { tag in
-                        Text("#\(tag)").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("#\(tag)").font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
             }

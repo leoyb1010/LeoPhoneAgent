@@ -2559,6 +2559,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "gear")
                 }
+                .accessibilityLabel(Text("设置"))
             }
         }
         ToolbarItem(placement: .topBarLeading) {
@@ -2639,18 +2640,20 @@ struct ContentView: View {
                         selectedIds = selectable
                     }
                 }
-            } else if hasAlarms, isWideLayout {
-                Button {
-                    showAlarmList = true
-                } label: {
-                    Image(systemName: "alarm")
-                        .font(.system(size: 15, weight: .medium))
-                }
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, isWideLayout {
                 Menu {
+                    // iPad 侧栏标题栏最多会挤 6 个图标(380pt 宽),闹钟收进这个菜单。
+                    if hasAlarms {
+                        Button {
+                            showAlarmList = true
+                        } label: {
+                            Label("闹钟", systemImage: "alarm")
+                        }
+                        Divider()
+                    }
                     Button {
                         showTerminal = true
                     } label: {
@@ -2689,6 +2692,7 @@ struct ContentView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)
+                        .accessibilityLabel(Text("更多工具"))
                 }
             }
         }

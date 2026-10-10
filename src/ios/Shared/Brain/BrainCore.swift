@@ -887,4 +887,188 @@ enum BrainBrowseScope: String, CaseIterable, Identifiable, Sendable {
         case .phone: return nil
         }
     }
+
+    /// 搜索框提示随范围走:在「资料库」里写「搜索收藏」会让人以为搜不到 Mac 上的文件。
+    var searchPrompt: String {
+        switch self {
+        case .all: return String(localized: "搜索收藏和资料库")
+        case .phone: return String(localized: "搜索收藏(含正文)")
+        case .archive: return String(localized: "搜索资料库里的文件")
+        case .cards: return String(localized: "搜索知识卡")
+        }
+    }
+
+    /// 「选择 / 查看归档」只对手机收藏有意义;在资料库范围里进选择模式只会得到一张空列表。
+    var supportsPhoneEditing: Bool { showsPhoneItems }
+
+    /// 没连接资料库时不显示四段范围切换(两段只会给出「去连接」),实际按「手机收藏」走,
+    /// 搜索提示也不再写「搜索收藏和资料库」。连上后恢复上次选的范围。
+    static func effective(_ stored: BrainBrowseScope, configured: Bool) -> BrainBrowseScope {
+        configured ? stored : .phone
+    }
+
+    static func showsPicker(configured: Bool) -> Bool { configured }
+}
+
+/// 资料库内容的显示文字:网关给的是 ISO 时间和英文状态码,直接显示不像给人看的。
+enum BrainDisplay {
+    static func status(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        switch raw.lowercased() {
+        case "draft": return String(localized: "草稿")
+        case "confirmed": return String(localized: "已确认")
+        case "reference": return String(localized: "参考")
+        default: return raw
+        }
+    }
+
+    static func parseDate(_ raw: String?) -> Date? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
+
+    /// 能解析就按本地格式显示日期与时间;解析不了原样返回。
+    static func date(_ raw: String?, locale: Locale = .current, timeZone: TimeZone = .current) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        guard let date = parseDate(raw) else { return raw }
+        var style = Date.FormatStyle(date: .abbreviated, time: .shortened)
+        style.locale = locale
+        style.timeZone = timeZone
+        return date.formatted(style)
+    }
+
+    /// 知识卡「出处」一行:网关只给文件 id(一串哈希),给人看的是序号和位置。
+    static func sourceLabel(index: Int, locator: String?) -> String {
+        let base = String(localized: "出处 \(index + 1)")
+        guard let locator = locator?.trimmingCharacters(in: .whitespacesAndNewlines), !locator.isEmpty else { return base }
+        return base + " · " + locator
+    }
+}
+
+/// 藏宝阁里资料库区块该显示什么。纯函数,界面只按它渲染,便于测试。
+enum BrainBrowsePhase: Equatable {
+    /// 没连接资料库:「全部」里静默,其它范围给「去连接」。
+    case notConfigured(showsConnectPrompt: Bool)
+    /// 还没输入关键词(知识卡范围直接列卡,不走这里)。
+    case idle
+    case loading
+    case results
+    case empty
+    case failed(BrainError)
+
+    static func resolve(configured: Bool, scope: BrainBrowseScope, query: String, loading: Bool,
+                        error: BrainError?, resultCount: Int) -> BrainBrowsePhase {
+        guard scope != .phone else { return .idle }
+        guard configured else { return .notConfigured(showsConnectPrompt: scope != .all) }
+        let listsCards = scope == .cards && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !listsCards, query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .idle }
+        if let error, resultCount == 0 { return .failed(error) }
+        if resultCount > 0 { return .results }
+        return loading ? .loading : .empty
+    }
+}
+
+/// 资料库出错时给用户的下一步。
+enum BrainRecovery: Equatable {
+    case retry
+    case reconnect
+    case none
+}
+
+extension BrainError {
+    var recovery: BrainRecovery {
+        switch self {
+        case .notConfigured, .unauthorized, .forbidden, .invalidBaseURL: return .reconnect
+        case .offline, .timeout, .network, .rateLimited, .server, .invalidResponse: return .retry
+        default: return .none
+        }
+    }
+}
+
+/// 藏宝阁里资料库的连接状态(一行小字,不抢内容)。
+enum BrainConnectionSummary {
+    static func text(configured: Bool, health: BrainHealth?, statusError: String?) -> String? {
+        guard configured else { return String(localized: "资料库未连接") }
+        if let health {
+            guard health.ok else { return String(localized: "资料库网关异常") }
+            if let files = health.files {
+                return String(localized: "资料库已连接 · \(files) 份文件")
+            }
+            return String(localized: "资料库已连接")
+        }
+        if statusError != nil { return String(localized: "资料库暂时连不上") }
+        return nil
+    }
+}
+
+// MARK: - On-demand knowledge in everyday chat
+
+/// 日常对话里按需调用藏宝阁 / 资料库:工具照常提供,但只有用户的请求真需要
+/// 他自己存的资料、笔记、过往工作,或明确要求时才用;其余直接回答。
+enum KnowledgeToolGuidance {
+    static func prompt(treasuryOffered: Bool, brainOffered: Bool) -> String {
+        guard treasuryOffered || brainOffered else { return "" }
+        var sources: [String] = []
+        if treasuryOffered { sources.append("treasury_* = what the user saved on this phone (藏宝阁)") }
+        if brainOffered { sources.append("brain_* = the user's long-term archive on their Mac (资料库)") }
+        return "- Personal knowledge, on demand only (" + sources.joined(separator: "; ") + "): "
+            + "call these only when the request depends on the user's own saved materials, notes, past work or decisions, "
+            + "or when the user explicitly asks you to check them (e.g. 查我的资料库 / 查藏宝阁 / 我之前存的). "
+            + "For general knowledge, chit-chat, coding or writing that does not need their materials, answer directly without searching. "
+            + "Use one focused search per need; never search on every turn or repeat a search whose results are already in this conversation.\n"
+    }
+}
+
+/// 输入框「/」面板里的「引用资料库 / 引用藏宝阁」:把明确的请求写进输入框,
+/// 用户看得见、可删改,发出去后模型按上面的按需规则去查。
+enum KnowledgeQuoteCommand: String, CaseIterable {
+    case brain = "quote_brain"
+    case treasury = "quote_treasury"
+
+    var title: String {
+        switch self {
+        case .brain: return String(localized: "引用资料库")
+        case .treasury: return String(localized: "引用藏宝阁")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .brain: return String(localized: "这条先查 Mac 上的资料库再回答")
+        case .treasury: return String(localized: "这条先查手机上的藏宝阁再回答")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .brain: return "books.vertical"
+        case .treasury: return "star.square.on.square"
+        }
+    }
+
+    /// 写进输入框的前缀。
+    var composerPrefix: String {
+        switch self {
+        case .brain: return String(localized: "查一下我的资料库:")
+        case .treasury: return String(localized: "查一下我的藏宝阁:")
+        }
+    }
+
+    static func available(brainOffered: Bool, treasuryOffered: Bool) -> [KnowledgeQuoteCommand] {
+        allCases.filter { $0 == .brain ? brainOffered : treasuryOffered }
+    }
+
+    /// 插入后的输入框文本(光标放末尾)。已有文字保留在前缀后面;重复或切换引用不叠加。
+    func apply(to existing: String) -> String {
+        var body = existing
+        for command in Self.allCases where body.hasPrefix(command.composerPrefix) {
+            body = String(body.dropFirst(command.composerPrefix.count))
+        }
+        return composerPrefix + body
+    }
 }
