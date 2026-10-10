@@ -27,9 +27,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        if #available(iOS 17.0, *) {
-            CLBackgroundActivitySession().invalidate()
-        }
+        // [S6] The launch's single orphaned-location-session probe (setup()
+        // and didBecomeActive are throttled against it).
+        BackgroundKeepAliveManager.probeOrphanedLocationSessionAtLaunch()
 
         // [T-notification-tap-vs-launch-session] The UNUserNotificationCenter
         // delegate must be in place BEFORE didFinishLaunching returns, or iOS

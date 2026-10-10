@@ -1240,24 +1240,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
-    /// [T-ios-scroll-suspend-leak] Compress a `Thread.callStackSymbols` frame to
-    /// just the demangled Swift function name (drops the module load address,
-    /// index, and image name that make raw frames unreadable in logs). Used only
-    /// for the [SuspendState] transition trace.
-    private static func shortFrame(_ raw: String) -> String {
-        // Raw frame looks like:
-        // "3   LeoPhoneAgent   0x0000000104abcd12 $s5Minis... mangled ... + 40"
-        // Prefer the human name after the mangled symbol if present, else the
-        // whitespace-collapsed tail.
-        let parts = raw.split(separator: " ", omittingEmptySubsequences: true)
-        // The mangled/demangled symbol is typically the 4th token onward.
-        guard parts.count >= 4 else { return raw.trimmingCharacters(in: .whitespaces) }
-        let symbol = parts[3...].joined(separator: " ")
-        // Strip the trailing " + <offset>" and cap length.
-        let trimmed = symbol.split(separator: "+").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? symbol
-        return String(trimmed.prefix(80))
-    }
-
     /// True while this vm is the OUTGOING side of a session-switch transition.
     /// During the brief window when the UICollectionView/SwiftUI host views of
     /// the previous session are being torn down and the new session's views
@@ -6159,15 +6141,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     @MainActor
-    func setStreamingUIUpdatesSuspended(_ suspended: Bool) {
+    func setStreamingUIUpdatesSuspended(_ suspended: Bool, caller: String = #function, file: String = #fileID) {
         guard streamingUIUpdatesSuspended != suspended else { return }
         // [T-ios-scroll-suspend-leak] Full lifecycle trace of every true↔false
         // transition. When UI/DB inconsistency is reported, this lets us see
         // whether a SUSPEND ever got a matching RESUME (the leak = a SUSPEND with
-        // no RESUME before the session was switched away). `caller` is the direct
-        // caller frame (scrollViewWillBeginDragging / scenePhase / openSession …).
-        let caller = Thread.callStackSymbols.count > 1 ? Self.shortFrame(Thread.callStackSymbols[1]) : "?"
-        logger.info("[SuspendState] \(suspended ? "SUSPEND" : "RESUME") sid=\(sessionId?.prefix(8).description ?? "nil") caller=\(caller)")
+        // no RESUME before the session was switched away). `caller` is the call
+        // site (scrollViewWillBeginDragging / scenePhase / openSession …).
+        // [S4] Compile-time `#function`/`#fileID`, not `Thread.callStackSymbols`:
+        // symbolicating the stack cost 5–30 ms per suspended VM, and every
+        // suspended VM is resumed inside the foreground-return window.
+        let callerName = "\((file as NSString).lastPathComponent):\(caller)"
+        logger.info("[SuspendState] \(suspended ? "SUSPEND" : "RESUME") sid=\(sessionId?.prefix(8).description ?? "nil") caller=\(callerName)")
         if suspended {
             streamingUIUpdatesSuspended = true
         } else {

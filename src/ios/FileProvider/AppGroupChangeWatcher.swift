@@ -14,8 +14,14 @@ import UIKit
 /// across the entire subtree. New subdirs get a watch attached on the fly; deleted
 /// ones get their watch dropped. Bursts coalesce within a short window so a `cp -r`
 /// of 1000 files signals once per touched parent, not 1000 times.
-@MainActor
-final class AppGroupChangeWatcher {
+///
+/// [S2] Threading: every piece of mutable state below is owned by `queue`. The
+/// class used to be `@MainActor` while its kqueue handlers and foreground
+/// reconcile mutated `watches` on `queue` — a data race — and `start()` walked
+/// the whole tree on the main thread during the first frame. `start()` now only
+/// hops to `queue`; directory selection is `AppGroupWatchPlanner` (bounded,
+/// breadth-first, roots reserved first).
+final class AppGroupChangeWatcher: @unchecked Sendable {
     static let shared = AppGroupChangeWatcher()
 
     private let logger = AppLogger(category: "FPWatcher")
@@ -27,99 +33,115 @@ final class AppGroupChangeWatcher {
     /// to leave room for the rest of the app.
     private let maxWatches = 180
 
+    /// Foreground reconcile re-lists every watched directory; at most once a minute.
+    private let foregroundReconcileInterval: TimeInterval = 60
+
     private struct Watch {
         let url: URL
         let rootKey: String           // "shared" | "skills" | "memory"
         let relativePath: String      // path inside the root, "" for root itself
         let source: DispatchSourceFileSystemObject
         var childNames: Set<String>   // baseline for new/deleted subdir detection
+        var depth: Int { relativePath.isEmpty ? 0 : relativePath.split(separator: "/").count }
     }
 
+    // queue-owned state
     private var watches: [URL: Watch] = [:]
     private var pendingSignals: [NSFileProviderItemIdentifier: DispatchWorkItem] = [:]
     private let signalCoalesceMs = 250
     private var started = false
+    private var capLogged = false
+    private var lastForegroundReconcile: Date = .distantPast
+    private var foregroundObserver: NSObjectProtocol?
 
     private init() {}
 
-    /// Start watching the three exposed roots. Idempotent — calling twice is a no-op.
+    /// Start watching the three exposed roots. Idempotent. Returns immediately:
+    /// the directory walk and every `open(O_EVTONLY)` run on `queue`.
     func start() {
-        guard !started else { return }
-        started = true
-
-        let fm = FileManager.default
-        let roots: [(URL, String)] = [
-            (AIChatViewModel.minisSharedPersistentDir, "shared"),
-            (AIChatViewModel.minisSkillsPersistentDir, "skills"),
-            (AIChatViewModel.minisMemoryPersistentDir, "memory"),
+        let roots: [AppGroupWatchPlanner.Root] = [
+            .init(key: "shared", url: AIChatViewModel.minisSharedPersistentDir),
+            .init(key: "skills", url: AIChatViewModel.minisSkillsPersistentDir),
+            .init(key: "memory", url: AIChatViewModel.minisMemoryPersistentDir),
         ]
+        queue.async { [self] in
+            guard !started else { return }
+            started = true
+            for root in roots {
+                // Make sure the root exists — otherwise kqueue can't open it.
+                try? FileManager.default.createDirectory(at: root.url, withIntermediateDirectories: true)
+            }
+            let plan = AppGroupWatchPlanner.plan(roots: roots, cap: maxWatches,
+                                                 listSubdirectories: AppGroupWatchPlanner.fileSystemSubdirectories)
+            for entry in plan.entries {
+                attachWatch(at: entry.url, rootKey: entry.rootKey, relativePath: entry.relativePath)
+            }
+            capLogged = plan.capReached
+            // One line per root — never one per skipped directory.
+            for line in plan.summaryLines { logger.info(line) }
 
-        for (rootURL, rootKey) in roots {
-            // Make sure the root exists — otherwise kqueue can't open it.
-            try? fm.createDirectory(at: rootURL, withIntermediateDirectories: true)
-            let beforeCount = watches.count
-            attachRecursive(at: rootURL, rootKey: rootKey, relativePath: "")
-            let attached = watches.count - beforeCount
-            let topChildren = (try? fm.contentsOfDirectory(atPath: rootURL.path).count) ?? -1
-            logger.info("[FPSyncTrace] root=\(rootKey) path=\(rootURL.path) watchesAttached=\(attached) topLevelChildren=\(topChildren)")
+            // When the app returns to foreground, kqueue events that fired while
+            // suspended may have been dropped: reconcile (throttled) on `queue`.
+            foregroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil
+            ) { [weak self] _ in
+                self?.queue.async { self?.handleForeground() }
+            }
         }
-
-        logger.info("started — watching \(self.watches.count) directories")
-
-        // When the app returns to foreground, kqueue events that fired while
-        // suspended may have been dropped. Force a full reconciliation: re-walk
-        // the trees and signal each root so the Files app refreshes.
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(handleForeground),
-            name: UIApplication.willEnterForegroundNotification, object: nil)
     }
 
-    @objc private func handleForeground() {
-        queue.async { [weak self] in
-            guard let self else { return }
-            // Walk the trees and add watches for any subdirs that appeared while
-            // suspended. Drop watches whose target vanished.
-            for (_, watch) in self.watches {
-                self.reconcileChildren(watch: watch)
-            }
-            // Signal all three roots + the working set to nudge Files app
-            // to re-enumerate after we missed events while suspended.
-            for rootKey in ["shared", "skills", "memory"] {
-                self.scheduleSignal(itemID: NSFileProviderItemIdentifier(rootKey))
-            }
-            self.scheduleSignal(itemID: .workingSet)
+    /// Runs on `queue`.
+    private func handleForeground() {
+        let now = Date()
+        guard now.timeIntervalSince(lastForegroundReconcile) >= foregroundReconcileInterval else { return }
+        lastForegroundReconcile = now
+        // Walk the trees and add watches for any subdirs that appeared while
+        // suspended. Drop watches whose target vanished.
+        for (_, watch) in watches {
+            reconcileChildren(watch: watch)
         }
+        // Signal all three roots + the working set to nudge Files app
+        // to re-enumerate after we missed events while suspended.
+        for rootKey in ["shared", "skills", "memory"] {
+            scheduleSignal(itemID: NSFileProviderItemIdentifier(rootKey))
+        }
+        scheduleSignal(itemID: .workingSet)
     }
 
     // MARK: - Watch lifecycle
 
-    /// Attach a watch to `url` and recursively to all existing subdirectories.
+    /// Attach a watch to `url` and, within the planner's rules, to its existing
+    /// subdirectories (a directory that appeared at runtime). Runs on `queue`.
     private func attachRecursive(at url: URL, rootKey: String, relativePath: String) {
-        attachWatch(at: url, rootKey: rootKey, relativePath: relativePath)
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(at: url,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]) else { return }
-        for child in entries {
-            let isDir = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-            guard isDir else { continue }
-            let childRel = relativePath.isEmpty
-                ? child.lastPathComponent
-                : "\(relativePath)/\(child.lastPathComponent)"
-            attachRecursive(at: child, rootKey: rootKey, relativePath: childRel)
+        guard attachWatch(at: url, rootKey: rootKey, relativePath: relativePath) else { return }
+        let depth = relativePath.isEmpty ? 0 : relativePath.split(separator: "/").count
+        for name in AppGroupWatchPlanner.fileSystemSubdirectories(of: url).sorted() {
+            guard AppGroupWatchPlanner.shouldWatch(name: name, parentDepth: depth, rootKey: rootKey) else { continue }
+            guard watches.count < maxWatches else { noteCapReached(); return }
+            let childRel = relativePath.isEmpty ? name : "\(relativePath)/\(name)"
+            attachRecursive(at: url.appendingPathComponent(name),
+                            rootKey: rootKey, relativePath: childRel)
         }
     }
 
-    private func attachWatch(at url: URL, rootKey: String, relativePath: String) {
-        guard watches[url] == nil else { return }
+    /// One WARN per cap episode (reset once a watch is released).
+    private func noteCapReached() {
+        guard !capLogged else { return }
+        capLogged = true
+        logger.warning("watch cap reached (\(self.maxWatches)); new directories are not watched until some are removed")
+    }
+
+    @discardableResult
+    private func attachWatch(at url: URL, rootKey: String, relativePath: String) -> Bool {
+        guard watches[url] == nil else { return false }
         guard watches.count < maxWatches else {
-            logger.warning("watch cap reached (\(self.maxWatches)); skipping \(url.path)")
-            return
+            noteCapReached()
+            return false
         }
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else {
-            logger.warning("open(O_EVTONLY) failed for \(url.path) errno=\(errno)")
-            return
+            logger.warning("open(O_EVTONLY) failed root=\(rootKey) errno=\(errno)")
+            return false
         }
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
@@ -139,11 +161,13 @@ final class AppGroupChangeWatcher {
         watches[url] = Watch(
             url: url, rootKey: rootKey, relativePath: relativePath,
             source: source, childNames: initialChildren)
+        return true
     }
 
     private func detachWatch(at url: URL) {
         guard let watch = watches.removeValue(forKey: url) else { return }
         watch.source.cancel()
+        if watches.count < maxWatches { capLogged = false }
     }
 
     /// Detach watches for `url` and all its descendants. Used when a directory
@@ -194,6 +218,8 @@ final class AppGroupChangeWatcher {
         }
 
         for name in added {
+            guard AppGroupWatchPlanner.shouldWatch(name: name, parentDepth: watch.depth, rootKey: watch.rootKey)
+            else { continue }
             let childURL = watch.url.appendingPathComponent(name)
             let isDir = (try? childURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             guard isDir else { continue }

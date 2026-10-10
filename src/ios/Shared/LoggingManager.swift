@@ -37,8 +37,16 @@ final class LoggingManager: ObservableObject {
     // the backlog instead of stalling whichever thread called NSLog/print.
     // Without this queue, a slow writer back-pressures every logger on the
     // main thread (root cause of the writev hang in v1.4.0-dev).
-    private let writerQueue = DispatchQueue(label: "LoggingManager.writer", qos: .utility)
+    private let writerQueue = LoggingManager.sharedWriterQueue
+    private static let sharedWriterQueue = DispatchQueue(label: "LoggingManager.writer", qos: .utility)
     private var writeCount = 0
+
+    /// [S1] AppLogger lines skip NSLog + the stderr pipe entirely: the caller
+    /// enqueues (lock + token bucket + async) and this queue formats, redacts
+    /// and writes. Enabled only while capture is on, exactly like the file.
+    static let linePipeline = LogLinePipeline(queue: sharedWriterQueue) { line in
+        LoggingManager.shared.writeFormattedLineOnWriterQueue(line)
+    }
 
     // [T-logging-writer-alloc-abort] Backpressure for the writer queue. The
     // reader thread hands every 4KB pipe chunk to `writerQueue.async` with no
@@ -105,10 +113,20 @@ final class LoggingManager: ObservableObject {
 
     /// Called at app launch to restore capture if previously enabled.
     func startIfEnabled() {
+        guard !didStartAtLaunch else { return }
+        didStartAtLaunch = true
         if isEnabled {
             startCapture()
+            // [WP8] Launch marker: scripts/IOSPerfBudgetGate.py measures the
+            // launch second from this line. Written through the pipeline so it
+            // lands in order with everything after it.
+            let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
+            Self.linePipeline.submit(category: "Lifecycle", level: "INFO",
+                                     message: "process launch pid=\(getpid()) v=\(version)")
         }
     }
+
+    private var didStartAtLaunch = false
 
     // MARK: - Capture
 
@@ -138,18 +156,24 @@ final class LoggingManager: ObservableObject {
         // Open (or rotate to) today's log file
         rotateLogFileIfNeeded()
 
-        // Start reader thread
+        Self.linePipeline.isEnabled = true
+
+        // Start reader thread. [S1] .userInitiated: at .utility it starved
+        // during launch, the 64 KB pipe filled, and every thread still writing
+        // to stderr (iSH, print, NSLog) blocked in write(2) — the main thread
+        // included.
         let thread = Thread { [weak self] in
             self?.readLoop()
         }
         thread.name = "LoggingManager.reader"
-        thread.qualityOfService = .utility
+        thread.qualityOfService = .userInitiated
         readerThread = thread
         thread.start()
     }
 
     private func stopCapture() {
         guard origStdout != -1 else { return }
+        Self.linePipeline.isEnabled = false
 
         // Restore original fds
         dup2(origStdout, STDOUT_FILENO)
@@ -639,6 +663,24 @@ final class LoggingManager: ObservableObject {
     // buffer. Format matches what `processChunk` would have produced.
     // Remove once we are confident hang dumps reliably land on disk via the
     // normal NSLog path.
+    /// [S1] Runs on `writerQueue`: one pre-formatted AppLogger line. Redacted
+    /// like captured stderr, tee'd to the original stdout so an attached
+    /// console still shows it, then appended to today's file.
+    fileprivate func writeFormattedLineOnWriterQueue(_ line: String) {
+        rotateLogFileIfNeeded()
+        let safe = EnvVarRedactor.redactForLocalLog(line)
+        let data = Data(safe.utf8)
+        let teeFd = origStdout
+        if teeFd != -1 {
+            data.withUnsafeBytes { ptr in
+                if let base = ptr.baseAddress { _ = Darwin.write(teeFd, base, data.count) }
+            }
+        }
+        _ = safeWrite(data)
+        writeCount += 1
+        if writeCount % 1000 == 0 { truncateIfNeeded() }
+    }
+
     func writeRawLine(category: String, level: String = "INFO", message: String) {
         guard isEnabled else { return }
         // Compose the line up-front on the caller's thread so the writerQueue

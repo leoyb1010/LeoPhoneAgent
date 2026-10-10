@@ -13,7 +13,8 @@ import os
 ///     --source "Library/Application Support/Diagnostics/perf.jsonl" --destination perf.jsonl
 ///
 /// 事件:
-/// - cold        冷启动:进程启动 → 首帧(firstFrame)→ 会话列表(listLoaded)→ 输入框出现(inputReady)
+/// - cold        冷启动:进程启动 → 首帧(firstFrame,display link 真实上屏)→ 会话列表(listLoaded)
+///               → 首页列表上屏(homeReady)或输入框出现(inputReady),先到者结束;`end` 字段记是哪一个
 /// - fg.frame    回前台 → 前台回调跑完后的第一帧
 /// - send.firstToken      本机对话:点发送 → 第一个文字增量
 /// - mac.ack / mac.firstToken  发给 Mac:点发送 → 中继回执 / 第一个 message.delta
@@ -120,13 +121,35 @@ enum LeoPerf {
     private static var foregroundAt: CFTimeInterval?
     private static var wasInBackground = false
 
-    /// firstFrame / listLoaded / inputReady,各记第一次;inputReady 到了就落一条 cold 记录。
+    /// [WP8] 首帧:下一次屏幕刷新(display link)时记 firstFrame,而不是 .task 开始的时刻。
+    static func coldFirstFrame() {
+        FirstFrameProbe.once { coldStep("firstFrame") }
+    }
+
+    /// [WP8] 首页列表已经展示:下一帧真正画出来时记 homeReady,结束 cold。
+    /// 首页成为默认落地页后,只等 inputReady 量到的是「你多久才点进聊天」。
+    static func coldHomeReady() {
+        FirstFrameProbe.once { coldStep("homeReady") }
+    }
+
+    static let coldEndSteps: Set<String> = ["homeReady", "inputReady"]
+
+    /// [S4/S5] Run `action` on the main thread right after the next frame is
+    /// on screen (display link). The launch and foreground-return paths use it
+    /// to keep everything that is not needed for that frame out of it.
+    static func afterNextFrame(_ action: @escaping @MainActor () -> Void) {
+        let run = { FirstFrameProbe.once { MainActor.assumeIsolated { action() } } }
+        if Thread.isMainThread { run() } else { DispatchQueue.main.async(execute: run) }
+    }
+
+    /// firstFrame / listLoaded / homeReady / inputReady,各记第一次;homeReady 或 inputReady
+    /// 先到的那个落一条 cold 记录。
     static func coldStep(_ step: String) {
         let ms = Date().timeIntervalSince(processStart) * 1000
         lock.lock()
         guard !coldDone, coldSteps[step] == nil else { lock.unlock(); return }
         coldSteps[step] = ms
-        let finished = step == "inputReady"
+        let finished = coldEndSteps.contains(step)
         if finished { coldDone = true }
         let steps = coldSteps
         lock.unlock()
@@ -137,8 +160,8 @@ enum LeoPerf {
         // 一分钟以上的,一律按预热算。
         let prewarm = ProcessInfo.processInfo.environment["ActivePrewarm"] == "1"
             || (steps["firstFrame"] ?? 0) > 60_000 || ms > 120_000
-        var extra: [String: Any] = ["prewarm": prewarm]
-        for (k, v) in steps where k != "inputReady" { extra[k] = (v * 10).rounded() / 10 }
+        var extra: [String: Any] = ["prewarm": prewarm, "end": step]
+        for (k, v) in steps where k != step { extra[k] = (v * 10).rounded() / 10 }
         record("cold", ms: ms, extra: extra)
     }
 

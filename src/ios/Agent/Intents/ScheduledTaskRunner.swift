@@ -115,8 +115,8 @@ enum ScheduledTaskRunner {
         }
 
         if started > 0 {
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.quickTasks)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+            WidgetReloads.request(LeoWidgetKind.quickTasks)
+            WidgetReloads.request(LeoWidgetKind.iPadConsole)
         }
         return started
     }

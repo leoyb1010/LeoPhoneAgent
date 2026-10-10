@@ -164,18 +164,23 @@ final class AudioSessionCoordinator {
             return
         }
         let (cat, mode, opts) = profile(for: top)
-        let session = AVAudioSession.sharedInstance()
-        // FULL compare (category + mode + options), not just category — a partial
-        // guard let BKA's `.mixWithOthers` profile poison reply TTS before.
-        let needsReconfig = session.category != cat
-            || session.mode != mode
-            || session.categoryOptions != opts
-        let needsActivate = !sessionActive || needsReconfig
-        guard needsReconfig || needsActivate else { return }
-        if needsActivate { sessionActive = true }
+        // [S4] The category/mode/options reads are XPC round trips to the audio
+        // daemon too; they now run on `sessionQueue` with the writes instead of
+        // on the main actor (this runs inside every foreground return).
+        let wasActive = sessionActive
+        sessionActive = true
         let log = logger
         Self.pendingLock.withLock { Self.pendingApplies += 1 }
         Self.sessionQueue.async {
+            defer { Self.pendingLock.withLock { Self.pendingApplies -= 1 } }
+            let session = AVAudioSession.sharedInstance()
+            // FULL compare (category + mode + options), not just category — a partial
+            // guard let BKA's `.mixWithOthers` profile poison reply TTS before.
+            let needsReconfig = session.category != cat
+                || session.mode != mode
+                || session.categoryOptions != opts
+            let needsActivate = !wasActive || needsReconfig
+            guard needsReconfig || needsActivate else { return }
             Self.lastApplyLock.withLock { Self._lastApplyError = nil }
             do {
                 if needsReconfig { try session.setCategory(cat, mode: mode, options: opts) }
@@ -187,7 +192,6 @@ final class AudioSessionCoordinator {
                 // Roll back the optimistic flag so the next begin() retries.
                 Task { @MainActor in self.sessionActive = false }
             }
-            Self.pendingLock.withLock { Self.pendingApplies -= 1 }
         }
     }
 

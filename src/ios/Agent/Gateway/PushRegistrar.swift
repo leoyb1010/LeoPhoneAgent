@@ -32,6 +32,7 @@ final class PushRegistrar {
         set { UserDefaults.standard.set(newValue, forKey: "leo.push.lastDeviceToken") }
     }
     private var lastPushToStartToken: String?
+    private var lastAuthorizationRefresh: Date = .distantPast
 
     /// 启动时调用:请求通知权限并向 APNs 注册。
     func start() {
@@ -43,6 +44,11 @@ final class PushRegistrar {
     /// the first deny, actually register. Also re-POSTs a persisted token
     /// once a relay host exists.
     func refreshAuthorizationAndRegister() {
+        // [S6] didFinishLaunching's start() and the launch's first scenePhase
+        // .active both landed here within the same second: one pass per 10 s.
+        let now = Date()
+        guard now.timeIntervalSince(lastAuthorizationRefresh) >= 10 else { return }
+        lastAuthorizationRefresh = now
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             Task { @MainActor in
                 switch settings.authorizationStatus {

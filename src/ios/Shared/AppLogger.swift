@@ -126,15 +126,42 @@ struct AppLogger {
         emit(level, message)
     }
 
+    /// [S1] Never blocks the caller. The line goes straight to the log
+    /// writer's queue (`LoggingManager.linePipeline`: token bucket per
+    /// category, formatting + redaction + file I/O off this thread) instead of
+    /// NSLog → stderr → 64 KB pipe → reader thread, which stalled the main
+    /// thread at launch whenever the reader fell behind. NSLog remains only in
+    /// DEBUG builds, and only while file capture is off (with capture on, the
+    /// writer tees each line to the original stdout, so an attached console
+    /// still sees it once).
     private func emit(_ level: String, _ message: String) {
-        NSLog("[%@] [%@] %@", category, level, message)
-        // VERBOSE reaches the file too — it is gated at the call site by the
-        // level check, so anything arriving here was explicitly asked for.
+        let pipeline = LoggingManager.linePipeline
+        #if DEBUG
+        if !pipeline.isEnabled {
+            NSLog("[%@] [%@] %@", category, level, message)
+        }
+        #endif
+        pipeline.submit(category: category, level: level, message: message)
+        // VERBOSE reaches the crash ring too — it is gated at the call site by
+        // the level check, so anything arriving here was explicitly asked for.
         if level == "VERBOSE" || level == "INFO" || level == "WARN" || level == "ERROR" {
-            let ts = Date().formatted(.dateTime.hour().minute().second())
-            let line = "[\(ts)] [\(category)] \(message)"
+            let line = "[\(Self.ringTimestamp())] [\(category)] \(message)"
             CrashReporter.shared.appendLog(line)
         }
+    }
+
+    /// One cached formatter for the crash ring's timestamps (was a fresh
+    /// `Date.formatted` style per line). `DateFormatter` formatting is
+    /// thread-safe, so every logging thread can share it.
+    private static let ringFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private static func ringTimestamp() -> String {
+        ringFormatter.string(from: Date())
     }
 
     // MARK: - Deferred logging during one-time initialization

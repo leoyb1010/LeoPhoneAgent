@@ -312,6 +312,12 @@
 		E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AT00011 /* AudioTogglePlaybackIntent.swift */; };
 		E5BADGE001 /* SessionBadgeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BADGE011 /* SessionBadgeStore.swift */; };
 		E5WMIR001 /* WidgetDataMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WMIR011 /* WidgetDataMirror.swift */; };
+		E5L3KMMB /* KeyedMemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3KMMR /* KeyedMemo.swift */; };
+		E5L3KMMT /* KeyedMemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3KMMR /* KeyedMemo.swift */; };
+		E5L3FWPB /* ForegroundWorkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3FWPR /* ForegroundWorkPolicy.swift */; };
+		E5L3FWPT /* ForegroundWorkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3FWPR /* ForegroundWorkPolicy.swift */; };
+		E5L3WRCB /* WidgetReloadCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3WRCR /* WidgetReloadCoalescer.swift */; };
+		E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3WRCR /* WidgetReloadCoalescer.swift */; };
 		E5WBR001 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WBR011 /* WatchBridge.swift */; };
 		E5BRM0001 /* BrowserResourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRM0011 /* BrowserResourceMonitor.swift */; };
 		E5BSH0001 /* BashismDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0011 /* BashismDetector.swift */; };
@@ -419,6 +425,8 @@
 		E5FP00003 /* FileProviderItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00013 /* FileProviderItem.swift */; };
 		E5FP00009 /* MinisFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5FP00010 /* MinisFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5FP00100 /* AppGroupChangeWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00101 /* AppGroupChangeWatcher.swift */; };
+		E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
+		E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3AWPR /* AppGroupWatchPlanner.swift */; };
 		E5FP00200 /* FPSyncTraceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00201 /* FPSyncTraceLog.swift */; };
 		E5G000001 /* BackgroundKeepAliveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000011 /* BackgroundKeepAliveManager.swift */; };
 		E5G000002 /* AgentLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000012 /* AgentLiveActivityManager.swift */; };
@@ -577,6 +585,8 @@
 		E5Q000001 /* BPETokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000011 /* BPETokenizer.swift */; };
 		E5Q000002 /* cl100k_base.tiktoken in Resources */ = {isa = PBXBuildFile; fileRef = E5Q000012 /* cl100k_base.tiktoken */; };
 		E5Q000003 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000013 /* AppLogger.swift */; };
+		E5L3LLPB /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
+		E5L3LLPT /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
 		E5Q000004 /* FontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000014 /* FontSettings.swift */; };
 		E5LEO0001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
 		E5LEO0002 /* ChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0012 /* ChatColors.swift */; };
@@ -1261,6 +1271,9 @@
 		E5AT00011 /* AudioTogglePlaybackIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTogglePlaybackIntent.swift; sourceTree = "<group>"; };
 		E5BADGE011 /* SessionBadgeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBadgeStore.swift; sourceTree = "<group>"; };
 		E5WMIR011 /* WidgetDataMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataMirror.swift; sourceTree = "<group>"; };
+		E5L3KMMR /* KeyedMemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyedMemo.swift; sourceTree = "<group>"; };
+		E5L3FWPR /* ForegroundWorkPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundWorkPolicy.swift; sourceTree = "<group>"; };
+		E5L3WRCR /* WidgetReloadCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetReloadCoalescer.swift; sourceTree = "<group>"; };
 		E5WBR011 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5AWS0002 /* ActiveWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWindowScene.swift; sourceTree = "<group>"; };
 		E5SPL0002 /* SessionSpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSpotlightIndexer.swift; sourceTree = "<group>"; };
@@ -1385,6 +1398,7 @@
 		E5FP00014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5FP00015 /* FileProvider.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FileProvider.entitlements; sourceTree = "<group>"; };
 		E5FP00101 /* AppGroupChangeWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupChangeWatcher.swift; sourceTree = "<group>"; };
+		E5L3AWPR /* AppGroupWatchPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupWatchPlanner.swift; sourceTree = "<group>"; };
 		E5FP00201 /* FPSyncTraceLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPSyncTraceLog.swift; sourceTree = "<group>"; };
 		E5G000011 /* BackgroundKeepAliveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeepAliveManager.swift; sourceTree = "<group>"; };
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
@@ -1549,6 +1563,7 @@
 		E5Q000011 /* BPETokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPETokenizer.swift; sourceTree = "<group>"; };
 		E5Q000012 /* cl100k_base.tiktoken */ = {isa = PBXFileReference; lastKnownFileType = text; path = cl100k_base.tiktoken; sourceTree = "<group>"; };
 		E5Q000013 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		E5L3LLPR /* LogLinePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogLinePipeline.swift; sourceTree = "<group>"; };
 		E5Q000014 /* FontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontSettings.swift; sourceTree = "<group>"; };
 		E5LEO0011 /* LeoDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoDesignSystem.swift; sourceTree = "<group>"; };
 		E5LEO0012 /* ChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatColors.swift; sourceTree = "<group>"; };
@@ -2384,6 +2399,7 @@
 				24B74F300D94BD261002831C /* CommandRisk.swift */,
 				E5AT00011 /* AudioTogglePlaybackIntent.swift */,
 				E5Q000013 /* AppLogger.swift */,
+				E5L3LLPR /* LogLinePipeline.swift */,
 				E5Q000011 /* BPETokenizer.swift */,
 				E5MDS0013 /* MarkdownStripper.swift */,
 				E5Q000012 /* cl100k_base.tiktoken */,
@@ -2430,6 +2446,9 @@
 				E5J000011 /* LoggingManager.swift */,
 				E5BADGE011 /* SessionBadgeStore.swift */,
 				E5WMIR011 /* WidgetDataMirror.swift */,
+				E5L3KMMR /* KeyedMemo.swift */,
+				E5L3FWPR /* ForegroundWorkPolicy.swift */,
+				E5L3WRCR /* WidgetReloadCoalescer.swift */,
 				E5WBR011 /* WatchBridge.swift */,
 				E5E15706F /* SessionHandoff.swift */,
 				E5E15705F /* WatchContinueOnPhone.swift */,
@@ -2459,6 +2478,7 @@
 				E5FP00014 /* Info.plist */,
 				E5FP00015 /* FileProvider.entitlements */,
 				E5FP00101 /* AppGroupChangeWatcher.swift */,
+				E5L3AWPR /* AppGroupWatchPlanner.swift */,
 				E5FP00201 /* FPSyncTraceLog.swift */,
 			);
 			path = FileProvider;
@@ -3600,6 +3620,11 @@
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				E5UIF05T /* LeoUIPolicies.swift in Sources */,
 				E5MDS0003T /* MarkdownStripper.swift in Sources */,
+				E5L3KMMT /* KeyedMemo.swift in Sources */,
+				E5L3FWPT /* ForegroundWorkPolicy.swift in Sources */,
+				E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */,
+				E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */,
+				E5L3LLPT /* LogLinePipeline.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5CSM0002 /* ContextSizeMeter.swift in Sources */,
@@ -3697,6 +3722,7 @@
 				1D636512DCD1B74F9B84556E /* CommandRisk.swift in Sources */,
 				E54000AC1 /* DebugSkillGenerated.swift in Sources */,
 				E5FP00100 /* AppGroupChangeWatcher.swift in Sources */,
+				E5L3AWPB /* AppGroupWatchPlanner.swift in Sources */,
 				AA0838A02F3B941A00049557 /* AboutView.swift in Sources */,
 				E5LEO0028 /* LeoReleaseNotesView.swift in Sources */,
 				E5LEO0001 /* LeoDesignSystem.swift in Sources */,
@@ -4109,6 +4135,9 @@
 				E5J000001 /* LoggingManager.swift in Sources */,
 				E5BADGE001 /* SessionBadgeStore.swift in Sources */,
 				E5WMIR001 /* WidgetDataMirror.swift in Sources */,
+				E5L3KMMB /* KeyedMemo.swift in Sources */,
+				E5L3FWPB /* ForegroundWorkPolicy.swift in Sources */,
+				E5L3WRCB /* WidgetReloadCoalescer.swift in Sources */,
 				E5WBR001 /* WatchBridge.swift in Sources */,
 				E5AWS0001 /* ActiveWindowScene.swift in Sources */,
 				E5WRG0001 /* WindowRegistry.swift in Sources */,
@@ -4170,6 +4199,7 @@
 				E5Q000001 /* BPETokenizer.swift in Sources */,
 				E5MDS0003 /* MarkdownStripper.swift in Sources */,
 				E5Q000003 /* AppLogger.swift in Sources */,
+				E5L3LLPB /* LogLinePipeline.swift in Sources */,
 				F1S00012 /* ChatSessionIdEnvironment.swift in Sources */,
 				E5Q000004 /* FontSettings.swift in Sources */,
 				E5S000001 /* DeviceIdentity.swift in Sources */,

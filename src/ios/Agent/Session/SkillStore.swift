@@ -99,6 +99,40 @@ final class SkillStore: ObservableObject {
         loadSkills()
         installBundledSkills()
         migrateMarkBundledSkillsDirty()
+        recordDiskFingerprintOffMain()
+    }
+
+    // MARK: - [S6] Foreground reload gate
+
+    /// Last full `loadSkills()`; the foreground path reloads at most every 5 min.
+    private var foregroundReloadGate = IntervalGate(interval: 300, last: Date())
+    /// Skills-directory fingerprint as of the last load (see SkillDiskFingerprint).
+    private var lastDiskFingerprint: Int?
+
+    private func recordDiskFingerprintOffMain() {
+        let dir = skillsDir
+        Task.detached(priority: .utility) { [weak self] in
+            let fingerprint = SkillDiskFingerprint.compute(skillsDir: dir)
+            await MainActor.run { [weak self] in self?.lastDiskFingerprint = fingerprint }
+        }
+    }
+
+    /// Foreground-return reload. The old path re-read every SKILL.md on the
+    /// main thread on each return (30 s throttle) — including right after the
+    /// store had just been created by the same launch. Now: at most once per
+    /// 5 minutes, and only when a cheap off-main mtime fingerprint of the skills
+    /// directory changed. Returns whether a reload ran.
+    @discardableResult
+    func reloadIfChangedOnDisk() async -> Bool {
+        guard foregroundReloadGate.admit() else { return false }
+        let dir = skillsDir
+        let fingerprint = await Task.detached(priority: .utility) {
+            SkillDiskFingerprint.compute(skillsDir: dir)
+        }.value
+        if let last = lastDiskFingerprint, last == fingerprint { return false }
+        lastDiskFingerprint = fingerprint
+        loadSkills()
+        return true
     }
 
     deinit {
