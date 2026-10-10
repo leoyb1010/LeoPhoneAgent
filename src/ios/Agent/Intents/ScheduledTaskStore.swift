@@ -69,6 +69,9 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     /// 回复的前 120 字。
     var lastResultPreview: String?
     var lastStatus: RunStatus?
+    /// [F2-self-schedule] Agent 自己安排的一次性跟进;nil = 普通的周期快捷任务。
+    /// 可选字段:旧数据没有这个键照样解码。
+    var followUp: ScheduledFollowUp?
 
     static let previewLimit = 120
 
@@ -162,6 +165,12 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
 
     /// True when this task owes a run right now.
     func isDue(now: Date, calendar: Calendar = .current) -> Bool {
+        if let followUp {
+            // 一次性跟进:到点且没跑过、没过期才算到期;after_completion 由账本按运行回执判断。
+            guard isEnabled, lastRunSlot == nil, followUp.trigger == .once,
+                  let fireAt = followUp.fireAt, fireAt <= now else { return false }
+            return now.timeIntervalSince(fireAt) < ScheduledFollowUp.staleAfter
+        }
         guard isEnabled, let slot = mostRecentDueSlot(now: now, calendar: calendar) else { return false }
         // Don't resurrect a slot that is more than a day stale — waking up
         // after a week away should not fire seven briefings.
@@ -226,7 +235,7 @@ final class ScheduledTaskStore: ObservableObject {
     func setEnabled(_ enabled: Bool, id: String, now: Date = Date()) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         // 停用期间错过的那一档不补跑:重新启用时认领当前档,等下一次到点。
-        if enabled && !tasks[index].isEnabled {
+        if enabled && !tasks[index].isEnabled && tasks[index].followUp == nil {
             tasks[index].lastRunSlot = Self.claimed(tasks[index].lastRunSlot, tasks[index].mostRecentDueSlot(now: now))
         }
         tasks[index].isEnabled = enabled
@@ -271,12 +280,63 @@ final class ScheduledTaskStore: ObservableObject {
         return true
     }
 
-    func dueTasks(now: Date = Date()) -> [ScheduledTask] {
-        tasks.filter { $0.isDue(now: now) }
+    /// `runEnd` 查 after_completion 跟进所等的那一轮结束了没有(运行回执);默认当作还在跑。
+    func dueTasks(now: Date = Date(),
+                  runEnd: (String) -> ScheduledFollowUp.RunEnd = { _ in .running }) -> [ScheduledTask] {
+        tasks.filter { task in
+            if task.isDue(now: now) { return true }
+            return task.followUpReadiness(now: now, runEnd: runEnd) == .due
+        }
     }
 
     private func persist() {
         guard let data = try? JSONEncoder().encode(tasks) else { return }
         defaults.set(data, forKey: Self.storageKey)
+    }
+}
+
+// MARK: - [F2-self-schedule] Follow-ups the agent schedules for itself
+
+extension ScheduledTaskStore {
+    /// Finished follow-ups are kept a week for the settings history, then dropped
+    /// so the ledger does not grow without bound.
+    static let finishedFollowUpRetention: TimeInterval = 7 * 24 * 3600
+
+    /// Adds a follow-up after checking the ledger's daily budget.
+    func addFollowUp(_ followUp: ScheduledFollowUp, now: Date = Date(),
+                     calendar: Calendar = .current) -> Result<ScheduledTask, ScheduledFollowUp.BudgetError> {
+        pruneFinishedFollowUps(now: now)
+        if let error = ScheduledFollowUp.checkBudget(existing: tasks, sessionId: followUp.sessionId,
+                                                     now: now, calendar: calendar) {
+            return .failure(error)
+        }
+        let task = ScheduledTask(followUp: followUp)
+        tasks.append(task)
+        persist()
+        return .success(task)
+    }
+
+    func pendingFollowUps(sessionId: String) -> [ScheduledTask] {
+        tasks.filter { $0.isPendingFollowUp && $0.followUp?.sessionId == sessionId }
+    }
+
+    /// Consumes a follow-up that will never run, recording why.
+    func expireFollowUp(id: String, reason: String, now: Date = Date()) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }), tasks[index].followUp != nil else { return }
+        tasks[index].lastRunSlot = tasks[index].followUp?.fireAt ?? now
+        tasks[index].isEnabled = false
+        tasks[index].lastStatus = .skipped
+        tasks[index].lastResultPreview = ScheduledTask.preview(reason)
+        persist()
+    }
+
+    func pruneFinishedFollowUps(now: Date = Date()) {
+        let before = tasks.count
+        tasks.removeAll { task in
+            guard let followUp = task.followUp, !task.isPendingFollowUp else { return false }
+            let finishedAt = task.lastRunAt ?? followUp.fireAt ?? followUp.createdAt
+            return now.timeIntervalSince(finishedAt) > Self.finishedFollowUpRetention
+        }
+        if tasks.count != before { persist() }
     }
 }

@@ -4372,7 +4372,8 @@ extension RawMessage {
                     let path = extractStringParam("path", from: tu.input)
                     kind = .readImageTool(path: path)
                     content = "Reading image \(path)..."
-                case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update":
+                case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update",
+                     ScheduledFollowUp.toolName:
                     kind = .memoryTool(action: tu.name)
                     if tu.name == "memory_write" {
                         content = "Writing memory..."

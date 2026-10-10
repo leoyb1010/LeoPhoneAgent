@@ -34,12 +34,27 @@ struct ScheduledTaskSettingsView: View {
                 } else {
                     ForEach(store.tasks) { task in
                         VStack(alignment: .leading, spacing: 6) {
-                            Button {
-                                editing = task
-                            } label: {
-                                row(task)
+                            if task.isFollowUp {
+                                // [F2-self-schedule] Agent 自己安排的跟进:点进对应会话,不进编辑器。
+                                Button {
+                                    openSession(task.followUp?.sessionId)
+                                } label: {
+                                    followUpRow(task)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                Button {
+                                    editing = task
+                                } label: {
+                                    row(task)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                            // [F2-countdown] 下次应运行 · 还有 N;长按立即运行。
+                            if task.isEnabled {
+                                ScheduledCountdownPill(task: task)
+                                    .padding(.leading, 38)
+                            }
                             if let status = task.lastStatus {
                                 lastResultRow(task, status: status)
                             }
@@ -111,7 +126,10 @@ struct ScheduledTaskSettingsView: View {
                isPresented: Binding(get: { pendingDeleteIds != nil },
                                     set: { if !$0 { pendingDeleteIds = nil } })) {
             Button(String(localized: "Delete"), role: .destructive) {
-                for id in pendingDeleteIds ?? [] { store.delete(id: id) }
+                for id in pendingDeleteIds ?? [] {
+                    ScheduledFollowUpDispatcher.cancelReminder(taskId: id)
+                    store.delete(id: id)
+                }
                 pendingDeleteIds = nil
             }
             Button(String(localized: "Cancel"), role: .cancel) { pendingDeleteIds = nil }
@@ -148,6 +166,53 @@ struct ScheduledTaskSettingsView: View {
         }
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+    }
+
+    /// [F2-self-schedule] Agent 自己安排的一次性跟进。
+    private func followUpRow(_ task: ScheduledTask) -> some View {
+        let followUp = task.followUp
+        let when: String = {
+            guard let followUp else { return "" }
+            switch followUp.trigger {
+            case .afterCompletion: return String(localized: "本轮结束后")
+            case .once: return followUp.fireAt.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? ""
+            }
+        }()
+        return HStack(spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .frame(width: 26)
+                .foregroundStyle(task.isPendingFollowUp ? Color.orange : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(followUp?.title ?? "")
+                    .font(.body)
+                    .foregroundStyle(task.isPendingFollowUp ? .primary : .secondary)
+                Text(String(localized: "定时跟进 · \(when)"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(followUp?.prompt ?? "")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        .accessibilityIdentifier("scheduledTask.followUp")
+    }
+
+    private func openSession(_ sessionId: String?) {
+        guard let sessionId else { return }
+        Task { @MainActor in
+            guard await ChatStore.shared.sessionExists(id: sessionId) else {
+                runNowMessage = String(localized: "那次运行的会话已被删除。")
+                return
+            }
+            NotificationNavigationStore.shared.setPending(sessionId)
+            NotificationCenter.default.post(name: .openSessionFromIntent, object: nil,
+                                            userInfo: ["sessionId": sessionId])
+        }
     }
 
     /// [E3] 最近一次运行的摘要；有会话就点进去。

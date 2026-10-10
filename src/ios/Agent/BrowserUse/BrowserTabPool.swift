@@ -713,6 +713,8 @@ final class BrowserTabPool: ObservableObject {
         action input: BrowserActionInput,
         singleTab: Bool = false
     ) async throws -> BrowserActionResult {
+        // [F2-tool-toggles] 设置里关掉浏览器:工具调用和 shell 的 minis-browser-use 都在这一个收口拒绝。
+        guard AgentToolToggles.browserUseEnabled else { return .error(AgentToolToggles.disabledBrowserMessage) }
         // [T-cred-approval] 敏感动作(读/写 Cookie)统一在这里过审批闸。
         // 这是所有调用路径的单一收口——agent 工具分发和 shell CLI
         // (minis-browser-use → BrowserUseOffloadBridge)都走 pool.execute,

@@ -139,6 +139,13 @@ struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
         }
     }
 
+    /// [F2-widget-background] Whether a one-tap background run (widget button)
+    /// can do this task as written: no input slots to fill, and no clipboard
+    /// read — iOS only lets the foreground app read the pasteboard.
+    var runsInBackground: Bool {
+        inputSlotNames.isEmpty && !prompt.localizedCaseInsensitiveContains("apple-clipboard")
+    }
+
     func renderedPrompt(inputValues: [String: String] = [:]) -> String {
         var rendered = prompt
         for name in inputSlotNames {
@@ -554,6 +561,7 @@ final class QuickTaskStore: ObservableObject {
         let ordered = pinned + tasks.filter { !pinnedIDs.contains($0.id) }
         let items = ordered.prefix(8).map { task -> WidgetQuickTaskItem in
             var item = WidgetQuickTaskItem(id: task.id, name: task.displayName, symbolName: task.symbolName)
+            item.needsApp = !task.runsInBackground
             if let old = previous[task.id] {
                 item.lastRunState = old.lastRunState
                 item.lastRunAt = old.lastRunAt

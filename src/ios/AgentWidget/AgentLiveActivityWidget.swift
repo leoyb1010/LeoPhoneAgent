@@ -1059,7 +1059,7 @@ private struct QuickTasksWidgetContainer: View {
         if family == .systemSmall {
             // The small family has no room for per-task controls, so the whole
             // tile runs the first task on iOS 17+ and deep-links otherwise.
-            if #available(iOSApplicationExtension 17.0, *), let first = entry.tasks.first {
+            if #available(iOSApplicationExtension 17.0, *), let first = entry.tasks.first, !first.needsApp {
                 Button(intent: RunQuickTaskFromWidgetIntent(taskId: first.id)) {
                     QuickTasksSmallView(entry: entry)
                 }
@@ -1157,7 +1157,9 @@ private struct QuickTaskChip: View {
     let task: WidgetQuickTaskItem
 
     var body: some View {
-        if #available(iOSApplicationExtension 17.0, *) {
+        // [F2-widget-background] A task that needs the app (input slots,
+        // clipboard) deep-links instead of failing silently in the background.
+        if #available(iOSApplicationExtension 17.0, *), !task.needsApp {
             Button(intent: RunQuickTaskFromWidgetIntent(taskId: task.id)) {
                 chipLabel
             }

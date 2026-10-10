@@ -1020,6 +1020,13 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
+        // [F2-self-schedule] The agent schedules a follow-up in this conversation.
+        case ScheduledFollowUp.toolName:
+            (toolOutput, toolSuccess) = await ScheduledFollowUpDispatcher.handleTool(argsJson: argsJson, vm: self)
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         // [T-subagent] Sub agents: delegate / status / steer / cancel / resume.
         case SubAgentTool.name:
             let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]

@@ -87,4 +87,17 @@ enum MemoryDailyLog {
         try data.write(to: url, options: .atomic)
         return name
     }
+
+    /// [F2-memory-undo] 删掉 `fileName` 里正文等于 `content` 的最新一条;返回是否删到了。
+    /// 与 prepend 共用一把锁,不会和同时进行的写入互相吞掉。
+    static func removeEntry(matching content: String, fileName: String, in directory: URL) throws -> Bool {
+        writeLock.lock(); defer { writeLock.unlock() }
+        let url = directory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        let existing = try String(contentsOf: url, encoding: .utf8)
+        guard let updated = MemoryWriteUndo.removingDailyEntry(from: existing, content: content),
+              let data = updated.data(using: .utf8) else { return false }
+        try data.write(to: url, options: .atomic)
+        return true
+    }
 }

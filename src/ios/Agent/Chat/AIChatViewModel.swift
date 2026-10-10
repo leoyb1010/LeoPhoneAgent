@@ -1893,6 +1893,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [T-subagent] Child brief, or the sub agent roster for a top-level chat.
         stable += subAgentPromptFragment
         stable += askUserPromptFragment   // [T-ask-user]
+        stable += toolTogglesPromptFragment
 
         var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
