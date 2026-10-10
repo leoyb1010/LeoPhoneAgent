@@ -41,16 +41,38 @@ struct FloatRingBuffer: Sendable {
             head = 0
             guard incoming > 0 else { return }
         }
-        // 已满:覆盖最旧的。
+        // 已满:覆盖最旧的(最多两段 memcpy)。
         let cap = storage.count
         var h = head
-        storage.withUnsafeMutableBufferPointer { buf in
-            var idx = source
-            for _ in 0..<incoming {
-                buf[h] = samples[idx]
-                idx = samples.index(after: idx)
-                h += 1
-                if h == cap { h = 0 }
+        let offset = samples.distance(from: samples.startIndex, to: source)
+        let count = incoming
+        let copied: Bool = samples.withContiguousStorageIfAvailable { src -> Bool in
+            guard let base = src.baseAddress else { return false }
+            var from = base + offset
+            var remaining = count
+            storage.withUnsafeMutableBufferPointer { dst in
+                guard let out = dst.baseAddress else { return }
+                while remaining > 0 {
+                    let n = min(remaining, cap - h)
+                    (out + h).update(from: from, count: n)
+                    from += n
+                    remaining -= n
+                    h += n
+                    if h == cap { h = 0 }
+                }
+            }
+            return true
+        } ?? false
+        if !copied {
+            h = head
+            storage.withUnsafeMutableBufferPointer { buf in
+                var idx = source
+                for _ in 0..<count {
+                    buf[h] = samples[idx]
+                    idx = samples.index(after: idx)
+                    h += 1
+                    if h == cap { h = 0 }
+                }
             }
         }
         head = h

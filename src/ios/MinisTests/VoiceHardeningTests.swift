@@ -21,7 +21,8 @@ final class VoiceHardeningTests: XCTestCase {
         XCTAssertEqual(full.count, capacity, "stays capped")
         XCTAssertLessThan(fullCost, smallCost * 4 + .milliseconds(50),
                           "appending to a full 5-minute buffer must cost about the same as to a small one")
-        // 500 taps × 0.1 s = 50 s of audio through a full buffer in well under a second.
+        // 500 taps × 0.1 s = 50 s of audio through a full buffer in well under a second
+        // (the old removeFirst path moved 58 MB per tap — minutes for the same loop).
         XCTAssertLessThan(fullCost, .seconds(1))
     }
 
