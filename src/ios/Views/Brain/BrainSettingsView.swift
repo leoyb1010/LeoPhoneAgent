@@ -124,7 +124,7 @@ struct BrainSettingsView: View {
                     ForEach(audit) { entry in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.endpoint).font(.footnote.monospaced())
-                            Text(verbatim: [entry.at, entry.target ?? "", entry.status.map { "HTTP \($0)" } ?? ""]
+                            Text(verbatim: [BrainDisplay.date(entry.at) ?? entry.at, entry.target ?? "", entry.status.map { "HTTP \($0)" } ?? ""]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.caption)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)

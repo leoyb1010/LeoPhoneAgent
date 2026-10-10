@@ -164,7 +164,9 @@ struct HomeContextStrip: View {
             .frame(minHeight: 32)
             .background(snapshot.inboxActive ? LeoTheme.ColorToken.accent.opacity(0.14) : Color.primary.opacity(0.06),
                         in: Capsule())
-            .contentShape(Capsule())
+            // 胶囊看起来 32pt,点按区补到 44pt。
+            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint(Text(snapshot.inboxActive ? "回到全部会话" : "只看未分组的会话"))

@@ -170,6 +170,8 @@ struct BrainBrowseSection: View {
     let query: String
     /// 下拉刷新时由藏宝阁递增,资料库区块跟着重查。
     var refreshToken: Int = 0
+    /// 藏宝阁传进来:在当前导航栈里推出资料库设置,不再跳去设置面板(iPad 上会把藏宝阁关掉)。
+    var onOpenSettings: (() -> Void)? = nil
     @ObservedObject private var store = BrainStore.shared
     @StateObject private var model = BrainBrowseModel()
     @State private var creatingCard = false
@@ -218,7 +220,11 @@ struct BrainBrowseSection: View {
     }
 
     private func openBrainSettings() {
-        DeepLinkCoordinator.shared.pendingSettingsTarget = .brain
+        if let onOpenSettings {
+            onOpenSettings()
+        } else {
+            DeepLinkCoordinator.shared.pendingSettingsTarget = .brain
+        }
     }
 
     @ViewBuilder
@@ -399,7 +405,8 @@ struct BrainCardRow: View {
                 Text(verbatim: summary).font(.footnote).lineLimit(2)
                     .foregroundStyle(LeoTheme.ColorToken.secondaryText)
             }
-            Text(verbatim: ["v\(card.version)", card.status ?? "", card.category ?? "", card.updatedAt ?? ""]
+            Text(verbatim: ["v\(card.version)", BrainDisplay.status(card.status) ?? "", card.category ?? "",
+                            BrainDisplay.date(card.updatedAt) ?? ""]
                 .filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption2)
                 .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
@@ -654,7 +661,7 @@ struct BrainCardDetailView: View {
                 Section {
                     HStack {
                         Text(verbatim: "v\(card.version)").font(.caption.monospaced())
-                        if let status = card.status { Text(verbatim: status).font(.caption) }
+                        if let status = BrainDisplay.status(card.status) { Text(verbatim: status).font(.caption) }
                         if fromCache { BrainOfflineBadge() }
                         Spacer()
                     }
@@ -668,13 +675,13 @@ struct BrainCardDetailView: View {
                 }
                 if !card.sources.isEmpty {
                     Section("出处") {
-                        ForEach(card.sources, id: \.self) { source in
+                        ForEach(Array(card.sources.enumerated()), id: \.element) { index, source in
+                            let label = BrainDisplay.sourceLabel(index: index, locator: source.locator)
                             NavigationLink {
-                                BrainFileDetailView(fileId: source.fileId, title: source.fileId, privacy: .general,
+                                BrainFileDetailView(fileId: source.fileId, title: label, privacy: .general,
                                                     initialLocator: source.locator)
                             } label: {
-                                Text(verbatim: [source.fileId, source.locator ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.footnote.monospaced())
+                                Text(verbatim: label).font(.footnote)
                             }
                         }
                     }
@@ -689,7 +696,7 @@ struct BrainCardDetailView: View {
                                     Text(verbatim: "v\(entry.version)").font(.footnote.monospaced())
                                     Text(verbatim: entry.title ?? "").font(.footnote).lineLimit(1)
                                     Spacer()
-                                    Text(verbatim: entry.savedAt ?? "").font(.caption2)
+                                    Text(verbatim: BrainDisplay.date(entry.savedAt) ?? "").font(.caption2)
                                         .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                                 }
                             }

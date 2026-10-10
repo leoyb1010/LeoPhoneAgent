@@ -900,6 +900,54 @@ enum BrainBrowseScope: String, CaseIterable, Identifiable, Sendable {
 
     /// 「选择 / 查看归档」只对手机收藏有意义;在资料库范围里进选择模式只会得到一张空列表。
     var supportsPhoneEditing: Bool { showsPhoneItems }
+
+    /// 没连接资料库时不显示四段范围切换(两段只会给出「去连接」),实际按「手机收藏」走,
+    /// 搜索提示也不再写「搜索收藏和资料库」。连上后恢复上次选的范围。
+    static func effective(_ stored: BrainBrowseScope, configured: Bool) -> BrainBrowseScope {
+        configured ? stored : .phone
+    }
+
+    static func showsPicker(configured: Bool) -> Bool { configured }
+}
+
+/// 资料库内容的显示文字:网关给的是 ISO 时间和英文状态码,直接显示不像给人看的。
+enum BrainDisplay {
+    static func status(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        switch raw.lowercased() {
+        case "draft": return String(localized: "草稿")
+        case "confirmed": return String(localized: "已确认")
+        case "reference": return String(localized: "参考")
+        default: return raw
+        }
+    }
+
+    static func parseDate(_ raw: String?) -> Date? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
+
+    /// 能解析就按本地格式显示日期与时间;解析不了原样返回。
+    static func date(_ raw: String?, locale: Locale = .current, timeZone: TimeZone = .current) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        guard let date = parseDate(raw) else { return raw }
+        var style = Date.FormatStyle(date: .abbreviated, time: .shortened)
+        style.locale = locale
+        style.timeZone = timeZone
+        return date.formatted(style)
+    }
+
+    /// 知识卡「出处」一行:网关只给文件 id(一串哈希),给人看的是序号和位置。
+    static func sourceLabel(index: Int, locator: String?) -> String {
+        let base = String(localized: "出处 \(index + 1)")
+        guard let locator = locator?.trimmingCharacters(in: .whitespacesAndNewlines), !locator.isEmpty else { return base }
+        return base + " · " + locator
+    }
 }
 
 /// 藏宝阁里资料库区块该显示什么。纯函数,界面只按它渲染,便于测试。

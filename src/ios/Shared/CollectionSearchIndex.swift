@@ -1164,6 +1164,100 @@ enum TreasuryWorkspaceLayoutPolicy {
     }
 }
 
+/// 藏宝阁列表顶部摆哪些块。手机上第一条内容之前的高度很有限(以前 SE 上
+/// 范围 + 概览卡 + 四个新建按钮 + 视图胶囊 + 剪贴板条 + 来源胶囊,第一条
+/// 在屏幕最下面):概览卡只在高屏、有内容、没在搜索时出现;四个新建按钮
+/// 只在首次使用(还没有内容)或高屏时铺开,其余时候用标题栏的「+」。
+enum TreasuryHeaderPolicy {
+    /// 列表容器高度达到这个值才算「宽裕」(iPad 竖屏 / 大面板;iPhone 都不够)。
+    static let roomyHeight: CGFloat = 800
+
+    struct Layout: Equatable {
+        var showsOverview: Bool
+        var showsCaptureGrid: Bool
+        var showsViewPicker: Bool
+    }
+
+    static func layout(containerHeight: CGFloat, itemCount: Int, searching: Bool,
+                       editing: Bool, showsPhoneItems: Bool) -> Layout {
+        guard showsPhoneItems, !editing else {
+            return Layout(showsOverview: false, showsCaptureGrid: false, showsViewPicker: false)
+        }
+        let hasItems = itemCount > 0
+        // 视图胶囊(收件箱 / 待读…)在一条内容都没有时只是噪音。
+        guard !searching else {
+            return Layout(showsOverview: false, showsCaptureGrid: false, showsViewPicker: hasItems)
+        }
+        let roomy = containerHeight.isFinite && containerHeight >= roomyHeight
+        return Layout(showsOverview: roomy && hasItems,
+                      showsCaptureGrid: !hasItems || roomy,
+                      showsViewPicker: hasItems)
+    }
+}
+
+/// 「剪贴板里有链接」那一条:以前只要剪贴板里有任何文字就常驻(几乎永远在),
+/// 白占一行。现在只在像是链接时出现;收过或点了「不收」,同一份剪贴板不再提示。
+enum TreasuryClipboardBannerPolicy {
+    static func shows(hasProbableLink: Bool, changeCount: Int, dismissedChangeCount: Int?,
+                      searching: Bool, editing: Bool) -> Bool {
+        guard hasProbableLink, !searching, !editing else { return false }
+        return dismissedChangeCount != changeCount
+    }
+}
+
+/// 长按菜单里的「分享…」交给系统分享面板什么:以前藏宝阁里的东西只能发给 Agent 或拷贝链接,
+/// 分享不到别的 App。链接分享网址(优先短链解析后的),文本分享原文,文件分享文件本身;
+/// 笔记正文在单独的文件里,不在这里分享。
+enum TreasuryShareItem: Equatable {
+    case url(URL)
+    case text(String)
+
+    static func payload(for item: CollectedItem, fileURL: (String) -> URL? = CollectionStore.fileURL(named:)) -> TreasuryShareItem? {
+        switch item.kind {
+        case .link:
+            let raw = item.resolvedURL ?? item.value
+            guard let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+                return item.value.isEmpty ? nil : .text(item.value)
+            }
+            return .url(url)
+        case .text:
+            let text = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : .text(item.value)
+        case .file:
+            return fileURL(item.value).map { .url($0) }
+        case .note:
+            return nil
+        }
+    }
+}
+
+/// 选择模式的「全选」与批量归档。
+enum TreasurySelection {
+    /// 当前可见的都选上了就清空,否则全选可见的(不动看不见的)。
+    static func toggleAll(selection: Set<String>, visibleIDs: [String]) -> Set<String> {
+        let visible = Set(visibleIDs)
+        guard !visible.isEmpty else { return selection }
+        return visible.isSubset(of: selection) ? selection.subtracting(visible) : selection.union(visible)
+    }
+
+    static func allSelected(selection: Set<String>, visibleIDs: [String]) -> Bool {
+        !visibleIDs.isEmpty && Set(visibleIDs).isSubset(of: selection)
+    }
+
+    /// 把选中的条目归档(或取消归档);已经是目标状态的不改,返回需要写回的条目。
+    static func archiving(_ items: [CollectedItem], ids: Set<String>, archive: Bool,
+                          now: Date = Date()) -> [CollectedItem] {
+        items.compactMap { item in
+            guard ids.contains(item.id), item.archived != archive else { return nil }
+            var updated = item
+            updated.archived = archive
+            updated.updatedAt = now
+            return updated
+        }
+    }
+}
+
 /// One-shot handoff for an open-app Treasury intent. The App Group flag
 /// survives an Intent execution process handing off to a cold app launch;
 /// the notification handles an already-mounted ContentView.

@@ -389,6 +389,8 @@ struct HomeEmptyState: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 9)
                             .background(Color.primary.opacity(0.06), in: Capsule())
+                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
