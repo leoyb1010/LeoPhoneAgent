@@ -30,13 +30,16 @@ enum MessageListItem: Hashable {
     /// [T-worked-fold] "已工作 9 步 · 1 分 12 秒" — a finished turn's steps,
     /// folded above its answer. Tapping it shows / hides them.
     case workSummary(UUID)
+    /// [T-tool-step-collapse] "已运行 N 个工具 · 9 秒" — a run of finished tool
+    /// calls in one reply, (messageId, first tool block id).
+    case toolGroup(UUID, UUID)
 
     /// The message ID this item belongs to.
     var messageId: UUID {
         switch self {
         case .wholeMessage(let id), .assistantHeader(let id),
              .assistantFooter(let id), .workSummary(let id): return id
-        case .assistantBlock(let msgId, _): return msgId
+        case .assistantBlock(let msgId, _), .toolGroup(let msgId, _): return msgId
         }
     }
 }
@@ -54,6 +57,7 @@ enum WorkFold {
         // [T-subagent] A sub agent card is user-facing (status, stop, result) and stays visible too.
         let hidden = blocks[..<answer].filter {
             $0.kind != .text && $0.imageFilePath == nil && !Self.isDelegateBlock($0)
+                && !$0.isAskUserBlock   // [T-ask-user] the question and its answer stay in view
         }
         guard hidden.filter({ $0.toolStatus != nil }).count >= 2 else { return nil }
         return Set(hidden.map(\.id))

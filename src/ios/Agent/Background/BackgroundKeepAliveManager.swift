@@ -1637,6 +1637,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 // [T-la-approval] Parked on the permission gate: say so, not "Working…".
                 icon = LiveSessionSnapshot.approvalIcon
                 statusText = String(localized: "等你批准")
+            } else if tracker.sessionActivityPhases[sid] == .waitingForUser,
+                      tracker.sessionActivityReasons[sid] == .userQuestion {
+                // [T-ask-user] The model asked a question: say so (never the question text).
+                icon = LiveSessionSnapshot.questionIcon
+                statusText = String(localized: "等你回答")
             } else if tracker.sessionActivityPhases[sid] == .suspended {
                 // [T-la-honest-outcome] Parked in waitIfBackgroundSuspended: it
                 // carries on by itself once the app is back. Not done, not failed.

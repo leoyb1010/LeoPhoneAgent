@@ -393,6 +393,8 @@ struct AgentCurrentStatusCard: View {
         if let toolName, phase == .usingTool {
             return AgentToolPresentation.displayName(for: toolName)
         }
+        // [T-ask-user] Waiting for the answer to a question, not for a Resume tap.
+        if phase == .waitingForUser, reason == .userQuestion { return String(localized: "等你回答") }
         return switch phase {
         case .waitingForUser: String(localized: "Ready to Resume")
         case .suspended: String(localized: "Waiting for a Slot")
@@ -426,6 +428,7 @@ struct AgentCurrentStatusCard: View {
             case .authenticationRequired: String(localized: "Check the selected provider credentials")
             case .rateLimited: String(localized: "Wait briefly, then retry from the last safe step")
             case .kernelUnavailable: String(localized: "Restart the local execution environment")
+            case .userQuestion: String(localized: "回答问题后接着做")
             }
         }
         return switch phase {
@@ -509,6 +512,7 @@ extension AgentActivityReason {
         case .authenticationRequired: String(localized: "Provider authentication needs attention")
         case .rateLimited: String(localized: "The provider rate limit was reached")
         case .kernelUnavailable: String(localized: "The local execution environment is unavailable")
+        case .userQuestion: String(localized: "等你回答一个问题")
         }
     }
 }

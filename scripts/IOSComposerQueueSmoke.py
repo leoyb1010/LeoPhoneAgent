@@ -54,6 +54,8 @@ final class Harness {
  let scrollToBottomSignal = Signal()
  var hasLoadingAttachments: Bool { attachments.contains { $0.loadState == .loading } }
  func interceptModelCommand(_ text: String) -> Bool { false }
+ var askUserWaiting = false
+ func routeComposerToAskUser(text: String, hasAttachments: Bool) -> Bool { askUserWaiting && !hasAttachments }
  func syncSelectedModelFromBinding() {}
  func expandPastedBlocks(in text: String) -> String { text }
  func appendSystemInfo(_ text: String, icon: String) {}
@@ -101,11 +103,14 @@ expect(treasury.pendingTreasuryContext == nil && treasury.promptQueue.first?.tre
 let expected: [AgentContentPart] = [.text("<treasury_context>queued material</treasury_context>"), .text("follow up")]
 expect(treasury.completedWire(treasury.promptQueue) == expected, "post-run drain lost material or mixed it into the editable instruction")
 expect(treasury.interruptedWire(treasury.promptQueue) == expected, "tool-boundary drain lost material")
+let answering = Harness(); answering.askUserWaiting = true
+answering.enqueuePrompt()
+expect(answering.promptQueue.isEmpty && answering.messages.isEmpty && answering.inputText.isEmpty, "typed answer to a waiting question was queued as a new turn")
 let ordinary = Harness(); ordinary.pendingTreasuryContext = "<treasury_context>normal material</treasury_context>"
 expect(ordinary.normalWire() == [.text("<treasury_context>normal material</treasury_context>"), .text("follow up")], "normal wire lost context")
 ordinary.inputText = "unrelated next question"
 expect(ordinary.normalWire() == [.text("unrelated next question")], "normal send reused prior context")
-print("PASS production enqueue and wire blocks: loading gates, normal send, queued context, both drains, no next-turn reuse")
+print("PASS production enqueue and wire blocks: loading gates, normal send, queued context, both drains, no next-turn reuse, typed answer to a waiting question")
 '''
 with tempfile.TemporaryDirectory(prefix='leo-composer-queue-') as folder:
     code = Path(folder) / 'main.swift'; code.write_text(swift)

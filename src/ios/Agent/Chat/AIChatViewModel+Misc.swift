@@ -128,6 +128,12 @@ extension AIChatViewModel {
             appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
             return
         }
+        // [T-ask-user] A message typed while the model waits for an answer IS the answer.
+        if routeComposerToAskUser(text: text, hasAttachments: !pendingAttachments.isEmpty || treasuryContext?.isEmpty == false) {
+            inputText = ""
+            pastedBlocks.removeAll()
+            return
+        }
         LeoHaptics.impact(.light)
         let prompt = QueuedPrompt(text: text, attachments: pendingAttachments, treasuryContext: treasuryContext)
         promptQueue.append(prompt)

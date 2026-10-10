@@ -108,6 +108,8 @@ enum ContextToolPolicy {
     static let blockedTools: Set<String> = [
         "shell_execute", "browser_use", "remote_shell", "remote_agent", "dispatch_subtask",
         "file_write", "file_edit", "subagent_task",
+        // [T-ask-user] nobody is at the card in these turns.
+        "ask_user",
     ]
 
     static func filter<T>(_ tools: [T], name: (T) -> String) -> [T] {

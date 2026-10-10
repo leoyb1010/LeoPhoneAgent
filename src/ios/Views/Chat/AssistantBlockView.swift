@@ -68,6 +68,9 @@ struct AssistantBlockView: View {
                 isStreaming: isActiveMessage && message.blocks.last?.id == block.id
             )
             .padding(.vertical, 2)
+        case .shellTool where block.isAskUserBlock:
+            // [T-ask-user] The question card replaces the capsule.
+            AskUserCardView(block: block, messageId: message.id)
         case .shellTool:
             VStack(alignment: .leading, spacing: 6) {
                 ToolCapsuleView(block: block, icon: "terminal", accentColor: .green,

@@ -213,6 +213,8 @@ struct AIChatView: View {
     @ObservedObject private var mentionIndex = FileMentionIndex.shared
     @ObservedObject private var configStore = ProviderConfigStore.shared
     @ObservedObject private var quickTaskStore = QuickTaskStore.shared
+    /// [T-ask-user] While the model waits for an answer, the composer doesn't say "Working…".
+    @ObservedObject private var askUserCenter = AskUserCenter.shared
     // [T-mac-composer] 对话框直达 Mac:Quick Tasks 旁的"指挥 Mac"按钮。
     @ObservedObject private var gatewayStore = GatewayHostStore.shared
     // 钉选变化后长按菜单要跟着变
@@ -3877,7 +3879,8 @@ struct AIChatView: View {
                     sessionId: vm.sessionId ?? sessionId ?? draftId,
                     isProcessing: vm.isProcessing,
                     isSuspended: vm.isSuspended,
-                    canResume: vm.canResume,
+                    // [T-ask-user] The question card is the way to continue.
+                    canResume: vm.canResume && vm.dormantAskUserToolUseId == nil,
                     failureReason: currentFailureReason,
                     onRetry: { performTypedRetry() },
                     onResume: {
@@ -3897,7 +3900,8 @@ struct AIChatView: View {
                 // [T-motion-effects] The chat's own "working" heartbeat: three
                 // breathing dots by the composer while a reply is in flight.
                 // Lives in the SwiftUI composer area, not the UIKit list.
-                if vm.isProcessing, !voiceInputActive, !isShortHeight {
+                if vm.isProcessing, !voiceInputActive, !isShortHeight,
+                   askUserCenter.waitingToolUseId(sessionId: vm.sessionId) == nil {
                     HStack(spacing: 6) {
                         LeoTypingIndicator()
                         Text("Working…")

@@ -76,6 +76,13 @@
 		E5SUB0105A /* HelperRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0105F /* HelperRunner.swift */; };
 		E5SUB0106A /* ModelTierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0106F /* ModelTierResolver.swift */; };
 		E5SUB0107A /* AIChatViewModel+SubAgents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0107F /* AIChatViewModel+SubAgents.swift */; };
+		E5ASK0001A /* AskUserState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0001F /* AskUserState.swift */; };
+		E5ASK0001T /* AskUserState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0001F /* AskUserState.swift */; };
+		E5ASK0002A /* AIChatViewModel+AskUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0002F /* AIChatViewModel+AskUser.swift */; };
+		E5ASK0003A /* AskUserCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0003F /* AskUserCardView.swift */; };
+		E5ASK0004A /* ToolStepGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0004F /* ToolStepGrouping.swift */; };
+		E5ASK0004T /* ToolStepGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0004F /* ToolStepGrouping.swift */; };
+		E5ASK0005A /* ToolStepGroupRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ASK0005F /* ToolStepGroupRow.swift */; };
 		E5SUB0108A /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
 		E5SUB0108T /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0108F /* SubAgentDefinition.swift */; };
 		E5SUB0109A /* SubAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0109F /* SubAgentStore.swift */; };
@@ -977,6 +984,11 @@
 		E5SUB0105F /* HelperRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRunner.swift; sourceTree = "<group>"; };
 		E5SUB0106F /* ModelTierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelTierResolver.swift; sourceTree = "<group>"; };
 		E5SUB0107F /* AIChatViewModel+SubAgents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+SubAgents.swift"; sourceTree = "<group>"; };
+		E5ASK0001F /* AskUserState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskUserState.swift; sourceTree = "<group>"; };
+		E5ASK0002F /* AIChatViewModel+AskUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+AskUser.swift"; sourceTree = "<group>"; };
+		E5ASK0003F /* AskUserCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskUserCardView.swift; sourceTree = "<group>"; };
+		E5ASK0004F /* ToolStepGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolStepGrouping.swift; sourceTree = "<group>"; };
+		E5ASK0005F /* ToolStepGroupRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolStepGroupRow.swift; sourceTree = "<group>"; };
 		E5SUB0108F /* SubAgentDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentDefinition.swift; sourceTree = "<group>"; };
 		E5SUB0109F /* SubAgentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentStore.swift; sourceTree = "<group>"; };
 		E5SUB0110F /* HelperBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperBlockView.swift; sourceTree = "<group>"; };
@@ -2701,6 +2713,8 @@
 				E5VMC0016 /* AIChatViewModel+BackgroundTask.swift */,
 				E5VMC0017 /* AIChatViewModel+ConcurrentTools.swift */,
 				E5SUB0107F /* AIChatViewModel+SubAgents.swift */,
+				E5ASK0001F /* AskUserState.swift */,
+				E5ASK0002F /* AIChatViewModel+AskUser.swift */,
 				E53000014 /* ChatStore.swift */,
 				E5CSC0011 /* ChatStoreSchemaContract.swift */,
 				E5SLQ0011 /* SessionListQuery.swift */,
@@ -2718,6 +2732,7 @@
 			children = (
 				E5V300011 /* CollectionViewMessageListV3.swift */,
 				F1A00021 /* MessageListInfrastructure.swift */,
+				E5ASK0004F /* ToolStepGrouping.swift */,
 				E5V100011 /* MessageListLayout.swift */,
 				E5MHC0011 /* MessageHeightCache.swift */,
 			);
@@ -2884,6 +2899,8 @@
 				E5F200013 /* AssistantBlockView.swift */,
 				E5R3R0011 /* ChatRenderLimits.swift */,
 				E5SUB0110F /* HelperBlockView.swift */,
+				E5ASK0003F /* AskUserCardView.swift */,
+				E5ASK0005F /* ToolStepGroupRow.swift */,
 				E5SUB0111F /* HelperSheet.swift */,
 				E5SUB0112F /* AgentCallbackCellView.swift */,
 				E5F200014 /* ChatMessageViews.swift */,
@@ -3453,6 +3470,8 @@
 				E5CUR0033 /* ToolExecutionLanes.swift in Sources */,
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
 				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
+				E5ASK0001T /* AskUserState.swift in Sources */,
+				E5ASK0004T /* ToolStepGrouping.swift in Sources */,
 				E5SUB0102T /* AgentCallback.swift in Sources */,
 				E5SUB0103T /* HelperModelIdentity.swift in Sources */,
 				E5SUB0108T /* SubAgentDefinition.swift in Sources */,
@@ -3977,6 +3996,11 @@
 				E5SUB0108A /* SubAgentDefinition.swift in Sources */,
 				E5SUB0109A /* SubAgentStore.swift in Sources */,
 				E5SUB0110A /* HelperBlockView.swift in Sources */,
+				E5ASK0001A /* AskUserState.swift in Sources */,
+				E5ASK0002A /* AIChatViewModel+AskUser.swift in Sources */,
+				E5ASK0003A /* AskUserCardView.swift in Sources */,
+				E5ASK0004A /* ToolStepGrouping.swift in Sources */,
+				E5ASK0005A /* ToolStepGroupRow.swift in Sources */,
 				E5SUB0111A /* HelperSheet.swift in Sources */,
 				E5SUB0112A /* AgentCallbackCellView.swift in Sources */,
 				E5SUB0113A /* HelperSettingsView.swift in Sources */,
