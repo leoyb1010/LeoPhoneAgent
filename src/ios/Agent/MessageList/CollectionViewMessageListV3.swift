@@ -833,7 +833,7 @@ private struct BridgedWholeMessageV3: View {
 
     var body: some View {
         // [T-subagent] A sub agent callback renders as a result card, not a user bubble.
-        if message.role == .user, let callback = AgentCallback.parse(message.content) {
+        if message.isSubAgentCallback, let callback = AgentCallback.parse(message.content) {
             AgentCallbackCellView(callback: callback)
                 .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
                 .frame(maxWidth: .infinity)
@@ -2727,7 +2727,7 @@ extension CollectionViewMessageListV3 {
                         // stable through the glide. Falls back to the coarse
                         // estimator for compactDivider / systemInfo / empty.
                         if let msg = messages.first(where: { $0.id == msgId }),
-                           msg.role == .user, !AgentCallback.isCallbackText(msg.content) {
+                           msg.role == .user, !msg.isSubAgentCallback {
                             // Real wrap is bounded by maxContentWidth (the
                             // .frame(maxWidth:) on BridgedWholeMessageV3); using
                             // the wider cvWidth would under-wrap → under-estimate

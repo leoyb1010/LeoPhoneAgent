@@ -256,30 +256,30 @@ final class AnthropicAgentProvider: AgentProvider {
                 // memcpy at the provider layer alone.
                 var currentToolId: String?
                 var currentToolName: String?
-                var currentToolJsonChunks: [String] = []
-                var currentToolJsonByteCount: Int = 0
-                var lastToolJoined: String = ""
-                var lastToolJoinedAtCount: Int = 0
-                var lastToolYieldAt: Date = .distantPast
-                // Yield throttle: 80ms gives the consumer at most ~12 events/sec
-                // even when SSE chunks land at 200/sec. The consumer
-                // (AIChatViewModel.toolInputDelta) further throttles to
-                // 200ms / 1s, so dropped intermediate yields are by design.
-                let toolYieldInterval: TimeInterval = 0.08
-                func currentToolJsonJoined() -> String {
-                    if lastToolJoinedAtCount == currentToolJsonChunks.count {
-                        return lastToolJoined
-                    }
-                    let joined = currentToolJsonChunks.joined()
-                    lastToolJoined = joined
-                    lastToolJoinedAtCount = currentToolJsonChunks.count
-                    return joined
-                }
+                // [T-r3-stream-hardening] Content-block index of the open tool
+                // call: a content_block_stop for a DIFFERENT block (a text or
+                // thinking block interleaved by the server) must not complete it.
+                var currentToolIndex: Int?
+                // Chunk array + lazy join + 80 ms yield throttle (the consumer
+                // throttles further), now shared with the OpenAI paths and
+                // capped at 1 MB — past that the call completes as an error.
+                var toolArgs = StreamToolArgsAccumulator()
                 var isThinkingBlock = false
                 var thinkingContent = ""
 
                 do {
                     for try await response in stream {
+                        // [B1] `event: error` (overloaded_error, api_error …) arrives
+                        // inside an HTTP 200 and has no StreamEvent case: it used to be
+                        // skipped, leaving half a reply saved with no retry. Surface it
+                        // as the same LLMError the HTTP status would have produced.
+                        if response.type == "error" {
+                            let err = StreamErrorClassifier.anthropic(
+                                type: response.error?.type ?? "error",
+                                message: response.error?.message ?? "stream error")
+                            logger.error("Stream error event: \(response.error?.type ?? "error")")
+                            throw err
+                        }
                         guard let event = response.streamEvent else { continue }
 
                         switch event {
@@ -295,11 +295,8 @@ final class AnthropicAgentProvider: AgentProvider {
                                     logger.info("[AnthropicStream] contentBlockStart tool_use raw_id=\(block.id ?? "<NIL→\(id)>") name=\(name) index=\(response.index ?? -1)")
                                     currentToolId = id
                                     currentToolName = name
-                                    currentToolJsonChunks.removeAll(keepingCapacity: true)
-                                    currentToolJsonByteCount = 0
-                                    lastToolJoined = ""
-                                    lastToolJoinedAtCount = 0
-                                    lastToolYieldAt = .distantPast
+                                    currentToolIndex = response.index
+                                    toolArgs = StreamToolArgsAccumulator()
                                     isThinkingBlock = false
                                     continuation.yield(.contentBlockStart(.toolUse(id: id, name: name)))
                                 } else if block.type == "thinking" {
@@ -324,22 +321,17 @@ final class AnthropicAgentProvider: AgentProvider {
                                 } else if let text = delta.text {
                                     continuation.yield(.textDelta(text))
                                 } else if let partialJson = delta.partialJson {
-                                    currentToolJsonChunks.append(partialJson)
-                                    currentToolJsonByteCount += partialJson.utf8.count
-                                    if let name = currentToolName {
-                                        let now = Date()
-                                        if now.timeIntervalSince(lastToolYieldAt) >= toolYieldInterval {
-                                            lastToolYieldAt = now
-                                            continuation.yield(.toolInputDelta(name: name, accumulated: currentToolJsonJoined()))
-                                        }
+                                    if toolArgs.append(partialJson), let name = currentToolName {
+                                        continuation.yield(.toolInputDelta(name: name, accumulated: toolArgs.joined()))
                                     }
                                 }
                             }
 
                         case .contentBlockStop:
-                            if let toolId = currentToolId, let toolName = currentToolName {
-                                let finalJson = currentToolJsonJoined()
-                                let args = Self.parseJsonToDict(finalJson)
+                            if let toolId = currentToolId, let toolName = currentToolName,
+                               currentToolIndex == nil || response.index == nil || response.index == currentToolIndex {
+                                let finalJson = toolArgs.overLimit ? "" : toolArgs.joined()
+                                let args = toolArgs.finalArgs(toolName: toolName)
                                 if args.isEmpty {
                                     // [ToolArgsProbe] Diagnose Kimi/etc. empty-args bug
                                     // — distinguish never-received-delta vs literal "{}"
@@ -348,17 +340,15 @@ final class AnthropicAgentProvider: AgentProvider {
                                     let utf8Bytes = finalJson.utf8.count
                                     let trimmed = finalJson.trimmingCharacters(in: .whitespacesAndNewlines)
                                     let parseOk = (try? JSONSerialization.jsonObject(with: Data(finalJson.utf8), options: [])) != nil
-                                    AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=anthropic.contentBlockStop model=\(self.model.id) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) chunks=\(currentToolJsonChunks.count) trimmedEmpty=\(trimmed.isEmpty ? 1 : 0) literalEmptyObj=\(trimmed == "{}" ? 1 : 0) parseOk=\(parseOk ? 1 : 0)")
+                                    AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=anthropic.contentBlockStop model=\(self.model.id) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) chunks=\(toolArgs.chunkCount) trimmedEmpty=\(trimmed.isEmpty ? 1 : 0) literalEmptyObj=\(trimmed == "{}" ? 1 : 0) parseOk=\(parseOk ? 1 : 0)")
                                 }
                                 continuation.yield(.toolCallComplete(
                                     id: toolId, name: toolName, args: args, metadata: nil
                                 ))
                                 currentToolId = nil
                                 currentToolName = nil
-                                currentToolJsonChunks.removeAll(keepingCapacity: true)
-                                currentToolJsonByteCount = 0
-                                lastToolJoined = ""
-                                lastToolJoinedAtCount = 0
+                                currentToolIndex = nil
+                                toolArgs = StreamToolArgsAccumulator()
                             }
 
                         case .messageDelta:
@@ -412,7 +402,7 @@ final class AnthropicAgentProvider: AgentProvider {
                     let debugBody = "// STREAM ERROR (model: \(self.model.id))\n// \(errorDesc.prefix(1500))"
                     LastAPIRequestBody.shared.set(debugBody, provider: "Anthropic")
                     #endif
-                    continuation.finish(throwing: self.provider.mapError(error))
+                    continuation.finish(throwing: (error as? LLMError) ?? self.provider.mapError(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -478,7 +468,8 @@ final class AnthropicAgentProvider: AgentProvider {
                 case .text(let text):
                     return .text(text)
                 case .toolUse(let id, let name, let input):
-                    return .toolUse(sanitizeToolId(id), name, convertToInput(input))
+                    // [B3] An invalid replayed name 400s every later request.
+                    return .toolUse(sanitizeToolId(id), ToolNameSanitizer.sanitize(name), convertToInput(input))
                 case .toolResult(let id, _, let content, let isError, let imageData, let imageMimeType, _, _):
                     let safeId = sanitizeToolId(id)
                     if let data = imageData {

@@ -12,6 +12,50 @@ import Foundation
 enum MemoryDailyLog {
     enum WriteError: Error { case notUTF8 }
 
+    // [B7] Memory is injected into every future system prompt, so a single
+    // memory_write must not be able to put megabytes there.
+    /// One daily-log entry.
+    static let maxEntryBytes = 8 * 1024
+    /// One correction (CORRECTIONS.md line).
+    static let maxCorrectionBytes = 1024
+    /// One day's log as injected into the system prompt.
+    static let maxDailyFragmentBytes = 16 * 1024
+    /// GLOBAL.md as injected into the system prompt.
+    static let maxGlobalFragmentBytes = 32 * 1024
+    /// All corrections together as injected into the system prompt.
+    static let maxCorrectionsFragmentBytes = 8 * 1024
+
+    /// `text` cut to at most `maxBytes` UTF-8 bytes on a character boundary,
+    /// with a visible marker when anything was dropped.
+    static func capped(_ text: String, maxBytes: Int, marker: String = " …[truncated]") -> String {
+        guard text.utf8.count > maxBytes else { return text }
+        let budget = max(0, maxBytes - marker.utf8.count)
+        var used = 0
+        var end = text.startIndex
+        for ch in text {
+            let n = ch.utf8.count
+            if used + n > budget { break }
+            used += n
+            end = text.index(after: end)
+        }
+        return String(text[..<end]) + marker
+    }
+
+    /// The first `maxBytes` of a file decoded as UTF-8 (a split multi-byte
+    /// character at the cut is dropped), read with a FileHandle so a huge
+    /// file is never loaded whole. nil when the file cannot be read.
+    static func readPrefix(of url: URL, maxBytes: Int) -> (text: String, truncated: Bool)? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard var data = try? handle.read(upToCount: maxBytes + 1) else { return nil }
+        let truncated = data.count > maxBytes
+        if truncated { data = data.prefix(maxBytes) }
+        for trim in 0...3 {
+            if let s = String(data: data.dropLast(trim), encoding: .utf8) { return (s, truncated) }
+        }
+        return nil
+    }
+
     static func fileName(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -22,7 +66,7 @@ enum MemoryDailyLog {
     static func entry(_ content: String, at date: Date, source: String? = nil) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let body = source.map { "[来源:\($0)] \(content)" } ?? content
+        let body = capped(source.map { "[来源:\($0)] \(content)" } ?? content, maxBytes: maxEntryBytes)
         return "<!-- \(formatter.string(from: date)) -->\n\(body)\n\n"
     }
 

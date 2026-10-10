@@ -96,10 +96,10 @@ final class GeminiProvider: LLMProvider {
                     for try await line in bytes.lines {
                         guard !Task.isCancelled else { break }
 
-                        guard line.hasPrefix("data: ") else { continue }
-                        let jsonStr = String(line.dropFirst(6))
-                        guard let jsonData = jsonStr.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
+                        // [T-r3-stream-hardening] `data:` with or without the space,
+                        // leading BOM tolerated; an in-stream `error` object throws.
+                        guard let json = SSEFraming.jsonObject(fromLine: line) else { continue }
+                        if let streamError = StreamErrorClassifier.topLevelError(json) { throw streamError }
 
                         if !started {
                             continuation.yield(.started)
@@ -184,11 +184,11 @@ final class GeminiProvider: LLMProvider {
                 do {
                     for try await line in bytes.lines {
                         guard !Task.isCancelled else { break }
-                        guard line.hasPrefix("data: ") else { continue }
-
-                        let jsonStr = String(line.dropFirst(6))
-                        guard let jsonData = jsonStr.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
+                        // [T-r3-stream-hardening] `data:{…}` without the space used to
+                        // drop every chunk; a BOM lost the first one; an in-stream
+                        // `{"error":{"code":503,…}}` ended the turn as if complete.
+                        guard let json = SSEFraming.jsonObject(fromLine: line) else { continue }
+                        if let streamError = StreamErrorClassifier.topLevelError(json) { throw streamError }
 
                         let events = self.parseStreamChunk(json)
                         #if DEBUG
@@ -485,8 +485,8 @@ final class GeminiProvider: LLMProvider {
     private func extractUsage(_ json: [String: Any]) -> LLMUsage? {
         let effective = json
         guard let usage = effective["usageMetadata"] as? [String: Any] else { return nil }
-        let input = usage["promptTokenCount"] as? Int ?? 0
-        let output = usage["candidatesTokenCount"] as? Int ?? 0
+        let input = UsageTokenClamp.value(usage["promptTokenCount"]) ?? 0
+        let output = UsageTokenClamp.value(usage["candidatesTokenCount"]) ?? 0
         return LLMUsage(inputTokens: input, outputTokens: output,
                         cacheCreationInputTokens: nil, cacheReadInputTokens: nil)
     }

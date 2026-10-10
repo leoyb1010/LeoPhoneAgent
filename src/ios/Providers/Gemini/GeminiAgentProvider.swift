@@ -50,6 +50,9 @@ final class GeminiAgentProvider: AgentProvider {
                 // terminal event, like the OpenAI provider does at [DONE].
                 var reasoningAccumulator = ""
                 var emittedReasoning = false
+                // [T-r3-stream-hardening] The finishReason `.done` (e.g. MAX_TOKENS)
+                // is the real one; the trailing end-of-body `.done` must not replace it.
+                var emittedDone = false
                 func flushReasoning() {
                     guard !emittedReasoning, !reasoningAccumulator.isEmpty else { return }
                     emittedReasoning = true
@@ -100,11 +103,17 @@ final class GeminiAgentProvider: AgentProvider {
                                 }
                             }
                             flushReasoning()
-                            continuation.yield(.done(stopReason: mapped))
+                            if !emittedDone {
+                                emittedDone = true
+                                continuation.yield(.done(stopReason: mapped))
+                            }
 
                         case .done:
                             flushReasoning()
-                            continuation.yield(.done(stopReason: hasToolCalls ? .toolUse : .endTurn))
+                            if !emittedDone {
+                                emittedDone = true
+                                continuation.yield(.done(stopReason: hasToolCalls ? .toolUse : .endTurn))
+                            }
                         }
                     }
                     flushReasoning()
@@ -175,7 +184,7 @@ final class GeminiAgentProvider: AgentProvider {
                     } else {
                         let sig = toolCallMetadataMap[id]?.thoughtSignature
                         parts.append(GeminiConversation.functionCallPart(
-                            name: name, args: input, thoughtSignature: sig
+                            name: ToolNameSanitizer.sanitize(name), args: input, thoughtSignature: sig // [B3]
                         ))
                     }
 
@@ -196,7 +205,7 @@ final class GeminiAgentProvider: AgentProvider {
                         // [T-gemini-empty-part-oneof-400] Never ship an empty
                         // result string into the functionResponse payload.
                         parts.append(GeminiConversation.functionResponsePart(
-                            name: resolvedName,
+                            name: ToolNameSanitizer.sanitize(resolvedName), // [B3]
                             response: GeminiWireFormat.functionResponseResult(content)
                         ))
                         if let data = imageData {

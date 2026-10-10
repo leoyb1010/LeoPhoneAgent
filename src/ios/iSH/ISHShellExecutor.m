@@ -37,6 +37,30 @@ static const NSTimeInterval ISHShellExecutorSweepInterval = 60.0;
 /// "stranded" — it only sees an entry that has been there a long time.
 static const NSTimeInterval ISHShellExecutorStaleContextAge = 7200.0; // 2h
 
+// [B6] Captured stdout/stderr are bounded. A command printing 100 MB used to
+// keep all of it in an NSMutableString before the tool result was cut to a few
+// thousand characters. Each buffer keeps its most recent
+// ISHShellExecutorOutputKeepChars characters (the tail, like the timeout
+// mirror); trimming waits until it is twice that so the cost is amortised.
+static const NSUInteger ISHShellExecutorOutputKeepChars = 1024 * 1024;
+// A single line without a newline is flushed once it reaches this length, so
+// a 100 MB one-line output is not rescanned for "\n" on every 4 KB read.
+static const NSUInteger ISHShellExecutorMaxLineChars = 64 * 1024;
+
+/// Append under the caller's @synchronized(buffer) and keep only the tail.
+static void ISHAppendBounded(NSMutableString *buffer, NSString *text) {
+    [buffer appendString:text];
+    if (buffer.length > ISHShellExecutorOutputKeepChars * 2) {
+        NSUInteger drop = buffer.length - ISHShellExecutorOutputKeepChars;
+        // Do not split a surrogate pair.
+        NSRange composed = [buffer rangeOfComposedCharacterSequenceAtIndex:drop];
+        drop = composed.location;
+        [buffer deleteCharactersInRange:NSMakeRange(0, drop)];
+        NSString *marker = [NSString stringWithFormat:@"[… earlier output dropped (%lu characters) …]\n", (unsigned long)drop];
+        [buffer insertString:marker atIndex:0];
+    }
+}
+
 #pragma mark - Result Implementation
 
 @interface ISHShellExecutionResult ()
@@ -1175,7 +1199,7 @@ static BOOL ISHTaskIsDescendantOf(struct task *t, pid_t_ rootPid) {
     // Process any remaining partial line
     if (lineBuffer.length > 0) {
         @synchronized(outputBuffer) {
-            [outputBuffer appendString:lineBuffer];
+            ISHAppendBounded(outputBuffer, lineBuffer);
         }
 
         if (ctx.lineCallback) {
@@ -1194,7 +1218,22 @@ static BOOL ISHTaskIsDescendantOf(struct task *t, pid_t_ rootPid) {
     while (YES) {
         NSRange newlineRange = [lineBuffer rangeOfString:@"\n"];
         if (newlineRange.location == NSNotFound) {
-            break;
+            // [B6] No newline yet: flush an over-long run as its own line so
+            // the buffer (and the rescan above) stays bounded.
+            if (lineBuffer.length < ISHShellExecutorMaxLineChars) break;
+            NSRange cut = [lineBuffer rangeOfComposedCharacterSequenceAtIndex:ISHShellExecutorMaxLineChars - 1];
+            NSUInteger cutAt = NSMaxRange(cut);
+            NSString *chunk = [lineBuffer substringToIndex:cutAt];
+            [lineBuffer deleteCharactersInRange:NSMakeRange(0, cutAt)];
+            @synchronized(outputBuffer) {
+                ISHAppendBounded(outputBuffer, chunk);
+            }
+            if (ctx.lineCallback) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    ctx.lineCallback(chunk, isStdErr);
+                });
+            }
+            continue;
         }
 
         // Extract line without newline
@@ -1205,8 +1244,8 @@ static BOOL ISHTaskIsDescendantOf(struct task *t, pid_t_ rootPid) {
 
         // Add to output buffer
         @synchronized(outputBuffer) {
-            [outputBuffer appendString:line];
-            [outputBuffer appendString:@"\n"];
+            ISHAppendBounded(outputBuffer, line);
+            ISHAppendBounded(outputBuffer, @"\n");
         }
 
         // Call line callback

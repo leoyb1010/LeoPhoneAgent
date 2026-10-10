@@ -56,6 +56,7 @@ final class Harness {
  func interceptModelCommand(_ text: String) -> Bool { false }
  func syncSelectedModelFromBinding() {}
  func expandPastedBlocks(in text: String) -> String { text }
+ func escapeUserAuthoredInput(_ text: String) -> String { text } // [B23] reserved-tag escaping, covered by AgentCallbackSpoofTests
  func appendSystemInfo(_ text: String, icon: String) {}
  func dumpQueueSnapshot(_ text: String) {}
  static func cleanupAttachmentFiles(_ items: [InputAttachment]) {}

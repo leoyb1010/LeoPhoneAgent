@@ -33,7 +33,10 @@ enum CorrectionStore {
         try? fm.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
-        let oneLine = trimmed.replacingOccurrences(of: "\n", with: " ")
+        // [B7] One correction is one short line in every future prompt.
+        let oneLine = MemoryDailyLog.capped(
+            trimmed.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " "),
+            maxBytes: MemoryDailyLog.maxCorrectionBytes)
         var entries = load()
         entries.append("- [\(fmt.string(from: Date()))] \(oneLine)")
         if entries.count > maxEntries { entries = Array(entries.suffix(maxEntries)) }
@@ -57,7 +60,10 @@ enum CorrectionStore {
     static func promptFragment() -> String? {
         let entries = load()
         guard !entries.isEmpty else { return nil }
+        // [B7] Entries written before the cap existed are capped here too.
+        let body = entries.map { MemoryDailyLog.capped($0, maxBytes: MemoryDailyLog.maxCorrectionBytes) }
+            .joined(separator: "\n")
         return "⚠️ Corrections the user has explicitly made (permanent, highest priority — never repeat these mistakes):\n"
-            + entries.joined(separator: "\n")
+            + MemoryDailyLog.capped(body, maxBytes: MemoryDailyLog.maxCorrectionsFragmentBytes)
     }
 }

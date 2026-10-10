@@ -2417,7 +2417,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         LeoPerf.sendBegan(LeoPerf.key(self), model: selectedModel.id)
         // [T-long-paste-fold] Splice folded pastes back in first, so the
         // compact prompts, the stored bubble and the model all see the full text.
-        let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
+        // [B23] Typed / pasted text cannot carry the app's own envelope tags.
+        let text = escapeUserAuthoredInput(
+            expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines))
         let treasuryContext = pendingTreasuryContext?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments

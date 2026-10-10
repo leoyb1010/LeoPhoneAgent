@@ -248,6 +248,16 @@ extension AIChatViewModel {
         // Throttle timestamps (local to this stream processing call)
         var lastTextDeltaFlush: Date = .distantPast
         var lastTextDeltaFlushedLength: Int = 0
+        // [B4] Length of the current text block in UTF-8 bytes, maintained per
+        // delta. `assistantText.count` walked the whole string on every delta,
+        // making a 100k-delta reply O(n²) on this thread.
+        var currentBlockTextLength = 0
+        // [B4] Whole-reply cap: past 2 MB of streamed text the turn ends as if
+        // the model hit its output limit (Resume continues it).
+        var streamedTextBudget = StreamTextBudget()
+        // First terminal reason wins (a trailing `.done` must not overwrite
+        // MAX_TOKENS / content-filter).
+        var stopGate = StreamStopReasonGate<AgentStopReason>()
         var lastThinkingDeltaFlush: Date = .distantPast
         var lastFileWriteStreamUpdate: Date = .distantPast
         var lastToolInputStreamUpdate: Date = .distantPast
@@ -297,7 +307,7 @@ extension AIChatViewModel {
         // 先合成一个 contentBlockStart(.text),排在这个队列里。
         var syntheticEvents: [AgentStreamEvent] = []
         do {
-        while true {
+        streamLoop: while true {
             let maybeEvent: AgentStreamEvent?
             if !syntheticEvents.isEmpty {
                 maybeEvent = syntheticEvents.removeFirst()
@@ -455,7 +465,7 @@ extension AIChatViewModel {
                     // streamingUIUpdatesSuspended to prevent "swallowed text" when
                     // the user is scrolling during streaming.
                     if let textIdx, !assistantText.isEmpty {
-                        lastTextDeltaFlushedLength = assistantText.count
+                        lastTextDeltaFlushedLength = currentBlockTextLength
                         let prepared = prepareMarkdownForRender(assistantText)
                         let parsed = MarkdownContent(prepared)
                         await MainActor.run {
@@ -508,6 +518,27 @@ extension AIChatViewModel {
                 LeoPerf.firstToken(LeoPerf.key(self))
                 if let blockIdx = currentTextBlockIdx {
                     result.assistantText += text
+                    currentBlockTextLength += text.utf8.count
+                    if streamedTextBudget.add(text) {
+                        logger.warning("[StreamBudget] reply passed \(StreamTextBudget.maxBytes) bytes — ending turn as max_tokens")
+                        let snapshot = result.assistantText
+                        let parsed = MarkdownContent(prepareMarkdownForRender(snapshot))
+                        await MainActor.run {
+                            guard msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
+                            self.setStreamingTextBlockContent(
+                                msgIdx: msgIdx,
+                                blockIdx: blockIdx,
+                                text: snapshot,
+                                parsedMarkdown: parsed,
+                                cacheAttributedString: false,
+                                requestScroll: true,
+                                expectedMessageId: runMsgId
+                            )
+                        }
+                        _ = stopGate.record(.maxTokens)
+                        result.stopReason = .maxTokens
+                        break streamLoop
+                    }
 
                     // Streaming TTS: speak completed sentences as they arrive. Don't
                     // gate on the start-time `speakEnabled` snapshot — read it live
@@ -560,7 +591,7 @@ extension AIChatViewModel {
 
                     let now = Date()
                     let elapsed = now.timeIntervalSince(lastTextDeltaFlush)
-                    let len = result.assistantText.count
+                    let len = currentBlockTextLength
                     let unflushed = len - lastTextDeltaFlushedLength
                     // Tiered flush throttle (085e0cd6): protects the main thread
                     // from the O(N²) full-markdown re-parse storm on dense /
@@ -876,6 +907,8 @@ extension AIChatViewModel {
                 // Reset text block tracking for potential next text block after tool use
                 currentTextBlockIdx = nil
                 result.assistantText = ""
+                currentBlockTextLength = 0
+                lastTextDeltaFlushedLength = 0
                 result.spokenTextOffset = 0
 
             case .thinkingDelta(let text):
@@ -956,7 +989,11 @@ extension AIChatViewModel {
                         messages[msgIdx].blocks[thinkIdx].finishThinkingClock()
                     }
                 }
-                result.stopReason = reason
+                if stopGate.record(reason) {
+                    result.stopReason = reason
+                } else {
+                    logger.info("[StreamDone] ignoring a second terminal event")
+                }
             }
         }
         // The AsyncThrowingStream may silently terminate (return nil) on Task
@@ -1001,7 +1038,14 @@ extension AIChatViewModel {
         if _streamError != nil {
             await syncThinkingTail(msgIdx: mutableMsgIdx, thinkIdx: currentThinkingBlockIdx, text: result.thinkingText)
         }
-        if let err = _streamError { throw err }
+        if let err = _streamError {
+            // [T-r3-stream-hardening] A 120 s stall is the server going quiet, not
+            // a decision about this request: make it retryable like a dropped link.
+            if let stall = err as? StreamStallError {
+                throw LLMError.transientError(message: stall.localizedDescription, statusCode: nil)
+            }
+            throw err
+        }
         // Stream ended cleanly. First drain any un-extracted tail past
         // spokenTextOffset: the streaming look-ahead in extractSentencesStatic
         // intentionally STOPS on a digit-trailing `.`/`,` at the buffer end
@@ -1358,8 +1402,11 @@ extension AIChatViewModel {
               let command = dict["command"] as? String else {
             return ("", defaultCommandTimeout, 0)
         }
-        let timeout = (dict["timeout"] as? NSNumber).map { TimeInterval($0.doubleValue) } ?? defaultCommandTimeout
-        let delay = (dict["delay"] as? NSNumber).map { TimeInterval($0.doubleValue) } ?? 0
+        // [T-r3-tool-arg-clamp] `timeout: 1e300` used to trap in Int(...) and
+        // `-1`/`0` killed the command at once; `delay: 1e18` trapped and `1e9`
+        // waited for decades. Clamp finite values into range, default the rest.
+        let timeout = ToolArgNumbers.shellTimeout(dict["timeout"], default: defaultCommandTimeout)
+        let delay = ToolArgNumbers.shellDelay(dict["delay"])
         return (command, timeout, delay)
     }
 

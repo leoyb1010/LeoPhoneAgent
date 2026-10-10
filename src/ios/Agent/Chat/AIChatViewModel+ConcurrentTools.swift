@@ -179,7 +179,9 @@ extension AIChatViewModel {
                 "[ToolPreflight] BLOCKED tool=\(tu.name) id=\(tu.id) reason=\"\(preflightError)\" argsKeys=[\(tu.args.keys.sorted().joined(separator: ","))] chunkCount=\(chunkRing.count) lastChunkBytes=\(chunkRing.last?.utf8.count ?? 0)"
             )
             let uiMessage = String(localized: "Blocked invalid tool call")
-            let modelMessage = "Error: Tool call rejected before execution. \(preflightError) The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
+            let modelMessage = toolArgs[StreamToolArgsAccumulator.oversizeSentinelKey] != nil
+                ? "Error: Tool call rejected before execution. \(preflightError)"
+                : "Error: Tool call rejected before execution. \(preflightError) The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                 messages[msgIdx].blocks[blockIdx].content = uiMessage
                 messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: uiMessage)
@@ -284,6 +286,14 @@ extension AIChatViewModel {
         case "shell_execute":
             let (command, timeout, delay) = parseToolInput(from: argsJson)
 
+            if let rejection = ToolInputGuard.commandRejection(command) {
+                toolOutput = rejection
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+                break
+            }
             if command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ctLogger.warning("[ToolArgsProbe] shell_execute called with empty command argsBytes=\(argsJson.utf8.count)")
                 toolOutput = "Error: Missing required 'command' parameter. Please call shell_execute again with a non-empty `command` field."
@@ -312,7 +322,7 @@ extension AIChatViewModel {
                 // both the button flag AND Task cancellation are honored within
                 // ~100ms, while the visible countdown still refreshes once per
                 // whole second.
-                let totalSeconds = Int(delay)
+                let totalSeconds = ToolArgNumbers.int(delay, clampedTo: 0...Int(ToolArgNumbers.shellDelayRange.upperBound))
                 let tickNanos: UInt64 = 100_000_000 // 100ms
                 let ticksPerSecond = 10
                 var lastShownRemaining = -1
@@ -653,32 +663,26 @@ extension AIChatViewModel {
             let pathArg = toolArgs["path"] as? String ?? ""
             let resolvedURL = await resolveMinisPath(pathArg)
             ctLogger.info("[read_image] pathArg=\(pathArg) resolvedURL=\(resolvedURL?.path ?? "nil") exists=\(resolvedURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
-            if let resolvedURL {
-                let dataOK = (try? Data(contentsOf: resolvedURL)) != nil
-                let uiOK = (try? Data(contentsOf: resolvedURL)).flatMap { UIImage(data: $0) } != nil
-                ctLogger.info("[read_image] dataReadable=\(dataOK) uiImageDecodable=\(uiOK) fileSize=\((try? FileManager.default.attributesOfItem(atPath: resolvedURL.path)[.size]) ?? "?")")
-            }
-
-            if let fileURL = resolvedURL,
-               let fileData = try? Data(contentsOf: fileURL),
-               let uiImage = UIImage(data: fileData) {
-                let originalSize = fileData.count
-                let originalW = uiImage.cgImage.map { $0.width } ?? Int(uiImage.size.width)
-                let originalH = uiImage.cgImage.map { $0.height } ?? Int(uiImage.size.height)
-
-                let inferenceData: Data
-                let resizedW: Int
-                let resizedH: Int
-                if let resized = Self.resizedImageData(fileData, maxLongEdge: 2000),
-                   let resizedImage = UIImage(data: resized) {
-                    inferenceData = resized
-                    resizedW = resizedImage.cgImage.map { $0.width } ?? Int(resizedImage.size.width)
-                    resizedH = resizedImage.cgImage.map { $0.height } ?? Int(resizedImage.size.height)
-                } else {
-                    inferenceData = uiImage.jpegData(compressionQuality: 0.85) ?? fileData
-                    resizedW = originalW
-                    resizedH = originalH
+            // [B5] Probe the header and decode through ImageIO's thumbnail path:
+            // never load a 500 MB file or a 30000×30000 bitmap just to shrink it.
+            let prepared: Result<ImageInputGuard.Prepared, ImageInputGuard.PrepareError>? =
+                resolvedURL.map { ImageInputGuard.prepare(url: $0) }
+            if case .failure(.refused(let reason))? = prepared {
+                ctLogger.warning("[read_image] refused oversized image")
+                toolOutput = "Error: Cannot read image at '\(pathArg)': \(reason). Ask the user for a smaller image, or resize it first (e.g. with a shell tool)."
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
                 }
+                break
+            }
+            if let fileURL = resolvedURL, case .success(let image)? = prepared {
+                let originalSize = image.probe.fileBytes
+                let originalW = image.probe.pixelWidth
+                let originalH = image.probe.pixelHeight
+                let inferenceData = image.jpegData
+                let resizedW = image.width
+                let resizedH = image.height
 
                 if pathArg.hasPrefix("/var/minis/") {
                     toolImageLinuxPath = pathArg
@@ -907,11 +911,11 @@ extension AIChatViewModel {
                 let timeout: TimeInterval
                 if tu.name == "remote_shell" {
                     command = (args["command"] as? String) ?? ""
-                    timeout = TimeInterval((args["timeout"] as? Int) ?? 120)
+                    timeout = TimeInterval(ToolArgNumbers.clampedInt(args["timeout"], to: ToolArgNumbers.remoteShellTimeoutRange) ?? 120)
                 } else {
                     let prompt = (args["prompt"] as? String) ?? ""
                     let workdir = (args["workdir"] as? String) ?? ""
-                    timeout = TimeInterval((args["timeout"] as? Int) ?? 300)
+                    timeout = TimeInterval(ToolArgNumbers.clampedInt(args["timeout"], to: ToolArgNumbers.remoteAgentTimeoutRange) ?? 300)
                     // Login shell so PATH picks up homebrew/npm installs of
                     // `claude`. No cd for the default: quoting '~' would
                     // suppress tilde expansion and fail every run — the login
@@ -926,6 +930,9 @@ extension AIChatViewModel {
                 }
                 if command.isEmpty || (tu.name == "remote_agent" && (args["prompt"] as? String)?.isEmpty != false) {
                     toolOutput = "Error: missing required parameter."
+                    toolSuccess = false
+                } else if let rejection = ToolInputGuard.commandRejection(command) {
+                    toolOutput = rejection
                     toolSuccess = false
                 } else {
                     // SensitiveToolGate already bound the user's local UI

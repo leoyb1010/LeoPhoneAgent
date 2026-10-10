@@ -759,6 +759,20 @@
 		E5VMB0007 /* ChatURLBrokerage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMB0017 /* ChatURLBrokerage.swift */; };
 		E5VMC0001 /* AIChatViewModel+ISHCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMC0011 /* AIChatViewModel+ISHCommand.swift */; };
 		E5VMC0002 /* AIChatViewModel+FileTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMC0012 /* AIChatViewModel+FileTools.swift */; };
+		E5R3HX001A /* ToolInputHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX001F /* ToolInputHardening.swift */; };
+		E5R3HX001T /* ToolInputHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX001F /* ToolInputHardening.swift */; };
+		E5R3HX002A /* FileReadPaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX002F /* FileReadPaging.swift */; };
+		E5R3HX002T /* FileReadPaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX002F /* FileReadPaging.swift */; };
+		E5R3HX003A /* ImageInputGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX003F /* ImageInputGuard.swift */; };
+		E5R3HX003T /* ImageInputGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX003F /* ImageInputGuard.swift */; };
+		E5R3HX004A /* StreamHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX004F /* StreamHardening.swift */; };
+		E5R3HX004T /* StreamHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX004F /* StreamHardening.swift */; };
+		E5R3HX005A /* MarkdownHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX005F /* MarkdownHardening.swift */; };
+		E5R3HX005T /* MarkdownHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX005F /* MarkdownHardening.swift */; };
+		E5R3HX101T /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
+		E5R3HX102T /* MarkdownPrepRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200011 /* MarkdownPrepRegex.swift */; };
+		E5R3HXP11 /* cmark-gfm in Frameworks */ = {isa = PBXBuildFile; productRef = E5R3HXP01 /* cmark-gfm */; };
+		E5R3HXP12 /* cmark-gfm-extensions in Frameworks */ = {isa = PBXBuildFile; productRef = E5R3HXP02 /* cmark-gfm-extensions */; };
 		E5SXP0001 /* AIChatViewModel+SessionExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SXP0002 /* AIChatViewModel+SessionExport.swift */; };
 		E5SHC0001 /* ReplyShareCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SHC0002 /* ReplyShareCard.swift */; };
 		E5VMC0003 /* AIChatViewModel+Offloading.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMC0013 /* AIChatViewModel+Offloading.swift */; };
@@ -1643,6 +1657,11 @@
 		E5VMB0017 /* ChatURLBrokerage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatURLBrokerage.swift; sourceTree = "<group>"; };
 		E5VMC0011 /* AIChatViewModel+ISHCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+ISHCommand.swift"; sourceTree = "<group>"; };
 		E5VMC0012 /* AIChatViewModel+FileTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+FileTools.swift"; sourceTree = "<group>"; };
+		E5R3HX001F /* ToolInputHardening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolInputHardening.swift; sourceTree = "<group>"; };
+		E5R3HX002F /* FileReadPaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileReadPaging.swift; sourceTree = "<group>"; };
+		E5R3HX003F /* ImageInputGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageInputGuard.swift; sourceTree = "<group>"; };
+		E5R3HX004F /* StreamHardening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamHardening.swift; sourceTree = "<group>"; };
+		E5R3HX005F /* MarkdownHardening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHardening.swift; sourceTree = "<group>"; };
 		E5SXP0002 /* AIChatViewModel+SessionExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+SessionExport.swift"; sourceTree = "<group>"; };
 		E5SHC0002 /* ReplyShareCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyShareCard.swift; sourceTree = "<group>"; };
 		E5VMC0013 /* AIChatViewModel+Offloading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+Offloading.swift"; sourceTree = "<group>"; };
@@ -1738,6 +1757,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5TRP006 /* libsqlite3.tbd in Frameworks */,
+				E5R3HXP11 /* cmark-gfm in Frameworks */,
+				E5R3HXP12 /* cmark-gfm-extensions in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1975,6 +1996,7 @@
 				E52000011 /* LLMTypes.swift */,
 				E5TT0002 /* ThinkingTypes.swift */,
 				E52000012 /* LLMError.swift */,
+				E5R3HX004F /* StreamHardening.swift */,
 				E5OARC030 /* OAuthRefreshCoordinator.swift */,
 				E5OARC031 /* OAuthRefreshSingleFlight.swift */,
 				E52000013 /* LLMProvider.swift */,
@@ -2669,6 +2691,9 @@
 				E5VMB0017 /* ChatURLBrokerage.swift */,
 				E5VMC0011 /* AIChatViewModel+ISHCommand.swift */,
 				E5VMC0012 /* AIChatViewModel+FileTools.swift */,
+				E5R3HX003F /* ImageInputGuard.swift */,
+				E5R3HX002F /* FileReadPaging.swift */,
+				E5R3HX001F /* ToolInputHardening.swift */,
 				E5SXP0002 /* AIChatViewModel+SessionExport.swift */,
 				E5VMD0011 /* MinisURLPathDecoding.swift */,
 				E5VMC0013 /* AIChatViewModel+Offloading.swift */,
@@ -2705,6 +2730,7 @@
 			children = (
 				E5U000011 /* KaTeXRenderer.swift */,
 				E5M000013 /* MinisMarkdownParser.swift */,
+				E5R3HX005F /* MarkdownHardening.swift */,
 				E5X000011 /* SwiftMathRenderer.swift */,
 				E5Y000011 /* MathRenderScheduler.swift */,
 			);
@@ -3093,6 +3119,10 @@
 				BB1000012F700000000000AA /* MinisTests */,
 			);
 			name = MinisTests;
+			packageProductDependencies = (
+				E5R3HXP01 /* cmark-gfm */,
+				E5R3HXP02 /* cmark-gfm-extensions */,
+			);
 			productName = MinisTests;
 			productReference = BB1000010F700000000000AA /* MinisTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3503,6 +3533,13 @@
 				E5KIMI0A2 /* KimiOAuthRefreshCoordinator.swift in Sources */,
 				E5KIMI0B2 /* KimiDeviceFlow.swift in Sources */,
 				E5OARC003 /* LLMError.swift in Sources */,
+				E5R3HX001T /* ToolInputHardening.swift in Sources */,
+				E5R3HX002T /* FileReadPaging.swift in Sources */,
+				E5R3HX003T /* ImageInputGuard.swift in Sources */,
+				E5R3HX004T /* StreamHardening.swift in Sources */,
+				E5R3HX005T /* MarkdownHardening.swift in Sources */,
+				E5R3HX101T /* MinisMarkdownParser.swift in Sources */,
+				E5R3HX102T /* MarkdownPrepRegex.swift in Sources */,
 				E521D59DA5102F112A67270D /* MIMEMessage.swift in Sources */,
 				E5A04910E1B075BC86214111 /* IMAPResponse.swift in Sources */,
 				E5E7AEEF0B1AE86527E36437 /* IMAPClient.swift in Sources */,
@@ -3654,6 +3691,11 @@
 				E5VMB0007 /* ChatURLBrokerage.swift in Sources */,
 				E5VMC0001 /* AIChatViewModel+ISHCommand.swift in Sources */,
 				E5VMC0002 /* AIChatViewModel+FileTools.swift in Sources */,
+				E5R3HX001A /* ToolInputHardening.swift in Sources */,
+				E5R3HX002A /* FileReadPaging.swift in Sources */,
+				E5R3HX003A /* ImageInputGuard.swift in Sources */,
+				E5R3HX004A /* StreamHardening.swift in Sources */,
+				E5R3HX005A /* MarkdownHardening.swift in Sources */,
 				E5SXP0001 /* AIChatViewModel+SessionExport.swift in Sources */,
 				E5SHC0001 /* ReplyShareCard.swift in Sources */,
 				E5VMD0001 /* MinisURLPathDecoding.swift in Sources */,
@@ -4926,6 +4968,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
+		};
+		E5R3HXP01 /* cmark-gfm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5M000020 /* XCRemoteSwiftPackageReference "swift-cmark" */;
+			productName = "cmark-gfm";
+		};
+		E5R3HXP02 /* cmark-gfm-extensions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5M000020 /* XCRemoteSwiftPackageReference "swift-cmark" */;
+			productName = "cmark-gfm-extensions";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

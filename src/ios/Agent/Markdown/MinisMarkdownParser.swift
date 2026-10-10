@@ -2,6 +2,8 @@ import Foundation
 import cmark_gfm
 import cmark_gfm_extensions
 
+private let markdownLogger = AppLogger(category: "MarkdownParser")
+
 // MARK: - Block & Inline Node types (inlined from swift-markdown-ui)
 
 enum BlockNode: Hashable {
@@ -110,13 +112,19 @@ struct MarkdownContent: Hashable {
     let blocks: [BlockNode]
 
     init(_ markdown: String) {
-        let (cleaned, mathSpans) = MarkdownMathExtractor.extract(from: markdown)
+        // [T-r3-markdown-hardening] Bounded before anything recursive sees it:
+        // bidi overrides / combining-mark floods are stripped and blockquote
+        // nesting past 8 levels becomes literal text.
+        // [B21] Past 200k characters the remainder is one plain code block.
+        let (head, overflow) = MarkdownSizeGuard.split(markdown)
+        let bounded = MarkdownNestingGuard.collapseDeepBlockquotes(MarkdownTextSanitizer.sanitize(head))
+        let (cleaned, mathSpans) = MarkdownMathExtractor.extract(from: bounded)
         let parsed = [BlockNode](markdown: cleaned)
-        if mathSpans.isEmpty {
-            self.blocks = parsed
-        } else {
-            self.blocks = MarkdownMathExtractor.restore(blocks: parsed, spans: mathSpans)
+        var blocks = mathSpans.isEmpty ? parsed : MarkdownMathExtractor.restore(blocks: parsed, spans: mathSpans)
+        if let overflow {
+            blocks.append(.codeBlock(fenceInfo: nil, content: MarkdownTextSanitizer.sanitize(overflow)))
         }
+        self.blocks = blocks
     }
 
     init(blocks: [BlockNode]) {
@@ -139,9 +147,18 @@ enum MarkdownMathExtractor {
     static func extract(from markdown: String) -> (String, [MathSpan]) {
         var spans: [MathSpan] = []
         var result = ""
+        // Fast path: nothing that can start math → nothing to extract.
+        guard markdown.utf8.contains(where: { $0 == UInt8(ascii: "$") || $0 == UInt8(ascii: "\\") }) else {
+            return (markdown, [])
+        }
         let chars = Array(markdown)
         let count = chars.count
         var i = 0
+        // [T-r3-markdown-hardening] Closer lookups are O(1) amortised: every
+        // search below used to rescan to the end of the line / document for
+        // each opener, so 100k unclosed `$` took O(n²) on the main thread.
+        let closers = MathCloserIndex(chars)
+        let backticks = BacktickRunIndex(chars)
 
         // Track code fences and inline code to skip them
         var inFencedCode = false
@@ -195,26 +212,14 @@ enum MarkdownMathExtractor {
                 var backtickLen = 0
                 var j = i
                 while j < count && chars[j] == "`" { backtickLen += 1; j += 1 }
-                // Find matching closing backticks
-                var found = false
-                var k = j
-                while k <= count - backtickLen {
-                    var matchLen = 0
-                    while k + matchLen < count && chars[k + matchLen] == "`" { matchLen += 1 }
-                    if matchLen == backtickLen {
-                        // Copy everything from i through k + matchLen - 1
-                        for idx in i..<(k + matchLen) {
-                            result.append(chars[idx])
-                        }
-                        i = k + matchLen
-                        found = true
-                        break
-                    }
-                    if matchLen > 0 { k += matchLen } else { k += 1 }
+                // Find matching closing backticks (indexed: no rescan per opener)
+                if let k = backticks.closingRunStart(length: backtickLen, after: j) {
+                    result.append(contentsOf: String(chars[i..<(k + backtickLen)]))
+                    i = k + backtickLen
+                    continue
                 }
-                if found { continue }
                 // No matching close — just output the backticks
-                for idx in i..<j { result.append(chars[idx]) }
+                result.append(contentsOf: String(chars[i..<j]))
                 i = j
                 continue
             }
@@ -228,7 +233,7 @@ enum MarkdownMathExtractor {
 
             // Check for \[ ... \] (display math)
             if chars[i] == "\\" && i + 1 < count && chars[i + 1] == "[" {
-                if let end = findClosingBracket(chars: chars, from: i + 2, close: "\\]") {
+                if let end = closers.next(.displayBracket, from: i + 2) {
                     let latex = String(chars[(i + 2)..<end])
                     let placeholder = "\u{FFFC}MATH\(spans.count)\u{FFFC}"
                     spans.append(MathSpan(placeholder: placeholder, latex: latex, isBlock: true))
@@ -240,7 +245,7 @@ enum MarkdownMathExtractor {
 
             // Check for \( ... \) (inline math)
             if chars[i] == "\\" && i + 1 < count && chars[i + 1] == "(" {
-                if let end = findClosingBracket(chars: chars, from: i + 2, close: "\\)") {
+                if let end = closers.next(.inlineParen, from: i + 2) {
                     let latex = String(chars[(i + 2)..<end])
                     let placeholder = "\u{FFFC}MATH\(spans.count)\u{FFFC}"
                     spans.append(MathSpan(placeholder: placeholder, latex: latex, isBlock: false))
@@ -252,7 +257,7 @@ enum MarkdownMathExtractor {
 
             // Check for $$ ... $$ (display math)
             if chars[i] == "$" && i + 1 < count && chars[i + 1] == "$" {
-                if let end = findDoubleDollar(chars: chars, from: i + 2) {
+                if let end = closers.next(.doubleDollar, from: i + 2) {
                     let latex = String(chars[(i + 2)..<end])
                     let placeholder = "\u{FFFC}MATH\(spans.count)\u{FFFC}"
                     spans.append(MathSpan(placeholder: placeholder, latex: latex, isBlock: true))
@@ -264,7 +269,7 @@ enum MarkdownMathExtractor {
 
             // Check for $ ... $ (inline math)
             if chars[i] == "$" && i + 1 < count && chars[i + 1] != "$" && chars[i + 1] != " " {
-                if let end = findSingleDollar(chars: chars, from: i + 1) {
+                if let end = closers.singleDollar(from: i + 1) {
                     let latex = String(chars[(i + 1)..<end])
                     // Heuristic: skip plain currency like $5, $10.
                     // [T-ios-table-cell-katex-false-positive] Also skip a span
@@ -300,38 +305,91 @@ enum MarkdownMathExtractor {
 
     // MARK: - Private Helpers
 
-    private static func findClosingBracket(chars: [Character], from start: Int, close: String) -> Int? {
-        let closeChars = Array(close)
-        var i = start
-        while i <= chars.count - closeChars.count {
-            var match = true
-            for j in 0..<closeChars.count {
-                if chars[i + j] != closeChars[j] { match = false; break }
+    /// Precomputed closer positions for every math delimiter, so each opener
+    /// finds its closer in O(log n) instead of scanning forward. Semantics
+    /// match the old scanners exactly:
+    ///   - `\]`, `\)`, `$$`: the first occurrence at or after `from`;
+    ///   - single `$`: the first `$` at or after `from` on the same line that
+    ///     is not escaped by a preceding `\` (escapes are consumed pairwise
+    ///     from `from`, as the old scanner did) and not preceded by a space.
+    struct MathCloserIndex {
+        enum Kind { case displayBracket, inlineParen, doubleDollar }
+        private var positions: [Kind: [Int]] = [:]
+        /// For the single-dollar scan: position of the next newline at or after i.
+        private let nextNewline: [Int]
+        /// Candidate `$` closers (not preceded by a space), ascending.
+        private let dollarCandidates: [Int]
+        private let chars: [Character]
+
+        init(_ chars: [Character]) {
+            self.chars = chars
+            let n = chars.count
+            var bracket: [Int] = [], paren: [Int] = [], dd: [Int] = [], dollars: [Int] = []
+            var newline = [Int](repeating: n, count: n + 1)
+            var i = n - 1
+            while i >= 0 {
+                newline[i] = chars[i] == "\n" ? i : newline[i + 1]
+                i -= 1
             }
-            if match { return i }
-            i += 1
+            for j in 0..<n {
+                let c = chars[j]
+                if c == "\\", j + 1 < n {
+                    if chars[j + 1] == "]" { bracket.append(j) }
+                    if chars[j + 1] == ")" { paren.append(j) }
+                } else if c == "$" {
+                    if j + 1 < n, chars[j + 1] == "$" { dd.append(j) }
+                    if j == 0 || chars[j - 1] != " " { dollars.append(j) }
+                }
+            }
+            positions = [.displayBracket: bracket, .inlineParen: paren, .doubleDollar: dd]
+            nextNewline = newline
+            dollarCandidates = dollars
         }
-        return nil
-    }
 
-    private static func findDoubleDollar(chars: [Character], from start: Int) -> Int? {
-        var i = start
-        while i < chars.count - 1 {
-            if chars[i] == "$" && chars[i + 1] == "$" { return i }
-            i += 1
+        func next(_ kind: Kind, from start: Int) -> Int? {
+            guard let list = positions[kind] else { return nil }
+            return Self.firstAtOrAfter(start, in: list)
         }
-        return nil
-    }
 
-    private static func findSingleDollar(chars: [Character], from start: Int) -> Int? {
-        var i = start
-        while i < chars.count {
-            if chars[i] == "\\" && i + 1 < chars.count { i += 2; continue } // skip escaped
-            if chars[i] == "$" && (i == 0 || chars[i - 1] != " ") { return i }
-            if chars[i] == "\n" { return nil } // single-line only
-            i += 1
+        /// The old `findSingleDollar`: walk from `start`, skipping `\x` pairs,
+        /// stop at a newline. Escapes are only relevant for candidates whose
+        /// preceding character is a backslash; those (rare) are verified with
+        /// a bounded local scan, everything else is a binary search.
+        func singleDollar(from start: Int) -> Int? {
+            guard start < chars.count else { return nil }
+            let lineEnd = nextNewline[start]
+            var from = start
+            while let cand = Self.firstAtOrAfter(from, in: dollarCandidates), cand < lineEnd {
+                if isEscaped(cand, scanStart: start) {
+                    from = cand + 1
+                    continue
+                }
+                return cand
+            }
+            return nil
         }
-        return nil
+
+        /// True when the pairwise `\` walk that starts at `scanStart` would
+        /// consume the character at `pos` as the second half of an escape.
+        private func isEscaped(_ pos: Int, scanStart: Int) -> Bool {
+            var run = 0
+            var k = pos - 1
+            while k >= scanStart, chars[k] == "\\" { run += 1; k -= 1 }
+            // The run of backslashes immediately before `pos` started at k+1.
+            // The walk reaches k+1 aligned (it is either scanStart or follows a
+            // non-backslash char, which the walk steps over one at a time), so
+            // an odd run escapes `pos`.
+            return run % 2 == 1
+        }
+
+        private static func firstAtOrAfter(_ value: Int, in list: [Int]) -> Int? {
+            var lo = 0, hi = list.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if list[mid] < value { lo = mid + 1 } else { hi = mid }
+            }
+            return lo < list.count ? list[lo] : nil
+        }
     }
 
     /// Heuristic: content looks like LaTeX if it contains special chars or is long enough.
@@ -481,41 +539,54 @@ enum MarkdownMathExtractor {
 
 // MARK: - cmark parsing glue
 
+// [T-r3-markdown-hardening] The walker is depth-limited: cmark builds any
+// nesting iteratively, but this conversion (and every renderer after it)
+// recursed once per level, so 2000 nested quotes / lists / emphasis overflowed
+// the stack. Past the limit a subtree is flattened to its plain text, collected
+// with cmark's own iterator (no recursion). Unknown node types are skipped and
+// logged instead of `fatalError`.
+
 extension Array where Element == BlockNode {
     init(markdown: String) {
         let blocks = UnsafeNode.parseMarkdown(markdown) { document in
-            document.children.compactMap(BlockNode.init(unsafeNode:))
+            document.children.compactMap { BlockNode(unsafeNode: $0, depth: 0) }
         }
         self.init(blocks ?? .init())
     }
 }
 
 extension BlockNode {
-    fileprivate init?(unsafeNode: UnsafeNode) {
+    fileprivate init?(unsafeNode: UnsafeNode, depth: Int) {
+        if depth >= MarkdownNestingGuard.maxBlockDepth {
+            let text = unsafeNode.flattenedText
+            guard !text.isEmpty else { return nil }
+            self = .paragraph(content: [.text(text)])
+            return
+        }
+        let childDepth = depth + 1
+        func blockChildren() -> [BlockNode] {
+            unsafeNode.children.compactMap { BlockNode(unsafeNode: $0, depth: childDepth) }
+        }
+        func inlineChildren() -> [InlineNode] {
+            unsafeNode.children.compactMap { InlineNode(unsafeNode: $0, depth: 0) }
+        }
         switch unsafeNode.nodeType {
         case .blockquote:
-            self = .blockquote(children: unsafeNode.children.compactMap(BlockNode.init(unsafeNode:)))
+            self = .blockquote(children: blockChildren())
         case .list:
             if unsafeNode.children.contains(where: \.isTaskListItem) {
                 self = .taskList(
                     isTight: unsafeNode.isTightList,
-                    items: unsafeNode.children.map(RawTaskListItem.init(unsafeNode:))
+                    items: unsafeNode.children.map { RawTaskListItem(unsafeNode: $0, depth: childDepth) }
                 )
             } else {
+                let items = unsafeNode.children.map { RawListItem(unsafeNode: $0, depth: childDepth) }
                 switch unsafeNode.listType {
-                case CMARK_BULLET_LIST:
-                    self = .bulletedList(
-                        isTight: unsafeNode.isTightList,
-                        items: unsafeNode.children.map(RawListItem.init(unsafeNode:))
-                    )
                 case CMARK_ORDERED_LIST:
-                    self = .numberedList(
-                        isTight: unsafeNode.isTightList,
-                        start: unsafeNode.listStart,
-                        items: unsafeNode.children.map(RawListItem.init(unsafeNode:))
-                    )
+                    self = .numberedList(isTight: unsafeNode.isTightList, start: unsafeNode.listStart, items: items)
                 default:
-                    fatalError("cmark reported a list node without a list type.")
+                    // CMARK_BULLET_LIST, and (defensively) a list without a type.
+                    self = .bulletedList(isTight: unsafeNode.isTightList, items: items)
                 }
             }
         case .codeBlock:
@@ -523,67 +594,71 @@ extension BlockNode {
         case .htmlBlock:
             self = .htmlBlock(content: unsafeNode.literal ?? "")
         case .paragraph:
-            self = .paragraph(content: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:)))
+            self = .paragraph(content: inlineChildren())
         case .heading:
-            self = .heading(
-                level: unsafeNode.headingLevel,
-                content: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:))
-            )
+            self = .heading(level: unsafeNode.headingLevel, content: inlineChildren())
         case .table:
             self = .table(
                 columnAlignments: unsafeNode.tableAlignments,
-                rows: unsafeNode.children.map(RawTableRow.init(unsafeNode:))
+                rows: unsafeNode.children.compactMap(RawTableRow.init(unsafeNode:))
             )
         case .thematicBreak:
             self = .thematicBreak
         default:
-            assertionFailure("Unhandled node type '\(unsafeNode.nodeType)' in BlockNode.")
+            markdownLogger.warning("skipping unhandled block node '\(unsafeNode.nodeType.rawValue)'")
             return nil
         }
     }
 }
 
 extension RawListItem {
-    fileprivate init(unsafeNode: UnsafeNode) {
-        guard unsafeNode.nodeType == .item else {
-            fatalError("Expected a list item but got a '\(unsafeNode.nodeType)' instead.")
-        }
-        self.init(children: unsafeNode.children.compactMap(BlockNode.init(unsafeNode:)))
+    fileprivate init(unsafeNode: UnsafeNode, depth: Int) {
+        // A non-item child (never produced by cmark) contributes its content
+        // instead of crashing.
+        self.init(children: unsafeNode.children.compactMap { BlockNode(unsafeNode: $0, depth: depth) })
     }
 }
 
 extension RawTaskListItem {
-    fileprivate init(unsafeNode: UnsafeNode) {
-        guard unsafeNode.nodeType == .taskListItem || unsafeNode.nodeType == .item else {
-            fatalError("Expected a list item but got a '\(unsafeNode.nodeType)' instead.")
-        }
+    fileprivate init(unsafeNode: UnsafeNode, depth: Int) {
         self.init(
-            isCompleted: unsafeNode.isTaskListItemChecked,
-            children: unsafeNode.children.compactMap(BlockNode.init(unsafeNode:))
+            isCompleted: unsafeNode.nodeType == .taskListItem && unsafeNode.isTaskListItemChecked,
+            children: unsafeNode.children.compactMap { BlockNode(unsafeNode: $0, depth: depth) }
         )
     }
 }
 
 extension RawTableRow {
-    fileprivate init(unsafeNode: UnsafeNode) {
+    fileprivate init?(unsafeNode: UnsafeNode) {
         guard unsafeNode.nodeType == .tableRow || unsafeNode.nodeType == .tableHead else {
-            fatalError("Expected a table row but got a '\(unsafeNode.nodeType)' instead.")
+            markdownLogger.warning("skipping unexpected table child '\(unsafeNode.nodeType.rawValue)'")
+            return nil
         }
-        self.init(cells: unsafeNode.children.map(RawTableCell.init(unsafeNode:)))
+        self.init(cells: unsafeNode.children.compactMap(RawTableCell.init(unsafeNode:)))
     }
 }
 
 extension RawTableCell {
-    fileprivate init(unsafeNode: UnsafeNode) {
+    fileprivate init?(unsafeNode: UnsafeNode) {
         guard unsafeNode.nodeType == .tableCell else {
-            fatalError("Expected a table cell but got a '\(unsafeNode.nodeType)' instead.")
+            markdownLogger.warning("skipping unexpected table-row child '\(unsafeNode.nodeType.rawValue)'")
+            return nil
         }
-        self.init(content: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:)))
+        self.init(content: unsafeNode.children.compactMap { InlineNode(unsafeNode: $0, depth: 0) })
     }
 }
 
 extension InlineNode {
-    fileprivate init?(unsafeNode: UnsafeNode) {
+    fileprivate init?(unsafeNode: UnsafeNode, depth: Int) {
+        if depth >= MarkdownNestingGuard.maxInlineDepth {
+            let text = unsafeNode.flattenedText
+            guard !text.isEmpty else { return nil }
+            self = .text(text)
+            return
+        }
+        func inlineChildren() -> [InlineNode] {
+            unsafeNode.children.compactMap { InlineNode(unsafeNode: $0, depth: depth + 1) }
+        }
         switch unsafeNode.nodeType {
         case .text: self = .text(unsafeNode.literal ?? "")
         case .softBreak: self = .softBreak
@@ -591,23 +666,17 @@ extension InlineNode {
         case .code: self = .code(unsafeNode.literal ?? "")
         case .html: self = .html(unsafeNode.literal ?? "")
         case .emphasis:
-            self = .emphasis(children: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:)))
+            self = .emphasis(children: inlineChildren())
         case .strong:
-            self = .strong(children: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:)))
+            self = .strong(children: inlineChildren())
         case .strikethrough:
-            self = .strikethrough(children: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:)))
+            self = .strikethrough(children: inlineChildren())
         case .link:
-            self = .link(
-                destination: unsafeNode.url ?? "",
-                children: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:))
-            )
+            self = .link(destination: unsafeNode.url ?? "", children: inlineChildren())
         case .image:
-            self = .image(
-                source: unsafeNode.url ?? "",
-                children: unsafeNode.children.compactMap(InlineNode.init(unsafeNode:))
-            )
+            self = .image(source: unsafeNode.url ?? "", children: inlineChildren())
         default:
-            assertionFailure("Unhandled node type '\(unsafeNode.nodeType)' in InlineNode.")
+            markdownLogger.warning("skipping unhandled inline node '\(unsafeNode.nodeType.rawValue)'")
             return nil
         }
     }
@@ -620,10 +689,35 @@ private typealias UnsafeNode = UnsafeMutablePointer<cmark_node>
 extension UnsafeNode {
     fileprivate var nodeType: NodeType {
         let typeString = String(cString: cmark_node_get_type_string(self))
-        guard let nodeType = NodeType(rawValue: typeString) else {
-            fatalError("Unknown node type '\(typeString)' found.")
+        // [T-r3-markdown-hardening] A node type this build does not know (a
+        // future cmark extension) is reported as `.unknown` and skipped by the
+        // walkers — it used to be a fatalError.
+        return NodeType(rawValue: typeString) ?? .unknown
+    }
+
+    /// Plain text of this node's whole subtree, collected with cmark's
+    /// iterator (iterative — safe at any depth).
+    fileprivate var flattenedText: String {
+        guard let iter = cmark_iter_new(self) else { return "" }
+        defer { cmark_iter_free(iter) }
+        var out = ""
+        var ev = cmark_iter_next(iter)
+        while ev != CMARK_EVENT_DONE {
+            if ev == CMARK_EVENT_ENTER, let node = cmark_iter_get_node(iter) {
+                switch cmark_node_get_type(node) {
+                case CMARK_NODE_TEXT, CMARK_NODE_CODE, CMARK_NODE_CODE_BLOCK, CMARK_NODE_HTML_INLINE:
+                    if let lit = cmark_node_get_literal(node) { out += String(cString: lit) }
+                case CMARK_NODE_SOFTBREAK, CMARK_NODE_LINEBREAK:
+                    out += " "
+                case CMARK_NODE_PARAGRAPH, CMARK_NODE_HEADING:
+                    if !out.isEmpty, !out.hasSuffix("\n") { out += "\n" }
+                default:
+                    break
+                }
+            }
+            ev = cmark_iter_next(iter)
         }
-        return nodeType
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     fileprivate var children: UnsafeNodeSequence {

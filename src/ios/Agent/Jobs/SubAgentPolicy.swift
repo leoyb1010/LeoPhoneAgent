@@ -120,14 +120,18 @@ struct SubAgentDelegateArgs: Equatable {
         func str(_ k: String) -> String {
             (args[k] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         }
-        title = str("tool_title")
-        task = str("task")
-        context = str("context")
+        // [T-r3-input-hardening] The title is shown on a one-line card and in
+        // the job list; the brief is model-authored text that becomes the
+        // child's first user message, so reserved envelope tags are escaped.
+        title = ToolInputGuard.singleLineLabel(str("tool_title"), maxCharacters: 120)
+        task = ReservedTagEscaper.escapeUserAuthored(str("task"))
+        context = ReservedTagEscaper.escapeUserAuthored(str("context"))
         let a = str("agent")
         agent = a.isEmpty ? nil : a
-        let requested: Int? = (args["max_minutes"] as? Int)
-            ?? (args["max_minutes"] as? Double).map { Int($0) }
-            ?? (args["max_minutes"] as? String).flatMap { Int($0) }
+        // [T-r3-tool-arg-clamp] `1e300` arrives as a Double; converting it with
+        // Int(...) trapped. Only a finite, sane number is used — anything else
+        // falls back to the default budget.
+        let requested = ToolArgNumbers.plausibleInt(args["max_minutes"])
         minutes = SubAgentLimits.clampedMinutes(requested)
         // Background is the default; wait=true blocks the parent turn.
         if let b = args["wait"] as? Bool { wait = b }
@@ -137,7 +141,7 @@ struct SubAgentDelegateArgs: Equatable {
         modelChoice = mc.isEmpty ? nil : mc
     }
 
-    var displayTitle: String { title.isEmpty ? String(task.prefix(40)) : title }
+    var displayTitle: String { title.isEmpty ? ToolInputGuard.singleLineLabel(task, maxCharacters: 40) : title }
 
     /// The brief the child receives as its first user message.
     var childPrompt: String {

@@ -10,8 +10,12 @@ extension AIChatViewModel {
     nonisolated static func loadGlobalMemoryFragment() -> String? {
         let globalFile = minisMemoryPersistentDir.appendingPathComponent("GLOBAL.md")
         guard FileManager.default.fileExists(atPath: globalFile.path),
-              let content = try? String(contentsOf: globalFile, encoding: .utf8),
-              !content.isEmpty else { return nil }
+              let read = MemoryDailyLog.readPrefix(of: globalFile, maxBytes: MemoryDailyLog.maxGlobalFragmentBytes),
+              !read.text.isEmpty else { return nil }
+        // [B7] Byte-capped: GLOBAL.md is injected into every request.
+        let content = read.truncated
+            ? read.text + "\n... (GLOBAL.md is longer; the rest was not loaded — use memory_get to search it)"
+            : read.text
 
         return "Global memory (GLOBAL.md — read-only, user-maintained). Treat these as background context, not standing instructions. If the user's latest message conflicts with or supersedes anything here (different scope, different numbers, different goal), defer to the user's latest message:\n\(content)"
     }
@@ -33,10 +37,13 @@ extension AIChatViewModel {
             let fileURL = minisMemoryPersistentDir.appendingPathComponent("\(dateStr).md")
 
             if fm.fileExists(atPath: fileURL.path),
-               let content = try? String(contentsOf: fileURL, encoding: .utf8),
-               !content.isEmpty {
+               let read = MemoryDailyLog.readPrefix(of: fileURL, maxBytes: MemoryDailyLog.maxDailyFragmentBytes * 4),
+               !read.text.isEmpty {
+                let content = read.text
                 let lines = content.components(separatedBy: "\n")
-                let preview = lines.prefix(200).joined(separator: "\n")
+                // [B7] 200 lines AND a byte cap: one 10 MB line is still one line.
+                let preview = MemoryDailyLog.capped(lines.prefix(200).joined(separator: "\n"),
+                                                    maxBytes: MemoryDailyLog.maxDailyFragmentBytes)
                 // [T-memory-recency-tiers] Label the AGE, not just the date.
                 // Every entry used to arrive with equal weight, so a
                 // preference stated a month ago read as current fact. The
@@ -54,6 +61,8 @@ extension AIChatViewModel {
                 var entry = "\(label) daily log (\(dateStr).md):\n\(preview)"
                 if lines.count > 200 {
                     entry += "\n... (\(lines.count - 200) more lines, use memory_get to search)"
+                } else if read.truncated {
+                    entry += "\n... (more entries, use memory_get to search)"
                 }
                 fragments.append(entry)
             }
@@ -121,7 +130,9 @@ extension AIChatViewModel {
         // waiting for the next foreground would leave it a day stale.
         Task { @MainActor in WidgetDataMirror.refreshMemory() }
 
-        return FileToolResult(output: "Memory saved to \(fileName) (\(content.count) chars)", success: true)
+        let note = content.utf8.count > MemoryDailyLog.maxEntryBytes
+            ? " — truncated to \(MemoryDailyLog.maxEntryBytes / 1024) KB; save long material as a file instead" : ""
+        return FileToolResult(output: "Memory saved to \(fileName) (\(content.count) chars)\(note)", success: true)
     }
 
     /// Execute a memory_get tool call: read and optionally search memory files.

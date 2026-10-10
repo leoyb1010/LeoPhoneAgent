@@ -207,6 +207,11 @@ extension AIChatViewModel {
     nonisolated static func preflightValidateToolCall(name: String,
                                                       args: [String: Any],
                                                       tools: [AgentToolDefinition]) -> String? {
+        // [B2] Arguments over the stream cap were discarded by the provider
+        // parser; the call completes as a readable error instead of running.
+        if let oversize = args[StreamToolArgsAccumulator.oversizeSentinelKey] as? String {
+            return oversize
+        }
         // Unknown tool names go through to the existing default branch in the
         // dispatch switch which already returns an "Unknown tool" error to
         // the model. Preflight stays silent so we don't double-fail.
