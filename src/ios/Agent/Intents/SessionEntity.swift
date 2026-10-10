@@ -1,8 +1,12 @@
 import AppIntents
+import CoreSpotlight
 import Foundation
 
 /// Wraps a ChatSession as an AppEntity so Shortcuts can reference sessions by name.
-struct SessionEntity: AppEntity {
+/// [F2-indexed-entity] Also an IndexedEntity: the Spotlight items the indexer
+/// writes are associated with this entity, so Spotlight and Shortcuts resolve a
+/// found conversation to the same entity the session actions take.
+struct SessionEntity: AppEntity, IndexedEntity {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "New Session")
     static var defaultQuery = SessionEntityQuery()
 
@@ -12,6 +16,14 @@ struct SessionEntity: AppEntity {
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(displayName)")
+    }
+
+    /// Title only — never message bodies (same rule as SessionSpotlightIndexer).
+    var attributeSet: CSSearchableItemAttributeSet {
+        let attributes = CSSearchableItemAttributeSet(contentType: .content)
+        attributes.title = displayName
+        attributes.keywords = ["LeoBot", "Agent", "chat"]
+        return attributes
     }
 
     init(id: String, displayName: String, modelId: String) {

@@ -156,6 +156,10 @@ struct WidgetQuickTaskItem: Codable, Hashable, Identifiable {
     var lastRunRequestId: String? = nil
     var lastRunId: String? = nil
     var lastRunSessionId: String? = nil
+    /// [F2-widget-background] The task needs the app in front (it has input
+    /// slots, or reads the clipboard): the widget opens the app instead of
+    /// running it in the background.
+    var needsApp: Bool = false
 
     // [T-codable-default-not-a-fallback] A property default does NOT make the
     // synthesised `init(from:)` tolerant: Swift emits `decode(_:forKey:)` for a
@@ -183,6 +187,7 @@ struct WidgetQuickTaskItem: Codable, Hashable, Identifiable {
         lastRunRequestId = try c.decodeIfPresent(String.self, forKey: .lastRunRequestId)
         lastRunId = try c.decodeIfPresent(String.self, forKey: .lastRunId)
         lastRunSessionId = try c.decodeIfPresent(String.self, forKey: .lastRunSessionId)
+        needsApp = (try? c.decodeIfPresent(Bool.self, forKey: .needsApp)) ?? false
     }
 
     @discardableResult

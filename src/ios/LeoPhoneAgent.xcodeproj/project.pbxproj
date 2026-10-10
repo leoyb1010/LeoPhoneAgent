@@ -7,6 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E5F2R3011A /* ToolTogglesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3011F /* ToolTogglesSettingsView.swift */; };
+		E5F2R3010A /* LongImageShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3010F /* LongImageShareView.swift */; };
+		E5F2R3009A /* TurnAccessibilityAnnouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3009F /* TurnAccessibilityAnnouncer.swift */; };
+		E5F2R3008A /* MemoryUndoAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3008F /* MemoryUndoAction.swift */; };
+		E5F2R3007A /* ScheduledCountdownPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3007F /* ScheduledCountdownPill.swift */; };
+		E5F2R3006A /* MemoryWriteUndo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3006F /* MemoryWriteUndo.swift */; };
+		E5F2R3006T /* MemoryWriteUndo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3006F /* MemoryWriteUndo.swift */; };
+		E5F2R3005A /* LongImageTranscript.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3005F /* LongImageTranscript.swift */; };
+		E5F2R3005T /* LongImageTranscript.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3005F /* LongImageTranscript.swift */; };
+		E5F2R3004A /* TurnAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3004F /* TurnAnnouncement.swift */; };
+		E5F2R3004T /* TurnAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3004F /* TurnAnnouncement.swift */; };
+		E5F2R3003A /* AgentToolToggles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3003F /* AgentToolToggles.swift */; };
+		E5F2R3003T /* AgentToolToggles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3003F /* AgentToolToggles.swift */; };
+		E5F2R3002A /* ScheduledFollowUpDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3002F /* ScheduledFollowUpDispatcher.swift */; };
+		E5F2R3001A /* ScheduledFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3001F /* ScheduledFollowUp.swift */; };
+		E5F2R3001T /* ScheduledFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2R3001F /* ScheduledFollowUp.swift */; };
 		E5E15708A /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15708T /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15709A /* SkillDraftEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15709F /* SkillDraftEditorView.swift */; };
@@ -924,6 +940,17 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E5F2R3011F /* ToolTogglesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTogglesSettingsView.swift; sourceTree = "<group>"; };
+		E5F2R3010F /* LongImageShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongImageShareView.swift; sourceTree = "<group>"; };
+		E5F2R3009F /* TurnAccessibilityAnnouncer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnAccessibilityAnnouncer.swift; sourceTree = "<group>"; };
+		E5F2R3008F /* MemoryUndoAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryUndoAction.swift; sourceTree = "<group>"; };
+		E5F2R3007F /* ScheduledCountdownPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledCountdownPill.swift; sourceTree = "<group>"; };
+		E5F2R3006F /* MemoryWriteUndo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryWriteUndo.swift; sourceTree = "<group>"; };
+		E5F2R3005F /* LongImageTranscript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongImageTranscript.swift; sourceTree = "<group>"; };
+		E5F2R3004F /* TurnAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnAnnouncement.swift; sourceTree = "<group>"; };
+		E5F2R3003F /* AgentToolToggles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolToggles.swift; sourceTree = "<group>"; };
+		E5F2R3002F /* ScheduledFollowUpDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledFollowUpDispatcher.swift; sourceTree = "<group>"; };
+		E5F2R3001F /* ScheduledFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledFollowUp.swift; sourceTree = "<group>"; };
 		E5E15708F /* SkillDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/SkillDraft.swift; sourceTree = SOURCE_ROOT; };
 		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
@@ -2497,6 +2524,8 @@
 				E5QTK0011 /* QuickTaskCatalog.swift */,
 				E5QTW0011 /* QuickTaskWidgetRunner.swift */,
 				E5SCH011 /* ScheduledTaskStore.swift */,
+				E5F2R3002F /* ScheduledFollowUpDispatcher.swift */,
+				E5F2R3001F /* ScheduledFollowUp.swift */,
 				E5SCH012 /* ScheduledTaskRunner.swift */,
 				E5AUT0002 /* AutomationEngine.swift */,
 				E5D601F /* AutomationRule.swift */,
@@ -2659,6 +2688,9 @@
 				E5VMA0017 /* AIChatViewModel+ToolDefinitions.swift */,
 				E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */,
 				E5R1C0011 /* AgentChatCorrectness.swift */,
+				E5F2R3005F /* LongImageTranscript.swift */,
+				E5F2R3004F /* TurnAnnouncement.swift */,
+				E5F2R3003F /* AgentToolToggles.swift */,
 				E5VMB0011 /* AIChatViewModel+Compaction.swift */,
 				E5VMB0012 /* AIChatViewModel+Fallback.swift */,
 				E5VMB0013 /* AIChatViewModel+Misc.swift */,
@@ -2740,6 +2772,7 @@
 				E5N0000112F3B941A00049557 /* SkillStore.swift */,
 				E5E15708F /* SkillDraft.swift */,
 				E5CST0002 /* CorrectionStore.swift */,
+				E5F2R3006F /* MemoryWriteUndo.swift */,
 				E5RHS0002 /* RemoteHostStore.swift */,
 				E5RSE0002 /* RemoteSSHExecutor.swift */,
 				E5WPL0002 /* WorkerPool.swift */,
@@ -2858,6 +2891,10 @@
 				E5F200011 /* MarkdownPrepRegex.swift */,
 				E5F200012 /* MinisMediaViews.swift */,
 				E5F200013 /* AssistantBlockView.swift */,
+				E5F2R3010F /* LongImageShareView.swift */,
+				E5F2R3009F /* TurnAccessibilityAnnouncer.swift */,
+				E5F2R3008F /* MemoryUndoAction.swift */,
+				E5F2R3007F /* ScheduledCountdownPill.swift */,
 				E5SUB0110F /* HelperBlockView.swift */,
 				E5SUB0111F /* HelperSheet.swift */,
 				E5SUB0112F /* AgentCallbackCellView.swift */,
@@ -2906,6 +2943,7 @@
 				E5LEO0018 /* LeoReleaseNotesView.swift */,
 				E5QTK0012 /* QuickTaskSettingsView.swift */,
 				E5SUB0113F /* HelperSettingsView.swift */,
+				E5F2R3011F /* ToolTogglesSettingsView.swift */,
 				E5SCH014 /* ScheduledTaskSettingsView.swift */,
 				E5C15611F /* ShortcutRecipesView.swift */,
 				E5RHV0002 /* RemoteHostSettingsView.swift */,
@@ -3368,6 +3406,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5F2R3006T /* MemoryWriteUndo.swift in Sources */,
+				E5F2R3005T /* LongImageTranscript.swift in Sources */,
+				E5F2R3004T /* TurnAnnouncement.swift in Sources */,
+				E5F2R3003T /* AgentToolToggles.swift in Sources */,
+				E5F2R3001T /* ScheduledFollowUp.swift in Sources */,
 				E5E15708T /* SkillDraft.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5MFF9003 /* MacFleetFeature.swift in Sources */,
@@ -3515,6 +3558,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5F2R3011A /* ToolTogglesSettingsView.swift in Sources */,
+				E5F2R3010A /* LongImageShareView.swift in Sources */,
+				E5F2R3009A /* TurnAccessibilityAnnouncer.swift in Sources */,
+				E5F2R3008A /* MemoryUndoAction.swift in Sources */,
+				E5F2R3007A /* ScheduledCountdownPill.swift in Sources */,
+				E5F2R3006A /* MemoryWriteUndo.swift in Sources */,
+				E5F2R3005A /* LongImageTranscript.swift in Sources */,
+				E5F2R3004A /* TurnAnnouncement.swift in Sources */,
+				E5F2R3003A /* AgentToolToggles.swift in Sources */,
+				E5F2R3002A /* ScheduledFollowUpDispatcher.swift in Sources */,
+				E5F2R3001A /* ScheduledFollowUp.swift in Sources */,
 				E5E15708A /* SkillDraft.swift in Sources */,
 				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,

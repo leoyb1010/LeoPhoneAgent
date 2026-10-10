@@ -432,6 +432,8 @@ struct AIChatView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)
                     }
+                    // [F2-countdown] This conversation's next scheduled follow-up.
+                    ScheduledFollowUpHeaderPill(sessionId: vm.sessionId)
                     // Error banner
                     if let error = vm.errorMessage {
                         errorBanner(error)
@@ -870,6 +872,7 @@ struct AIChatView: View {
             inputFocused = true
         }
         .modifier(ChatInputAppendListener(vm: vm, inputFocused: $inputFocused))
+        .modifier(LongImageShareListener(vm: vm))
         // [B5] Also hosts the open_terminal link confirmation, so this chain
         // gains no modifier layer for it (cold-launch demangle crash history).
         .modifier(RerunFromToolBlockListener(vm: vm, pendingRewind: $pendingRewind,
@@ -1419,6 +1422,8 @@ struct AIChatView: View {
         }
         .onChange(of: vm.isProcessing) { processing in
             if !processing {
+                // [F2-voiceover] One concise announcement per finished turn.
+                TurnAccessibilityAnnouncer.turnEnded(vm: vm)
                 // Reply reading is handled INCREMENTALLY during streaming (the
                 // SSE loop splits into sentences/titles + tool announcements and
                 // queues them as they arrive — see speakQueued/extractNewSentences).
@@ -1731,6 +1736,10 @@ struct AIChatView: View {
             onArtifacts: { showArtifactTray = true },
             onExportMarkdown: { vm.exportSession(format: .markdown) },
             onExportPDF: { vm.exportSession(format: .pdf) },
+            onShareLongImage: {
+                NotificationCenter.default.post(name: .chatLongImageShareRequested, object: nil,
+                                                userInfo: AIChatViewModel.shareRequestUserInfo(sessionId: vm.sessionId))
+            },
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
             onInspector: {
@@ -5255,6 +5264,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     // [T-session-export] Whole-conversation export (Batch C).
     let onExportMarkdown: () -> Void
     let onExportPDF: () -> Void
+    // [F2-long-image]
+    var onShareLongImage: () -> Void = {}
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onInspector: () -> Void
@@ -5363,6 +5374,9 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             UIAction(title: String(localized: "Export as PDF"),
                      image: UIImage(systemName: "doc.richtext"),
                      attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
+            UIAction(title: String(localized: "分享为长图"),
+                     image: UIImage(systemName: "photo.on.rectangle"),
+                     attributes: key.messagesEmpty || key.isLocked ? [.disabled] : []) { _ in coordinator.parent.onShareLongImage() },
         ]))
 
         // [T-chat-menu-compact-entry] Compact sits ABOVE Clear Chat in its own

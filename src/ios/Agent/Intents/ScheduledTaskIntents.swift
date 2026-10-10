@@ -25,8 +25,10 @@ struct ScheduledTaskEntity: AppEntity {
     @MainActor
     init(_ task: ScheduledTask) {
         id = task.id
-        name = QuickTaskStore.shared.definition(for: task.quickTaskId)?.displayName ?? "已删除的快捷任务"
-        schedule = task.cadence == .hourly ? task.cadence.title : "\(task.cadence.title) \(task.timeText)"
+        name = task.followUp?.title
+            ?? QuickTaskStore.shared.definition(for: task.quickTaskId)?.displayName ?? "已删除的快捷任务"
+        schedule = task.isFollowUp ? String(localized: "定时跟进")
+            : task.cadence == .hourly ? task.cadence.title : "\(task.cadence.title) \(task.timeText)"
         isEnabled = task.isEnabled
     }
 
@@ -87,6 +89,13 @@ struct RunScheduledTaskNowIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        // [F2-self-schedule] Agent 安排的跟进没有快捷任务:走同一条 runDueTasks 立即运行。
+        if let followUp = ScheduledTaskStore.shared.tasks.first(where: { $0.id == task.id && $0.isFollowUp })?.followUp {
+            let started = await ScheduledTaskRunner.runDueTasks(reason: "intentRunNow", forceTaskId: task.id)
+            return .result(value: "", dialog: IntentDialog(stringLiteral: started > 0
+                ? "已开始运行「\(followUp.title)」，结果会出现在原来的会话里。"
+                : "现在没能运行「\(followUp.title)」，会话可能正忙或已经运行过。"))
+        }
         guard let stored = ScheduledTaskStore.shared.tasks.first(where: { $0.id == task.id }),
               let definition = QuickTaskStore.shared.definition(for: stored.quickTaskId) else {
             return .result(value: "", dialog: "找不到这个定时任务，它可能已被删除。")

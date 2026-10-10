@@ -441,7 +441,7 @@ extension AIChatViewModel {
                     case "browser_use": .browserTool(action: "")
                     case "read_image": .readImageTool(path: "")
                     case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update",
-                         "mail_search", "mail_read", "mail_folders", "mail_accounts":
+                         "mail_search", "mail_read", "mail_folders", "mail_accounts", ScheduledFollowUp.toolName:
                         .memoryTool(action: name)
                     case SubAgentTool.name: .delegateTool(title: "")
                     default: .shellTool(command: name)

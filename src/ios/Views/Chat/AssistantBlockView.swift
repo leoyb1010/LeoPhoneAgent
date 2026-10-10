@@ -445,6 +445,12 @@ struct ToolCapsuleView: View {
                     // the button as a group so the menu doesn't leave a
                     // trailing separator with nothing under it.
                     if !vm.isProcessing {
+                        // [F2-memory-undo] memory_write → 撤销这条记忆(只删这一条)。
+                        if MemoryUndoAction.canUndo(block) {
+                            Button(role: .destructive) { MemoryUndoAction.undo(block) } label: {
+                                Label(String(localized: "撤销这条记忆"), systemImage: "arrow.uturn.backward")
+                            }
+                        }
                         Divider()
                         Button(role: .destructive) {
                             // Re-run the whole assistant turn that owns this

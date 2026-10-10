@@ -432,6 +432,9 @@ extension AIChatViewModel {
             ))
         }
 
+        // [F2-tool-toggles] Browser / self-scheduling switches (Settings › 工具开关).
+        tools = applyToolToggles(tools)
+
         // [T-subagent] subagent_task for top-level chats; children lose delegation / remote tools.
         tools = applySubAgentTools(tools)
 

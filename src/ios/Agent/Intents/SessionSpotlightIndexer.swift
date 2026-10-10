@@ -56,6 +56,8 @@ enum SessionSpotlightIndexer {
         attributes.contentDescription = String(localized: "LeoBot conversation")
         attributes.contentModificationDate = session.updatedAt
         attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
+        // [F2-indexed-entity] Same item, now tied to the SessionEntity Shortcuts uses.
+        attributes.associateAppEntity(SessionEntity(from: session))
 
         let item = CSSearchableItem(
             uniqueIdentifier: session.id,
@@ -111,6 +113,7 @@ enum SessionSpotlightIndexer {
             attributes.contentDescription = String(localized: "LeoBot conversation")
             attributes.contentModificationDate = session.updatedAt
             attributes.keywords = ["LeoBot", "LeoPhoneAgent", "Agent", "chat"]
+            attributes.associateAppEntity(SessionEntity(from: session))
             return CSSearchableItem(
                 uniqueIdentifier: session.id,
                 domainIdentifier: domain,

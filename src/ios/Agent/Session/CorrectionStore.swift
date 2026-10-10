@@ -47,6 +47,19 @@ enum CorrectionStore {
         }
     }
 
+    /// [F2-memory-undo] 撤销一条纠错:只删记录这段内容的最新那一行。
+    static func remove(_ content: String) -> Bool {
+        guard let kept = MemoryWriteUndo.removingCorrection(from: load(), content: content) else { return false }
+        let body = kept.isEmpty ? "" : kept.joined(separator: "\n") + "\n"
+        do {
+            try body.data(using: .utf8)?.write(to: fileURL, options: .atomic)
+            NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     static func load() -> [String] {
         guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
         return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
