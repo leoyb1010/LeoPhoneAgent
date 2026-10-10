@@ -216,7 +216,44 @@ enum SystemPromptCacheBoundary {
 final class AssistantBlock: Identifiable, ObservableObject {
     let id = UUID()
     @Published var kind: AssistantBlockKind
-    @Published var content: String
+    /// [T-r3-S7] Hand-published (not `@Published`) so a streaming flush that
+    /// sets content + parse + rendered string together can announce ONE
+    /// change (`applyBatched`) instead of three objectWillChange sends.
+    var content: String {
+        willSet { publishChange() }
+        didSet { contentHashMemo = nil }
+    }
+
+    // MARK: Change batching [T-r3-S7]
+
+    private var changeBatchDepth = 0
+
+    private func publishChange() {
+        if changeBatchDepth == 0 { objectWillChange.send() }
+    }
+
+    /// Runs `body` announcing a single objectWillChange for every
+    /// content / cachedMarkdown / cachedAttributedString write inside it.
+    func applyBatched(_ body: () -> Void) {
+        if changeBatchDepth == 0 { objectWillChange.send() }
+        changeBatchDepth += 1
+        defer { changeBatchDepth -= 1 }
+        body()
+    }
+
+    // MARK: Content hash memo [T-r3-S7]
+
+    private var contentHashMemo: Int?
+
+    /// `content.hashValue`, computed once per content change instead of once
+    /// per snapshot pass (the list keys its height cache on it for every text
+    /// block on every apply).
+    var contentHash: Int {
+        if let memo = contentHashMemo { return memo }
+        let h = content.hashValue
+        contentHashMemo = h
+        return h
+    }
 
     // MARK: Thinking block performance (T-thinking-render-perf-ios)
 
@@ -317,7 +354,9 @@ final class AssistantBlock: Identifiable, ObservableObject {
     /// surface the yellow ⓘ "enable enhanced background" hint only when relevant.
     @Published var wasBackgroundSuspended: Bool = false
     /// Cached parsed markdown for completed text blocks.
-    @Published var cachedMarkdown: MarkdownContent?
+    var cachedMarkdown: MarkdownContent? {
+        willSet { publishChange() }
+    }
     /// [T-stream-table-tail] True between the first streamed flush and the
     /// finalize. `cachedMarkdown` can't tell the two apart any more — the
     /// stream parses off-main and hands that parse in on every flush — so the
@@ -327,7 +366,9 @@ final class AssistantBlock: Identifiable, ObservableObject {
     /// Cached rendered NSAttributedString for completed text blocks.
     /// Set once when cachedMarkdown is finalized; avoids re-running MarkdownNSRenderer
     /// on every SwiftUI updateUIView triggered by unrelated state changes.
-    @Published var cachedAttributedString: NSAttributedString?
+    var cachedAttributedString: NSAttributedString? {
+        willSet { publishChange() }
+    }
     /// The tool_use ID from the provider, used to match with snapshots.
     var toolUseId: String?
     /// Serialized JSON of the tool input arguments (for introspection in SessionMemoryView, etc.).

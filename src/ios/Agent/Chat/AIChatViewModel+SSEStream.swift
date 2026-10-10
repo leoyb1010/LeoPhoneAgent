@@ -457,7 +457,7 @@ extension AIChatViewModel {
                     // the user is scrolling during streaming.
                     if let textIdx, !assistantText.isEmpty {
                         lastTextDeltaFlushedLength = assistantText.count
-                        let prepared = prepareMarkdownForRender(assistantText)
+                        let prepared = prepareMarkdownForRender(MarkdownRenderCap.head(assistantText))
                         let parsed = MarkdownContent(prepared)
                         await MainActor.run {
                             guard msgIdx < messages.count, textIdx < messages[msgIdx].blocks.count else { return }
@@ -594,7 +594,7 @@ extension AIChatViewModel {
                         lastTextDeltaFlushedLength = len
                         let snapshot = result.assistantText
                         // Parse markdown off main thread — cmark + math extraction + regex transforms
-                        let prepared = prepareMarkdownForRender(snapshot)
+                        let prepared = prepareMarkdownForRender(MarkdownRenderCap.head(snapshot))
                         let parsed = MarkdownContent(prepared)
                         await MainActor.run {
                             guard msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
@@ -760,7 +760,7 @@ extension AIChatViewModel {
                 // throttled-flush parse. Done here because we're still on
                 // the stream-processing actor, not MainActor.
                 let freshParsedMarkdown: MarkdownContent? = (textIdx != nil && !assistantText.isEmpty)
-                    ? MarkdownContent(prepareMarkdownForRender(assistantText))
+                    ? MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(assistantText)))
                     : nil
 
                 let blockIdx: Int = await MainActor.run {
@@ -975,7 +975,7 @@ extension AIChatViewModel {
                         msgIdx: msgIdx,
                         blockIdx: blockIdx,
                         text: result.assistantText,
-                        parsedMarkdown: MarkdownContent(prepareMarkdownForRender(result.assistantText)),
+                        parsedMarkdown: MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(result.assistantText))),
                         cacheAttributedString: true,
                         requestScroll: false,
                         expectedMessageId: runMsgId,

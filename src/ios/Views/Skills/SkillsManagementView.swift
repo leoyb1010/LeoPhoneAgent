@@ -532,7 +532,8 @@ private struct SkillDetailView: View {
     /// "刚刚" / "5 分钟前" / "3 天前", in the app's language.
     static func relativeTime(_ date: Date) -> String {
         guard Date().timeIntervalSince(date) >= 60 else { return String(localized: "刚刚") }
-        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+        // [T-r3-P2] Shared formatter (was built per row).
+        return LeoFormatters.relative.localizedString(for: date, relativeTo: Date())
     }
 
     /// Latest modification date across all files in the skill directory.

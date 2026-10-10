@@ -25,6 +25,25 @@ static uint64_t gRunloopTick = 0;
 // Counter for analytics.
 static uint64_t gShortCircuitCount = 0;
 
+// setSize: calls that reached the original implementation (tests use the
+// delta to prove a code path no longer issues a resize per layout pass).
+static uint64_t gForwardedCount = 0;
+
+// The "unbounded" dimension every larger value (.greatestFiniteMagnitude
+// included) is clamped to. Swift mirrors it as
+// `LeoTextContainer.unboundedHeight` (Views/Chat/ChatRenderLimits.swift);
+// callers that restore an unbounded height compare against THAT value, never
+// against .greatestFiniteMagnitude — after this clamp the stored height is
+// always smaller than .greatestFiniteMagnitude, so such a comparison re-issues
+// setSize: (and a full re-typeset) on every layout pass. [T-r3-S3]
+static const CGFloat kLeoTextContainerUnbounded = 1e7;
+
+// [T-r3-S8] Log a short-circuit only when the running total is a power of
+// two: a storm of 10 000 costs 14 lines instead of 625.
+static inline BOOL LeoGuardShouldLog(uint64_t n) {
+    return n != 0 && (n & (n - 1)) == 0;
+}
+
 typedef struct {
     CGSize lastSize;
     uint64_t lastTick;
@@ -85,7 +104,7 @@ static void minis_NSTextContainer_setSize(id self, SEL _cmd, CGSize newSize) {
     if (!isfinite(newSize.width) || !isfinite(newSize.height) ||
         newSize.width < 0 || newSize.height < 0) {
         gShortCircuitCount += 1;
-        if ((gShortCircuitCount & 0x1F) == 1) {
+        if (LeoGuardShouldLog(gShortCircuitCount)) {
             NSLog(@"[TextContainerGuard] [WARN] short-circuited setSize: "
                   @"REJECT-NAN-INF-NEG size=%.1fx%.1f total=%llu container=%p",
                   newSize.width, newSize.height,
@@ -94,8 +113,8 @@ static void minis_NSTextContainer_setSize(id self, SEL _cmd, CGSize newSize) {
         }
         return;
     }
-    if (newSize.width > 1e7) newSize.width = 1e7;
-    if (newSize.height > 1e7) newSize.height = 1e7;
+    if (newSize.width > kLeoTextContainerUnbounded) newSize.width = kLeoTextContainerUnbounded;
+    if (newSize.height > kLeoTextContainerUnbounded) newSize.height = kLeoTextContainerUnbounded;
 
     _NSTextContainerGuardState *holder = objc_getAssociatedObject(self, kGuardStateKey);
     if (!holder) {
@@ -112,9 +131,8 @@ static void minis_NSTextContainer_setSize(id self, SEL _cmd, CGSize newSize) {
         s->repeatCount += 1;
         if (s->repeatCount >= kRepeatThreshold) {
             gShortCircuitCount += 1;
-            // Periodic warn log: every 16 short-circuits (≈ once per
-            // visible reentrancy storm) to bound log volume.
-            if ((gShortCircuitCount & 0xF) == 1) {
+            // Power-of-two warn log to bound log volume.
+            if (LeoGuardShouldLog(gShortCircuitCount)) {
                 NSLog(@"[TextContainerGuard] [WARN] short-circuited setSize: "
                       @"size=%.1fx%.1f tick=%llu repeatThisTick=%ld "
                       @"totalShortCircuits=%llu container=%p",
@@ -134,6 +152,7 @@ static void minis_NSTextContainer_setSize(id self, SEL _cmd, CGSize newSize) {
         s->initialized = YES;
     }
 
+    gForwardedCount += 1;
     ((void (*)(id, SEL, CGSize))gOriginalSetSize)(self, _cmd, newSize);
 }
 
@@ -188,6 +207,18 @@ static void bumpRunloopTick(CFRunLoopObserverRef obs, CFRunLoopActivity act, voi
 
 + (uint64_t)shortCircuitCount {
     return gShortCircuitCount;
+}
+
++ (uint64_t)forwardedCount {
+    return gForwardedCount;
+}
+
++ (CGFloat)unboundedDimension {
+    return kLeoTextContainerUnbounded;
+}
+
++ (BOOL)shouldLogShortCircuitTotal:(uint64_t)total {
+    return LeoGuardShouldLog(total);
 }
 
 @end

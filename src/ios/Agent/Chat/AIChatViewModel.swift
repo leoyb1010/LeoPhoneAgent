@@ -4332,7 +4332,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if msgIdx < messages.count {
             for i in messages[msgIdx].blocks.indices {
                 if case .text = messages[msgIdx].blocks[i].kind, !messages[msgIdx].blocks[i].content.isEmpty {
-                    messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(messages[msgIdx].blocks[i].content))
+                    messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(messages[msgIdx].blocks[i].content)))
                     cacheAttributedString(for: messages[msgIdx].blocks[i])
                 }
             }
@@ -5549,7 +5549,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     msgIdx: msgIdx,
                     blockIdx: textBlockIdx,
                     text: assistantText,
-                    parsedMarkdown: MarkdownContent(prepareMarkdownForRender(assistantText)),
+                    parsedMarkdown: MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(assistantText))),
                     cacheAttributedString: true,
                     requestScroll: true,
                     expectedMessageId: runMsgId
@@ -6114,7 +6114,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // to avoid re-parsing and re-rendering on cell recycling / SwiftUI refreshes.
         for i in messages[msgIdx].blocks.indices {
             if case .text = messages[msgIdx].blocks[i].kind, !messages[msgIdx].blocks[i].content.isEmpty {
-                messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(messages[msgIdx].blocks[i].content))
+                messages[msgIdx].blocks[i].cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(messages[msgIdx].blocks[i].content)))
                 cacheAttributedString(for: messages[msgIdx].blocks[i])
             }
         }
@@ -6140,10 +6140,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // hit `cachedContent` (skip re-parse) AND keys its content-hash off the
         // stable `blocks.hashValue` so the per-coordinator hash-skip can land.
         // No extra work: we were already computing this MarkdownContent here.
-        let content = block.cachedMarkdown ?? MarkdownContent(prepareMarkdownForRender(block.content))
-        block.cachedMarkdown = content
-        block.cachedAttributedString = autoreleasepool {
-            renderMarkdownBlocks(content.blocks)
+        let content = block.cachedMarkdown ?? MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(block.content)))
+        let source = block.content
+        block.applyBatched {
+            block.cachedMarkdown = content
+            block.cachedAttributedString = autoreleasepool {
+                renderMarkdownBlocksForDisplay(content.blocks, source: source)
+            }
         }
     }
 
@@ -6287,15 +6290,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         cacheAttributedString shouldCacheAttributedString: Bool
     ) {
         let wasEmpty = block.content.isEmpty
-        block.isStreamingText = !shouldCacheAttributedString
-        block.content = text
-        if let parsedMarkdown {
-            block.cachedMarkdown = parsedMarkdown
-        } else if block.cachedMarkdown == nil {
-            block.cachedMarkdown = MarkdownContent(prepareMarkdownForRender(text))
-        }
-        if shouldCacheAttributedString {
-            cacheAttributedString(for: block)
+        // [T-r3-S7] One objectWillChange per flush (was one per property:
+        // content, cachedMarkdown and, on the final flush, the attributed string).
+        block.applyBatched {
+            block.isStreamingText = !shouldCacheAttributedString
+            block.content = text
+            if let parsedMarkdown {
+                block.cachedMarkdown = parsedMarkdown
+            } else if block.cachedMarkdown == nil {
+                block.cachedMarkdown = MarkdownContent(prepareMarkdownForRender(MarkdownRenderCap.head(text)))
+            }
+            if shouldCacheAttributedString {
+                cacheAttributedString(for: block)
+            }
         }
         // When content transitions from empty to non-empty, signal the collection
         // view to reconfigure the cell. UIHostingConfiguration doesn't always

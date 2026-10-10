@@ -5679,14 +5679,11 @@ private struct MoveToSessionSheet: View {
             return String(localized: "Yesterday")
         } else {
             let diff = calendar.dateComponents([.day], from: date, to: now)
+            // [T-r3-P2] Shared formatters (were built per row).
             if let days = diff.day, days < 7 {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "EEEE"
-                return formatter.string(from: date)
+                return LeoFormatters.date(format: "EEEE").string(from: date)
             }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M/d"
-            return formatter.string(from: date)
+            return LeoFormatters.date(format: "M/d").string(from: date)
         }
     }
 }

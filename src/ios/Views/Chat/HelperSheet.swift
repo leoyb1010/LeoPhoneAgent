@@ -25,7 +25,7 @@ struct HelperSheet: View {
             List {
                 Section(String(localized: "任务")) {
                     Text(info.title).font(.body.weight(.semibold))
-                    if let task = AIChatViewModel.subAgentInputArgs(block)["task"] as? String, !task.isEmpty {
+                    if let task = HelperBlockInfo.parsed(block).args["task"] as? String, !task.isEmpty {
                         Text(task).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                     LabeledContent(String(localized: "子代理"), value: info.agent ?? SubAgentDefinition.builtInName)

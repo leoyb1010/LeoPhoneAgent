@@ -6,6 +6,37 @@ import SwiftUI
 import UIKit
 
 private let imgLogger = AppLogger(category: "MinisImage")
+
+/// [T-r3-S7] Attachment size change, scoped to the owning message when known.
+private func postAttachmentSizeChanged(source: String, messageId: UUID?) {
+    NotificationCenter.default.post(
+        name: .minisAttachmentSizeChanged,
+        object: source,
+        userInfo: messageId.map { [Notification.Name.minisAttachmentOwnerKey: $0] }
+    )
+}
+
+/// [T-r3-B22] Process-wide image-load gate (MarkdownImagePolicy.maxConcurrentLoads).
+private let markdownImageLoadLimiter = AsyncLimiter(limit: MarkdownImagePolicy.maxConcurrentLoads)
+
+/// [T-r3-B22] Remote markdown images: bounded time, no cookies / disk cache.
+private let markdownImageSession: URLSession = {
+    let cfg = URLSessionConfiguration.ephemeral
+    cfg.timeoutIntervalForRequest = MarkdownImagePolicy.fetchTimeout
+    cfg.timeoutIntervalForResource = MarkdownImagePolicy.fetchTimeout * 3
+    cfg.httpMaximumConnectionsPerHost = MarkdownImagePolicy.maxConcurrentLoads
+    return URLSession(configuration: cfg)
+}()
+
+/// [T-r3-B22] Fetch a remote image body within the timeout and size limits.
+private func fetchMarkdownImageData(_ url: URL) async -> Data? {
+    var request = URLRequest(url: url)
+    request.timeoutInterval = MarkdownImagePolicy.fetchTimeout
+    guard let (data, response) = try? await markdownImageSession.data(for: request) else { return nil }
+    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+    guard data.count <= MarkdownImagePolicy.maxRemoteBytes else { return nil }
+    return data
+}
 private let attachLogger = AppLogger(category: "AttachDebug")
 
 // MARK: - leophoneagent:// URL encoding [T-minis-url-fullwidth-pipe-ios]
@@ -285,6 +316,47 @@ func renderMarkdownBlocks(_ blocks: [BlockNode]) -> NSAttributedString {
     return renderer.render(blocks: blocks)
 }
 
+/// [T-r3-B21] Display form of a reply whose parsed blocks came from
+/// `MarkdownRenderCap.head(source)`: the rendered head plus, past the cap, the
+/// plain monospaced overflow.
+@MainActor
+func renderMarkdownBlocksForDisplay(_ blocks: [BlockNode], source: String) -> NSAttributedString {
+    SelectableMarkdownView.appendingRenderCapOverflow(MarkdownRenderCap.split(source),
+                                                      to: renderMarkdownBlocks(blocks))
+}
+
+extension SelectableMarkdownView {
+    /// [T-r3-B21] Appends the over-cap tail as plain monospaced text behind a
+    /// short notice. Character wrapping: the tail is often one giant line, and
+    /// word-wrapping it makes TextKit search for break points across all of it.
+    static func appendingRenderCapOverflow(_ split: MarkdownRenderCap.Split?,
+                                           to body: NSAttributedString) -> NSAttributedString {
+        guard let split else { return body }
+        let size = FontSettings.shared.scaledMessage(16.5)
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byCharWrapping
+        para.paragraphSpacingBefore = 8
+        let noticeAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: size * 0.82, weight: .medium),
+            .foregroundColor: UIColor.secondaryLabel,
+            .paragraphStyle: para,
+        ]
+        let out = NSMutableAttributedString(attributedString: body)
+        out.append(NSAttributedString(string: "\n" + String(localized: "内容过长，以下部分按纯文本显示。") + "\n",
+                                      attributes: noticeAttrs))
+        out.append(NSAttributedString(string: split.overflow, attributes: [
+            .font: UIFont.monospacedSystemFont(ofSize: size * 0.82, weight: .regular),
+            .foregroundColor: UIColor.label,
+            .paragraphStyle: para,
+        ]))
+        if split.overflowTruncated {
+            out.append(NSAttributedString(string: "\n…\n" + String(localized: "其余内容未显示，复制整条消息可得到全文。"),
+                                          attributes: noticeAttrs))
+        }
+        return out
+    }
+}
+
 // MARK: - MarkdownNSRenderer
 
 /// Converts `[BlockNode]` → `NSMutableAttributedString` for display in a UITextView.
@@ -384,6 +456,7 @@ fileprivate final class MarkdownNSRenderer {
     func render(blocks: [BlockNode]) -> NSAttributedString {
         codeBlockIndex = 0
         tableIndex = 0
+        inlineImageCount = 0
         let t0 = CFAbsoluteTimeGetCurrent()
         let tableCountBefore = tableAttachmentCache.count
 
@@ -406,6 +479,24 @@ fileprivate final class MarkdownNSRenderer {
     }
 
     fileprivate static let rendererLogger = AppLogger(category: "MarkdownRenderer")
+
+    /// [T-r3-B22] Inline media rendered in the current `render(blocks:)` pass.
+    private var inlineImageCount = 0
+
+    /// [T-r3-B22] Plain stand-in for an image that is not rendered inline
+    /// (over the per-message cap, or refused by policy): a tappable link when
+    /// the source is short enough to be a real link, plain text otherwise.
+    private func renderImageStandIn(source: String, alt: String, attrs: [NSAttributedString.Key: Any], note: String) -> NSAttributedString {
+        var linkAttrs = attrs
+        let label = alt.isEmpty ? note : "\(note) \(alt.prefix(80))"
+        if source.utf8.count <= 2_048, !source.lowercased().hasPrefix("data:"), let url = normalizedLinkURL(from: source) {
+            linkAttrs[.link] = url
+            linkAttrs[.foregroundColor] = theme.linkColor
+        } else {
+            linkAttrs[.foregroundColor] = UIColor.secondaryLabel
+        }
+        return NSAttributedString(string: "[\(label)]", attributes: linkAttrs)
+    }
 
     // MARK: Block Rendering
 
@@ -952,8 +1043,8 @@ fileprivate final class MarkdownNSRenderer {
     private func renderImageAttachment(source: String) -> NSAttributedString {
         let attachment: ImageAttachment
         if let cached = imageAttachmentCache[source] {
-            AppLogger(category: "AttachHotPath").info("[IMG][RENDER] REUSE src=\(ImageAttachment.shortSrc(source)) ptr=\(ObjectIdentifier(cached).hashValue & 0xFFFFFF) loaded=\(cached.loadedImage != nil)")
-            imgLogger.info("[MinisImage][RenderAttach] REUSE cached attachment src=\(ImageAttachment.shortSrc(source)) loaded=\(cached.loadedImage != nil) imgSize=\(cached.loadedImage.map { "\($0.size.width)x\($0.size.height)" } ?? "nil")")
+            AppLogger(category: "AttachHotPath").verbose("[IMG][RENDER] REUSE src=\(ImageAttachment.shortSrc(source)) ptr=\(ObjectIdentifier(cached).hashValue & 0xFFFFFF) loaded=\(cached.loadedImage != nil)")
+            imgLogger.verbose("[MinisImage][RenderAttach] REUSE cached attachment src=\(ImageAttachment.shortSrc(source)) loaded=\(cached.loadedImage != nil) imgSize=\(cached.loadedImage.map { "\($0.size.width)x\($0.size.height)" } ?? "nil")")
             // Keep messageId fresh on reused attachments — the same renderer
             // instance may survive across different messages during cell reuse.
             cached.messageId = messageId
@@ -962,14 +1053,14 @@ fileprivate final class MarkdownNSRenderer {
             // cached bitmap so the next draw re-reads from disk.
             let currentFp = minisMediaCacheKey(for: source)
             if let loadedFp = cached.loadedFingerprint, loadedFp != currentFp {
-                AppLogger(category: "AttachHotPath").info("[IMG][RENDER] FINGERPRINT-DROP src=\(ImageAttachment.shortSrc(source)) old=\(loadedFp) new=\(currentFp) — bitmap invalidated, will reload")
-                imgLogger.info("[MinisImage][RenderAttach] FINGERPRINT CHANGED src=\(ImageAttachment.shortSrc(source)) old=\(loadedFp) new=\(currentFp) — invalidating cached image")
+                AppLogger(category: "AttachHotPath").verbose("[IMG][RENDER] FINGERPRINT-DROP src=\(ImageAttachment.shortSrc(source)) old=\(loadedFp) new=\(currentFp) — bitmap invalidated, will reload")
+                imgLogger.verbose("[MinisImage][RenderAttach] FINGERPRINT CHANGED src=\(ImageAttachment.shortSrc(source)) old=\(loadedFp) new=\(currentFp) — invalidating cached image")
                 cached.invalidateLoadedImage()
             }
             attachment = cached
         } else {
-            AppLogger(category: "AttachHotPath").info("[IMG][RENDER] CREATE src=\(ImageAttachment.shortSrc(source)) cacheCount=\(self.imageAttachmentCache.count) — fresh ImageAttachment, ObjectIdentifier changed, view WILL be rebuilt")
-            imgLogger.info("[MinisImage][RenderAttach] CREATE new ImageAttachment src=\(ImageAttachment.shortSrc(source)) cacheCount=\(self.imageAttachmentCache.count)")
+            AppLogger(category: "AttachHotPath").verbose("[IMG][RENDER] CREATE src=\(ImageAttachment.shortSrc(source)) cacheCount=\(self.imageAttachmentCache.count) — fresh ImageAttachment, ObjectIdentifier changed, view WILL be rebuilt")
+            imgLogger.verbose("[MinisImage][RenderAttach] CREATE new ImageAttachment src=\(ImageAttachment.shortSrc(source)) cacheCount=\(self.imageAttachmentCache.count)")
             attachment = ImageAttachment(source: source, theme: theme, messageId: messageId)
             imageAttachmentCache[source] = attachment
         }
@@ -986,6 +1077,7 @@ fileprivate final class MarkdownNSRenderer {
             attachment = VideoAttachment(source: source, theme: theme)
             videoAttachmentCache[source] = attachment
         }
+        attachment.messageId = messageId
         let result = NSMutableAttributedString(attachment: attachment)
         result.addAttribute(.font, value: theme.baseFont, range: NSRange(location: 0, length: result.length))
         return result
@@ -1112,19 +1204,34 @@ fileprivate final class MarkdownNSRenderer {
             return renderInlines(children, baseAttributes: linkAttrs)
 
         case .image(let source, let children):
-            let ext = URL(string: source)?.pathExtension.lowercased() ?? ""
             let altText = children.plainText
-            imgLogger.info("[MinisImage][InlineParse] .image node src=\(ImageAttachment.shortSrc(source)) ext=\(ext) alt=\(altText)")
+            // [T-r3-B22] Policy first: a huge data: URI or a file: URL outside
+            // the session's media directory is never loaded.
+            switch MarkdownImagePolicy.verdict(for: source, sessionMediaRoot: AIChatViewModel.activeSessionId.map {
+                AIChatViewModel.minisPersistentBase.appendingPathComponent($0, isDirectory: true)
+            }) {
+            case .allow: break
+            case .dataURITooLarge:
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片过大，未显示"))
+            case .fileOutsideSessionMedia:
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片不在本会话目录，未显示"))
+            }
+            inlineImageCount += 1
+            if inlineImageCount > MarkdownImagePolicy.maxImagesPerMessage {
+                return renderImageStandIn(source: source, alt: altText, attrs: attrs, note: String(localized: "图片"))
+            }
+            let ext = URL(string: source)?.pathExtension.lowercased() ?? ""
+            imgLogger.verbose("[MinisImage][InlineParse] .image node src=\(ImageAttachment.shortSrc(source)) ext=\(ext)")
             if nativeAudioExts.contains(ext) {
                 return renderAudioAttachment(source: source)
             } else if nativeVideoExts.contains(ext) {
                 return renderVideoAttachment(source: source)
             } else if nativeImageExts.contains(ext) || ext.isEmpty {
-                imgLogger.info("[MinisImage][InlineParse] routing to IMAGE attachment src=\(ImageAttachment.shortSrc(source))")
+                imgLogger.verbose("[MinisImage][InlineParse] routing to IMAGE attachment src=\(ImageAttachment.shortSrc(source))")
                 return renderImageAttachment(source: source)
             } else {
                 // Unknown extension — render as image attachment (best guess)
-                imgLogger.info("[MinisImage][InlineParse] unknown ext=\(ext), routing to IMAGE attachment (best guess) src=\(ImageAttachment.shortSrc(source))")
+                imgLogger.verbose("[MinisImage][InlineParse] unknown ext=\(ext), routing to IMAGE attachment (best guess) src=\(ImageAttachment.shortSrc(source))")
                 return renderImageAttachment(source: source)
             }
 
@@ -3116,8 +3223,7 @@ final class MathAttachment: NSTextAttachment {
     private(set) var renderedImage: UIImage?
     private(set) var renderedSize: CGSize = .zero
     private var didAttemptRender = false
-    private var isKaTeXPending = false
-    /// Both SwiftMath and KaTeX failed — show raw LaTeX fallback.
+    /// SwiftMath failed — show raw LaTeX fallback.
     private(set) var renderFailed = false
     var onLoad: (() -> Void)?
 
@@ -3187,9 +3293,9 @@ final class MathAttachment: NSTextAttachment {
     func beginRenderingIfNeeded() {
         MathAttachment.beginCount &+= 1
         if MathAttachment.beginCount <= 3 || MathAttachment.beginCount % 50 == 0 {
-            AppLogger(category: "MathSched").info("[MathSched] beginRenderingIfNeeded #\(MathAttachment.beginCount) rendered=\(renderedImage != nil) attempted=\(didAttemptRender) katex=\(isKaTeXPending) isBlock=\(isBlock) latex=\(latex.prefix(30))")
+            AppLogger(category: "MathSched").info("[MathSched] beginRenderingIfNeeded #\(MathAttachment.beginCount) rendered=\(renderedImage != nil) attempted=\(didAttemptRender) isBlock=\(isBlock) latex=\(latex.prefix(30))")
         }
-        guard renderedImage == nil, !didAttemptRender, !isKaTeXPending else { return }
+        guard renderedImage == nil, !didAttemptRender else { return }
         didAttemptRender = true
         MathRenderScheduler.shared.enqueue(self)
     }
@@ -3225,7 +3331,7 @@ final class MathAttachment: NSTextAttachment {
 
     func makeView(width: CGFloat) -> UIView {
         // Attempt render if not yet done (e.g. attachment reappeared after recycle)
-        if renderedImage == nil && !didAttemptRender && !isKaTeXPending {
+        if renderedImage == nil && !didAttemptRender {
             beginRenderingIfNeeded()
         }
 
@@ -3248,7 +3354,7 @@ final class MathAttachment: NSTextAttachment {
                 return imgView
             }
         }
-        // Placeholder while KaTeX renders, or final fallback: raw LaTeX
+        // Placeholder before rendering, or final fallback: raw LaTeX
         let label = UILabel()
         label.text = latex
         label.font = .monospacedSystemFont(ofSize: theme.baseFontSize * 0.85, weight: .regular)
@@ -3338,7 +3444,7 @@ final class ImageAttachment: NSTextAttachment {
         self.messageId = messageId
         super.init(data: nil, ofType: nil)
         self.image = Self.transparentImage
-        AppLogger(category: "AttachHotPath").info("[IMG][CTOR] src=\(Self.shortSrc(source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF)")
+        AppLogger(category: "AttachHotPath").verbose("[IMG][CTOR] src=\(Self.shortSrc(source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF)")
     }
 
     /// Log-safe source: for http(s) URLs the query / userinfo / fragment are
@@ -3440,7 +3546,7 @@ final class ImageAttachment: NSTextAttachment {
         // flooding while still proving cadence vs streaming token rate.
         let cnt = attachmentBoundsCallCount
         if cnt <= 5 || cnt % 50 == 0 {
-            AppLogger(category: "AttachHotPath").info("[IMG][BOUNDS] #\(cnt) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) rawW=\(String(format: "%.1f", rawWidth)) bucketW=\(String(format: "%.0f", width)) hasImg=\(self.loadedImage != nil)")
+            AppLogger(category: "AttachHotPath").verbose("[IMG][BOUNDS] #\(cnt) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) rawW=\(String(format: "%.1f", rawWidth)) bucketW=\(String(format: "%.0f", width)) hasImg=\(self.loadedImage != nil)")
         }
 
         if let img = loadedImage {
@@ -3520,21 +3626,24 @@ final class ImageAttachment: NSTextAttachment {
         loadedFingerprint = fingerprint
         isLoading = false
         fileNotFound = false
-        imgLogger.info("[MinisImage][Adopt] via=\(via) src=\(Self.shortSrc(canonicalSrc)) size=\(Int(image.size.width))x\(Int(image.size.height))")
+        imgLogger.verbose("[MinisImage][Adopt] via=\(via) src=\(Self.shortSrc(canonicalSrc)) size=\(Int(image.size.width))x\(Int(image.size.height))")
         onLoad?()
         // Adoption grows the cell (placeholder → image bounds); re-measure even
         // on the synchronous cache-hit path.
-        NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: canonicalSrc)
+        postAttachmentSizeChanged(source: canonicalSrc, messageId: messageId)
     }
 
-    func beginLoadingIfNeeded() {
+    /// [T-r3-B22] `cacheOnly`: adopt a bitmap already in memory but start no
+    /// disk / network load — used for attachments outside the viewport, which
+    /// load once they scroll near it (SelectableMarkdownTextView viewport gate).
+    func beginLoadingIfNeeded(cacheOnly: Bool = false) {
         // Canonicalize scheme-less / relative sources to leophoneagent://workspace/…
         // so the rest of the pipeline (cache key, resolve, fingerprint)
         // treats them uniformly. Agents writing plain markdown like
         // `![img](foo.png)` or `![img](subdir/foo.png)` land here.
         let canonicalSrc = Self.canonicalizeMarkdownImageSource(source)
         if canonicalSrc != source {
-            imgLogger.info("[MinisImage][Load] canonicalized src=\(Self.shortSrc(self.source)) → \(Self.shortSrc(canonicalSrc))")
+            imgLogger.verbose("[MinisImage][Load] canonicalized src=\(Self.shortSrc(self.source)) → \(Self.shortSrc(canonicalSrc))")
         }
 
         // [T-ios-image-single-writer] Cache first, flags second: the shared
@@ -3551,9 +3660,10 @@ final class ImageAttachment: NSTextAttachment {
                 return
             }
         }
+        if cacheOnly { return }
 
         guard loadedImage == nil, !isLoading else {
-            imgLogger.info("[MinisImage][Load] skip src=\(Self.shortSrc(self.source)) alreadyLoaded=\(self.loadedImage != nil) isLoading=\(self.isLoading)")
+            imgLogger.verbose("[MinisImage][Load] skip src=\(Self.shortSrc(self.source)) alreadyLoaded=\(self.loadedImage != nil) isLoading=\(self.isLoading)")
             return
         }
         // Reset fileNotFound so we don't spin; it will be set again if still missing.
@@ -3569,82 +3679,39 @@ final class ImageAttachment: NSTextAttachment {
         loadGeneration &+= 1
         let gen = loadGeneration
         let parsedURL = URL(string: canonicalSrc)
-        imgLogger.info("[MinisImage][Load] START gen=\(gen) src=\(Self.shortSrc(canonicalSrc)) scheme=\(parsedURL?.scheme ?? "nil") host=\(parsedURL?.host ?? "nil") path=\(parsedURL?.path ?? "nil") ext=\(parsedURL?.pathExtension ?? "nil") retriesRemaining=\(self.retriesRemaining)")
-        imgLogger.info("[MinisImage][Load] MEMORY CACHE MISS src=\(Self.shortSrc(canonicalSrc)) — will load from disk/network")
+        imgLogger.info("[MinisImage][Load] START gen=\(gen) src=\(Self.shortSrc(canonicalSrc)) scheme=\(parsedURL?.scheme ?? "nil") ext=\(parsedURL?.pathExtension ?? "nil") retriesRemaining=\(self.retriesRemaining)")
 
         let src = canonicalSrc
-        let isMinisURL = URL(string: src).map { $0.scheme == "leophoneagent" } ?? false
+        let isMinisURL = parsedURL.map { $0.scheme == "leophoneagent" } ?? false
         // [T-ios-failed-image-refetch-storm] For remote (non-minis) URLs that
         // failed recently, don't re-dispatch a network fetch on every cell
         // recycle — render the placeholder and bail. leophoneagent:// is exempt: those
         // are local files that may be written shortly after the markdown
         // references them, so the retriesRemaining-scheduled flow must stay.
         if !isMinisURL, NativeMediaImageCache.shared.isRecentlyFailed(src) {
-            imgLogger.info("[MinisImage][Load] SUPPRESSED (recent failure within TTL) src=\(Self.shortSrc(src))")
+            imgLogger.verbose("[MinisImage][Load] SUPPRESSED (recent failure within TTL) src=\(Self.shortSrc(src))")
             isLoading = false
             fileNotFound = true
             return
         }
-        imgLogger.info("[MinisImage][Load] dispatching async load src=\(Self.shortSrc(src)) isMinisURL=\(isMinisURL)")
-        // Captured on main: displayTargetPixels runs off-main.
+        // [T-r3-B22] Captured on main: the policy check and displayTargetPixels
+        // run off-main.
         let screenScale = UIScreen.main.scale
+        let mediaRoot = AIChatViewModel.activeSessionId.map {
+            AIChatViewModel.minisPersistentBase.appendingPathComponent($0, isDirectory: true)
+        }
         Task.detached(priority: .userInitiated) {
-            var fileURL: URL?
-            let img: UIImage?
-            if let url = URL(string: src), url.scheme == "leophoneagent" {
-                imgLogger.info("[MinisImage][Load] resolving leophoneagent:// URL src=\(Self.shortSrc(src)) host=\(url.host ?? "nil") path=\(url.path)")
-                if let resolved = resolveMinisFileURLForNativeText(url: url) {
-                    imgLogger.info("[MinisImage][Load] leophoneagent:// resolved to localPath=\(resolved.path)")
-                    fileURL = resolved
-                    if let data = try? Data(contentsOf: resolved) {
-                        imgLogger.info("[MinisImage][Load] read \(data.count) bytes from localPath=\(resolved.path)")
-                        // [T-ios-image-single-writer] Decode straight to display
-                        // size — the one and only decode this image gets.
-                        let downsampled = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
-                        if let downsampled {
-                            imgLogger.info("[MinisImage][Load] downsample OK src=\(Self.shortSrc(src)) resultSize=\(downsampled.size.width)x\(downsampled.size.height)")
-                        } else {
-                            imgLogger.error("[MinisImage][Load] downsample FAILED src=\(Self.shortSrc(src)) dataSize=\(data.count)")
-                        }
-                        img = downsampled
-                    } else {
-                        imgLogger.error("[MinisImage][Load] Data(contentsOf:) FAILED localPath=\(resolved.path)")
-                        img = nil
-                    }
-                } else {
-                    imgLogger.warning("[MinisImage][Load] resolveMinisFileURLForNativeText returned nil src=\(Self.shortSrc(src))")
-                    img = nil
-                }
-            } else if let url = URL(string: src), url.scheme == "http" || url.scheme == "https" {
-                imgLogger.info("[MinisImage][Load] fetching HTTP(S) url=\(src)")
-                if let data = try? Data(contentsOf: url) {
-                    imgLogger.info("[MinisImage][Load] HTTP fetched \(data.count) bytes src=\(Self.shortSrc(src))")
-                    img = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
-                } else {
-                    imgLogger.warning("[MinisImage][Load] HTTP fetch FAILED src=\(Self.shortSrc(src))")
-                    img = nil
-                }
-            } else if let url = URL(string: src) {
-                // file URL or relative
-                imgLogger.info("[MinisImage][Load] trying file/relative URL scheme=\(url.scheme ?? "nil") path=\(url.path)")
-                fileURL = url
-                if let data = try? Data(contentsOf: url) {
-                    imgLogger.info("[MinisImage][Load] file loaded \(data.count) bytes src=\(Self.shortSrc(src))")
-                    img = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
-                } else {
-                    imgLogger.warning("[MinisImage][Load] file load FAILED src=\(Self.shortSrc(src))")
-                    img = nil
-                }
-            } else {
-                imgLogger.error("[MinisImage][Load] cannot parse URL src=\(Self.shortSrc(src))")
-                img = nil
+            // [T-r3-B22] At most MarkdownImagePolicy.maxConcurrentLoads loads
+            // (read + decode, or fetch + decode) run at once, process-wide.
+            let (img, fileURL) = await markdownImageLoadLimiter.run { () async -> (UIImage?, URL?) in
+                await Self.loadImage(src: src, screenScale: screenScale, mediaRoot: mediaRoot)
             }
 
             // Recompute the fingerprint post-load in case the file was
             // rewritten between the pre-check at entry and this point.
             let postLoadKey = minisMediaCacheKey(for: src)
             if let img {
-                imgLogger.info("[MinisImage][Load] SUCCESS src=\(Self.shortSrc(src)) finalSize=\(img.size.width)x\(img.size.height) — caching in memory")
+                imgLogger.info("[MinisImage][Load] SUCCESS src=\(Self.shortSrc(src)) finalSize=\(img.size.width)x\(img.size.height)")
                 NativeMediaImageCache.shared.set(img, for: postLoadKey)
                 // Also record the size (keyed by canonical source) so future
                 // ImageAttachment instances can compute correct bounds before
@@ -3670,7 +3737,7 @@ final class ImageAttachment: NSTextAttachment {
                 // The bitmap is already in the shared cache above, so the live
                 // generation adopts it from there; nothing stale ever lands.
                 guard gen == self.loadGeneration else {
-                    imgLogger.info("[MinisImage][Load] DROP STALE completion gen=\(gen) current=\(self.loadGeneration) src=\(Self.shortSrc(src))")
+                    imgLogger.verbose("[MinisImage][Load] DROP STALE completion gen=\(gen) current=\(self.loadGeneration) src=\(Self.shortSrc(src))")
                     return
                 }
                 self.resolvedFileURL = fileURL
@@ -3680,7 +3747,7 @@ final class ImageAttachment: NSTextAttachment {
                     self.loadedFingerprint = nil
                     self.isLoading = false
                     if isMinisURL && self.retriesRemaining > 0 {
-                        imgLogger.info("[MinisImage][Load] RETRY scheduled src=\(Self.shortSrc(src)) retriesRemaining=\(self.retriesRemaining)")
+                        imgLogger.verbose("[MinisImage][Load] RETRY scheduled src=\(Self.shortSrc(src)) retriesRemaining=\(self.retriesRemaining)")
                         self.fileNotFound = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                             guard let self, self.fileNotFound else { return }
@@ -3699,6 +3766,50 @@ final class ImageAttachment: NSTextAttachment {
         }
     }
 
+    /// [T-r3-B22] Read / fetch + decode one source (off-main). leophoneagent://
+    /// resolves inside the session; http(s) goes through the bounded
+    /// URLSession; data: and file: are re-checked against MarkdownImagePolicy.
+    private static func loadImage(src: String, screenScale: CGFloat, mediaRoot: URL?) async -> (UIImage?, URL?) {
+        guard let url = URL(string: src) else {
+            imgLogger.error("[MinisImage][Load] cannot parse URL src=\(Self.shortSrc(src))")
+            return (nil, nil)
+        }
+        func decode(_ data: Data) -> UIImage? {
+            downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
+        }
+        switch url.scheme?.lowercased() {
+        case "leophoneagent":
+            guard let resolved = resolveMinisFileURLForNativeText(url: url) else {
+                imgLogger.warning("[MinisImage][Load] resolve returned nil src=\(Self.shortSrc(src))")
+                return (nil, nil)
+            }
+            guard let data = try? Data(contentsOf: resolved) else {
+                imgLogger.error("[MinisImage][Load] read FAILED src=\(Self.shortSrc(src))")
+                return (nil, resolved)
+            }
+            imgLogger.verbose("[MinisImage][Load] read \(data.count) bytes src=\(Self.shortSrc(src))")
+            // [T-ios-image-single-writer] Decode straight to display size —
+            // the one and only decode this image gets.
+            return (decode(data), resolved)
+        case "http", "https":
+            guard let data = await fetchMarkdownImageData(url) else {
+                imgLogger.warning("[MinisImage][Load] HTTP fetch FAILED src=\(Self.shortSrc(src))")
+                return (nil, nil)
+            }
+            return (decode(data), nil)
+        default:
+            guard MarkdownImagePolicy.verdict(for: src, sessionMediaRoot: mediaRoot) == .allow else {
+                imgLogger.warning("[MinisImage][Load] refused by policy src=\(Self.shortSrc(src))")
+                return (nil, nil)
+            }
+            guard let data = try? Data(contentsOf: url) else {
+                imgLogger.warning("[MinisImage][Load] file load FAILED src=\(Self.shortSrc(src))")
+                return (nil, url.isFileURL ? url : nil)
+            }
+            return (decode(data), url.isFileURL ? url : nil)
+        }
+    }
+
 
     func makeView(width: CGFloat) -> UIView {
         makeViewCallCount &+= 1
@@ -3706,12 +3817,12 @@ final class ImageAttachment: NSTextAttachment {
         // if this fires more than once per attachment per layout pass, the
         // UIImageView subview is being rebuilt and we have a leak in the
         // updateAttachmentViews reuse path.
-        AppLogger(category: "AttachHotPath").info("[IMG][MAKEVIEW] #\(self.makeViewCallCount) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) hasImg=\(self.loadedImage != nil) width=\(String(format: "%.0f", width))")
+        AppLogger(category: "AttachHotPath").verbose("[IMG][MAKEVIEW] #\(self.makeViewCallCount) src=\(Self.shortSrc(self.source)) ptr=\(ObjectIdentifier(self).hashValue & 0xFFFFFF) hasImg=\(self.loadedImage != nil) width=\(String(format: "%.0f", width))")
         if let img = loadedImage {
-            imgLogger.info("[MinisImage][MakeView] rendering LOADED image src=\(Self.shortSrc(self.source)) imgSize=\(img.size.width)x\(img.size.height) containerWidth=\(width)")
+            imgLogger.verbose("[MinisImage][MakeView] rendering LOADED image src=\(Self.shortSrc(self.source)) imgSize=\(img.size.width)x\(img.size.height) containerWidth=\(width)")
             return makeImageView(img, width: width)
         } else {
-            imgLogger.info("[MinisImage][MakeView] rendering PLACEHOLDER src=\(Self.shortSrc(self.source)) containerWidth=\(width) fileNotFound=\(self.fileNotFound) retriesRemaining=\(self.retriesRemaining)")
+            imgLogger.verbose("[MinisImage][MakeView] rendering PLACEHOLDER src=\(Self.shortSrc(self.source)) containerWidth=\(width) fileNotFound=\(self.fileNotFound) retriesRemaining=\(self.retriesRemaining)")
             return makePlaceholderView(width: width)
         }
     }
@@ -3726,7 +3837,7 @@ final class ImageAttachment: NSTextAttachment {
         let aspect = img.size.height / max(img.size.width, 1)
         let maxH = LeoWindowMetrics.layoutHeight / 2
         let h = min(imgWidth * aspect, maxH)
-        imgLogger.info("[MinisImage][MakeView] layout src=\(Self.shortSrc(self.source)) displayWidth=\(imgWidth) displayHeight=\(h) aspect=\(aspect) maxImageWidth=\(Self.maxImageWidth)")
+        imgLogger.verbose("[MinisImage][MakeView] layout src=\(Self.shortSrc(self.source)) displayWidth=\(imgWidth) displayHeight=\(h) aspect=\(aspect) maxImageWidth=\(Self.maxImageWidth)")
 
         let shadowInset: CGFloat = Self.imageShadowInset
         // Container == the attachment box (image + shadow room on all sides).
@@ -3866,6 +3977,8 @@ final class VideoAttachment: NSTextAttachment {
     private var isLoading = false
     private var resolvedURL: URL?
     var onLoad: (() -> Void)?
+    /// [T-r3-S7] Owning message, so a thumbnail load re-measures only it.
+    var messageId: UUID?
 
     init(source: String, theme: SelectableMarkdownTheme) {
         self.source = source
@@ -3927,7 +4040,7 @@ final class VideoAttachment: NSTextAttachment {
                     // until some unrelated event (scroll, reconfigure) forces
                     // a re-measure (the "appears half-rendered, then snaps
                     // 10s later" bug).
-                    NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: src)
+                    postAttachmentSizeChanged(source: src, messageId: self.messageId)
                 }
                 return
             }
@@ -3955,7 +4068,7 @@ final class VideoAttachment: NSTextAttachment {
                 self.isLoading = false
                 self.onLoad?()
                 if thumb != nil {
-                    NotificationCenter.default.post(name: .minisAttachmentSizeChanged, object: src)
+                    postAttachmentSizeChanged(source: src, messageId: self.messageId)
                 }
             }
         }
@@ -5460,7 +5573,67 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         return Int(total.rounded())
     }
 
+    // MARK: Viewport-gated image loads [T-r3-B22]
+
+    /// Image attachments waiting for the viewport, with their rect in this
+    /// view's coordinates (refreshed by every full updateAttachmentViews pass).
+    private var deferredImageLoads: [ObjectIdentifier: (attachment: ImageAttachment, rect: CGRect)] = [:]
+    private var viewportObservation: NSKeyValueObservation?
+    private var lastViewportCheckOffsetY: CGFloat = .nan
+
+    /// Within one screen above or below the visible window.
+    private func isNearViewport(_ rect: CGRect) -> Bool {
+        guard let window else { return false }
+        let r = convert(rect, to: window)
+        return window.bounds.insetBy(dx: -1, dy: -window.bounds.height).intersects(r)
+    }
+
+    /// Start (or defer) an image load depending on where it sits.
+    private func loadImageAttachmentRespectingViewport(_ attachment: ImageAttachment, rect: CGRect) {
+        if isNearViewport(rect) {
+            deferredImageLoads.removeValue(forKey: ObjectIdentifier(attachment))
+            attachment.beginLoadingIfNeeded()
+            return
+        }
+        // Off-screen: a bitmap already in memory is still adopted (keeps the
+        // height right); anything else waits for the viewport.
+        attachment.beginLoadingIfNeeded(cacheOnly: true)
+        guard attachment.loadedImage == nil else { return }
+        deferredImageLoads[ObjectIdentifier(attachment)] = (attachment, rect)
+        observeEnclosingScrollViewIfNeeded()
+    }
+
+    func loadDeferredImagesNearViewport() {
+        guard !deferredImageLoads.isEmpty, window != nil else { return }
+        for (id, entry) in deferredImageLoads where isNearViewport(entry.rect) {
+            deferredImageLoads.removeValue(forKey: id)
+            entry.attachment.beginLoadingIfNeeded()
+        }
+        if deferredImageLoads.isEmpty {
+            viewportObservation = nil
+        }
+    }
+
+    private func observeEnclosingScrollViewIfNeeded() {
+        guard viewportObservation == nil, window != nil else { return }
+        var ancestor = superview
+        while let current = ancestor, !(current is UIScrollView) { ancestor = current.superview }
+        guard let scrollView = ancestor as? UIScrollView else { return }
+        viewportObservation = scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let y = sv.contentOffset.y
+                // Re-check every ~quarter screen of travel, not every frame.
+                if !self.lastViewportCheckOffsetY.isNaN, abs(y - self.lastViewportCheckOffsetY) < 200 { return }
+                self.lastViewportCheckOffsetY = y
+                self.loadDeferredImagesNearViewport()
+            }
+        }
+    }
+
     func clearAllAttachmentViews() {
+        deferredImageLoads.removeAll()
+        viewportObservation = nil
         for view in attachmentViews { view.removeFromSuperview() }
         attachmentViews.removeAll()
         attachmentViewMap.removeAll()
@@ -5511,7 +5684,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 }
             }
             if allMapped && currentTableGenSum == lastUAVTableGenSum {
-                AppLogger(category: "AttachHotPath").info("[UAV][SKIP-DEDUPE] storageLen=\(storage.length) tcW=\(String(format: "%.0f", self.textContainer.size.width)) views=\(self.attachmentViewMap.count) tableGen=\(currentTableGenSum) — fingerprint match, nothing to do")
+                AppLogger(category: "AttachHotPath").verbose("[UAV][SKIP-DEDUPE] storageLen=\(storage.length) tcW=\(String(format: "%.0f", self.textContainer.size.width)) views=\(self.attachmentViewMap.count) tableGen=\(currentTableGenSum) — fingerprint match, nothing to do")
                 return
             }
         }
@@ -5525,8 +5698,10 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             }
             return n
         }()
+        // A full pass re-registers every still-off-screen image below.
+        deferredImageLoads.removeAll()
         if imageAttachmentCount > 0 {
-            AppLogger(category: "AttachHotPath").info("[UAV] enter imgAttach=\(imageAttachmentCount) prevViews=\(self.attachmentViews.count) tcW=\(String(format: "%.0f", self.textContainer.size.width))")
+            AppLogger(category: "AttachHotPath").verbose("[UAV] enter imgAttach=\(imageAttachmentCount) prevViews=\(self.attachmentViews.count) tcW=\(String(format: "%.0f", self.textContainer.size.width))")
         }
         let previousViewMap = attachmentViewMap
         var newViews: [UIView] = []
@@ -5552,8 +5727,10 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // causes glyphs beyond that height to have zero bounding rects. Temporarily
         // expand to infinite height for both ensureLayout and boundingRect queries.
         let savedContainerHeight = self.textContainer.size.height
-        if savedContainerHeight < CGFloat.greatestFiniteMagnitude {
-            self.textContainer.size.height = CGFloat.greatestFiniteMagnitude
+        // [T-r3-S3] Compare against the guard's clamped sentinel — see
+        // LeoTextContainer. `< .greatestFiniteMagnitude` was always true.
+        if LeoTextContainer.needsUnboundedRestore(savedContainerHeight) {
+            self.textContainer.size.height = LeoTextContainer.unboundedHeight
         }
         // [T-attachment-zero-origin 2026-05-23] Invalidate glyph properties
         // (not just layout) for the full range before ensureLayout. Otherwise
@@ -5593,7 +5770,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     // File was rewritten since last load — force a rebuild
                     // so the new bitmap reaches the UIImageView inside.
                     if imageAttach.needsViewRebuild {
-                        AppLogger(category: "AttachHotPath").info("[IMG][UAV] STALE-needsRebuild src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF)")
+                        AppLogger(category: "AttachHotPath").verbose("[IMG][UAV] STALE-needsRebuild src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF)")
                         stale = true
                         imageAttach.needsViewRebuild = false
                     }
@@ -5606,7 +5783,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                         imageAttach.onLoad = { [weak self] in
                             DispatchQueue.main.async { self?.refreshAttachmentViews() }
                         }
-                        imageAttach.beginLoadingIfNeeded()
+                        loadImageAttachmentRespectingViewport(imageAttach, rect: boundingRect)
                     } else {
                         // Clear any stale onLoad so a later invalidation path
                         // doesn't surface a synchronous refresh from an earlier
@@ -5616,7 +5793,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     if !stale && imageAttach.loadedImage != nil {
                         let hasImageView = existingView.subviews.contains(where: { $0 is UIImageView || ($0.subviews.contains(where: { $0 is UIImageView })) })
                         if !hasImageView {
-                            AppLogger(category: "AttachHotPath").info("[IMG][UAV] STALE-placeholderToLoaded src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — replacing placeholder with image view")
+                            AppLogger(category: "AttachHotPath").verbose("[IMG][UAV] STALE-placeholderToLoaded src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — replacing placeholder with image view")
                             stale = true
                         }
                     }
@@ -5686,7 +5863,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     // Content loaded since last render — recreate the view
                     existingView.removeFromSuperview()
                     if let imageAttach = attachment as? ImageAttachment {
-                        AppLogger(category: "AttachHotPath").info("[IMG][UAV] RECREATE src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — same attachment, but stale view → makeView")
+                        AppLogger(category: "AttachHotPath").verbose("[IMG][UAV] RECREATE src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — same attachment, but stale view → makeView")
                         view = imageAttach.makeView(width: boundingRect.width)
                     } else if let videoAttach = attachment as? VideoAttachment {
                         view = videoAttach.makeView(width: boundingRect.width)
@@ -5718,7 +5895,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 } else {
                     // Reuse: just update position and size
                     if let imageAttach = attachment as? ImageAttachment {
-                        AppLogger(category: "AttachHotPath").info("[IMG][UAV] REUSE src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — view kept, only frame updated")
+                        AppLogger(category: "AttachHotPath").verbose("[IMG][UAV] REUSE src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — view kept, only frame updated")
                     }
                     view = existingView
                 }
@@ -5760,7 +5937,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             } else if let thematicBreak = attachment as? ThematicBreakAttachment {
                 view = thematicBreak.makeView(width: boundingRect.width)
             } else if let imageAttach = attachment as? ImageAttachment {
-                AppLogger(category: "AttachHotPath").info("[IMG][UAV] NEW src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — no previous view (first render OR ObjectIdentifier changed) → makeView")
+                AppLogger(category: "AttachHotPath").verbose("[IMG][UAV] NEW src=\(ImageAttachment.shortSrc(imageAttach.source)) ptr=\(attachId.hashValue & 0xFFFFFF) — no previous view (first render OR ObjectIdentifier changed) → makeView")
                 // Same guard as the reused-attachment branch above: only arm
                 // onLoad when the image isn't already loaded, so a memory-cache
                 // hit during beginLoadingIfNeeded can't synchronously recurse
@@ -5769,7 +5946,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     imageAttach.onLoad = { [weak self] in
                         DispatchQueue.main.async { self?.refreshAttachmentViews() }
                     }
-                    imageAttach.beginLoadingIfNeeded()
+                    loadImageAttachmentRespectingViewport(imageAttach, rect: boundingRect)
                 } else {
                     imageAttach.onLoad = nil
                 }
@@ -5888,7 +6065,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
 
     /// Re-layout attachment views after an async image/video load completes.
     private func performRefreshAttachmentViews() {
-        AppLogger(category: "AttachHotPath").info("[REFRESH] entry — async media-load callback fired (image/video/math finished loading); will run updateAttachmentViews + invalidateCellSize")
+        AppLogger(category: "AttachHotPath").verbose("[REFRESH] entry — async media-load callback fired (image/video/math finished loading); will run updateAttachmentViews + invalidateCellSize")
         guard window != nil else {
             // Detached from window — defer the refresh until re-attach so an
             // async image load that completed mid-recycle still grows the
@@ -5959,7 +6136,15 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             for sub in attachmentViews {
                 sub.layer.contents = nil
             }
+            viewportObservation = nil
         } else {
+            // [T-r3-B22] Images deferred while off-screen get their chance now,
+            // and follow the enclosing scroll view from here on.
+            if !deferredImageLoads.isEmpty {
+                lastViewportCheckOffsetY = .nan
+                observeEnclosingScrollViewIfNeeded()
+                DispatchQueue.main.async { [weak self] in self?.loadDeferredImagesNearViewport() }
+            }
             // Replay any refresh dropped while we were detached. The
             // canonical case is the LAST image of a multi-image message
             // finishing its async load between scroll-out and scroll-in:
@@ -6020,8 +6205,13 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // LeoPhoneAgent-2026-05-13-084827.ips: every layout pass re-triggers a full
         // fillLayoutHole on tables, which calls back into attachmentBounds,
         // which re-enters typesetting.
-        if textContainer.size.height < CGFloat.greatestFiniteMagnitude {
-            textContainer.size.height = CGFloat.greatestFiniteMagnitude
+        // [T-r3-S3] The setSize: guard clamps .greatestFiniteMagnitude to
+        // LeoTextContainer.unboundedHeight, so the old
+        // `< .greatestFiniteMagnitude` test was ALWAYS true here: every
+        // layout pass re-issued setSize: and re-typeset the whole message
+        // (the 481-per-burst TextContainerGuard storms).
+        if LeoTextContainer.needsUnboundedRestore(textContainer.size.height) {
+            textContainer.size.height = LeoTextContainer.unboundedHeight
         }
 
         let currentWidth = textContainer.size.width
@@ -6207,7 +6397,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
            abs(measureWidth - lastSizedWidth) < 0.5,
            tableGenSum == lastSizedTableGenSum,
            lastComputedHeight > 0 {
-            cellSizeLogger.info("[invalidateCell][SKIP-DEDUPE] storageLen=\(textStorage.length) measureW=\(String(format: "%.0f", measureWidth)) tcW=\(String(format: "%.0f", textContainer.size.width)) lastH=\(String(format: "%.1f", lastComputedHeight)) tableGen=\(tableGenSum) — fingerprint match, skipping sizeThatFits")
+            cellSizeLogger.verbose("[invalidateCell][SKIP-DEDUPE] storageLen=\(textStorage.length) measureW=\(String(format: "%.0f", measureWidth)) tcW=\(String(format: "%.0f", textContainer.size.width)) lastH=\(String(format: "%.1f", lastComputedHeight)) tableGen=\(tableGenSum) — fingerprint match, skipping sizeThatFits")
             return
         }
         isInvalidatingCellSize = true
@@ -6215,8 +6405,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         let newHeight = sizeThatFits(CGSize(width: measureWidth, height: .greatestFiniteMagnitude)).height
         // sizeThatFits clamps textContainer.size.height — restore it (only
         // when actually clamped, to avoid a redundant setSize: → fillLayoutHole).
-        if textContainer.size.height < CGFloat.greatestFiniteMagnitude {
-            textContainer.size.height = CGFloat.greatestFiniteMagnitude
+        if LeoTextContainer.needsUnboundedRestore(textContainer.size.height) {
+            textContainer.size.height = LeoTextContainer.unboundedHeight
         }
         let previousHeight = lastComputedHeight
         if abs(newHeight - previousHeight) <= 1 {
@@ -6613,17 +6803,20 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
         let currentFontSize = FontSettings.shared.scaledMessage(16.5)
         let fontChanged = context.coordinator.lastFontSize != currentFontSize
+        // [T-r3-S7] Decide "nothing new" FIRST and once: every SwiftUI body
+        // re-evaluation lands here (scroll, unrelated @Published churn), and
+        // the common answer is "same text" — which must cost one string
+        // compare (identity fast path), not length walks + prefix scans.
+        let markdownUnchanged = markdown == context.coordinator.lastMarkdown
 
-        // [AttachHotPath] updateUIView entry — only log when this textView has
-        // image attachments in its renderer's cache (the only scenario that can
-        // trigger the streaming + image re-layout problem). Skips noise from
-        // pure-text blocks.
-        let imgCacheN = context.coordinator.renderer.imageAttachmentCache.count
-        if imgCacheN > 0 {
-            let prevLen = context.coordinator.lastMarkdown.count
-            let curLen = markdown.count
-            let isAppend = curLen > prevLen && markdown.hasPrefix(context.coordinator.lastMarkdown)
-            AppLogger(category: "AttachHotPath").info("[UPD] entry imgCache=\(imgCacheN) prevLen=\(prevLen) curLen=\(curLen) Δ\(curLen - prevLen) appendOnly=\(isAppend ? 1 : 0) fontChanged=\(fontChanged ? 1 : 0)")
+        // [AttachHotPath] updateUIView entry — verbose only, and only when the
+        // text changed on a view that holds image attachments.
+        if !markdownUnchanged, AppLogger.isVerboseEnabled,
+           context.coordinator.renderer.imageAttachmentCache.count > 0 {
+            let imgCacheN = context.coordinator.renderer.imageAttachmentCache.count
+            let prevLen = context.coordinator.lastMarkdown.utf8.count
+            let curLen = markdown.utf8.count
+            AppLogger(category: "AttachHotPath").verbose("[UPD] entry imgCache=\(imgCacheN) prevLen=\(prevLen) curLen=\(curLen) Δ\(curLen - prevLen) fontChanged=\(fontChanged ? 1 : 0)")
         }
 
         // [RotationTableFix] Detect (markdown unchanged + width changed) — the
@@ -6638,7 +6831,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         let _curW = textView.textContainer.size.width
         let _prevW = context.coordinator.lastRenderedWidth
         let _widthChanged = _curW > 1 && _prevW > 1 && abs(_curW - _prevW) > 0.5
-        if _widthChanged && markdown == context.coordinator.lastMarkdown && !fontChanged {
+        if _widthChanged && markdownUnchanged && !fontChanged {
             // [WordFade] Width change (rotation) re-lays-out everything; snap
             // any mid-fade words to full opacity so none stick translucent.
             context.coordinator.fadeAnimator.cancelAll()
@@ -6668,7 +6861,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // [T-stream-table-tail] A reply can finish without new text (the last
         // flush already carried it); the plain tail still has to become a table row.
         let tailNeedsFinalRender = context.coordinator.lastHadPlainSuffix && !isStreaming
-        guard markdown != context.coordinator.lastMarkdown || fontChanged || tailNeedsFinalRender else {
+        guard !markdownUnchanged || fontChanged || tailNeedsFinalRender else {
             let shouldRecover = textView.window != nil
                 && textView.needsAttachmentRecovery
                 && !textView.hasScheduledRecoveryForCurrentContent
@@ -6810,39 +7003,40 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // stream hands its off-main parse in on every flush, so that signal
         // was true all through streaming and this split never ran.
         let _isFinalised = !isStreaming
-        let _splitForUpdate = _isFinalised ? (prefix: markdown, plainSuffix: "") : splitStreamingTableTail(markdown)
+        // [T-r3-B21] Hard render cap: past MarkdownRenderCap the tail is shown
+        // as plain monospaced text and never reaches the parser or the
+        // streaming-table split.
+        let renderCap = MarkdownRenderCap.split(markdown)
+        let renderSource = renderCap?.head ?? markdown
+        let _splitForUpdate = _isFinalised ? (prefix: renderSource, plainSuffix: "") : splitStreamingTableTail(renderSource)
         let _hasPlainSuffix = !_splitForUpdate.plainSuffix.isEmpty
         if context.coordinator.lastHadPlainSuffix != _hasPlainSuffix {
             // Same text length, different layout: the height cache is stale.
             context.coordinator.cachedSizes.removeAll(keepingCapacity: true)
             context.coordinator.lastHadPlainSuffix = _hasPlainSuffix
         }
-        let prepared = prepareMarkdownForRender(_splitForUpdate.prefix)
         // If we split off a suffix, the prebuilt cache (which was rendered
         // from the full markdown) no longer matches what we'll render —
         // force a fresh MarkdownContent parse and skip cachedContent.
-        let content = (_hasPlainSuffix ? nil : cachedContent) ?? MarkdownContent(prepared)
+        // [T-r3-S7] With a usable cachedContent, the prep regex pass is skipped.
+        let content = (_hasPlainSuffix ? nil : cachedContent)
+            ?? MarkdownContent(prepareMarkdownForRender(_splitForUpdate.prefix))
         let prepElapsed = (CFAbsoluteTimeGetCurrent() - prepStart) * 1000
-        // Image-related diagnostics — only walk the parsed block tree when
-        // the raw markdown actually contains image syntax. The block walk
-        // is O(N) over every node in every block, which on long messages
-        // becomes a measurable chunk of every updateUIView pass (and
-        // updateUIView runs on each SwiftUI body re-evaluation, so it
-        // multiplies during streaming and self-sizing measurement loops).
-        let imageMatches = markdown.ranges(of: /!\[([^\]]*)\]\(([^)]+)\)/)
-        if !imageMatches.isEmpty {
-            for match in imageMatches {
-                let matchStr = String(markdown[match])
-                imgLogger.info("[MinisImage][StreamParse] image markdown found: \(matchStr)")
-            }
-            let imageBlockCount = content.blocks.flatMap { Self.collectImageNodes(from: $0) }.count
-            if imageBlockCount > 0 {
-                imgLogger.info("[MinisImage][StreamParse] parsed \(imageBlockCount) image node(s) from \(content.blocks.count) block(s), markdownLen=\(markdown.count)")
+        // Image diagnostics — verbose only, and the regex runs only when the
+        // text can contain image syntax at all.
+        if AppLogger.isVerboseEnabled, renderSource.contains("![") {
+            let imageMatches = renderSource.ranges(of: /!\[([^\]]*)\]\(([^)]+)\)/)
+            if !imageMatches.isEmpty {
+                let imageBlockCount = content.blocks.flatMap { Self.collectImageNodes(from: $0) }.count
+                imgLogger.verbose("[MinisImage][StreamParse] \(imageMatches.count) image link(s), \(imageBlockCount) image node(s) from \(content.blocks.count) block(s), markdownLen=\(renderSource.utf8.count)")
             }
         }
 
         var hasher = Hasher()
         hasher.combine(cachedContent != nil ? cachedContent!.blocks.hashValue : markdown.hashValue)
+        // The overflow tail is not part of the parsed blocks; its growth must
+        // still miss the hash (O(1) on native strings).
+        hasher.combine(markdown.utf8.count)
         hasher.combine(FontSettings.shared.scaledMessage(16.5))
         hasher.combine(_hasPlainSuffix)
         let contentHash: Int = hasher.finalize()
@@ -6920,9 +7114,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
                     .foregroundColor: UIColor.label,
                 ]
                 mut.append(NSAttributedString(string: _splitForUpdate.plainSuffix, attributes: suffixAttrs))
-                attributed = mut
+                attributed = Self.appendingRenderCapOverflow(renderCap, to: mut)
             } else {
-                attributed = renderedBody
+                attributed = Self.appendingRenderCapOverflow(renderCap, to: renderedBody)
             }
             usedCache = false
         }
@@ -6941,7 +7135,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
             if let loadedFp = att.loadedFingerprint {
                 let currentFp = minisMediaCacheKey(for: att.source)
                 if loadedFp != currentFp {
-                    imgLogger.info("[MinisImage][CachedAttr] FINGERPRINT CHANGED src=\(ImageAttachment.shortSrc(att.source)) old=\(loadedFp) new=\(currentFp) — invalidating cached image")
+                    imgLogger.verbose("[MinisImage][CachedAttr] FINGERPRINT CHANGED src=\(ImageAttachment.shortSrc(att.source)) old=\(loadedFp) new=\(currentFp) — invalidating cached image")
                     att.invalidateLoadedImage()
                 }
             }
@@ -7138,8 +7332,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // Keep textContainer height unconstrained so subsequent boundingRect
         // queries return correct positions for attachments near the end.
         // Only assign when it's actually clamped — see layoutSubviews.
-        if textView.textContainer.size.height < CGFloat.greatestFiniteMagnitude {
-            textView.textContainer.size.height = CGFloat.greatestFiniteMagnitude
+        if LeoTextContainer.needsUnboundedRestore(textView.textContainer.size.height) {
+            textView.textContainer.size.height = LeoTextContainer.unboundedHeight
         }
         #if DEBUG
         // [T-attachment-zero-origin] Snapshot at end of updateUIView (live uiView).
@@ -7449,16 +7643,20 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 // message whose final row never gets a trailing `\n` must
                 // still be rendered as a real table after stream-end.
                 let _isFinalisedSTF = !isStreaming
+                let renderCapSTF = MarkdownRenderCap.split(markdown)
+                let renderSourceSTF = renderCapSTF?.head ?? markdown
                 let split = _isFinalisedSTF
-                    ? (prefix: markdown, plainSuffix: "")
-                    : splitStreamingTableTail(markdown)
-                let preparedPrefix = prepareMarkdownForRender(split.prefix)
-                let blocks = MarkdownContent(preparedPrefix).blocks
+                    ? (prefix: renderSourceSTF, plainSuffix: "")
+                    : splitStreamingTableTail(renderSourceSTF)
+                // [T-r3-S7] Reuse the cached parse when it still describes
+                // what is rendered (no streaming table tail split off).
+                let blocks = (split.plainSuffix.isEmpty ? cachedContent?.blocks : nil)
+                    ?? MarkdownContent(prepareMarkdownForRender(split.prefix)).blocks
                 coord.renderer.messageId = messageId
                 coord.renderer.blockId = blockId
                 let rendered = autoreleasepool { coord.renderer.render(blocks: blocks) }
                 if split.plainSuffix.isEmpty {
-                    pending = rendered
+                    pending = Self.appendingRenderCapOverflow(renderCapSTF, to: rendered)
                 } else {
                     let mut = NSMutableAttributedString(attributedString: rendered)
                     let suffixAttrs: [NSAttributedString.Key: Any] = [
@@ -7466,7 +7664,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
                         .foregroundColor: UIColor.label,
                     ]
                     mut.append(NSAttributedString(string: split.plainSuffix, attributes: suffixAttrs))
-                    pending = mut
+                    pending = Self.appendingRenderCapOverflow(renderCapSTF, to: mut)
                 }
             }
             // REPRO-FIX(2026-05-16): scan pending for ANY .attachment.
@@ -7654,8 +7852,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // Restore the unbounded height so the layout manager keeps all glyphs
         // laid out for drawing. UITextView.sizeThatFits clamps this internally.
         // Only when actually clamped — see layoutSubviews for the rationale.
-        if tc.size.height < CGFloat.greatestFiniteMagnitude {
-            tc.size.height = CGFloat.greatestFiniteMagnitude
+        if LeoTextContainer.needsUnboundedRestore(tc.size.height) {
+            tc.size.height = LeoTextContainer.unboundedHeight
         }
 
         // Keep lastComputedHeight in sync so invalidateCellSizeIfNeeded()
@@ -8146,7 +8344,7 @@ private func resolveMinisFileURLForNativeText(url: URL) -> URL? {
     // holdout, so double-encoded non-ASCII inline image names still failed here.
     // [T-ios-file-preview-stale-cache, completing T-fix-double-encoding 2026-06-01]
     let subPaths = MinisURLPathDecoding.subPathCandidates(for: url)
-    imgLogger.info("[MinisImage][Resolve] BEGIN url=\(url.absoluteString) host=\(host) subPaths=\(subPaths) activeSession=\(AIChatViewModel.activeSessionId ?? "nil")")
+    imgLogger.verbose("[MinisImage][Resolve] BEGIN url=\(url.absoluteString) host=\(host) subPaths=\(subPaths) activeSession=\(AIChatViewModel.activeSessionId ?? "nil")")
     let fm = FileManager.default
 
     // Primary: active session persistent storage
@@ -8156,23 +8354,23 @@ private func resolveMinisFileURLForNativeText(url: URL) -> URL? {
                 .appendingPathComponent(sid, isDirectory: true)
                 .appendingPathComponent(host, isDirectory: true)
                 .appendingPathComponent(subPath)
-            imgLogger.info("[MinisImage][Resolve] checking session path=\(persistURL.path)")
+            imgLogger.verbose("[MinisImage][Resolve] checking session path=\(persistURL.path)")
             if fm.fileExists(atPath: persistURL.path) {
                 let size = (try? fm.attributesOfItem(atPath: persistURL.path)[.size] as? Int64) ?? -1
                 imgLogger.info("[MinisImage][Resolve] FOUND in active session=\(sid) path=\(persistURL.path) size=\(size)")
                 return persistURL
             }
         }
-        imgLogger.info("[MinisImage][Resolve] NOT in active session=\(sid)")
+        imgLogger.verbose("[MinisImage][Resolve] NOT in active session=\(sid)")
     } else {
-        imgLogger.info("[MinisImage][Resolve] no active session — skipping session lookup")
+        imgLogger.verbose("[MinisImage][Resolve] no active session — skipping session lookup")
     }
 
     // Global namespaces (not session-scoped)
     if host == "skills" {
         for subPath in subPaths {
             let candidate = AIChatViewModel.minisSkillsPersistentDir.appendingPathComponent(subPath)
-            imgLogger.info("[MinisImage][Resolve] checking global skills path=\(candidate.path)")
+            imgLogger.verbose("[MinisImage][Resolve] checking global skills path=\(candidate.path)")
             if fm.fileExists(atPath: candidate.path) {
                 let size = (try? fm.attributesOfItem(atPath: candidate.path)[.size] as? Int64) ?? -1
                 imgLogger.info("[MinisImage][Resolve] FOUND global skills path=\(candidate.path) size=\(size)")
@@ -8182,7 +8380,7 @@ private func resolveMinisFileURLForNativeText(url: URL) -> URL? {
     } else if host == "memory" {
         for subPath in subPaths {
             let candidate = AIChatViewModel.minisMemoryPersistentDir.appendingPathComponent(subPath)
-            imgLogger.info("[MinisImage][Resolve] checking global memory path=\(candidate.path)")
+            imgLogger.verbose("[MinisImage][Resolve] checking global memory path=\(candidate.path)")
             if fm.fileExists(atPath: candidate.path) {
                 let size = (try? fm.attributesOfItem(atPath: candidate.path)[.size] as? Int64) ?? -1
                 imgLogger.info("[MinisImage][Resolve] FOUND global memory path=\(candidate.path) size=\(size)")

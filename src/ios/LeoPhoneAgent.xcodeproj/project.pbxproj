@@ -395,6 +395,9 @@
 		E5F200001 /* MarkdownPrepRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200011 /* MarkdownPrepRegex.swift */; };
 		E5F200002 /* MinisMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200012 /* MinisMediaViews.swift */; };
 		E5F200003 /* AssistantBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200013 /* AssistantBlockView.swift */; };
+		E5R3R0001 /* ChatRenderLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3R0011 /* ChatRenderLimits.swift */; };
+		E5R3R0002 /* ChatRenderLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3R0011 /* ChatRenderLimits.swift */; };
+		E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000031 /* NSTextContainerSetSizeGuard.m */; };
 		E5F200004 /* ChatMessageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200014 /* ChatMessageViews.swift */; };
 		E5F200005 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200015 /* ChatInputBar.swift */; };
 		E5QTP0001 /* QuickTaskPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTP0011 /* QuickTaskPickerSheet.swift */; };
@@ -717,8 +720,6 @@
 		E5T00000B /* UserMessageEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T00001B /* UserMessageEntity.swift */; };
 		E5T0000A1 /* AskMinisIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T0000A2 /* AskMinisIntent.swift */; };
 		E5TLC0001 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
-		E5U000001 /* KaTeXRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5U000011 /* KaTeXRenderer.swift */; };
-		E5U000002 /* KaTeX in Resources */ = {isa = PBXBuildFile; fileRef = E5U000012 /* KaTeX */; };
 		E5UMP0001 /* UnifiedModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5UMP0011 /* UnifiedModelPicker.swift */; };
 		E5V000002 /* AlternateIcons in Resources */ = {isa = PBXBuildFile; fileRef = E5V000012 /* AlternateIcons */; };
 		E5V100001 /* MessageListLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5V100011 /* MessageListLayout.swift */; };
@@ -1324,6 +1325,7 @@
 		E5F200011 /* MarkdownPrepRegex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPrepRegex.swift; sourceTree = "<group>"; };
 		E5F200012 /* MinisMediaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisMediaViews.swift; sourceTree = "<group>"; };
 		E5F200013 /* AssistantBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantBlockView.swift; sourceTree = "<group>"; };
+		E5R3R0011 /* ChatRenderLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderLimits.swift; sourceTree = "<group>"; };
 		E5F200014 /* ChatMessageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageViews.swift; sourceTree = "<group>"; };
 		E5F200015 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		E5QTP0011 /* QuickTaskPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskPickerSheet.swift; sourceTree = "<group>"; };
@@ -1621,8 +1623,6 @@
 		E5T0000A2 /* AskMinisIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMinisIntent.swift; sourceTree = "<group>"; };
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
 		E5TT0002 /* ThinkingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingTypes.swift; sourceTree = "<group>"; };
-		E5U000011 /* KaTeXRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KaTeXRenderer.swift; sourceTree = "<group>"; };
-		E5U000012 /* KaTeX */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KaTeX; path = Resources/KaTeX; sourceTree = "<group>"; };
 		E5UMP0011 /* UnifiedModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedModelPicker.swift; sourceTree = "<group>"; };
 		E5V000012 /* AlternateIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AlternateIcons; path = Resources/AlternateIcons; sourceTree = "<group>"; };
 		E5V100011 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
@@ -1939,7 +1939,6 @@
 				E5IP00010 /* InfoPlist.strings */,
 				E5AS00010 /* AppShortcuts.strings */,
 				E5A000011 /* default_mount */,
-				E5U000012 /* KaTeX */,
 				E5V000012 /* AlternateIcons */,
 				E5D00060 /* models-dev-api.json */,
 				E5JB00014 /* jieba.dict.utf8 */,
@@ -2728,7 +2727,6 @@
 		F1A00012 /* Markdown */ = {
 			isa = PBXGroup;
 			children = (
-				E5U000011 /* KaTeXRenderer.swift */,
 				E5M000013 /* MinisMarkdownParser.swift */,
 				E5X000011 /* SwiftMathRenderer.swift */,
 				E5Y000011 /* MathRenderScheduler.swift */,
@@ -2884,6 +2882,7 @@
 				E5F200011 /* MarkdownPrepRegex.swift */,
 				E5F200012 /* MinisMediaViews.swift */,
 				E5F200013 /* AssistantBlockView.swift */,
+				E5R3R0011 /* ChatRenderLimits.swift */,
 				E5SUB0110F /* HelperBlockView.swift */,
 				E5SUB0111F /* HelperSheet.swift */,
 				E5SUB0112F /* AgentCallbackCellView.swift */,
@@ -3320,7 +3319,6 @@
 				E5BSH0005 /* bashism_test_vectors.json in Resources */,
 				AA0838D22F3B941A00049557 /* RootfsPatch.bundle in Resources */,
 				E5A000001 /* default_mount in Resources */,
-				E5U000002 /* KaTeX in Resources */,
 				E5V000002 /* AlternateIcons in Resources */,
 				AA71B0222F44BEB200A28A5E /* Launch Screen.storyboard in Resources */,
 				E51000003 /* Assets.xcassets in Resources */,
@@ -3516,6 +3514,8 @@
 				E5CR00004 /* ShellCommandRingBuffer.swift in Sources */,
 				E5GWF0004 /* GeminiWireFormat.swift in Sources */,
 				E5JB10001 /* JiebaWrapper.mm in Sources */,
+				E5R3R0002 /* ChatRenderLimits.swift in Sources */,
+				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
 				E5VC1000A /* SentenceSplitter.swift in Sources */,
 				E5VTS1001 /* VoiceTextSanitizer.swift in Sources */,
@@ -3708,6 +3708,7 @@
 				E5F200001 /* MarkdownPrepRegex.swift in Sources */,
 				E5F200002 /* MinisMediaViews.swift in Sources */,
 				E5F200003 /* AssistantBlockView.swift in Sources */,
+				E5R3R0001 /* ChatRenderLimits.swift in Sources */,
 				E5F200004 /* ChatMessageViews.swift in Sources */,
 				E5F2009A1 /* EquatableContextMenu.swift in Sources */,
 		E5RCE0001 /* ReplyContentExtractor.swift in Sources */,
@@ -4005,7 +4006,6 @@
 				E5LEO0003 /* SelectableMarkdownTheme.swift in Sources */,
 				E5K000002 /* ChatTurnScreenshot.swift in Sources */,
 				E5M000003 /* MinisMarkdownParser.swift in Sources */,
-				E5U000001 /* KaTeXRenderer.swift in Sources */,
 				E5X000001 /* SwiftMathRenderer.swift in Sources */,
 				E5Y000001 /* MathRenderScheduler.swift in Sources */,
 				E5N0000012F3B941A00049557 /* SkillStore.swift in Sources */,
