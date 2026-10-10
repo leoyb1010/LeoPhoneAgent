@@ -87,28 +87,34 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         guard !launched else { return }
         launched = true
         CrashSignalHandler.install()
-        checkStaleMarker()
-        try? FileManager.default.removeItem(at: Self.hangSnapshotURL)
-        try? FileManager.default.removeItem(at: Self.crashStackURL)
-        writeLaunchMarker()
+        markerQueue.sync {
+            checkStaleMarker()
+            try? FileManager.default.removeItem(at: Self.hangSnapshotURL)
+            try? FileManager.default.removeItem(at: Self.crashStackURL)
+            writeLaunchMarker()
+        }
         MXMetricManager.shared.add(self)
         logger.info("CrashReporter initialized, signal handlers + MetricKit subscriber registered")
     }
 
     func onWillTerminate() {
-        removeLaunchMarker()
+        markerQueue.sync { removeLaunchMarker() }
         try? FileManager.default.removeItem(at: Self.hangSnapshotURL)
         try? FileManager.default.removeItem(at: Self.crashStackURL)
         logger.info("Launch marker removed (normal termination)")
     }
 
+    /// [S4] Marker file I/O (read + merge + atomic write) runs here, off the
+    /// main thread; `onAppLaunch` uses `sync` so its stale-marker check and the
+    /// fresh marker stay ordered with queued phase updates.
+    private let markerQueue = DispatchQueue(label: "com.leoyuan.leophoneagent.CrashReporter.marker", qos: .utility)
+
+    /// Snapshot the live state on the main actor (cheap reads), then merge it
+    /// into the launch marker on `markerQueue`.
     @MainActor
     func updateMarkerPhase(phase: String) {
         let url = launchMarkerURL
-        guard FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url),
-              var marker = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return }
+        var marker: [String: Any] = [:]
 
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
@@ -179,9 +185,17 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             ]
         }
 
-        if let updated = try? JSONSerialization.data(withJSONObject: marker),
-           let json = String(data: updated, encoding: .utf8) {
-            try? json.write(to: url, atomically: true, encoding: .utf8)
+        let patch = marker
+        markerQueue.async {
+            guard FileManager.default.fileExists(atPath: url.path),
+                  let data = try? Data(contentsOf: url),
+                  var stored = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return }
+            stored.merge(patch) { _, new in new }
+            if let updated = try? JSONSerialization.data(withJSONObject: stored),
+               let json = String(data: updated, encoding: .utf8) {
+                try? json.write(to: url, atomically: true, encoding: .utf8)
+            }
         }
     }
 

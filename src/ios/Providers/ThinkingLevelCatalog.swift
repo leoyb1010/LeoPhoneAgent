@@ -123,8 +123,30 @@ enum CodexReasoningCeiling {
     }
 
     static func level(for modelId: String) -> ThinkingLevel? {
-        guard let raw = (UserDefaults.standard.dictionary(forKey: key) as? [String: String])?[modelId.lowercased()] else { return nil }
+        guard let raw = ceilings()[modelId.lowercased()] else { return nil }
         return ThinkingLevel(rawValue: raw)
+    }
+
+    /// [P2] `level(for:)` is read from view bodies (per frame while streaming);
+    /// `dictionary(forKey:)` bridged and re-cast the whole dictionary each time.
+    /// Cached like ThinkingRuleStore: keyed on the stored object itself, so a
+    /// write from anywhere (not just `save`) is picked up on the next read.
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedRaw: NSDictionary?
+    nonisolated(unsafe) private static var cachedCeilings: [String: String] = [:]
+
+    static func ceilings(defaults: UserDefaults = .standard) -> [String: String] {
+        guard let raw = defaults.object(forKey: key) as? NSDictionary else {
+            cacheLock.lock(); cachedRaw = nil; cachedCeilings = [:]; cacheLock.unlock()
+            return [:]
+        }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached = cachedRaw, cached === raw || cached.isEqual(raw) { return cachedCeilings }
+        let decoded = raw as? [String: String] ?? [:]
+        cachedRaw = raw
+        cachedCeilings = decoded
+        return decoded
     }
 
     // Lowest effort each model accepts. Models with mandatory reasoning don't

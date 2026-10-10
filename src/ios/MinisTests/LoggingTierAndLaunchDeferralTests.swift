@@ -49,10 +49,12 @@ final class LoggingTierAndLaunchDeferralTests: XCTestCase {
     }
 
     func testForegroundSkillReloadIsOffTheFirstFramePath() throws {
+        // [S4/S6] The skills reload now lives in runAfterForegroundFrame (after
+        // the returning frame is on screen) and is throttled + fingerprinted.
         let text = try source("MinisApp.swift")
-        guard let call = text.range(of: "SkillStore.shared.reload()") else { return XCTFail("reload call not found") }
-        let from: String.Index = text.index(call.lowerBound, offsetBy: -400, limitedBy: text.startIndex) ?? text.startIndex
-        let before = String(text[from..<call.lowerBound])
-        XCTAssertTrue(before.contains("DispatchQueue.main.async {"))
+        guard let call = text.range(of: "SkillStore.shared.reloadIfChangedOnDisk()") else { return XCTFail("reload call not found") }
+        guard let after = text.range(of: "private static func runAfterForegroundFrame()") else { return XCTFail("after-frame routine missing") }
+        XCTAssertLessThan(after.lowerBound, call.lowerBound)
+        XCTAssertFalse(text.contains("SkillStore.shared.reload()"))
     }
 }

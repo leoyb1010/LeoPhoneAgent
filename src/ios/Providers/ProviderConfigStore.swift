@@ -231,11 +231,56 @@ final class ProviderConfigStore: ObservableObject {
         return true
     }
 
-    init() {
+    // MARK: - [S5] Off-main JSON prefetch
+
+    /// Result of reading provider-config.json (+ its model archive) on a
+    /// background thread, started from `App.init`. `init()` consumes it when it
+    /// has landed and only falls back to reading on the calling (main) thread
+    /// when it has not. Not "publish empty, fill later": background launches
+    /// (widgets, Shortcuts) and the launch migrations read `instances` right
+    /// after init and must never see an empty config.
+    private struct DiskSnapshot {
+        let url: URL
+        let config: ProviderConfig
+        let failed: Bool
+        let unreadable: Bool
+    }
+
+    nonisolated private static let prefetchLock = NSLock()
+    nonisolated(unsafe) private static var prefetched: DiskSnapshot?
+    nonisolated(unsafe) private static var prefetchStarted = false
+
+    nonisolated private static var defaultFileURL: URL {
         let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
         let baseURL = libraryURL.appendingPathComponent("MinisChat", isDirectory: true)
         try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
-        self.fileURL = baseURL.appendingPathComponent("provider-config.json")
+        return baseURL.appendingPathComponent("provider-config.json")
+    }
+
+    /// Start reading the JSON off the main thread. Idempotent; call from App.init.
+    nonisolated static func prefetchFromDisk() {
+        prefetchLock.lock()
+        guard !prefetchStarted else { prefetchLock.unlock(); return }
+        prefetchStarted = true
+        prefetchLock.unlock()
+        Task.detached(priority: .userInitiated) {
+            let url = defaultFileURL
+            let loaded = loadDistinguishingUnreadable(from: url)
+            prefetchLock.lock()
+            prefetched = DiskSnapshot(url: url, config: loaded.config, failed: loaded.failed, unreadable: loaded.unreadable)
+            prefetchLock.unlock()
+        }
+    }
+
+    nonisolated private static func takePrefetched(for url: URL) -> DiskSnapshot? {
+        prefetchLock.lock(); defer { prefetchLock.unlock() }
+        guard let snapshot = prefetched, snapshot.url == url else { return nil }
+        prefetched = nil
+        return snapshot
+    }
+
+    init() {
+        self.fileURL = Self.defaultFileURL
         // First-frame value comes from the V2 JSON so the UI has something to
         // render before the SQLite DB finishes opening. Once the DB is ready
         // and V3 is the authoritative store (migration done), we overwrite
@@ -243,12 +288,13 @@ final class ProviderConfigStore: ObservableObject {
         // group members verbatim — so the JSON's (potentially member-truncated
         // from an older build) snapshot never becomes the persisted/pushed
         // source of truth. [T-icloud-modelgroup-member-loss]
-        let loaded = Self.loadDistinguishingUnreadable(from: fileURL)
-        self.config = loaded.config
-        self.jsonLoadFailed = loaded.failed
+        let loaded = Self.takePrefetched(for: fileURL).map { ($0.config, $0.failed, $0.unreadable) }
+            ?? Self.loadDistinguishingUnreadable(from: fileURL)
+        self.config = loaded.0
+        self.jsonLoadFailed = loaded.1
         self.lastSavedSnapshot = self.config
         loadModelArchiveAliases()
-        if loaded.unreadable { registerUnreadableRecovery() }
+        if loaded.2 { registerUnreadableRecovery() }
         Self.setupDBAndMigrate(jsonURL: fileURL) { [weak self] db in
             Task { @MainActor in
                 guard let self else { return }
@@ -425,7 +471,7 @@ final class ProviderConfigStore: ObservableObject {
     /// [T-ios-reboot-config-loss] `unreadable` = the file exists but cannot be read —
     /// the pre-first-unlock file-protection state when iOS relaunches the app in the
     /// background after a reboot. Recoverable once protected data becomes available.
-    private static func loadDistinguishingUnreadable(from url: URL) -> (config: ProviderConfig, failed: Bool, unreadable: Bool) {
+    nonisolated private static func loadDistinguishingUnreadable(from url: URL) -> (config: ProviderConfig, failed: Bool, unreadable: Bool) {
         if !FileManager.default.fileExists(atPath: url.path) {
             return (.empty, false, false)
         }
@@ -2342,7 +2388,29 @@ final class ProviderConfigStore: ObservableObject {
     /// Refresh models for all enabled provider instances.
     /// Called on first daily launch to keep model lists up-to-date.
     /// Skips instances where the user has manually added custom models.
-    func refreshAllModelsIfNeeded() {
+    /// [S6] Daily model-list refresh. Was fired from the first `.onAppear`
+    /// with one concurrent network task per provider — N requests, N JSON
+    /// decodes and N config publishes racing the launch frame. Now it waits
+    /// `delay` seconds (and for the app to still be active), then refreshes the
+    /// providers one after another.
+    func refreshAllModelsIfNeeded(delay: TimeInterval = 10) {
+        guard !modelRefreshScheduled else { return }
+        modelRefreshScheduled = true
+        Task { @MainActor [weak self] in
+            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+            guard let self else { return }
+            self.modelRefreshScheduled = false
+            guard UIApplication.shared.applicationState == .active else {
+                logger.info("[ModelList] refreshAllModelsIfNeeded: SKIP — app not active after delay")
+                return
+            }
+            await self.refreshAllModelsSerially()
+        }
+    }
+
+    private var modelRefreshScheduled = false
+
+    private func refreshAllModelsSerially() async {
         let key = "lastModelsRefreshDate"
         let lastRefresh = UserDefaults.standard.object(forKey: key) as? Date
         let calendar = Calendar.current
@@ -2363,9 +2431,7 @@ final class ProviderConfigStore: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: key)
 
         for instance in enabledInstances {
-            Task {
-                await autoRefreshModels(for: instance)
-            }
+            await autoRefreshModels(for: instance)
         }
     }
 

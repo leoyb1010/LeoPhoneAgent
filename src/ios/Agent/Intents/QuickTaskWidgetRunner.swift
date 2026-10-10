@@ -71,7 +71,7 @@ enum QuickTaskWidgetRunner {
     }
 
     private static func reload() {
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.quickTasks)
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+        WidgetReloads.request(LeoWidgetKind.quickTasks)
+        WidgetReloads.request(LeoWidgetKind.iPadConsole)
     }
 }

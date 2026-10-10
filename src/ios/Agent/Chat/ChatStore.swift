@@ -900,10 +900,12 @@ actor ChatStore {
                        parentSessionId: String? = nil, parentToolUseId: String? = nil) -> ChatSession {
         // A hidden child session is excluded by the list SQL, so it never
         // changes the visible row set. [T-subagent]
-        if parentSessionId == nil { invalidateSessionListCache() }  // FULL: a new row
         let now = Date()
+        let newId = UUID().uuidString
+        // [P2] Targeted: SessionListPatch inserts the new row in sorted position.
+        if parentSessionId == nil { invalidateSessionListCache(sessionId: newId) }
         var session = ChatSession(
-            id: UUID().uuidString,
+            id: newId,
             title: title,
             category: nil,
             modelId: modelId,
@@ -1829,7 +1831,9 @@ actor ChatStore {
     func toggleSessionPin(_ id: String) -> Bool {
         guard beginSyncMutation() else { return false }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()  // FULL: pin moves the row between sections
+        // [P2] Targeted: the list SQL orders by updated_at only; pinned rows are
+        // sectioned by the UI from `pinnedAt`, so re-querying this row suffices.
+        invalidateSessionListCache(sessionId: id)
         // Check current pin state
         var isPinned = false
         let checkSql = "SELECT pinned_at FROM sessions WHERE id = ?"
@@ -1915,7 +1919,9 @@ actor ChatStore {
     func deleteSession(_ id: String) {
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
-        invalidateSessionListCache()  // FULL: row set changes
+        // [P2] Targeted: a dirty id with no re-queried row is dropped by the
+        // patch. Child sessions are never list rows.
+        invalidateSessionListCache(sessionId: id)
         // Queue cloud deletions BEFORE removing local rows so the SELECTs
         // below can still enumerate child ids. Peers receive op=delete
         // for the session + each child and apply them as hard deletes
@@ -2010,7 +2016,8 @@ actor ChatStore {
     private func deleteSessionLocalRowsOnly(_ id: String) {
         // [T-ios-listsessions-cache] Invalidate here (the low-level row delete)
         // so ALL callers are covered — deleteSession AND deleteSessionLocalOnly.
-        invalidateSessionListCache()  // FULL: row set changes
+        // [P2] Targeted (the patch drops a dirty id whose row is gone).
+        invalidateSessionListCache(sessionId: id)
         // [T-subagent] A conversation's hidden sub agent sessions go with it.
         for child in childSessionIds(of: id) where child != id {
             deleteSessionLocalRowsOnly(child)
@@ -5805,7 +5812,12 @@ extension ChatStore {
     func upsertSyncDevice(_ device: SyncDevice) throws {
         // FULL: rows show their origin device's name (column 16), a join no
         // per-row patch would re-run for sessions it did not touch.
-        invalidateSessionListCache()
+        // [P2] Only when that name actually changes (or the device is new):
+        // every sync pass upserts every peer just to bump last_seen, and each
+        // one used to force a full list rebuild.
+        if syncDeviceName(id: device.id) != device.deviceName {
+            invalidateSessionListCache()
+        }
         try withInboundMutation {
             iCloudLogger.info("[iCloud] upsertSyncDevice: id=\(device.id) name=\(device.deviceName) zone=\(device.zoneName) upload=\(device.uploadTypes)")
             let sql = """
@@ -5825,6 +5837,17 @@ extension ChatStore {
             }
             sqlite3_finalize(stmt); stmt = nil
         }
+    }
+
+    /// Stored display name for `id`, nil when the device is unknown.
+    private func syncDeviceName(id: String) -> String? {
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, "SELECT device_name FROM sync_devices WHERE device_id = ?", -1, &stmt, nil) == SQLITE_OK
+        else { return nil }
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let text = sqlite3_column_text(stmt, 0) else { return nil }
+        return String(cString: text)
     }
 
     /// Inbound retirement of a peer's previous device id (it re-minted).

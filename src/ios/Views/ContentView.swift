@@ -279,6 +279,10 @@ struct ContentView: View {
     /// reading it from the row closure costs nothing per frame. Rebuilt only
     /// when `sessions` changes (see .onChange below).
     @State private var sessionsByIdCache: [String: ChatSession] = [:]
+    /// [P2] Bumped whenever `sessions` changes; key input for the home memos.
+    @State private var sessionsRevision = 0
+    @State private var homeContextMemo = KeyedMemo<HomeContextMemoKey, HomeContextSnapshot>(capacity: 1)
+    @State private var groupedSessionIDsMemo = KeyedMemo<GroupedSessionsMemoKey, [(label: String, ids: [String])]>(capacity: 3)
     /// Soul name shown as the sidebar title. Sourced from SOUL.md, falls
     /// back to "LeoPhoneAgent". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
@@ -483,6 +487,8 @@ struct ContentView: View {
     @State private var windowId = UUID()
     /// Tracks the session ID currently visible on the compact navigation stack.
     @State private var currentStackSessionId: String?
+    /// [S4] Last recent-sessions widget content we reloaded the timeline for.
+    @State private var recentSessionsWidgetSignature: RecentSessionsWidgetSignature?
     /// What this window shows: the split view's selection or the pushed chat.
     private var onScreenSessionId: String? { isWideLayout ? selectedSessionId : currentStackSessionId }
     /// The real session ID after a draft session is persisted (iPad only).
@@ -689,8 +695,15 @@ struct ContentView: View {
                         updatedAt: session.updatedAt
                     )
                 }
-                WidgetRecentSessionsStore.save(Array(items))
-                WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.recentSessions)
+                let rows = Array(items)
+                WidgetRecentSessionsStore.save(rows)
+                // [S4] The store is cheap and always current; the timeline
+                // reload wakes the widget process, so only when the visible
+                // top-8 (ids, titles, order) actually changed.
+                let signature = RecentSessionsWidgetSignature(ids: rows.map(\.id), titles: rows.map(\.title))
+                guard signature != recentSessionsWidgetSignature else { return }
+                recentSessionsWidgetSignature = signature
+                WidgetReloads.request(LeoWidgetKind.recentSessions)
             }
             // Cold-launch belt-and-braces: a Home Screen Quick Action that
             // fires before `.onReceive(.newChatRequested)` is attached
@@ -1051,7 +1064,7 @@ struct ContentView: View {
                     if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
                     return
                 }
-                LeoPerf.coldStep("firstFrame")
+                LeoPerf.coldFirstFrame()
                 sessions = await ChatStore.shared.listSessions()
                 LeoPerf.coldStep("listLoaded")
                 let collectionsPending = deepLink.consumePendingCollections()
@@ -1167,6 +1180,9 @@ struct ContentView: View {
                     }
                 }
                 didInitialLoad = true
+                // [WP8] Landed on home: cold ends when the list is on screen.
+                // A chat that opened instead ends it at inputReady.
+                if onScreenSessionId == nil, activeToolSheet == nil { LeoPerf.coldHomeReady() }
                 if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
                 fetchAlarmsIfNeeded()
                 await refreshRemoteDeviceSessions()
@@ -1402,10 +1418,14 @@ struct ContentView: View {
                         // Guard against rapid bg→fg→bg: if scenePhase already
                         // changed back, skip the stale .active work.
                         guard scenePhase == .active else { return }
-                        refreshHomeDeviceState()
-                        fetchAlarmsIfNeeded()
                         if #available(iOS 17.0, *) {
                             SyncCore.shared.isAppInBackground = false
+                        }
+                        // [S4] Home device state + alarms are not needed for
+                        // the returning frame.
+                        LeoPerf.afterNextFrame {
+                            refreshHomeDeviceState()
+                            fetchAlarmsIfNeeded()
                         }
                         #if DEBUG
                         UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
@@ -1684,9 +1704,27 @@ struct ContentView: View {
     // and rows look the session up by id. Grouping/sorting logic is unchanged —
     // groupedSessionIDs() just projects groupedSessions() down to ids.
 
+    /// [P2] What `groupedSessions` reads from each row, plus the day (buckets
+    /// are relative to today). Building this is a flat copy; the grouping it
+    /// guards does a calendar computation per row.
+    private struct GroupedSessionsMemoKey: Equatable {
+        let ids: [String]
+        let updatedAt: [Double]
+        let pinnedAt: [Double?]
+        let day: Date
+    }
+
     /// Grouped sidebar sections carrying only session IDs (cheap to diff).
+    /// Memoized: called from several body paths per evaluation.
     private func groupedSessionIDs(_ list: [ChatSession]) -> [(label: String, ids: [String])] {
-        groupedSessions(list).map { (label: $0.label, ids: $0.sessions.map(\.id)) }
+        let key = GroupedSessionsMemoKey(
+            ids: list.map(\.id),
+            updatedAt: list.map { $0.updatedAt.timeIntervalSince1970 },
+            pinnedAt: list.map { $0.pinnedAt?.timeIntervalSince1970 },
+            day: Calendar.current.startOfDay(for: Date()))
+        return groupedSessionIDsMemo.value(for: key) {
+            groupedSessions(list).map { (label: $0.label, ids: $0.sessions.map(\.id)) }
+        }
     }
 
     private func isCollapsibleHistoryGroup(_ label: String) -> Bool {
@@ -1732,6 +1770,8 @@ struct ContentView: View {
     /// closures never trigger a per-frame Dictionary.== / ChatSession.== diff.
     private func rebuildSessionsByIdCache() {
         sessionsByIdCache = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // [P2] Invalidates the home-context memo (sessions are one of its inputs).
+        sessionsRevision &+= 1
     }
 
     /// Resolve a session for a sidebar row by id, reading the @State cache.
@@ -2311,7 +2351,9 @@ struct ContentView: View {
     // MARK: - Sidebar Toolbar
 
     /// Refresh cadence for the sidebar migration subtitle, in seconds.
-    private static let migrationSubtitleRefreshInterval: UInt64 = 5
+    /// [P2] 60 s (was 5): each tick is a dirty-record COUNT on the ChatStore
+    /// actor, and the subtitle is a coarse "syncing N" hint.
+    private static let migrationSubtitleRefreshInterval: UInt64 = 60
 
     /// [T-ios-migration-timer-sessionlist-uaf-crash] Self-cancelling refresh loop
     /// for `migrationSubtitle`, driven by `.task` on the identity-stable sidebar
@@ -2344,7 +2386,10 @@ struct ContentView: View {
             } else {
                 backgrounded = false
             }
-            if !backgrounded {
+            // [P2] Only while the list is what the user sees: on compact a
+            // pushed chat covers it (the sidebar stays mounted underneath).
+            let listCovered = !isWideLayout && !navigationPath.isEmpty
+            if !backgrounded, !listCovered {
                 refreshMigrationSubtitle()
             }
         }
@@ -3824,7 +3869,46 @@ struct ContentView: View {
 
     /// 继续上次 / 今日 / 安静收件箱 / 专注收尾。The decisions live in
     /// HomeContextResolver (unit-tested); this only gathers the inputs.
+    /// [P2] Every input of `computeHomeContextSnapshot()`. The snapshot used
+    /// to be rebuilt (an O(sessions) pass with string trimming) on every body
+    /// evaluation of the home list; now only when one of these changes. The
+    /// minute bucket covers the resolver's time-of-day rules.
+    private struct HomeContextMemoKey: Equatable {
+        let sessionsRevision: Int
+        let badges: [String: [SessionBadgeState]]
+        let running: Set<String>
+        let suspended: [String]
+        let archived: Set<String>
+        let folders: [String: String]
+        let filter: SessionListExtras.Filter
+        let missedApprovals: Int
+        let refresh: Int
+        let pinnedSessionId: String?
+        let pinnedAt: Double?
+        let focusPayload: NSObject?
+        let minute: Int
+    }
+
     private var homeContextSnapshot: HomeContextSnapshot {
+        let defaults = UserDefaults.standard
+        let key = HomeContextMemoKey(
+            sessionsRevision: sessionsRevision,
+            badges: badgeStore.badgeStates,
+            running: runningSessionIds,
+            suspended: sidebarConcurrencyManager.suspendedSessions,
+            archived: sessionExtras.archived,
+            folders: sessionExtras.folders,
+            filter: sessionExtras.filter,
+            missedApprovals: relayCatchUp.missedApprovals.count,
+            refresh: homeContextRefresh,
+            pinnedSessionId: defaults.string(forKey: HomeContextResolver.pinnedSessionIdKey),
+            pinnedAt: defaults.object(forKey: HomeContextResolver.pinnedAtKey) as? Double,
+            focusPayload: defaults.object(forKey: HomeContextResolver.focusSummaryKey) as? NSObject,
+            minute: Int(Date().timeIntervalSince1970 / 60))
+        return homeContextMemo.value(for: key) { computeHomeContextSnapshot() }
+    }
+
+    private func computeHomeContextSnapshot() -> HomeContextSnapshot {
         _ = homeContextRefresh
         let defaults = UserDefaults.standard
         let badges = badgeStore.badgeStates

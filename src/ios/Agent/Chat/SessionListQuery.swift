@@ -200,14 +200,16 @@ enum SessionListPatch {
     ///  * A dirty id with no refreshed row was deleted underneath us: drop it.
     ///  * The result is re-sorted like the SQL (`updated_at DESC, id DESC`),
     ///    because a new message bumping updated_at is the common case.
-    /// Returns nil when a refreshed row is unknown to the cache (a creation
-    /// that used per-session invalidation): the caller must rebuild fully
-    /// rather than guess where the row goes or drop it.
+    ///  * [P2] A refreshed row unknown to the cache is a creation (createSession
+    ///    now invalidates per session instead of forcing a full rebuild): it is
+    ///    inserted, and the re-sort puts it where the SQL would. Only rows the
+    ///    caller asked for (`dirtyIds`) are accepted; anything else returns nil
+    ///    and the caller rebuilds fully.
     static func apply<Row: SessionListRow>(
         cached: [Row], dirtyIds: Set<String>, refreshed: [String: Row]
     ) -> [Row]? {
         var out: [Row] = []
-        out.reserveCapacity(cached.count)
+        out.reserveCapacity(cached.count + 1)
         var seen = Set<String>()
         for row in cached {
             guard dirtyIds.contains(row.id) else {
@@ -217,7 +219,10 @@ enum SessionListPatch {
             seen.insert(row.id)
             if let fresh = refreshed[row.id] { out.append(fresh) }
         }
-        if refreshed.keys.contains(where: { !seen.contains($0) }) { return nil }
+        for (id, row) in refreshed where !seen.contains(id) {
+            guard dirtyIds.contains(id) else { return nil }
+            out.append(row)
+        }
         sort(&out)
         return out
     }

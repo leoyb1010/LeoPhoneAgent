@@ -80,8 +80,6 @@ struct MinisApp: App {
     /// init() makes it accurate). Used to tell a cold-launch LANDING chat
     /// apart from a chat the user navigated into minutes later.
     static let processLaunchedAt = Date()
-    /// 回前台时上一次重扫技能的时间(见 scenePhase .active)。
-    @MainActor static var lastForegroundSkillReload: Date = .distantPast
 
     // Minimal UIApplicationDelegate adapter — needed only to receive
     // `UIApplicationShortcutItem` events (Home Screen Quick Actions).
@@ -117,6 +115,16 @@ struct MinisApp: App {
         IOSExecutionBackend.selectLocal()
         // [T-perf-1.39] 度量最先起:冷启动计时、回前台首帧、主线程卡顿计数。
         LeoPerf.start()
+        // [S1/WP8] File capture starts here, not in the first .onAppear, so the
+        // launch second is on record (and IOSPerfBudgetGate can measure it).
+        // Cheap: dup2 + pipe + one file open; lines are written off-main.
+        LoggingManager.shared.startIfEnabled()
+        // [S5] Pre-touch the stores whose first use would otherwise open SQLite
+        // / decode JSON on the main thread inside the first frame. Each is a
+        // once-token; the main thread only waits if it gets there first.
+        Task.detached(priority: .userInitiated) { _ = ChatStore.shared }
+        ProviderConfigStore.prefetchFromDisk()
+        AgentActivityLog.warmUpOffMain()
         FullAutoLog.install()
         #if DEBUG
         try? debugServer.start(port: 8321)
@@ -156,8 +164,9 @@ struct MinisApp: App {
         // hang a frame. (T-ios-biometric-probe-scroll-hang)
         BiometricAuth.prewarm()
         SessionActivityTracker.installApprovalPhaseHook()
-        // Clean up Live Activities left over from a previous app session (e.g. app was killed)
-        AgentLiveActivityManager.shared.cleanupStaleActivities(source: "MinisApp.init")
+        // [S6] Live Activities left over from a killed process are cleaned once
+        // per launch: after the first frame by the .active pass (foreground
+        // launch) or in BackgroundKeepAliveManager.setup (background launch).
         // Start screen-awake controller — it will observe running tasks
         // + the user's opt-in flag and toggle the idle timer accordingly.
         Task { @MainActor in KeepScreenAwakeController.shared.start() }
@@ -272,17 +281,14 @@ struct MinisApp: App {
                     }
                 }
                 .onAppear {
+                    // [S5/S6] Only what the first frame (or launch routing)
+                    // needs runs here; the rest waits for the frame to be on
+                    // screen, then runs off the main thread where it can.
                     // Populate ConfigRegistry once. Idempotent — every
                     // appearance after the first is a no-op.
                     ConfigRegistry.shared.registerBuiltinsIfNeeded()
                     // Register notification delegate for shortcut task tap-to-open
                     ShortcutNotificationDelegate.shared.register()
-                    // Register App Shortcuts with the system so Siri and Spotlight discover them
-                    if #available(iOS 17.0, *) {
-                        MinisShortcutsProvider.updateAppShortcutParameters()
-                    }
-                    // Start logging if previously enabled
-                    LoggingManager.shared.startIfEnabled()
                     // HangFix(2026-05-14) — always-on hang detector. Was
                     // previously gated to `isProcessing == true`, but the
                     // user can also hit hang while just browsing a session
@@ -294,7 +300,8 @@ struct MinisApp: App {
                     // Migrate legacy provider config on first launch after upgrade
                     ProviderMigration.migrateIfNeeded(store: ProviderConfigStore.shared)
                     Self.retireSignInsAfterProviderLoad()
-                    // Refresh model lists once per day to keep them current
+                    // [S6] Daily model-list refresh: ≥10 s after launch, one
+                    // provider at a time (see refreshAllModelsIfNeeded).
                     ProviderConfigStore.shared.refreshAllModelsIfNeeded()
                     // [T-mimo-shadow-voice] One-time upgrade fix: force-refresh
                     // mixed-modality providers (MiMo/DashScope) mis-classified by
@@ -308,26 +315,7 @@ struct MinisApp: App {
                     shareCoordinator.checkForPendingShare()
                     // Set up background keep-alive manager
                     BackgroundKeepAliveManager.shared.setup()
-                    // Monitor network changes to keep iSH DNS up to date
-                    NetworkMonitor.shared.start()
-                    // Register FileProvider domain for shared files
-                    Self.registerFileProviderDomain()
-                    // Migrate legacy shared dir to App Group container
-                    Self.migrateSharedDirToAppGroup()
-                    // Trace the resolved AppGroup paths so we can confirm the
-                    // main app, FileProvider extension, and iSH bind mount all
-                    // agree on which directory holds the user's shared files.
-                    Self.logFPSyncTracePaths()
-                    // Start watching shared/skills/memory subtrees so iSH writes
-                    // and FileBrowserView mutations propagate to the Files app.
-                    AppGroupChangeWatcher.shared.start()
-                    // Activate security scopes for user-mounted external folders
-                    // (e.g. Obsidian vault in iCloud Drive). Held for app lifetime.
-                    MountedFoldersManager.shared.activateAll()
                     presentReleaseNotesIfNeeded()
-                    // Create /var/minis/mounts/<name> symlinks in the fakefs now
-                    // that the rootfs exists and mounts are active.
-                    AIChatViewModel.refreshMountedFolderSymlinks()
                     // Start iCloud sync engine. v2 takes precedence when its
                     // feature flag is on (see SyncV2Bootstrap); v1 stays
                     // paused while v2 is active. When v2 is off, v1 boots
@@ -340,6 +328,9 @@ struct MinisApp: App {
                             }
                         }
                     }
+                    LeoPerf.afterNextFrame {
+                        Self.runAfterFirstLaunchFrame()
+                    }
                 }
         }
         // [T-ipad-menu-bar] Menu bar + ⌘-overlay shortcuts. Scene-level, so
@@ -349,6 +340,156 @@ struct MinisApp: App {
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase)
         }
+    }
+
+    /// First scenePhase .active of this process has run (cold launch = full pass).
+    @MainActor private static var didRunFirstActivePass = false
+
+    /// [S4] Foreground-return work that the returning frame does not need.
+    /// Runs once that frame is on screen (`LeoPerf.afterNextFrame`).
+    @MainActor
+    private static func runAfterForegroundFrame() {
+        PushRegistrar.shared.refreshAuthorizationAndRegister()
+        CrashReporter.shared.onAppLaunch()
+        // [T-resource-diag] 60s port/resource sampler; idempotent, off main.
+        ResourceDiagnostics.start()
+        // Gathered here, written on CrashReporter's marker queue.
+        CrashReporter.shared.updateMarkerPhase(phase: "active")
+
+        AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
+        // [T-ios-live-activity-soft-finish] If a completed task's Live
+        // Activity is lingering (soft-finished, awaiting the user), the
+        // user is now back in the app — dismiss it.
+        AgentLiveActivityManager.shared.dismissFinishedActivityOnForeground()
+
+        Task { @MainActor in
+            _ = SessionBadgeStore.shared
+            // [T-ios-session-paused-badge-hardkill] Reconcile .paused badges
+            // against the DB's interrupted-session set. The background-expiry
+            // push only fires on a graceful task expiry; a hard kill (jetsam/
+            // SIGKILL) never runs it, so the badge would be missing after
+            // restart. The persisted message tail is the durable source of
+            // truth — scan it on the actor, reconcile on the main actor.
+            let interruptedSessions = await ChatStore.shared.interruptedSessionIds()
+            // Durable run state covers the message-tail blind spot: if iOS
+            // killed the process while plain assistant text was streaming,
+            // the final message shape may not match any tool/Continue
+            // heuristic. AgentActivityLog converts such previous-process
+            // runs to waitingForUser exactly once when its singleton opens
+            // (its database was opened off-main at App.init; this is one
+            // indexed SELECT).
+            let persistedInterruptedSessions = AgentActivityLog.shared.resumableSessionIds()
+            // Exclude sessions that are actively streaming RIGHT NOW: a
+            // resumed/running session's DB tail still looks "interrupted"
+            // (mid-loop shape), but it is executing, not paused — flagging it
+            // would surface a ⏸ badge on a live, spinning session. Active ⇒
+            // never paused. (Mirrors the Android foreground reconcile.)
+            let activeNow = SessionActivityTracker.shared.activeSessions
+            let allInterrupted = interruptedSessions.union(persistedInterruptedSessions)
+            SessionBadgeStore.shared.reconcileInterruptedSessions(allInterrupted.subtracting(activeNow))
+
+            try? await UNUserNotificationCenter.current().setBadgeCount(0)
+        }
+        BackgroundInterruptionTracker.shared.checkOnForeground()
+        // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
+        // were marked pending but never cleared (i.e. the process was
+        // suspended before the completion path ran). Records where the
+        // user hadn't enabled Background Keep-Alive at the time get a
+        // one-shot guidance notification with the setting to turn on;
+        // stale (>24h) records are dropped silently.
+        ShortcutRunTracker.checkPendingOnForeground()
+        // [S6] Skills: at most every 5 min, and only if an off-main mtime
+        // fingerprint of the skills directory changed (was: every SKILL.md
+        // re-read on the main thread on every return).
+        Task { @MainActor in
+            let t0 = CFAbsoluteTimeGetCurrent()
+            if await SkillStore.shared.reloadIfChangedOnDisk() {
+                LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+            }
+        }
+        if #available(iOS 17.0, *) {
+            SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
+        }
+
+        // [T-widget-mirror] Keep the usage / memory widgets current.
+        // Cheap (one SQL scan + one small file read) and only on
+        // foreground, so it never competes with the agent loop. Timeline
+        // reloads are coalesced into one pass 2 s after the return.
+        Task {
+            // Catch-up: publishes any briefing whose session finished
+            // while we were suspended (the observer would have died).
+            await WidgetDataMirror.resolvePendingBriefings(reason: "foreground")
+            await WidgetDataMirror.refreshAll()
+            // [T-scheduled-tasks] Reconcile the schedule. This is the
+            // fallback path when no Shortcuts automation is set up —
+            // a due task runs when the user next opens the app rather
+            // than being silently lost.
+            await ScheduledTaskRunner.runDueTasks(reason: "foreground")
+            await AutomationEngine.shared.reconcile()
+            // [T-spotlight-sessions] Converge the search index:
+            // sessions renamed or deleted on another device, and any
+            // created while indexing was off.
+            await SessionSpotlightIndexer.reindexAll()
+        }
+
+        MountedFoldersManager.shared.refreshAllWritability()
+
+        // Credential-presence diagnostic (Keychain reads off-main)
+        let credInstances: [(id: String, type: ProviderType, cred: String, enabled: Bool)] =
+            ProviderConfigStore.shared.instances.map {
+                ($0.id, $0.providerType, $0.credentialType.rawValue, $0.isEnabled)
+            }
+        Task.detached(priority: .utility) {
+            let logger = AppLogger(category: "Provider")
+            for inst in credInstances {
+                let hasKey = ProviderKeychainHelper.loadAPIKey(instanceId: inst.id) != nil
+                let hasOAuthTok: Bool
+                switch inst.type {
+                case .openAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: CodexTokenStorage.self) != nil
+                case .xAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: XAITokenStorage.self) != nil
+                case .kimiCode: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: KimiTokenStorage.self) != nil
+                default: hasOAuthTok = false
+                }
+                let hasManual = ProviderKeychainHelper.loadOAuthString(instanceId: inst.id, account: "manual-oauth-token") != nil
+                logger.info("appPhase=active instanceId=\(inst.id.prefix(8)) type=\(inst.type.rawValue) cred=\(inst.cred) enabled=\(inst.enabled) hasApiKey=\(hasKey) hasOAuthToken=\(hasOAuthTok) hasManualOAuth=\(hasManual)")
+            }
+        }
+    }
+
+    /// [S5/S6] Launch work that no first-frame view depends on. Order inside
+    /// is kept from the old `.onAppear` (domain registration and the legacy
+    /// shared-dir migration before the watcher; mounts before the symlinks).
+    @MainActor
+    private static var didRunAfterFirstLaunchFrame = false
+
+    @MainActor
+    private static func runAfterFirstLaunchFrame() {
+        guard !didRunAfterFirstLaunchFrame else { return }
+        didRunAfterFirstLaunchFrame = true
+        // Register App Shortcuts with the system so Siri and Spotlight discover them
+        if #available(iOS 17.0, *) {
+            MinisShortcutsProvider.updateAppShortcutParameters()
+        }
+        // Monitor network changes to keep iSH DNS up to date (its first DNS
+        // write and proxy probe run on the monitor's own queue).
+        NetworkMonitor.shared.start()
+        // Register FileProvider domain for shared files
+        registerFileProviderDomain()
+        // Migrate legacy shared dir to App Group container
+        migrateSharedDirToAppGroup()
+        // Trace the resolved AppGroup paths so we can confirm the main app,
+        // FileProvider extension, and iSH bind mount all agree on which
+        // directory holds the user's shared files. Directory listings: off-main.
+        Task.detached(priority: .utility) { logFPSyncTracePaths() }
+        // Start watching shared/skills/memory subtrees so iSH writes and
+        // FileBrowserView mutations propagate to the Files app. start() only
+        // hops to the watcher's queue; the bounded walk runs there.
+        AppGroupChangeWatcher.shared.start()
+        // Mount security scopes are activated once, in didFinishLaunching
+        // (MountedFoldersManager.activateAll is a shared pass); here only the
+        // /var/minis/mounts/<name> symlinks are created now that the rootfs
+        // exists.
+        AIChatViewModel.refreshMountedFolderSymlinks()
     }
 
     /// The migration's "retire removed sign-in providers" pass disables them,
@@ -385,13 +526,26 @@ struct MinisApp: App {
         switch phase {
         case .active:
             let remaining = UIApplication.shared.backgroundTimeRemaining
-            if let entry = backgroundEntryDate {
-                let elapsed = Date().timeIntervalSince(entry)
+            let backgroundedFor = backgroundEntryDate.map { Date().timeIntervalSince($0) }
+            if let elapsed = backgroundedFor {
                 lifecycleLog.info("[Lifecycle] → Active (was background for \(String(format: "%.1f", elapsed))s, remaining: \(Self.formatTimeRemaining(remaining)))")
             } else {
                 lifecycleLog.info("[Lifecycle] → Active (remaining: \(Self.formatTimeRemaining(remaining)))")
             }
             backgroundEntryDate = nil
+
+            // [S4] The foreground window: only what the first frame needs.
+            //   in-window  — credential cache marked stale, streaming UI resumed,
+            //                app lock / privacy screen, plus WindowRegistry and
+            //                SyncCore's background flag (ContentView);
+            //   after frame — Live Activity, crash marker, location probe,
+            //                badges, skills, widgets, home device state;
+            //   detached   — DNS, audio-session reads, FileProvider signal.
+            // Inactive↔active churn that never reached .background, and
+            // background blips < 2 s, stop after the in-window part.
+            let plan = ForegroundWorkPolicy.plan(isFirstActivation: !Self.didRunFirstActivePass,
+                                                 backgroundedFor: backgroundedFor)
+            Self.didRunFirstActivePass = true
 
             // [T-new-session-hang-credential-cache] L2 invalidation hook #4:
             // foreground backstop. Credentials may have changed while backgrounded
@@ -401,11 +555,6 @@ struct MinisApp: App {
             // first resolve re-reads truth.
             // 标成过期而不是清空:第一帧不再同步查钥匙串,先用旧值、后台重查。
             ProviderCredentialCache.shared.markAllStale()
-
-            // Unified audio re-assertion on foreground return: stop the background
-            // keep-alive track and re-apply the correct session category for the
-            // current intent (reply TTS / capture), fixing stale-category silence.
-            AudioSessionCoordinator.shared.reassertForForeground()
 
             // [T-ios-scenephase-active-sigkill] ALL foreground-resume work is
             // deferred off the synchronous scenePhase→.active callback by one
@@ -418,123 +567,34 @@ struct MinisApp: App {
             // runs on a later tick, outside the fragile window.
             Task { @MainActor in
                 await Task.yield()
-
                 ViewModelCache.shared.resumeAllStreamingUI()
-                PushRegistrar.shared.refreshAuthorizationAndRegister()
-
                 SessionLockStore.shared.evaluateAppLock()
-
-                CrashReporter.shared.onAppLaunch()
-                // [T-resource-diag] 60s port/resource sampler; idempotent, off main.
-                ResourceDiagnostics.start()
-                CrashReporter.shared.updateMarkerPhase(phase: "active")
-
-                _ = SessionBadgeStore.shared
-                // [T-ios-session-paused-badge-hardkill] Reconcile .paused badges
-                // against the DB's interrupted-session set. The background-expiry
-                // push only fires on a graceful task expiry; a hard kill (jetsam/
-                // SIGKILL) never runs it, so the badge would be missing after
-                // restart. The persisted message tail is the durable source of
-                // truth — scan it on the actor, reconcile on the main actor.
-                let interruptedSessions = await ChatStore.shared.interruptedSessionIds()
-                // Durable run state covers the message-tail blind spot: if iOS
-                // killed the process while plain assistant text was streaming,
-                // the final message shape may not match any tool/Continue
-                // heuristic. AgentActivityLog converts such previous-process
-                // runs to waitingForUser exactly once when its singleton opens.
-                let persistedInterruptedSessions = AgentActivityLog.shared.resumableSessionIds()
-                // Exclude sessions that are actively streaming RIGHT NOW: a
-                // resumed/running session's DB tail still looks "interrupted"
-                // (mid-loop shape), but it is executing, not paused — flagging it
-                // would surface a ⏸ badge on a live, spinning session. Active ⇒
-                // never paused. (Mirrors the Android foreground reconcile.)
-                let activeNow = SessionActivityTracker.shared.activeSessions
-                let allInterrupted = interruptedSessions.union(persistedInterruptedSessions)
-                SessionBadgeStore.shared.reconcileInterruptedSessions(allInterrupted.subtracting(activeNow))
-                ISHKernel.shared.refreshDns()
-
-                #if DEBUG
-                debugServer.restartIfDead(port: 8321)
-                #endif
-
-                try? await UNUserNotificationCenter.current().setBadgeCount(0)
-                BackgroundInterruptionTracker.shared.checkOnForeground()
-                // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
-                // were marked pending but never cleared (i.e. the process was
-                // suspended before the completion path ran). Records where the
-                // user hadn't enabled Background Keep-Alive at the time get a
-                // one-shot guidance notification with the setting to turn on;
-                // stale (>24h) records are dropped silently.
-                ShortcutRunTracker.checkPendingOnForeground()
-                AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
-                // [T-ios-live-activity-soft-finish] If a completed task's Live
-                // Activity is lingering (soft-finished, awaiting the user), the
-                // user is now back in the app — dismiss it.
-                AgentLiveActivityManager.shared.dismissFinishedActivityOnForeground()
-                // 技能重扫(数据库 + 逐个读 SKILL.md)在主线程上:30 秒内切回来不重复做。
-                if Date().timeIntervalSince(Self.lastForegroundSkillReload) > 30 {
-                    Self.lastForegroundSkillReload = Date()
-                    // [T-ios-listsessions-perf] Off the first-frame critical
-                    // path: reload() is a synchronous main-actor SQLite query
-                    // plus one SKILL.md read per skill, and scenePhase turns
-                    // .active while the launch frame is still being built.
-                    // Nothing in the first frame reads `skills`; a main-queue
-                    // hop lets the frame commit first.
-                    DispatchQueue.main.async {
-                        let t0 = CFAbsoluteTimeGetCurrent()
-                        SkillStore.shared.reload()
-                        LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
-                    }
-                }
-
-                if #available(iOS 17.0, *) {
-                    SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
-                }
-
-                // [T-widget-mirror] Keep the usage / memory widgets current.
-                // Cheap (one SQL scan + one small file read) and only on
-                // foreground, so it never competes with the agent loop.
-                Task {
-                    // Catch-up: publishes any briefing whose session finished
-                    // while we were suspended (the observer would have died).
-                    await WidgetDataMirror.resolvePendingBriefings(reason: "foreground")
-                    await WidgetDataMirror.refreshAll()
-                    // [T-scheduled-tasks] Reconcile the schedule. This is the
-                    // fallback path when no Shortcuts automation is set up —
-                    // a due task runs when the user next opens the app rather
-                    // than being silently lost.
-                    await ScheduledTaskRunner.runDueTasks(reason: "foreground")
-                await AutomationEngine.shared.reconcile()
-                    // [T-spotlight-sessions] Converge the search index:
-                    // sessions renamed or deleted on another device, and any
-                    // created while indexing was off.
-                    await SessionSpotlightIndexer.reindexAll()
-                }
-
-                Self.signalFileProvider()
-                MountedFoldersManager.shared.refreshAllWritability()
-
-                // Credential-presence diagnostic (Keychain reads off-main)
-                let credInstances: [(id: String, type: ProviderType, cred: String, enabled: Bool)] =
-                    ProviderConfigStore.shared.instances.map {
-                        ($0.id, $0.providerType, $0.credentialType.rawValue, $0.isEnabled)
-                    }
-                Task.detached(priority: .utility) {
-                    let logger = AppLogger(category: "Provider")
-                    for inst in credInstances {
-                        let hasKey = ProviderKeychainHelper.loadAPIKey(instanceId: inst.id) != nil
-                        let hasOAuthTok: Bool
-                        switch inst.type {
-                        case .openAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: CodexTokenStorage.self) != nil
-                        case .xAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: XAITokenStorage.self) != nil
-                        case .kimiCode: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: KimiTokenStorage.self) != nil
-                        default: hasOAuthTok = false
-                        }
-                        let hasManual = ProviderKeychainHelper.loadOAuthString(instanceId: inst.id, account: "manual-oauth-token") != nil
-                        logger.info("appPhase=active instanceId=\(inst.id.prefix(8)) type=\(inst.type.rawValue) cred=\(inst.cred) enabled=\(inst.enabled) hasApiKey=\(hasKey) hasOAuthToken=\(hasOAuthTok) hasManualOAuth=\(hasManual)")
-                    }
-                }
             }
+            // Unified audio re-assertion on any return from the background: stop
+            // the keep-alive track and re-apply the correct session category for
+            // the current intent (reply TTS / capture), fixing stale-category
+            // silence. The AVAudioSession reads and writes run on the
+            // coordinator's queue.
+            if plan == .full || backgroundedFor != nil {
+                AudioSessionCoordinator.shared.reassertForForeground()
+            }
+            guard plan == .full else {
+                lifecycleLog.info("[Lifecycle] foreground blip — skipping the full foreground pass")
+                return
+            }
+
+            WidgetReloads.noteForeground()
+            Task.detached(priority: .utility) {
+                ISHKernel.shared.refreshDns()
+                Self.signalFileProvider()
+            }
+            LeoPerf.afterNextFrame {
+                Self.runAfterForegroundFrame()
+            }
+            #if DEBUG
+            debugServer.restartIfDead(port: 8321)
+            #endif
+
             // Trigger iCloud sync on foreground resume: fetch remote changes + send local dirty records.
             // Route to whichever engine is active. v1 must stay quiet whenever
             // v2 has taken over (SyncV2Bootstrap.shouldPauseV1 == true) —
@@ -804,8 +864,13 @@ struct MinisApp: App {
         }
     }
 
-    private static func signalFileProvider() {
-        NSFileProviderManager(for: fileProviderDomain)?.signalEnumerator(for: .rootContainer) { error in
+    /// [S4] Called off the main thread on foreground return; builds its own
+    /// domain value so it touches no main-actor state.
+    nonisolated private static func signalFileProvider() {
+        let domain = NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier("com.leoyuan.leophoneagent.files"),
+            displayName: "LeoBot")
+        NSFileProviderManager(for: domain)?.signalEnumerator(for: .rootContainer) { error in
             if let error {
                 lifecycleLog.warning("[FileProvider] signal failed: \(error.localizedDescription)")
             }
@@ -1002,7 +1067,7 @@ struct MinisApp: App {
     /// roots, plus a child count for each. Lets us correlate against the
     /// FileProvider extension's view of the same paths and the iSH bind mount
     /// targets logged during MOUNT setup.
-    private static func logFPSyncTracePaths() {
+    nonisolated private static func logFPSyncTracePaths() {
         let fm = FileManager.default
         let groupID = "group.com.leoyuan.leophoneagent"
         let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: groupID)

@@ -215,13 +215,54 @@ final class SessionListPerfTests: XCTestCase {
         XCTAssertEqual(out?[1], cached[0])
     }
 
-    func testPatchDropsDeletedRowsAndRefusesUnknownRows() {
+    func testPatchDropsDeletedRowsAndRefusesUnrequestedRows() {
         let cached = [Row(id: "b", updatedAt: Date(timeIntervalSince1970: 20), preview: "b"),
                       Row(id: "a", updatedAt: Date(timeIntervalSince1970: 10), preview: "a")]
         XCTAssertEqual(SessionListPatch.apply(cached: cached, dirtyIds: ["a"], refreshed: [:])?.map(\.id), ["b"])
         let stranger = Row(id: "z", updatedAt: Date(timeIntervalSince1970: 50), preview: "z")
-        XCTAssertNil(SessionListPatch.apply(cached: cached, dirtyIds: ["z"], refreshed: ["z": stranger]),
-                     "a row the cache never had needs a full rebuild, not a guess")
+        XCTAssertNil(SessionListPatch.apply(cached: cached, dirtyIds: ["a"], refreshed: ["z": stranger]),
+                     "a row nobody asked for needs a full rebuild, not a guess")
+    }
+
+    /// [P2] createSession invalidates only the new id: the patch must insert
+    /// the unknown row where the SQL would put it, keeping every other row.
+    func testPatchInsertsCreatedRowInSortedPosition() {
+        let cached = [Row(id: "c", updatedAt: Date(timeIntervalSince1970: 30), preview: "c"),
+                      Row(id: "a", updatedAt: Date(timeIntervalSince1970: 10), preview: "a")]
+        let created = Row(id: "n", updatedAt: Date(timeIntervalSince1970: 20), preview: "")
+        let out = SessionListPatch.apply(cached: cached, dirtyIds: ["n"], refreshed: ["n": created])
+        XCTAssertEqual(out?.map(\.id), ["c", "n", "a"])
+        XCTAssertEqual(out?[0], cached[0])
+        XCTAssertEqual(out?[2], cached[1])
+        let newest = Row(id: "m", updatedAt: Date(timeIntervalSince1970: 99), preview: "")
+        XCTAssertEqual(SessionListPatch.apply(cached: cached, dirtyIds: ["m"], refreshed: ["m": newest])?.first?.id, "m")
+    }
+
+    /// [P2] Pin and delete re-query just their row: pinning keeps the row (and
+    /// the others) in place, deleting a parent drops one row even when its
+    /// hidden children are dirty too.
+    func testPatchHandlesPinAndDeleteAsTargetedUpdates() {
+        let cached = [Row(id: "b", updatedAt: Date(timeIntervalSince1970: 20), preview: "b"),
+                      Row(id: "a", updatedAt: Date(timeIntervalSince1970: 10), preview: "a")]
+        var pinned = cached[1]
+        pinned.preview = "pinned"
+        XCTAssertEqual(SessionListPatch.apply(cached: cached, dirtyIds: ["a"], refreshed: ["a": pinned])?.map(\.preview),
+                       ["b", "pinned"])
+        XCTAssertEqual(SessionListPatch.apply(cached: cached, dirtyIds: ["b", "child-1", "child-2"], refreshed: [:])?.map(\.id),
+                       ["a"])
+    }
+
+    func testCreatePinDeleteUseTargetedInvalidation() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let store = try String(contentsOf: root.appendingPathComponent("Agent/Chat/ChatStore.swift"), encoding: .utf8)
+        func body(_ signature: String) throws -> Substring {
+            let start = try XCTUnwrap(store.range(of: signature))
+            return store[start.lowerBound...].prefix(900)
+        }
+        XCTAssertTrue(try body("func createSession(modelId: String").contains("invalidateSessionListCache(sessionId: newId)"))
+        XCTAssertTrue(try body("func toggleSessionPin(_ id: String)").contains("invalidateSessionListCache(sessionId: id)"))
+        XCTAssertTrue(try body("func deleteSession(_ id: String)").contains("invalidateSessionListCache(sessionId: id)"))
+        XCTAssertTrue(try body("private func deleteSessionLocalRowsOnly(").contains("invalidateSessionListCache(sessionId: id)"))
     }
 
     func testPatchOrderMatchesSQLTieBreak() throws {

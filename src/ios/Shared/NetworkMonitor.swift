@@ -21,24 +21,24 @@ final class NetworkMonitor {
     }
 
     func start() {
-        NSLog("NetworkMonitor: start() called, isStarted=%d", isStarted ? 1 : 0)
         guard !isStarted else { return }
         isStarted = true
 
-        // Capture initial state and do an immediate DNS write so resolv.conf is
-        // populated before the first NWPathMonitor callback fires (which can be
-        // delayed by several hundred milliseconds).
-        let initialPath = monitor.currentPath
-        lastInterfaceTypes = activeInterfaceTypes(initialPath)
-        logger.info("[Network] Monitor started — writing initial DNS config")
-        NSLog("NetworkMonitor: about to refreshDns + dump proxy")
-        ISHKernel.shared.refreshDns()
-        dumpSystemProxySettings(reason: "monitor-start")
-
-        monitor.pathUpdateHandler = { [weak self] path in
-            self?.handlePathUpdate(path)
+        // [S6] Everything below runs on `queue`, not the caller (the main
+        // thread inside the launch frame): the initial resolv.conf write, the
+        // CFNetwork proxy copy and the per-URL proxy probe are all blocking.
+        // The immediate DNS write still happens before the first
+        // NWPathMonitor callback, which is delivered on the same serial queue.
+        queue.async { [self] in
+            lastInterfaceTypes = activeInterfaceTypes(monitor.currentPath)
+            logger.info("[Network] Monitor started — writing initial DNS config")
+            ISHKernel.shared.refreshDns()
+            dumpSystemProxySettings(reason: "monitor-start")
+            monitor.pathUpdateHandler = { [weak self] path in
+                self?.handlePathUpdate(path)
+            }
+            monitor.start(queue: queue)
         }
-        monitor.start(queue: queue)
     }
 
     func stop() {
@@ -68,7 +68,12 @@ final class NetworkMonitor {
         }
 
         ISHKernel.shared.refreshDns()
-        dumpSystemProxySettings(reason: typesChanged ? "interface-change" : "path-update")
+        // [S8] The proxy dump (CFNetwork copy + per-URL probe + up to three
+        // lines) used to run on every path tick; only an interface change can
+        // change what it reports.
+        if typesChanged {
+            dumpSystemProxySettings(reason: "interface-change")
+        }
 
         // Evict LLM provider connection pools ONLY when the active interface
         // set actually changed (WiFi <-> cellular, gained/lost connectivity,

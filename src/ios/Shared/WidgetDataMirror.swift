@@ -15,6 +15,18 @@ import WidgetKit
 
 private let logger = AppLogger(category: "WidgetMirror")
 
+/// [S4] App-wide entry for widget timeline reloads: merged into one pass 2 s
+/// after a foreground return (see `WidgetReloadCoalescer`), pass-through
+/// otherwise.
+enum WidgetReloads {
+    static let coalescer = WidgetReloadCoalescer(
+        schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) },
+        reload: { kind in WidgetCenter.shared.reloadTimelines(ofKind: kind) })
+
+    static func request(_ kind: String) { coalescer.request(kind) }
+    static func noteForeground() { coalescer.noteForeground() }
+}
+
 enum WidgetDataMirror {
 
     // MARK: - Daily briefing
@@ -55,8 +67,8 @@ enum WidgetDataMirror {
             sessionId: sessionId,
             summary: String(summary.prefix(400))
         ))
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.briefing)
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+        WidgetReloads.request(LeoWidgetKind.briefing)
+        WidgetReloads.request(LeoWidgetKind.iPadConsole)
         logger.info("briefing recorded task=\(taskName) session=\(sessionId.prefix(8)) chars=\(summary.count)")
         return true
     }
@@ -92,7 +104,7 @@ enum WidgetDataMirror {
             if let taskId = entry.taskId {
                 WidgetQuickTasksStore.updateRunState(id: taskId,
                     state: QuickTaskWidgetRunner.badgeState(for: outcome), runId: state.runId)
-                WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.quickTasks)
+                WidgetReloads.request(LeoWidgetKind.quickTasks)
             }
             if outcome == .failed || outcome == .cancelled {
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
@@ -187,8 +199,13 @@ enum WidgetDataMirror {
             topModel: todayTokensByModel.max(by: { $0.value < $1.value })?.key ?? "",
             recentDays: recentDays
         )
+        let previous = WidgetUsageStore.load()
         WidgetUsageStore.save(summary)
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.todayOverview)
+        // [S4] Reload the timeline only when what the widget shows changed.
+        var comparable = previous
+        comparable.updatedAt = summary.updatedAt
+        guard comparable != summary || !calendar.isDate(previous.updatedAt, inSameDayAs: summary.updatedAt) else { return }
+        WidgetReloads.request(LeoWidgetKind.todayOverview)
     }
 
     // MARK: - Memory lens
@@ -206,10 +223,9 @@ enum WidgetDataMirror {
 
         let redacted = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
         guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
-            WidgetMemoryStore.save(WidgetMemorySnapshot(
+            saveMemoryAndReloadIfChanged(WidgetMemorySnapshot(
                 updatedAt: Date(), todayCount: 0, latestEntry: "", isRedacted: redacted
             ))
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.memory)
             return
         }
 
@@ -220,13 +236,25 @@ enum WidgetDataMirror {
             .filter { $0.hasPrefix("- ") || $0.hasPrefix("* ") }
             .map { String($0.dropFirst(2)) }
 
-        WidgetMemoryStore.save(WidgetMemorySnapshot(
+        saveMemoryAndReloadIfChanged(WidgetMemorySnapshot(
             updatedAt: Date(),
             todayCount: entries.count,
             latestEntry: redacted ? "" : String((entries.last ?? "").prefix(180)),
             isRedacted: redacted
         ))
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.memory)
+    }
+
+    /// [S4] Always store (the widget reads `updatedAt`), reload the timeline
+    /// only when the visible content changed or the day rolled over.
+    @MainActor
+    private static func saveMemoryAndReloadIfChanged(_ snapshot: WidgetMemorySnapshot) {
+        let previous = WidgetMemoryStore.load()
+        WidgetMemoryStore.save(snapshot)
+        var comparable = previous
+        comparable.updatedAt = snapshot.updatedAt
+        guard comparable != snapshot
+            || !Calendar.current.isDate(previous.updatedAt, inSameDayAs: snapshot.updatedAt) else { return }
+        WidgetReloads.request(LeoWidgetKind.memory)
     }
 
     // MARK: - Artifacts
@@ -254,8 +282,10 @@ enum WidgetDataMirror {
                 symbolName: symbol(for: snap.artifact.kind)
             )
         }
+        let previous = WidgetArtifactsStore.load()
         WidgetArtifactsStore.save(Array(items))
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.artifacts)
+        guard previous != Array(items) else { return }
+        WidgetReloads.request(LeoWidgetKind.artifacts)
     }
 
     private static func symbol(for kind: ArtifactKind) -> String {
@@ -309,7 +339,7 @@ enum WidgetDataMirror {
         }
         if items != current {
             WidgetRecentSessionsStore.save(items)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.recentSessions)
+            WidgetReloads.request(LeoWidgetKind.recentSessions)
         }
         let redactedSummary = String(localized: "已生成 · 打开 App 查看")
         if var briefing = WidgetBriefingStore.load(),
@@ -317,8 +347,8 @@ enum WidgetDataMirror {
            briefing.summary != redactedSummary {
             briefing.summary = redactedSummary
             WidgetBriefingStore.save(briefing)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.briefing)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+            WidgetReloads.request(LeoWidgetKind.briefing)
+            WidgetReloads.request(LeoWidgetKind.iPadConsole)
         }
         // The status card (also the watch face) keeps the last run's title
         // until the next run rewrites it.
@@ -331,8 +361,8 @@ enum WidgetDataMirror {
             status.loopIteration = 0
             status.privacyMode = true
             AgentWidgetSnapshotStore.save(status)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.status)
-            WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+            WidgetReloads.request(LeoWidgetKind.status)
+            WidgetReloads.request(LeoWidgetKind.iPadConsole)
             WatchBridge.shared.pushStatus()
         }
     }

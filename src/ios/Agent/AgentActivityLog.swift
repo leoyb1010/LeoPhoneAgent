@@ -16,7 +16,7 @@ final class AgentActivityLog: ObservableObject {
     @Published private(set) var revision = 0
     @Published private(set) var persistenceAvailable = true
 
-    private static let maxRows = 5000
+    nonisolated private static let maxRows = 5000
     /// 裁剪旧记录每 200 次写入做一次(启动时也做一次):以前每个工具边界都在主线程上整表排序删一遍。
     private static let pruneEvery = 200
     private var appendsSincePrune = 0
@@ -24,16 +24,28 @@ final class AgentActivityLog: ObservableObject {
     private let dbURL: URL
 
     init(databaseURL: URL? = nil) {
-        let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        var base = databaseURL?.deletingLastPathComponent()
-            ?? library.appendingPathComponent("LeoPhoneAgent", isDirectory: true)
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        var resourceValues = URLResourceValues()
-        resourceValues.isExcludedFromBackup = true
-        try? base.setResourceValues(resourceValues)
-        dbURL = databaseURL ?? base.appendingPathComponent("agent-activity.db")
-        openAndMigrate()
-        if db != nil { _ = prune() }
+        if let databaseURL {
+            try? FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(),
+                                                     withIntermediateDirectories: true)
+        }
+        dbURL = databaseURL ?? Self.defaultDatabaseURL
+        // [S5] The open + schema + backfill + prune usually already ran on a
+        // background thread (`warmUpOffMain`, started from App.init). Take that
+        // connection; only open here when the warm-up never started. Waiting
+        // on the semaphore while a warm-up is mid-flight costs no more than
+        // doing the work here, and two connections never migrate concurrently.
+        Self.warmSemaphore.wait()
+        if let warmed = Self.warmed, warmed.url == dbURL {
+            db = warmed.db
+            persistenceAvailable = warmed.ok
+            Self.warmed = nil
+        } else {
+            let opened = Self.openAndMigrate(at: dbURL)
+            db = opened.db
+            persistenceAvailable = opened.ok
+        }
+        Self.warmClaimed = true
+        Self.warmSemaphore.signal()
         recoverRunsInterruptedByPreviousProcess()
     }
 
@@ -41,16 +53,70 @@ final class AgentActivityLog: ObservableObject {
         sqlite3_close(db)
     }
 
-    private func openAndMigrate() {
-        guard sqlite3_open(dbURL.path, &db) == SQLITE_OK else {
-            persistenceAvailable = false
-            activityLogLogger.error("Could not open device-local activity database")
-            return
+    // MARK: - [S5] Off-main open
+
+    nonisolated private static let warmSemaphore = DispatchSemaphore(value: 1)
+    nonisolated(unsafe) private static var warmed: (url: URL, db: OpaquePointer?, ok: Bool)?
+    nonisolated(unsafe) private static var warmClaimed = false
+    nonisolated(unsafe) private static var warmStarted = false
+
+    nonisolated static var defaultDatabaseURL: URL {
+        let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+        var base = library.appendingPathComponent("LeoPhoneAgent", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try? base.setResourceValues(resourceValues)
+        return base.appendingPathComponent("agent-activity.db")
+    }
+
+    /// Open, migrate and prune the default database on a background thread so
+    /// the singleton's first touch on the main actor only adopts the handle.
+    /// Idempotent; a no-op once the singleton exists.
+    nonisolated static func warmUpOffMain() {
+        warmSemaphore.wait()
+        let start = !warmStarted && !warmClaimed
+        warmStarted = true
+        warmSemaphore.signal()
+        guard start else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            warmSemaphore.wait()
+            defer { warmSemaphore.signal() }
+            guard !warmClaimed else { return }
+            let url = defaultDatabaseURL
+            let opened = openAndMigrate(at: url)
+            warmed = (url, opened.db, opened.ok)
         }
-        exec("PRAGMA journal_mode=WAL")
+    }
+
+    /// Opens the database, creates/migrates the schema, backfills run state
+    /// and prunes old rows. Thread-agnostic: touches only its own connection.
+    nonisolated private static func openAndMigrate(at url: URL) -> (db: OpaquePointer?, ok: Bool) {
+        var db: OpaquePointer?
+        guard sqlite3_open(url.path, &db) == SQLITE_OK else {
+            activityLogLogger.error("Could not open device-local activity database")
+            return (db, false)
+        }
+        var ok = true
+        func run(_ sql: String) { if !sqlExec(db, sql) { ok = false } }
+        func ensureColumn(_ name: String, definition: String, table: String = "activity_event") {
+            var statement: OpaquePointer?
+            var exists = false
+            if sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK {
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    if let text = sqlite3_column_text(statement, 1), String(cString: text) == name {
+                        exists = true
+                        break
+                    }
+                }
+            }
+            sqlite3_finalize(statement)
+            if !exists { run("ALTER TABLE \(table) ADD COLUMN \(name) \(definition)") }
+        }
+        run("PRAGMA journal_mode=WAL")
         // 本机活动日志:WAL 下 NORMAL 只在断电时可能丢最后几条,换来每次提交少一次 fsync(写在主线程上)。
-        exec("PRAGMA synchronous=NORMAL")
-        exec("""
+        run("PRAGMA synchronous=NORMAL")
+        run("""
             CREATE TABLE IF NOT EXISTS activity_event (
                 id          TEXT PRIMARY KEY,
                 run_id      TEXT NOT NULL,
@@ -64,9 +130,9 @@ final class AgentActivityLog: ObservableObject {
         """)
         ensureColumn("reason", definition: "TEXT")
         ensureColumn("result_message_id", definition: "TEXT")
-        exec("CREATE INDEX IF NOT EXISTS idx_activity_session_at ON activity_event(session_id, at DESC)")
-        exec("CREATE INDEX IF NOT EXISTS idx_activity_run_at ON activity_event(run_id, at DESC)")
-        exec("""
+        run("CREATE INDEX IF NOT EXISTS idx_activity_session_at ON activity_event(session_id, at DESC)")
+        run("CREATE INDEX IF NOT EXISTS idx_activity_run_at ON activity_event(run_id, at DESC)")
+        run("""
             CREATE TABLE IF NOT EXISTS agent_run_state (
                 run_id      TEXT PRIMARY KEY,
                 session_id  TEXT NOT NULL,
@@ -77,15 +143,15 @@ final class AgentActivityLog: ObservableObject {
                 reason      TEXT
             )
         """)
-        exec("CREATE INDEX IF NOT EXISTS idx_run_state_session_updated ON agent_run_state(session_id, updated_at DESC)")
-        exec("CREATE INDEX IF NOT EXISTS idx_run_state_phase ON agent_run_state(phase)")
-        exec("CREATE INDEX IF NOT EXISTS idx_activity_at ON activity_event(at DESC)")
-        exec("CREATE INDEX IF NOT EXISTS idx_run_state_updated ON agent_run_state(updated_at DESC)")
+        run("CREATE INDEX IF NOT EXISTS idx_run_state_session_updated ON agent_run_state(session_id, updated_at DESC)")
+        run("CREATE INDEX IF NOT EXISTS idx_run_state_phase ON agent_run_state(phase)")
+        run("CREATE INDEX IF NOT EXISTS idx_activity_at ON activity_event(at DESC)")
+        run("CREATE INDEX IF NOT EXISTS idx_run_state_updated ON agent_run_state(updated_at DESC)")
         ensureColumn("result_message_id", definition: "TEXT", table: "agent_run_state")
         // Backfill the latest privacy-safe event for databases created before
         // durable run state existed. This table is device-local and never
         // participates in the chat/iCloud schema.
-        exec("""
+        run("""
             INSERT OR IGNORE INTO agent_run_state
                 (run_id, session_id, started_at, updated_at, phase, tool_name, reason)
             SELECT latest.run_id,
@@ -102,37 +168,44 @@ final class AgentActivityLog: ObservableObject {
                 GROUP BY run_id
             ) first ON first.run_id = latest.run_id AND first.updated_at = latest.at
         """)
+        // 启动时裁剪一次(以前在主线程的 init 里)。
+        if !pruneRows(db) { ok = false }
+        return (db, ok)
     }
 
-    @discardableResult
-    private func exec(_ sql: String) -> Bool {
+    nonisolated private static func sqlExec(_ db: OpaquePointer?, _ sql: String) -> Bool {
         var error: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(db, sql, nil, nil, &error) != SQLITE_OK {
             let message = error.map { String(cString: $0) } ?? "unknown"
             activityLogLogger.error("SQLite error: \(message)")
             sqlite3_free(error)
-            persistenceAvailable = false
             return false
         }
         return true
     }
 
-    private func ensureColumn(_ name: String, definition: String, table: String = "activity_event") {
-        guard db != nil else { return }
-        var statement: OpaquePointer?
-        var exists = false
-        if sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK {
-            while sqlite3_step(statement) == SQLITE_ROW {
-                if let text = sqlite3_column_text(statement, 1), String(cString: text) == name {
-                    exists = true
-                    break
-                }
-            }
+    nonisolated private static func pruneRows(_ db: OpaquePointer?) -> Bool {
+        sqlExec(db, """
+            DELETE FROM activity_event
+            WHERE id NOT IN (
+                SELECT id FROM activity_event ORDER BY at DESC LIMIT \(maxRows)
+            )
+        """) && sqlExec(db, """
+            DELETE FROM agent_run_state
+            WHERE run_id NOT IN (
+                SELECT run_id FROM agent_run_state
+                ORDER BY updated_at DESC LIMIT 1000
+            )
+        """)
+    }
+
+    @discardableResult
+    private func exec(_ sql: String) -> Bool {
+        guard Self.sqlExec(db, sql) else {
+            persistenceAvailable = false
+            return false
         }
-        sqlite3_finalize(statement)
-        if !exists {
-            exec("ALTER TABLE \(table) ADD COLUMN \(name) \(definition)")
-        }
+        return true
     }
 
     @discardableResult
@@ -205,18 +278,11 @@ final class AgentActivityLog: ObservableObject {
 
     private func prune() -> Bool {
         appendsSincePrune = 0
-        return exec("""
-            DELETE FROM activity_event
-            WHERE id NOT IN (
-                SELECT id FROM activity_event ORDER BY at DESC LIMIT \(Self.maxRows)
-            )
-        """) && exec("""
-            DELETE FROM agent_run_state
-            WHERE run_id NOT IN (
-                SELECT run_id FROM agent_run_state
-                ORDER BY updated_at DESC LIMIT 1000
-            )
-        """)
+        guard Self.pruneRows(db) else {
+            persistenceAvailable = false
+            return false
+        }
+        return true
     }
 
     /// A new turn supersedes any resumable/nonterminal run left for the same

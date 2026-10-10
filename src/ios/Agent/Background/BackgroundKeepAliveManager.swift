@@ -222,7 +222,23 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// Timer for periodic Live Activity updates.
     private var updateTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
-    private let locationManager = CLLocationManager()
+    /// [S6] Created on first use instead of in the singleton's init: the
+    /// constructor plus delegate hookup is a locationd round trip that used to
+    /// land on the main thread inside the first frame. `setup()` creates it
+    /// after the first frame (immediately on a background launch).
+    private var _locationManager: CLLocationManager?
+    private var locationManager: CLLocationManager {
+        if let manager = _locationManager { return manager }
+        let manager = CLLocationManager()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+        manager.pausesLocationUpdatesAutomatically = false
+        // No synchronous `authorizationStatus` read here: setting the delegate
+        // makes the system call locationManagerDidChangeAuthorization with the
+        // current status, which re-runs every evaluation.
+        _locationManager = manager
+        return manager
+    }
     private var locationUpdating = false
     private var locationTimer: Timer?
     private var appIsInBackground = false
@@ -370,13 +386,20 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     private override init() {
         super.init()
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
-        locationManager.pausesLocationUpdatesAutomatically = false
-        // No synchronous `authorizationStatus` read here: it is a round trip to
-        // locationd on the main thread during the first frame. Setting the
-        // delegate makes the system call locationManagerDidChangeAuthorization
-        // with the current status, which re-runs every evaluation.
+    }
+
+    /// [S6] One CLBackgroundActivitySession orphan probe per launch / foreground
+    /// return. didFinishLaunching, setup(), didBecomeActive and the foreground
+    /// cleanup each probed on their own (3 at launch, 2 per foreground), every
+    /// one a locationd round trip on the main thread.
+    private static var lastOrphanProbeAt: Date = .distantPast
+    private static let orphanProbeInterval: TimeInterval = 5
+
+    /// Launch-time probe from AppDelegate; does not create the singleton.
+    static func probeOrphanedLocationSessionAtLaunch() {
+        guard #available(iOS 17.0, *) else { return }
+        lastOrphanProbeAt = Date()
+        CLBackgroundActivitySession().invalidate()
     }
 
     private var didSetup = false
@@ -407,12 +430,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             evaluateSilentAudio(caller: "setup.launchedInBackground")
         }
 
-        if #available(iOS 17.0, *) {
-            let probe = CLBackgroundActivitySession()
-            probe.invalidate()
-            logger.info("[BKA] unconditional orphan-session retract on setup")
-        }
-
         // [T-ios-bgactivitysession-leak] A CLBackgroundActivitySession outlives
         // app termination by design: if the previous process was force-killed
         // without invalidating it, iOS keeps the system location indicator
@@ -421,7 +438,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // any orphaned session + stale Live Activity so a leaked session from a
         // prior run doesn't keep the indicator (and a dead Live Activity) up.
         retractOrphanedLocationSession(caller: "setup")
-        AgentLiveActivityManager.shared.cleanupStaleActivities(source: "BKA.setup")
+        // [S6] A foreground launch cleans stale Live Activities once, after the
+        // first frame (MinisApp's .active pass). Only a background launch, which
+        // never gets that pass until the user opens the app, does it here.
+        if launchedInBackground {
+            AgentLiveActivityManager.shared.cleanupStaleActivities(source: "BKA.setup")
+            _ = locationManager
+        } else {
+            LeoPerf.afterNextFrame { [weak self] in _ = self?.locationManager }
+        }
 
         evaluateBackgroundActivitySession()
 
@@ -498,7 +523,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.logLifecycleSnapshot("Active")
-                self?.retractOrphanedLocationSession(caller: "didBecomeActive")
+                // [S4] After the first frame; throttled with the foreground
+                // cleanup's probe so a return makes one locationd call.
+                LeoPerf.afterNextFrame { [weak self] in
+                    self?.retractOrphanedLocationSession(caller: "didBecomeActive")
+                }
             }
             .store(in: &cancellables)
 
@@ -721,15 +750,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         locationTimer?.invalidate()
         locationTimer = nil
         locationUpdating = false
-        if locationManager.allowsBackgroundLocationUpdates {
-            locationManager.stopUpdatingLocation()
-            locationManager.allowsBackgroundLocationUpdates = false
+        if let manager = _locationManager, manager.allowsBackgroundLocationUpdates {
+            manager.stopUpdatingLocation()
+            manager.allowsBackgroundLocationUpdates = false
         }
         stopBackgroundActivitySession()
         // Belt-and-suspenders: after tearing down our owned session, probe-retract
         // so the system indicator is definitively cleared even if the handle was
         // already lost.
-        retractOrphanedLocationSession(caller: "terminate")
+        retractOrphanedLocationSession(caller: "terminate", force: true)
         AgentLiveActivityManager.shared.endActivity()
     }
 
@@ -820,7 +849,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             disarmBackgroundLocation()
             evaluateLocationUpdates()
             evaluateBackgroundActivitySession()
-            retractOrphanedLocationSession(caller: "deactivate")
+            retractOrphanedLocationSession(caller: "deactivate", force: true)
             evaluateSilentAudio(caller: "reevaluate-deactivate")
             // THEN soft-finish the Live Activity: flip to a completed state
             // (checkmark + last message) and leave it on screen; it's dismissed
@@ -1002,14 +1031,18 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         locationTimer?.invalidate()
         locationTimer = nil
         locationUpdating = false
-        if locationManager.allowsBackgroundLocationUpdates {
-            locationManager.stopUpdatingLocation()
-            locationManager.allowsBackgroundLocationUpdates = false
+        if let manager = _locationManager, manager.allowsBackgroundLocationUpdates {
+            manager.stopUpdatingLocation()
+            manager.allowsBackgroundLocationUpdates = false
         }
         // Tear down our own iOS17 session (disarmed ⇒ shouldRun is false).
         evaluateBackgroundActivitySession()
-        // Retract any orphaned session our handle can't reach.
-        retractOrphanedLocationSession(caller: "foreground")
+        // Retract any orphaned session our handle can't reach — after the
+        // first frame (it is a locationd round trip) and at most once per
+        // return (shared throttle with didBecomeActive).
+        LeoPerf.afterNextFrame { [weak self] in
+            self?.retractOrphanedLocationSession(caller: "foreground")
+        }
         // Keep the Live Activity consistent with the live session set.
         updateLiveActivityIfNeeded(source: "foregroundCleanup")
     }
@@ -1147,9 +1180,12 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// session must be retracted even mid-task; if keep-alive should genuinely
     /// run, the subsequent `evaluateBackgroundActivitySession()` recreates a
     /// fresh, owned session.
-    private func retractOrphanedLocationSession(caller: String) {
+    private func retractOrphanedLocationSession(caller: String, force: Bool = false) {
         guard #available(iOS 17.0, *) else { return }
         guard liveUpdatesTask == nil, bgActivitySession == nil else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(Self.lastOrphanProbeAt) >= Self.orphanProbeInterval else { return }
+        Self.lastOrphanProbeAt = now
         let probe = CLBackgroundActivitySession()
         probe.invalidate()
         logger.info("[BKA][LocationLA] retracted orphaned CLBackgroundActivitySession (caller=\(caller))")
@@ -1605,9 +1641,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         lastWidgetReloadState = state
         lastWidgetReloadActiveCount = activeIds.count
 
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.status)
+        WidgetReloads.request(LeoWidgetKind.status)
         // The iPad console renders the same status pane, so it has to follow.
-        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+        WidgetReloads.request(LeoWidgetKind.iPadConsole)
         logger.info("[Widget] refreshed src=\(source) state=\(state.rawValue) active=\(activeIds.count) privacy=\(privacy)")
     }
 
