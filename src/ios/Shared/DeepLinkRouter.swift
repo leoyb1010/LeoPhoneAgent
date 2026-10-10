@@ -39,6 +39,8 @@ extension Notification.Name {
 ///   leophoneagent://settings/about
 ///   leophoneagent://settings/permissions
 ///   leophoneagent://settings/environments[?create_key=…&create_note=…]  (create_value is ignored)
+///   leophoneagent://settings/brain                      (alias: archive)
+///   leophoneagent://brain/connect?token=…[&scopes=…]     (资料库令牌,确认后存钥匙串)
 ///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
 ///   leophoneagent://paperclip/issue/<id>[?company=<companyId>]   (opens the Paperclip workspace on that issue)
 ///   leophoneagent://shortcut-result?run=<runId>&status=success|error|cancel[&result=…]  (apple-shortcuts run callback)
@@ -161,6 +163,13 @@ enum DeepLinkRouter {
             IOSExecutionBackend.selectLocal()
             handleSettings(url: url, coord: coord)
 
+        // [T-brain] leobot://brain/connect?token=… —— 令牌只暂存,到设置 › 资料库确认后才写进钥匙串。
+        // 日志不带 URL(令牌在查询串里)。
+        case "brain":
+            IOSExecutionBackend.selectLocal()
+            _ = BrainStore.shared.receiveDeepLink(url)
+            coord.pendingSettingsTarget = .brain
+
         // [G7] 服务器任务：切到 Paperclip 工作区并打开该工单（通知、灵动岛、Spotlight 都走这里）。
         // 无效链接不改变工作区。
         case PaperclipDeepLink.host:
@@ -223,6 +232,9 @@ enum DeepLinkRouter {
 
         case "mail", "mail-accounts", "mailboxes":
             coord.pendingSettingsTarget = .mailAccounts
+
+        case "brain", "archive":
+            coord.pendingSettingsTarget = .brain
 
         case "memory":
             coord.pendingSettingsTarget = .memory

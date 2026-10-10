@@ -357,6 +357,8 @@ struct MinisApp: App {
         CrashReporter.shared.updateMarkerPhase(phase: "active")
 
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
+        // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
+        BrainStore.shared.importProvisionFileIfPresent()
         // [T-ios-live-activity-soft-finish] If a completed task's Live
         // Activity is lingering (soft-finished, awaiting the user), the
         // user is now back in the app — dismiss it.

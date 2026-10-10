@@ -81,6 +81,9 @@ enum PaperclipProfile {
 final class ShortcutCallbackStore { static let shared = ShortcutCallbackStore(); static let callbackHost = "shortcut-result"
  @discardableResult func handle(url: URL) -> Bool { false } }
 @MainActor final class PaperclipNavigationInbox { static let shared = PaperclipNavigationInbox(); var pending: PaperclipDeepLink.Target? }
+// [T-brain] 资料库深链只暂存令牌、打开设置页确认;这里记录收到了几次。
+@MainActor final class BrainStore { static let shared = BrainStore(); var received = 0
+ func receiveDeepLink(_ url: URL) -> Bool { received += 1; return true } }
 @MainActor final class ShareCoordinator { var raised = 0; func raisePendingShare() { raised += 1 } }
 // [V-rec] 录音深链只打开页面 / 导入分享来的音频;路由只把路径交给 RecordingPresenter。
 @MainActor enum RecordingPresenter { static var paths: [String] = []; static func handleDeepLink(path: String) { paths.append(path) } }
@@ -118,7 +121,7 @@ extension Notification.Name { static let openSessionFromIntent = Notification.Na
  enum Target: Equatable {
   case home, providers, modelGroups, usage, skills, mcpIntegrations, mailAccounts, memory, storage,
        mountedFolders, sharedFolders, logs, appearance, background, about, permissions, selfTest,
-       macConsole, environments
+       macConsole, environments, brain
   case providerDetail(instanceId: String), modelGroupDetail(groupId: String), mcpServerDetail(serverId: String)
  }
  struct EnvCreate { let key: String; let value: String; let note: String }
@@ -252,6 +255,11 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.pending == "notification-session", "notification/Spotlight/Siri cold buffer stayed hidden")
   reset(); NotificationNavigationStore.shared.setPendingMac(["macSessionId": "m1"])
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.mac?["macSessionId"] == "m1", "Mac session notification stayed hidden")
+  // [T-brain] leobot://brain/connect 只交给 BrainStore 暂存并打开设置 › 资料库,不直接连接。
+  reset(); let brainBefore = BrainStore.shared.received; route("leobot://brain/connect?token=fixture")
+  expect(BrainStore.shared.received == brainBefore + 1 && DeepLinkCoordinator.shared.pendingSettingsTarget == .brain, "brain connect link not routed to settings confirmation")
+  reset(); route("leophoneagent://settings/brain")
+  expect(DeepLinkCoordinator.shared.pendingSettingsTarget == .brain, "settings/brain not routed")
   reset(); let before = QuickActionRouter.shared.newChatTrigger; QuickActionRouter.shared.startNewChat()
   expect(UserDefaults.standard.string(forKey: key) == "local" && QuickActionRouter.shared.newChatTrigger == before + 1, "home screen quick action stayed hidden")
   print("PASS production deep links (leophoneagent:// + lobe:// alias): 18 local routes + 13 rejected (incl. traversal session/path), 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")

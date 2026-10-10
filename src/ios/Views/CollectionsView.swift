@@ -66,6 +66,9 @@ struct CollectionsView: View {
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
     @AppStorage("treasury.lastView") private var treasuryView = TreasuryView.all
+    /// [T-brain] 全部 / 手机收藏 / 资料库 / 知识卡。
+    @AppStorage("treasury.brainScope") private var brainScope = BrainBrowseScope.all
+    @ObservedObject private var brain = BrainStore.shared
     // [T-attachments] 三条导入入口
     @State private var showFileImporter = false
     @State private var showScanner = false
@@ -196,6 +199,10 @@ struct CollectionsView: View {
         let shown = visible
         return List(selection: $selection) {
             if !editMode.isEditing {
+                BrainScopePicker(scope: $brainScope)
+            }
+            if brainScope.showsPhoneItems {
+            if !editMode.isEditing {
                 treasuryHero
                 captureActions
                 treasuryViewPicker
@@ -233,6 +240,11 @@ struct CollectionsView: View {
                     })
                     requestDelete(ids)
                 }
+            }
+            }
+            // [T-brain] 资料库结果:「全部」里跟在手机收藏后面,「资料库 / 知识卡」单独显示。
+            if brainScope != .phone, !editMode.isEditing {
+                BrainBrowseSection(scope: brainScope, query: TreasuryLocalQuery.parse(query).textQuery)
             }
         }
         .environment(\.editMode, $editMode)
@@ -601,6 +613,11 @@ struct CollectionsView: View {
             Button {
                 sendToAgent(item, prompt: nil)
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
+            if brain.isConfigured {
+                Button {
+                    Task { flash(await BrainTreasuryCapture.send(item)) }
+                } label: { Label("存进资料库", systemImage: "tray.and.arrow.up") }
+            }
             if item.kind != .file {
                 Button {
                     if usesSplit {

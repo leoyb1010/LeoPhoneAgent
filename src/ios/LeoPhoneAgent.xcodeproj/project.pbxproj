@@ -676,6 +676,15 @@
 		E5COL0009 /* CollectionOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0010 /* CollectionOpener.swift */; };
 		E5COL0007 /* CollectionIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0008 /* CollectionIntents.swift */; };
 		E5COL0005 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0006 /* CollectionsView.swift */; };
+		E5BRN01A /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
+		E5BRN01T /* BrainCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN01F /* BrainCore.swift */; };
+		E5BRN02A /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
+		E5BRN02T /* BrainOfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN02F /* BrainOfflineCache.swift */; };
+		E5BRN03A /* BrainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN03F /* BrainClient.swift */; };
+		E5BRN04A /* BrainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN04F /* BrainStore.swift */; };
+		E5BRN05A /* AIChatViewModel+Brain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN05F /* AIChatViewModel+Brain.swift */; };
+		E5BRN06A /* BrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN06F /* BrainSettingsView.swift */; };
+		E5BRN07A /* BrainBrowseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRN07F /* BrainBrowseViews.swift */; };
 		E5COL0001 /* CollectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0002 /* CollectionStore.swift */; };
 		E5SLM0003 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SLM0004 /* AppearanceSettingsView.swift */; };
 		E5SLM0001 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SLM0002 /* SettingsSheet.swift */; };
@@ -1679,6 +1688,13 @@
 		E5COL0010 /* CollectionOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/CollectionOpener.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0008 /* CollectionIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/CollectionIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0006 /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/CollectionsView.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN01F /* BrainCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainCore.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN02F /* BrainOfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainOfflineCache.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN03F /* BrainClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainClient.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN04F /* BrainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Brain/BrainStore.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN05F /* AIChatViewModel+Brain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Chat/AIChatViewModel+Brain.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN06F /* BrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Brain/BrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
+		E5BRN07F /* BrainBrowseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Brain/BrainBrowseViews.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0002 /* CollectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/CollectionStore.swift"; sourceTree = SOURCE_ROOT; };
 		E5SLM0004 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/AppearanceSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5SLM0002 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SettingsSheet.swift"; sourceTree = SOURCE_ROOT; };
@@ -2729,6 +2745,13 @@
 				E5COL0010 /* CollectionOpener.swift */,
 				E5COL0008 /* CollectionIntents.swift */,
 				E5COL0006 /* CollectionsView.swift */,
+				E5BRN01F /* BrainCore.swift */,
+				E5BRN02F /* BrainOfflineCache.swift */,
+				E5BRN03F /* BrainClient.swift */,
+				E5BRN04F /* BrainStore.swift */,
+				E5BRN05F /* AIChatViewModel+Brain.swift */,
+				E5BRN06F /* BrainSettingsView.swift */,
+				E5BRN07F /* BrainBrowseViews.swift */,
 				E5COL0002 /* CollectionStore.swift */,
 				E5SLM0004 /* AppearanceSettingsView.swift */,
 				E5SLM0002 /* SettingsSheet.swift */,
@@ -3701,6 +3724,8 @@
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
 				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
 				E5ASK0001T /* AskUserState.swift in Sources */,
+				E5BRN01T /* BrainCore.swift in Sources */,
+				E5BRN02T /* BrainOfflineCache.swift in Sources */,
 				E5ASK0004T /* ToolStepGrouping.swift in Sources */,
 				E5SUB0102T /* AgentCallback.swift in Sources */,
 				E5SUB0103T /* HelperModelIdentity.swift in Sources */,
@@ -4083,6 +4108,13 @@
 				E5COL0009 /* CollectionOpener.swift in Sources */,
 				E5COL0007 /* CollectionIntents.swift in Sources */,
 				E5COL0005 /* CollectionsView.swift in Sources */,
+				E5BRN01A /* BrainCore.swift in Sources */,
+				E5BRN02A /* BrainOfflineCache.swift in Sources */,
+				E5BRN03A /* BrainClient.swift in Sources */,
+				E5BRN04A /* BrainStore.swift in Sources */,
+				E5BRN05A /* AIChatViewModel+Brain.swift in Sources */,
+				E5BRN06A /* BrainSettingsView.swift in Sources */,
+				E5BRN07A /* BrainBrowseViews.swift in Sources */,
 				E5COL0001 /* CollectionStore.swift in Sources */,
 				E5SLM0003 /* AppearanceSettingsView.swift in Sources */,
 				E5SLM0001 /* SettingsSheet.swift in Sources */,
