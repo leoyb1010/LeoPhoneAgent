@@ -78,6 +78,11 @@ actor NativeMCPClient {
 
     private let protocolVersion = "2025-06-18"
 
+    /// [B17] Every request goes through this session: its delegate refuses a
+    /// redirect to another scheme/host/port, so the server's Authorization /
+    /// API-key headers are never resent to a host the user didn't configure.
+    private static let session = URLSession(configuration: .default, delegate: MCPRedirectGuard(), delegateQueue: nil)
+
     // MARK: - Public
 
     /// True when this config can be served natively. stdio servers still need
@@ -257,7 +262,7 @@ actor NativeMCPClient {
             "jsonrpc": "2.0", "method": method, "params": [String: Any](),
         ]) else { return false }
         request.httpBody = body
-        guard let (_, response) = try? await URLSession.shared.data(for: request) else {
+        guard let (_, response) = try? await Self.session.data(for: request) else {
             return true   // network hiccup — don't force a re-handshake loop
         }
         guard let http = response as? HTTPURLResponse else { return true }
@@ -308,15 +313,16 @@ actor NativeMCPClient {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        let requestId = nextID()
         let body: [String: Any] = [
             "jsonrpc": "2.0",
-            "id": nextID(),
+            "id": requestId,
             "method": method,
             "params": params,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw ClientError.malformed("no HTTP response")
         }
@@ -349,6 +355,10 @@ actor NativeMCPClient {
             }
             throw ClientError.http(http.statusCode, bodyText)
         }
+        if (300..<400).contains(http.statusCode) {
+            // MCPRedirectGuard refused to follow it (another host or scheme).
+            throw ClientError.http(http.statusCode, "redirect to a different host was not followed")
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw ClientError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
         }
@@ -356,20 +366,23 @@ actor NativeMCPClient {
         let contentType = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
         let envelope: [String: Any]
         if contentType.contains("text/event-stream") {
-            guard let parsed = Self.firstJSONFromSSE(data) else {
-                throw ClientError.malformed("SSE stream carried no JSON-RPC message")
+            guard let parsed = MCPWireSafety.replyFromSSE(data, requestId: requestId) else {
+                throw ClientError.malformed("SSE stream carried no reply to request \(requestId)")
             }
             envelope = parsed
         } else {
             guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw ClientError.malformed(String(data: data, encoding: .utf8)?.prefix(200).description ?? "non-JSON body")
             }
+            // [B17] A reply to some other request (or none) is not this one's result.
+            guard MCPWireSafety.isReply(parsed, to: requestId) || (isInitialize && parsed["id"] == nil) else {
+                throw ClientError.malformed("response id does not match request \(requestId)")
+            }
             envelope = parsed
         }
 
-        if let error = envelope["error"] as? [String: Any] {
-            let message = (error["message"] as? String) ?? String(describing: error)
-            throw ClientError.rpc(message)
+        if let error = envelope["error"], !(error is NSNull) {
+            throw ClientError.rpc(MCPWireSafety.errorMessage(error))
         }
         guard let result = envelope["result"] as? [String: Any] else {
             if isInitialize { return [:] }   // some servers answer initialize with a bare ack
@@ -377,21 +390,5 @@ actor NativeMCPClient {
         }
         logger.info("\(method) ok server=\(config.id)")
         return result
-    }
-
-    /// Pulls the first `data:` payload that parses as a JSON-RPC envelope.
-    /// A POST response stream carries the reply for that request, so the
-    /// first well-formed message is the one we want.
-    private static func firstJSONFromSSE(_ data: Data) -> [String: Any]? {
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
-        for line in text.split(whereSeparator: \.isNewline) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("data:") else { continue }
-            let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-            guard payload != "[DONE]", let d = payload.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { continue }
-            if obj["result"] != nil || obj["error"] != nil { return obj }
-        }
-        return nil
     }
 }

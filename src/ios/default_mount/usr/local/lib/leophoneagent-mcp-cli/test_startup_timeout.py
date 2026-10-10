@@ -132,7 +132,13 @@ class _FakeProc:
                     time.sleep(0.05)
             time.sleep(self._reply_after)
             yield '{"jsonrpc":"2.0","id":%d,"result":{}}\n' % self._want_id
-        return gen()
+        lines = gen()
+
+        class _Reader:
+            # The daemon reads with readline(limit), like a real pipe.
+            def readline(self, size=-1):
+                return next(lines, "")
+        return _Reader()
 
     def poll(self):
         return None

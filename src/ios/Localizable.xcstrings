@@ -125170,6 +125170,72 @@
           }
         }
       }
+    },
+    "SKILL.md 开头的 --- 信息块没有结束的 ---，无法导入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SKILL.md opens a --- header block that never closes; it can't be imported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SKILL.md 开头的 --- 信息块没有结束的 ---，无法导入。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SKILL.md 開頭的 --- 資訊區塊沒有結束的 ---，無法匯入。"
+          }
+        }
+      }
+    },
+    "技能名称无效，请在 SKILL.md 的 name 里用字母、数字或短横线。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid skill name. Use letters, digits or hyphens in the SKILL.md name."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能名称无效，请在 SKILL.md 的 name 里用字母、数字或短横线。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能名稱無效，請在 SKILL.md 的 name 裡使用字母、數字或短橫線。"
+          }
+        }
+      }
+    },
+    "已有同名技能「%@」。要替换它，请在技能详情里更新，或先删除原来的。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A skill named “%@” already exists. To replace it, update it from the skill's details or delete the old one first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有同名技能「%@」。要替换它，请在技能详情里更新，或先删除原来的。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有同名技能「%@」。要取代它，請在技能詳情裡更新，或先刪除原來的。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

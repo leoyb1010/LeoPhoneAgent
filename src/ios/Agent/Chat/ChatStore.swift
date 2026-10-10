@@ -6708,7 +6708,8 @@ extension ChatStore {
                     isEnabled: sqlite3_column_int(stmt, 5) == 1,
                     installedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6)),
                     updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7)),
-                    body: String(cString: sqlite3_column_text(stmt, 8))
+                    bodyPreview: SkillManifest.bodyPreview(String(cString: sqlite3_column_text(stmt, 8))),
+                    fullBody: String(cString: sqlite3_column_text(stmt, 8))
                 ))
             }
         }

@@ -280,6 +280,12 @@ final class AgentJobRegistry: ObservableObject {
         job.completionHook?(job)
         job.completionHook = nil
         job.child = nil
+        // [B24] The result is in the parent's block now: drop the child's VM
+        // (render state + cache entry) instead of keeping a finished
+        // transcript resident. Skipped while it is on screen or still busy.
+        if let sid = job.runSessionId {
+            ViewModelCache.shared.releaseIfIdle(sessionId: sid, reason: "sub agent finished")
+        }
         runThen(for: job)
         drainQueuedDelegations()
         pruneFinished()

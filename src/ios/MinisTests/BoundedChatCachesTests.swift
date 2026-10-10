@@ -46,10 +46,10 @@ final class BoundedChatCachesTests: XCTestCase {
 
     func testDualPoolCaps() throws {
         let text = try source("Agent/Chat/ChatLifecycleSupport.swift")
-        XCTAssertTrue(text.contains("private static let softCap: Int = 6"))
-        XCTAssertTrue(text.contains("private static let backgroundSoftCap: Int = 10"))
-        XCTAssertTrue(text.contains("evictPool(.normal, cap: Self.softCap)"))
-        XCTAssertTrue(text.contains("evictPool(.background, cap: Self.backgroundSoftCap)"))
+        // [B24] The caps and per-pool sweep live in ViewModelCachePolicy (tested directly).
+        XCTAssertEqual(ViewModelCachePolicy.cap(for: .normal), 6)
+        XCTAssertEqual(ViewModelCachePolicy.cap(for: .background), 10)
+        XCTAssertTrue(text.contains("ViewModelCachePolicy.victims("))
         XCTAssertTrue(try source("Agent/Background/QuietTaskScheduler.swift").contains("createDraft(pool: .background)"))
         XCTAssertTrue(try source("Agent/Session/WorkerPool.swift").contains("createDraft(pool: .background)"))
     }
