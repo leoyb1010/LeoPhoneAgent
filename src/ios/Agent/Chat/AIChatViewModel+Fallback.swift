@@ -190,6 +190,8 @@ extension AIChatViewModel {
                 // First attempt: call provider directly (no auto-retry) so we can
                 // distinguish fallbackable errors from network errors.
                 let currentModel = currentEntryId.flatMap { ProviderConfigStore.shared.entry(for: $0)?.model } ?? model
+                streamStallLimit = ProviderResponseTimeout.stallSeconds(
+                    instanceId: currentEntryId.flatMap { ProviderConfigStore.shared.entry(for: $0)?.providerInstanceId })
                 let maxTok = dynamicMaxTokens(provider: currentProvider, model: currentModel, lastContextTokens: lastContextTokens)
                 var thinkLvl = sessionId.flatMap { ProviderConfigStore.shared.inferenceConfig(for: $0)?.thinkingLevel } ?? .off
                 // [T-fallback-thinking-preclamp] When falling back (e.g. a

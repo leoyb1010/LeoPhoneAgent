@@ -37,7 +37,7 @@ import UIKit
 /// Non-secret OAuth config stored inside servers.json (syncs with the server).
 struct MCPOAuthConfig: Codable, Hashable {
     /// "static" = user-supplied client credentials (this implementation);
-    /// "dynamic" reserved for discovery+DCR (design-only for now).
+    /// "dynamic" = Client ID obtained by discovery + dynamic registration (RFC 7591).
     var mode: String = "static"
     var clientId: String = ""
     var authorizationEndpoint: String = ""
@@ -517,6 +517,106 @@ final class MCPOAuthController: NSObject, ObservableObject {
         Self.materializeBridge(server: server, oauth: oauth, tokens: stored)
         logger.info("[Authorize] '\(server)' OK (hasRefresh=\(stored.refreshToken != nil), expiresIn=\(Int(expiresIn))s)")
     }
+
+    // MARK: - 自动发现 + 动态客户端注册(RFC 9728 / RFC 8414 / RFC 7591)
+
+    /// 没填 Client ID 或端点时,先从 MCP 服务器自己声明的元数据里找授权端点,必要时动态注册一个
+    /// 公共客户端(PKCE,无密钥)。已经填全的配置原样返回,手动流程不受影响。
+    /// 只访问:服务器主机上的 well-known 地址、它声明的授权服务器、授权服务器声明的注册端点;全部 https,
+    /// 不跟随重定向。注册返回的 client_secret(少见)只进本机钥匙串。
+    func resolveConfigIfNeeded(server: String, serverURL: String?, oauth: MCPOAuthConfig) async throws -> MCPOAuthConfig {
+        guard MCPOAuthDiscovery.needsDiscovery(clientId: oauth.clientId,
+                                               authorizationEndpoint: oauth.authorizationEndpoint,
+                                               tokenEndpoint: oauth.tokenEndpoint) else { return oauth }
+        guard let url = MCPOAuthDiscovery.httpsURL(serverURL) else {
+            throw OAuthError.badConfig(String(localized: "自动发现授权信息需要 https 的服务器地址;也可以手动填写 Client ID 和端点。"))
+        }
+        // 1. 受保护资源元数据 → 授权服务器
+        var issuers: [URL] = []
+        var suggestedScopes: [String] = []
+        for candidate in MCPOAuthDiscovery.protectedResourceMetadataURLs(serverURL: url) {
+            if let data = await Self.discoveryGET(candidate),
+               let prm = MCPOAuthDiscovery.parseProtectedResource(data) {
+                issuers = prm.authorizationServers
+                suggestedScopes = prm.scopes
+                break
+            }
+        }
+        // 2. 授权服务器元数据
+        var metadata: MCPOAuthDiscovery.ServerMetadata?
+        let issuerCandidates = issuers.isEmpty ? [MCPOAuthDiscovery.origin(url)].compactMap { $0 } : issuers
+        search: for issuer in issuerCandidates {
+            for candidate in MCPOAuthDiscovery.authorizationServerMetadataURLs(issuer: issuer) {
+                if let data = await Self.discoveryGET(candidate),
+                   let parsed = try? MCPOAuthDiscovery.parseServerMetadata(data, expectedIssuer: issuer) {
+                    metadata = parsed
+                    break search
+                }
+            }
+        }
+        if metadata == nil, issuers.isEmpty {
+            metadata = MCPOAuthDiscovery.legacyDefaultMetadata(serverURL: url)
+        }
+        guard let metadata else {
+            throw OAuthError.badConfig(String(localized: "没有从服务器找到授权信息,请手动填写 Client ID 和端点。"))
+        }
+        var resolved = oauth
+        if resolved.authorizationEndpoint.trimmingCharacters(in: .whitespaces).isEmpty {
+            resolved.authorizationEndpoint = metadata.authorizationEndpoint
+        }
+        if resolved.tokenEndpoint.trimmingCharacters(in: .whitespaces).isEmpty {
+            resolved.tokenEndpoint = metadata.tokenEndpoint
+        }
+        if (resolved.scopes ?? "").trimmingCharacters(in: .whitespaces).isEmpty, !suggestedScopes.isEmpty {
+            resolved.scopes = suggestedScopes.joined(separator: " ")
+        }
+        // 3. 动态注册
+        if resolved.clientId.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard let registration = metadata.registrationEndpoint.flatMap({ URL(string: $0) }) else {
+                throw OAuthError.badConfig(String(localized: "这个服务器不支持自动注册客户端,请手动填写 Client ID。"))
+            }
+            let redirect = (resolved.redirectURI?.isEmpty == false ? resolved.redirectURI! : Self.defaultRedirectURI)
+            let body = MCPOAuthDiscovery.registrationBody(redirectURI: redirect, scope: resolved.scopes)
+            var req = URLRequest(url: registration)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 15
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            guard let (data, resp) = try? await Self.discoverySession.data(for: req),
+                  let status = (resp as? HTTPURLResponse)?.statusCode, (200..<300).contains(status),
+                  let client = try? MCPOAuthDiscovery.parseRegistration(data) else {
+                logger.error("[Discovery] '\(server)' dynamic registration failed (host=\(registration.host ?? "?"))")
+                throw OAuthError.badConfig(String(localized: "自动注册客户端失败,请手动填写 Client ID。"))
+            }
+            resolved.clientId = client.clientId
+            resolved.mode = "dynamic"
+            if let secret = client.clientSecret { Self.setClientSecret(secret, server: server) }
+            logger.info("[Discovery] '\(server)' registered client (hasSecret=\(client.clientSecret != nil))")
+        }
+        logger.info("[Discovery] '\(server)' resolved (authHost=\(URL(string: resolved.authorizationEndpoint)?.host ?? "?"), issuers=\(issuers.count))")
+        return resolved
+    }
+
+    /// 元数据 GET:只要 200 + 合理大小,失败就当没有(继续试下一个地址)。
+    nonisolated private static func discoveryGET(_ url: URL) async -> Data? {
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 10
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let (data, resp) = try? await discoverySession.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              data.count <= MCPOAuthDiscovery.maxMetadataBytes else { return nil }
+        return data
+    }
+
+    nonisolated private static let discoverySession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        config.httpCookieStorage = nil
+        config.urlCache = nil
+        return URLSession(configuration: config, delegate: StrictNoRedirectDelegate(), delegateQueue: nil)
+    }()
 
     // MARK: - Presentation flows
 

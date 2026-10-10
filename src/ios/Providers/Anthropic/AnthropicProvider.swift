@@ -99,7 +99,8 @@ final class AnthropicProvider: LLMProvider {
         return host == "api.anthropic.com" || host.hasSuffix(".anthropic.com")
     }
 
-    init(apiKey: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil) {
+    init(apiKey: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil,
+         requestTimeout: TimeInterval = ProviderResponseTimeout.defaultRequestSeconds) {
         self.model = model
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
@@ -110,7 +111,7 @@ final class AnthropicProvider: LLMProvider {
             apiKey: apiKey,
             basePath: resolvedBase,
             betaHeaders: nil,
-            httpClient: EagerStreamingHTTPClient(customUserAgent: customUserAgent)
+            httpClient: EagerStreamingHTTPClient(customUserAgent: customUserAgent, requestTimeout: requestTimeout)
         )
     }
 
@@ -118,7 +119,8 @@ final class AnthropicProvider: LLMProvider {
     /// for maximum compatibility with third-party proxies and Coding Plan endpoints.
     /// `perRequestHeaders` is resolved on every request (see `DualAuthHTTPClient`), for
     /// headers whose value can change after construction — OpenCode Go's session id.
-    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil, extraHeaders: [String: String] = [:], perRequestHeaders: (@Sendable () -> [String: String])? = nil) {
+    init(manualToken: String, model: LLMModel = .claudeHaiku45, basePath: String? = nil, appendV1Suffix: Bool = true, customUserAgent: String? = nil, extraHeaders: [String: String] = [:], perRequestHeaders: (@Sendable () -> [String: String])? = nil,
+         requestTimeout: TimeInterval = ProviderResponseTimeout.defaultRequestSeconds) {
         self.model = model
         self.betaHeaders = nil
         let resolvedBase = appendV1Suffix
@@ -130,7 +132,7 @@ final class AnthropicProvider: LLMProvider {
             basePath: resolvedBase,
             betaHeaders: nil,
             httpClient: DualAuthHTTPClient(customUserAgent: customUserAgent, extraHeaders: extraHeaders,
-                                           perRequestHeaders: perRequestHeaders)
+                                           perRequestHeaders: perRequestHeaders, requestTimeout: requestTimeout)
         )
     }
 

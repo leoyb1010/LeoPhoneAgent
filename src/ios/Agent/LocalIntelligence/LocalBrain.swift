@@ -34,6 +34,22 @@ private struct StructuredTaskPayload {
     let title: String
     let detail: String
 }
+
+@available(iOS 26.0, *)
+@Generable
+private struct SessionTitlePayload {
+    @Guide(description: "A short conversation title, at most 20 Chinese characters or 6 English words")
+    let title: String
+    @Guide(description: "Exactly one of: code, writing, research, analysis, creative, chat, math, translation, health, finance, travel, education, design, productivity, support, other")
+    let category: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+private struct FollowUpPayload {
+    @Guide(description: "Up to three short follow-up questions the user is likely to ask next")
+    let questions: [String]
+}
 #endif
 
 @MainActor
@@ -233,6 +249,87 @@ final class LocalBrain: ObservableObject {
         #else
         return nil
         #endif
+    }
+
+    // MARK: - ④ 会话标题与分类
+
+    struct SessionTitle: Sendable, Equatable {
+        let title: String
+        let category: String?
+    }
+
+    /// 用首轮提问 + 回复开头生成会话标题和类别。输入按 4,096 token 窗口裁剪;
+    /// 不可用、超时、出错或输出不合格时返回 nil,调用方照旧走云端生成。
+    func generateSessionTitle(firstUser: String, replyStart: String, languageHint: String) async -> SessionTitle? {
+        #if canImport(FoundationModels)
+        guard #available(iOS 26.0, *), isReady else { return nil }
+        let input = OnDeviceTextBudget.titleInput(firstUser: firstUser, replyStart: replyStart)
+        guard !input.user.isEmpty else { return nil }
+        let instructions = """
+        你为对话生成简短标题和类别。标题概括话题,不超过 20 个中文字符或 6 个英文单词,不加引号、不加句号。
+        类别只能是以下之一:\(SessionTitleCategory.allowed.joined(separator: ", "))。
+        \(languageHint)
+        """
+        let prompt = "对话开头:\n用户:\(input.user)\n助手:\(input.reply)"
+        let payload: SessionTitle? = await Self.withDeadline(seconds: 12) {
+            do {
+                let session = LanguageModelSession(instructions: instructions)
+                let response = try await session.respond(to: prompt, generating: SessionTitlePayload.self)
+                return SessionTitle(title: response.content.title, category: response.content.category)
+            } catch {
+                return nil
+            }
+        }
+        guard let payload, let title = OnDeviceTitleValidator.validate(payload.title) else { return nil }
+        return SessionTitle(title: title, category: SessionTitleCategory.normalize(payload.category))
+        #else
+        return nil
+        #endif
+    }
+
+    // MARK: - ⑤ 回复后的追问建议
+
+    /// 最多 3 条简短追问。只用本机模型;不可用或失败返回空数组,绝不联网。
+    func suggestFollowUps(lastUser: String, reply: String) async -> [String] {
+        #if canImport(FoundationModels)
+        guard #available(iOS 26.0, *), isReady else { return [] }
+        let user = OnDeviceTextBudget.clip(lastUser, limit: OnDeviceTextBudget.followUpUserChars)
+        let answer = OnDeviceTextBudget.clip(reply, limit: OnDeviceTextBudget.followUpReplyChars)
+        guard !answer.isEmpty else { return [] }
+        let instructions = """
+        根据用户的问题和助手的回答,给出最多 3 个用户接下来最可能想问的追问。
+        每条不超过 20 个字,站在用户的角度、用用户提问的语言来问,不要重复已经回答过的内容,不要编号。
+        """
+        let prompt = "用户:\(user)\n助手:\(answer)"
+        let raw: [String]? = await Self.withDeadline(seconds: 12) {
+            do {
+                let session = LanguageModelSession(instructions: instructions)
+                let response = try await session.respond(to: prompt, generating: FollowUpPayload.self)
+                return response.content.questions
+            } catch {
+                return nil
+            }
+        }
+        return FollowUpSuggestionPolicy.sanitize(raw ?? [], lastUserPrompt: lastUser)
+        #else
+        return []
+        #endif
+    }
+
+    /// 本机模型偶尔会被系统占用很久;超时就当不可用,不能让标题或追问一直挂着。
+    nonisolated private static func withDeadline<T: Sendable>(
+        seconds: Double, _ work: @escaping @Sendable () async -> T?
+    ) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: - 底层调用

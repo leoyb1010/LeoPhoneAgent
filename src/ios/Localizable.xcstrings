@@ -120396,6 +120396,446 @@
           }
         }
       }
+    },
+    "回复后建议追问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggest follow-ups after replies"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回复后建议追问"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回覆後建議追問"
+          }
+        }
+      }
+    },
+    "只用本机模型,不联网。点建议只会填进输入框,不会自动发送;本机模型不可用、后台任务和子代理会话里不显示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device model only, never online. Tapping a suggestion only fills the composer and never sends it. Hidden when the on-device model is unavailable, and in background-task and sub-agent sessions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只用本机模型,不联网。点建议只会填进输入框,不会自动发送;本机模型不可用、后台任务和子代理会话里不显示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只用本機模型,不連網。點建議只會填進輸入框,不會自動傳送;本機模型不可用、背景任務和子代理對話裡不顯示。"
+          }
+        }
+      }
+    },
+    "填入输入框,不会自动发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fills the composer; does not send"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填入输入框,不会自动发送"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填入輸入框,不會自動傳送"
+          }
+        }
+      }
+    },
+    "建议追问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggested follow-ups"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建议追问"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建議追問"
+          }
+        }
+      }
+    },
+    "余额偏低": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low balance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额偏低"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "餘額偏低"
+          }
+        }
+      }
+    },
+    "余额 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balance %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "餘額 %@"
+          }
+        }
+      }
+    },
+    "当前余额": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current balance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前余额"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前餘額"
+          }
+        }
+      }
+    },
+    "暂无数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫無資料"
+          }
+        }
+      }
+    },
+    "低于此值提醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warn below"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于此值提醒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低於此值提醒"
+          }
+        }
+      }
+    },
+    "刷新余额": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh balance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新余额"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新整理餘額"
+          }
+        }
+      }
+    },
+    "余额": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "餘額"
+          }
+        }
+      }
+    },
+    "直接查询该服务商官方的余额接口,至少 15 分钟查一次,查不到时不显示。低于提醒值时,模型选择器里这个服务商的模型名旁会出现黄点。提醒值按币种保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked directly against this provider's official balance API, at most once every 15 minutes; nothing is shown if it can't be read. Below the warning value, a yellow dot appears next to this provider's models in the model picker. Warning values are saved per currency."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接查询该服务商官方的余额接口,至少 15 分钟查一次,查不到时不显示。低于提醒值时,模型选择器里这个服务商的模型名旁会出现黄点。提醒值按币种保存。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接查詢該服務商官方的餘額介面,至少 15 分鐘查一次,查不到時不顯示。低於提醒值時,模型選擇器裡這個服務商的模型名旁會出現黃點。提醒值按幣別儲存。"
+          }
+        }
+      }
+    },
+    "响应超时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Response timeout"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "响应超时"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回應逾時"
+          }
+        }
+      }
+    },
+    "秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "s"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秒"
+          }
+        }
+      }
+    },
+    "模型多久没有任何输出就判定为卡住并自动重试,同时作为这个服务商的请求超时。留空用默认(120 秒),可填 30–600。只保存在这台设备上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How long the model may produce no output before it's treated as stuck and retried; also used as this provider's request timeout. Leave empty for the default (120 s); 30–600 allowed. Saved on this device only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型多久没有任何输出就判定为卡住并自动重试,同时作为这个服务商的请求超时。留空用默认(120 秒),可填 30–600。只保存在这台设备上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型多久沒有任何輸出就判定為卡住並自動重試,同時作為這個服務商的請求逾時。留空用預設(120 秒),可填 30–600。只儲存在這台裝置上。"
+          }
+        }
+      }
+    },
+    "Client ID 留空时,会从服务器自动发现授权端点并注册客户端;找不到再手动填写。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave Client ID empty to discover the authorization endpoints from the server and register a client automatically; fill it in manually if that fails."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client ID 留空时,会从服务器自动发现授权端点并注册客户端;找不到再手动填写。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client ID 留空時,會從伺服器自動發現授權端點並註冊用戶端;找不到再手動填寫。"
+          }
+        }
+      }
+    },
+    "自动发现授权信息需要 https 的服务器地址;也可以手动填写 Client ID 和端点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic discovery needs an https server URL. You can also enter the Client ID and endpoints manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动发现授权信息需要 https 的服务器地址;也可以手动填写 Client ID 和端点。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動發現授權資訊需要 https 的伺服器位址;也可以手動填寫 Client ID 和端點。"
+          }
+        }
+      }
+    },
+    "没有从服务器找到授权信息,请手动填写 Client ID 和端点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server didn't publish authorization details. Enter the Client ID and endpoints manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有从服务器找到授权信息,请手动填写 Client ID 和端点。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有從伺服器找到授權資訊,請手動填寫 Client ID 和端點。"
+          }
+        }
+      }
+    },
+    "这个服务器不支持自动注册客户端,请手动填写 Client ID。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This server doesn't support automatic client registration. Enter a Client ID manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个服务器不支持自动注册客户端,请手动填写 Client ID。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個伺服器不支援自動註冊用戶端,請手動填寫 Client ID。"
+          }
+        }
+      }
+    },
+    "自动注册客户端失败,请手动填写 Client ID。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic client registration failed. Enter a Client ID manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动注册客户端失败,请手动填写 Client ID。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動註冊用戶端失敗,請手動填寫 Client ID。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

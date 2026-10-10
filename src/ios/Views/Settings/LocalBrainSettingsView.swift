@@ -16,6 +16,7 @@ struct LocalBrainSettingsView: View {
     @State private var probe = ""
     @State private var probeResult: String?
     @State private var probing = false
+    @AppStorage(FollowUpSuggestionPolicy.enabledKey) private var followUpsEnabled = true
 
     var body: some View {
         List {
@@ -43,6 +44,16 @@ struct LocalBrainSettingsView: View {
                     "输入框上方的「改写」:润色、精简、翻译、语气转换,全程离线")
                 row("语音任务整理", "mic.fill",
                     "用 Siri 指挥 Mac 时,把口述的流水话整理成标题 + 要点再下发")
+                row("会话标题与分类", "textformat",
+                    "新会话的标题和类别先由本机生成,只看首轮提问和回复开头;不合格时才交给云端模型")
+                row("回复后建议追问", "text.bubble",
+                    "回复结束后在输入框上方给出最多 3 个追问,点一下填进输入框")
+            }
+
+            Section {
+                Toggle("回复后建议追问", isOn: $followUpsEnabled)
+            } footer: {
+                Text("只用本机模型,不联网。点建议只会填进输入框,不会自动发送;本机模型不可用、后台任务和子代理会话里不显示。")
             }
 
             Section {

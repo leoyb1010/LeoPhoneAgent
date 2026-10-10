@@ -35,6 +35,9 @@ struct ProviderInstanceDetailView: View {
     /// 页面读到(或最后一次写入)的钥匙 / 名字:只有你改过才写回,别处同步来的新值不会被页面上的旧值盖掉。
     @State private var loadedKey = ""
     @State private var loadedLabel: String?
+    @ObservedObject private var balances = ProviderBalanceStore.shared
+    @State private var editingResponseTimeout = ""
+    @State private var editingBalanceThreshold = ""
 
     private var instance: ProviderInstance? {
         store.instance(for: instanceId)
@@ -241,6 +244,14 @@ struct ProviderInstanceDetailView: View {
             if instance.credentialType == .oauth && !instance.providerType.isUnsupported {
                 manualOAuthTokenSection(instance)
             }
+
+            // MARK: 余额(只有官方提供余额接口的服务商)
+            if ProviderBalanceStore.supportsBalance(instance) {
+                balanceSection(instance)
+            }
+
+            // MARK: 响应超时
+            responseTimeoutSection(instance)
 
             // MARK: Status
             Section("Status") {
@@ -708,6 +719,83 @@ struct ProviderInstanceDetailView: View {
         } footer: {
             Text(String(localized: "Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats."))
         }
+    }
+
+    // MARK: - 余额与响应超时
+
+    private func balanceSection(_ instance: ProviderInstance) -> some View {
+        let balance = balances.balance(for: instance.id)
+        let currency = balance?.currency ?? ProviderBalanceStore.expectedCurrency(instance)
+        return Section {
+            HStack {
+                Text("当前余额")
+                Spacer()
+                if let balance {
+                    Text(ProviderBalanceRules.display(balance))
+                        .foregroundStyle(balances.isLow(instanceId: instance.id) ? Color.orange : Color.secondary)
+                        .monospacedDigit()
+                } else {
+                    Text("暂无数据").foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Text("低于此值提醒")
+                Spacer()
+                TextField(String(format: "%.0f", ProviderBalanceRules.defaultThreshold(currency: currency)),
+                          text: $editingBalanceThreshold)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 100)
+                    .onAppear {
+                        let key = ProviderBalanceRules.thresholdKey(currency: currency)
+                        editingBalanceThreshold = UserDefaults.standard.object(forKey: key) == nil
+                            ? "" : String(format: "%g", ProviderBalanceRules.threshold(currency: currency))
+                    }
+                    .onSubmit { saveBalanceThreshold(currency: currency) }
+                    .onDisappear { saveBalanceThreshold(currency: currency) }
+                Text(currency).foregroundStyle(.secondary)
+            }
+            Button("刷新余额") { balances.refreshIfStale([instance], force: true) }
+        } header: {
+            Text("余额")
+        } footer: {
+            Text("直接查询该服务商官方的余额接口,至少 15 分钟查一次,查不到时不显示。低于提醒值时,模型选择器里这个服务商的模型名旁会出现黄点。提醒值按币种保存。")
+        }
+        .onAppear { balances.refreshIfStale([instance]) }
+    }
+
+    private func saveBalanceThreshold(currency: String) {
+        let text = editingBalanceThreshold.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+        ProviderBalanceRules.setThreshold(text.isEmpty ? nil : Double(text), currency: currency)
+        balances.objectWillChange.send()
+    }
+
+    private func responseTimeoutSection(_ instance: ProviderInstance) -> some View {
+        Section {
+            HStack {
+                Text("响应超时")
+                Spacer()
+                TextField("默认", text: $editingResponseTimeout)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 80)
+                    .onAppear {
+                        editingResponseTimeout = ProviderResponseTimeout.stored(instanceId: instance.id).map(String.init) ?? ""
+                    }
+                    .onSubmit { saveResponseTimeout(instance.id) }
+                    .onDisappear { saveResponseTimeout(instance.id) }
+                Text("秒").foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text("模型多久没有任何输出就判定为卡住并自动重试,同时作为这个服务商的请求超时。留空用默认(120 秒),可填 30–600。只保存在这台设备上。")
+        }
+    }
+
+    private func saveResponseTimeout(_ instanceId: String) {
+        let value = ProviderResponseTimeout.parse(editingResponseTimeout)
+        ProviderResponseTimeout.set(value, instanceId: instanceId)
+        editingResponseTimeout = value.map(String.init) ?? ""
     }
 
     private func customUserAgentSection(_ instance: ProviderInstance) -> some View {

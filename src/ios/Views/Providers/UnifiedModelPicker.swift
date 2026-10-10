@@ -264,6 +264,7 @@ struct UnifiedModelPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var pins = ModelPinStore.shared
+    @ObservedObject private var balances = ProviderBalanceStore.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var browseScope: BrowseScope = .providers
     @State private var editMode: EditMode = .inactive
@@ -300,7 +301,16 @@ struct UnifiedModelPicker: View {
     }
     private var filteredFavorites: [ModelEntry] { favoriteEntries.filter { matchesEntry($0) } }
     private func matchesEntry(_ entry: ModelEntry) -> Bool {
-        ModelCatalog.matches(searchText, entry: entry, providerLabel: store.instance(for: entry.providerInstanceId)?.label ?? "")
+        ModelSearchScorer.score(searchText, fields: searchFields(entry)) != nil
+    }
+    private func searchFields(_ entry: ModelEntry) -> ModelSearchScorer.Fields {
+        ModelSearchScorer.Fields(displayName: entry.model.displayName, baseDisplayName: entry.baseModel.displayName,
+                                 modelId: entry.baseModel.id,
+                                 providerLabel: store.instance(for: entry.providerInstanceId)?.label ?? "")
+    }
+    /// 搜索结果:按相关度排序(精确 ID > 前缀 > 词边界 > 子串 > 模糊),同分保持服务商与新旧顺序。
+    private var rankedSearchEntries: [ModelEntry] {
+        ModelSearchScorer.rank(filteredEntriesByInstance.flatMap { $0.entries }, query: searchText, fields: searchFields)
     }
     @State private var selectedEntryIds: Set<String> = []
     @State private var expandedGroupIds: Set<String> = []
@@ -381,7 +391,8 @@ struct UnifiedModelPicker: View {
             guard !seen.contains(instance.id) else { continue }
             seen.insert(instance.id)
             if let entries = grouped[instance.id], !entries.isEmpty {
-                result.append((instance, entries))
+                // 同一服务商内新模型在前(models.dev 发布日期),没有日期的保持原顺序排在后面。
+                result.append((instance, ModelRecency.sortNewestFirst(entries) { ModelsDevAPI.releaseDate(for: $0.baseModel) }))
             }
         }
         return result
@@ -456,7 +467,7 @@ struct UnifiedModelPicker: View {
                 // keyboard viewport at accessibility text sizes.
                 if !filteredEntriesByInstance.isEmpty {
                     Section {
-                        ForEach(filteredEntriesByInstance.flatMap { $0.entries }) { entry in entryRow(entry) }
+                        ForEach(rankedSearchEntries) { entry in entryRow(entry) }
                     }
                 }
                 if supportsGroups && !visibleGroups.isEmpty { groupsSection }
@@ -485,6 +496,8 @@ struct UnifiedModelPicker: View {
         .onAppear {
             seedCollapse()
             SystemVoiceCatalog.startObservingVoiceChanges()
+            // 后台查余额(有缓存就不查),不阻塞选择器。
+            balances.refreshIfStale(store.instances)
         }
         .onChange(of: browseScope) { _, _ in editMode = .inactive }
         .onChange(of: searchText) { _, _ in
@@ -1176,9 +1189,15 @@ struct UnifiedModelPicker: View {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(entry.model.displayName).font(.body).foregroundStyle(Color.primary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if balances.isLow(instanceId: entry.providerInstanceId) {
+                                Circle().fill(Color.yellow).frame(width: 7, height: 7)
+                                    .accessibilityLabel(Text("余额偏低"))
+                            }
+                        }
                         if let provider = store.instance(for: entry.providerInstanceId) {
                             Text(provider.label).font(.caption).foregroundStyle(ModelPickerText.secondary)
                         }
