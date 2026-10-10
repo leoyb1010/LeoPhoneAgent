@@ -1142,6 +1142,22 @@ enum TreasuryShortcutPresentation {
 /// Available-width policy for the iPad Treasury workspace. Height is
 /// deliberately irrelevant: presenting the keyboard must not collapse the
 /// split view and rebuild an in-progress annotation or highlight editor.
+/// 藏宝阁「没有匹配的内容」时是否给「清除筛选」:视图不是「全部」、选了来源、或在看归档。
+enum TreasuryFilterReset {
+    static func hasActiveFilters(view: String, source: String?, showArchived: Bool) -> Bool {
+        view != "all" || source != nil || showArchived
+    }
+}
+
+/// 附件点开去哪:图片 / 扫描件进预览页(连带 OCR 文字),其余交给系统快速查看。
+enum TreasuryFilePreviewPolicy {
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "gif", "webp", "tif", "tiff", "bmp"]
+
+    static func usesImagePreview(fileName: String) -> Bool {
+        imageExtensions.contains((fileName as NSString).pathExtension.lowercased())
+    }
+}
+
 enum TreasuryWorkspaceLayoutPolicy {
     static func usesSplit(width: CGFloat, regularWidth: Bool) -> Bool {
         regularWidth && width.isFinite && width >= 760

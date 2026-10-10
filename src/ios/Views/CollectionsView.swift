@@ -19,6 +19,7 @@
 import LinkPresentation
 import SafariServices
 import PhotosUI
+import QuickLook
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -99,6 +100,10 @@ struct CollectionsView: View {
     @State private var fullTextSnippets: [String: String] = [:]
     @State private var indexing = false
     @State private var searchTask: Task<Void, Never>?
+    /// 下拉刷新时递增,资料库区块跟着重查(以前只刷新手机收藏)。
+    @State private var brainRefreshToken = 0
+    /// 非图片附件(PDF、文稿…)直接交给系统快速查看,不再只显示一个文件图标。
+    @State private var quickLookURL: URL?
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -160,9 +165,27 @@ struct CollectionsView: View {
         }
     }
 
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasActiveFilters: Bool {
+        TreasuryFilterReset.hasActiveFilters(view: treasuryView.rawValue, source: filterSource, showArchived: showArchived)
+    }
+
+    private func clearFilters() {
+        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+            filterSource = nil
+            treasuryView = .all
+            showArchived = false
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let usesSplit = TreasuryWorkspaceLayoutPolicy.usesSplit(
+            // 只有自己当容器(整页面板)时才分栏;被推进别人的导航栈(设置的 iPad 分栏详情页)
+            // 再套一层 NavigationSplitView 会出现两层侧栏、返回键失灵。
+            let usesSplit = onClose != nil && TreasuryWorkspaceLayoutPolicy.usesSplit(
                 width: geometry.size.width,
                 regularWidth: horizontalSizeClass == .regular)
             Group {
@@ -203,22 +226,33 @@ struct CollectionsView: View {
             }
             if brainScope.showsPhoneItems {
             if !editMode.isEditing {
-                treasuryHero
-                captureActions
+                // 搜索时概览卡和四个新建按钮让结果被挤到屏幕下半截,搜索期间收起。
+                if !isSearching {
+                    treasuryHero
+                    captureActions
+                }
                 treasuryViewPicker
-                importRow
+                if !isSearching { importRow }
             }
             if items.isEmpty {
                 emptyState
-            } else if shown.isEmpty {
+            } else {
+                // 来源筛选在结果为空时也要留着:以前选了某个来源再切视图得到 0 条时,
+                // 胶囊跟着消失,用户没法取消这个来源筛选。
+                if sources.count > 1, !editMode.isEditing { sourceFilter }
+                if shown.isEmpty {
                 // 判据必须是 visible 而不是 items:切到"查看归档"却没有
                 // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
                 // 筛选胶囊和一片空白,没有任何解释。
                 LeoEmptyState(systemImage: showArchived ? "archivebox" : "magnifyingglass",
                               title: showArchived ? String(localized: "归档里还没有东西") : String(localized: "没有匹配的内容"),
-                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil)
-            } else {
-                if sources.count > 1 { sourceFilter }
+                              message: showArchived ? String(localized: "左滑任意条目可以归档。") : nil,
+                              actionTitle: hasActiveFilters ? String(localized: "清除筛选") : nil,
+                              actionSystemImage: "line.3.horizontal.decrease.circle",
+                              action: hasActiveFilters ? clearFilters : nil)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                } else {
                 ForEach(shown) { item in
                     // 卡片与上方概览卡同一条左右边线(14pt),内容在卡片里再缩 12pt;
                     // 之前背景是通栏的,列表卡片贴着屏幕边(1.41.0 真机截图)。
@@ -240,17 +274,21 @@ struct CollectionsView: View {
                     })
                     requestDelete(ids)
                 }
+                }
             }
             }
             // [T-brain] 资料库结果:「全部」里跟在手机收藏后面,「资料库 / 知识卡」单独显示。
             if brainScope != .phone, !editMode.isEditing {
-                BrainBrowseSection(scope: brainScope, query: TreasuryLocalQuery.parse(query).textQuery)
+                BrainBrowseSection(scope: brainScope, query: TreasuryLocalQuery.parse(query).textQuery,
+                                   refreshToken: brainRefreshToken)
             }
         }
         .environment(\.editMode, $editMode)
         .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "藏宝阁")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索收藏(含正文)")
+        // 进来就能看到搜索框:默认的自动抽屉要先往下拉一下才露出来。
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: Text(brainScope.searchPrompt))
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(LeoTheme.ColorToken.groupedBackground)
@@ -277,7 +315,11 @@ struct CollectionsView: View {
                 }
             }
         }
-        .refreshable { reload() }
+        .refreshable {
+            reload()
+            if brainScope != .phone { brainRefreshToken += 1 }
+        }
+        .quickLookPreview($quickLookURL)
         // [T-treasury-ui] 条目的进出与重排(置顶跳到最前、归档滑走、删除
         // 收起)都走弹簧,不再瞬间跳变。items 是 Equatable,代价可控。
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.3), value: items)
@@ -460,7 +502,7 @@ struct CollectionsView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("你的资料库")
+                    Text("你的藏宝阁")
                         .font(.headline.weight(.bold))
                     Text("收藏、笔记、扫描与文件会统一索引，随时交给 Agent 继续工作。")
                         .font(.caption)
@@ -540,6 +582,9 @@ struct CollectionsView: View {
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(treasuryView == view ? Color.orange : LeoTheme.ColorToken.surface,
                                         in: Capsule())
+                            // 胶囊看起来小,点按区域补到 44pt 高。
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(treasuryView == view ? .isSelected : [])
@@ -698,22 +743,34 @@ struct CollectionsView: View {
                 }
             } else {
                 Menu {
-                    Button {
-                        withAnimation { showArchived.toggle() }
-                    } label: {
-                        Label(showArchived ? "回到收藏" : "查看归档",
-                              systemImage: showArchived ? "tray.full" : "archivebox")
+                    // 资料库 / 知识卡范围里没有手机收藏可选,进选择模式只会得到一张空列表。
+                    if brainScope.supportsPhoneEditing {
+                        Button {
+                            withAnimation { showArchived.toggle() }
+                        } label: {
+                            Label(showArchived ? "回到收藏" : "查看归档",
+                                  systemImage: showArchived ? "tray.full" : "archivebox")
+                        }
+                        Button {
+                            withAnimation { editMode = .active }
+                        } label: { Label("选择", systemImage: "checkmark.circle") }
+                        Divider()
                     }
                     Button {
-                        withAnimation { editMode = .active }
-                    } label: { Label("选择", systemImage: "checkmark.circle") }
+                        DeepLinkCoordinator.shared.pendingSettingsTarget = .brain
+                    } label: {
+                        Label(brain.isConfigured ? "资料库设置" : "连接资料库…", systemImage: "books.vertical")
+                    }
                     Divider()
                     Picker("分享时的默认动作", selection: $defaultAction) {
                         Text("每次询问").tag("ask")
                         Text("总是发到对话").tag("chat")
                         Text("总是收藏(不打断)").tag("collect")
                     }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .accessibilityLabel(Text("更多"))
+                }
             }
         }
         ToolbarItem(placement: .bottomBar) {
@@ -794,7 +851,7 @@ struct CollectionsView: View {
     private func filterChip(_ source: String?, label: String) -> some View {
         let selected = filterSource == source
         return Button {
-            withAnimation(LeoMotion.snappy()) { filterSource = source }
+            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { filterSource = source }
             LeoHaptics.selection()
         } label: {
             Text(label)
@@ -803,8 +860,11 @@ struct CollectionsView: View {
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .background(selected ? Color.accentColor : Color.secondary.opacity(0.1),
                             in: Capsule())
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: 行为
@@ -1218,7 +1278,14 @@ struct CollectionsView: View {
             return
         }
         guard item.kind == .link else {
-            previewItem = item
+            // 图片 / 扫描件留在预览页(带识别出的文字);其它附件直接系统快速查看,
+            // 以前这里只显示一个文件图标和文件名,打不开也分享不了。
+            if item.kind == .file, let file = CollectionStore.fileURL(named: item.value),
+               !TreasuryFilePreviewPolicy.usesImagePreview(fileName: item.value) {
+                quickLookURL = file
+            } else {
+                previewItem = item
+            }
             return
         }
         Task { @MainActor in
@@ -1812,6 +1879,7 @@ private struct CollectionCard: View {
         HStack(alignment: .top, spacing: 12) {
             thumbnail
                 .frame(width: 60, height: 60)
+                .accessibilityHidden(true)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1834,14 +1902,14 @@ private struct CollectionCard: View {
                             .font(.system(size: 10)).foregroundStyle(.orange)
                     }
                     Text(displayTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
                 if let summary = item.summary, !summary.isEmpty {
                     Text(summary)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -1850,21 +1918,25 @@ private struct CollectionCard: View {
                     HStack(spacing: 5) {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(.teal.opacity(0.6)).frame(width: 2)
-                        Text(note).font(.system(size: 12)).foregroundStyle(.teal)
+                        Text(note).font(.caption).foregroundStyle(.teal)
                             .lineLimit(1)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 6) {
                     Text(item.sourceLabel)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
                         .foregroundStyle(leoSourceColor(item.sourceLabel))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(leoSourceColor(item.sourceLabel).opacity(0.13), in: Capsule())
                     Text(leoRelativeDate(item.updatedAt))
-                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                     ForEach(item.tags.prefix(2), id: \.self) { tag in
-                        Text("#\(tag)").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("#\(tag)").font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
             }

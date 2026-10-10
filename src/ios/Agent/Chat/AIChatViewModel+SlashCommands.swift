@@ -180,6 +180,8 @@ extension AIChatViewModel {
             }
             return cmd
         }
+        // [T-brain-chat] 引用资料库 / 引用藏宝阁:工具提供时才列出。
+        commands.append(contentsOf: knowledgeQuoteSlashCommands)
         // Append enabled skills as slash entries.
         // - id is namespaced ("skill:<uuid>") so it never collides with a
         //   built-in id.
@@ -330,11 +332,20 @@ extension AIChatViewModel {
 
     /// Check if the input text is a slash command and execute it instead of sending.
     /// Returns true if a command was matched and executed.
+    /// [T-brain-chat] 「/」面板里的引用行。资料库只在工具真的提供给本对话时出现;
+    /// 藏宝阁是本机工具,远程会话里没有。
+    var knowledgeQuoteSlashCommands: [SlashCommand] {
+        KnowledgeQuoteCommand.available(brainOffered: brainOfferedTools.contains(BrainToolGating.search),
+                                        treasuryOffered: remoteDeviceId == nil && !isSubAgentChild)
+            .map { SlashCommand(id: $0.rawValue, icon: $0.icon, title: $0.title, subtitle: $0.subtitle) }
+    }
+
     func tryExecuteInputAsSlashCommand() -> Bool {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.hasPrefix("/") else { return false }
         let name = String(text.dropFirst()).lowercased()
-        guard let cmd = Self.availableSlashCommands.first(where: { $0.title.lowercased() == name }) else {
+        guard let cmd = (Self.availableSlashCommands + knowledgeQuoteSlashCommands)
+            .first(where: { $0.title.lowercased() == name }) else {
             return false
         }
         executeSlashCommand(cmd)
@@ -357,6 +368,19 @@ extension AIChatViewModel {
         // savedInputBeforeSlash here — that flag isn't relevant to the
         // skill path (the menu was opened by typing "/", not by the "/"
         // button over existing text).
+        if let quote = KnowledgeQuoteCommand(rawValue: cmd.id) {
+            // 把「查一下我的资料库:」写进输入框(保留已写的内容),光标落在前缀后面,
+            // 用户接着写要查什么;发出去之后由模型按需调用 brain_* / treasury_*。
+            let applied = quote.apply(to: savedInputBeforeSlash ?? "")
+            inputText = applied
+            pendingCaret = applied.count
+            savedInputBeforeSlash = nil
+            savedCaretBeforeSlash = nil
+            showSlashMenu = false
+            slashMenuSelectedIndex = -1
+            requestComposerFocusSignal.send()
+            return
+        }
         if cmd.isSkill || cmd.isMCP {
             // Skill / MCP insertion has two flavors:
             //
