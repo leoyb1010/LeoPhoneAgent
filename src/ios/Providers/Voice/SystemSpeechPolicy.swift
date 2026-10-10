@@ -251,3 +251,30 @@ final class SpeechCaptureStartGate {
         onPendingChange?(false)
     }
 }
+
+// MARK: - [V-rec] Long-audio and callback-based recognition deadlines
+
+extension SystemSpeechPolicy {
+    /// 一个录音转写单元(≤10 分钟)的等待上限。本机长语音模型通常远快于实时,
+    /// 但慢机型、发热降频时可能接近实时:给时长 + 60 秒,至少 60 秒,最多 15 分钟。
+    static func longAudioTimeout(audioDuration: Double?) -> Double {
+        guard let audioDuration, audioDuration.isFinite, audioDuration > 0 else { return 60 }
+        return min(900, max(60, audioDuration + 60))
+    }
+}
+
+/// [V-watch] 回调式识别(SFSpeechRecognizer 的 recognitionTask)套上 SpeechRequestLifetime:
+/// 回调永远不来(识别器卡住、手表发来的文件坏了)时到点报超时并取消任务,
+/// 不会让调用方(手表问答)永远挂着。`start` 返回取消动作。
+enum CallbackSpeechTask {
+    static func run<Value: Sendable>(
+        timeoutSeconds: Double,
+        start: @escaping (_ complete: @escaping @Sendable (Result<Value, Error>) -> Void) -> (() -> Void)
+    ) async throws -> Value {
+        let lifetime = SpeechRequestLifetime<Value>()
+        return try await lifetime.value(timeoutSeconds: timeoutSeconds) { lifetime in
+            let cancel = start { result in lifetime.finish(result) }
+            lifetime.onFinish(cancel)
+        }
+    }
+}

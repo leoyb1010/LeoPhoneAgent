@@ -13,7 +13,7 @@
 "NSHealthUpdateUsageDescription" = "LeoBot greift schreibend auf HealthKit zu, damit der KI-Agent Gesundheitsdaten wie Schritte, Gewicht und Wasseraufnahme in Ihrem Namen aufzeichnen kann.";
 "NSContactsUsageDescription" = "LeoBot greift auf Kontakte zu, damit der KI-Agent Ihre Kontakte in Ihrem Namen suchen, anzeigen und verwalten kann.";
 "NSAppleMusicUsageDescription" = "LeoBot greift auf die Mediathek zu, damit der KI-Agent Ihre Musikbibliothek durchsuchen und die Wiedergabe steuern kann.";
-"NSMicrophoneUsageDescription" = "LeoBot benötigt Mikrofonzugriff für die Spracheingabe im Chat.";
+"NSMicrophoneUsageDescription" = "LeoBot verwendet das Mikrofon für die Spracheingabe und für Aufnahmen, die du startest und die in Notizen und Protokolle umgewandelt werden. Aufgenommene Audiodaten bleiben auf diesem Gerät.";
 "NSSpeechRecognitionUsageDescription" = "LeoBot verwendet Spracherkennung, um Ihre Stimme in Textnachrichten umzuwandeln.";
 "NSHomeKitUsageDescription" = "LeoBot greift auf HomeKit zu, damit der KI-Agent Ihre Smart-Home-Geräte in Ihrem Namen abfragen und steuern kann.";
 "NSAlarmKitUsageDescription" = "LeoBot verwendet AlarmKit, damit der KI-Agent Wecker und Timer in Ihrem Namen stellen kann.";

@@ -13,7 +13,7 @@
 "NSHealthUpdateUsageDescription" = "LeoPhoneAgent는 AI 에이전트가 걸음 수, 체중, 수분 섭취량 등의 건강 데이터를 기록할 수 있도록 건강 쓰기 접근 권한을 사용합니다.";
 "NSContactsUsageDescription" = "LeoPhoneAgent는 AI 에이전트가 연락처를 검색, 조회, 관리할 수 있도록 연락처 접근 권한을 사용합니다.";
 "NSAppleMusicUsageDescription" = "LeoPhoneAgent는 AI 에이전트가 음악 보관함을 검색하고 재생을 제어할 수 있도록 미디어 보관함 접근 권한을 사용합니다.";
-"NSMicrophoneUsageDescription" = "LeoPhoneAgent는 채팅에서 음성 텍스트 변환 입력을 위해 마이크 접근 권한이 필요합니다.";
+"NSMicrophoneUsageDescription" = "LeoPhoneAgent는 음성 입력과 사용자가 시작한 녹음(텍스트와 회의록으로 변환)에 마이크를 사용합니다. 녹음된 오디오는 이 기기에만 저장됩니다.";
 "NSSpeechRecognitionUsageDescription" = "LeoPhoneAgent는 음성을 텍스트 메시지로 변환하기 위해 음성 인식을 사용합니다.";
 "NSHomeKitUsageDescription" = "LeoPhoneAgent는 AI 에이전트가 스마트 홈 액세서리를 조회하고 제어할 수 있도록 HomeKit 접근 권한을 사용합니다.";
 "NSAlarmKitUsageDescription" = "LeoPhoneAgent는 AI 에이전트가 알람과 타이머를 설정할 수 있도록 AlarmKit을 사용합니다.";

@@ -108,9 +108,15 @@ final class VoiceActivityDetector: NSObject {
     private var samplesSinceSegmentEnd: Int = 0
     /// Fallback buffer: ALL audio samples since start(), regardless of VAD state.
     /// Used when user taps stop but VAD never detected speech — we still have the audio.
-    /// Capped at 5 minutes worth of samples.
-    private var rawAudioBuffer: [Float] = []
+    /// Capped at 5 minutes worth of samples. [V-vad] Ring buffer: trimming the
+    /// oldest audio is O(appended), not a 58 MB memmove on the realtime thread.
+    private var rawAudioBuffer = FloatRingBuffer(capacity: 1)
     private var rawAudioStartTime: TimeInterval = 0
+    /// 5 minutes of mono samples at `sampleRate` (fallback buffer cap).
+    static func rawCapacity(sampleRate: Double) -> Int {
+        guard sampleRate.isFinite, sampleRate > 0 else { return 48_000 * 300 }
+        return Int(min(sampleRate, 192_000) * 300)
+    }
     /// Timestamp (seconds since boot) when the current segment's speech started.
     private var segmentStartTime: TimeInterval = 0
 
@@ -200,8 +206,11 @@ final class VoiceActivityDetector: NSObject {
             throw VoiceProviderError.parseError("Audio engine failed to start")
         }
         VoiceLog.log("audioEngine started OK; isRunning=true")
-        captureLock.withLock { lastVoicedUptime = 0 }
-        rawAudioBuffer.removeAll(keepingCapacity: true)
+        captureLock.withLock {
+            lastVoicedUptime = 0
+            rawAudioBuffer.resize(capacity: Self.rawCapacity(sampleRate: captureSampleRate))
+            rawAudioBuffer.removeAll()
+        }
         samplesSinceSegmentEnd = 0
         rawAudioStartTime = ProcessInfo.processInfo.systemUptime
         isRunning = true
@@ -355,9 +364,8 @@ final class VoiceActivityDetector: NSObject {
     @discardableResult
     func flushRawFallback() -> Bool {
         captureLock.lock()
-        let samples = rawAudioBuffer
+        let samples = rawAudioBuffer.drain()
         let rate = captureSampleRate
-        rawAudioBuffer.removeAll(keepingCapacity: true)
         captureLock.unlock()
         let duration = Double(samples.count) / rate
         guard samples.count > Int(rate * 0.5) else {
@@ -684,16 +692,16 @@ final class VoiceActivityDetector: NSObject {
         }
 
         captureLock.lock()
-        // Fallback: always accumulate raw audio (capped at 5 min = 300s)
+        // Fallback: always accumulate raw audio (capped at 5 min = 300s).
+        // The ring overwrites its oldest samples itself; only a sample-rate
+        // change (route switch) resizes it.
+        let rawCap = Self.rawCapacity(sampleRate: captureSampleRate)
+        if rawAudioBuffer.capacity != rawCap { rawAudioBuffer.resize(capacity: rawCap) }
         rawAudioBuffer.append(contentsOf: samples)
         // Track how much of it arrived outside a speech segment — this bounds
         // the start back-fill so it never reaches into the previous segment.
         if !isSpeaking {
             samplesSinceSegmentEnd += samples.count
-        }
-        let rawCap = Int(captureSampleRate * 300)
-        if rawAudioBuffer.count > rawCap {
-            rawAudioBuffer.removeFirst(rawAudioBuffer.count - rawCap)
         }
         // While speech is active, accumulate the segment.
         var total = 0
@@ -737,7 +745,7 @@ extension VoiceActivityDetector: VADDelegate {
             // segment ended (so we never re-consume the previous segment).
             let cap = Int(captureSampleRate * Self.startBackfillSeconds)
             let backfill = min(min(cap, samplesSinceSegmentEnd), rawAudioBuffer.count)
-            captureSamples = backfill > 0 ? Array(rawAudioBuffer.suffix(backfill)) : []
+            captureSamples = backfill > 0 ? rawAudioBuffer.suffix(backfill) : []
             captureLock.unlock()
             let backfillSec = Double(backfill) / captureSampleRate
             VoiceLog.log(String(format: "VAD speech start | ts=%.3f | backfill=%.3fs", now, backfillSec))

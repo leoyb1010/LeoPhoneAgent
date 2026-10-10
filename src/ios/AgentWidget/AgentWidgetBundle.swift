@@ -18,6 +18,8 @@ struct AgentWidgetBundle: WidgetBundle {
             AgentLiveActivityWidget()
             // [G2] Paperclip 工单的灵动岛 / 锁屏卡片。
             PaperclipLiveActivityWidget()
+            // [V-rec] 录音的灵动岛 / 锁屏卡片。
+            RecordingLiveActivityWidget()
         }
         // [T-control-center] Control Center / Lock Screen / Action Button.
         if #available(iOSApplicationExtension 18.0, *) {

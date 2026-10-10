@@ -33,13 +33,20 @@ final class AudioSessionCoordinator {
         case replyTTS = 1
         case mediaAttachment = 2
         case capture = 3
+        /// [V-rec] 长录音(录音 → 纪要)。和语音输入的 `.capture` 分开:语音输入结束时
+        /// end(.capture) 不能把正在进行的录音的会话一起收走。锁屏后继续录,靠的就是这个
+        /// 真实的 `.record` 会话 + 已有的 `audio` 后台模式(不是静音保活)。
+        case recording = 4
     }
 
     private let logger = AppLogger(category: "AudioSession")
     private var active: Set<Intent> = []
 
     /// True while the mic is capturing — reply TTS is suppressed in this state.
-    var isCapturing: Bool { active.contains(.capture) }
+    var isCapturing: Bool { active.contains(.capture) || active.contains(.recording) }
+
+    /// [V-rec] A long recording holds the session.
+    var isRecording: Bool { active.contains(.recording) }
 
     // MARK: - Public API
 
@@ -129,6 +136,10 @@ final class AudioSessionCoordinator {
         switch intent {
         case .capture:
             return (.record, .measurement, [])
+        case .recording:
+            // `.default` keeps the system's input gain control on — better for a
+            // room of people at different distances than `.measurement`'s raw feed.
+            return (.record, .default, [])
         case .mediaAttachment:
             return (.playback, .default, [.duckOthers])
         case .replyTTS:

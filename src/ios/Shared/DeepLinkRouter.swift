@@ -120,6 +120,11 @@ enum DeepLinkRouter {
             IOSExecutionBackend.selectLocal()
             coord.pendingCollections = true
 
+        // [V-rec] 录音:打开列表 / 正在录的页面 / 导入分享来的音频。链接永远不会替你开始录音。
+        case "recordings", "recording":
+            IOSExecutionBackend.selectLocal()
+            RecordingPresenter.handleDeepLink(path: url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+
         case "open":
             if handleWebAppLauncherReturn(url: url) { IOSExecutionBackend.selectLocal() }
 

@@ -291,3 +291,89 @@ final class AppleLiveTranscriber: @unchecked Sendable {
         Task { if let analyzer = await setup?.value { await analyzer.cancelAndFinishNow() } }
     }
 }
+
+// MARK: - [V-rec] 录音转写:带时间戳的长音频
+
+@available(iOS 26.0, *)
+extension AppleSpeechAnalyzer {
+    /// 本机转写录音文件的一个窗口(≤10 分钟)。返回的时间相对窗口起点。
+    /// 文件经 AVAssetReader 读出(崩溃留下的分片文件、导入的 mp3/wav 都能读),
+    /// 转成分析器要的格式后整段送进 SpeechTranscriber;资源没装时抛 `.assetsMissing`,
+    /// 绝不悄悄改走网络。超时按音频时长给(SystemSpeechPolicy.longAudioTimeout)。
+    @MainActor
+    static func transcribeWindow(url: URL, start: Double, duration: Double, localeIdentifier: String,
+                                 contextualStrings: [String] = []) async throws -> [TranscriptAssembler.LocalSegment] {
+        let available = await availability(locale: Locale(identifier: localeIdentifier))
+        guard available.state == .installed, let resolved = available.resolvedLocale else {
+            if available.state == .downloading { throw SystemSpeechError.assetsDownloading(localeIdentifier) }
+            if available.state == .unsupported { throw SystemSpeechError.offlineUnavailable(localeIdentifier) }
+            throw SystemSpeechError.assetsMissing(localeIdentifier)
+        }
+        try Task.checkCancellation()
+        let transcriber = SpeechTranscriber(locale: Locale(identifier: resolved), transcriptionOptions: [],
+                                            reportingOptions: [], attributeOptions: [.audioTimeRange])
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
+            throw SystemSpeechError.recognitionFailed("没有可用的音频格式")
+        }
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
+        let lifetime = SpeechRequestLifetime<[TranscriptAssembler.LocalSegment]>()
+        return try await lifetime.value(timeoutSeconds: SystemSpeechPolicy.longAudioTimeout(audioDuration: duration)) { lifetime in
+            lifetime.onFinish {
+                continuation.finish()
+                Task { await analyzer.cancelAndFinishNow() }
+            }
+            let results = Task { () throws -> [TranscriptAssembler.LocalSegment] in
+                var out: [TranscriptAssembler.LocalSegment] = []
+                for try await result in transcriber.results where result.isFinal {
+                    try Task.checkCancellation()
+                    let text = String(result.text.characters)
+                    let range = result.range
+                    let s = range.start.seconds
+                    let e = range.end.seconds
+                    out.append(.init(start: s.isFinite ? s : 0, end: e.isFinite ? e : (s.isFinite ? s : 0), text: text))
+                }
+                return out
+            }
+            lifetime.onFinish { results.cancel() }
+            let work = Task { @MainActor in
+                do {
+                    if !contextualStrings.isEmpty {
+                        let context = AnalysisContext()
+                        context.contextualStrings[.general] = Array(contextualStrings.prefix(VoiceHotwords.limit))
+                        try? await analyzer.setContext(context)
+                    }
+                    try await analyzer.start(inputSequence: stream)
+                    let readFormat = AVAudioFormat(commonFormat: format.commonFormat == .pcmFormatInt16 ? .pcmFormatInt16 : .pcmFormatFloat32,
+                                                   sampleRate: format.sampleRate, channels: 1, interleaved: true) ?? format
+                    var converter: AVAudioConverter?
+                    try await RecordingAudioReader.read(url: url, start: start, duration: duration, format: readFormat) { buffer in
+                        if buffer.format == format {
+                            continuation.yield(AnalyzerInput(buffer: buffer))
+                            return
+                        }
+                        if converter == nil { converter = AVAudioConverter(from: buffer.format, to: format) }
+                        guard let converter,
+                              let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: buffer.frameLength + 64) else { return }
+                        var supplied = false
+                        var error: NSError?
+                        let status = converter.convert(to: out, error: &error) { _, outStatus in
+                            if supplied { outStatus.pointee = .noDataNow; return nil }
+                            supplied = true
+                            outStatus.pointee = .haveData
+                            return buffer
+                        }
+                        if status != .error, out.frameLength > 0 { continuation.yield(AnalyzerInput(buffer: out)) }
+                    }
+                    continuation.finish()
+                    try await analyzer.finalizeAndFinishThroughEndOfInput()
+                    let segments = try await results.value
+                    lifetime.finish(.success(segments))
+                } catch {
+                    lifetime.finish(.failure(error is CancellationError ? error : SystemSpeechError.recognitionFailed(error.localizedDescription)))
+                }
+            }
+            lifetime.onFinish { work.cancel() }
+        }
+    }
+}

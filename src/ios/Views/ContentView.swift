@@ -3373,6 +3373,10 @@ struct ContentView: View {
         Button { activeToolSheet = .rootfsManagement } label: {
             Label("本机文件", systemImage: "folder")
         }
+        // [V-rec] 录音 → 转写 → 纪要。
+        Button { RecordingPresenter.present(.recorder) } label: {
+            Label("录音", systemImage: "waveform")
+        }
     }
 
     /// "/" 面板的全部动作。顺序是首次打开时的默认顺序,之后按最近使用排。
@@ -3380,6 +3384,7 @@ struct ContentView: View {
         var list: [HomeAction] = [
             HomeAction(id: "voice", title: "语音模式", icon: "waveform", tint: .orange) { startHomeChatAction(.startVoice) },
             HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: .pink) { startHomeChatAction(.openCamera) },
+            HomeAction(id: "recording", title: "录音纪要", icon: "waveform", tint: .red) { RecordingPresenter.present(.recorder) },
         ]
         if torchSupported {
             list.append(HomeAction(id: "torch", title: torchOn ? "关手电筒" : "手电筒",

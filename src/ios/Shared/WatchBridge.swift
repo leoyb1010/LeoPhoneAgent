@@ -18,6 +18,7 @@
 //  WatchConnectivity. Inert when no watch is paired, so shipping it costs nothing.
 //
 
+import AVFoundation
 import CryptoKit
 import Combine
 import Foundation
@@ -571,7 +572,8 @@ extension WatchBridge: WCSessionDelegate {
         guard let newline = messageData.firstIndex(of: 0x0A),
               let header = try? JSONSerialization.jsonObject(with: messageData[..<newline]) as? [String: Any],
               (header["kind"] as? String) == WatchPayloadKey.kindAskAudio else { return }
-        let requestId = (header[WatchPayloadKey.requestId] as? String) ?? UUID().uuidString
+        // [V-watch] requestId 会拼进临时文件名:只收安全字符,其余换成新 UUID。
+        let requestId = WatchRequestIdPolicy.sanitized(header[WatchPayloadKey.requestId] as? String)
         let sessionId = header[WatchPayloadKey.sessionId] as? String
         let audio = Data(messageData[messageData.index(after: newline)...])
         Task { @MainActor in
@@ -634,6 +636,16 @@ extension WatchBridge: WCSessionDelegate {
         case WatchPayloadKey.kindWake:
             // Receiving it is the point: iOS has already woken the app.
             replyHandler(["ok": true])
+        case WatchRecordingRemote.kind:
+            // [V-watch] 遥控 iPhone 录音:只传指令,不传音频。
+            guard let action = WatchRecordingRemote.action(from: message) else {
+                replyHandler(WatchRecordingRemote.reply(.idle, ok: false))
+                return
+            }
+            Task { @MainActor in
+                let (ok, status) = await RecordingController.shared.handleWatchCommand(action)
+                replyHandler(WatchRecordingRemote.reply(status, ok: ok))
+            }
         case WatchContinueOnPhone.kind:
             // 先确认会话还在、通知真发出去了再回 ok,别让手表显示「已发到 iPhone」却什么都没有。
             guard let sessionId = WatchContinueOnPhone.sessionId(from: message) else {
@@ -696,18 +708,20 @@ extension WatchBridge {
         }
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.shouldReportPartialResults = false
-        return try await withCheckedThrowingContinuation { continuation in
-            var finished = false
-            recognizer.recognitionTask(with: request) { result, error in
-                guard !finished else { return }
+        // [V-watch] 识别器回调永远不来(坏文件、识别服务卡住)时,手表问答会一直挂着:
+        // 按音频时长给一个上限,到点取消识别任务并报超时。
+        let duration = (try? AVAudioFile(forReading: url)).map {
+            Double($0.length) / max(1, $0.processingFormat.sampleRate)
+        }
+        return try await CallbackSpeechTask.run(timeoutSeconds: SystemSpeechPolicy.timeout(audioDuration: duration)) { complete in
+            let task = recognizer.recognitionTask(with: request) { result, error in
                 if let error {
-                    finished = true
-                    continuation.resume(throwing: error)
+                    complete(.failure(error))
                 } else if let result, result.isFinal {
-                    finished = true
-                    continuation.resume(returning: result.bestTranscription.formattedString)
+                    complete(.success(result.bestTranscription.formattedString))
                 }
             }
+            return { task.cancel() }
         }
     }
 }

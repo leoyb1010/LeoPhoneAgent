@@ -24,6 +24,12 @@ class ShareViewController: UIViewController {
 
             let action = SharedContainerStore.sharedDefaults?
                 .string(forKey: CollectionStore.defaultActionKey) ?? "ask"
+            // [V-rec] 有音频时总是问一句:转成录音纪要,还是照常发到对话 / 收藏。
+            if vm.hasAudio {
+                self.awaitingChoice = true
+                self.presentChoice()
+                return
+            }
             switch action {
             case "chat":
                 self.sendToChat()
@@ -48,6 +54,12 @@ class ShareViewController: UIViewController {
     private func presentChoice() {
         let alert = UIAlertController(title: "分享到 LeoBot",
                                       message: nil, preferredStyle: .alert)
+        if vm?.hasAudio == true {
+            alert.message = "音频只保存在这台设备上;转写默认在本机完成。"
+            alert.addAction(UIAlertAction(title: "🎙 转写成录音纪要", style: .default) { [weak self] _ in
+                self?.sendToRecordings()
+            })
+        }
         alert.addAction(UIAlertAction(title: "💬 发到对话", style: .default) { [weak self] _ in
             self?.sendToChat()
         })
@@ -64,6 +76,14 @@ class ShareViewController: UIViewController {
         guard let vm else { return finish() }
         _ = vm.save()
         redirectToHostApp()
+        finish()
+    }
+
+    private func sendToRecordings() {
+        guard let vm, vm.saveRecordingImports() else { return finish() }
+        // 同一次分享里的非音频内容照常进对话信箱。
+        _ = vm.save()
+        redirect(to: "leophoneagent://recordings/import")
         finish()
     }
 
@@ -84,7 +104,11 @@ class ShareViewController: UIViewController {
     // MARK: - Redirect to main app
 
     private func redirectToHostApp() {
-        guard let url = URL(string: "leophoneagent://share") else { return }
+        redirect(to: "leophoneagent://share")
+    }
+
+    private func redirect(to link: String) {
+        guard let url = URL(string: link) else { return }
         let selectorOpenURL = sel_registerName("openURL:")
         var responder: UIResponder? = self
         while responder != nil {

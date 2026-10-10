@@ -722,6 +722,62 @@ struct AgentActivityAttributes: ActivityAttributes {
     }
 }
 
+// MARK: - [V-la] Payload cap
+
+@available(iOS 16.2, *)
+extension AgentActivityAttributes.ContentState {
+    /// ActivityKit drops an update whose encoded state exceeds 4 KB — silently: the
+    /// Dynamic Island just freezes on the last good state. Titles and tool status are
+    /// model/user-derived and unbounded, so cap every string and the row count before
+    /// pushing. Budgets keep a worst-case state (every row and field full) under 3 KB.
+    static let maxRows = 4
+    static let maxTitle = 24
+    static let maxToolStatus = 32
+    static let maxLastMessage = 40
+    static let maxSoulName = 16
+    static let maxAudioTitle = 24
+    static let maxIcon = 40
+    static let maxSessionId = 64
+
+    func cappedForPayload() -> Self {
+        var s = self
+        if s.sessions.count > Self.maxRows {
+            // Keep the row on screen, then anything waiting for approval, then the rest in order.
+            let shown = min(max(0, s.carouselIndex), s.sessions.count - 1)
+            var keep: [Int] = [shown]
+            for i in s.sessions.indices where s.sessions[i].needsApproval && !keep.contains(i) { keep.append(i) }
+            for i in s.sessions.indices where !keep.contains(i) { keep.append(i) }
+            let kept = Array(keep.prefix(Self.maxRows)).sorted()
+            s.carouselIndex = kept.firstIndex(of: shown) ?? 0
+            s.sessions = kept.map { s.sessions[$0] }
+        }
+        s.sessions = s.sessions.map { row in
+            var r = row
+            r.sessionId = String(r.sessionId.prefix(Self.maxSessionId))
+            r.title = Self.cap(r.title, Self.maxTitle)
+            r.toolIcon = String(r.toolIcon.prefix(Self.maxIcon))
+            r.toolStatus = Self.cap(r.toolStatus, Self.maxToolStatus)
+            r.lastMessage = Self.cap(r.lastMessage, Self.maxLastMessage)
+            return r
+        }
+        s.soulName = Self.cap(s.soulName, Self.maxSoulName)
+        s.latestToolIcon = String(s.latestToolIcon.prefix(Self.maxIcon))
+        s.audioTitle = Self.cap(s.audioTitle, Self.maxAudioTitle)
+        if s.carouselIndex >= s.sessions.count { s.carouselIndex = max(0, s.sessions.count - 1) }
+        return s
+    }
+
+    /// Single line, at most `limit` characters (an ellipsis marks the cut).
+    static func cap(_ text: String, _ limit: Int) -> String {
+        var t = text
+        if t.contains(where: \.isNewline) {
+            t = t.split(whereSeparator: \.isNewline).joined(separator: " ")
+        }
+        guard t.count > limit else { return t }
+        return String(t.prefix(max(0, limit - 1))) + "…"
+    }
+}
+
 // MARK: - Control Center intents [T-control-center]
 
 /// Opens a brand-new chat from a Control Center button / Action Button.
