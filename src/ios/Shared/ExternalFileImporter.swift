@@ -53,6 +53,31 @@ enum ExternalFileImporter {
             return true
         }
 
+        // [V-rec] 音频(语音备忘录、文件 App 里的录音)→ 录音转写,而不是塞进对话。
+        // 在安全作用域还有效时先复制出来,导入完删掉这份临时拷贝。
+        if RecordingController.isAudioFile(url) {
+            let staged = FileManager.default.temporaryDirectory
+                .appendingPathComponent("recording-import-\(UUID().uuidString)")
+                .appendingPathExtension(url.pathExtension)
+            var coordErr: NSError?
+            var copyErr: Error?
+            NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordErr) { readURL in
+                do { try FileManager.default.copyItem(at: readURL, to: staged) } catch { copyErr = error }
+            }
+            guard coordErr == nil, copyErr == nil else {
+                importLog.error("[Share] ingest: audio copy failed for \(url.lastPathComponent)")
+                return false
+            }
+            let originalName = url.lastPathComponent
+            let originalTitle = url.deletingPathExtension().lastPathComponent
+            Task { @MainActor in
+                let id = await RecordingController.shared.importAudio(from: staged, title: originalTitle, originalName: originalName)
+                try? FileManager.default.removeItem(at: staged)
+                RecordingPresenter.present(id.map { .detail($0) } ?? .list)
+            }
+            return true
+        }
+
         let fm = FileManager.default
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 

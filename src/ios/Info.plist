@@ -19,6 +19,18 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Audio Recording</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>JSON Document</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -270,7 +282,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>LeoBot uses your location to record where agent sessions are started for your session history.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>LeoBot needs microphone access for voice-to-text input in chat.</string>
+	<string>LeoBot uses the microphone for voice input and for recordings you start, which are transcribed into notes and minutes. Recorded audio stays on this device.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>LeoBot uses motion data so the AI agent can report your live step count and activity when you ask.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -282,7 +294,7 @@
 	<key>NSRemindersUsageDescription</key>
 	<string>LeoBot uses reminders access so the AI agent can query and create reminders on your behalf.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>LeoBot uses speech recognition to convert your voice into text messages.</string>
+	<string>LeoBot uses speech recognition to turn your voice and your recordings into text.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

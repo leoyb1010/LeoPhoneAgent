@@ -94,6 +94,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
         // [T-watch-companion] Inert unless a watch app is installed.
         WatchBridge.shared.activate()
+        // [V-rec] Close out a recording a killed process left open, end its stale
+        // Live Activity, and listen for the Live Activity's pause/stop buttons.
+        // Async: a few file stats, never on the launch path.
+        RecordingController.bootstrapAtLaunch()
         // [T-automation-engine] Region wakes relaunch the app in the
         // BACKGROUND — the monitor delegate must exist before iOS delivers
         // the event, not when the settings page happens to appear.

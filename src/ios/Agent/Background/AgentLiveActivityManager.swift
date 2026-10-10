@@ -752,7 +752,8 @@ final class AgentLiveActivityManager {
         s.isAudioPlaying = audio.isPlaying
         s.isAudioLoaded = audio.isLoaded
         s.audioTitle = audio.title
-        return withPrivacyRedaction(s)
+        // [V-la] Cap strings/rows last: an oversize state is dropped by ActivityKit silently.
+        return withPrivacyRedaction(s).cappedForPayload()
     }
 
     /// [T-ios-live-activity-privacy-mode] Data-layer redaction: strip every

@@ -757,10 +757,20 @@ final class StreamingPCMPlayback: @unchecked Sendable {
                                          channels: 1, interleaved: false) else { return nil }
         self.format = format
         timePitch.rate = rate
-        engine.attach(node)
-        engine.attach(timePitch)
-        engine.connect(node, to: timePitch, format: format)
-        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        // [V-tts] attach/connect raise an NSException (not a Swift error) when the
+        // output route rejects the format mid route-change — uncaught, that is a
+        // SIGABRT. Fail this stream instead; the caller falls back to whole-sentence.
+        let engine = self.engine, node = self.node, timePitch = self.timePitch
+        let wired = noff_try_objc {
+            engine.attach(node)
+            engine.attach(timePitch)
+            engine.connect(node, to: timePitch, format: format)
+            engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        }
+        guard wired else {
+            VoiceLog.log("TTS stream: engine wiring raised — whole-sentence path")
+            return nil
+        }
         // 拔耳机 / 换输出设备时系统会停掉引擎,已排的片段不再回调「播完」:
         // 不处理的话 onFinished 永远不来,后面的朗读全部卡住。直接结束这一段,队列接着走。
         configObserver = NotificationCenter.default.addObserver(
@@ -775,9 +785,14 @@ final class StreamingPCMPlayback: @unchecked Sendable {
     }
 
     func start() throws {
-        engine.prepare()
-        try engine.start()
-        node.play()
+        var startError: Error?
+        let ok = noff_try_objc {
+            self.engine.prepare()
+            do { try self.engine.start() } catch { startError = error; return }
+            self.node.play()
+        }
+        if let startError { throw startError }
+        guard ok else { throw VoiceProviderError.parseError("TTS audio engine failed to start") }
     }
 
     /// 播不下去了:停掉,并像正常播完一样回调一次 onFinished(stop() 之后不会再回调)。
@@ -842,11 +857,15 @@ final class StreamingPCMPlayback: @unchecked Sendable {
     /// ("_engine->IsRunning()")让 App 崩溃。先把引擎拉起来,拉不起来就结束这一段。
     func resume() {
         if !engine.isRunning {
-            engine.prepare()
-            do { try engine.start() } catch { abandon(); return }
+            var failed = false
+            let ok = noff_try_objc {
+                self.engine.prepare()
+                do { try self.engine.start() } catch { failed = true }
+            }
+            if failed || !ok { abandon(); return }
         }
         guard engine.isRunning else { abandon(); return }
-        node.play()
+        guard noff_try_objc({ self.node.play() }) else { abandon(); return }
     }
 
     func stop() {

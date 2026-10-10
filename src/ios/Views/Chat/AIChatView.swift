@@ -3146,6 +3146,8 @@ struct AIChatView: View {
             Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
             Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
             Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
+            // [V-rec] 录音 → 转写 → 纪要(独立页面,和语音输入互不影响)。
+            Button { RecordingPresenter.present(.recorder) } label: { Label("录音", systemImage: "waveform") }
         } label: {
             icon
         }

@@ -840,6 +840,36 @@
 		E50E3DE034E41A79F378F810 /* MailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E530843EFE7E556C09C0F20A /* MailService.swift */; };
 		E56A439125632EE00B93B5D3 /* MailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E530843EFE7E556C09C0F20A /* MailService.swift */; };
 		E5765D01962FD682F367D27D /* MailAccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52B0110EC6FB3E3F11745AE /* MailAccountsView.swift */; };
+		6F4C87986CB1BB15F9E996C9 /* RecordingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43E566C32F3043113B89FD6 /* RecordingModels.swift */; };
+		B8B4257BF22BCB0C27A58442 /* RecordingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43E566C32F3043113B89FD6 /* RecordingModels.swift */; };
+		D3E546C9D7E5829027ADC8EF /* RecordingChunkPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD7B588B26ADC2A58CA958E /* RecordingChunkPlanner.swift */; };
+		184CE59BFACC71DFFF6728F7 /* RecordingChunkPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD7B588B26ADC2A58CA958E /* RecordingChunkPlanner.swift */; };
+		2C67229BB8DEEFEFD4FF0271 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C99227AA66BC819ED1EFC4 /* RecordingStore.swift */; };
+		25696AFC50D1A61435F64690 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C99227AA66BC819ED1EFC4 /* RecordingStore.swift */; };
+		C3BFAA877D224CF5B0456000 /* TranscriptAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071F3CECC9D059D26019B4F5 /* TranscriptAssembler.swift */; };
+		0A55C48C56104EAD49AEF19F /* TranscriptAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071F3CECC9D059D26019B4F5 /* TranscriptAssembler.swift */; };
+		B9AFEE36C4C28ED10D364DC3 /* MinutesPromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40B7259094DEFC93FC26CB9 /* MinutesPromptBuilder.swift */; };
+		31854F0DE8581C31F7E75BD8 /* MinutesPromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40B7259094DEFC93FC26CB9 /* MinutesPromptBuilder.swift */; };
+		7230F4FC4E5D18029FB159DC /* RecordingAudioIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A01E82F7D6EAB170CB1C66 /* RecordingAudioIO.swift */; };
+		76E333C638867F78C1BBEB1D /* RecordingAudioIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A01E82F7D6EAB170CB1C66 /* RecordingAudioIO.swift */; };
+		295BAE817107EF0973E47D3C /* FloatRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0636FB68876DD2D11FCA4D3A /* FloatRingBuffer.swift */; };
+		B72DD88AD398E7A8D71DA5FE /* FloatRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0636FB68876DD2D11FCA4D3A /* FloatRingBuffer.swift */; };
+		4B01505602E3C27970F0CBC3 /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556C3F9735D330C9F8B4B5A7 /* RecordingActivityAttributes.swift */; };
+		3460A53460507DD3A5E539E6 /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556C3F9735D330C9F8B4B5A7 /* RecordingActivityAttributes.swift */; };
+		3A6144B1BC5CE896D868EA56 /* RecordingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556C3F9735D330C9F8B4B5A7 /* RecordingActivityAttributes.swift */; };
+		5325C3A1CFED5894BE01809F /* WatchRecordingRemote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF335679C1049F058DBD188 /* WatchRecordingRemote.swift */; };
+		06D542EF3D67CEAF7548E1D8 /* WatchRecordingRemote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF335679C1049F058DBD188 /* WatchRecordingRemote.swift */; };
+		8EA772E132D17960556AA52A /* WatchRecordingRemote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF335679C1049F058DBD188 /* WatchRecordingRemote.swift */; };
+		C351FD78B63ABE851A0559D2 /* RecordingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F1491B2C6C15D8FCC903F0D /* RecordingSession.swift */; };
+		BE621F6CB9BCB707AE678F98 /* RecordingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F98E89F3452A6D31630E60 /* RecordingController.swift */; };
+		FAE8E3A504C30487679A9432 /* RecordingTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9EB447FFCABE6596FE420AE /* RecordingTranscriber.swift */; };
+		45833D4AF9BAAEDBC699C6D7 /* MinutesGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFE5C01B3E77B310B172CA22 /* MinutesGenerator.swift */; };
+		1AB7E8546721743C9AE28A56 /* RecordingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DEBCEF91060C8DF14CA6C43 /* RecordingPresenter.swift */; };
+		B4C10D6C98BD2542A1123ED7 /* RecordingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14782B927FE339084F81F492 /* RecordingListView.swift */; };
+		E2A85EDBB210823CB95BA433 /* RecordingRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E62056DDEE2D96E86E5A3B /* RecordingRecorderView.swift */; };
+		3CF0FE5D0A813923A67BF4F8 /* RecordingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57A7FBEA11368012AF9A1E5 /* RecordingDetailView.swift */; };
+		7E891949AC83D7C350DCC6A1 /* RecordingLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */; };
+		51CBC55507BEC436918E5674 /* WatchRecordingRemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1717,6 +1747,25 @@
 		E5A4FB4D6254D774D3D03C56 /* MailAccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailAccountStore.swift; path = Agent/Mail/MailAccountStore.swift; sourceTree = SOURCE_ROOT; };
 		E530843EFE7E556C09C0F20A /* MailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailService.swift; path = Agent/Mail/MailService.swift; sourceTree = SOURCE_ROOT; };
 		E52B0110EC6FB3E3F11745AE /* MailAccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MailAccountsView.swift; path = Views/Settings/MailAccountsView.swift; sourceTree = SOURCE_ROOT; };
+		E43E566C32F3043113B89FD6 /* RecordingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingModels.swift; sourceTree = "<group>"; };
+		BAD7B588B26ADC2A58CA958E /* RecordingChunkPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingChunkPlanner.swift; sourceTree = "<group>"; };
+		25C99227AA66BC819ED1EFC4 /* RecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStore.swift; sourceTree = "<group>"; };
+		071F3CECC9D059D26019B4F5 /* TranscriptAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptAssembler.swift; sourceTree = "<group>"; };
+		E40B7259094DEFC93FC26CB9 /* MinutesPromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinutesPromptBuilder.swift; sourceTree = "<group>"; };
+		01A01E82F7D6EAB170CB1C66 /* RecordingAudioIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingAudioIO.swift; sourceTree = "<group>"; };
+		0636FB68876DD2D11FCA4D3A /* FloatRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatRingBuffer.swift; sourceTree = "<group>"; };
+		556C3F9735D330C9F8B4B5A7 /* RecordingActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActivityAttributes.swift; sourceTree = "<group>"; };
+		8FF335679C1049F058DBD188 /* WatchRecordingRemote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingRemote.swift; sourceTree = "<group>"; };
+		8F1491B2C6C15D8FCC903F0D /* RecordingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSession.swift; sourceTree = "<group>"; };
+		84F98E89F3452A6D31630E60 /* RecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingController.swift; sourceTree = "<group>"; };
+		B9EB447FFCABE6596FE420AE /* RecordingTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingTranscriber.swift; sourceTree = "<group>"; };
+		CFE5C01B3E77B310B172CA22 /* MinutesGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinutesGenerator.swift; sourceTree = "<group>"; };
+		3DEBCEF91060C8DF14CA6C43 /* RecordingPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPresenter.swift; sourceTree = "<group>"; };
+		14782B927FE339084F81F492 /* RecordingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingListView.swift; sourceTree = "<group>"; };
+		E9E62056DDEE2D96E86E5A3B /* RecordingRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRecorderView.swift; sourceTree = "<group>"; };
+		F57A7FBEA11368012AF9A1E5 /* RecordingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDetailView.swift; sourceTree = "<group>"; };
+		03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivityWidget.swift; sourceTree = "<group>"; };
+		01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecordingRemoteView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1791,6 +1840,7 @@
 				DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */,
 				D7656F4130247E4002A3AC0C /* VoiceTextSanitizer.swift */,
 				E5VLL0000 /* VoiceLiveLogic.swift */,
+				0636FB68876DD2D11FCA4D3A /* FloatRingBuffer.swift */,
 			);
 			path = Voice;
 			sourceTree = "<group>";
@@ -2072,6 +2122,7 @@
 				F1A00018 /* Speech */,
 				F1A00013 /* Sync */,
 				E5LD00003 /* ToolLoopDetector.swift */,
+				V0REC00000000000000GRP01 /* Recording */,
 			);
 			path = Agent;
 			sourceTree = "<group>";
@@ -2278,6 +2329,7 @@
 				F1V00016 /* Skills */,
 				F1VMCPG0 /* MCP */,
 				EAB000060 /* Sync */,
+				V0REC00000000000000GRP02 /* Recording */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -2362,6 +2414,8 @@
 				E5E0000A2 /* ExternalFileImporter.swift */,
 				E5E000017 /* SharedContainerStore.swift */,
 				AADDA9E02F6ECCF400B66649 /* ThumbnailCache.swift */,
+				556C3F9735D330C9F8B4B5A7 /* RecordingActivityAttributes.swift */,
+				8FF335679C1049F058DBD188 /* WatchRecordingRemote.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -2388,6 +2442,7 @@
 				E5PCG0040 /* PaperclipLiveActivityWidget.swift */,
 				E5H000013 /* Info.plist */,
 				E5H000014 /* AgentWidget.entitlements */,
+				03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */,
 			);
 			path = AgentWidget;
 			sourceTree = "<group>";
@@ -2991,6 +3046,34 @@
 			path = MCP;
 			sourceTree = "<group>";
 		};
+		V0REC00000000000000GRP01 /* Recording */ = {
+			isa = PBXGroup;
+			children = (
+				E43E566C32F3043113B89FD6 /* RecordingModels.swift */,
+				BAD7B588B26ADC2A58CA958E /* RecordingChunkPlanner.swift */,
+				25C99227AA66BC819ED1EFC4 /* RecordingStore.swift */,
+				071F3CECC9D059D26019B4F5 /* TranscriptAssembler.swift */,
+				E40B7259094DEFC93FC26CB9 /* MinutesPromptBuilder.swift */,
+				01A01E82F7D6EAB170CB1C66 /* RecordingAudioIO.swift */,
+				8F1491B2C6C15D8FCC903F0D /* RecordingSession.swift */,
+				84F98E89F3452A6D31630E60 /* RecordingController.swift */,
+				B9EB447FFCABE6596FE420AE /* RecordingTranscriber.swift */,
+				CFE5C01B3E77B310B172CA22 /* MinutesGenerator.swift */,
+			);
+			path = Recording;
+			sourceTree = "<group>";
+		};
+		V0REC00000000000000GRP02 /* Recording */ = {
+			isa = PBXGroup;
+			children = (
+				3DEBCEF91060C8DF14CA6C43 /* RecordingPresenter.swift */,
+				14782B927FE339084F81F492 /* RecordingListView.swift */,
+				E9E62056DDEE2D96E86E5A3B /* RecordingRecorderView.swift */,
+				F57A7FBEA11368012AF9A1E5 /* RecordingDetailView.swift */,
+			);
+			path = Recording;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 		E5WA00050 /* LeoWatch */ = {
@@ -3007,6 +3090,7 @@
 				E5WA00209 /* WatchStreaming.swift */,
 				E5WA00210 /* WatchMCPClient.swift */,
 				E5WA00211 /* WatchAgentLoop.swift */,
+				01127995AF5BFCF73F286A20 /* WatchRecordingRemoteView.swift */,
 			);
 			path = LeoWatch;
 			sourceTree = "<group>";
@@ -3026,6 +3110,8 @@
 				E5WA00109 /* WatchStreaming.swift in Sources */,
 				E5WA00110 /* WatchMCPClient.swift in Sources */,
 				E5WA00111 /* WatchAgentLoop.swift in Sources */,
+				8EA772E132D17960556AA52A /* WatchRecordingRemote.swift in Sources */,
+				51CBC55507BEC436918E5674 /* WatchRecordingRemoteView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3508,6 +3594,15 @@
 				E5E7AEEF0B1AE86527E36437 /* IMAPClient.swift in Sources */,
 				E56BEBDBC94EC484ACC8DBE1 /* MailAccountStore.swift in Sources */,
 				E56A439125632EE00B93B5D3 /* MailService.swift in Sources */,
+				B8B4257BF22BCB0C27A58442 /* RecordingModels.swift in Sources */,
+				184CE59BFACC71DFFF6728F7 /* RecordingChunkPlanner.swift in Sources */,
+				25696AFC50D1A61435F64690 /* RecordingStore.swift in Sources */,
+				0A55C48C56104EAD49AEF19F /* TranscriptAssembler.swift in Sources */,
+				31854F0DE8581C31F7E75BD8 /* MinutesPromptBuilder.swift in Sources */,
+				76E333C638867F78C1BBEB1D /* RecordingAudioIO.swift in Sources */,
+				B72DD88AD398E7A8D71DA5FE /* FloatRingBuffer.swift in Sources */,
+				3460A53460507DD3A5E539E6 /* RecordingActivityAttributes.swift in Sources */,
+				06D542EF3D67CEAF7548E1D8 /* WatchRecordingRemote.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4124,6 +4219,23 @@
 				E57CD6950AD692B8CB385CE1 /* MailAccountStore.swift in Sources */,
 				E50E3DE034E41A79F378F810 /* MailService.swift in Sources */,
 				E5765D01962FD682F367D27D /* MailAccountsView.swift in Sources */,
+				6F4C87986CB1BB15F9E996C9 /* RecordingModels.swift in Sources */,
+				D3E546C9D7E5829027ADC8EF /* RecordingChunkPlanner.swift in Sources */,
+				2C67229BB8DEEFEFD4FF0271 /* RecordingStore.swift in Sources */,
+				C3BFAA877D224CF5B0456000 /* TranscriptAssembler.swift in Sources */,
+				B9AFEE36C4C28ED10D364DC3 /* MinutesPromptBuilder.swift in Sources */,
+				7230F4FC4E5D18029FB159DC /* RecordingAudioIO.swift in Sources */,
+				295BAE817107EF0973E47D3C /* FloatRingBuffer.swift in Sources */,
+				4B01505602E3C27970F0CBC3 /* RecordingActivityAttributes.swift in Sources */,
+				5325C3A1CFED5894BE01809F /* WatchRecordingRemote.swift in Sources */,
+				C351FD78B63ABE851A0559D2 /* RecordingSession.swift in Sources */,
+				BE621F6CB9BCB707AE678F98 /* RecordingController.swift in Sources */,
+				FAE8E3A504C30487679A9432 /* RecordingTranscriber.swift in Sources */,
+				45833D4AF9BAAEDBC699C6D7 /* MinutesGenerator.swift in Sources */,
+				1AB7E8546721743C9AE28A56 /* RecordingPresenter.swift in Sources */,
+				B4C10D6C98BD2542A1123ED7 /* RecordingListView.swift in Sources */,
+				E2A85EDBB210823CB95BA433 /* RecordingRecorderView.swift in Sources */,
+				3CF0FE5D0A813923A67BF4F8 /* RecordingDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4161,6 +4273,8 @@
 				E5H000003 /* AgentActivityAttributes.swift in Sources */,
 				E5PCG0013 /* PaperclipActivityAttributes.swift in Sources */,
 				E5AT00003 /* AudioTogglePlaybackIntent.swift in Sources */,
+				3A6144B1BC5CE896D868EA56 /* RecordingActivityAttributes.swift in Sources */,
+				7E891949AC83D7C350DCC6A1 /* RecordingLiveActivityWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -17,6 +17,9 @@ struct BackupFileTreeExporter {
     var isExcludedDirectory: @Sendable (String) -> Bool = { _ in false }
     /// How long to wait for one iCloud placeholder to download.
     var downloadTimeout: TimeInterval = 20
+    /// [V-rec] Trees never packaged, wherever they turn up (a symlinked or
+    /// mis-rooted walk included): recording audio stays on this device only.
+    var excludedRoots: [URL] = [RecordingStore.defaultRoot]
 
     struct Result {
         var filesIncluded = 0
@@ -34,6 +37,7 @@ struct BackupFileTreeExporter {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else { return result }
+        guard !isExcludedRoot(root) else { return result }
 
         let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey,
                                       .fileSizeKey, .contentModificationDateKey]
@@ -50,6 +54,12 @@ struct BackupFileTreeExporter {
 
             // Never follow links out of the tree, never package a package.
             if values?.isSymbolicLink == true { continue }
+            // Directories only: the excluded trees are directories, and one
+            // check per directory keeps the per-file cost of a big backup flat.
+            if values?.isDirectory == true, isExcludedRoot(url) {
+                enumerator.skipDescendants()
+                continue
+            }
             if isBackupArtifact(rel) {
                 if values?.isDirectory == true { enumerator.skipDescendants() }
                 continue
@@ -101,6 +111,10 @@ struct BackupFileTreeExporter {
             }
         }
         return result
+    }
+
+    private func isExcludedRoot(_ url: URL) -> Bool {
+        excludedRoots.contains { RecordingStore(root: $0).contains(url) }
     }
 
     private func isBackupArtifact(_ rel: String) -> Bool {

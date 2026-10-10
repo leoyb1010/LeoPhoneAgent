@@ -24,6 +24,8 @@ struct WatchRootView: View {
         TabView {
             AskPage()
             HistoryPage()
+            // [V-watch] 遥控 iPhone 录音(只发指令,不传音频)。
+            WatchRecordingRemoteView()
         }
         .tabViewStyle(.verticalPage)
         .reducedResourceAware()

@@ -7,10 +7,15 @@ import UniformTypeIdentifiers
 final class ShareViewModel {
     private var pendingItems: [PendingShare.Item] = []
     private let inlineTextLimit = 1000
+    /// [V-rec] 分享进来的音频(暂存名 `rec-xxxxxxxx_原名`)。可以转成录音纪要,也可以照常发到对话。
+    private(set) var audioFileNames: [String] = []
+    var hasAudio: Bool { !audioFileNames.isEmpty }
+    static let pendingRecordingImportsKey = "recording.pendingImports"
 
     /// Process all extension items from the share context.
     func processExtensionItems(_ extensionItems: [NSExtensionItem]) async {
         pendingItems.removeAll()
+        audioFileNames.removeAll()
 
         let fm = FileManager.default
         if let dir = SharedContainerStore.sharedFileDirectory {
@@ -25,6 +30,11 @@ final class ShareViewModel {
             // 摘录就变成了"又收藏了一遍整篇文章"。两个都在就两个都收:
             // 文字是内容,地址是出处。
             for provider in attachments {
+                // [V-rec] 语音备忘录、文件 App 里的录音:先认成音频(public.audio)。
+                if provider.hasItemConformingToTypeIdentifier(UTType.audio.identifier) {
+                    await processAudio(provider)
+                    continue
+                }
                 let hasURL = provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
                 let hasText = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
                 if hasURL, hasText {
@@ -76,6 +86,17 @@ final class ShareViewModel {
         return true
     }
 
+    /// [V-rec] 转成录音:音频名单写进 App Group,主 App 经 `leophoneagent://recordings/import` 导入;
+    /// 这些音频不再作为对话附件。返回是否有音频。
+    func saveRecordingImports() -> Bool {
+        guard hasAudio, let defaults = SharedContainerStore.sharedDefaults else { return false }
+        let existing = defaults.stringArray(forKey: Self.pendingRecordingImportsKey) ?? []
+        defaults.set(Array((existing + audioFileNames).suffix(10)), forKey: Self.pendingRecordingImportsKey)
+        let names = Set(audioFileNames)
+        pendingItems.removeAll { $0.kind == .attachment && names.contains($0.value) }
+        return true
+    }
+
     /// [T-collections] 收藏模式:把已处理的物料交给收藏库,不经 pendingShare。
     func builtShare() -> PendingShare {
         PendingShare(items: pendingItems, timestamp: Date())
@@ -108,6 +129,27 @@ final class ShareViewModel {
         let prefix = url.pathExtension.isEmpty ? "shared" : "shared-file"
         let fileName = "\(prefix)-\(UUID().uuidString.prefix(8))_\(originalName)"
         copyItemIfPossible(from: url, fileName: fileName)
+    }
+
+    private func processAudio(_ provider: NSItemProvider) async {
+        guard let item = try? await provider.loadItem(forTypeIdentifier: UTType.audio.identifier) else { return }
+        let ext = provider.registeredTypeIdentifiers.compactMap { UTType($0) }
+            .first { $0.conforms(to: .audio) }?.preferredFilenameExtension ?? "m4a"
+        let prefix = "rec-\(UUID().uuidString.prefix(8))_"
+        if let url = item as? URL, url.isFileURL {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            let name = url.lastPathComponent.isEmpty ? "audio.\(ext)" : url.lastPathComponent
+            let fileName = prefix + name
+            let before = pendingItems.count
+            copyItemIfPossible(from: url, fileName: fileName)
+            if pendingItems.count > before { audioFileNames.append(fileName) }
+        } else if let data = item as? Data {
+            let fileName = prefix + "audio.\(ext)"
+            let before = pendingItems.count
+            writeDataIfPossible(data, fileName: fileName)
+            if pendingItems.count > before { audioFileNames.append(fileName) }
+        }
     }
 
     private func processText(_ provider: NSItemProvider) async {

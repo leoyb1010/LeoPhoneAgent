@@ -57,6 +57,10 @@ assert local_write in new_chat[:new_chat.index('makeNewSessionId')], 'quick acti
 start = content.index('.onChange(of: deepLink.pendingSettingsTarget')
 end = content.index('.onChange(of: deepLink.pendingCollections', start)
 observer = content[start:end]
+# [V-rec] 一条链接永远不能替你打开麦克风:录音深链的处理函数里不许出现开始录音。
+presenter = (root/'src/ios/Views/Recording/RecordingPresenter.swift').read_text()
+deep = presenter[presenter.index('static func handleDeepLink'):presenter.index('static func present(')]
+assert 'startRecording' not in deep, 'a recordings deep link must never start recording'
 swift = r'''
 import Foundation
 struct AppLogger { func info(_ message: String) {}; func warning(_ message: String) {} }
@@ -78,6 +82,8 @@ final class ShortcutCallbackStore { static let shared = ShortcutCallbackStore();
  @discardableResult func handle(url: URL) -> Bool { false } }
 @MainActor final class PaperclipNavigationInbox { static let shared = PaperclipNavigationInbox(); var pending: PaperclipDeepLink.Target? }
 @MainActor final class ShareCoordinator { var raised = 0; func raisePendingShare() { raised += 1 } }
+// [V-rec] 录音深链只打开页面 / 导入分享来的音频;路由只把路径交给 RecordingPresenter。
+@MainActor enum RecordingPresenter { static var paths: [String] = []; static func handleDeepLink(path: String) { paths.append(path) } }
 @MainActor final class QuickActionRouter {
  static let shared = QuickActionRouter(); var newCalls = 0; var voiceCalls = 0; var quickTasks: [String] = []
  var newChatTrigger = 0
@@ -210,6 +216,11 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
    expect(UserDefaults.standard.string(forKey: key) == "local", value + " stayed in hidden Paperclip workspace")
   }
   expect(QuickActionRouter.shared.quickTasks == ["fixture-task", "fixture-task"], "quick task action lost")
+  for value in ["leophoneagent://recordings", "leophoneagent://recordings/recorder", "leophoneagent://recording/import"] {
+   reset(); route(value)
+   expect(UserDefaults.standard.string(forKey: key) == "local", value + " stayed in hidden Paperclip workspace")
+  }
+  expect(RecordingPresenter.paths == ["", "recorder", "import"], "recording links not routed to the presenter")
   expect(share.raised == 1, "share route did not raise pending share")
   expect(DeepLinkCoordinator.shared.showAlarmList && DeepLinkCoordinator.shared.showTerminal && DeepLinkCoordinator.shared.pendingCollections, "local presentation flags not set")
   expect(DeepLinkCoordinator.shared.terminalInitCommand == "ls", "terminal command not prefilled")

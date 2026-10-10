@@ -13,8 +13,8 @@
 "NSHealthUpdateUsageDescription" = "LeoBot 需要寫入健康數據的權限，以便 AI 智能體代您記錄步數、體重和飲水量等數據。";
 "NSContactsUsageDescription" = "LeoBot 需要訪問通訊錄，以便 AI 智能體代您搜索、查看和管理聯繫人。";
 "NSAppleMusicUsageDescription" = "LeoBot 需要訪問媒體資料庫，以便 AI 智能體搜索音樂並代您控制播放。";
-"NSMicrophoneUsageDescription" = "LeoBot 需要使用麥克風進行語音轉文字輸入。";
-"NSSpeechRecognitionUsageDescription" = "LeoBot 使用語音識別將您的語音轉換爲文字消息。";
+"NSMicrophoneUsageDescription" = "LeoBot 使用麥克風進行語音輸入,以及錄製你開始的錄音並轉寫成文字和紀要。錄音音訊只保存在這台裝置上。";
+"NSSpeechRecognitionUsageDescription" = "LeoBot 使用語音辨識把你的語音和錄音轉成文字。";
 "NSHomeKitUsageDescription" = "LeoBot 需要訪問 HomeKit，以便 AI 智能體代您查詢和控制智能家居設備。";
 "NSAlarmKitUsageDescription" = "LeoBot 使用鬧鐘功能，以便 AI 智能體代您設置鬧鐘和計時器。";
 "NSLocalNetworkUsageDescription" = "LeoBot 使用本機網絡連接安全 Shell 工作區以及你主動連接的服務。";
