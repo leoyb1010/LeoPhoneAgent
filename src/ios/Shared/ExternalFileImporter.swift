@@ -90,6 +90,8 @@ enum ExternalFileImporter {
                 RecordingPresenter.present(id.map { .detail($0) } ?? .list)
             }
             return true
+        }
+
         guard PendingShare.admitsAttachment(byteCount: byteCount) else {
             importLog.warning("[Share] ingest: file over the size limit — not copied")
             return false
