@@ -2,7 +2,7 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.60.0%20(158)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.61.0%20(159)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.8.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -188,8 +188,9 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.60.0 (158)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.61.0 (159)`;Bundle ID `com.leoyuan.leophoneagent`
 - 2026-10-07 Paperclip 中文发行层 1.1.8：全站 UI 审计（竖排/遮挡/裸语法/中英混排/窄屏）、页面可用性（删除组织 500、登录跳转 7.5 s、轮询降 80%、已取消任务收敛）、源站压缩；见 CHANGELOG。
+- 2026-10-10 1.61.0：第三轮——启动/回前台/聊天渲染提速，输入与同步加固，新增录音纪要、提问卡片、工具步骤折叠、本机标题与追问、服务商余额、自我排程。
 - 2026-10-09 1.60.0：移植 OpenMinis v1.14（沙箱内核调速、会话列表与渲染提速、精简旧上下文、子代理、备份与恢复、思考规则与图片识别模型组、同步补齐）；Mac 舰队改为默认隐藏的高级功能。
 - 2026-10-06 1.59.0 / Mac 1.8.0：产品改名 LeoBot，新机器人图标；新增 leobot:// 链接（lobe:// 与 leophoneagent:// 继续可用），覆盖升级、数据保留。
 - 2026-10-06 1.58.0 / Mac 1.7.0：产品改名 LOBE（只改用户可见名称，内部标识与数据不变，覆盖升级），新图标，Siri 简称 LB，新增 lobe:// 链接。
