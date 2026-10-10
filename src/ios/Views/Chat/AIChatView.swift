@@ -3487,6 +3487,40 @@ struct AIChatView: View {
         return AnyView(field)
     }
 
+    /// 回复结束后本机模型给出的追问建议(最多 3 条)。点一下填进输入框,不自动发送;
+    /// 流式中、用户已开始输入时不显示。AnyView 原因同 composerQuickTaskStrip。
+    private var followUpSuggestionStrip: AnyView {
+        let suggestions = vm.visibleFollowUpSuggestions
+        guard !suggestions.isEmpty else { return AnyView(EmptyView()) }
+        let strip = ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(suggestions, id: \.self) { text in
+                    Button {
+                        vm.applyFollowUpSuggestion(text)
+                        inputFocused = true
+                    } label: {
+                        Text(text)
+                            .font(.footnote)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color(UIColor.secondarySystemFill)))
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text("填入输入框,不会自动发送"))
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("建议追问"))
+        .transition(.opacity)
+        return AnyView(strip)
+    }
+
     /// User-selected task templates rendered as a compact native control row.
     /// AnyView keeps this optional branch out of the composer's already-deep
     /// generic metadata chain (the same constraint as inputBottomRow).
@@ -3875,6 +3909,7 @@ struct AIChatView: View {
                     .transition(.opacity)
                 }
                 if !voiceInputActive, vm.editingMessageIndex == nil, !isShortHeight {
+                    followUpSuggestionStrip
                     composerQuickTaskStrip
                 }
 

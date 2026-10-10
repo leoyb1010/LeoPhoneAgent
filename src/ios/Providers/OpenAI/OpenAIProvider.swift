@@ -83,6 +83,8 @@ final class OpenAIProvider: LLMProvider {
     /// thinking resolver can load user rules pinned to it. nil outside the factory
     /// (title-gen references, tests) — those resolve against global rules only.
     var providerInstanceId: String?
+    /// 该实例设置的「响应超时」(秒);nil = 不改原来的请求超时。工厂对没有实例标记的路径直接赋值。
+    var requestTimeoutOverride: TimeInterval?
 
     /// [T-model-use-image-passthrough GH#62] Arbitrary extra fields merged into the
     /// /images/generations JSON body, so `minis-model-use` can pass provider-specific
@@ -600,6 +602,10 @@ final class OpenAIProvider: LLMProvider {
 
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let timeout = requestTimeoutOverride
+            ?? providerInstanceId.flatMap({ ProviderResponseTimeout.stored(instanceId: $0) }).map(TimeInterval.init) {
+            request.timeoutInterval = timeout
+        }
         for (key, value) in extraHeaders {
             request.setValue(value, forHTTPHeaderField: key)
         }

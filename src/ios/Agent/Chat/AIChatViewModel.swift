@@ -611,6 +611,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     @Published var actionRouteChip: String = ""
 
+    /// 回复结束后本机模型给出的追问建议(最多 3 条),只属于 `followUpSuggestionsMessageId` 那条回复。
+    @Published var followUpSuggestions: [String] = []
+    var followUpSuggestionsMessageId: UUID?
+    var followUpSuggestionTask: Task<Void, Never>?
+    /// 当前流式请求的停滞判定秒数:按所用服务商实例的「响应超时」,没设置就是 120。
+    var streamStallLimit: TimeInterval = ProviderResponseTimeout.defaultStallSeconds
+
     @Published var isProcessing = false {
         didSet {
             _deinitSnapshot = "isProcessing=\(isProcessing) session=\(sessionId ?? "nil") draft=\(draftId ?? "nil")"
@@ -630,6 +637,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// without changing the proven start ordering.
     private func handleProcessingStarted() {
         nativeRunOutcome = nil
+        clearFollowUpSuggestions()
         // [B8] A new run supersedes the previous failure's typed retry.
         typedErrorRetry = nil
         // Agent loop starting — defer iCloud sync sends until completion
@@ -694,6 +702,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if #available(iOS 17.0, *) {
             SkillFilesystemNotifier.shared.drainIfDirty(reason: "agent turn finished")
         }
+        scheduleFollowUpSuggestions()
     }
 
     @Published var canResume = false {

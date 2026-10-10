@@ -214,13 +214,16 @@ enum ModelSwitcher {
             }
     }
 
-    /// 模糊匹配:"/model kimi" 这种只打几个字母就要命中。
+    /// 模糊匹配:"/model kimi" 这种只打几个字母就要命中;结果按相关度排序(精确 ID 最先)。
     static func search(_ query: String, store: ProviderConfigStore) -> [Choice] {
-        allChoices(store: store).filter { choice in
+        ModelSearchScorer.rank(allChoices(store: store), query: query) { choice in
             if choice.kind == .entry, let entry = store.entry(for: choice.id) {
-                return ModelCatalog.matches(query, entry: entry, providerLabel: choice.subtitle)
+                return ModelSearchScorer.Fields(displayName: entry.model.displayName,
+                                                baseDisplayName: entry.baseModel.displayName,
+                                                modelId: entry.baseModel.id, providerLabel: choice.subtitle)
             }
-            return ModelCatalog.matches(query, text: choice.title + " " + choice.subtitle)
+            return ModelSearchScorer.Fields(displayName: choice.title, baseDisplayName: "", modelId: "",
+                                            providerLabel: choice.subtitle)
         }
     }
 

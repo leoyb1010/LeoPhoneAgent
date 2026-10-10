@@ -101,28 +101,33 @@ enum LLMProviderFactory {
         // otherwise send the app default (LeoPhoneAgent/<marketing>) so the SDK
         // (which sets no UA itself) doesn't fall back to URLSession's build-number default.
         let ua = (instance.supportsCustomUserAgent(manualToken: manualToken) ? instance.effectiveCustomUserAgent : nil) ?? MinisUserAgent.default
+        let timeout = ProviderResponseTimeout.requestSeconds(instanceId: instance.id)
         // A retired subscription-login instance has no manual token and falls
         // through to an empty key; entry points reject it via `retiredSignInNotice`.
         if let manualToken {
-            return AnthropicProvider(manualToken: manualToken, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
+            return AnthropicProvider(manualToken: manualToken, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua, requestTimeout: timeout)
         }
         let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
         // Relays and coding plans behind a custom base often want the key as
         // `Authorization: Bearer`; send it that way too (x-api-key stays).
         if customBase != nil {
-            return AnthropicProvider(manualToken: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
+            return AnthropicProvider(manualToken: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua, requestTimeout: timeout)
         }
-        return AnthropicProvider(apiKey: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua)
+        return AnthropicProvider(apiKey: key, model: model, basePath: customBase, appendV1Suffix: appendV1, customUserAgent: ua, requestTimeout: timeout)
     }
 
     static func makeGeminiProvider(instance: ProviderInstance, model: LLMModel) -> GeminiProvider {
         let manualToken = instance.storedManualToken()
         let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
+        let provider: GeminiProvider
         if let manualToken {
-            return GeminiProvider(apiKey: manualToken, model: model, customBasePath: customBase)
+            provider = GeminiProvider(apiKey: manualToken, model: model, customBasePath: customBase)
+        } else {
+            let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
+            provider = GeminiProvider(apiKey: key, model: model, customBasePath: customBase)
         }
-        let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-        return GeminiProvider(apiKey: key, model: model, customBasePath: customBase)
+        provider.requestTimeoutOverride = ProviderResponseTimeout.stored(instanceId: instance.id).map(TimeInterval.init)
+        return provider
     }
 
     /// OpenCode Go: one key, three wire protocols chosen by model family.
@@ -143,7 +148,8 @@ enum LLMProviderFactory {
         }
         switch OpenCodeGo.wireProtocol(for: model.id) {
         case .anthropicMessages:
-            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, perRequestHeaders: resolve)
+            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, perRequestHeaders: resolve,
+                                     requestTimeout: ProviderResponseTimeout.requestSeconds(instanceId: instance.id))
         case .responses:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
             provider.forceResponsesAPI = true
@@ -191,6 +197,7 @@ enum LLMProviderFactory {
                 model: model
             )
             provider.codexAccountId = CodexOAuthManager.shared.accountId(instanceId: iid)
+            provider.requestTimeoutOverride = ProviderResponseTimeout.stored(instanceId: iid).map(TimeInterval.init)
             return provider
         }
     }
@@ -239,6 +246,7 @@ enum LLMProviderFactory {
             )
             provider.forceResponsesAPI = true
             provider.codexAccountId = CodexOAuthManager.shared.accountId(instanceId: iid)
+            provider.requestTimeoutOverride = ProviderResponseTimeout.stored(instanceId: iid).map(TimeInterval.init)
             return provider
         }
     }

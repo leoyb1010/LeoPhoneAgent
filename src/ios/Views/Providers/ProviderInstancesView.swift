@@ -80,6 +80,7 @@ struct ProviderInstancesView: View {
         }
         .navigationTitle("Providers")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { ProviderBalanceStore.shared.refreshIfStale(store.instances) }
         .toolbar {
             if !store.instances.isEmpty {
                 ToolbarItem(placement: .topBarLeading) {
@@ -207,6 +208,7 @@ struct ProviderInstancesView: View {
 private struct InstanceRow: View {
     let instance: ProviderInstance
     @ObservedObject private var store = ProviderConfigStore.shared
+    @ObservedObject private var balances = ProviderBalanceStore.shared
     /// 钥匙 / 登录状态只在出现时和 authRevision 变化时查一次钥匙串;以前每次重画每行要查 2–6 次。
     @State private var cachedStatus: CredentialStatus?
 
@@ -268,6 +270,11 @@ private struct InstanceRow: View {
                     Text(String(localized: "\(modelCount) models"))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                }
+                if let balance = balances.balance(for: instance.id) {
+                    Text("余额 \(ProviderBalanceRules.display(balance))")
+                        .font(.caption2)
+                        .foregroundStyle(balances.isLow(instanceId: instance.id) ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.tertiary))
                 }
             }
 

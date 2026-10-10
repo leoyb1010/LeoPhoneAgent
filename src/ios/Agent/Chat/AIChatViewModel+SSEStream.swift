@@ -289,7 +289,8 @@ extension AIChatViewModel {
             return "\(raw)-\(n)"
         }
 
-        let stallTimeoutSeconds: TimeInterval = 120
+        // 按所用服务商实例的「响应超时」;没设置时就是原来的 120 秒。
+        let stallTimeoutSeconds = await MainActor.run { self.streamStallLimit }
         var _streamError: Error? = nil
         let iterBox = StreamIteratorBox(stream)
         // [T-image-output] 模型直接产出的图片:先落盘成本会话的资源,再以 markdown 图片

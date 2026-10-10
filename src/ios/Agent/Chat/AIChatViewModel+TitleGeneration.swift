@@ -89,6 +89,8 @@ extension AIChatViewModel {
         // Captured for the fallback-title path below (full first-user content).
         let firstUserRaw = firstUser.content
         let userTurnCount = userMessages.count
+        // 端侧标题只喂首轮提问 + 回复开头(LocalBrain 内部再按窗口裁剪)。
+        let replyStart = String(responseText.prefix(2_000))
 
         titleGenAttempts += 1
         isTitleGenerating = true
@@ -96,7 +98,7 @@ extension AIChatViewModel {
         let attempt = titleGenAttempts
         let subEntry = resolveSubEntry()
         logger.info("[TitleGen] Starting title generation attempt \(attempt)/3 for session \(sessionId ?? "nil"), subEntry: \(subEntry?.model.id ?? "nil")")
-        Task { [weak self, sessionId, subEntry, firstUserRaw, summary] in
+        Task { [weak self, sessionId, subEntry, firstUserRaw, summary, replyStart] in
             do {
                 // If title already exists (e.g. set by a previous async Task), stop trying
                 if let session = await ChatStore.shared.getSession(sessionId), session.title != nil {
@@ -108,9 +110,9 @@ extension AIChatViewModel {
                 }
 
                 logger.info("[TitleGen] Summary length: \(summary.count) chars, userTurns=\(userTurnCount)")
-                let (title, category) = try await Self.callSubModelForTitle(
-                    conversationSummary: summary,
-                    subEntry: subEntry
+                let (title, category) = try await Self.titleOnDeviceFirst(
+                    firstUser: firstUserRaw, replyStart: replyStart,
+                    conversationSummary: summary, subEntry: subEntry
                 )
                 let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
@@ -243,14 +245,29 @@ extension AIChatViewModel {
             }
         }
 
-        let (title, category) = try await callSubModelForTitle(
-            conversationSummary: summary,
-            subEntry: subEntry
+        let (title, category) = try await titleOnDeviceFirst(
+            firstUser: extractText(firstUser, limit: 2_000),
+            replyStart: extractText(firstAssistant, limit: 2_000),
+            conversationSummary: summary, subEntry: subEntry
         )
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         guard !trimmed.isEmpty else { return }
         await ChatStore.shared.updateSessionTitle(sessionId, title: trimmed, category: category)
+    }
+
+    /// 先用本机模型(只看首轮提问 + 回复开头);不可用、超时或输出不合格时走原来的云端子模型。
+    static func titleOnDeviceFirst(
+        firstUser: String, replyStart: String,
+        conversationSummary: String, subEntry: ModelEntry?
+    ) async throws -> (String, String?) {
+        if let local = await LocalBrain.shared.generateSessionTitle(
+            firstUser: firstUser, replyStart: replyStart, languageHint: titleLanguageInjection()) {
+            logger.info("[TitleGen] source=on-device titleLength=\(local.title.count) hasCategory=\(local.category != nil)")
+            return (local.title, local.category)
+        }
+        logger.info("[TitleGen] source=cloud (on-device unavailable or rejected: \(LocalBrain.shared.isReady ? "rejected" : "unavailable"))")
+        return try await callSubModelForTitle(conversationSummary: conversationSummary, subEntry: subEntry)
     }
 
     /// Build a lightweight provider for the sub model and call it to generate a title and category.

@@ -200,6 +200,33 @@ enum ModelsDevAPI {
         loadRegistry()?[providerKey]?.models[modelId]?.provider?.npm
     }
 
+    // MARK: - Release dates (model picker ordering)
+
+    private static var releaseDateCache: [String: String] = [:]
+    private static var releaseDateMisses: Set<String> = []
+    private static var releaseDateCacheBuiltFrom: Date?
+    private static let releaseDateLock = NSLock()
+
+    /// models.dev 发布日期(YYYY-MM-DD),查不到返回 nil。用与 `enrichModel` 相同的解析器,
+    /// 结果按注册表时间戳缓存,选择器每次重画只做字典查找。
+    static func releaseDate(for model: LLMModel) -> String? {
+        let key = model.provider + "\u{1F}" + model.id
+        releaseDateLock.lock()
+        if releaseDateCacheBuiltFrom != cacheTimestamp {
+            releaseDateCache.removeAll()
+            releaseDateMisses.removeAll()
+            releaseDateCacheBuiltFrom = cacheTimestamp
+        }
+        if let hit = releaseDateCache[key] { releaseDateLock.unlock(); return hit }
+        if releaseDateMisses.contains(key) { releaseDateLock.unlock(); return nil }
+        releaseDateLock.unlock()
+        let date = loadRegistry().flatMap { resolveDevModel(for: model, in: $0)?.model.releaseDate }
+        releaseDateLock.lock()
+        if let date { releaseDateCache[key] = date } else { releaseDateMisses.insert(key) }
+        releaseDateLock.unlock()
+        return date
+    }
+
     /// Enrich an array of models in bulk. Same resolver as `enrichModel`, so a single
     /// model and a bulk refresh never disagree about the same id.
     static func enrichModels(_ models: [LLMModel]) -> [LLMModel] {
@@ -444,10 +471,14 @@ private struct ModelsDevModel: Decodable {
     /// non-array value reads as "no opinion" instead of failing the whole registry.
     private let reasoningOptionsField: ModelsDevReasoningOptionList?
     var reasoningOptions: [ModelsDevReasoningOption]? { reasoningOptionsField?.items }
+    /// models.dev `release_date`(YYYY-MM-DD)。宽松解码:类型不对只当没有,不让整份注册表解析失败。
+    private let releaseDateField: ModelsDevLenientString?
+    var releaseDate: String? { releaseDateField?.value }
 
     enum CodingKeys: String, CodingKey {
         case id, name, family, modalities, limit, reasoning, interleaved, provider
         case reasoningOptionsField = "reasoning_options"
+        case releaseDateField = "release_date"
     }
 
     /// Effort tiers declared by the catalog, or nil when the model exposes no
@@ -483,6 +514,13 @@ private struct ModelsDevModel: Decodable {
         if out.contains("audio") { result.insert(.audioOutput) }
         if out.contains("video") { result.insert(.videoOutput) }
         return result.isEmpty ? nil : result
+    }
+}
+
+private struct ModelsDevLenientString: Decodable {
+    let value: String?
+    init(from decoder: Decoder) throws {
+        value = try? decoder.singleValueContainer().decode(String.self)
     }
 }
 

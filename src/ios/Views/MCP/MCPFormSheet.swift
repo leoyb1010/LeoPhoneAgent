@@ -59,6 +59,8 @@ struct MCPFormSheet: View {
     @State private var oauthTokenEndpoint: String = ""
     @State private var oauthScopes: String = ""
     @State private var oauthRedirectURI: String = ""
+    /// "static"(手填)或 "dynamic"(自动注册得到的 Client ID),随配置保存。
+    @State private var oauthMode: String = "static"
     @State private var isAuthorized = false
     @State private var isAuthorizing = false
     @State private var oauthError: String?
@@ -343,13 +345,16 @@ struct MCPFormSheet: View {
                             Text(isAuthorized ? String(localized: "Re-authorize") : String(localized: "Authorize…"))
                         }
                     }
-                    .disabled(isAuthorizing || !canSave || oauthClientId.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(isAuthorizing || !canSave)
                     .buttonStyle(.glassProminent)
                     .controlSize(.small)
                 }
                 // [T-mcp-form-authorize-saves] The flow needs the persisted
                 // server (resource URI, Keychain secret), so it saves first — say so.
                 Text("Authorizing saves this server with the settings above first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Client ID 留空时,会从服务器自动发现授权端点并注册客户端;找不到再手动填写。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let oauthError {
@@ -379,7 +384,21 @@ struct MCPFormSheet: View {
         MCPOAuthController.setClientSecret(oauthClientSecret, server: config.id)
         guard let oauth = config.oauth else { return }
         do {
-            try await MCPOAuthController.shared.authorize(server: config.id, oauth: oauth)
+            // 没填 Client ID / 端点:先按服务器声明的元数据自动发现 + 动态注册,结果写回表单和配置。
+            let resolved = try await MCPOAuthController.shared.resolveConfigIfNeeded(
+                server: config.id, serverURL: config.url, oauth: oauth)
+            if resolved != oauth {
+                oauthClientId = resolved.clientId
+                oauthAuthEndpoint = resolved.authorizationEndpoint
+                oauthTokenEndpoint = resolved.tokenEndpoint
+                oauthScopes = resolved.scopes ?? ""
+                oauthMode = resolved.mode
+                oauthClientSecret = MCPOAuthController.clientSecret(server: config.id) ?? oauthClientSecret
+                var updated = config
+                updated.oauth = resolved
+                store.add(updated)
+            }
+            try await MCPOAuthController.shared.authorize(server: config.id, oauth: resolved)
             isAuthorized = true
         } catch MCPOAuthController.OAuthError.cancelled {
             // 用户自己关掉了授权页:不是错误,不出红字。
@@ -573,6 +592,7 @@ struct MCPFormSheet: View {
                 oauthTokenEndpoint = oauth.tokenEndpoint
                 oauthScopes = oauth.scopes ?? ""
                 oauthRedirectURI = oauth.redirectURI ?? ""
+                oauthMode = oauth.mode
                 // [T-mcp-cli-oauth-flags] Pull in a CLI-seeded secret before
                 // reading the Keychain, so `leophoneagent-mcp-cli add
                 // --oauth-client-secret` shows up pre-filled here.
@@ -600,6 +620,7 @@ struct MCPFormSheet: View {
             // the secret is Keychain-only (written on Save/Authorize).
             if authMode == .oauthStatic {
                 var oauth = MCPOAuthConfig()
+                oauth.mode = oauthMode
                 oauth.clientId = oauthClientId.trimmingCharacters(in: .whitespaces)
                 oauth.authorizationEndpoint = oauthAuthEndpoint.trimmingCharacters(in: .whitespaces)
                 oauth.tokenEndpoint = oauthTokenEndpoint.trimmingCharacters(in: .whitespaces)

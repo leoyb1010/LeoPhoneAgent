@@ -31,6 +31,8 @@ final class GeminiProvider: LLMProvider {
     /// Extra generation config fields to merge into `generationConfig` (e.g. aspect ratio, resolution).
     /// Set by callers like ModelUseOffloadBridge before calling sendMessage.
     var extraGenerationConfig: [String: Any]?
+    /// 该实例设置的「响应超时」(秒),只作用于流式请求;nil = 原来的 600 秒会话超时。
+    var requestTimeoutOverride: TimeInterval?
 
     init(apiKey: String, model: LLMModel = .gemini25Flash, customBasePath: String? = nil) {
         self.model = model
@@ -426,6 +428,9 @@ final class GeminiProvider: LLMProvider {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        if path.hasPrefix("streamGenerateContent"), let timeout = requestTimeoutOverride {
+            request.timeoutInterval = timeout
+        }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // Without an explicit UA URLSession sends its build-number default.
         request.setValue(MinisUserAgent.default, forHTTPHeaderField: "User-Agent")
