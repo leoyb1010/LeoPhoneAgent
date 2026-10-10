@@ -319,6 +319,7 @@ func renderMarkdownBlocks(_ blocks: [BlockNode]) -> NSAttributedString {
 /// [T-r3-B21] Display form of a reply whose parsed blocks came from
 /// `MarkdownRenderCap.head(source)`: the rendered head plus, past the cap, the
 /// plain monospaced overflow.
+@MainActor
 func renderMarkdownBlocksForDisplay(_ blocks: [BlockNode], source: String) -> NSAttributedString {
     SelectableMarkdownView.appendingRenderCapOverflow(MarkdownRenderCap.split(source),
                                                       to: renderMarkdownBlocks(blocks))
