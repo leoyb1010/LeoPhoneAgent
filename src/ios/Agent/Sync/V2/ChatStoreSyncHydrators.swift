@@ -25,7 +25,7 @@ enum ChatStoreSyncHydrators {
             recordType: "SessionV2",
             builder: { id in await buildSession(id: id) },
             merger: { record in try await mergeSession(record: record) },
-            deletionApplier: { id in try await deleteSession(id: id) }
+            datedDeletionApplier: { id, updatedAt in try await deleteSession(id: id, updatedAt: updatedAt) }
         )
 
         h.register(
@@ -305,10 +305,11 @@ enum ChatStoreSyncHydrators {
         )
     }
 
-    private static func deleteSession(id: String) async throws {
+    private static func deleteSession(id: String, updatedAt: Date?) async throws {
         // Per §3.3.2: SessionV2 deletions are NOT propagated as hard
-        // deletes — they soft-tombstone instead.
-        try await ChatStore.shared.deleteSessionFromSync(id)
+        // deletes — they soft-tombstone instead. A dated delete older than
+        // the local edit is ignored; a running session defers it.
+        try await ChatStore.shared.deleteSessionFromSync(id, deletionUpdatedAt: updatedAt)
     }
 
     // MARK: - Message

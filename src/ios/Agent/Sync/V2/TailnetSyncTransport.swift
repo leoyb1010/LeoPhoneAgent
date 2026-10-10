@@ -2,34 +2,7 @@ import CryptoKit
 import Foundation
 import Darwin
 
-/// Replica wire types. Dates deliberately use JSONEncoder's default Apple epoch,
-/// matching the Mac replica's portable field/date contract.
-private struct TailnetAsset: Codable {
-    let key: String
-    let sha256: String
-    let size: Int
-    let mimeType: String?
-}
-
-private struct TailnetRecord: Codable {
-    let id: SyncRecordID
-    let fields: [String: PortableFieldValue]
-    let assets: [String: TailnetAsset]
-    let schemaVersion: Int
-    let minimumCompatibleVersion: Int?
-    let unknownFields: [String: PortableFieldValue]
-    let updatedAt: Date
-}
-
-private struct TailnetChange: Codable {
-    let changeId: String
-    let revision: Int64
-    let id: SyncRecordID
-    let operation: String
-    let updatedAt: Date
-    let record: TailnetRecord?
-}
-
+// Replica wire types and the page decoder live in TailnetSyncWire.swift.
 private struct TailnetReceipts: Decodable {
     let replicaId: String
     let receipts: [Receipt]
@@ -38,18 +11,6 @@ private struct TailnetReceipts: Decodable {
         let revision: Int64
         let status: String
         let cursor: Int64
-    }
-}
-
-private struct TailnetPage: Codable {
-    let replicaId: String
-    let changes: [Entry]
-    let nextCursor: Int64
-    let hasMore: Bool
-    struct Entry: Codable {
-        let cursor: Int64
-        let senderDeviceId: String
-        let change: TailnetChange
     }
 }
 
@@ -317,29 +278,33 @@ final class TailnetSyncTransport: SyncTransport {
         ids.map { .permanentFailure($0, reason: "Delete requires a durable ticket") }
     }
 
-    private func requestPage(after: Int64) async throws -> TailnetPage {
-        let (data, response) = try await client.replicaData(path: "/sync/v1/changes?after=\(after)&limit=100")
+    private func requestPage(after: Int64, limit: Int = TailnetPageDecoder.pageLimit) async throws -> TailnetPage {
+        let (data, response) = try await client.replicaData(path: "/sync/v1/changes?after=\(after)&limit=\(limit)")
         if response.statusCode == 409, after > 0 {
-            let reset = try await requestPage(after: 0)
+            let reset = try await requestPage(after: 0, limit: limit)
             guard let replicaId, reset.replicaId != replicaId else { throw httpError(response) }
             return reset
         }
         guard response.statusCode == 200 else { throw httpError(response) }
-        guard data.count <= 5 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
-        let page = try JSONDecoder().decode(TailnetPage.self, from: data)
-        if let replicaId, replicaId != page.replicaId, after > 0 { return try await requestPage(after: 0) }
-        guard UUID(uuidString: page.replicaId) != nil, page.nextCursor >= after,
-              page.changes.count <= 100 else { throw URLError(.cannotParseResponse) }
-        var previous = after
-        for entry in page.changes {
-            guard entry.cursor > previous, entry.cursor <= page.nextCursor,
-                  !entry.change.id.id.isEmpty, !entry.change.id.type.isEmpty,
-                  entry.change.operation == "upsert" || entry.change.operation == "delete",
-                  entry.change.operation == "delete" || entry.change.record?.id == entry.change.id
-            else { throw URLError(.cannotParseResponse) }
-            previous = entry.cursor
+        let decoded: (page: TailnetPage, skipped: [TailnetPageDecoder.Skipped])
+        do {
+            decoded = try TailnetPageDecoder.decode(data, after: after, limit: limit, knownReplicaId: replicaId)
+        } catch is TailnetPageDecoder.ReplicaChanged {
+            // A rebuilt replica restarts its cursors.
+            return try await requestPage(after: 0, limit: limit)
+        } catch is TailnetPageDecoder.PageTooLarge {
+            // One oversized change must cost one change, not the page forever.
+            return try await requestPage(after: after, limit: 1)
         }
-        guard page.nextCursor == previous, !page.hasMore || !page.changes.isEmpty else { throw URLError(.cannotParseResponse) }
+        let page = decoded.page
+        if !decoded.skipped.isEmpty {
+            for skip in decoded.skipped {
+                SyncInboundQuarantine.shared.add(
+                    recordId: skip.id ?? SyncRecordID(type: "TailnetEntry", id: "\(page.replicaId)#\(skip.cursor)"),
+                    record: nil, reason: skip.reason, replayable: false)
+            }
+            SyncInboundQuarantine.shared.flush()
+        }
         return page
     }
 

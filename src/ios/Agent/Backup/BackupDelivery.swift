@@ -20,7 +20,7 @@ enum BackupDelivery {
             ?? .data
     }
 
-    static var backupsDirectory: URL {
+    nonisolated static var backupsDirectory: URL {
         AIChatViewModel.minisAppGroupRoot.appendingPathComponent(BackupFormat.backupsDirectoryName, isDirectory: true)
     }
 
@@ -35,7 +35,7 @@ enum BackupDelivery {
     }
 
     @discardableResult
-    static func moveToVisibleStorage(_ packageURL: URL) throws -> URL {
+    nonisolated static func moveToVisibleStorage(_ packageURL: URL) throws -> URL {
         let fm = FileManager.default
         try fm.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
         let dest = backupsDirectory.appendingPathComponent(packageURL.lastPathComponent)

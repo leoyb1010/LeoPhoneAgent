@@ -71,7 +71,11 @@ final class BackupRunController: ObservableObject {
                                    passphrase: request.passphrase),
                     progress: progress)
                 history.setBackupId(recordId, summary.backupId)
-                let delivered = try BackupDelivery.moveToVisibleStorage(summary.packageURL)
+                // File move (may be a copy across containers): off the main actor.
+                let packageURL = summary.packageURL
+                let delivered = try await Task.detached(priority: .utility) {
+                    try BackupDelivery.moveToVisibleStorage(packageURL)
+                }.value
                 var destinations = [String(localized: "文件 App › 我的 iPhone › LeoBot › Backups")]
                 var failures: [String] = []
                 for folderId in request.mountedFolderIds {

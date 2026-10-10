@@ -125104,6 +125104,72 @@
           }
         }
       }
+    },
+    "已有备份或恢复在进行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A backup or restore is already in progress"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有备份或恢复在进行中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有備份或回復正在進行"
+          }
+        }
+      }
+    },
+    "Mac 上有 %lld 个任务结束": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld tasks finished on your Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上有 %lld 个任务结束"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上有 %lld 個任務結束"
+          }
+        }
+      }
+    },
+    "其中 %lld 个失败，打开 App 查看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld failed. Open the app to see them."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其中 %lld 个失败，打开 App 查看"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其中 %lld 個失敗，打開 App 查看"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

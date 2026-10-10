@@ -41,6 +41,39 @@ struct PendingShare: Codable, Equatable {
         return selectedNewestFirst.reversed().joined(separator: "\n")
     }
 
+    // MARK: - Bounds (share extension, "Open in", App Group record)
+
+    /// Most items one share (or merged unconsumed shares) can carry.
+    static let maxItems = 20
+    /// Longest inline text item kept as text.
+    static let maxInlineTextChars = 4000
+    /// Largest file the share extension / "Open in" will copy in.
+    static let maxAttachmentBytes: Int64 = 512 * 1024 * 1024
+    /// Largest shared text staged as a .txt attachment.
+    static let maxStagedTextBytes = 10 * 1024 * 1024
+
+    /// Checked BEFORE copying: nil size (unknown) is allowed through; the
+    /// copy itself is streamed.
+    static func admitsAttachment(byteCount: Int64?) -> Bool {
+        guard let byteCount else { return true }
+        return byteCount >= 0 && byteCount <= maxAttachmentBytes
+    }
+
+    /// Newest `maxItems` items; inline text cut to `maxInlineTextChars`.
+    static func bounded(_ items: [Item]) -> [Item] {
+        items.suffix(maxItems).map { item in
+            guard item.kind == .inlineText, item.value.count > maxInlineTextChars else { return item }
+            return Item(kind: .inlineText, value: String(item.value.prefix(maxInlineTextChars)))
+        }
+    }
+
+    /// The same record with its item list bounded (a corrupt or merged App
+    /// Group record must not flood the composer).
+    var bounded: PendingShare {
+        PendingShare(items: Self.bounded(items), timestamp: timestamp,
+                     instruction: instruction, treasuryContext: treasuryContext)
+    }
+
     struct Item: Codable, Equatable {
         let kind: Kind
         /// For `.inlineText`: the text/URL content. For `.attachment`: the filename in the shared container.

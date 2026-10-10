@@ -46,10 +46,14 @@ enum WebAppPathResolver {
         let base: URL
         switch shortcut.pathScope {
         case .sessionAttachment:
+            // The context names the scope root itself, so a hostile one
+            // (`../../..`) would move the root — validate it as an id first.
             guard let sid = shortcut.scopeContext else { throw ResolveError.missingContext }
+            guard DeepLinkSafety.isSafeSessionId(sid) else { throw ResolveError.escapesScope }
             base = AIChatViewModel.minisAttachmentsPersistentDir(for: sid)
         case .sessionWorkspace:
             guard let sid = shortcut.scopeContext else { throw ResolveError.missingContext }
+            guard DeepLinkSafety.isSafeSessionId(sid) else { throw ResolveError.escapesScope }
             base = AIChatViewModel.minisWorkspacePersistentDir(for: sid)
         case .shared:
             base = AIChatViewModel.minisSharedPersistentDir
@@ -66,14 +70,21 @@ enum WebAppPathResolver {
         // Strip any leading slash so appendingPathComponent doesn't anchor
         // the stored path absolutely (which would defeat the scope).
         let trimmed = shortcut.htmlPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard trimmed.isEmpty || DeepLinkSafety.isSafeRelativePath(trimmed) else {
+            resolverLogger.warning("resolve: unsafe relative path rejected")
+            throw ResolveError.escapesScope
+        }
+        // Symlinks resolved on both sides: a link inside the scope pointing
+        // out of it must not widen what the WebView can read.
         let candidate = base.appendingPathComponent(trimmed).standardizedFileURL
-        let scopeRoot = base.standardizedFileURL
+        let resolvedCandidate = candidate.resolvingSymlinksInPath()
+        let scopeRoot = base.standardizedFileURL.resolvingSymlinksInPath()
 
         // Reject paths that escape the scope (e.g. "../../other-session/..").
         // standardizedFileURL collapses "..", so a hostile path becomes
         // visible after standardization. Compare path prefixes.
-        if !candidate.path.hasPrefix(scopeRoot.path + "/") && candidate.path != scopeRoot.path {
-            resolverLogger.warning("resolve: path escapes scope; candidate=\(candidate.path) scopeRoot=\(scopeRoot.path)")
+        if !resolvedCandidate.path.hasPrefix(scopeRoot.path + "/") && resolvedCandidate.path != scopeRoot.path {
+            resolverLogger.warning("resolve: path escapes scope")
             throw ResolveError.escapesScope
         }
 

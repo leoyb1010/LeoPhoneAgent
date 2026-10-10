@@ -84,7 +84,7 @@ enum SharedContainerStore {
               let data = defaults.data(forKey: pendingShareKey) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(PendingShare.self, from: data)
+        return (try? decoder.decode(PendingShare.self, from: data))?.bounded
     }
 
     static func clearPendingShare() {

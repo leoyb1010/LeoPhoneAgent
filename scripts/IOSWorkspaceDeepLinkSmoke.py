@@ -225,7 +225,10 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   expect(DeepLinkCoordinator.shared.showAlarmList && DeepLinkCoordinator.shared.showTerminal && DeepLinkCoordinator.shared.pendingCollections, "local presentation flags not set")
   expect(DeepLinkCoordinator.shared.terminalInitCommand == "ls", "terminal command not prefilled")
   for value in ["leophoneagent://quick-task/", "leophoneagent://views/other", "leophoneagent://open",
-                "leophoneagent://open?path=unknown/x", "leophoneagent://open?path=attachments/x.html"] {
+                "leophoneagent://open?path=unknown/x", "leophoneagent://open?path=attachments/x.html",
+                "leophoneagent://open?session=../../..&path=attachments/x.html",
+                "leophoneagent://open?session=s1&path=workspace/../../x.html",
+                "leophoneagent://open?path=shared:../x.html"] {
    reset(); route(value)
    expect(UserDefaults.standard.string(forKey: key) == "paperclip", "invalid " + value + " changed workspace")
   }
@@ -251,11 +254,12 @@ func expect(_ value: Bool, _ message: String) { if !value { print("FAIL: " + mes
   expect(UserDefaults.standard.string(forKey: key) == "local" && NotificationNavigationStore.shared.mac?["macSessionId"] == "m1", "Mac session notification stayed hidden")
   reset(); let before = QuickActionRouter.shared.newChatTrigger; QuickActionRouter.shared.startNewChat()
   expect(UserDefaults.standard.string(forKey: key) == "local" && QuickActionRouter.shared.newChatTrigger == before + 1, "home screen quick action stayed hidden")
-  print("PASS production deep links (leophoneagent:// + lobe:// alias): 18 local routes + 10 rejected, 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
+  print("PASS production deep links (leophoneagent:// + lobe:// alias): 18 local routes + 13 rejected (incl. traversal session/path), 3 Paperclip issue routes + 4 rejected, cold buffers (notification/Spotlight/Siri/Mac/quick action), warm receivers (source), window ownership, original actions")
  }
 }
 '''
 with tempfile.TemporaryDirectory(prefix='leo-workspace-link-') as folder:
     code = Path(folder)/'main.swift'; code.write_text(swift); binary = Path(folder)/'smoke'
-    subprocess.run(['swiftc', '-parse-as-library', str(code), '-o', str(binary)], check=True)
+    safety = root/'src/ios/Shared/DeepLinkSafety.swift'
+    subprocess.run(['swiftc', '-parse-as-library', str(code), str(safety), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

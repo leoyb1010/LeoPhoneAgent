@@ -119,7 +119,7 @@ final class ShareCoordinator: ObservableObject {
                 merged.append(item)
             }
             let mergedShare = PendingShare(
-                items: merged,
+                items: PendingShare.bounded(merged),
                 timestamp: share.timestamp,
                 instruction: PendingShare.boundedMerge(
                     [existing.share.instruction, share.instruction], maxTotalChars: 8_000),

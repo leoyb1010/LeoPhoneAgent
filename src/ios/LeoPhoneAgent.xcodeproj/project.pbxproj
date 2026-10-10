@@ -19,6 +19,21 @@
 		F1R3MSST /* ModelSearchScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3MSSF /* ModelSearchScorer.swift */; };
 		F1R3LIPA /* LocalIntelligencePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3LIPF /* LocalIntelligencePolicies.swift */; };
 		F1R3LIPT /* LocalIntelligencePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1R3LIPF /* LocalIntelligencePolicies.swift */; };
+		R3S0000A2 /* SyncInboundHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000A1 /* SyncInboundHardening.swift */; };
+		R3S0000A3 /* SyncInboundHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000A1 /* SyncInboundHardening.swift */; };
+		R3S0000B2 /* TailnetSyncWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000B1 /* TailnetSyncWire.swift */; };
+		R3S0000B3 /* TailnetSyncWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000B1 /* TailnetSyncWire.swift */; };
+		R3S0000C2 /* SessionTitleSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000C1 /* SessionTitleSanitizer.swift */; };
+		R3S0000C3 /* SessionTitleSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000C1 /* SessionTitleSanitizer.swift */; };
+		R3S0000D2 /* ChatSearchSQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000D1 /* ChatSearchSQL.swift */; };
+		R3S0000D3 /* ChatSearchSQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000D1 /* ChatSearchSQL.swift */; };
+		R3S0000E2 /* DeepLinkSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000E1 /* DeepLinkSafety.swift */; };
+		R3S0000E3 /* DeepLinkSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000E1 /* DeepLinkSafety.swift */; };
+		R3S0000F2 /* RelayCatchUpPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000F1 /* RelayCatchUpPolicy.swift */; };
+		R3S0000F3 /* RelayCatchUpPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = R3S0000F1 /* RelayCatchUpPolicy.swift */; };
+		R3S0000G3 /* SyncFileSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SAFE003 /* SyncFileSafety.swift */; };
+		R3S0000H3 /* PortableRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W000011 /* PortableRecord.swift */; };
+		R3S0000I3 /* SyncDeliveryLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DLV0003 /* SyncDeliveryLedger.swift */; };
 		E5E15708A /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15708T /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15709A /* SkillDraftEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15709F /* SkillDraftEditorView.swift */; };
@@ -1005,6 +1020,12 @@
 		F1R3PBLF /* ProviderBalance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ProviderBalance.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3MSSF /* ModelSearchScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelSearchScorer.swift"; sourceTree = SOURCE_ROOT; };
 		F1R3LIPF /* LocalIntelligencePolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalIntelligencePolicies.swift"; sourceTree = SOURCE_ROOT; };
+		R3S0000A1 /* SyncInboundHardening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncInboundHardening.swift; sourceTree = "<group>"; };
+		R3S0000B1 /* TailnetSyncWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailnetSyncWire.swift; sourceTree = "<group>"; };
+		R3S0000C1 /* SessionTitleSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTitleSanitizer.swift; sourceTree = "<group>"; };
+		R3S0000D1 /* ChatSearchSQL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSearchSQL.swift; sourceTree = "<group>"; };
+		R3S0000E1 /* DeepLinkSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkSafety.swift; sourceTree = "<group>"; };
+		R3S0000F1 /* RelayCatchUpPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/RelayCatchUpPolicy.swift"; sourceTree = SOURCE_ROOT; };
 		E5E15708F /* SkillDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/SkillDraft.swift; sourceTree = SOURCE_ROOT; };
 		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
@@ -2481,6 +2502,7 @@
 				E5F100012 /* LLMSessionRegistry.swift */,
 				E5F100013 /* MinisUserAgent.swift */,
 				E5E000016 /* PendingShare.swift */,
+				R3S0000E1 /* DeepLinkSafety.swift */,
 				E5E000019 /* ShareCoordinator.swift */,
 				E5E0000A2 /* ExternalFileImporter.swift */,
 				E5E000017 /* SharedContainerStore.swift */,
@@ -2657,6 +2679,7 @@
 				E5SNP0002 /* FleetSnippets.swift */,
 				E5PSH0002 /* PushRegistrar.swift */,
 				E5RLY0002 /* RelayEventCatchUp.swift */,
+				R3S0000F1 /* RelayCatchUpPolicy.swift */,
 				E5MDL0004 /* QuickModelSwitchSheet.swift */,
 				EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */,
 				EA1CATA10000000000000001 /* ModelCatalog.swift */,
@@ -2817,6 +2840,8 @@
 				E5ASK0002F /* AIChatViewModel+AskUser.swift */,
 				E53000014 /* ChatStore.swift */,
 				E5CSC0011 /* ChatStoreSchemaContract.swift */,
+				R3S0000D1 /* ChatSearchSQL.swift */,
+				R3S0000C1 /* SessionTitleSanitizer.swift */,
 				E5SLQ0011 /* SessionListQuery.swift */,
 				BB1000110F700000000000AA /* ContextPolicy.swift */,
 				E5CSM0003 /* ContextSizeMeter.swift */,
@@ -2948,6 +2973,8 @@
 				E5W000014 /* SyncTransport.swift */,
 				E5SRP0003 /* SyncRetryPolicy.swift */,
 				E5SPP0003 /* SyncPollPlan.swift */,
+				R3S0000B1 /* TailnetSyncWire.swift */,
+				R3S0000A1 /* SyncInboundHardening.swift */,
 				E5SHL0003 /* SyncHealth.swift */,
 				E5W000015 /* LANTransport.swift */,
 				E5W000016 /* SyncedTypes.swift */,
@@ -3550,6 +3577,15 @@
 				F1R3PBLT /* ProviderBalance.swift in Sources */,
 				F1R3MSST /* ModelSearchScorer.swift in Sources */,
 				F1R3LIPT /* LocalIntelligencePolicies.swift in Sources */,
+				R3S0000A3 /* SyncInboundHardening.swift in Sources */,
+				R3S0000B3 /* TailnetSyncWire.swift in Sources */,
+				R3S0000C3 /* SessionTitleSanitizer.swift in Sources */,
+				R3S0000D3 /* ChatSearchSQL.swift in Sources */,
+				R3S0000E3 /* DeepLinkSafety.swift in Sources */,
+				R3S0000F3 /* RelayCatchUpPolicy.swift in Sources */,
+				R3S0000G3 /* SyncFileSafety.swift in Sources */,
+				R3S0000H3 /* PortableRecord.swift in Sources */,
+				R3S0000I3 /* SyncDeliveryLedger.swift in Sources */,
 				E5E15708T /* SkillDraft.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5MFF9003 /* MacFleetFeature.swift in Sources */,
@@ -3729,6 +3765,12 @@
 				F1R3PBLA /* ProviderBalance.swift in Sources */,
 				F1R3MSSA /* ModelSearchScorer.swift in Sources */,
 				F1R3LIPA /* LocalIntelligencePolicies.swift in Sources */,
+				R3S0000A2 /* SyncInboundHardening.swift in Sources */,
+				R3S0000B2 /* TailnetSyncWire.swift in Sources */,
+				R3S0000C2 /* SessionTitleSanitizer.swift in Sources */,
+				R3S0000D2 /* ChatSearchSQL.swift in Sources */,
+				R3S0000E2 /* DeepLinkSafety.swift in Sources */,
+				R3S0000F2 /* RelayCatchUpPolicy.swift in Sources */,
 				E5E15708A /* SkillDraft.swift in Sources */,
 				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,

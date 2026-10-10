@@ -596,4 +596,31 @@ final class BackupRoundTripTests: XCTestCase {
         let free = await lock.isBusy
         XCTAssertFalse(free)
     }
+
+    func testOpeningSecondPackageWhileExtractingIsRefused() async throws {
+        let a = try populated()
+        let summary = try await export(a)
+        let b = try world("B")
+        let imp = importer(b)
+        let packageURL = summary.packageURL
+        // While another unpack (or any backup activity) holds the lock, a
+        // second open is refused up front — nothing is extracted.
+        let refused: Bool = try await BackupActivityLock.shared.withLock(.restore) {
+            do {
+                _ = try await imp.open(packageURL: packageURL, passphrase: nil)
+                return false
+            } catch let busy as BackupActivityLock.Busy {
+                XCTAssertEqual(busy.current, .restore)
+                return true
+            }
+        }
+        XCTAssertTrue(refused, "second open must be refused while one is extracting")
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: b.workRoot.path)) ?? []
+        XCTAssertFalse(leftovers.contains { $0.hasPrefix("restore-work-") }, "refused open extracts nothing")
+        // Once the lock is free the same package opens normally.
+        let prepared = try await imp.open(packageURL: summary.packageURL, passphrase: nil)
+        imp.discard(prepared)
+        let busy = await BackupActivityLock.shared.isBusy
+        XCTAssertFalse(busy)
+    }
 }

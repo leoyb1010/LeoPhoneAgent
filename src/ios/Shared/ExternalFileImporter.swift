@@ -13,6 +13,9 @@ private let importLog = AppLogger(category: "Share")
 /// detection path. [T-ios-json-open-provider-import-prompt]
 enum ExternalFileImporter {
 
+    /// Largest `.skillmd` read for install.
+    static let maxSkillFileBytes: Int64 = 1024 * 1024
+
     /// True if `url` is a local file we should ingest (vs a `leophoneagent://` deep link).
     static func canIngest(_ url: URL) -> Bool {
         url.isFileURL
@@ -37,8 +40,12 @@ enum ExternalFileImporter {
         // A .minisbak is a LeoBot backup package: route it to restore (staged
         // now, while the security scope is held) instead of attaching it.
         if BackupOpenRouter.isBackupPackage(url) {
-            let staged = BackupOpenRouter.stage(url)
-            Task { @MainActor in BackupOpenRouter.presentStaged(staged) }
+            // Multi-GB copy: off the main thread. `stage` re-opens the
+            // security scope itself for the duration of the copy.
+            Task.detached(priority: .userInitiated) {
+                let staged = BackupOpenRouter.stage(url)
+                await BackupOpenRouter.presentStaged(staged)
+            }
             return true
         }
 
@@ -47,8 +54,15 @@ enum ExternalFileImporter {
         // plain .md files keep their existing attach behaviour. A skill steers
         // every later run, so a file from outside is previewed and confirmed
         // first, and replacing a same-name skill is its own explicit choice.
-        if url.pathExtension.lowercased() == "skillmd",
-           let content = try? String(contentsOf: url, encoding: .utf8) {
+        let byteCount = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { Int64($0) }
+        if url.pathExtension.lowercased() == "skillmd" {
+            // A skill file is text; anything this large is not one. Size is
+            // checked before reading so a huge file is never loaded.
+            guard (byteCount ?? 0) <= maxSkillFileBytes,
+                  let content = try? String(contentsOf: url, encoding: .utf8) else {
+                importLog.warning("[Share] ingest: .skillmd too large or unreadable — ignored")
+                return false
+            }
             Task { @MainActor in confirmSkillInstall(content: content) }
             return true
         }
@@ -76,6 +90,9 @@ enum ExternalFileImporter {
                 RecordingPresenter.present(id.map { .detail($0) } ?? .list)
             }
             return true
+        guard PendingShare.admitsAttachment(byteCount: byteCount) else {
+            importLog.warning("[Share] ingest: file over the size limit — not copied")
+            return false
         }
 
         let fm = FileManager.default
