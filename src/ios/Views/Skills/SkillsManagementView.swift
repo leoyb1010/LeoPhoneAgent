@@ -516,7 +516,7 @@ private struct SkillDetailView: View {
     /// First 5 non-empty lines of the skill body (frontmatter already stripped)
     private var bodyPreview: String {
         guard let skill else { return "" }
-        let nonEmpty = skill.body
+        let nonEmpty = skill.bodyPreview
             .components(separatedBy: "\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let lines = Array(nonEmpty.prefix(5))
@@ -758,7 +758,8 @@ private struct SkillDetailView: View {
                         try store.updateSkillContent(skillId, newContent: newContent)
                     case .archiveURL(let url):
                         defer { try? FileManager.default.removeItem(at: url) }
-                        _ = try store.importFromArchive(at: url)
+                        // Updating this skill from an archive is an explicit replace.
+                        _ = try store.importFromArchive(at: url, replace: true)
                     }
                     updateError = nil
                 } catch {
@@ -1171,7 +1172,8 @@ private class SkillBrowserCoordinator: ObservableObject {
         hudState = .importing
         Task {
             do {
-                let skill = try await SkillStore.shared.commitGitHubImport(urlString: pendingImportURL, content: pendingImportContent)
+                let skill = try await SkillStore.shared.commitGitHubImport(urlString: pendingImportURL, content: pendingImportContent,
+                                                                           replace: true)
                 hudState = .success(skill.name)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if case .success = hudState { hudState = .hidden }
@@ -1628,7 +1630,8 @@ extension SkillsManagementView {
         if !skill.description.isEmpty { front += "description: \(skill.description)\n" }
         if !skill.version.isEmpty { front += "version: \(skill.version)\n" }
         front += "---\n\n"
-        let content = front + skill.body
+        // The full body is read from disk; the in-memory skill keeps a preview only.
+        let content = front + (SkillStore.shared.readSkillBody(skill.id) ?? skill.bodyPreview)
         let safeName = String(skill.name.unicodeScalars.map {
             CharacterSet.alphanumerics.contains($0) || $0 == " " || $0 == "-" || $0 == "_" ? Character($0) : "-"
         }).trimmingCharacters(in: CharacterSet(charactersIn: "-. "))

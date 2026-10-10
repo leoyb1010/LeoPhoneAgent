@@ -49,7 +49,8 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
             SkillStore.shared.skills.map {
                 BackupSkillRecord(id: $0.id, name: $0.name, description: $0.description, version: $0.version,
                                   isEnabled: $0.isEnabled, installedAt: $0.installedAt, updatedAt: $0.updatedAt,
-                                  body: $0.body, sourceURL: $0.sourceURL)
+                                  body: SkillStore.shared.readSkillBody($0.id) ?? $0.bodyPreview,
+                                  sourceURL: $0.sourceURL)
             }
         }
     }
@@ -167,7 +168,8 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
                   let content = store.readSkillContent(id) else { return nil }
             let record = BackupSkillRecord(id: s.id, name: s.name, description: s.description, version: s.version,
                                            isEnabled: s.isEnabled, installedAt: s.installedAt,
-                                           updatedAt: s.updatedAt, body: s.body, sourceURL: s.sourceURL)
+                                           updatedAt: s.updatedAt, body: SkillStore.parse(skillMD: content).body,
+                                           sourceURL: s.sourceURL)
             return BackupSkillSnapshot(record: record, content: content, zipData: store.buildSkillZipData(id))
         }
     }

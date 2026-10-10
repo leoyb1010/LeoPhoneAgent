@@ -265,7 +265,8 @@ final class MCPOAuthController: NSObject, ObservableObject {
             .flatMap { try? JSONDecoder().decode(StoredTokens.self, from: $0) }
         guard let existing,
               let refreshToken = existing.refreshToken, !refreshToken.isEmpty,
-              let endpoint = URL(string: oauth.tokenEndpoint) else { return nil }
+              let endpoint = URL(string: oauth.tokenEndpoint),
+              endpoint.scheme?.lowercased() == "https" else { return nil }  // never send a refresh token in clear text
 
         var form: [String: String] = [
             "grant_type": "refresh_token",
@@ -412,7 +413,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
               authBase.scheme?.lowercased() == "https" else {
             throw OAuthError.badConfig(String(localized: "Authorization Endpoint must be a valid https URL."))
         }
-        guard URL(string: oauth.tokenEndpoint)?.scheme?.lowercased() == "https" else {
+        guard let tokenURL = URL(string: oauth.tokenEndpoint), tokenURL.scheme?.lowercased() == "https" else {
             throw OAuthError.badConfig(String(localized: "Token Endpoint must be a valid https URL."))
         }
         let redirect = (oauth.redirectURI?.isEmpty == false ? oauth.redirectURI! : Self.defaultRedirectURI)
@@ -434,7 +435,9 @@ final class MCPOAuthController: NSObject, ObservableObject {
             .replacingOccurrences(of: "=", with: "")
         let state = Self.randomURLSafe(length: 24)
 
-        var comps = URLComponents(url: authBase, resolvingAgainstBaseURL: false)!
+        guard var comps = URLComponents(url: authBase, resolvingAgainstBaseURL: false) else {
+            throw OAuthError.badConfig(String(localized: "Authorization Endpoint must be a valid https URL."))
+        }
         var items = comps.queryItems ?? []
         items.append(contentsOf: [
             URLQueryItem(name: "response_type", value: "code"),
@@ -492,7 +495,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
         if let resource {
             form["resource"] = resource
         }
-        var req = URLRequest(url: URL(string: oauth.tokenEndpoint)!)
+        var req = URLRequest(url: tokenURL)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.httpBody = form.map { "\($0.key)=\(Self.formEncode($0.value))" }

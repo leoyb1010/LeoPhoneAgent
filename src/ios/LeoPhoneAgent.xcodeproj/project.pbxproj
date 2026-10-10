@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		LPAM0003A /* ViewModelCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0003F /* ViewModelCachePolicy.swift */; };
+		LPAM0003T /* ViewModelCachePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0003F /* ViewModelCachePolicy.swift */; };
+		LPAM0002A /* MCPWireSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0002F /* MCPWireSafety.swift */; };
+		LPAM0002T /* MCPWireSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0002F /* MCPWireSafety.swift */; };
+		LPAM0001A /* SkillManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0001F /* SkillManifest.swift */; };
+		LPAM0001T /* SkillManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPAM0001F /* SkillManifest.swift */; };
 		E5E15708A /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15708T /* SkillDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15708F /* SkillDraft.swift */; };
 		E5E15709A /* SkillDraftEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15709F /* SkillDraftEditorView.swift */; };
@@ -924,6 +930,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		LPAM0003F /* ViewModelCachePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelCachePolicy.swift; sourceTree = "<group>"; };
+		LPAM0002F /* MCPWireSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPWireSafety.swift; sourceTree = "<group>"; };
+		LPAM0001F /* SkillManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillManifest.swift; sourceTree = "<group>"; };
 		E5E15708F /* SkillDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Session/SkillDraft.swift; sourceTree = SOURCE_ROOT; };
 		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
@@ -2666,6 +2675,7 @@
 				E5T5L0002 /* T5ShellBridgeLogic.swift */,
 				E5VMB0015 /* ChatModels.swift */,
 				E5VMB0016 /* ChatLifecycleSupport.swift */,
+				LPAM0003F /* ViewModelCachePolicy.swift */,
 				E5VMB0017 /* ChatURLBrokerage.swift */,
 				E5VMC0011 /* AIChatViewModel+ISHCommand.swift */,
 				E5VMC0012 /* AIChatViewModel+FileTools.swift */,
@@ -2739,6 +2749,7 @@
 				E5LOCK101 /* SessionLockStore.swift */,
 				E5N0000112F3B941A00049557 /* SkillStore.swift */,
 				E5E15708F /* SkillDraft.swift */,
+				LPAM0001F /* SkillManifest.swift */,
 				E5CST0002 /* CorrectionStore.swift */,
 				E5RHS0002 /* RemoteHostStore.swift */,
 				E5RSE0002 /* RemoteSSHExecutor.swift */,
@@ -2753,6 +2764,7 @@
 				E5AUD0101F /* ProviderRowStamps.swift */,
 				F1MCPSTORE /* MCPStore.swift */,
 				E5NMCP011 /* NativeMCPClient.swift */,
+				LPAM0002F /* MCPWireSafety.swift */,
 				F1MCPOAUTH /* MCPOAuthController.swift */,
 				E5SOUL101 /* SoulStore.swift */,
 			);
@@ -3369,6 +3381,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5E15708T /* SkillDraft.swift in Sources */,
+				LPAM0003T /* ViewModelCachePolicy.swift in Sources */,
+				LPAM0002T /* MCPWireSafety.swift in Sources */,
+				LPAM0001T /* SkillManifest.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5MFF9003 /* MacFleetFeature.swift in Sources */,
 				E5E15703T /* PaperclipHandoff.swift in Sources */,
@@ -3516,6 +3531,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5E15708A /* SkillDraft.swift in Sources */,
+				LPAM0003A /* ViewModelCachePolicy.swift in Sources */,
+				LPAM0002A /* MCPWireSafety.swift in Sources */,
+				LPAM0001A /* SkillManifest.swift in Sources */,
 				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,
 				E5E15702A /* ReplyNextStepViews.swift in Sources */,

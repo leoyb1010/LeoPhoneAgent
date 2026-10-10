@@ -177,10 +177,11 @@ final class SessionForkManager {
         }
 
         // Build SKILL.md content from body
-        let content = skill.body.isEmpty ? "---\nname: \(skill.name)\ndescription: \(skill.description)\nversion: \(skill.version)\n---\n" : skill.body
+        let body = skill.fullBody ?? skill.bodyPreview
+        let content = body.isEmpty ? "---\nname: \(skill.name)\ndescription: \(skill.description)\nversion: \(skill.version)\n---\n" : body
 
         do {
-            try SkillStore.shared.importSkill(content: content, source: .file)
+            try SkillStore.shared.importSkill(content: content, source: .file, replace: true)
             logger.info("[Fork] Copied remote skill: \(skill.name)")
             return true
         } catch {

@@ -90,7 +90,8 @@ struct SkillDraftEditorView: View {
 
     private func save() {
         do {
-            let skill = try store.importSkill(content: edited.skillMD, source: .session)
+            // An existing name was confirmed through the overwrite dialog.
+            let skill = try store.importSkill(content: edited.skillMD, source: .session, replace: true)
             LeoHaptics.notification(.success)
             onSaved(skill.name)
             dismiss()

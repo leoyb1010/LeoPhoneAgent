@@ -611,12 +611,7 @@ final class ViewModelCache {
     /// background runs (quiet tasks, orchestration workers, agent-spawned
     /// `minis-sessions` chats) must not compete with the conversations the
     /// user opens: a burst of them used to evict the user's own chats.
-    enum PoolKind: String {
-        /// A conversation the user opens directly (default for every caller).
-        case normal
-        /// A headless run created off-screen; separate, larger cap.
-        case background
-    }
+    typealias PoolKind = ViewModelCachePool
 
     private var cache: [String: AIChatViewModel] = [:]
     /// Pool membership per session id; absent ⇒ `.normal`. Decided by whoever
@@ -637,10 +632,8 @@ final class ViewModelCache {
     /// agent loop must keep running). Re-entering an evicted session rebuilds
     /// the VM and re-hydrates messages from SQLite via the normal isNew path.
     /// [T-ios-vmcache-lru-evict]
-    private static let softCap: Int = 6
-    /// [T-vmcache-pools] Cap for `.background` VMs: a single burst can hold
-    /// several at once, and each is cheap once its render state is released.
-    private static let backgroundSoftCap: Int = 10
+    /// [T-vmcache-pools] `.background` VMs (sub-agent children, quiet runs) have
+    /// their own cap; both live in `ViewModelCachePolicy`.
 
     init() {
         // Evict aggressively under memory pressure — same hook BrowserTabPool
@@ -798,22 +791,29 @@ final class ViewModelCache {
     }
 
     /// [T-vmcache-pools] Each pool is swept against its own cap; within a pool
-    /// the order is plain LRU.
+    /// the order is plain LRU (ViewModelCachePolicy).
     private func evictIfOverCap() {
-        evictPool(.normal, cap: Self.softCap)
-        evictPool(.background, cap: Self.backgroundSoftCap)
+        let resident = lruOrder.filter { cache[$0] != nil }
+        let victims = ViewModelCachePolicy.victims(
+            lruOrder: resident,
+            pool: { self.poolKinds[$0] ?? .normal },
+            isEvictable: { sid in self.cache[sid].map { self.isEvictable(sid, $0) } ?? false })
+        for sessionId in victims {
+            guard let vm = cache[sessionId] else { continue }
+            let kind = poolKinds[sessionId] ?? .normal
+            evict(sessionId, vm: vm, reason: "over \(kind.rawValue)Cap(\(ViewModelCachePolicy.cap(for: kind)))")
+        }
     }
 
-    private func evictPool(_ kind: PoolKind, cap: Int) {
-        let members = lruOrder.filter { (poolKinds[$0] ?? .normal) == kind && cache[$0] != nil }
-        guard members.count > cap else { return }
-        var overflow = members.count - cap
-        // Walk LRU → MRU within this pool, evicting evictable VMs first.
-        for sessionId in members where overflow > 0 {
-            guard let vm = cache[sessionId], isEvictable(sessionId, vm) else { continue }
-            evict(sessionId, vm: vm, reason: "over \(kind.rawValue)Cap(\(cap))")
-            overflow -= 1
-        }
+    /// [B24] A finished sub-agent child is dropped right after its result was
+    /// delivered — a release (render state + cache entry), never a cancel —
+    /// unless something still uses it (on screen, running, pinned). Returns
+    /// whether it was released.
+    @discardableResult
+    func releaseIfIdle(sessionId: String, reason: String) -> Bool {
+        guard let vm = cache[sessionId], isEvictable(sessionId, vm) else { return false }
+        evict(sessionId, vm: vm, reason: reason)
+        return true
     }
 
     /// On a memory warning, drop every evictable cached VM (and its

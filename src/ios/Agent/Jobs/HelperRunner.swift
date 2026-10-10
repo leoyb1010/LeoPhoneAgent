@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 private let logger = AppLogger(category: "HelperRunner")
@@ -199,7 +200,9 @@ extension AIChatViewModel {
                 writeSubAgentBlock(toolUseId: toolUseId, content: converted)
                 return (converted, true)
             }
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            // [B24] Wake on the child's start/stop or the user's next message
+            // instead of polling every 500 ms; the cap keeps budget checks timely.
+            await Self.awaitSubAgentChange(child, parent: self, upTo: 1.0)
         }
         if Task.isCancelled, child.isProcessing { child.cancel(queuePolicy: .discardQueuedPrompts) }
         var settle = 0
@@ -237,7 +240,9 @@ extension AIChatViewModel {
     /// Configure (or re-configure, on resume) the child's view model.
     private func prepareSubAgentChild(childId: String, job: AgentJob, subAgent: SubAgentDefinition,
                                       title: String) -> AIChatViewModel {
-        let (child, _) = ViewModelCache.shared.getOrCreate(for: childId)
+        // [B24] Children live in the background pool: a burst of sub agents
+        // must never evict the conversations the user opened.
+        let (child, _) = ViewModelCache.shared.getOrCreate(for: childId, kind: .background)
         child.sessionSource = "subagent"
         child.subAgentState.config = SubAgentRunConfig(
             parentSessionId: job.parentSessionId, parentToolUseId: job.parentToolUseId, jobId: job.id,
@@ -287,7 +292,8 @@ extension AIChatViewModel {
                     _ = child.submitSubAgentPrompt(SubAgentText.steerNudge)
                 }
                 if Date() >= deadline { timedOut = true; break }
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                await Self.awaitSubAgentChange(child, parent: nil,
+                                               upTo: min(2.0, deadline.timeIntervalSinceNow))
             }
             if Task.isCancelled { return }
             var state: AgentJobState = child.userDidCancel ? .cancelled : .done
@@ -305,6 +311,25 @@ extension AIChatViewModel {
             registry.finish(job.id, state: state, result: text)
         }
         logger.info("[subagent] BACKGROUND job=\(job.id.prefix(8)) child=\(childId.prefix(8)) budget=\(minutes)m")
+    }
+
+    /// [B24] Suspend until the child's `isProcessing` or the parent's prompt
+    /// queue changes, the task is cancelled, or `seconds` pass — whichever is
+    /// first. Callers re-check their conditions after it returns.
+    static func awaitSubAgentChange(_ child: AIChatViewModel, parent: AIChatViewModel?,
+                                    upTo seconds: TimeInterval) async {
+        guard seconds > 0, !Task.isCancelled else { return }
+        let wakeup = SubAgentWakeup()
+        var subscriptions: [AnyCancellable] = [child.$isProcessing.dropFirst().sink { _ in wakeup.fire() }]
+        if let parent {
+            subscriptions.append(parent.$promptQueue.dropFirst().sink { _ in wakeup.fire() })
+        }
+        await withTaskCancellationHandler {
+            await wakeup.wait(upTo: seconds)
+        } onCancel: {
+            Task { @MainActor in wakeup.fire() }
+        }
+        subscriptions.forEach { $0.cancel() }
     }
 
     static func awaitSubAgentIdle(_ child: AIChatViewModel, seconds: TimeInterval) async -> Bool {
@@ -653,6 +678,35 @@ extension AIChatViewModel {
                 }
                 await ChatStore.shared.updateMessageParts(messageId: raw.id, parts: parts)
                 return
+            }
+        }
+    }
+}
+
+/// [B24] One-shot wake-up for `awaitSubAgentChange`. `@Published` emits in
+/// willSet; resuming only enqueues the waiter, which runs after the property
+/// has been assigned, so it always sees the new value.
+@MainActor
+final class SubAgentWakeup {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var fired = false
+    private var timer: Task<Void, Never>?
+
+    func fire() {
+        fired = true
+        timer?.cancel()
+        timer = nil
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func wait(upTo seconds: TimeInterval) async {
+        guard !fired else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            continuation = cont
+            timer = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+                self?.fire()
             }
         }
     }

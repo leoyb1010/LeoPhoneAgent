@@ -126,7 +126,8 @@ enum ExternalFileImporter {
     @MainActor
     private static func install(content: String) {
         do {
-            let skill = try SkillStore.shared.importSkill(content: content, source: .file)
+            // The alert above already asked to replace an existing skill.
+            let skill = try SkillStore.shared.importSkill(content: content, source: .file, replace: true)
             importLog.info("[Share] installed shared skill '\(skill.name)'")
             let note = UNMutableNotificationContent()
             note.title = String(localized: "Skill installed")
