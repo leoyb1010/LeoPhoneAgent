@@ -25,9 +25,8 @@ struct AlarmItem: Identifiable {
             self.scheduleType = "fixed"
         }
         if let iso = dict["fire_date"] as? String {
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            self.fireDate = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+            // [T-r3-P2] Shared formatters (were built per row).
+            self.fireDate = LeoFormatters.iso8601Fractional.date(from: iso) ?? LeoFormatters.iso8601.date(from: iso)
         } else {
             self.fireDate = nil
         }
@@ -41,9 +40,7 @@ struct AlarmItem: Identifiable {
         switch scheduleType {
         case "fixed":
             guard let d = fireDate else { return "--:--" }
-            let f = DateFormatter()
-            f.dateFormat = "HH:mm"
-            return f.string(from: d)
+            return LeoFormatters.date(format: "HH:mm").string(from: d)
         case "relative":
             return relativeTime ?? "--:--"
         case "timer":
@@ -64,10 +61,7 @@ struct AlarmItem: Identifiable {
         switch scheduleType {
         case "fixed":
             guard let d = fireDate else { return "" }
-            let f = DateFormatter()
-            f.dateStyle = .medium
-            f.timeStyle = .none
-            return f.string(from: d)
+            return LeoFormatters.date(dateStyle: .medium, timeStyle: .none).string(from: d)
         case "relative":
             return String(localized: "每天")
         case "timer":
@@ -96,9 +90,7 @@ struct AlarmItem: Identifiable {
                 return allDays.filter { days.contains($0) }.map(name).joined(separator: "、")
             }
         } else if scheduleType == "fixed", let d = fireDate {
-            let f = DateFormatter()
-            f.dateFormat = "EEE"
-            return f.string(from: d)
+            return LeoFormatters.date(format: "EEE").string(from: d)
         }
         return nil
     }
@@ -195,8 +187,7 @@ class AlarmListViewModel: ObservableObject {
 
         // Build sorted sections
         let sortedWeeks = weekBuckets.keys.sorted()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "M/d"
+        let dateFormatter = LeoFormatters.date(format: "M/d")
 
         var sections: [(title: String, alarms: [AlarmItem])] = []
 

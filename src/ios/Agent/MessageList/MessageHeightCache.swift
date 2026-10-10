@@ -27,8 +27,16 @@ struct HeightCacheKey: Hashable {
     let fontSize: Int
 
     init(content: String, width: CGFloat, fontSize: CGFloat) {
-        self.contentLength = content.utf8.count
-        self.contentHash = content.hashValue
+        self.init(contentLength: content.utf8.count, contentHash: content.hashValue,
+                  width: width, fontSize: fontSize)
+    }
+
+    /// [T-r3-S7] For callers that already hold the content's hash (an
+    /// `AssistantBlock` memoizes it), so a snapshot pass does not re-hash
+    /// every text block's full body. `contentHash` must be `content.hashValue`.
+    init(contentLength: Int, contentHash: Int, width: CGFloat, fontSize: CGFloat) {
+        self.contentLength = contentLength
+        self.contentHash = contentHash
         self.width = Int((width * 100).rounded())
         self.fontSize = Int((fontSize * 100).rounded())
     }

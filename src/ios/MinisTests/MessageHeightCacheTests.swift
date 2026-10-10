@@ -71,7 +71,9 @@ final class MessageHeightCacheTests: XCTestCase {
         let src = try String(contentsOf: root.appendingPathComponent("Agent/MessageList/CollectionViewMessageListV3.swift"), encoding: .utf8)
         XCTAssertTrue(src.contains("HeightLRU(capacity: 300)"))
         XCTAssertFalse(src.contains("ObjectIdentifier(attrStr)"))
-        XCTAssertTrue(src.contains("content: block.content"))
+        // Keyed by the markdown source via the block's memoized hash [T-r3-S7].
+        XCTAssertTrue(src.contains("contentLength: block.content.utf8.count"))
+        XCTAssertTrue(src.contains("contentHash: block.contentHash"))
         XCTAssertTrue(src.contains("scaledMessage(16.5)"))
         XCTAssertTrue(src.contains("didReceiveMemoryWarningNotification"))
         XCTAssertTrue(src.contains("containsAttachments(in:"), "attachment strings are never cached")

@@ -115,6 +115,11 @@ extension AIChatViewModel {
         let authRevision: UInt
     }
     private static var resolveCache: [ResolveCacheKey: String] = [:]  // key → entryId
+    /// [T-r3-P2] Revision pair the cache entries were built under. Every
+    /// config / credential change makes all older keys unreachable, so they
+    /// are dropped instead of accumulating for the life of the process.
+    private static var resolveCacheRevisions: (config: UInt, auth: UInt)?
+    private static let resolveCacheCap = 256
     /// Negatives (no resolvable entry) are cached too, as the sentinel below —
     /// the no-config/no-credential path is itself moderately expensive to re-walk.
     private static let resolveNilSentinel = "\u{0}nil"
@@ -139,6 +144,13 @@ extension AIChatViewModel {
             configRevision: store.configRevision,
             authRevision: store.authRevision
         )
+        if let revs = Self.resolveCacheRevisions,
+           revs.config != key.configRevision || revs.auth != key.authRevision {
+            Self.resolveCache.removeAll(keepingCapacity: true)
+        } else if Self.resolveCache.count >= Self.resolveCacheCap {
+            Self.resolveCache.removeAll(keepingCapacity: true)
+        }
+        Self.resolveCacheRevisions = (key.configRevision, key.authRevision)
         if let cachedId = Self.resolveCache[key] {
             if cachedId == Self.resolveNilSentinel { return nil }
             // The entry could have been deleted out from under a still-valid

@@ -78,7 +78,7 @@ func resolveMinisFileURLCached(url: URL) -> URL? {
     let sessionScope = AIChatViewModel.activeSessionId ?? "nil"
     let key = "\(sessionScope)|\(url.absoluteString)"
     if let cached = MinisMediaCache.shared.resolvedURL(for: key) {
-        minisLogger.info("[MinisImage][ResolveCache] HIT url=\(url.absoluteString) → \(cached.path)")
+        minisLogger.verbose("[MinisImage][ResolveCache] HIT url=\(url.absoluteString) → \(cached.path)")
         return cached
     }
     if let resolved = resolveMinisFileURL(url: url) {
@@ -86,7 +86,7 @@ func resolveMinisFileURLCached(url: URL) -> URL? {
         minisLogger.info("[MinisImage][ResolveCache] MISS→resolved url=\(url.absoluteString) → \(resolved.path)")
         return resolved
     }
-    minisLogger.warning("[MinisImage][ResolveCache] MISS→nil url=\(url.absoluteString)")
+    minisLogger.verbose("[MinisImage][ResolveCache] MISS→nil url=\(url.absoluteString)")
     return nil
 }
 
@@ -238,7 +238,7 @@ func resolveMinisFileURL(url: URL) -> URL? {
     // model-use-zimage-0.jpg, so session B referencing that path would silently
     // resolve to session A's image. Not-found is the correct, safe result for a
     // cross-session reference.
-    minisLogger.warning("[MinisImage][Resolve] \(url.absoluteString) → not found in active session, global dirs, or mounts (cross-session scan disabled for isolation)")
+    minisLogger.verbose("[MinisImage][Resolve] \(url.absoluteString) → not found in active session, global dirs, or mounts (cross-session scan disabled for isolation)")
     return nil
 }
 
@@ -481,11 +481,16 @@ struct MinisImageFilePreviewView: View {
                 .padding(.horizontal)
                 .padding(.top, 2)
             }
-            .onAppear {
-                if let data = try? Data(contentsOf: fileURL),
-                   let img = UIImage(data: data) {
-                    loadedImage = img
-                }
+            // [T-r3-B25] Read + decode off-main, downsampled to a size that
+            // still zooms sharply full-screen (was a synchronous full-res
+            // decode on main in onAppear).
+            .task(id: fileURL) {
+                let url = fileURL
+                let img = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                    guard let data = try? Data(contentsOf: url) else { return nil }
+                    return downsampleImage(data: data, maxPixelSize: 4096)
+                }.value
+                if let img { loadedImage = img }
             }
         }
     }

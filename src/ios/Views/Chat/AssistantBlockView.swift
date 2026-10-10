@@ -1,6 +1,36 @@
 import SwiftUI
 import Combine
 
+// MARK: - Inline tool image [T-r3-B25]
+
+/// A shell tool's generated image, shown in the flow. Decoded off-main,
+/// downsampled to display size and shared through ThumbnailCache — the body
+/// used to decode the file at full resolution (no cache)
+/// on every evaluation.
+private struct ShellToolInlineImage: View {
+    let path: String
+    let onTap: () -> Void
+    /// 260 pt × 3x screens.
+    private static let maxPixels: CGFloat = 780
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let img = image ?? ThumbnailCache.shared.cachedThumbnail(for: path, maxSize: Self.maxPixels) {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 260, maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .onTapGesture(perform: onTap)
+            }
+        }
+        .task(id: path) {
+            image = await ThumbnailCache.shared.thumbnail(for: path, maxSize: Self.maxPixels)
+        }
+    }
+}
+
 // MARK: - Assistant Block View (individual block — isolated invalidation)
 
 struct AssistantBlockView: View {
@@ -45,13 +75,8 @@ struct AssistantBlockView: View {
                                 toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
                 // [T-inline-image-render] A generated image is user-facing
                 // output — show it right in the flow, not behind a tap.
-                if let path = block.imageFilePath, let img = UIImage(contentsOfFile: path) {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 260, maxHeight: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .onTapGesture { detailBlock = block }
+                if let path = block.imageFilePath {
+                    ShellToolInlineImage(path: path) { detailBlock = block }
                 }
             }
         case .fileReadTool:
@@ -552,6 +577,10 @@ extension Notification.Name {
     /// string (for logging only — handler invalidates all visible cells).
     /// [T-attachment-size-invalidate 2026-05-21]
     static let minisAttachmentSizeChanged = Notification.Name("minisAttachmentSizeChanged")
+    /// [T-r3-S7] userInfo key on `minisAttachmentSizeChanged`: the owning
+    /// assistant message's UUID, when known. The list then re-measures only
+    /// that message's items instead of every item in the session.
+    static let minisAttachmentOwnerKey = "messageId"
     /// Posted from a tool capsule's long-press menu "Re-run from here".
     /// userInfo["blockId"] is the AssistantBlock.id (UUID) of the tapped
     /// tool_use. The active AIChatView listens, maps the block to its

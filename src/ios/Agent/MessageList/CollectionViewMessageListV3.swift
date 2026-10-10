@@ -2047,10 +2047,14 @@ extension CollectionViewMessageListV3 {
                         AppLogger(category: "FGLayout").info("[FGLayout] skip layout (content unchanged)")
                         return
                     }
-                    Task { @MainActor in
-                        await Task.yield()
+                    // [T-r3-S7] Let the stale frame paint first: the
+                    // re-measure (20–200 ms) used to run inside the resume
+                    // transaction and pushed out the first foreground frame.
+                    // 50 ms is past the first commit on every device measured.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                        guard let self else { return }
                         guard UIApplication.shared.applicationState != .background else {
-                            AppLogger(category: "FGLayout").info("[FGLayout] skip layout (re-backgrounded before yield)")
+                            AppLogger(category: "FGLayout").info("[FGLayout] skip layout (re-backgrounded before deferred remeasure)")
                             return
                         }
                         self.remeasureVisibleCells(reason: "foreground(delta=\(accumulated))")
@@ -2331,41 +2335,37 @@ extension CollectionViewMessageListV3 {
                             return
                         }
                         let urlStr = (notification.object as? String) ?? "<nil>"
-                        let visibleIPs = cv.indexPathsForVisibleItems.sorted()
+                        let ownerId = notification.userInfo?[Notification.Name.minisAttachmentOwnerKey] as? UUID
+                        let items = self.dataSource?.snapshot().itemIdentifiers ?? []
+                        // [T-r3-S7] Scope to the owning message's items when the
+                        // poster knows it. The old path invalidated EVERY item
+                        // and reconfigured the whole snapshot per image load —
+                        // O(items) per image, O(N²) for an image-heavy session.
+                        let targets: [Int] = ownerId.map { owner in
+                            items.indices.filter { items[$0].messageId == owner }
+                        } ?? Array(items.indices)
                         var cleared = 0
-                        for ip in visibleIPs {
+                        for idx in targets {
+                            let ip = IndexPath(item: idx, section: 0)
                             if let cell = cv.cellForItem(at: ip) as? SelfSizingCell {
-                                let before = cell.frame.size.height
                                 cell.clearCachedHeight()
-                                layout.invalidateHeight(at: ip.item)
                                 cleared += 1
-                                alog.info("[AttachmentSize] clear idx=\(ip.item) frameH=\(String(format: "%.1f", before))")
                             }
-                        }
-                        // [T-attachment-cell-offscreen 2026-05-24]
-                        // A markdown-inline video/image whose initial estimate
-                        // was too small (e.g. text-only block estimator
-                        // returning ~50pt) is pushed off-screen by the cold
-                        // scroll-to-bottom — the visible-cells-only invalidate
-                        // above then misses it, and the cell stays at the
-                        // 200pt placeholder until an unrelated reconfigure
-                        // runs many seconds later. Always invalidate the
-                        // layout's height cache for ALL items so the next
-                        // measurement pass picks up the new attachmentBounds.
-                        let totalItems = self.dataSource?.snapshot().itemIdentifiers.count ?? 0
-                        for idx in 0..<totalItems {
+                            // [T-attachment-cell-offscreen 2026-05-24] Off-screen
+                            // owners (pushed out by the cold scroll-to-bottom)
+                            // must re-measure too, so the layout cache is
+                            // invalidated for every target, visible or not.
                             layout.invalidateHeight(at: idx)
                         }
-                        if let snapshot = self.dataSource?.snapshot() {
-                            // Reconfigure every item — cheap (no diff), forces
-                            // every cell that gets re-displayed to re-measure.
-                            // We still see a visible reflow only on cells in
-                            // viewport; off-screen cells just get a corrected
-                            // cached height for next display.
+                        if let snapshot = self.dataSource?.snapshot(), !targets.isEmpty {
+                            // Reconfigure the targets — cheap (no diff), forces
+                            // each to re-measure when next displayed.
                             var snap = snapshot
-                            snap.reconfigureItems(snapshot.itemIdentifiers)
+                            snap.reconfigureItems(targets.map { items[$0] })
                             self.dataSource?.apply(snap, animatingDifferences: false)
                         }
+                        let totalItems = targets.count
+                        let visibleIPs = cv.indexPathsForVisibleItems
                         // [T-attachment-defer-invalidate 2026-05-24]
                         // Defer invalidateLayout to the next runloop. reconfigureItems
                         // schedules a SwiftUI hosting-config update on the next
@@ -2380,11 +2380,12 @@ extension CollectionViewMessageListV3 {
                         // when the user navigates back). Letting the runloop
                         // turn first ensures the new attributedString is
                         // mounted in the hosting view before we re-measure.
+                        let targetSet = Set(targets)
                         DispatchQueue.main.async {
                             // Clear cell-side caches AGAIN after the
                             // reconfigure has propagated, then ask UIKit to
                             // re-measure.
-                            for ip in cv.indexPathsForVisibleItems {
+                            for ip in cv.indexPathsForVisibleItems where targetSet.contains(ip.item) {
                                 (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
                             }
                             layout.invalidateLayout()
@@ -2621,7 +2622,9 @@ extension CollectionViewMessageListV3 {
                                 // 16.5 = MarkdownNSRenderer's base size for
                                 // assistant markdown (SelectableMarkdownView), so a
                                 // Dynamic Type change misses instead of colliding.
-                                let key = HeightCacheKey(content: block.content, width: textWidth,
+                                let key = HeightCacheKey(contentLength: block.content.utf8.count,
+                                                         contentHash: block.contentHash,
+                                                         width: textWidth,
                                                          fontSize: FontSettings.shared.scaledMessage(16.5))
                                 // Not cached: strings with attachments (an image's
                                 // height is decided at layout time — 200 pt
@@ -3045,6 +3048,8 @@ extension CollectionViewMessageListV3 {
         ///   - row:   HStack { Spacer(minLength: 60); VStack(spacing:6){ attachments?; bubble } }
         ///   - cell:  .padding(.horizontal, 16) on the whole row
         /// No on-screen view is touched; pure TextKit measurement (usedRect).
+        static let userBubbleHeightCacheCap = 600
+
         static func measureUserBubbleHeight(for message: ChatMessage, cvWidth: CGFloat,
                                             cache: inout [String: CGFloat]) -> CGFloat? {
             // userDisplayText: strip the <user-attached-files> block, trim.
@@ -3117,6 +3122,9 @@ extension CollectionViewMessageListV3 {
             let cjk = text.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) || (0x3000...0x30FF).contains($0.value) }
             // bubble vertical padding (10*2) + attachment block + 1pt safety.
             let total = textH + 20 + attachH + 1 + (cjk && attachCount == 0 ? 7 : 0)
+            // [T-r3-P2] Bounded: the cache lives as long as the coordinator and
+            // a long session (or many width / font changes) kept adding keys.
+            if cache.count >= Self.userBubbleHeightCacheCap { cache.removeAll(keepingCapacity: true) }
             cache[key] = total
             return total
         }
@@ -3214,7 +3222,9 @@ extension CollectionViewMessageListV3 {
             }
             switch item {
             case .wholeMessage(let id):
-                let n = msg(id)?.content.count ?? 0
+                // UTF-8 length: O(1), and any edit changes it as well as
+                // the grapheme count would. [T-r3-S7]
+                let n = msg(id)?.content.utf8.count ?? 0
                 let a = msg(id)?.attachments.count ?? 0
                 return "w:\(id.uuidString):\(n):\(a)"
             case .assistantHeader(let id):
@@ -3225,7 +3235,7 @@ extension CollectionViewMessageListV3 {
                 return "s:\(id.uuidString)"
             case .assistantBlock(let mid, let bid):
                 let block = msg(mid)?.blocks.first(where: { $0.id == bid })
-                let n = block?.content.count ?? 0
+                let n = block?.content.utf8.count ?? 0
                 return "b:\(mid.uuidString):\(bid.uuidString):\(n)"
             }
         }

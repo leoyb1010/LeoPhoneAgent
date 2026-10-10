@@ -7,5 +7,7 @@
 #define MinisTests_Bridging_Header_h
 
 #import "../Shared/JiebaWrapper.h"
+// TextContainerGuardTests drive the real setSize: guard (UIKit only, no iSH).
+#import "../Shared/NSTextContainerSetSizeGuard.h"
 
 #endif /* MinisTests_Bridging_Header_h */

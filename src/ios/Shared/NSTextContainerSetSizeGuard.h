@@ -23,6 +23,7 @@
 //  often this rescues us in production.
 
 #import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -34,6 +35,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Total number of short-circuited setSize: calls since install.
 /// Visible for debugging and analytics; updated on main thread.
 + (uint64_t)shortCircuitCount;
+
+/// Main-thread setSize: calls forwarded to NSTextContainer since install.
++ (uint64_t)forwardedCount;
+
+/// The value any larger width/height (incl. .greatestFiniteMagnitude) is clamped to.
++ (CGFloat)unboundedDimension;
+
+/// Short-circuit warnings are logged only when the running total is a power of two.
++ (BOOL)shouldLogShortCircuitTotal:(uint64_t)total;
 
 @end
 

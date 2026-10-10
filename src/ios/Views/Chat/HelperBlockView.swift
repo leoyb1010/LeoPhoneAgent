@@ -25,9 +25,10 @@ struct HelperBlockInfo {
     @MainActor
     init(block: AssistantBlock) {
         toolUseId = block.toolUseId
-        let args = AIChatViewModel.subAgentInputArgs(block)
+        let parsed = Self.parsed(block)
+        let args = parsed.args
         action = SubAgentTool.Action.parse(args["action"])
-        payload = SubAgentRecovery.parseJSON(block.content)
+        payload = parsed.payload
         let argTitle = (args["tool_title"] as? String) ?? ""
         let payloadTitle = (payload?["title"] as? String) ?? ""
         let summaryTitle = block.toolSummary ?? ""
@@ -48,6 +49,35 @@ struct HelperBlockInfo {
     }
 
     var isControlOnly: Bool { action != .delegate }
+
+    // MARK: Parse cache [T-r3-P2]
+
+    /// The card and its sheet re-evaluate on every block / registry change;
+    /// both JSON documents only change when their strings do. Entry is
+    /// reused while the exact strings are unchanged (`==` hits the identity
+    /// fast path for the same storage), so a body pass costs no parsing.
+    private struct ParsedEntry {
+        let content: String
+        let argsRaw: String?
+        let payload: [String: Any]?
+        let args: [String: Any]
+    }
+    @MainActor private static var parseCache: [UUID: ParsedEntry] = [:]
+    @MainActor private static let parseCacheCap = 256
+
+    @MainActor
+    static func parsed(_ block: AssistantBlock) -> (payload: [String: Any]?, args: [String: Any]) {
+        if let hit = parseCache[block.id], hit.content == block.content, hit.argsRaw == block.toolInputArgs {
+            return (hit.payload, hit.args)
+        }
+        let entry = ParsedEntry(content: block.content,
+                                argsRaw: block.toolInputArgs,
+                                payload: SubAgentRecovery.parseJSON(block.content),
+                                args: AIChatViewModel.subAgentInputArgs(block))
+        if parseCache.count >= parseCacheCap { parseCache.removeAll(keepingCapacity: true) }
+        parseCache[block.id] = entry
+        return (entry.payload, entry.args)
+    }
 
     /// Live state against the registry: a "running" block with no job behind
     /// it was lost with the previous process (interrupted, resumable).
@@ -71,8 +101,20 @@ struct HelperBlockInfo {
 
 struct HelperBlockView: View {
     @ObservedObject var block: AssistantBlock
-    @ObservedObject private var registry = AgentJobRegistry.shared
     @State private var showSheet = false
+    /// [T-r3-P2] The registry slice this card shows. The card used to observe
+    /// the whole registry, so every job / queue change anywhere re-ran every
+    /// card's body (and its JSON parse); now it only re-renders when ITS
+    /// job's liveness or queue state actually changes.
+    @State private var liveSlice = LiveSlice()
+
+    struct LiveSlice: Equatable {
+        var job: AgentJob?
+        var queued = false
+        static func == (a: LiveSlice, b: LiveSlice) -> Bool {
+            a.job === b.job && a.queued == b.queued
+        }
+    }
 
     var body: some View {
         let info = HelperBlockInfo(block: block)
@@ -86,6 +128,20 @@ struct HelperBlockView: View {
         .sheet(isPresented: $showSheet) {
             HelperSheet(block: block)
         }
+        .onAppear { refreshLiveSlice() }
+        .onChange(of: block.content) { _, _ in refreshLiveSlice() }
+        // Delivered after the change lands (objectWillChange fires before it).
+        .onReceive(AgentJobRegistry.shared.objectWillChange.receive(on: DispatchQueue.main)) { _ in
+            refreshLiveSlice()
+        }
+    }
+
+    private func refreshLiveSlice() {
+        let info = HelperBlockInfo(block: block)
+        let registry = AgentJobRegistry.shared
+        let next = LiveSlice(job: info.childSessionId.flatMap { registry.job(forChild: $0) },
+                             queued: info.toolUseId.map { registry.isQueued(toolUseId: $0) } ?? false)
+        if next != liveSlice { liveSlice = next }
     }
 
     // MARK: Control call (status / steer / cancel / resume)
@@ -114,7 +170,7 @@ struct HelperBlockView: View {
     // MARK: Delegation card
 
     private func card(_ info: HelperBlockInfo) -> some View {
-        let live = info.childSessionId.flatMap { registry.job(forChild: $0) }
+        let live = liveSlice.job
         let state = info.recoveryState
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
