@@ -9,6 +9,7 @@ final class RecordingStoreTests: XCTestCase {
         try super.setUpWithError()
         dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recording-store-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         store = RecordingStore(root: dir.appendingPathComponent("recordings", isDirectory: true))
     }
 

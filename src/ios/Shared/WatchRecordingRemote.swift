@@ -42,11 +42,12 @@ enum WatchRecordingRemote {
     }
 
     static func reply(_ status: Status, ok: Bool) -> [String: Any] {
+        let elapsed: Double = status.elapsed.isFinite ? max(0, status.elapsed) : 0
         var out: [String: Any] = [
             "ok": ok,
             "isRecording": status.isRecording,
             "isPaused": status.isPaused,
-            "elapsed": status.elapsed.isFinite ? max(0, status.elapsed) : 0,
+            "elapsed": elapsed,
             "highlights": max(0, status.highlightCount),
         ]
         if let message = status.message { out["message"] = String(message.prefix(80)) }
