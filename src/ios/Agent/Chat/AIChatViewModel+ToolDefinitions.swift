@@ -432,6 +432,9 @@ extension AIChatViewModel {
             ))
         }
 
+        // [T-ask-user] Only an attended conversation can stop to ask the user.
+        if askUserIsOffered { tools.append(AskUserTool.definition) }
+
         // [T-subagent] subagent_task for top-level chats; children lose delegation / remote tools.
         tools = applySubAgentTools(tools)
 

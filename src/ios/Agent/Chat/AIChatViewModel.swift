@@ -1901,6 +1901,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         // [T-subagent] Child brief, or the sub agent roster for a top-level chat.
         stable += subAgentPromptFragment
+        stable += askUserPromptFragment   // [T-ask-user]
 
         var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
             + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
@@ -2433,6 +2434,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         guard !text.isEmpty || !pendingAttachments.isEmpty || treasuryContext?.isEmpty == false,
               !isProcessing else {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) treasury.isEmpty=\(treasuryContext?.isEmpty != false) isProcessing=\(self.isProcessing)")
+            return
+        }
+        // [T-ask-user] Typing while a question waits answers it (resumes that turn).
+        if editingMessageIndex == nil,
+           routeComposerToAskUser(text: text, hasAttachments: !pendingAttachments.isEmpty || treasuryContext?.isEmpty == false) {
+            inputText = ""
+            pastedBlocks.removeAll()
             return
         }
         // 这一轮真的要发出去了:之后的审批记录按"App"算,不再沿用之前快捷指令 / 定时任务打的标签。

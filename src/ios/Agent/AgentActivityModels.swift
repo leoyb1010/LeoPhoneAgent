@@ -50,6 +50,8 @@ enum AgentActivityReason: String, Codable, CaseIterable, Sendable {
     case authenticationRequired = "authentication_required"
     case rateLimited = "rate_limited"
     case kernelUnavailable = "kernel_unavailable"
+    /// [T-ask-user] The model asked the user a question and waits for the answer.
+    case userQuestion = "user_question"
 }
 
 /// Recovery actions are intentionally coarse and contain no provider text.
@@ -335,6 +337,7 @@ enum AgentToolPresentation {
         case "text":                            return "bubble.left"
         case "thinking":                        return "lightbulb.max"
         case "code_interpret":                  return "chevron.left.forwardslash.chevron.right"
+        case "ask_user":                        return "questionmark.bubble.fill"
         default:                                return "ellipsis.circle"
         }
     }
@@ -358,6 +361,7 @@ enum AgentToolPresentation {
         case "text":                            return String(localized: "Responding")
         case "thinking":                        return String(localized: "Thinking…")
         case "code_interpret":                  return String(localized: "Code")
+        case "ask_user":                        return String(localized: "等你回答")
         default:                                return String(localized: "Working")
         }
     }

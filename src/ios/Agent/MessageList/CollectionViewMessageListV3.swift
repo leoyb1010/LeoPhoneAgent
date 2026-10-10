@@ -871,6 +871,7 @@ private final class AssistantHeaderCellV3: SelfSizingCell {}
 private final class AssistantBlockCellV3: SelfSizingCell {}
 private final class AssistantFooterCellV3: SelfSizingCell {}
 private final class WorkSummaryCellV3: SelfSizingCell {}
+private final class ToolGroupCellV3: SelfSizingCell {}   // [T-tool-step-collapse]
 
 // MARK: - V3 Coordinator
 
@@ -961,6 +962,20 @@ extension CollectionViewMessageListV3 {
             scrollMode = .userBrowsing
             LeoHaptics.selection()
             if let vm { applySnapshot(messages: vm.messages, caller: "workFold") }
+        }
+
+        /// [T-tool-step-collapse] Opened "已运行 N 个工具" rows (per message, while the list lives).
+        let toolGroups = ToolGroupFoldState()
+
+        /// Show / hide one run of finished tool calls. Same reading rule as
+        /// `toggleWork`: the tapped row stays put, the list stops following.
+        func toggleToolGroup(_ message: ChatMessage, firstBlockId: UUID) {
+            let steps = message.blocks.map(ToolStep.init(block:))
+            guard let group = ToolStepGrouping.groups(steps).first(where: { $0.firstId == firstBlockId }) else { return }
+            if toolGroups.expanded.remove(group.expansionKey) == nil { toolGroups.expanded.insert(group.expansionKey) }
+            scrollMode = .userBrowsing
+            LeoHaptics.selection()
+            if let vm { applySnapshot(messages: vm.messages, caller: "toolGroup") }
         }
 
         // === Height Measurement Cache ===
@@ -1095,6 +1110,10 @@ extension CollectionViewMessageListV3 {
                 [weak self] cell, indexPath, item in
                 self?.configureCell(cell, item: item, indexPath: indexPath)
             }
+            let toolGroupReg = UICollectionView.CellRegistration<ToolGroupCellV3, MessageListItem> {
+                [weak self] cell, indexPath, item in
+                self?.configureCell(cell, item: item, indexPath: indexPath)
+            }
 
             dataSource = UICollectionViewDiffableDataSource<Section, MessageListItem>(
                 collectionView: collectionView
@@ -1110,6 +1129,8 @@ extension CollectionViewMessageListV3 {
                     return cv.dequeueConfiguredReusableCell(using: footerReg, for: indexPath, item: item)
                 case .workSummary:
                     return cv.dequeueConfiguredReusableCell(using: workReg, for: indexPath, item: item)
+                case .toolGroup:
+                    return cv.dequeueConfiguredReusableCell(using: toolGroupReg, for: indexPath, item: item)
                 }
             }
 
@@ -1356,6 +1377,19 @@ extension CollectionViewMessageListV3 {
                     .transaction { $0.disablesAnimations = true }
                 }.minSize(width: 0, height: 0).margins(.all, 0)
                 cell.applyContentConfiguration(config)
+
+            case .toolGroup(let msgId, let firstBlockId):
+                guard let msgIdx = messageIndex[msgId], msgIdx < messages.count else { return }
+                let message = messages[msgIdx]
+                cell.backgroundColor = .clear
+                let config = UIHostingConfiguration {
+                    ToolStepGroupRow(message: message, firstBlockId: firstBlockId, state: toolGroups,
+                                     maxWidth: width) { [weak self] in
+                        self?.toggleToolGroup(message, firstBlockId: firstBlockId)
+                    }
+                    .transaction { $0.disablesAnimations = true }
+                }.minSize(width: 0, height: 0).margins(.all, 0)
+                cell.applyContentConfiguration(config)
             }
 
             // [T-ios-scroll-decel-height-drift] Seed this cell with the real
@@ -1559,7 +1593,9 @@ extension CollectionViewMessageListV3 {
                 guard isLast, let sid = vm.sessionId else { return false }
                 return SessionActivityTracker.shared.isActive(sid)
             }()
-            bridge.canResume = isLast ? (vm.canResume && !vm.isProcessing && !trackerActive) : false
+            // [T-ask-user] A question still waiting on the card IS the way to continue: no Resume banner under it.
+            bridge.canResume = isLast ? (vm.canResume && !vm.isProcessing && !trackerActive
+                                         && vm.dormantAskUserToolUseId == nil) : false
             bridge.onResume = isLast ? { [weak self] in self?.onResume?() } : nil
             bridge.onWithdraw = message.isQueued ? { [weak self] in self?.onWithdraw?(message.id) } : nil
             // "Read from Start": replay this whole reply via TTS. Only for assistant
@@ -2507,8 +2543,30 @@ extension CollectionViewMessageListV3 {
                     let folded = isLatestReply || shownFlatToReader ? nil : WorkFold.foldedBlockIds(message.blocks)
                     if folded != nil { newItems.append(.workSummary(message.id)) }
                     let hideSteps = folded != nil && !workFold.expanded.contains(WorkFold.expansionKey(message))
-                    for block in message.blocks where !(hideSteps && folded?.contains(block.id) == true) {
-                        newItems.append(.assistantBlock(message.id, block.id))
+                    if folded == nil {
+                        // [T-tool-step-collapse] Runs of finished tool calls read as one row.
+                        // Like the work fold, never fold capsules under the reader: a run
+                        // you're reading flat stays flat until the list follows again.
+                        let steps = message.blocks.map(ToolStep.init(block:))
+                        for entry in ToolStepGrouping.layout(steps, expanded: toolGroups.expanded) {
+                            switch entry {
+                            case .group(let group):
+                                let keepFlat = scrollMode != .autoScrolling
+                                    && previousIds.contains(.assistantBlock(message.id, group.firstId))
+                                    && !previousIds.contains(.toolGroup(message.id, group.firstId))
+                                if !keepFlat {
+                                    newItems.append(.toolGroup(message.id, group.firstId))
+                                } else if !toolGroups.expanded.contains(group.expansionKey) {
+                                    newItems.append(contentsOf: group.memberIds.map { .assistantBlock(message.id, $0) })
+                                }
+                            case .step(let blockId):
+                                newItems.append(.assistantBlock(message.id, blockId))
+                            }
+                        }
+                    } else {
+                        for block in message.blocks where !(hideSteps && folded?.contains(block.id) == true) {
+                            newItems.append(.assistantBlock(message.id, block.id))
+                        }
                     }
                     // Only emit a footer cell when it will actually render
                     // content. A footer with zero visible content (no typing
@@ -2573,7 +2631,7 @@ extension CollectionViewMessageListV3 {
                         let isLastMsg = messages.last?.id == footerMsgId
                         let hasError = footerMsg?.error != nil
                         let showsResume = isLastMsg && !hasError
-                            && vm.canResume && !vm.isProcessing
+                            && vm.canResume && !vm.isProcessing && vm.dormantAskUserToolUseId == nil
                         let isActive = isLastMsg && vm.isProcessing
                         footerProminent = hasError || showsResume || isActive
                         layout.setFooterHug(!footerProminent, at: i)
@@ -2596,6 +2654,9 @@ extension CollectionViewMessageListV3 {
 
                     case .workSummary:
                         layout.setEstimatedHeight(WorkSummaryRowV3.estimatedHeight, at: i)
+
+                    case .toolGroup:
+                        layout.setEstimatedHeight(ToolStepGroupRow.estimatedHeight, at: i)
 
                     case .assistantFooter:
                         // Prominent banners (error/resume/typing) measure
@@ -3156,6 +3217,7 @@ extension CollectionViewMessageListV3 {
             case .assistantFooter(let id): return id
             case .workSummary(let id): return id
             case .assistantBlock(let mid, _): return mid
+            case .toolGroup(let mid, _): return mid
             }
         }
 
@@ -3199,6 +3261,8 @@ extension CollectionViewMessageListV3 {
             case .workSummary(let id):
                 let c = msg(id)?.blocks.first?.content ?? ""
                 return "s#\(digest(c))"
+            case .toolGroup(let mid, let bid):
+                return "g#\(mid.uuidString.prefix(8))#\(bid.uuidString.prefix(8))"
             case .assistantBlock(let mid, let bid):
                 guard let b = msg(mid)?.blocks.first(where: { $0.id == bid }) else { return "b#?" }
                 let c = b.content
@@ -3223,6 +3287,8 @@ extension CollectionViewMessageListV3 {
                 return "f:\(id.uuidString)"
             case .workSummary(let id):
                 return "s:\(id.uuidString)"
+            case .toolGroup(let mid, let bid):
+                return "g:\(mid.uuidString):\(bid.uuidString)"
             case .assistantBlock(let mid, let bid):
                 let block = msg(mid)?.blocks.first(where: { $0.id == bid })
                 let n = block?.content.count ?? 0
@@ -3286,6 +3352,8 @@ extension CollectionViewMessageListV3 {
                 return 28
             case .workSummary:
                 return WorkSummaryRowV3.estimatedHeight
+            case .toolGroup:
+                return ToolStepGroupRow.estimatedHeight
             case .assistantBlock(let msgId, let blockId):
                 guard let msg = messages.first(where: { $0.id == msgId }),
                       let block = msg.blocks.first(where: { $0.id == blockId }) else { return 44 }
@@ -3488,6 +3556,7 @@ extension CollectionViewMessageListV3 {
             case .assistantBlock(let mid, _): return mid == messageId
             case .assistantFooter(let mid): return mid == messageId
             case .workSummary(let mid): return mid == messageId
+            case .toolGroup(let mid, _): return mid == messageId
             case .wholeMessage, .assistantHeader: return false
             }
         }

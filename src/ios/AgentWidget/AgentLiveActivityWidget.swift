@@ -2314,7 +2314,7 @@ extension LiveSessionSnapshot {
     var restingSymbol: String { outcome.symbol }
     var restingTint: Color { outcome.tint }
     /// In-flight tint: orange while it waits for your OK, blue otherwise.
-    var liveTint: Color { needsApproval ? .orange : .blue }
+    var liveTint: Color { needsApproval || needsAnswer ? .orange : .blue }
 }
 
 @available(iOSApplicationExtension 16.2, *)

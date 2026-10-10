@@ -1019,6 +1019,11 @@ extension AIChatViewModel {
             (toolOutput, toolSuccess) = await executeSubAgentTask(args: args, toolUseId: tu.id,
                                                                   msgIdx: msgIdx, blockIdx: blockIdx)
 
+        // [T-ask-user] Pause for the user's answer (card in the chat).
+        case AskUserTool.name:
+            (toolOutput, toolSuccess) = await executeAskUser(args: toolArgs, toolUseId: tu.id,
+                                                             msgIdx: msgIdx, blockIdx: blockIdx)
+
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false

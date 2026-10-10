@@ -634,6 +634,11 @@ extension LiveSessionSnapshot {
 
     var needsApproval: Bool { !isCompleted && toolIcon == Self.approvalIcon }
 
+    /// [T-ask-user] A run waiting for the user's answer to a question.
+    static let questionIcon = "questionmark.bubble.fill"
+
+    var needsAnswer: Bool { !isCompleted && toolIcon == Self.questionIcon }
+
     private enum CodingKeys: String, CodingKey {
         case sessionId, title, toolIcon, toolStatus, loopIteration, isCompleted, lastMessage, outcome
     }

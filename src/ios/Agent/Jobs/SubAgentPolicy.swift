@@ -94,6 +94,8 @@ enum SubAgentTool {
         name,
         "remote_shell", "remote_agent",
         "dispatch_subtask", "check_subtasks", "collect_subtask",
+        // [T-ask-user] only the parent conversation asks the user.
+        "ask_user",
     ]
 
     static func isForbiddenForChild(_ toolName: String) -> Bool {

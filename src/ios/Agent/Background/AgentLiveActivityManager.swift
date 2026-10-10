@@ -831,6 +831,11 @@ final class AgentLiveActivityManager {
             redacted.toolStatus = privacyApprovalStatus
             redacted.toolIcon = LiveSessionSnapshot.approvalIcon
             redacted.lastMessage = ""
+        } else if snap.needsAnswer {
+            // [T-ask-user] Content-free: the question itself never reaches the lock screen here.
+            redacted.toolStatus = String(localized: "等你回答")
+            redacted.toolIcon = LiveSessionSnapshot.questionIcon
+            redacted.lastMessage = ""
         } else if snap.toolIcon == pausedIcon {
             redacted.toolStatus = privacyPausedStatus
             redacted.toolIcon = pausedIcon

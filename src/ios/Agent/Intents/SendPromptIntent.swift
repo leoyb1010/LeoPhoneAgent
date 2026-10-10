@@ -521,6 +521,10 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         if NotificationQuickReply.handle(response: response, completion: completionHandler) {
             return
         }
+        // [T-ask-user] An answer button on a question notification.
+        if AskUserNotificationResponder.handle(response: response, completion: completionHandler) {
+            return
+        }
         let userInfo = response.notification.request.content.userInfo
         // [T-approval-vocab] 本机敏感操作的审批按钮:在锁屏 / 手表上直接裁决。
         if let decision = SensitiveToolGate.decision(forNotificationAction: response.actionIdentifier),
@@ -601,7 +605,8 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         // [T-presence-quiet] 正在用 App:横幅会从灵动岛 / 屏幕顶上压住正在看的内容(用户 2026-09-26 反馈)。
         // 只有别的任务在等你批准才弹(不响)—— 不批它就一直卡着;完成、快捷指令结果这类只进通知中心。
         let category = notification.request.content.categoryIdentifier
-        if category == HarnessApprovalNotifier.categoryId || category == SensitiveToolGate.notifyCategoryId {
+        if category == HarnessApprovalNotifier.categoryId || category == SensitiveToolGate.notifyCategoryId
+            || info[AskUserNotification.toolUseKey] != nil {
             completionHandler([.banner, .list])
         } else {
             completionHandler([.list])
