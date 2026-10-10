@@ -30,6 +30,13 @@ enum BackupOpenRouter {
         // Give a dismissing sheet a beat so the presentation isn't dropped.
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
+            // A backup or restore (including a package still extracting) is
+            // running: refuse a second restore screen instead of stacking one.
+            if await BackupActivityLock.shared.isBusy {
+                try? FileManager.default.removeItem(at: staged)
+                presentAlert(String(localized: "已有备份或恢复在进行中"))
+                return
+            }
             present(packageURL: staged, ownsFile: true)
         }
     }

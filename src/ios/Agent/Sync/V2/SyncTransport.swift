@@ -99,6 +99,10 @@ protocol SyncTransport: AnyObject {
     /// Release an in-flight lease after failed domain apply, retaining the inbox.
     func deferInbound(_ batch: SyncInboundBatch) async
 
+    /// A record was applied but parked waiting for this parent; fetch it if
+    /// the transport can address records directly. Best effort.
+    func requestInboundDependency(_ id: SyncRecordID) async
+
     /// Hard delete a set of records by id. Returns one outcome per id.
     func delete(_ ids: [SyncRecordID]) async throws -> [SyncOutcome]
 }
@@ -110,4 +114,5 @@ extension SyncTransport {
     func checkConnection() async throws { throw SyncTransportError.notStarted }
     func acknowledgeInbound(_ batch: SyncInboundBatch) async throws { _ = batch }
     func deferInbound(_ batch: SyncInboundBatch) async { _ = batch }
+    func requestInboundDependency(_ id: SyncRecordID) async { _ = id }
 }

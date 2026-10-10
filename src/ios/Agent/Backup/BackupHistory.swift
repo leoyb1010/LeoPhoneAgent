@@ -125,7 +125,32 @@ final class BackupHistory: ObservableObject {
         records = (try? BackupDates.decoder().decode([Record].self, from: data)) ?? []
     }
 
+    /// Progress lines arrive many times a second during a long run; encoding
+    /// and rewriting the whole history each time stalled the main thread.
+    /// Mutations of a running record are coalesced (≤ one write per
+    /// `saveInterval`); begin / finish / fail / remove write immediately.
+    static let saveInterval: TimeInterval = 5
+    private var pendingSave: Task<Void, Never>?
+
+    private func scheduleSave() {
+        guard pendingSave == nil else { return }
+        pendingSave = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.saveInterval * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            self.pendingSave = nil
+            self.save()
+        }
+    }
+
+    /// Write any coalesced changes now.
+    func flush() {
+        guard pendingSave != nil else { return }
+        save()
+    }
+
     private func save() {
+        pendingSave?.cancel()
+        pendingSave = nil
         do {
             try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
@@ -215,6 +240,8 @@ final class BackupHistory: ObservableObject {
     private func mutate(_ id: UUID, _ change: (inout Record) -> Void) {
         guard let i = records.firstIndex(where: { $0.id == id }) else { return }
         change(&records[i])
-        save()
+        // Terminal states are written at once (a kill right after must not
+        // lose the outcome); in-flight progress is coalesced.
+        if records[i].status == .running { scheduleSave() } else { save() }
     }
 }

@@ -1583,7 +1583,9 @@ struct AIChatView: View {
     /// `ProviderConfigStore.importInstanceJSON` keys on, so a hit reliably
     /// imports. Returns nil for non-JSON or ordinary JSON. [T-ios-json-open-provider-import-prompt]
     static func providerExportJSON(at url: URL) -> String? {
+        // A provider export is a few KB; never load a large .json to sniff it.
         guard url.pathExtension.lowercased() == "json",
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_048_576,
               let data = try? Data(contentsOf: url),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let providerTypeRaw = dict["providerType"] as? String,

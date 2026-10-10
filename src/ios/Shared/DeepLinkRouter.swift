@@ -38,7 +38,7 @@ extension Notification.Name {
 ///   leophoneagent://settings/background
 ///   leophoneagent://settings/about
 ///   leophoneagent://settings/permissions
-///   leophoneagent://settings/environments[?create_key=…&create_value=…&create_note=…]
+///   leophoneagent://settings/environments[?create_key=…&create_note=…]  (create_value is ignored)
 ///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
 ///   leophoneagent://paperclip/issue/<id>[?company=<companyId>]   (opens the Paperclip workspace on that issue)
 ///   leophoneagent://shortcut-result?run=<runId>&status=success|error|cancel[&result=…]  (apple-shortcuts run callback)
@@ -111,8 +111,8 @@ enum DeepLinkRouter {
         case "open_terminal":
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             // 只预填、不执行:去掉换行和其它控制字符,链接里的 %0A 不能替你按回车。
-            coord.terminalInitCommand = components?.queryItems?.first(where: { $0.name == "init_command" })?.value
-                .map { String(String.UnicodeScalarView($0.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) })) }
+            coord.terminalInitCommand = DeepLinkSafety.terminalPrefill(
+                components?.queryItems?.first(where: { $0.name == "init_command" })?.value)
             IOSExecutionBackend.selectLocal()
             coord.showTerminal = true
 
@@ -272,11 +272,10 @@ enum DeepLinkRouter {
             // like `…?create_key=GH_TOKEN&create_value=` (present-but-
             // empty) still opens the prefilled form. Without
             // `create_key`, plain navigation to the env vars list.
-            let key = components?.queryItems?.first(where: { $0.name == "create_key" })?.value
-            if let key, !key.isEmpty {
-                let value = components?.queryItems?.first(where: { $0.name == "create_value" })?.value ?? ""
-                let note = components?.queryItems?.first(where: { $0.name == "create_note" })?.value ?? ""
-                coord.pendingEnvVarCreate = .init(key: key, value: value, note: note)
+            // A link may name the variable, never supply its value: anything
+            // in `create_value` is ignored so a link can't plant a credential.
+            if let prefill = DeepLinkSafety.envVarPrefill(components?.queryItems ?? []) {
+                coord.pendingEnvVarCreate = .init(key: prefill.key, value: "", note: prefill.note)
             }
             coord.pendingSettingsTarget = .environments
 
@@ -324,44 +323,22 @@ enum DeepLinkRouter {
             return false
         }
 
-        let scope: WebAppPathScope
-        let ctx: String?
-        let htmlPath: String
-
-        if rawPath.hasPrefix("attachments/") {
-            guard let sid = session, !sid.isEmpty else {
-                deepLinkLog.warning("leophoneagent://open path=attachments/… missing session")
-                return false
-            }
-            scope = .sessionAttachment
-            ctx = sid
-            htmlPath = String(rawPath.dropFirst("attachments/".count))
-        } else if rawPath.hasPrefix("workspace/") {
-            guard let sid = session, !sid.isEmpty else {
-                deepLinkLog.warning("leophoneagent://open path=workspace/… missing session")
-                return false
-            }
-            scope = .sessionWorkspace
-            ctx = sid
-            htmlPath = String(rawPath.dropFirst("workspace/".count))
-        } else if rawPath.hasPrefix("shared:") {
-            scope = .shared
-            ctx = nil
-            htmlPath = String(rawPath.dropFirst("shared:".count))
-        } else if rawPath.hasPrefix("mount:") {
-            // mount:<uuid>/<rest>
-            let rest = rawPath.dropFirst("mount:".count)
-            guard let slash = rest.firstIndex(of: "/") else {
-                deepLinkLog.warning("leophoneagent://open path=mount:… missing /<rest>")
-                return false
-            }
-            scope = .mount
-            ctx = String(rest[..<slash])
-            htmlPath = String(rest[rest.index(after: slash)...])
-        } else {
-            deepLinkLog.warning("leophoneagent://open unknown path prefix in \(rawPath)")
+        // Session ids must be ids and paths must stay inside their scope —
+        // `session=../../..` or `path=attachments/../../x` is refused here,
+        // before anything is resolved against the sandbox.
+        guard let launch = DeepLinkSafety.parseWebAppLaunch(session: session, rawPath: rawPath) else {
+            deepLinkLog.warning("leophoneagent://open rejected: invalid session or path")
             return false
         }
+        let scope: WebAppPathScope
+        switch launch.scope {
+        case .sessionAttachment: scope = .sessionAttachment
+        case .sessionWorkspace: scope = .sessionWorkspace
+        case .shared: scope = .shared
+        case .mount: scope = .mount
+        }
+        let ctx = launch.context
+        let htmlPath = launch.htmlPath
 
         let title = url.fragment.flatMap { $0.removingPercentEncoding } ?? ""
         let shortcut = WebAppShortcut(
@@ -376,13 +353,22 @@ enum DeepLinkRouter {
             sourceSessionId: (scope == .sessionAttachment || scope == .sessionWorkspace) ? ctx : nil
         )
 
-        deepLinkLog.info("leophoneagent://open scope=\(scope.rawValue) ctx=\(ctx ?? "nil") htmlPath=\(htmlPath)")
-        // Dismiss any leftover fullScreenCover (image gallery, in-chat
-        // web preview, camera, etc.) BEFORE attempting to present the
-        // WebApp. iOS only allows one fullScreenCover per host view at a
-        // time, so a present-while-another-is-up silently no-ops.
-        NotificationCenter.default.post(name: .dismissAllImmersivePresentations, object: nil)
+        deepLinkLog.info("leophoneagent://open scope=\(scope.rawValue) hasContext=\(ctx != nil) pathLength=\(htmlPath.count)")
+        let isSessionScope = scope == .sessionAttachment || scope == .sessionWorkspace
         Task { @MainActor in
+            // A session scope must name a conversation that exists here.
+            if isSessionScope, let sid = ctx {
+                guard await ChatStore.shared.sessionExists(id: sid),
+                      !OffloadPermissionManager.isReservedSessionId(sid) else {
+                    deepLinkLog.info("leophoneagent://open for unknown session — ignored")
+                    return
+                }
+            }
+            // Dismiss any leftover fullScreenCover (image gallery, in-chat
+            // web preview, camera, etc.) BEFORE attempting to present the
+            // WebApp. iOS only allows one fullScreenCover per host view at a
+            // time, so a present-while-another-is-up silently no-ops.
+            NotificationCenter.default.post(name: .dismissAllImmersivePresentations, object: nil)
             // 350ms covers the standard fullScreenCover dismiss animation
             // (~300ms) with a small safety margin.
             try? await Task.sleep(nanoseconds: 350_000_000)

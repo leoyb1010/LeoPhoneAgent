@@ -34,7 +34,8 @@ INSERT INTO sessions VALUES ('percent', '100% ready', 'm', 0, 0, NULL, NULL), ('
  ('underscore', 'a_b', 'm', 0, 0, NULL, NULL), ('letter', 'axb', 'm', 0, 0, NULL, NULL),
  ('slash', 'a\b', 'm', 0, 0, NULL, NULL), ('message', 'body match', 'm', 0, 0, NULL, NULL),
  ('hiddenchild', '100% sub agent', 'm', 0, 0, NULL, 'percent');
-INSERT INTO messages VALUES ('message', 'literal 50% and x_y and a\b and O''Reilly', 1);
+INSERT INTO messages VALUES ('message', '[{"type":"text","value":"literal 50% and x_y and a\\b and O''Reilly"}]', 1),
+ ('letter', '[{"type":"toolUse","value":{"name":"x","input":"100% a_b"}}]', 1), ('number', 'not json at all "', 1);
 """#
 precondition(sqlite3_exec(harness.db, sql, nil, nil, nil) == SQLITE_OK)
 func check(_ query: String, _ ids: Set<String>) {
@@ -48,12 +49,15 @@ check("_", ["underscore", "message"])
 check(#"a\b"#, ["slash", "message"])
 check("O'Reilly", ["message"])
 check("%' OR 1=1 --", [])
+check("\"", [])
+check("type", [])
 check("", [])
-print("PASS production session search: literal wildcards, backslash, message matches, quotes, empty query, hidden sub agent sessions excluded")
+print("PASS production session search: literal wildcards, backslash, message text (not JSON envelope or tool payloads), quotes, malformed rows, empty query, hidden sub agent sessions excluded")
 '''
 with tempfile.TemporaryDirectory(prefix='leo-session-search-') as folder:
-    swift = Path(folder) / 'Search.swift'
+    swift = Path(folder) / 'main.swift'
     binary = Path(folder) / 'search'
     swift.write_text(source)
-    subprocess.run(['xcrun', 'swiftc', str(swift), '-o', str(binary)], check=True)
+    helper = root / 'src/ios/Agent/Chat/ChatSearchSQL.swift'
+    subprocess.run(['xcrun', 'swiftc', str(swift), str(helper), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

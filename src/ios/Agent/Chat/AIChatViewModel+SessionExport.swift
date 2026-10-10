@@ -41,31 +41,41 @@ extension AIChatViewModel {
         // ~16ms/200 messages). The sanitizer + CoreText pagination are NOT
         // cheap on pathological input (a 500KB single-line blob measured
         // 8-74s) -- so everything after this line runs off-main.
-        let markdown = sessionExportMarkdown()
-        guard !markdown.isEmpty else { return }
+        let chunks = Self.sessionExportChunks(messages: messages)
+        guard !chunks.isEmpty else { return }
         let stamp = Self.exportStamp.string(from: Date())
         let sessionId = self.sessionId
+        // Markdown streams chunk by chunk to disk and reaches the tray as a
+        // mapped file: a long transcript never exists as one giant String.
+        // PDF needs the whole text for CoreText, so it alone joins.
+        let markdownForPDF = format == .pdf ? chunks.joined(separator: "\n") : nil
         Task.detached(priority: .userInitiated) {
             let fileName: String
+            let url: URL
             let data: Data?
             switch format {
             case .markdown:
                 fileName = "session-\(stamp).md"
-                data = markdown.data(using: .utf8)
+                url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                do {
+                    try Self.writeExportChunks(chunks, to: url)
+                    data = try Data(contentsOf: url, options: .mappedIfSafe)
+                } catch {
+                    await MainActor.run { LeoHaptics.notification(.error) }
+                    return
+                }
             case .pdf:
                 fileName = "session-\(stamp).pdf"
-                data = Self.pdfData(from: WatchTextSanitizer.plain(markdown))
-            }
-            guard let data else { return }
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            do {
-                try data.write(to: url)
-            } catch {
-                await MainActor.run { LeoHaptics.notification(.error) }
-                return
+                url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                guard let pdf = Self.pdfData(from: WatchTextSanitizer.plain(markdownForPDF ?? "")) else { return }
+                do { try pdf.write(to: url) } catch {
+                    await MainActor.run { LeoHaptics.notification(.error) }
+                    return
+                }
+                data = pdf
             }
             // Into the tray so the export survives the share sheet, then share.
-            if let sessionId {
+            if let sessionId, let data {
                 _ = try? await ArtifactRepository.shared.create(
                     data: data,
                     fileName: fileName,
@@ -80,6 +90,26 @@ extension AIChatViewModel {
         }
     }
 
+    /// Writes export chunks through a buffered handle (one write per ~256 KB).
+    nonisolated static func writeExportChunks(_ chunks: [String], to url: URL) throws {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        guard fm.createFile(atPath: url.path, contents: nil) else { throw CocoaError(.fileWriteUnknown) }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        var buffer = Data()
+        buffer.reserveCapacity(256 * 1024)
+        for (index, chunk) in chunks.enumerated() {
+            if index > 0 { buffer.append(0x0A) }
+            buffer.append(contentsOf: chunk.utf8)
+            if buffer.count >= 256 * 1024 {
+                try handle.write(contentsOf: buffer)
+                buffer.removeAll(keepingCapacity: true)
+            }
+        }
+        if !buffer.isEmpty { try handle.write(contentsOf: buffer) }
+    }
+
     static let exportStamp: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -87,22 +117,20 @@ extension AIChatViewModel {
         return formatter
     }()
 
-    /// The transcript as markdown. User/assistant text in full; tool calls
-    /// as single marker lines; errors kept (they're part of what happened).
-    private func sessionExportMarkdown() -> String {
-        Self.sessionExportMarkdown(messages: messages)
-    }
-
     /// [C5] 与 ViewModel 实例无关的导出:App 内导出和「导出会话」快捷指令动作共用。
     static func sessionExportMarkdown(messages: [ChatMessage]) -> String {
-        var out: [String] = []
+        sessionExportChunks(messages: messages).joined(separator: "\n")
+    }
+
+    /// The transcript as markdown chunks (header, then one per message;
+    /// joined with "\n" they are the full document). User/assistant text in
+    /// full; tool calls as single marker lines; errors kept.
+    static func sessionExportChunks(messages: [ChatMessage]) -> [String] {
         let header = DateFormatter()
         header.dateFormat = "yyyy-MM-dd HH:mm"
-        out.append("# LeoBot Session")
-        out.append("")
-        out.append("_Exported \(header.string(from: Date()))_")
+        var chunks: [String] = ["# LeoBot Session\n\n_Exported \(header.string(from: Date()))_"]
         for message in messages {
-            out.append("")
+            var out: [String] = [""]
             switch message.role {
             case .user:
                 out.append("## 👤 " + String(localized: "You"))
@@ -130,8 +158,9 @@ extension AIChatViewModel {
             default:
                 break
             }
+            chunks.append(out.joined(separator: "\n"))
         }
-        return out.joined(separator: "\n")
+        return chunks
     }
 
     /// One-line transcript marker for a tool block.

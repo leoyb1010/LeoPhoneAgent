@@ -2095,8 +2095,13 @@ extension SkillStore {
     /// Includes SKILL.md and all bundled files, excluding package manager dirs.
     /// Returns nil if the skill directory doesn't exist or has no files.
     func buildSkillZipData(_ skillId: String) -> Data? {
+        Self.buildSkillZipData(skillDir: skillsDir.appendingPathComponent(skillId), skillId: skillId)
+    }
+
+    /// Pure file work — callable off the main actor (backup restore zips here).
+    nonisolated static func buildSkillZipData(skillDir: URL, skillId: String) -> Data? {
         let syncLogger = AppLogger(category: "SkillSync")
-        let skillDir = skillsDir.appendingPathComponent(skillId)
+        let fm = FileManager.default
         guard fm.fileExists(atPath: skillDir.path) else {
             syncLogger.info("[ZIP] '\(skillId)' directory missing — cannot build ZIP")
             return nil
@@ -2221,7 +2226,7 @@ extension SkillStore {
 
     /// Build a ZIP archive in memory from a list of (relativePath, data) pairs.
     /// Uses Store method (no compression) for simplicity and speed.
-    static func buildZipArchive(files: [(relativePath: String, data: Data)]) -> Data {
+    nonisolated static func buildZipArchive(files: [(relativePath: String, data: Data)]) -> Data {
         var archive = Data()
         var centralDirectory = Data()
         var offset: UInt32 = 0
@@ -2295,7 +2300,7 @@ extension SkillStore {
     }
 
     /// CRC-32 (ISO 3309 / ITU-T V.42)
-    private static func crc32(_ data: Data) -> UInt32 {
+    nonisolated private static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFFFFFF
         for byte in data {
             crc ^= UInt32(byte)

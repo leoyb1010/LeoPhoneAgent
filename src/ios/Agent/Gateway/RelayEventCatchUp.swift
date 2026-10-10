@@ -23,6 +23,8 @@ import CryptoKit
 import UIKit
 import UserNotifications
 
+private let relayLog = AppLogger(category: "RelayCatchUp")
+
 @MainActor
 final class RelayEventCatchUp: ObservableObject {
     static let shared = RelayEventCatchUp()
@@ -69,7 +71,12 @@ final class RelayEventCatchUp: ObservableObject {
         inFlight = true
         defer { inFlight = false }
 
-        guard let payload = try? await client.relayEvents(after: lastSeenAt) else { return }
+        let now = Date().timeIntervalSince1970
+        // An older build could have pushed the cursor into the future; pull it
+        // back or nothing would ever be caught up again.
+        let after = RelayCatchUpPolicy.repairedCursor(lastSeenAt, now: now)
+        if after != lastSeenAt { lastSeenAt = after }
+        guard let payload = try? await client.relayEvents(after: after) else { return }
         guard !payload.items.isEmpty else {
             // 空结果也推进水位,但只推进到"本批已看到的最大时间",
             // 不用服务端的 now —— 查询快照与读 now 之间写入的事件
@@ -77,16 +84,20 @@ final class RelayEventCatchUp: ObservableObject {
             return
         }
 
+        // Newest ≤200 only; the cursor never moves past now + 60 s.
+        let plan = RelayCatchUpPolicy.plan(payload.items, lastSeenAt: after, now: now)
+        if plan.droppedOlder > 0 {
+            relayLog.info("catch-up capped: dropped \(plan.droppedOlder) older events")
+        }
         var approvals: [RelayEventItem] = []
-        var highWater = lastSeenAt
-        for item in payload.items {
-            highWater = max(highWater, item.receivedAt)
+        var finished: [RelayEventItem] = []
+        for item in plan.items {
             let fingerprint = item.fingerprint
             guard !notifiedSet.contains(fingerprint) else { continue }
             remember(fingerprint)
             // [E5] 从手机对话派出的 Mac 任务结束:结果暂存,打开那个对话时显示。
             if let result = MacResultInbox.entry(event: item.raw, machine: item.machine,
-                                                 receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? item.receivedAt : Date().timeIntervalSince1970)) {
+                                                 receivedAt: Date(timeIntervalSince1970: item.receivedAt > 0 ? min(item.receivedAt, now) : now)) {
                 MacResultInbox.record(result)
                 NotificationCenter.default.post(name: MacResultInbox.changed, object: nil,
                                                 userInfo: ["sessionId": result.phoneSessionId])
@@ -94,14 +105,13 @@ final class RelayEventCatchUp: ObservableObject {
             switch item.eventName {
             case "approval.request":
                 approvals.append(item)
-            case "run.failed":
-                postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "")
-            case "run.completed":
-                postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "")
+            case "run.failed", "run.completed":
+                finished.append(item)
             default:
                 break
             }
         }
+        postFinished(finished)
         if !approvals.isEmpty {
             // Only what the Mac is still waiting on: one already answered on the
             // lock screen, the watch or the Mac itself must not come back as a
@@ -116,7 +126,25 @@ final class RelayEventCatchUp: ObservableObject {
             // 前台时通知发不出去(系统会压掉),改由界面显示这批待审批。
             if !approvals.isEmpty { missedApprovals = approvals }
         }
-        lastSeenAt = highWater
+        lastSeenAt = plan.highWater
+    }
+
+    /// 终态提示:少量逐条发,多了合并成一条,不让一次补拉刷屏。
+    private func postFinished(_ items: [RelayEventItem]) {
+        guard !items.isEmpty else { return }
+        if items.count <= RelayCatchUpPolicy.maxIndividualNotices {
+            for item in items {
+                if item.eventName == "run.failed" {
+                    postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "")
+                } else {
+                    postSimple(title: "✅ \(item.machine) 任务完成", body: item.text ?? "")
+                }
+            }
+            return
+        }
+        let failed = items.filter { $0.eventName == "run.failed" }.count
+        postSimple(title: String(localized: "Mac 上有 \(items.count) 个任务结束"),
+                   body: String(localized: "其中 \(failed) 个失败，打开 App 查看"))
     }
 
     private func remember(_ fingerprint: String) {
@@ -158,28 +186,7 @@ final class RelayEventCatchUp: ObservableObject {
     }
 }
 
-// MARK: - 中继事件模型
-
-struct RelayEventItem {
-    let machine: String
-    let receivedAt: Double
-    let raw: [String: Any]
-
-    var eventName: String { raw["event"] as? String ?? "" }
-    var sessionId: String? { raw["session_id"] as? String }
-    var approvalId: String? { raw["approval_id"] as? String ?? raw["request_id"] as? String }
-    var command: String? { raw["command"] as? String }
-    var text: String? { raw["error"] as? String ?? raw["output"] as? String }
-    var seq: Int { raw["seq"] as? Int ?? 0 }
-
-    /// 幂等指纹:同一台机器同一会话同一 seq 只提示一次。
-    var fingerprint: String { "\(machine)|\(sessionId ?? "")|\(eventName)|\(seq)" }
-}
-
-struct RelayEventPayload {
-    let items: [RelayEventItem]
-    let now: Double
-}
+// 中继事件模型与补拉策略在 RelayCatchUpPolicy.swift(纯逻辑，可单测)。
 
 enum TreasuryAssetFetchStatus: String {
     case ready, pending, unavailable, failed
@@ -771,17 +778,19 @@ extension LeoAgentClient {
     nonisolated var relayEventsURL: URL? { relayServices?.eventsURL }
 
     /// 取中继上暂存的关键事件。`after` 是上次看到的时间水位。
+    /// 只要最新的 200 条,响应超过 1 MB 直接拒收(不解析)。
     func relayEvents(after: Double) async throws -> RelayEventPayload {
         guard let base = relayEventsURL,
               var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
             return RelayEventPayload(items: [], now: 0)
         }
-        parts.queryItems = [URLQueryItem(name: "after", value: String(after))]
+        parts.queryItems = [URLQueryItem(name: "after", value: String(after)),
+                            URLQueryItem(name: "limit", value: String(RelayCatchUpPolicy.maxItems))]
         guard let url = parts.url else { return RelayEventPayload(items: [], now: 0) }
         var req = URLRequest(url: url)
         req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 20
-        let (data, response) = try await session.data(for: req)
+        let (bytes, response) = try await session.bytes(for: req)
         guard let http = response as? HTTPURLResponse else {
             throw GatewayError.malformedResponse("not an HTTP response")
         }
@@ -789,15 +798,18 @@ extension LeoAgentClient {
         guard (200..<300).contains(http.statusCode) else {
             throw GatewayError.http(status: http.statusCode, message: nil)
         }
-        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        let rows = obj["events"] as? [[String: Any]] ?? []
-        let items = rows.compactMap { row -> RelayEventItem? in
-            guard let event = row["event"] as? [String: Any] else { return nil }
-            return RelayEventItem(
-                machine: row["machine"] as? String ?? "Mac",
-                receivedAt: row["received_at"] as? Double ?? 0,
-                raw: event)
+        if http.expectedContentLength > Int64(RelayCatchUpPolicy.maxResponseBytes) {
+            bytes.task.cancel()
+            throw RelayCatchUpPolicy.ResponseTooLarge()
         }
-        return RelayEventPayload(items: items, now: obj["now"] as? Double ?? 0)
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count > RelayCatchUpPolicy.maxResponseBytes {
+                bytes.task.cancel()
+                throw RelayCatchUpPolicy.ResponseTooLarge()
+            }
+        }
+        return try RelayCatchUpPolicy.decode(data)
     }
 }

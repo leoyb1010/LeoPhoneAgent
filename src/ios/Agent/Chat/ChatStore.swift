@@ -1409,31 +1409,18 @@ actor ChatStore {
     }
 
     func searchSessions(query: String) -> [SearchResult] {
-        guard !query.isEmpty else { return [] }
-        let escapedQuery = query.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_")
-        let likePattern = "%\(escapedQuery)%"
-        // Find sessions where title matches OR any message text contains the query
-        let sql = """
-            SELECT DISTINCT s.id, s.title, s.model_id, s.created_at, s.updated_at, s.category,
-                   (SELECT m2.parts_json FROM messages m2
-                    WHERE m2.session_id = s.id AND m2.parts_json LIKE ? ESCAPE '\\'
-                    ORDER BY m2.sort_order DESC LIMIT 1)
-            FROM sessions s
-            LEFT JOIN messages m ON m.session_id = s.id
-            WHERE s.parent_session_id IS NULL
-              AND (s.title LIKE ? ESCAPE '\\' OR m.parts_json LIKE ? ESCAPE '\\')
-            GROUP BY s.id
-            ORDER BY s.updated_at DESC
-            """
+        // Text parts only, wildcards escaped, query bounded (ChatSearchSQL):
+        // `"` used to match every session because it searched the JSON envelope.
+        guard let search = ChatSearchSQL.sessionSearch(query: query),
+              let query = ChatSearchSQL.normalizedQuery(query) else { return [] }
+        let sql = search.sql
         var stmt: OpaquePointer?
         var results: [SearchResult] = []
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, (likePattern as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            for (offset, value) in search.bindings.enumerated() {
+                sqlite3_bind_text(stmt, Int32(offset + 1), (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            }
 
             let lowerQuery = query.lowercased()
             while sqlite3_step(stmt) == SQLITE_ROW {
@@ -1503,9 +1490,10 @@ actor ChatStore {
 
         // Filter by keywords (AND: all keywords must match in title or message content)
         if let kws = keywords, !kws.isEmpty {
-            for kw in kws {
-                let pattern = "%\(kw)%"
-                conditions.append("(s.title LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id AND m.parts_json LIKE ?))")
+            // Keywords are literals: `%`/`_` escaped, length bounded.
+            for kw in kws.compactMap(ChatSearchSQL.normalizedQuery) {
+                let pattern = ChatSearchSQL.containsPattern(kw)
+                conditions.append("(s.title LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id AND m.parts_json LIKE ? ESCAPE '\\'))")
                 bindings.append((bindIndex, pattern))
                 bindIndex += 1
                 bindings.append((bindIndex, pattern))
@@ -1539,7 +1527,7 @@ actor ChatStore {
             for (idx, value) in doubleBindings {
                 sqlite3_bind_double(stmt, idx, value)
             }
-            sqlite3_bind_int(stmt, bindIndex, Int32(limit))
+            sqlite3_bind_int(stmt, bindIndex, Int32(clamping: max(0, limit)))
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
@@ -1565,21 +1553,18 @@ actor ChatStore {
 
     /// Search messages across sessions, returning up to `limit` matching messages with keyword-context snippets (max 600 chars each).
     func searchMessages(sessionIds: [String]? = nil, keywords: [String], limit: Int = 50, startDate: Date? = nil, endDate: Date? = nil) -> [(sessionId: String, sessionTitle: String?, messageId: String, role: String, createdAt: Date, snippet: String)] {
+        // Keywords are literals (`a_b` must not match `axb`) and bounded.
+        let keywords = keywords.compactMap(ChatSearchSQL.normalizedQuery)
         guard !keywords.isEmpty else { return [] }
 
-        var conditions: [String] = ["m.parts_json LIKE ?"]
+        var conditions: [String] = []
         var bindings: [(Int32, String)] = []
         var doubleBindings: [(Int32, Double)] = []
         var bindIndex: Int32 = 1
 
-        // First keyword for initial filter
-        bindings.append((bindIndex, "%\(keywords[0])%"))
-        bindIndex += 1
-
-        // Additional keyword conditions
-        for kw in keywords.dropFirst() {
-            conditions.append("m.parts_json LIKE ?")
-            bindings.append((bindIndex, "%\(kw)%"))
+        for kw in keywords {
+            conditions.append("m.parts_json LIKE ? ESCAPE '\\'")
+            bindings.append((bindIndex, ChatSearchSQL.containsPattern(kw)))
             bindIndex += 1
         }
 
@@ -1633,7 +1618,7 @@ actor ChatStore {
                 sqlite3_bind_double(stmt, idx, value)
             }
             // Over-fetch to compensate for rows filtered out due to empty text extraction
-            sqlite3_bind_int(stmt, bindIndex, Int32(limit * 3))
+            sqlite3_bind_int(stmt, bindIndex, Int32(clamping: max(0, min(limit, 100_000)) * 3))
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let sessionId = String(cString: sqlite3_column_text(stmt, 0))
@@ -1706,8 +1691,8 @@ actor ChatStore {
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(stmt, 2, Int32(limit))
-            sqlite3_bind_int(stmt, 3, Int32(offset))
+            sqlite3_bind_int(stmt, 2, Int32(clamping: max(0, limit)))
+            sqlite3_bind_int(stmt, 3, Int32(clamping: max(0, offset)))
 
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let messageId = String(cString: sqlite3_column_text(stmt, 0))
@@ -1793,7 +1778,9 @@ actor ChatStore {
         sqlite3_finalize(stmt)
     }
 
-    func updateSessionTitle(_ id: String, title: String, category: String? = nil) {
+    func updateSessionTitle(_ id: String, title rawTitle: String, category: String? = nil) {
+        // Single line, ≤256 characters — whatever wrote it (rename, model, shortcut).
+        let title = SessionTitleSanitizer.stored(rawTitle)
         guard beginSyncMutation() else { return }
         defer { finishSyncMutation() }
         invalidateSessionListCache(sessionId: id)  // PER-SESSION: row content + updated_at (patch re-sorts)
@@ -1943,17 +1930,32 @@ actor ChatStore {
         deleteSessionLocalRowsOnly(id)
     }
 
-    func deleteSessionFromSync(_ id: String) throws {
+    func deleteSessionFromSync(_ id: String, deletionUpdatedAt: Date? = nil) throws {
         _ = try SyncFileSafety.component(id)
         // Preserve the local deletion path's scope. Workspace tombstones are
         // separate SessionFile records; unsynced workspace content stays local.
-        let directories = try ["browser", "attachments", "images", "generated"].map {
-            try SyncFileSafety.destination(root: minisBaseURL, relativePath: "\(id)/\($0)")
-        }
+        let directories = try SessionMediaPaths.directories(root: minisBaseURL, sessionId: id)
         // [T-subagent] Hidden child sessions are device-local, so the peer's
         // delete never names them; drop them with their parent like the local
         // delete path does.
         let children = childSessionIds(of: id).filter { $0 != id }
+        let running = ([id] + children).contains { SessionActivityTracker.isActiveThreadSafe($0) }
+        switch SyncSessionDeleteGate.decide(isRunning: running, localUpdatedAt: sessionUpdatedAt(id: id),
+                                            deletionUpdatedAt: deletionUpdatedAt) {
+        case .deferUntilIdle:
+            // Deleting rows under a live run loses its output and leaves the
+            // view model writing into nothing. The transport retries later.
+            iCloudLogger.info("[iCloud] deleteSessionFromSync DEFER (session running locally): sid=\(id.prefix(8))")
+            throw CocoaError(.fileWriteUnknown)
+        case .keepLocalNewer:
+            // A stale or replayed delete: this device edited the session after
+            // the peer deleted it. Keep it and re-offer the session row.
+            iCloudLogger.info("[iCloud] deleteSessionFromSync SKIP (local edit newer than delete): sid=\(id.prefix(8))")
+            markDirty(recordType: "Session", recordId: id)
+            return
+        case .apply:
+            break
+        }
         try withInboundMutation {
             for victim in children + [id] {
                 for (table, key) in [("messages", "session_id"), ("compact_markers", "session_id"), ("sessions", "id")] {
@@ -2818,12 +2820,13 @@ actor ChatStore {
     /// Delete all media for a session.
     func deleteSessionMedia(_ sessionId: String) {
         let fm = FileManager.default
-
-        for subdir in ["browser", "attachments", "images", "generated"] {
-            let dirURL = minisBaseURL.appendingPathComponent("\(sessionId)/\(subdir)")
-            if fm.fileExists(atPath: dirURL.path) {
-                try? fm.removeItem(at: dirURL)
-            }
+        // A hostile id (`../../Documents`) must never resolve outside minis/.
+        guard let directories = try? SessionMediaPaths.directories(root: minisBaseURL, sessionId: sessionId) else {
+            logger.warning("deleteSessionMedia refused an unsafe session id")
+            return
+        }
+        for dirURL in directories where fm.fileExists(atPath: dirURL.path) {
+            try? fm.removeItem(at: dirURL)
         }
     }
 
@@ -2948,7 +2951,7 @@ actor ChatStore {
             sqlite3_finalize(checkStmt); checkStmt = nil
             guard sessionExists else {
                 if isResurrectionOfDeleted(marker.sessionId, remoteUpdatedAt: marker.createdAt) { return }
-                throw CocoaError(.fileReadUnknown)
+                throw SyncInboundDisposition.awaitingParent(SyncRecordID(type: "SessionV2", id: marker.sessionId))
             }
 
             // If local already has this marker id, only overwrite when remote is strictly newer.
@@ -6093,10 +6096,49 @@ extension ChatStore {
             }
             sqlite3_finalize(bfStmt); bfStmt = nil
             let backfilled = sqlite3_changes(db)
+            // Parked copies have done their job once the session exists.
+            var parkStmt: OpaquePointer?
+            defer { sqlite3_finalize(parkStmt) }
+            if try prepareInbound("DELETE FROM remote_messages WHERE session_id = ? AND device_id = ?", &parkStmt) == SQLITE_OK {
+                sqlite3_bind_text(parkStmt, 1, (session.id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(parkStmt, 2, (Self.parkedMessageDeviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                _ = try stepInbound(parkStmt)
+            }
+            sqlite3_finalize(parkStmt); parkStmt = nil
             if backfilled > 0 {
                 iCloudLogger.info("[iCloud] mergeRemoteSession backfilled \(backfilled) messages for \(session.id)")
+                recomputeStoredPreview(sessionId: session.id)
             }
         }
+    }
+
+    /// `remote_messages.device_id` for inbound messages that arrived before
+    /// their session. Never a real device id, so the per-device remote browser
+    /// never lists them.
+    static let parkedMessageDeviceId = "sync-v2-parked"
+
+    private func parkInboundMessage(id: String, sessionId: String, role: String, partsJson: String,
+                                    createdAt: Date, tokenUsageJson: String?, sortOrder: Int,
+                                    reasoningContent: String?, streamInterruptCount: Int) throws {
+        let sql = """
+            INSERT OR REPLACE INTO remote_messages
+            (id, device_id, session_id, role, parts_json, created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        _ = try prepareInbound(sql, &stmt)
+        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (Self.parkedMessageDeviceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 4, (role as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 5, (partsJson as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_double(stmt, 6, createdAt.timeIntervalSince1970)
+        bindOptionalText(stmt, index: 7, value: tokenUsageJson)
+        sqlite3_bind_int64(stmt, 8, Int64(Int32(clamping: sortOrder)))
+        bindOptionalText(stmt, index: 9, value: reasoningContent)
+        sqlite3_bind_int64(stmt, 10, Int64(Int32(clamping: streamInterruptCount)))
+        _ = try stepInbound(stmt)
     }
 
     /// Delete a local session if it originated from the given device (remote deletion propagation).
@@ -6132,6 +6174,9 @@ extension ChatStore {
         reasoningContent: String?, streamInterruptCount: Int,
         updatedAt: Date? = nil
     ) throws {
+        // Parking is reported after the savepoint is released (throwing inside
+        // would roll the parked row back).
+        var parkedFor: String?
         try withInboundMutation {
             // PER-SESSION: an inbound message changes one session's preview /
             // order; the session row itself is merged (FULL) by mergeRemoteSession.
@@ -6164,7 +6209,15 @@ extension ChatStore {
             sqlite3_finalize(checkStmt); checkStmt = nil
             guard sessionExists else {
                 if isResurrectionOfDeleted(sessionId, remoteUpdatedAt: updatedAt ?? createdAt) { return }
-                throw CocoaError(.fileReadUnknown)
+                // Park it: mergeRemoteSession backfills remote_messages when the
+                // session lands. Retrying instead would hold the whole inbound
+                // batch (and a replica cursor) hostage to one orphan.
+                try parkInboundMessage(id: id, sessionId: sessionId, role: role, partsJson: partsJson,
+                                       createdAt: createdAt, tokenUsageJson: tokenUsageJson, sortOrder: sortOrder,
+                                       reasoningContent: reasoningContent, streamInterruptCount: streamInterruptCount)
+                iCloudLogger.info("[iCloud] mergeRemoteMessage PARK (session not here yet): id=\(id.prefix(8)) sid=\(sessionId.prefix(8))")
+                parkedFor = sessionId
+                return
             }
 
             // [T-icloud-deleted-session-resurrection] Defence in depth: even if the
@@ -6234,7 +6287,7 @@ extension ChatStore {
                     else { sqlite3_bind_null(stmt, 2) }
                     if let r = reasoningContent { sqlite3_bind_text(stmt, 3, (r as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 3) }
-                    sqlite3_bind_int(stmt, 4, Int32(streamInterruptCount))
+                    sqlite3_bind_int(stmt, 4, Int32(clamping: streamInterruptCount))
                     sqlite3_bind_double(stmt, 5, effectiveUpdatedAt)
                     sqlite3_bind_int64(stmt, 6, Int64(partFlags))
                     sqlite3_bind_text(stmt, 7, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
@@ -6334,10 +6387,10 @@ extension ChatStore {
                     sqlite3_bind_double(stmt, 5, createdAt.timeIntervalSince1970)
                     if let tu = tokenUsageJson { sqlite3_bind_text(stmt, 6, (tu as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 6) }
-                    sqlite3_bind_int(stmt, 7, Int32(finalSortOrder))
+                    sqlite3_bind_int(stmt, 7, Int32(clamping: finalSortOrder))
                     if let r = reasoningContent { sqlite3_bind_text(stmt, 8, (r as NSString).utf8String, -1, SQLITE_TRANSIENT) }
                     else { sqlite3_bind_null(stmt, 8) }
-                    sqlite3_bind_int(stmt, 9, Int32(streamInterruptCount))
+                    sqlite3_bind_int(stmt, 9, Int32(clamping: streamInterruptCount))
                     sqlite3_bind_double(stmt, 10, effectiveUpdatedAt)
                     sqlite3_bind_int64(stmt, 11, Int64(partFlags))
                     _ = try stepInbound(stmt)
@@ -6361,6 +6414,9 @@ extension ChatStore {
             Task { @MainActor in
                 ViewModelCache.shared.markStale(sessionId: sid)
             }
+        }
+        if let parkedFor {
+            throw SyncInboundDisposition.parked(dependency: SyncRecordID(type: "SessionV2", id: parkedFor))
         }
     }
 

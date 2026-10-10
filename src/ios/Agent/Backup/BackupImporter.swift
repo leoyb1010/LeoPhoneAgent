@@ -153,7 +153,16 @@ actor BackupImporter {
 
     // MARK: - 1. Open
 
+    /// Unpack + verify (+ decrypt) under the process-wide backup lock: a
+    /// second package opened while one is extracting is refused instead of
+    /// running two multi-GB extractions side by side.
     func open(packageURL: URL, passphrase: String?) async throws -> Prepared {
+        try await BackupActivityLock.shared.withLock(.restore) {
+            try await self.openUnlocked(packageURL: packageURL, passphrase: passphrase)
+        }
+    }
+
+    private func openUnlocked(packageURL: URL, passphrase: String?) async throws -> Prepared {
         let peek = try BackupPackageReader.peek(at: packageURL)
         let manifest = peek.manifest
 

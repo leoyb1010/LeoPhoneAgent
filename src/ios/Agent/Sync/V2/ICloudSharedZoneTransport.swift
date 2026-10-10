@@ -215,6 +215,10 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         await fetchInboundDependency(dependency)
     }
 
+    func requestInboundDependency(_ id: SyncRecordID) async {
+        await fetchInboundDependency(id)
+    }
+
     /// Fetch a required parent by its stable CK record ID, without the 24-hour
     /// query window. Never ACK the child or apply a parent outside the journal.
     /// Existing queued parent mutations/deletes always keep their position.

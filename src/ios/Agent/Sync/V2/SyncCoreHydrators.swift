@@ -73,31 +73,36 @@ final class SyncCoreHydrators {
     /// Success means durable apply or an explicit conflict-resolution no-op.
     /// Upload preferences never discard inbound records. Missing handlers and
     /// deferred/failed storage operations retain the transport's durable inbox.
-    @discardableResult
-    func mergeRemote(_ record: PortableRecord) async -> Bool {
-        guard let merger = mergers[record.id.type] else { return false }
+    func mergeRemote(_ record: PortableRecord) async -> SyncMergeOutcome {
+        guard let merger = mergers[record.id.type] else { return .unsupported }
         do {
             try await merger(record)
-            return !Task.isCancelled
+            return Task.isCancelled ? .retry : .applied
+        } catch let disposition as SyncInboundDisposition {
+            return disposition.outcome
         } catch {
-            return false
+            return .retry
         }
     }
 
-    @discardableResult
-    func applyRemoteDeletion(_ id: SyncRecordID, updatedAt: Date? = nil) async -> Bool {
-        if let deleter = datedDeleters[id.type] {
-            do { try await deleter(id.id, updatedAt); return !Task.isCancelled }
-            catch { return false }
-        }
-        guard let deleter = deleters[id.type] else { return false }
+    func applyRemoteDeletion(_ id: SyncRecordID, updatedAt: Date? = nil) async -> SyncMergeOutcome {
         do {
-            try await deleter(id.id)
-            return !Task.isCancelled
+            if let deleter = datedDeleters[id.type] {
+                try await deleter(id.id, updatedAt)
+            } else if let deleter = deleters[id.type] {
+                try await deleter(id.id)
+            } else {
+                return .unsupported
+            }
+            return Task.isCancelled ? .retry : .applied
+        } catch let disposition as SyncInboundDisposition {
+            return disposition.outcome
         } catch {
-            return false
+            return .retry
         }
     }
+
+    func hasMerger(recordType: String) -> Bool { mergers[recordType] != nil }
 
     var registeredRecordTypes: [String] {
         Array(Set(builders.keys).union(mergers.keys).union(deleters.keys).union(datedDeleters.keys)).sorted()

@@ -108,12 +108,14 @@ extension AIChatViewModel {
                 }
 
                 logger.info("[TitleGen] Summary length: \(summary.count) chars, userTurns=\(userTurnCount)")
-                let (title, category) = try await Self.callSubModelForTitle(
+                let (rawTitle, rawCategory) = try await Self.callSubModelForTitle(
                     conversationSummary: summary,
                     subEntry: subEntry
                 )
-                let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                // One line, ≤60 chars, no markdown; category from the fixed list.
+                let title = rawTitle
+                let trimmed = SessionTitleSanitizer.generated(rawTitle) ?? ""
+                let category = SessionTitleSanitizer.category(rawCategory)
                 guard !trimmed.isEmpty else {
                     logger.error("[TitleGen] FAILED attempt \(attempt)/3 — reason=empty-response rawLength=\(title.count)")
                     await Self.applyFallbackTitle(sessionId: sessionId, firstUserRaw: firstUserRaw, attempt: attempt)
@@ -243,13 +245,12 @@ extension AIChatViewModel {
             }
         }
 
-        let (title, category) = try await callSubModelForTitle(
+        let (title, rawCategory) = try await callSubModelForTitle(
             conversationSummary: summary,
             subEntry: subEntry
         )
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = SessionTitleSanitizer.generated(title) else { return }
+        let category = SessionTitleSanitizer.category(rawCategory)
         await ChatStore.shared.updateSessionTitle(sessionId, title: trimmed, category: category)
     }
 

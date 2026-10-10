@@ -286,6 +286,7 @@ final class SyncCore {
         }
         isRunning = true
         logger.info("[SyncCore] start STEP=exit isRunning=true")
+        Task { @MainActor [weak self] in await self?.replayQuarantine() }
         startPathMonitor()
         // Drain any dirty rows left over from a previous session (e.g. a
         // markDirty that happened before the last shutdown). Without this
@@ -644,8 +645,10 @@ final class SyncCore {
     // MARK: - Inbound
 
     /// Apply a remote batch to local SQLite via per-type appliers
-    /// registered through `SyncCoreHydrators`. Skips records whose
-    /// recordType is not registered (per §3.6.3).
+    /// registered through `SyncCoreHydrators`. Records are sanitized first
+    /// (`SyncRecordSanitizer`); unknown types, newer schemas and malformed or
+    /// hostile records go to `SyncInboundQuarantine` and count as handled, so
+    /// only a genuinely transient failure withholds the transport's ACK.
     @discardableResult
     func processInbound(_ batch: SyncInboundBatch, from transport: String, countAsReceived: Bool = true) async -> Bool {
         guard !batch.records.isEmpty || !batch.deletes.isEmpty else { return true }
@@ -657,100 +660,95 @@ final class SyncCore {
             lastFetchAt = Date()
             totalReceived += batch.records.count + batch.deletes.count
         }
-        let registry = SyncableTypeRegistry.shared
-        // Hydrate inbound in 25-record chunks with a 50ms yield between
-        // chunks. Without this, a 600-record fetch holds the full
-        // PortableRecord array (each carrying message content + maybe
-        // inline attachments) in main-actor scope while the merger
-        // thrashes ChatStore + UI for tens of seconds, and ARC has no
-        // chance to release intermediate Codable structs. Observed:
-        // 3+GB resident before OOM crash on a 1196-session migration.
-        var applied = 0, skipped = 0, blocked = 0
-        // Records we pushed moments ago still run their LWW merger (a peer may
-        // have edited them too) but don't count as a visible change, so our own
-        // echo doesn't make every open chat reload.
-        var visible = 0
-        // Parents before children (Folder → Session → Message): a message
-        // ahead of its session in one batch would fail the session guard.
-        let allRecords = SyncPollPlan.parentsFirst(batch.records) { $0.id.type }
-        let allDeletes = batch.deletes
-        let chunkSize = 25
-        var i = 0
         // Prune stale echo-suppress entries once per batch so the map
         // doesn't grow unbounded over an idle session.
         let now = Date()
         recentlyPushedIds = recentlyPushedIds.filter { now.timeIntervalSince($0.value) < echoTTL }
-        var appliedThisBatch: Set<String> = []
-        while i < allRecords.count {
-            let end = min(i + chunkSize, allRecords.count)
-            for j in i..<end {
-                var record = allRecords[j]
-                guard let metadata = registry.metadata(for: record.id.type) else {
-                    logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=retained")
-                    blocked += 1
-                    continue
-                }
-                record = record.reclassifyingKnownFields(metadata.knownCloudKeys)
-                if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
-                    logger.warning("[SyncSchema] minimumCompatibleVersionBlocked: type=\(record.id.type) required=\(minimum) local=\(metadata.version)")
-                    blocked += 1
-                    continue
-                }
-                // An ID alone does not prove an echo: a peer may edit that same
-                // record during our send window. Always run its LWW merger before
-                // allowing a durable replica cursor to advance.
-                if record.schemaVersion != metadata.version {
-                    logger.info("[SyncSchema] schemaVersionMismatch: type=\(record.id.type) local=\(metadata.version) remote=\(record.schemaVersion)")
-                }
-                if !record.unknownFields.isEmpty {
-                    // [T-ios-log-noise-reduction] Dedup by (type + sorted
-                    // keys): log the first occurrence of each combination
-                    // once, then suppress. Downgraded to debug so even the
-                    // first-seen line is Debug-only.
-                    let dedupKey = "\(record.id.type)|\(record.unknownFields.keys.sorted().joined(separator: ","))"
-                    if loggedUnknownFieldKeys.insert(dedupKey).inserted {
-                        logger.debug("[SyncSchema] unknownFields (first-seen, further occurrences suppressed): type=\(record.id.type) keys=\(record.unknownFields.keys.sorted())")
-                    }
-                }
-                let appliedKey = "\(record.id.description)@\(record.updatedAt.timeIntervalSince1970)"
-                if appliedInDeferredBatch.contains(appliedKey) { applied += 1; continue }
-                if await SyncCoreHydrators.shared.mergeRemote(record) {
-                    applied += 1
-                    appliedThisBatch.insert(appliedKey)
-                    if recentlyPushedIds[record.id.description] == nil { visible += 1 }
-                } else { blocked += 1 }
+        for record in batch.records where !record.unknownFields.isEmpty {
+            // [T-ios-log-noise-reduction] Dedup by (type + sorted keys).
+            let dedupKey = "\(record.id.type)|\(record.unknownFields.keys.sorted().joined(separator: ","))"
+            if loggedUnknownFieldKeys.insert(dedupKey).inserted {
+                logger.debug("[SyncSchema] unknownFields (first-seen, further occurrences suppressed): type=\(record.id.type) keys=\(record.unknownFields.keys.sorted())")
             }
-            i = end
-            // Yield so the main thread can run UI / scrolling / SwiftUI
-            // diff for whatever the user is doing in the foreground,
-            // and so ARC has a chance to release the chunk's Codable
-            // intermediaries before the next chunk allocates more.
-            if i < allRecords.count { try? await Task.sleep(nanoseconds: 50_000_000) }
         }
-        for deleteId in allDeletes {
-            guard registry.metadata(for: deleteId.type) != nil else {
-                blocked += 1
-                if deleteId.type == "Message" {
-                    logger.warning("[EditSync] inbound delete SKIPPED — no registry metadata for type=Message id=\(deleteId.id.prefix(8))")
-                }
-                continue
-            }
-            if deleteId.type == "Message" {
-                logger.warning("[EditSync] applying inbound delete Message id=\(deleteId.id.prefix(8)) — calling hydrator.applyRemoteDeletion")
-            }
-            if await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId, updatedAt: batch.deletionUpdatedAt[deleteId]) {
-                applied += 1
-                if recentlyPushedIds[deleteId.description] == nil { visible += 1 }
-            } else { blocked += 1 }
-        }
-        logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked)")
-        // Refresh after awaited domain callbacks; cursor checkpointing remains
-        // the caller's responsibility and unsupported records withhold it.
+        let deferred = appliedInDeferredBatch
+        // Hydrate inbound in 25-record chunks with a 50ms yield between
+        // chunks so a large fetch doesn't hold the main actor (and every
+        // intermediate Codable struct) for tens of seconds.
+        let summary = await inboundApplier(alreadyApplied: { deferred.contains($0) }).apply(batch)
+        // Records we pushed moments ago still run their LWW merger (a peer may
+        // have edited them too) but don't count as a visible change, so our own
+        // echo doesn't make every open chat reload.
+        let visible = summary.appliedIds.filter { recentlyPushedIds[$0.description] == nil }.count
+        logger.info("[SyncCore] inbound from \(transport): applied=\(summary.applied) quarantined=\(summary.quarantined) dropped=\(summary.dropped) blocked=\(summary.blocked)")
+        SyncInboundQuarantine.shared.flush()
         if visible > 0 { notifyFetchedChanges() }
-        let complete = skipped == 0 && blocked == 0 && !Task.isCancelled
-        if complete { appliedInDeferredBatch.removeAll() }
-        else if appliedInDeferredBatch.count < 10_000 { appliedInDeferredBatch.formUnion(appliedThisBatch) }
-        return complete
+        if summary.complete { appliedInDeferredBatch.removeAll() }
+        else if appliedInDeferredBatch.count < 10_000 { appliedInDeferredBatch.formUnion(summary.appliedKeys) }
+        // Parents that arrived may unblock quarantined children; parked
+        // children ask the transport for their parent.
+        let arrivedSessions = Set(summary.appliedIds.filter { $0.type == "SessionV2" })
+        if !arrivedSessions.isEmpty, transport != Self.quarantineReplaySource {
+            await replayQuarantine(parents: arrivedSessions)
+        }
+        if !summary.dependencies.isEmpty, let t = transports.first(where: { $0.name == transport }) {
+            // After the caller has ACKed this batch (the parent goes through
+            // the transport's own inbox like any other record).
+            let dependencies = Array(Set(summary.dependencies).prefix(20))
+            Task { @MainActor in
+                for dependency in dependencies { await t.requestInboundDependency(dependency) }
+            }
+        }
+        return summary.complete
+    }
+
+    private static let quarantineReplaySource = "quarantine"
+
+    private func inboundApplier(alreadyApplied: @escaping (String) -> Bool) -> SyncInboundApplier {
+        let registry = SyncableTypeRegistry.shared
+        let hydrators = SyncCoreHydrators.shared
+        return SyncInboundApplier(
+            metadata: { type in
+                guard let meta = registry.metadata(for: type) else { return nil }
+                return .init(version: meta.version, knownKeys: meta.knownCloudKeys)
+            },
+            merge: { await hydrators.mergeRemote($0) },
+            delete: { await hydrators.applyRemoteDeletion($0, updatedAt: $1) },
+            quarantine: SyncInboundQuarantine.shared,
+            alreadyApplied: alreadyApplied,
+            yieldBetweenChunks: { try? await Task.sleep(nanoseconds: 50_000_000) })
+    }
+
+    /// Retry quarantined records this build can now apply: on launch (after
+    /// an upgrade registered a new type) and when a waited-for parent lands.
+    func replayQuarantine(parents: Set<SyncRecordID>? = nil) async {
+        let registry = SyncableTypeRegistry.shared
+        let candidates = SyncInboundApplier.replayableEntries(
+            SyncInboundQuarantine.shared.all(),
+            metadata: { type in
+                registry.metadata(for: type).map { .init(version: $0.version, knownKeys: $0.knownCloudKeys) }
+            },
+            parents: parents)
+        guard !candidates.isEmpty else { return }
+        var dates: [SyncRecordID: Date] = [:]
+        for entry in candidates where entry.isDeletion { dates[entry.recordId] = entry.deletionUpdatedAt }
+        let batch = SyncInboundBatch(records: candidates.compactMap { $0.isDeletion ? nil : $0.record },
+                                     deletes: candidates.filter(\.isDeletion).map(\.recordId),
+                                     sourceDeviceId: nil, deletionUpdatedAt: dates)
+        // Handled entries leave quarantine (a re-quarantine re-adds them);
+        // ones that asked to retry stay for the next pass.
+        SyncInboundQuarantine.shared.remove(keys: Set(candidates.map(\.key)))
+        let summary = await inboundApplier(alreadyApplied: { _ in false }).apply(batch)
+        for entry in candidates where summary.retryIds.contains(entry.recordId) {
+            SyncInboundQuarantine.shared.add(recordId: entry.recordId, record: entry.record,
+                                             isDeletion: entry.isDeletion,
+                                             deletionUpdatedAt: entry.deletionUpdatedAt,
+                                             reason: entry.reason, replayable: true,
+                                             dependency: entry.dependency)
+        }
+        SyncInboundQuarantine.shared.flush()
+        logger.info("[SyncCore] quarantine replay: candidates=\(candidates.count) applied=\(summary.applied) retry=\(summary.retryIds.count)")
+        if !summary.appliedIds.isEmpty { notifyFetchedChanges() }
     }
 
     /// CloudKit now delivers one record per batch; posting per record made every

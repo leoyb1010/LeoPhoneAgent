@@ -25,6 +25,8 @@ final class ShareViewModel {
             // 摘录就变成了"又收藏了一遍整篇文章"。两个都在就两个都收:
             // 文字是内容,地址是出处。
             for provider in attachments {
+                // Bounded share: extra items are dropped, never copied.
+                guard pendingItems.count < PendingShare.maxItems else { break }
                 let hasURL = provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
                 let hasText = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
                 if hasURL, hasText {
@@ -71,7 +73,7 @@ final class ShareViewModel {
                   existing.items.count, pendingItems.count)
             items = existing.items + items
         }
-        let share = PendingShare(items: items, timestamp: Date())
+        let share = PendingShare(items: PendingShare.bounded(items), timestamp: Date())
         SharedContainerStore.savePendingShare(share)
         return true
     }
@@ -119,7 +121,7 @@ final class ShareViewModel {
         } else {
             let fileName = "shared-text-\(UUID().uuidString.prefix(8)).txt"
             if let dir = SharedContainerStore.sharedFileDirectory,
-               let data = text.data(using: .utf8),
+               let data = text.data(using: .utf8).map({ $0.prefix(PendingShare.maxStagedTextBytes) }),
                SharedContainerStore.stageData(data, to: dir, named: fileName) {
                     pendingItems.append(.init(kind: .attachment, value: fileName))
             }
@@ -133,6 +135,7 @@ final class ShareViewModel {
                 return
             }
             if let imageData = item as? Data {
+                guard PendingShare.admitsAttachment(byteCount: Int64(imageData.count)) else { return }
                 let ext = preferredImageExtension(for: provider) ?? "img"
                 writeDataIfPossible(imageData,
                                     fileName: "shared-image-\(UUID().uuidString.prefix(8)).\(ext)")
@@ -175,6 +178,13 @@ final class ShareViewModel {
     private func copyItemIfPossible(from sourceURL: URL, fileName: String) {
         guard SharedContainerStore.isSafeFileName(fileName),
               let directory = SharedContainerStore.sharedFileDirectory else { return }
+        // Size checked before copying: a multi-GB item would exhaust the
+        // extension's budget and the App Group.
+        let size = (try? sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { Int64($0) }
+        guard PendingShare.admitsAttachment(byteCount: size) else {
+            NSLog("[ShareExt] skipped an attachment over the size limit")
+            return
+        }
         if SharedContainerStore.stageFile(from: sourceURL, to: directory, named: fileName) {
             pendingItems.append(.init(kind: .attachment, value: fileName))
         }

@@ -264,25 +264,38 @@ struct BackupRestoreView: View {
     // MARK: - Actions
 
     private func adopt(staging url: URL) {
-        let staged = BackupOpenRouter.stage(url)
-        guard let staged else {
-            error = String(localized: "无法读取这个备份文件")
-            return
-        }
         cleanup()
-        packageURL = staged
-        ownsPackage = true
-        peek()
+        error = nil
+        phase = .checking
+        // Copying a multi-GB package (coordinated, may download first) must
+        // not run on the main thread.
+        Task {
+            let staged = await Task.detached(priority: .userInitiated) { BackupOpenRouter.stage(url) }.value
+            guard let staged else {
+                error = String(localized: "无法读取这个备份文件")
+                phase = .pick
+                return
+            }
+            packageURL = staged
+            ownsPackage = true
+            peek()
+        }
     }
 
     private func peek() {
         guard let packageURL else { return }
         error = nil
-        do {
-            phase = .peeked(try BackupPackageReader.peek(at: packageURL))
-        } catch {
-            self.error = error.localizedDescription
-            phase = .pick
+        // Reading the zip directory of a large package is file I/O: off main.
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try BackupPackageReader.peek(at: packageURL) }
+            }.value
+            switch result {
+            case .success(let peeked): phase = .peeked(peeked)
+            case .failure(let failure):
+                error = failure.localizedDescription
+                phase = .pick
+            }
         }
     }
 

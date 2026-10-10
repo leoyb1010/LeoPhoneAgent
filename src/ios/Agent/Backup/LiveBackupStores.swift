@@ -81,29 +81,30 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
     /// API keys and user-pasted tokens only. Structured OAuth logins stay
     /// device-only (LeoBot policy) and are re-done after a restore.
     func collectSecrets(providerInstanceIds: [String]?, envVarKeys: [String]?) async -> BackupSecrets {
-        await MainActor.run {
-            var out = BackupSecrets()
-            let instances = ProviderConfigStore.shared.config.instances
-            for id in providerInstanceIds ?? [] {
-                guard let inst = instances.first(where: { $0.id == id }) else { continue }
-                var s = BackupSecrets.ProviderSecret(instanceId: id, label: inst.label,
-                                                     providerType: inst.providerType.rawValue)
-                if let key = ProviderKeychainHelper.loadAPIKey(instanceId: id), !key.isEmpty {
-                    s.apiKey = BackupSecrets.encode(key)
-                }
-                if let manual = ProviderKeychainHelper.loadOAuthString(instanceId: id, account: Self.manualOAuthAccount),
-                   !manual.isEmpty {
-                    s.manualOAuthToken = BackupSecrets.encode(manual)
-                }
-                if !s.isEmpty { out.providers.append(s) }
-            }
-            for key in envVarKeys ?? [] {
-                guard let value = EnvVarStore.loadValueSync(forKey: key), !value.isEmpty else { continue }
-                out.envVars.append(.init(name: key, value: BackupSecrets.encode(value)))
-            }
-            logger.info("[Backup] credentials collected providers=\(out.providers.count) envVars=\(out.envVars.count)")
-            return out
+        // Only the instance list needs the main actor; Keychain reads can take
+        // tens of ms each and run here, off it.
+        let instances = await MainActor.run {
+            ProviderConfigStore.shared.config.instances.map { (id: $0.id, label: $0.label, type: $0.providerType.rawValue) }
         }
+        var out = BackupSecrets()
+        for id in providerInstanceIds ?? [] {
+            guard let inst = instances.first(where: { $0.id == id }) else { continue }
+            var s = BackupSecrets.ProviderSecret(instanceId: id, label: inst.label, providerType: inst.type)
+            if let key = ProviderKeychainHelper.loadAPIKey(instanceId: id), !key.isEmpty {
+                s.apiKey = BackupSecrets.encode(key)
+            }
+            if let manual = ProviderKeychainHelper.loadOAuthString(instanceId: id, account: Self.manualOAuthAccount),
+               !manual.isEmpty {
+                s.manualOAuthToken = BackupSecrets.encode(manual)
+            }
+            if !s.isEmpty { out.providers.append(s) }
+        }
+        for key in envVarKeys ?? [] {
+            guard let value = EnvVarStore.loadValueSync(forKey: key), !value.isEmpty else { continue }
+            out.envVars.append(.init(name: key, value: BackupSecrets.encode(value)))
+        }
+        logger.info("[Backup] credentials collected providers=\(out.providers.count) envVars=\(out.envVars.count)")
+        return out
     }
 
     // MARK: - Restore: chats
@@ -161,27 +162,33 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
     }
 
     func snapshotSkill(id: String) async -> BackupSkillSnapshot? {
-        await MainActor.run {
+        let found: (record: BackupSkillRecord, content: String, dir: URL)? = await MainActor.run {
             let store = SkillStore.shared
             guard let s = store.skills.first(where: { $0.id == id }),
                   let content = store.readSkillContent(id) else { return nil }
             let record = BackupSkillRecord(id: s.id, name: s.name, description: s.description, version: s.version,
                                            isEnabled: s.isEnabled, installedAt: s.installedAt,
                                            updatedAt: s.updatedAt, body: s.body, sourceURL: s.sourceURL)
-            return BackupSkillSnapshot(record: record, content: content, zipData: store.buildSkillZipData(id))
+            return (record, content, store.skillDirectoryURL(for: id))
         }
+        guard let found else { return nil }
+        // Reading and zipping a skill tree is file I/O: never on the main actor.
+        let zip = SkillStore.buildSkillZipData(skillDir: found.dir, skillId: id)
+        return BackupSkillSnapshot(record: found.record, content: found.content, zipData: zip)
     }
 
     func applySkill(_ payload: BackupSkillPayload) async throws {
+        var files = [(relativePath: "SKILL.md", data: Data(payload.content.utf8))]
+        files += payload.files.map { (relativePath: $0.relativePath, data: $0.data) }
+        // Build the archive here, off the main actor; only the store commit hops.
+        let zipData = SkillStore.buildZipArchive(files: files)
         try await MainActor.run {
-            var files = [(relativePath: "SKILL.md", data: Data(payload.content.utf8))]
-            files += payload.files.map { (relativePath: $0.relativePath, data: $0.data) }
             let rec = payload.record
             // The same transactional path iCloud sync uses: both skill roots,
             // the skills DB and the guest's fakefs metadata in one step.
             try SkillStore.shared.importSkillFromSyncWithAsset(
                 skillId: rec.id, content: payload.content,
-                zipData: SkillStore.buildZipArchive(files: files),
+                zipData: zipData,
                 source: rec.sourceURL.map { .url($0) } ?? .file,
                 isEnabled: rec.isEnabled, installedAt: rec.installedAt, updatedAt: rec.updatedAt)
         }
@@ -254,41 +261,39 @@ struct LiveBackupStores: BackupExportSource, BackupRestoreTarget {
 
     func applyProviderSecrets(_ secrets: [BackupSecrets.ProviderSecret],
                               instanceIds: Set<String>) async -> (written: [BackupSecretRef], keptLocal: Int) {
-        await MainActor.run {
-            var written: [BackupSecretRef] = []
-            var kept = 0
-            for s in secrets where instanceIds.contains(s.instanceId) {
-                if let value = s.apiKey.flatMap(BackupSecrets.decode), !value.isEmpty {
-                    if ProviderKeychainHelper.loadAPIKey(instanceId: s.instanceId) == nil {
-                        if ProviderKeychainHelper.saveAPIKey(value, instanceId: s.instanceId) {
-                            written.append(.init(instanceId: s.instanceId, kind: .apiKey))
-                        }
-                    } else {
-                        kept += 1
+        // Keychain I/O off the main actor; the helper hops to main itself for
+        // its auth-revision bump.
+        var written: [BackupSecretRef] = []
+        var kept = 0
+        for s in secrets where instanceIds.contains(s.instanceId) {
+            if let value = s.apiKey.flatMap(BackupSecrets.decode), !value.isEmpty {
+                if ProviderKeychainHelper.loadAPIKey(instanceId: s.instanceId) == nil {
+                    if ProviderKeychainHelper.saveAPIKey(value, instanceId: s.instanceId) {
+                        written.append(.init(instanceId: s.instanceId, kind: .apiKey))
                     }
-                }
-                if let value = s.manualOAuthToken.flatMap(BackupSecrets.decode), !value.isEmpty {
-                    if ProviderKeychainHelper.loadOAuthString(instanceId: s.instanceId, account: Self.manualOAuthAccount) == nil {
-                        ProviderKeychainHelper.saveOAuthString(value, instanceId: s.instanceId, account: Self.manualOAuthAccount)
-                        written.append(.init(instanceId: s.instanceId, kind: .manualOAuthToken))
-                    } else {
-                        kept += 1
-                    }
+                } else {
+                    kept += 1
                 }
             }
-            logger.info("[Restore] credentials written=\(written.count) keptLocal=\(kept)")
-            return (written, kept)
+            if let value = s.manualOAuthToken.flatMap(BackupSecrets.decode), !value.isEmpty {
+                if ProviderKeychainHelper.loadOAuthString(instanceId: s.instanceId, account: Self.manualOAuthAccount) == nil {
+                    ProviderKeychainHelper.saveOAuthString(value, instanceId: s.instanceId, account: Self.manualOAuthAccount)
+                    written.append(.init(instanceId: s.instanceId, kind: .manualOAuthToken))
+                } else {
+                    kept += 1
+                }
+            }
         }
+        logger.info("[Restore] credentials written=\(written.count) keptLocal=\(kept)")
+        return (written, kept)
     }
 
     func removeProviderSecrets(_ refs: [BackupSecretRef]) async {
-        await MainActor.run {
-            for ref in refs {
-                switch ref.kind {
-                case .apiKey: ProviderKeychainHelper.deleteAPIKey(instanceId: ref.instanceId)
-                case .manualOAuthToken:
-                    ProviderKeychainHelper.deleteOAuthString(instanceId: ref.instanceId, account: Self.manualOAuthAccount)
-                }
+        for ref in refs {
+            switch ref.kind {
+            case .apiKey: ProviderKeychainHelper.deleteAPIKey(instanceId: ref.instanceId)
+            case .manualOAuthToken:
+                ProviderKeychainHelper.deleteOAuthString(instanceId: ref.instanceId, account: Self.manualOAuthAccount)
             }
         }
     }
