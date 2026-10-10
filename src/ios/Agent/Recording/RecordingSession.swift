@@ -43,6 +43,8 @@ final class RecordingSession: @unchecked Sendable {
     private let lock = NSLock()
     private var _elapsed: Double = 0
     private var _liveSamples: ((UnsafeBufferPointer<Float>, Double) -> Void)?
+    /// 暂停中:不送实时字幕(没录进去的话不该出现在字幕里)。
+    private var _paused = false
     private var levelSum: Float = 0
     private var levelCount = 0
     private var lastLevelPost: TimeInterval = 0
@@ -91,6 +93,7 @@ final class RecordingSession: @unchecked Sendable {
     /// 你按了暂停:块保持打开,采集继续但丢弃(麦克风待命,锁屏后 App 不会被挂起,
     /// 在灵动岛上点继续能立即接上)。
     func pauseByUser() {
+        lock.withLock { _paused = true }
         queue.async { [self] in apply(planner.pause(.user), buffer: nil) }
     }
 
@@ -110,6 +113,7 @@ final class RecordingSession: @unchecked Sendable {
             rate = try startEngine()
         }
         queue.async { [self] in apply(planner.resume(sampleRate: rate), buffer: nil) }
+        lock.withLock { _paused = false }
         logger.info("[Recording] resumed rate=\(Int(rate))")
     }
 
@@ -237,7 +241,7 @@ final class RecordingSession: @unchecked Sendable {
             levelCount = 0
             lastLevelPost = now
         }
-        feed = _liveSamples
+        feed = _paused ? nil : _liveSamples
         lock.unlock()
         if let postLevel {
             // -50 dBFS … 0 dBFS 映射到 0…1。
