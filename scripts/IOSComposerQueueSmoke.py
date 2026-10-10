@@ -58,6 +58,7 @@ final class Harness {
  func routeComposerToAskUser(text: String, hasAttachments: Bool) -> Bool { askUserWaiting && !hasAttachments }
  func syncSelectedModelFromBinding() {}
  func expandPastedBlocks(in text: String) -> String { text }
+ func escapeUserAuthoredInput(_ text: String) -> String { text } // [B23] reserved-tag escaping, covered by AgentCallbackSpoofTests
  func appendSystemInfo(_ text: String, icon: String) {}
  func dumpQueueSnapshot(_ text: String) {}
  static func cleanupAttachmentFiles(_ items: [InputAttachment]) {}

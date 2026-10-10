@@ -8,20 +8,17 @@ func normalizeMarkdownListSyntax(_ markdown: String) -> String {
     let orderedParenRegex = MarkdownPrepRegex.orderedParen
     let bulletGlyphRegex = MarkdownPrepRegex.bulletGlyph
 
-    var inCodeFence = false
+    // [T-r3-markdown-hardening] CommonMark fence rules (``` / ~~~, closer at
+    // least as long as the opener): the old `hasPrefix("```")` toggle lost sync
+    // on a ```` fence containing ``` lines and rewrote list markers inside code.
+    var fence = MarkdownFenceTracker()
     let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
     var normalized: [String] = []
     normalized.reserveCapacity(lines.count)
 
     for raw in lines {
         var line = String(raw)
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.hasPrefix("```") {
-            inCodeFence.toggle()
-            normalized.append(line)
-            continue
-        }
-        if inCodeFence {
+        if fence.consume(line) {
             normalized.append(line)
             continue
         }
@@ -97,22 +94,10 @@ func prepareMarkdownForRender(_ markdown: String) -> String {
 func fixEmphasisPairsForCJK(_ markdown: String) -> String {
     guard markdown.contains("*") else { return markdown }
     var out: [String] = []
-    var inFence = false
-    var fenceMarker = ""
+    var fence = MarkdownFenceTracker()
     for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
         let lineStr = String(line)
-        let trimmed = lineStr.drop(while: { $0 == " " || $0 == "\t" })
-        if !inFence, trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
-            inFence = true
-            fenceMarker = String(trimmed.prefix(3))
-            out.append(lineStr)
-            continue
-        } else if inFence {
-            if trimmed.hasPrefix(fenceMarker),
-               trimmed.drop(while: { String($0) == String(fenceMarker.first!) })
-                   .allSatisfy({ $0 == " " || $0 == "\t" }) {
-                inFence = false
-            }
+        if fence.consume(lineStr) {
             out.append(lineStr)
             continue
         }
@@ -129,6 +114,7 @@ private func fixEmphasisPairsInLine(_ line: String) -> String {
     // Pass 1 — protected regions: escapes, inline code spans (backtick runs
     // matched by equal length, per CommonMark), and link destinations `](…)`.
     var isProtected = [Bool](repeating: false, count: n)
+    let backtickRuns = BacktickRunIndex(chars)
     var i = 0
     while i < n {
         let c = chars[i]
@@ -142,18 +128,8 @@ private func fixEmphasisPairsInLine(_ line: String) -> String {
             var j = i
             while j < n, chars[j] == "`" { j += 1 }
             let runLen = j - i
-            var k = j
-            var closeStart = -1
-            while k < n {
-                if chars[k] == "`" {
-                    var m = k
-                    while m < n, chars[m] == "`" { m += 1 }
-                    if m - k == runLen { closeStart = k; break }
-                    k = m
-                } else {
-                    k += 1
-                }
-            }
+            // Indexed lookup (was a rescan to end-of-line per opener → O(k²)).
+            let closeStart = backtickRuns.closingRunStart(length: runLen, after: j) ?? -1
             if closeStart >= 0 {
                 for p in i..<(closeStart + runLen) { isProtected[p] = true }
                 i = closeStart + runLen
@@ -280,10 +256,9 @@ func strictifyStrikethrough(_ markdown: String) -> String {
     guard markdown.contains("~~") else { return markdown }
     let ns = markdown as NSString
     let nsLen = ns.length
-    var inFence = false
-    var fenceMarker = ""
+    var fence = MarkdownFenceTracker()
     var out = String()
-    out.reserveCapacity(markdown.count)
+    out.reserveCapacity(markdown.utf8.count)
     // Walk line-by-line so we can skip fenced code blocks intact.
     let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
     func isBoundaryChar(_ ch: Character?) -> Bool {
@@ -297,20 +272,8 @@ func strictifyStrikethrough(_ markdown: String) -> String {
     }
     for (idx, line) in lines.enumerated() {
         let lineStr = String(line)
-        let trimmed = lineStr.drop(while: { $0 == " " || $0 == "\t" })
-        // Fence tracking (mirrors insertBlankLineAfterTable's logic).
-        if !inFence, (trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")) {
-            inFence = true
-            fenceMarker = String(trimmed.prefix(3))
-            out.append(lineStr)
-            if idx < lines.count - 1 { out.append("\n") }
-            continue
-        } else if inFence {
-            if trimmed.hasPrefix(fenceMarker)
-                && trimmed.drop(while: { String($0) == String(fenceMarker.first!) })
-                    .allSatisfy({ $0 == " " || $0 == "\t" }) {
-                inFence = false
-            }
+        // Fence tracking (shared CommonMark rules).
+        if fence.consume(lineStr) {
             out.append(lineStr)
             if idx < lines.count - 1 { out.append("\n") }
             continue
@@ -418,8 +381,7 @@ func splitStreamingTableTail(_ markdown: String) -> (prefix: String, plainSuffix
 func insertBlankLineAfterTable(_ markdown: String) -> String {
     var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     guard lines.count > 1 else { return markdown }
-    var inFence = false
-    var fenceMarker = ""
+    var fence = MarkdownFenceTracker()
     var result: [String] = []
     result.reserveCapacity(lines.count + 4)
     func isTableLine(_ s: String) -> Bool {
@@ -432,21 +394,7 @@ func insertBlankLineAfterTable(_ markdown: String) -> String {
     for i in 0..<lines.count {
         let line = lines[i]
         result.append(line)
-        let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
-        if !inFence {
-            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
-                inFence = true
-                fenceMarker = String(trimmed.prefix(3))
-                continue
-            }
-        } else {
-            if trimmed.hasPrefix(fenceMarker)
-                && trimmed.drop(while: { String($0) == String(fenceMarker.first!) })
-                    .allSatisfy({ $0 == " " || $0 == "\t" }) {
-                inFence = false
-            }
-            continue
-        }
+        if fence.consume(line) { continue }
         // Check: table row terminated by a non-table, non-blank line on the
         // next index? If so, insert a blank line between them.
         guard isTableLine(line), i + 1 < lines.count else { continue }

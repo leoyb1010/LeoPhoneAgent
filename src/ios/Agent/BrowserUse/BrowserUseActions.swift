@@ -82,15 +82,15 @@ struct BrowserActionInput {
             url: dict["url"] as? String,
             selector: dict["selector"] as? String,
             text: dict["text"] as? String,
-            coordinateX: dict["coordinate_x"] as? Int,
-            coordinateY: dict["coordinate_y"] as? Int,
+            coordinateX: ToolArgNumbers.clampedInt(dict["coordinate_x"], to: -100_000...100_000),
+            coordinateY: ToolArgNumbers.clampedInt(dict["coordinate_y"], to: -100_000...100_000),
             direction: (dict["direction"] as? String).flatMap(ScrollDirection.init),
-            amount: dict["amount"] as? Int,
+            amount: ToolArgNumbers.clampedInt(dict["amount"], to: -1_000_000...1_000_000),
             script: dict["script"] as? String,
             userAgent: (dict["user_agent"] as? String).flatMap(UserAgentProfile.init),
-            maxDepth: dict["max_depth"] as? Int,
-            tabId: dict["tab_id"] as? Int,
-            scrollCount: dict["scroll_count"] as? Int,
+            maxDepth: ToolArgNumbers.clampedInt(dict["max_depth"], to: 0...1000),
+            tabId: ToolArgNumbers.clampedInt(dict["tab_id"], to: 0...1_000_000),
+            scrollCount: ToolArgNumbers.clampedInt(dict["scroll_count"], to: 0...1000),
             itemSelector: dict["item_selector"] as? String,
             keywords: {
                 if let arr = dict["keywords"] as? [String] {
@@ -103,9 +103,11 @@ struct BrowserActionInput {
                 return nil
             }(),
             fuzzy: dict["fuzzy"] as? Bool,
-            timeout: dict["timeout"] as? Int,
-            viewportWidth: dict["viewport_width"] as? Int,
-            viewportHeight: dict["viewport_height"] as? Int,
+            timeout: ToolArgNumbers.clampedInt(dict["timeout"], to: 1...600),
+            // [T-r3-tool-arg-clamp] A 100000×100000 viewport allocated a backing
+            // store the size of the device RAM; clamp to sane screen sizes.
+            viewportWidth: ToolArgNumbers.clampedInt(dict["viewport_width"], to: ToolArgNumbers.viewportWidthRange),
+            viewportHeight: ToolArgNumbers.clampedInt(dict["viewport_height"], to: ToolArgNumbers.viewportHeightRange),
             viewportReset: dict["reset"] as? Bool,
             fullPage: dict["full_page"] as? Bool,
             cookies: Self.parseCookies(dict["cookies"])

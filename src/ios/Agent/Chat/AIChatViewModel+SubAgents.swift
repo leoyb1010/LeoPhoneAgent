@@ -160,6 +160,22 @@ extension AIChatViewModel {
         }
     }
 
+    // MARK: - Reserved tags
+
+    /// [B23] App-authored reminders that Siri and the Watch append to the
+    /// user's words; they stay intact, everything before them is escaped.
+    static var trustedReminderSuffixes: [String] {
+        [SendPromptIntent.voiceOnlyReminder, WatchAskRunner.wristReminder]
+    }
+
+    /// [B23] Escape reserved envelope tags in text a person typed or pasted.
+    /// Programmatic sub-agent sends (callbacks, briefs) are app-authored and
+    /// pass through unchanged — the brief was already escaped when parsed.
+    func escapeUserAuthoredInput(_ text: String) -> String {
+        if subAgentState.isProgrammaticSend { return text }
+        return ReservedTagEscaper.escapeUserAuthored(text, preservingTrustedSuffixes: Self.trustedReminderSuffixes)
+    }
+
     // MARK: - Programmatic prompts
 
     /// Start a turn in this (child) view model with text nobody typed.
@@ -191,6 +207,7 @@ extension AIChatViewModel {
         prompt.deferUntilIdle = true
         promptQueue.append(prompt)
         let row = ChatMessage(role: .user, content: text, isQueued: true)
+        row.isSubAgentCallback = AgentCallback.isCallbackText(text)
         row.queuedPromptId = prompt.id
         messages.append(row)
         scheduleCallbackRescue(promptId: prompt.id)

@@ -88,7 +88,16 @@ final class ChatMessage: Identifiable, ObservableObject {
         self.content = content
         self.blocks = blocks
         self.isQueued = isQueued
+        // [B23] Decided once, at creation. Typed and pasted text has its
+        // reserved tags escaped before it ever becomes a message, so a user
+        // row that still opens with the raw `<agent_callback` envelope was
+        // written by the sub-agent path (live, or persisted by it earlier).
+        self.isSubAgentCallback = role == .user && AgentCallback.isCallbackText(content)
     }
+
+    /// [B23] This user-role row is a sub-agent callback and renders as a result
+    /// card. The list reads this flag instead of re-parsing every user message.
+    var isSubAgentCallback = false
 
     /// [T-bridge-message-ui-leak] True when this UI message is the internal
     /// role-alternation bridge (#579) that must never render as a chat bubble.

@@ -464,7 +464,7 @@ final class BrowserUseManager: NSObject, ObservableObject {
             )
             let total: Int
             if let n = countResult as? Int { total = n }
-            else if let n = countResult as? Double { total = Int(n) }
+            else if let n = countResult as? Double { total = ToolArgNumbers.saturatingInt(n) } // page-controlled: may be Infinity
             else { break } // page context lost
 
             let delta = total - lastTotal
@@ -662,6 +662,12 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
     // MARK: - Navigate
 
+    /// Hosts the user configured as remote machines (SSH / Tailnet): a page
+    /// on one of them is something the user already chose to reach.
+    private static func userConfiguredHosts() -> Set<String> {
+        Set(RemoteHostStore.configuredHosts().map { $0.host.lowercased() })
+    }
+
     private func navigate(to urlString: String?) async throws -> BrowserActionResult {
         let navStart = CFAbsoluteTimeGetCurrent()
 
@@ -683,6 +689,13 @@ final class BrowserUseManager: NSObject, ObservableObject {
         let scheme = url.scheme?.lowercased() ?? ""
         if !["http", "https", "leophoneagent"].contains(scheme) {
             return .error("Cannot navigate to \(scheme):// URLs. Only http://, https://, and leophoneagent:// are supported.")
+        }
+        // [T-r3-browser-ssrf] Same private/link-local/metadata host rules as
+        // link previews; loopback (servers inside the iSH sandbox) and hosts the
+        // user configured as remote machines stay reachable.
+        if let rejection = BrowserNavigationPolicy.rejection(for: url, userAllowedHosts: Self.userConfiguredHosts()) {
+            logger.warning("[NavPolicy] blocked model navigation to a private host")
+            return .error(rejection)
         }
 
         let logHost = url.host ?? "local"
@@ -845,7 +858,7 @@ final class BrowserUseManager: NSObject, ObservableObject {
             fileSize: jpegData.count,
             fullPage: fullPage,
             truncated: truncated,
-            originalHeight: Int(originalPageHeight)
+            originalHeight: ToolArgNumbers.saturatingInt(Double(originalPageHeight))
         )
 
         return BrowserActionResult(
@@ -1513,7 +1526,7 @@ final class BrowserUseManager: NSObject, ObservableObject {
                 if let n = result as? Int {
                     count = n
                 } else if let n = result as? Double {
-                    count = Int(n)
+                    count = ToolArgNumbers.saturatingInt(n) // page-controlled: may be Infinity
                 } else {
                     count = 0
                 }

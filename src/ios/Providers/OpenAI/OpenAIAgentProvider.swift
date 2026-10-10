@@ -156,8 +156,11 @@ final class OpenAIAgentProvider: AgentProvider {
             let task = Task {
                 var emittedTextStart = false
                 var hasToolCalls = false
-                // Track parallel tool calls by index: [index: (id, name, accumulatedJSON)]
-                var toolCallAccum: [Int: (id: String, name: String, json: String)] = [:]
+                // Parallel tool calls by index. [T-r3-stream-hardening] Linear
+                // accumulation (chunk array + throttled snapshot, 1 MB cap), and a
+                // second call started on a still-open index no longer orphans the
+                // first one.
+                var toolCallTable = OpenAIToolCallTable()
                 // Accumulate reasoning_content from thinking models (Kimi, DeepSeek, QwQ, etc.)
                 var reasoningContent = ""
                 // True once we've seen ANY reasoning field on the wire — even an empty
@@ -238,12 +241,12 @@ final class OpenAIAgentProvider: AgentProvider {
                         guard let data = payload.data(using: .utf8),
                               let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
 
-                        // Check for error in SSE stream (OpenRouter / proxy providers)
-                        if let error = event["error"] as? [String: Any] {
-                            let message = error["message"] as? String ?? "Unknown streaming error"
-                            let code = error["code"] as? Int
-                            logger.error("SSE stream error: \(message)")
-                            throw LLMError.providerError(message: "[\(code ?? -1)] \(message)")
+                        // Check for error in SSE stream (OpenRouter / proxy providers).
+                        // [B1] 5xx / overloaded map to a transient error so the
+                        // same-model auto-retry runs before any group fallback.
+                        if let streamError = StreamErrorClassifier.topLevelError(event) {
+                            logger.error("SSE stream error: \(streamError.localizedDescription)")
+                            throw streamError
                         }
 
                         // Usage
@@ -251,9 +254,9 @@ final class OpenAIAgentProvider: AgentProvider {
                             let details = usage["prompt_tokens_details"] as? [String: Any]
                             // DeepSeek reports cache hits at `usage.prompt_cache_hit_tokens`
                             // instead of the OpenAI-native `prompt_tokens_details.cached_tokens`.
-                            let cacheRead = (details?["cached_tokens"] as? Int)
-                                ?? (usage["prompt_cache_hit_tokens"] as? Int)
-                            let promptTokens = usage["prompt_tokens"] as? Int ?? 0
+                            let cacheRead = UsageTokenClamp.value(details?["cached_tokens"])
+                                ?? UsageTokenClamp.value(usage["prompt_cache_hit_tokens"])
+                            let promptTokens = UsageTokenClamp.value(usage["prompt_tokens"]) ?? 0
                             // `prompt_tokens` is the FULL input (cached + fresh); subtract the
                             // cached portion so `inputTokens` is fresh-only — matching
                             // OpenAIProvider.parseChatCompletionsUsage(). Without this,
@@ -262,8 +265,8 @@ final class OpenAIAgentProvider: AgentProvider {
                             let freshInput = (cacheRead.map { promptTokens - $0 }).flatMap { $0 >= 0 ? $0 : nil } ?? promptTokens
                             let u = LLMUsage(
                                 inputTokens: freshInput,
-                                outputTokens: usage["completion_tokens"] as? Int ?? 0,
-                                cacheCreationInputTokens: details?["cache_creation_input_tokens"] as? Int,
+                                outputTokens: UsageTokenClamp.value(usage["completion_tokens"]) ?? 0,
+                                cacheCreationInputTokens: UsageTokenClamp.value(details?["cache_creation_input_tokens"]),
                                 cacheReadInputTokens: cacheRead
                             )
                             continuation.yield(.usage(u))
@@ -379,20 +382,18 @@ final class OpenAIAgentProvider: AgentProvider {
                                 // would treat each delta as a NEW tool call and overwrite
                                 // the valid accumulator entry with empty values.
                                 if let id = tc["id"] as? String, !id.isEmpty,
-                                   let name = fn["name"] as? String, !name.isEmpty {
+                                   let name = fn["name"] as? String, !name.isEmpty,
+                                   toolCallTable.start(index: index, id: id, name: name) {
                                     // New tool call start
                                     emittedTextStart = false
                                     hasToolCalls = true
-                                    toolCallAccum[index] = (id: id, name: name, json: "")
                                     continuation.yield(.contentBlockStart(.toolUse(id: id, name: name)))
                                     diagYieldedAnyContent = true
                                 }
 
                                 if let argDelta = fn["arguments"] as? String,
-                                   var entry = toolCallAccum[index] {
-                                    entry.json += argDelta
-                                    toolCallAccum[index] = entry
-                                    continuation.yield(.toolInputDelta(name: entry.name, accumulated: entry.json))
+                                   let progress = toolCallTable.appendArguments(index: index, delta: argDelta) {
+                                    continuation.yield(.toolInputDelta(name: progress.name, accumulated: progress.snapshot))
                                 }
                             }
                         }
@@ -412,16 +413,14 @@ final class OpenAIAgentProvider: AgentProvider {
                             emitParsed(thinkParser.finishTurn())
                             logger.info("SSE finish_reason=\(fr) hasToolCalls=\(hasToolCalls) emittedTextStart=\(emittedTextStart) reasoningLen=\(reasoningContent.count) encryptedReasoningChunks=\(encryptedReasoningChunks)")
                             // Emit completed tool calls
-                            for (_, entry) in toolCallAccum.sorted(by: { $0.key < $1.key }) {
-                                let args = Self.parseJsonToDict(entry.json)
-                                if args.isEmpty {
-                                    Self.diagEmptyToolArgs(rawJson: entry.json, toolName: entry.name, toolId: entry.id, model: self.model.id, source: "chatCompletions.finishReason")
+                            for entry in toolCallTable.drain() {
+                                if entry.args.isEmpty {
+                                    Self.diagEmptyToolArgs(rawJson: entry.raw, toolName: entry.name, toolId: entry.id, model: self.model.id, source: "chatCompletions.finishReason")
                                 }
                                 continuation.yield(.toolCallComplete(
-                                    id: entry.id, name: entry.name, args: args, metadata: nil
+                                    id: entry.id, name: entry.name, args: entry.args, metadata: nil
                                 ))
                             }
-                            toolCallAccum.removeAll()
 
                             // Emit accumulated reasoning content from thinking models.
                             // Also emit when the field appeared on the wire as an empty
@@ -584,8 +583,9 @@ final class OpenAIAgentProvider: AgentProvider {
             let task = Task {
                 var emittedTextStart = false
                 var hasToolCalls = false
-                // Track current function call items: [item_id: (call_id, name, accumulatedJSON)]
-                var functionCallAccum: [String: (callId: String, name: String, json: String)] = [:]
+                // Current function call items by item_id. [T-r3-stream-hardening]
+                // Arguments accumulate linearly with a 1 MB cap.
+                var functionCallAccum: [String: (callId: String, name: String, args: StreamToolArgsAccumulator)] = [:]
 
                 // Per-item streamed summary text. Keyed by reasoning item id.
                 // OpenAI Responses API can emit multiple reasoning items in a
@@ -611,6 +611,13 @@ final class OpenAIAgentProvider: AgentProvider {
                               let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
 
                         let type = event["type"] as? String ?? ""
+
+                        // [B1] `error` / `response.error` mid-stream used to fall
+                        // through `default` and end the turn as if complete.
+                        if let streamError = StreamErrorClassifier.responsesErrorEvent(event) {
+                            logger.error("Responses stream error event: \(streamError.localizedDescription)")
+                            throw streamError
+                        }
 
                         switch type {
                         // Reasoning text deltas (Responses API)
@@ -644,10 +651,12 @@ final class OpenAIAgentProvider: AgentProvider {
                         case "response.function_call_arguments.delta":
                             if let itemId = event["item_id"] as? String,
                                let delta = event["delta"] as? String,
-                               var entry = functionCallAccum[itemId] {
-                                entry.json += delta
-                                functionCallAccum[itemId] = entry
-                                continuation.yield(.toolInputDelta(name: entry.name, accumulated: entry.json))
+                               functionCallAccum[itemId] != nil {
+                                if functionCallAccum[itemId]!.args.append(delta) {
+                                    let name = functionCallAccum[itemId]!.name
+                                    let snapshot = functionCallAccum[itemId]!.args.joined()
+                                    continuation.yield(.toolInputDelta(name: name, accumulated: snapshot))
+                                }
                             }
 
                         case "response.output_item.done":
@@ -680,11 +689,11 @@ final class OpenAIAgentProvider: AgentProvider {
                                let itemType = item["type"] as? String,
                                itemType == "function_call",
                                let itemId = item["id"] as? String,
-                               let entry = functionCallAccum[itemId] {
+                               var entry = functionCallAccum[itemId] {
                                 let combinedId = Self.combineResponsesAPIIds(callId: entry.callId, fcId: itemId)
-                                let args = Self.parseJsonToDict(entry.json)
+                                let args = entry.args.finalArgs(toolName: entry.name)
                                 if args.isEmpty {
-                                    Self.diagEmptyToolArgs(rawJson: entry.json, toolName: entry.name, toolId: combinedId, model: self.model.id, source: "responsesAPI.outputItemDone")
+                                    Self.diagEmptyToolArgs(rawJson: entry.args.joined(), toolName: entry.name, toolId: combinedId, model: self.model.id, source: "responsesAPI.outputItemDone")
                                 }
                                 continuation.yield(.toolCallComplete(
                                     id: combinedId, name: entry.name, args: args, metadata: nil
@@ -714,7 +723,7 @@ final class OpenAIAgentProvider: AgentProvider {
                                 emittedTextStart = false
                                 hasToolCalls = true
                                 let combinedId = Self.combineResponsesAPIIds(callId: callId, fcId: itemId)
-                                functionCallAccum[itemId] = (callId: callId, name: name, json: "")
+                                functionCallAccum[itemId] = (callId: callId, name: name, args: StreamToolArgsAccumulator())
                                 continuation.yield(.contentBlockStart(.toolUse(id: combinedId, name: name)))
                             }
 
@@ -827,10 +836,10 @@ final class OpenAIAgentProvider: AgentProvider {
                             // Usage
                             if let usage {
                                 let inputDetails = usage["input_tokens_details"] as? [String: Any]
-                                let cacheRead = inputDetails?["cached_tokens"] as? Int
+                                let cacheRead = UsageTokenClamp.value(inputDetails?["cached_tokens"])
                                 let u = LLMUsage(
-                                    inputTokens: usage["input_tokens"] as? Int ?? 0,
-                                    outputTokens: usage["output_tokens"] as? Int ?? 0,
+                                    inputTokens: UsageTokenClamp.value(usage["input_tokens"]) ?? 0,
+                                    outputTokens: UsageTokenClamp.value(usage["output_tokens"]) ?? 0,
                                     cacheCreationInputTokens: nil,
                                     cacheReadInputTokens: cacheRead
                                 )
@@ -1371,7 +1380,9 @@ final class OpenAIAgentProvider: AgentProvider {
                 toolCalls.append([
                     "id": Self.capChatId(id),
                     "type": "function",
-                    "function": ["name": name, "arguments": argsJSON],
+                    // [B3] A name the model invented ("foo bar") is stored as is;
+                    // replayed raw it 400s every retry and every fallback model.
+                    "function": ["name": ToolNameSanitizer.sanitize(name), "arguments": argsJSON],
                 ])
             }
             result["tool_calls"] = toolCalls
@@ -1481,7 +1492,7 @@ final class OpenAIAgentProvider: AgentProvider {
                     var entry: [String: Any] = [
                         "type": "function_call",
                         "call_id": safeCallId,
-                        "name": name,
+                        "name": ToolNameSanitizer.sanitize(name), // [B3]
                         "arguments": argsStr,
                     ]
                     // Responses API requires `function_call.id` to begin with
@@ -1772,12 +1783,9 @@ final class OpenAIAgentProvider: AgentProvider {
     /// with no space and our previous strict `data: ` check dropped every
     /// chunk on that provider, surfacing as "empty stream" failures.
     private static func ssePayload(from line: String) -> String? {
-        guard line.hasPrefix("data:") else { return nil }
-        let after = line.dropFirst(5)
-        if after.first == " " {
-            return String(after.dropFirst())
-        }
-        return String(after)
+        // [T-r3-stream-hardening] Shared framing: also drops a leading BOM and a
+        // trailing CR so the first event of a BOM-prefixed body is not lost.
+        SSEFraming.payload(fromLine: line)
     }
 
     private static func parseJsonToDict(_ json: String) -> [String: Any] {

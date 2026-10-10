@@ -268,22 +268,44 @@ extension AIChatViewModel {
     func executeFileRead(from json: String) async throws -> FileToolResult {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let path = dict["path"] as? String else {
+              let rawPath = dict["path"] as? String else {
             return FileToolResult(output: "Error: Missing required 'path' parameter", success: false)
         }
+        // [T-r3-input-hardening] Control characters never belong in a path;
+        // NFC once here so meta.db rows and mount compares see one spelling.
+        if let rejection = ToolInputGuard.pathRejection(rawPath) {
+            return FileToolResult(output: rejection, success: false)
+        }
+        let path = ToolInputGuard.normalizedPath(rawPath)
 
         guard let hostURL = await resolvePathForDirectRead(path) else {
             return FileToolResult(output: "Error: Invalid path: \(path)", success: false)
         }
 
-        let offset = max(1, FileReadPaging.intValue(dict, "offset") ?? 1)
-        let maxLines = FileReadPaging.intValue(dict, "lines")
-        let requested = FileReadPaging.intValue(dict, "max_length") ?? Self.kMaxToolResultChars
+        // [T-r3-tool-arg-clamp] Int.max / Int.min / 1e300 arrive here from the
+        // model; every value is clamped before any arithmetic touches it.
+        let offset = ToolArgNumbers.clampedInt(dict["offset"], to: ToolArgNumbers.fileReadOffsetRange) ?? 1
+        let maxLines = ToolArgNumbers.clampedInt(dict["lines"], to: ToolArgNumbers.fileReadLinesRange)
+        let requested = ToolArgNumbers.clampedInt(dict["max_length"], to: ToolArgNumbers.fileReadMaxLengthRange) ?? Self.kMaxToolResultChars
         let maxLength = min(requested, FileReadPaging.hardCap)
         let direction = (dict["direction"] as? String)?.lowercased() ?? "head"
 
         guard FileManager.default.fileExists(atPath: hostURL.path) else {
             return FileToolResult(output: "Error: No such file: \(path)", success: false)
+        }
+
+        // [T-r3-resource-caps] A 500 MB file used to be loaded whole (and then
+        // copied twice more while splitting lines). Refuse past the cap.
+        if let size = ToolResourceLimits.fileSize(at: hostURL), size > ToolResourceLimits.maxTextFileBytes {
+            if let head = ToolResourceLimits.leadingBytes(of: hostURL, count: 512), head.contains(0) {
+                let hexPreview = head.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " ")
+                return FileToolResult(output: "[\(path) | \(size) bytes | binary file]\nHex preview: \(hexPreview)", success: true)
+            }
+            return FileToolResult(
+                output: ToolResourceLimits.fileTooLargeMessage(
+                    path: path, bytes: size, limit: ToolResourceLimits.maxTextFileBytes,
+                    hint: "Read parts of it with shell_execute (head -n, tail -n, sed -n 'A,Bp', grep -n)."),
+                success: false)
         }
 
         // Check for binary content (null bytes in first 512 bytes)
@@ -327,9 +349,22 @@ extension AIChatViewModel {
     func executeFileWrite(from json: String) async throws -> FileToolResult {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let path = dict["path"] as? String,
+              let rawPath = dict["path"] as? String,
               var content = dict["content"] as? String else {
             return FileToolResult(output: "Error: Missing required 'path' and/or 'content' parameters", success: false)
+        }
+        // [T-r3-input-hardening] Control characters never belong in a path;
+        // NFC once here so meta.db rows and mount compares see one spelling.
+        if let rejection = ToolInputGuard.pathRejection(rawPath) {
+            return FileToolResult(output: rejection, success: false)
+        }
+        let path = ToolInputGuard.normalizedPath(rawPath)
+        if content.utf8.count > ToolResourceLimits.maxWriteContentBytes {
+            return FileToolResult(
+                output: ToolResourceLimits.fileTooLargeMessage(
+                    path: path, bytes: content.utf8.count, limit: ToolResourceLimits.maxWriteContentBytes,
+                    hint: "Write the file in smaller pieces (create it, then append with shell_execute) or generate it with a script."),
+                success: false)
         }
 
         var restoredNote = ""
@@ -536,11 +571,17 @@ extension AIChatViewModel {
     func executeFileEdit(from json: String) async throws -> FileToolResult {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let path = dict["path"] as? String,
+              let rawPath = dict["path"] as? String,
               let oldString = dict["old_string"] as? String,
               var newString = dict["new_string"] as? String else {
             return FileToolResult(output: "Error: Missing required parameters (path, old_string, new_string)", success: false)
         }
+        // [T-r3-input-hardening] Control characters never belong in a path;
+        // NFC once here so meta.db rows and mount compares see one spelling.
+        if let rejection = ToolInputGuard.pathRejection(rawPath) {
+            return FileToolResult(output: rejection, success: false)
+        }
+        let path = ToolInputGuard.normalizedPath(rawPath)
 
         switch await resolveOffloadPlaceholders(in: newString, field: "new_string") {
         case .clean: break
@@ -573,6 +614,14 @@ extension AIChatViewModel {
 
         guard FileManager.default.fileExists(atPath: hostURL.path) else {
             return FileToolResult(output: "Error: File does not exist: \(path). Use file_write to create new files.", success: false)
+        }
+
+        if let size = ToolResourceLimits.fileSize(at: hostURL), size > ToolResourceLimits.maxTextFileBytes {
+            return FileToolResult(
+                output: ToolResourceLimits.fileTooLargeMessage(
+                    path: path, bytes: size, limit: ToolResourceLimits.maxTextFileBytes,
+                    hint: "Edit it with shell_execute (sed -i, or a small script) instead."),
+                success: false)
         }
 
         guard let fileContent = try? String(contentsOf: hostURL, encoding: .utf8) else {
@@ -841,110 +890,4 @@ extension AIChatViewModel {
         return "First 20 lines:\n\(preview)"
     }
 
-}
-
-/// Same pagination contract as Android `FileReadPaging` / Harmony `fileReadPage`.
-/// Length is UTF-16 so `next_offset` stays aligned across the three runtimes.
-enum FileReadPaging {
-    static let hardCap = 80_000
-
-    struct Page {
-        let showStart: Int
-        let showEnd: Int
-        let totalLines: Int
-        let content: String
-        let truncated: Bool
-        let nextOffset: Int?
-    }
-
-    static func intValue(_ dict: [String: Any], _ key: String) -> Int? {
-        if let n = dict[key] as? Int { return n }
-        if let n = dict[key] as? NSNumber { return n.intValue }
-        return nil
-    }
-
-    static func page(
-        allLines: [String],
-        offset: Int,
-        requestedLines: Int?,
-        maxLength: Int,
-        direction: String
-    ) -> Page {
-        let total = allLines.count
-        let cap = max(1, min(maxLength, hardCap))
-        if total == 0 {
-            return Page(showStart: 1, showEnd: 0, totalLines: 0, content: "", truncated: false, nextOffset: nil)
-        }
-        let isTail = direction.lowercased() == "tail"
-        let selected: [String]
-        let showStart: Int
-        if isTail {
-            let count = requestedLines ?? total
-            let start = max(0, total - count)
-            selected = Array(allLines[start..<total])
-            showStart = start + 1
-        } else {
-            let start = min(max(0, max(offset, 1) - 1), total)
-            let end: Int
-            if let requestedLines {
-                end = min(start + max(requestedLines, 0), total)
-            } else {
-                end = total
-            }
-            selected = Array(allLines[start..<end])
-            showStart = selected.isEmpty ? max(offset, 1) : start + 1
-        }
-        return clip(selected, showStart: showStart, total: total, cap: cap, isTail: isTail)
-    }
-
-    private static func clip(
-        _ selected: [String],
-        showStart: Int,
-        total: Int,
-        cap: Int,
-        isTail: Bool
-    ) -> Page {
-        if selected.isEmpty {
-            return Page(showStart: showStart, showEnd: showStart - 1, totalLines: total, content: "", truncated: false, nextOffset: nil)
-        }
-        let joined = selected.joined(separator: "\n")
-        let joinedLen = (joined as NSString).length
-        if joinedLen <= cap {
-            let showEnd = showStart + selected.count - 1
-            let next = (!isTail && showEnd < total) ? showEnd + 1 : nil
-            return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: joined, truncated: false, nextOffset: next)
-        }
-        var used = 0
-        var complete = 0
-        for line in selected {
-            let extra = complete == 0 ? 0 : 1
-            let lineLen = (line as NSString).length
-            if used + extra + lineLen > cap { break }
-            used += extra + lineLen
-            complete += 1
-        }
-        if complete == 0 {
-            let showEnd = showStart
-            let next = isTail ? nil : showStart + 1
-            let clipped = (selected[0] as NSString).substring(to: min(cap, (selected[0] as NSString).length))
-            return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: clipped, truncated: true, nextOffset: next)
-        }
-        let showEnd = showStart + complete - 1
-        let content = selected[0..<complete].joined(separator: "\n")
-        let next = (!isTail && showEnd < total) ? showEnd + 1 : nil
-        return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: content, truncated: true, nextOffset: next)
-    }
-
-    static func formatOutput(path: String, size: Int, page: Page) -> String {
-        let range: String
-        if page.totalLines == 0 || page.showEnd < page.showStart {
-            range = "showing 0-0 of 0"
-        } else {
-            range = "showing \(page.showStart)-\(page.showEnd) of \(page.totalLines)"
-        }
-        let trunc = page.truncated ? " (truncated at \(hardCap) chars or requested max_length)" : ""
-        let header = "[\(path) | \(size) bytes | \(page.totalLines) lines | \(range)\(trunc)]"
-        let next = page.nextOffset.map { "\nnext_offset: \($0)" } ?? ""
-        return "\(header)\n\(page.content)\(next)"
-    }
 }

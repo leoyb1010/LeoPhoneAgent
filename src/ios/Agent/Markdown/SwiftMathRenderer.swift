@@ -14,6 +14,15 @@ enum SwiftMathRenderer {
     static func render(latex: String, displayMode: Bool, fontSize: CGFloat = 17) -> SwiftMathRenderResult? {
         _ = cacheSetup
 
+        // [T-r3-markdown-hardening] SwiftMath's parser recurses per nesting
+        // level on the main thread: 10k nested \frac{ overflowed the stack.
+        // Oversized / over-nested formulas go to the text fallback (nil here
+        // makes the caller use renderFallback).
+        guard MathLatexGuard.allowsNativeRender(latex) else {
+            logger.warning("formula too large or deeply nested for native rendering (\(latex.utf8.count) bytes) — using text fallback")
+            return nil
+        }
+
         let key = cacheKey(latex: latex, displayMode: displayMode, fontSize: fontSize) as NSString
         if let cached = cache.object(forKey: key) {
             return cached
@@ -110,7 +119,7 @@ enum SwiftMathRenderer {
         let key = ("F:" + cacheKey(latex: latex, displayMode: displayMode, fontSize: fontSize)) as NSString
         if let cached = cache.object(forKey: key) { return cached }
 
-        let unicode = latexToUnicode(latex)
+        let unicode = latexToUnicode(MathLatexGuard.fallbackSource(latex))
         guard !unicode.isEmpty else { return nil }
 
         let textFont = UIFont.systemFont(ofSize: fontSize)

@@ -929,7 +929,7 @@ enum WatchAskRunner {
         return ""
     }
 
-    private static let wristReminder = "\n\n<system-reminder>This message was spoken on the user's Apple Watch. Do the task as usual, but write the final reply for a watch face that may read it aloud: plain Chinese text, no Markdown, tables or code blocks, lead with the answer, at most about 120 characters unless the user asked for detail.</system-reminder>"
+    static let wristReminder = "\n\n<system-reminder>This message was spoken on the user's Apple Watch. Do the task as usual, but write the final reply for a watch face that may read it aloud: plain Chinese text, no Markdown, tables or code blocks, lead with the answer, at most about 120 characters unless the user asked for detail.</system-reminder>"
 
     /// Stops the run behind a wrist request. False when it already finished.
     static func cancel(requestId: String) -> Bool {

@@ -849,6 +849,15 @@ struct LLMUsage: Sendable {
     let outputTokens: Int
     let cacheCreationInputTokens: Int?
     let cacheReadInputTokens: Int?
+
+    /// [T-r3-stream-hardening] Server-reported counts are clamped on the way
+    /// in: `Int.max` input + cache tokens used to overflow (trap) in TokenUsage.
+    init(inputTokens: Int, outputTokens: Int, cacheCreationInputTokens: Int?, cacheReadInputTokens: Int?) {
+        self.inputTokens = UsageTokenClamp.clamp(inputTokens)
+        self.outputTokens = UsageTokenClamp.clamp(outputTokens)
+        self.cacheCreationInputTokens = UsageTokenClamp.clamp(cacheCreationInputTokens)
+        self.cacheReadInputTokens = UsageTokenClamp.clamp(cacheReadInputTokens)
+    }
 }
 
 // MARK: - Model ID → Display Name

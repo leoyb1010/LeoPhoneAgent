@@ -113,7 +113,8 @@ extension AIChatViewModel {
         syncSelectedModelFromBinding()
         // [T-long-paste-fold] Same expansion as send(): the queued bubble and
         // the injected prompt must carry the pasted text, not the token.
-        let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = escapeUserAuthoredInput(
+            expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines))
         // A loading photo still belongs to the composer: its completion callback
         // resolves the placeholder here, not inside a queued value snapshot.
         guard !hasLoadingAttachments, isProcessing else { return }

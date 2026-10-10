@@ -295,7 +295,7 @@ extension AIChatViewModel {
     /// Compact then send the pending message.
     func compactAndSend() {
         showCompactBeforeSendPrompt = false
-        let text = pendingSendText ?? ""
+        let text = pendingSendText ?? "" // already escaped by send() [B23]
         let atts = pendingSendAttachments
         let treasuryContext = pendingSendTreasuryContext
         pendingSendTreasuryContext = nil

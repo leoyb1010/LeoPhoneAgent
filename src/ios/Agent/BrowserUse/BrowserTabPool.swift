@@ -793,6 +793,15 @@ final class BrowserTabPool: ObservableObject {
             // Pass input.url through so the new tab actually loads it — Android
             // already does this (BrowserTabPool.kt NEW_TAB branch).
             // [T-ios-new-tab-url-dropped]
+            // [T-r3-browser-ssrf] The model-supplied URL passes the same host
+            // policy as navigate.
+            if let raw = input.url?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+               let url = URL(string: raw.contains("://") ? raw : "https://\(raw)"),
+               let rejection = BrowserNavigationPolicy.rejection(
+                   for: url,
+                   userAllowedHosts: Set(RemoteHostStore.configuredHosts().map { $0.host.lowercased() })) {
+                return .error(rejection)
+            }
             return newTab(url: input.url)
         case .closeTab:
             let tabId = input.tabId ?? selectedTabId
