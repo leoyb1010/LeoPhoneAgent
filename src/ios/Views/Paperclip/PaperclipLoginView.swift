@@ -12,10 +12,8 @@ struct PaperclipLoginView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Text("请在下面的服务器网页登录。完成后验证人类用户身份；不支持智能体或管理员 API 密钥。")
-                    .font(.footnote).foregroundStyle(.secondary).padding()
-                Text(profile.origin.absoluteString).font(.caption).textSelection(.enabled).padding(.bottom, 8)
-                if let error { Text(error).foregroundStyle(.red).font(.footnote).padding() }
+                PaperclipWebHeader(origin: profile.origin, error: error,
+                                   message: "请在下面的服务器网页登录。完成后验证人类用户身份；不支持智能体或管理员 API 密钥。")
                 PaperclipLoginBrowser(profile: profile, error: $error)
             }
             .navigationTitle("登录 Paperclip")
@@ -47,15 +45,48 @@ struct PaperclipWebsiteView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Text("费用、运行管理及模型配置，请在服务器网页版操作。附件可在此查看，下载请使用浏览器。本页未提供附件下载。网页公司以网页当前选择为准，请先核对。")
-                    .font(.footnote).foregroundStyle(.secondary).padding()
-                Text(profile.origin.absoluteString).font(.caption).textSelection(.enabled).padding(.bottom, 8)
-                if let error { Text(error).foregroundStyle(.red).font(.footnote).padding() }
+                PaperclipWebHeader(origin: profile.origin, error: error,
+                                   message: "费用、运行管理及模型配置，请在服务器网页版操作。附件可在此查看，下载请使用浏览器。本页未提供附件下载。网页公司以网页当前选择为准，请先核对。")
                 PaperclipLoginBrowser(profile: profile, workspace: true, error: $error)
             }
             .navigationTitle("服务器网页版").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
+    }
+}
+
+/// 网页上方的说明条：服务器地址（锁形图标 + 等宽地址胶囊）、一句说明、错误提示。
+private struct PaperclipWebHeader: View {
+    let origin: URL
+    let error: String?
+    let message: LocalizedStringKey
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.fill").font(.caption2.weight(.bold)).foregroundStyle(LeoTheme.ColorToken.success)
+                    .accessibilityHidden(true)
+                Text(origin.absoluteString)
+                    .font(.caption.monospaced())
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(LeoTheme.ColorToken.surface, in: Capsule())
+            .accessibilityElement(children: .combine)
+            Text(message).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let error {
+                PaperclipNotice(text: error, systemImage: "exclamationmark.octagon.fill", tint: LeoTheme.ColorToken.destructive)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, LeoTheme.Spacing.md)
+        .padding(.vertical, LeoTheme.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: error)
     }
 }
 

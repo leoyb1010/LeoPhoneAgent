@@ -61,9 +61,14 @@ struct PaperclipWorkspaceView: View {
     @State private var query = ""
     @State private var listVisible = false
     @State private var columns = NavigationSplitViewVisibility.all
+    /// 折叠的分组（只在本次打开期间记住）。
+    @State private var collapsed: Set<PaperclipIssueGroup> = []
+    /// 相对时间每分钟刷新一次；行按 Equatable 比较，只有时间文字变了的行重绘。
+    @State private var now = Date()
     @FocusState private var searching: Bool
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var inbox = PaperclipNavigationInbox.shared
 
     private var filtered: [PaperclipIssue] {
@@ -73,12 +78,8 @@ struct PaperclipWorkspaceView: View {
         }
     }
 
-    private func grouped(_ issues: [PaperclipIssue]) -> [(PaperclipIssueGroup, [PaperclipIssue])] {
-        let buckets = Dictionary(grouping: issues) { PaperclipIssueGroup.group($0, running: store.liveIssueIDs.contains($0.id)) }
-        return PaperclipIssueGroup.allCases.compactMap { group in
-            guard let rows = buckets[group], !rows.isEmpty else { return nil }
-            return (group, rows)
-        }
+    private var sections: [PaperclipIssueGroup.Section] {
+        PaperclipIssueGroup.sections(filtered, running: store.liveIssueIDs)
     }
 
     var body: some View {
@@ -119,6 +120,7 @@ struct PaperclipWorkspaceView: View {
             // 竖屏也展开左栏：「本机」、新建和输入栏都在左栏里，收起就找不到。
             NavigationSplitView(columnVisibility: $columns) {
                 listPage(split: true)
+                    .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 460)
             } detail: {
                 NavigationStack {
                     if let reference = openedReference, let client = store.client {
@@ -144,7 +146,8 @@ struct PaperclipWorkspaceView: View {
 
     private func listPage(split: Bool) -> some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
+            // 分组标题吸顶；行直接作为惰性子项（不包在每组一个 VStack 里），长列表只构建可见行。
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 content(split: split)
             }
             .padding(.horizontal, LeoTheme.Spacing.md)
@@ -156,7 +159,7 @@ struct PaperclipWorkspaceView: View {
         .navigationTitle("服务器任务")
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             if let client = store.client, let user = store.user, !store.companyID.isEmpty {
                 PaperclipCreateIssueView(client: client, companyID: store.companyID, userID: user.id,
                     agents: store.agents, focusRequest: focusRequest, creating: $creating) { issue in
@@ -169,7 +172,8 @@ struct PaperclipWorkspaceView: View {
             }
         }
         .refreshable { await refresh() }
-        .onAppear { listVisible = true; store.setListVisible(true) }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
+        .onAppear { listVisible = true; now = Date(); store.setListVisible(true) }
         .onDisappear { listVisible = false; store.setListVisible(false) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -232,43 +236,25 @@ struct PaperclipWorkspaceView: View {
             } else if filtered.isEmpty {
                 emptyState
             } else {
-                ForEach(grouped(filtered), id: \.0) { group, rows in
-                    HStack(spacing: 6) {
-                        Text(group.title).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                        Text("\(rows.count)").font(.caption2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Color.primary.opacity(0.06), in: Capsule())
-                    }
-                    .padding(.top, LeoTheme.Spacing.sm)
-                    .padding(.bottom, LeoTheme.Spacing.xs)
-                    .padding(.leading, 4)
-                    .accessibilityAddTraits(.isHeader)
-                    ForEach(rows) { issue in
-                        let card = PaperclipIssueCard(issue: issue, assignee: store.agents.first { $0.id == issue.assigneeAgentId },
-                                                      running: store.liveIssueIDs.contains(issue.id), client: client)
-                        Group {
-                            if split {
-                                // 两栏：选中只换右栏详情，列表不重建、不重新加载。
-                                let selected = openedReference?.issueID == issue.id
-                                Button { openedReference = client.reference(for: issue, userID: user.id) } label: {
-                                    card.overlay {
-                                        RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
-                                            .strokeBorder(LeoTheme.ColorToken.accent, lineWidth: 2)
-                                            .opacity(selected ? 1 : 0)
-                                    }
-                                }
-                                .accessibilityAddTraits(selected ? .isSelected : [])
-                            } else {
-                                NavigationLink {
-                                    detail(client: client, reference: client.reference(for: issue, userID: user.id))
-                                } label: { card }
+                let agents = Dictionary(store.agents.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                ForEach(sections) { section in
+                    Section {
+                        if !collapsed.contains(section.group) {
+                            ForEach(Array(section.issues.enumerated()), id: \.element.id) { index, issue in
+                                issueLink(issue, assignee: issue.assigneeAgentId.flatMap { agents[$0] },
+                                          position: PaperclipRowPosition(index: index, count: section.issues.count),
+                                          split: split, client: client, user: user)
                             }
                         }
-                        .buttonStyle(LeoSquishButtonStyle())
-                        .padding(.bottom, 10)
-                        .accessibilityIdentifier("paperclip.issue.\(issue.id)")
+                    } header: {
+                        PaperclipSectionHeader(group: section.group, count: section.issues.count,
+                                               collapsed: collapsed.contains(section.group)) {
+                            withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.standard)) {
+                                if collapsed.contains(section.group) { collapsed.remove(section.group) } else { collapsed.insert(section.group) }
+                            }
+                        }
                     }
+                    Color.clear.frame(height: LeoTheme.Spacing.sm)
                 }
                 if store.hasMore {
                     Button { Task { await store.refresh(loadMore: true) } } label: {
@@ -289,10 +275,35 @@ struct PaperclipWorkspaceView: View {
         }
     }
 
+    /// 一行：iPhone 推入详情，iPad 两栏只换右栏。
+    /// 不用缩放转场：实测缩放转场期间详情页「打开即定位到最新消息」的滚动会落空，停在页首。
+    @ViewBuilder private func issueLink(_ issue: PaperclipIssue, assignee: PaperclipAgent?, position: PaperclipRowPosition,
+                                        split: Bool, client: PaperclipClient, user: PaperclipUser) -> some View {
+        let selected = split && openedReference?.issueID == issue.id
+        let row = PaperclipIssueRow(issue: issue, assignee: assignee, running: store.liveIssueIDs.contains(issue.id),
+                                    selected: selected, timeText: PaperclipTimeText.compact(issue.updatedAt, now: now),
+                                    position: position, client: client)
+        Group {
+            if split {
+                // 两栏：选中只换右栏详情，列表不重建、不重新加载。
+                Button { openedReference = client.reference(for: issue, userID: user.id) } label: { row.equatable() }
+            } else {
+                NavigationLink {
+                    detail(client: client, reference: client.reference(for: issue, userID: user.id))
+                } label: {
+                    row.equatable()
+                }
+            }
+        }
+        .buttonStyle(PaperclipRowButtonStyle())
+        .accessibilityLabel(Text(row.accessibilityText))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("paperclip.issue.\(issue.id)")
+    }
+
     @ViewBuilder private var emptyState: some View {
         if store.busy && store.issues.isEmpty {
-            HStack(spacing: 10) { ProgressView(); Text("正在加载任务…").foregroundStyle(.secondary) }
-                .frame(maxWidth: .infinity).padding(.top, 60)
+            PaperclipIssueListSkeleton().padding(.top, LeoTheme.Spacing.xs)
         } else if !query.isEmpty {
             LeoEmptyState(systemImage: "magnifyingglass", title: "没有匹配的任务", message: "试试其他关键词。")
         } else {
