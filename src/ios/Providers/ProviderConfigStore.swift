@@ -384,7 +384,7 @@ final class ProviderConfigStore: ObservableObject {
                     }
                     logger.info("[CompositeKeyMigrate] init: normalizeReferences rewrote refs → danglingGroupRefs(after)=\(danglingAfter); persisted+saved")
                 } else {
-                    logger.info("[CompositeKeyMigrate] init: normalizeReferences no-op (no uuid refs matched lmap; \(danglingBefore) dangling refs need a cloud entry record to normalize)")
+                    logger.verbose("[CompositeKeyMigrate] init: normalizeReferences no-op (no uuid refs matched lmap; \(danglingBefore) dangling refs need a cloud entry record to normalize)")
                 }
                 logger.info("[GroupLoad] init: loaded authoritative config from V3 DB — groups=\(deduped.modelGroups.count) entries=\(deduped.modelEntries.count) groupMembers(json=\(jsonGroupMembers)→db=\(dbGroupMembers)) prunedDuplicates=\(prunedAtLoad.count)")
                 self.ensureVoiceTemplateModels()

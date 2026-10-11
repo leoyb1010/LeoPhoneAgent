@@ -311,7 +311,6 @@ struct MinisApp: App {
                     ProviderConfigStore.shared.refreshCodexCatalogOnceIfNeeded()
                     // For existing users with no model groups, create a default group silently
                     Task { await ProviderConfigStore.shared.createDefaultGroupIfNeeded() }
-                    shareLog.info("[Share] onAppear — checking for pending share")
                     shareCoordinator.checkForPendingShare()
                     // Set up background keep-alive manager
                     BackgroundKeepAliveManager.shared.setup()
@@ -443,6 +442,7 @@ struct MinisApp: App {
             }
         Task.detached(priority: .utility) {
             let logger = AppLogger(category: "Provider")
+            var summary: [LaunchLogCompaction.Credential] = []
             for inst in credInstances {
                 let hasKey = ProviderKeychainHelper.loadAPIKey(instanceId: inst.id) != nil
                 let hasOAuthTok: Bool
@@ -453,8 +453,11 @@ struct MinisApp: App {
                 default: hasOAuthTok = false
                 }
                 let hasManual = ProviderKeychainHelper.loadOAuthString(instanceId: inst.id, account: "manual-oauth-token") != nil
-                logger.info("appPhase=active instanceId=\(inst.id.prefix(8)) type=\(inst.type.rawValue) cred=\(inst.cred) enabled=\(inst.enabled) hasApiKey=\(hasKey) hasOAuthToken=\(hasOAuthTok) hasManualOAuth=\(hasManual)")
+                summary.append(.init(id: inst.id, type: inst.type.rawValue, cred: inst.cred, enabled: inst.enabled,
+                                     hasApiKey: hasKey, hasOAuthToken: hasOAuthTok, hasManualOAuth: hasManual))
             }
+            // [r7] One line for all instances (was one per instance in the launch second).
+            logger.info(LaunchLogCompaction.credentialSummary(summary))
         }
     }
 
@@ -1079,21 +1082,26 @@ struct MinisApp: App {
         let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: groupID)
         let containerPath = containerURL?.path ?? "<nil>"
         let resolvedContainer = containerURL?.resolvingSymlinksInPath().path ?? "<nil>"
-        lifecycleLog.info("[FPSyncTrace] appGroup=\(groupID) container=\(containerPath) resolved=\(resolvedContainer)")
+        // [r7] Paths go to .verbose; the INFO line keeps what is read when
+        // correlating with the extension: the container and per-root counts.
+        lifecycleLog.verbose("[FPSyncTrace] appGroup=\(groupID) container=\(containerPath) resolved=\(resolvedContainer)")
 
         let providerRoot = AIChatViewModel.minisAppGroupRoot
-        lifecycleLog.info("[FPSyncTrace] providerRoot=\(providerRoot.path) resolved=\(providerRoot.resolvingSymlinksInPath().path)")
+        lifecycleLog.verbose("[FPSyncTrace] providerRoot=\(providerRoot.path) resolved=\(providerRoot.resolvingSymlinksInPath().path)")
 
         let roots: [(name: String, url: URL)] = [
             ("shared", AIChatViewModel.minisSharedPersistentDir),
             ("skills", AIChatViewModel.minisSkillsPersistentDir),
             ("memory", AIChatViewModel.minisMemoryPersistentDir),
         ]
+        var rootCounts: [String] = []
         for (name, url) in roots {
             let exists = fm.fileExists(atPath: url.path)
             let count = (try? fm.contentsOfDirectory(atPath: url.path).count) ?? -1
-            lifecycleLog.info("[FPSyncTrace] root=\(name) path=\(url.path) exists=\(exists) childCount=\(count)")
+            lifecycleLog.verbose("[FPSyncTrace] root=\(name) path=\(url.path) exists=\(exists) childCount=\(count)")
+            rootCounts.append("\(name)=\(exists ? String(count) : "missing")")
         }
+        lifecycleLog.info("[FPSyncTrace] container=\(resolvedContainer) roots \(rootCounts.joined(separator: " "))")
     }
 
     // MARK: - WebApp Presentation

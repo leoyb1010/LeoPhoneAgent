@@ -119,4 +119,31 @@ final class TextContainerGuardTests: XCTestCase {
         XCTAssertEqual(restores, 0, "an unclamped container must not be restored")
         XCTAssertLessThan(forwarded, 5, "no setSize: per measure/layout pass (was one per pass)")
     }
+
+    /// [r7 round 2] Skipping a same-size setSize: must never hide a needed
+    /// re-layout: new text (storage edits invalidate on their own) and a new
+    /// width (a real size change, forwarded) both still reflow.
+    func testGuard_skippedIdenticalSetSizeStillReflowsAfterTextAndWidthChanges() {
+        let tv = UITextView(frame: CGRect(x: 0, y: 0, width: 300, height: 50))
+        tv.isScrollEnabled = false
+        tv.textContainer.lineFragmentPadding = 0
+        tv.textContainerInset = .zero
+        tv.text = "短"
+        tv.textContainer.size = CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude)
+        let fit = CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude)
+        let short = tv.sizeThatFits(fit).height
+
+        let skipped = NSTextContainerSetSizeGuard.identicalSkipCount()
+        tv.text = String(repeating: "丝滑好用 smooth and easy. ", count: 30)
+        tv.textContainer.size = CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude) // identical → skipped
+        XCTAssertGreaterThan(NSTextContainerSetSizeGuard.identicalSkipCount(), skipped)
+        let long = tv.sizeThatFits(fit).height
+        XCTAssertGreaterThan(long, short * 3, "new text still lays out at full height")
+
+        tv.textContainer.size = CGSize(width: 150, height: CGFloat.greatestFiniteMagnitude)
+        tv.frame.size.width = 150
+        let narrow = tv.sizeThatFits(CGSize(width: 150, height: CGFloat.greatestFiniteMagnitude)).height
+        XCTAssertGreaterThan(narrow, long, "a width change still re-wraps")
+        XCTAssertEqual(tv.textContainer.size.width, 150)
+    }
 }

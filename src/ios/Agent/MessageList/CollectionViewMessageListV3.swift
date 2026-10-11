@@ -720,6 +720,16 @@ private struct BridgedAssistantFooterV3: View {
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
+            } else if AgentActivityFailureClassifier.isMissingModel(error) {
+                // [r7] First run / no provider: 重试 only fails again — add one.
+                Button {
+                    DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
+                } label: {
+                    Text(String(localized: "Add Provider")).font(.caption.weight(.semibold))
+                        .foregroundStyle(ChatColors.primaryText)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(ChatColors.primaryText.opacity(0.15)).clipShape(Capsule())
+                }
             } else if AgentActivityFailureClassifier.reason(for: error) == .authenticationRequired {
                 // Retrying a rejected key just fails again: go fix it.
                 Button {

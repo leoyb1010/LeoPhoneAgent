@@ -85,7 +85,7 @@ struct RecordingListView: View {
         } message: { _ in
             Text("音频、转写和缓存的纪要会从这台设备上删除。已经生成的对话保留在对话列表里。")
         }
-        .onAppear { controller.reload() }
+        .onAppear { controller.reloadForDisplay() }
     }
 
     private func start() {

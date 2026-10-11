@@ -10,6 +10,11 @@ final class NetworkMonitor {
     private let queue = DispatchQueue(label: "com.leoyuan.leophoneagent.networkmonitor")
     private let logger = AppLogger(category: "Network")
     private var lastInterfaceTypes: Set<NWInterface.InterfaceType> = []
+    /// [r7] `currentPath` read before `monitor.start` has no interfaces, so the
+    /// first callback always looked like an interface change (a second proxy
+    /// dump + a pool eviction in the launch second). The first callback only
+    /// sets the baseline.
+    private var hasBaselinePath = false
     private var isStarted = false
 
     private init() {}
@@ -52,20 +57,25 @@ final class NetworkMonitor {
         let currentTypes = activeInterfaceTypes(path)
         let satisfied = path.status == .satisfied
 
-        logger.info("[Network] Path update — status: \(String(describing: path.status)), interfaces: \(currentTypes.map { String(describing: $0) })")
-
-        let typesChanged = currentTypes != lastInterfaceTypes
+        let isFirstPath = !hasBaselinePath
+        hasBaselinePath = true
+        let typesChanged = !isFirstPath && currentTypes != lastInterfaceTypes
         lastInterfaceTypes = currentTypes
 
         // Always refresh DNS on any path update — even when unsatisfied, refreshDns
         // will write the public-DNS fallback so resolv.conf is never left empty.
+        // [r7] One line per update (was two: the path, then the action).
+        let action: String
         if !satisfied {
-            logger.info("[Network] Network unsatisfied — writing fallback DNS")
+            action = "unsatisfied — writing fallback DNS"
+        } else if isFirstPath {
+            action = "initial path — refreshing DNS"
         } else if typesChanged {
-            logger.info("[Network] Interface change detected — refreshing DNS")
+            action = "interface change — refreshing DNS"
         } else {
-            logger.info("[Network] Path updated — refreshing DNS")
+            action = "refreshing DNS"
         }
+        logger.info("[Network] Path update — status: \(String(describing: path.status)), interfaces: \(currentTypes.map { String(describing: $0) }) → \(action)")
 
         ISHKernel.shared.refreshDns()
         // [S8] The proxy dump (CFNetwork copy + per-URL probe + up to three
@@ -115,7 +125,26 @@ final class NetworkMonitor {
         let pacURL       =  dict["ProxyAutoConfigURLString"] as? String
         let exceptions   =  dict["ExceptionsList"]           as? [String]
 
-        logger.info("[Proxy] dump (\(reason)) http=\(httpEnabled):\(httpHost ?? "-"):\(httpPort.map(String.init) ?? "-") https=\(httpsEnabled):\(httpsHost ?? "-"):\(httpsPort.map(String.init) ?? "-") socks=\(socksEnabled):\(socksHost ?? "-"):\(socksPort.map(String.init) ?? "-") pac=\(pacEnabled):\(pacURL ?? "-") exceptions=\(exceptions ?? [])")
+        let summary = "[Proxy] dump (\(reason)) http=\(httpEnabled):\(httpHost ?? "-"):\(httpPort.map(String.init) ?? "-") https=\(httpsEnabled):\(httpsHost ?? "-"):\(httpsPort.map(String.init) ?? "-") socks=\(socksEnabled):\(socksHost ?? "-"):\(socksPort.map(String.init) ?? "-") pac=\(pacEnabled):\(pacURL ?? "-") exceptions=\(exceptions ?? [])"
+
+        // Per-URL probe: ask CFNetwork what it would actually pick for a real
+        // request. On VPN-injected / PAC scenarios this may return a proxy
+        // even when the top-level dict above looks empty.
+        var probe: [[String: Any]] = []
+        if let probeURL = URL(string: "https://api.anthropic.com/v1/messages") {
+            probe = (CFNetworkCopyProxiesForURL(probeURL as CFURL, cf).takeRetainedValue() as? [[String: Any]]) ?? []
+        }
+        let probeTypes = probe.map { ($0["kCFProxyTypeKey"] as? String) ?? "?" }
+
+        // [r7] Direct connection (the usual case): one line. The full dump
+        // (summary + every extra CFNetwork key + the probe) was 11 lines per
+        // call, twice in the launch second, all saying "no proxy".
+        let direct = LaunchLogCompaction.isDirectConnection(settings: dict, probeTypes: probeTypes)
+        if direct {
+            logger.info("[Proxy] (\(reason)) direct — no system proxy, probe=\(probeTypes) exceptions=\((exceptions ?? []).count)")
+        } else {
+            logger.info(summary)
+        }
 
         // Also dump every other key CFNetwork hands back so we don't miss
         // VPN-specific or future fields.
@@ -127,16 +156,13 @@ final class NetworkMonitor {
             "ExceptionsList",
         ]
         let extras = dict.filter { !knownKeys.contains($0.key) }
-        if !extras.isEmpty {
-            logger.info("[Proxy] dump (\(reason)) extra keys: \(extras)")
-        }
-
-        // Per-URL probe: ask CFNetwork what it would actually pick for a real
-        // request. On VPN-injected / PAC scenarios this may return a proxy
-        // even when the top-level dict above looks empty.
-        if let probeURL = URL(string: "https://api.anthropic.com/v1/messages") {
-            let arr = CFNetworkCopyProxiesForURL(probeURL as CFURL, cf).takeRetainedValue() as? [[String: Any]]
-            logger.info("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(arr ?? [])")
+        if direct {
+            logger.verbose(summary)
+            if !extras.isEmpty { logger.verbose("[Proxy] dump (\(reason)) extra keys: \(extras)") }
+            logger.verbose("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(probe)")
+        } else {
+            if !extras.isEmpty { logger.info("[Proxy] dump (\(reason)) extra keys: \(extras)") }
+            logger.info("[Proxy] dump (\(reason)) CFNetworkCopyProxiesForURL(api.anthropic.com)=\(probe)")
         }
     }
 

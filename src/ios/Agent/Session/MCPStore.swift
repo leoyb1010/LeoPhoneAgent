@@ -163,7 +163,7 @@ final class MCPStore: ObservableObject {
         let fm = FileManager.default
         let newURL = syncFileURL
         guard !fm.fileExists(atPath: newURL.path) else {
-            logger.info("[Migrate] skip: servers.json already at \(newURL.path)")
+            logger.verbose("[Migrate] skip: servers.json already at \(newURL.path)")
             return
         }
         let oldURL = legacyServersFileURL
