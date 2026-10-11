@@ -68,7 +68,9 @@ enum AgentRecoveryAction: String, Codable, CaseIterable, Sendable {
 enum AgentActivityFailureClassifier {
     static func reason(for message: String?) -> AgentActivityReason {
         let text = (message ?? "").lowercased()
-        if text.contains("kernel") || text.contains("rootfs") || text.contains("ish") || text.contains("执行环境") {
+        // "ish" only as a whole word: as a substring it matched "establish",
+        // "finish", "publish", "English" and sent network errors to the kernel path.
+        if text.contains("kernel") || text.contains("rootfs") || containsWord(text, "ish") || text.contains("执行环境") {
             return .kernelUnavailable
         }
         if text.contains("unauthorized") || text.contains("authentication")
@@ -89,6 +91,22 @@ enum AgentActivityFailureClassifier {
             return .toolFailure
         }
         return .providerFailure
+    }
+
+    /// [r7] The run never started because no model is configured (first run,
+    /// or every provider removed). Retrying can only fail the same way, so the
+    /// chat error offers 「添加 AI 服务商」 instead of 重试. Matches the
+    /// message in every shipped language, since old sessions keep the text
+    /// they were written with.
+    static func isMissingModel(_ message: String?) -> Bool {
+        guard let message, !message.isEmpty else { return false }
+        if message == String(localized: "No model configured. Add a provider in Settings.") { return true }
+        let text = message.lowercased()
+        return text.contains("no model configured") || text.contains("未配置模型") || text.contains("未設定模型")
+    }
+
+    private static func containsWord(_ text: String, _ word: String) -> Bool {
+        text.split { !$0.isLetter }.contains { $0 == word }
     }
 
     static func recoveryAction(for reason: AgentActivityReason) -> AgentRecoveryAction {

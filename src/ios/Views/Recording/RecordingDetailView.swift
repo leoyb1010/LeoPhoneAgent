@@ -22,6 +22,7 @@ struct RecordingDetailView: View {
     @State private var reminderDraft: ReminderDraft?
     @State private var confirmDelete = false
     @State private var confirmRetranscribe = false
+    @State private var confirmClearSpeakers = false
     @State private var toast: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -83,6 +84,12 @@ struct RecordingDetailView: View {
             }
         } message: {
             Text("音频、转写和缓存的纪要会从这台设备上删除。已经生成的对话保留在对话列表里。")
+        }
+        // [r7] 「清除」紧挨着说话人胶囊,一碰就把推断结果和改过的名字全清掉,而且重新区分要再跑一次模型。
+        .confirmationDialog("清除说话人标注?", isPresented: $confirmClearSpeakers, titleVisibility: .visible) {
+            Button("清除说话人", role: .destructive) { controller.clearSpeakers(recordingId) }
+        } message: {
+            Text("说话人标注和改过的名字都会清掉。之后可以重新区分说话人,需要再调用一次模型。")
         }
         .confirmationDialog("重新转写?", isPresented: $confirmRetranscribe, titleVisibility: .visible) {
             Button("重新转写") { controller.transcribe(recordingId, restart: true) }
@@ -322,7 +329,7 @@ struct RecordingDetailView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Button(role: .destructive) { controller.clearSpeakers(recordingId) } label: {
+                    Button(role: .destructive) { confirmClearSpeakers = true } label: {
                         Label("清除", systemImage: "xmark.circle")
                             .font(.footnote)
                     }

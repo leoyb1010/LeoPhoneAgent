@@ -5886,10 +5886,9 @@ extension ChatStore {
             }
         }
         sqlite3_finalize(stmt)
-        iCloudLogger.info("[iCloud] listSyncDevices: returning \(devices.count) devices")
-        for d in devices {
-            iCloudLogger.info("[iCloud]   device: id=\(d.id) name=\(d.deviceName) zone=\(d.zoneName)")
-        }
+        // [r7] One line for the whole list (was one per device).
+        let deviceList = devices.map { "\($0.id.prefix(8)):\($0.deviceName)@\($0.zoneName)" }.joined(separator: ", ")
+        iCloudLogger.info("[iCloud] listSyncDevices: returning \(devices.count) devices [\(deviceList)]")
         // DIAG: when zero devices, dump enough surrounding state to tell at
         // a glance WHY peer discovery isn't surfacing the other side. Three
         // common causes — sync not initialized (zoneEmpty), user disabled

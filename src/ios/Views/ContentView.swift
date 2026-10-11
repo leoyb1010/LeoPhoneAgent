@@ -1089,7 +1089,12 @@ struct ContentView: View {
                     return true
                 }()
                 let quickActionPending = quickActionRouter.newChatTrigger != consumedQuickActionTrigger || workflowActive
-                shareLog.info("[Share] .task: hasPendingShare=\(shareCoordinator.hasPendingShare) launchScreen=\(launchScreen) sessions=\(sessions.count) bufferVersion=\(shareCoordinator.bufferVersion) shareAlreadyHandled=\(shareAlreadyHandled) quickActionPending=\(quickActionPending) workflowActive=\(workflowActive)")
+                let shareTaskLine = "[Share] .task: hasPendingShare=\(shareCoordinator.hasPendingShare) launchScreen=\(launchScreen) sessions=\(sessions.count) bufferVersion=\(shareCoordinator.bufferVersion) shareAlreadyHandled=\(shareAlreadyHandled) quickActionPending=\(quickActionPending) workflowActive=\(workflowActive)"
+                if shareCoordinator.hasPendingShare || quickActionPending {
+                    shareLog.info(shareTaskLine)
+                } else {
+                    shareLog.verbose(shareTaskLine)
+                }
 
                 // [T-notification-tap-vs-launch-session] A notification tap's
                 // explicit target session outranks every launch-screen default.

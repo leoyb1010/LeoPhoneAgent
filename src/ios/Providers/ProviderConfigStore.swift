@@ -384,7 +384,7 @@ final class ProviderConfigStore: ObservableObject {
                     }
                     logger.info("[CompositeKeyMigrate] init: normalizeReferences rewrote refs → danglingGroupRefs(after)=\(danglingAfter); persisted+saved")
                 } else {
-                    logger.info("[CompositeKeyMigrate] init: normalizeReferences no-op (no uuid refs matched lmap; \(danglingBefore) dangling refs need a cloud entry record to normalize)")
+                    logger.verbose("[CompositeKeyMigrate] init: normalizeReferences no-op (no uuid refs matched lmap; \(danglingBefore) dangling refs need a cloud entry record to normalize)")
                 }
                 logger.info("[GroupLoad] init: loaded authoritative config from V3 DB — groups=\(deduped.modelGroups.count) entries=\(deduped.modelEntries.count) groupMembers(json=\(jsonGroupMembers)→db=\(dbGroupMembers)) prunedDuplicates=\(prunedAtLoad.count)")
                 self.ensureVoiceTemplateModels()
@@ -2854,7 +2854,7 @@ enum ProviderKeychainHelper {
         let syncStatus = SecItemCopyMatching(syncQuery as CFDictionary, &result)
         if syncStatus == errSecSuccess, let data = result as? Data {
             let s = String(data: data, encoding: .utf8)
-            AppLogger(category: "Keychain").info("read apiKey instanceId=\(instanceId.prefix(8)) src=sync hit=\(s != nil) keyLen=\(s?.count ?? 0) caller=\(caller)")
+            AppLogger(category: "Keychain").verbose("read apiKey instanceId=\(instanceId.prefix(8)) src=sync hit=\(s != nil) keyLen=\(s?.count ?? 0) caller=\(caller)")
             return s
         }
         // Fallback to legacy non-sync entry
@@ -2868,7 +2868,7 @@ enum ProviderKeychainHelper {
         result = nil
         let legacyStatus = SecItemCopyMatching(legacyQuery as CFDictionary, &result)
         guard legacyStatus == errSecSuccess, let data = result as? Data else {
-            AppLogger(category: "Keychain").info("read apiKey instanceId=\(instanceId.prefix(8)) hit=false syncStatus=\(syncStatus) legacyStatus=\(legacyStatus) caller=\(caller)")
+            AppLogger(category: "Keychain").verbose("read apiKey instanceId=\(instanceId.prefix(8)) hit=false syncStatus=\(syncStatus) legacyStatus=\(legacyStatus) caller=\(caller)")
             return nil
         }
         let s = String(data: data, encoding: .utf8)
@@ -3041,11 +3041,11 @@ enum ProviderKeychainHelper {
         let (local, localStatus) = readOAuthTokenData(instanceId: instanceId, synchronizable: false)
         let data = local ?? migrateOAuthTokenToDeviceOnly(instanceId: instanceId)
         guard let data else {
-            AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) hit=false localStatus=\(localStatus) caller=\(caller)")
+            AppLogger(category: "Keychain").verbose("read oauthToken instanceId=\(instanceId.prefix(8)) hit=false localStatus=\(localStatus) caller=\(caller)")
             return nil
         }
         let decoded = try? JSONDecoder().decode(type, from: data)
-        AppLogger(category: "Keychain").info("read oauthToken instanceId=\(instanceId.prefix(8)) src=\(local != nil ? "local" : "migrated") hit=true decoded=\(decoded != nil) caller=\(caller)")
+        AppLogger(category: "Keychain").verbose("read oauthToken instanceId=\(instanceId.prefix(8)) src=\(local != nil ? "local" : "migrated") hit=true decoded=\(decoded != nil) caller=\(caller)")
         return decoded
     }
 
@@ -3161,7 +3161,7 @@ enum ProviderKeychainHelper {
         let syncStatus = SecItemCopyMatching(syncQuery as CFDictionary, &result)
         if syncStatus == errSecSuccess, let data = result as? Data {
             let s = String(data: data, encoding: .utf8)
-            AppLogger(category: "Keychain").info("read oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) src=sync hit=\(s != nil) valLen=\(s?.count ?? 0) caller=\(caller)")
+            AppLogger(category: "Keychain").verbose("read oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) src=sync hit=\(s != nil) valLen=\(s?.count ?? 0) caller=\(caller)")
             return s
         }
         // Fallback to legacy
@@ -3174,7 +3174,7 @@ enum ProviderKeychainHelper {
         ]
         let legacyStatus = SecItemCopyMatching(query as CFDictionary, &result)
         guard legacyStatus == errSecSuccess, let data = result as? Data else {
-            AppLogger(category: "Keychain").info("read oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) hit=false syncStatus=\(syncStatus) legacyStatus=\(legacyStatus) caller=\(caller)")
+            AppLogger(category: "Keychain").verbose("read oauthString instanceId=\(instanceId.prefix(8)) acct=\(account) hit=false syncStatus=\(syncStatus) legacyStatus=\(legacyStatus) caller=\(caller)")
             return nil
         }
         let s = String(data: data, encoding: .utf8)

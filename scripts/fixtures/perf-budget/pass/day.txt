@@ -1,0 +1,426 @@
+[09:00:00] [Lifecycle] [INFO] process launch
+[09:00:01] [Noise] [INFO] old launch line 0
+[09:00:01] [Noise] [INFO] old launch line 1
+[09:00:01] [Noise] [INFO] old launch line 2
+[09:00:01] [Noise] [INFO] old launch line 3
+[09:00:01] [Noise] [INFO] old launch line 4
+[09:00:01] [Noise] [INFO] old launch line 5
+[09:00:01] [Noise] [INFO] old launch line 6
+[09:00:01] [Noise] [INFO] old launch line 7
+[09:00:01] [Noise] [INFO] old launch line 8
+[09:00:01] [Noise] [INFO] old launch line 9
+[09:00:01] [Noise] [INFO] old launch line 10
+[09:00:01] [Noise] [INFO] old launch line 11
+[09:00:01] [Noise] [INFO] old launch line 12
+[09:00:01] [Noise] [INFO] old launch line 13
+[09:00:01] [Noise] [INFO] old launch line 14
+[09:00:01] [Noise] [INFO] old launch line 15
+[09:00:01] [Noise] [INFO] old launch line 16
+[09:00:01] [Noise] [INFO] old launch line 17
+[09:00:01] [Noise] [INFO] old launch line 18
+[09:00:01] [Noise] [INFO] old launch line 19
+[09:00:01] [Noise] [INFO] old launch line 20
+[09:00:01] [Noise] [INFO] old launch line 21
+[09:00:01] [Noise] [INFO] old launch line 22
+[09:00:01] [Noise] [INFO] old launch line 23
+[09:00:01] [Noise] [INFO] old launch line 24
+[09:00:01] [Noise] [INFO] old launch line 25
+[09:00:01] [Noise] [INFO] old launch line 26
+[09:00:01] [Noise] [INFO] old launch line 27
+[09:00:01] [Noise] [INFO] old launch line 28
+[09:00:01] [Noise] [INFO] old launch line 29
+[09:00:01] [Noise] [INFO] old launch line 30
+[09:00:01] [Noise] [INFO] old launch line 31
+[09:00:01] [Noise] [INFO] old launch line 32
+[09:00:01] [Noise] [INFO] old launch line 33
+[09:00:01] [Noise] [INFO] old launch line 34
+[09:00:01] [Noise] [INFO] old launch line 35
+[09:00:01] [Noise] [INFO] old launch line 36
+[09:00:01] [Noise] [INFO] old launch line 37
+[09:00:01] [Noise] [INFO] old launch line 38
+[09:00:01] [Noise] [INFO] old launch line 39
+[09:00:01] [Noise] [INFO] old launch line 40
+[09:00:01] [Noise] [INFO] old launch line 41
+[09:00:01] [Noise] [INFO] old launch line 42
+[09:00:01] [Noise] [INFO] old launch line 43
+[09:00:01] [Noise] [INFO] old launch line 44
+[09:00:01] [Noise] [INFO] old launch line 45
+[09:00:01] [Noise] [INFO] old launch line 46
+[09:00:01] [Noise] [INFO] old launch line 47
+[09:00:01] [Noise] [INFO] old launch line 48
+[09:00:01] [Noise] [INFO] old launch line 49
+[09:00:01] [Noise] [INFO] old launch line 50
+[09:00:01] [Noise] [INFO] old launch line 51
+[09:00:01] [Noise] [INFO] old launch line 52
+[09:00:01] [Noise] [INFO] old launch line 53
+[09:00:01] [Noise] [INFO] old launch line 54
+[09:00:01] [Noise] [INFO] old launch line 55
+[09:00:01] [Noise] [INFO] old launch line 56
+[09:00:01] [Noise] [INFO] old launch line 57
+[09:00:01] [Noise] [INFO] old launch line 58
+[09:00:01] [Noise] [INFO] old launch line 59
+[09:00:01] [Noise] [INFO] old launch line 60
+[09:00:01] [Noise] [INFO] old launch line 61
+[09:00:01] [Noise] [INFO] old launch line 62
+[09:00:01] [Noise] [INFO] old launch line 63
+[09:00:01] [Noise] [INFO] old launch line 64
+[09:00:01] [Noise] [INFO] old launch line 65
+[09:00:01] [Noise] [INFO] old launch line 66
+[09:00:01] [Noise] [INFO] old launch line 67
+[09:00:01] [Noise] [INFO] old launch line 68
+[09:00:01] [Noise] [INFO] old launch line 69
+[09:00:01] [Noise] [INFO] old launch line 70
+[09:00:01] [Noise] [INFO] old launch line 71
+[09:00:01] [Noise] [INFO] old launch line 72
+[09:00:01] [Noise] [INFO] old launch line 73
+[09:00:01] [Noise] [INFO] old launch line 74
+[09:00:01] [Noise] [INFO] old launch line 75
+[09:00:01] [Noise] [INFO] old launch line 76
+[09:00:01] [Noise] [INFO] old launch line 77
+[09:00:01] [Noise] [INFO] old launch line 78
+[09:00:01] [Noise] [INFO] old launch line 79
+[09:00:01] [Noise] [INFO] old launch line 80
+[09:00:01] [Noise] [INFO] old launch line 81
+[09:00:01] [Noise] [INFO] old launch line 82
+[09:00:01] [Noise] [INFO] old launch line 83
+[09:00:01] [Noise] [INFO] old launch line 84
+[09:00:01] [Noise] [INFO] old launch line 85
+[09:00:01] [Noise] [INFO] old launch line 86
+[09:00:01] [Noise] [INFO] old launch line 87
+[09:00:01] [Noise] [INFO] old launch line 88
+[09:00:01] [Noise] [INFO] old launch line 89
+[09:00:01] [Noise] [INFO] old launch line 90
+[09:00:01] [Noise] [INFO] old launch line 91
+[09:00:01] [Noise] [INFO] old launch line 92
+[09:00:01] [Noise] [INFO] old launch line 93
+[09:00:01] [Noise] [INFO] old launch line 94
+[09:00:01] [Noise] [INFO] old launch line 95
+[09:00:01] [Noise] [INFO] old launch line 96
+[09:00:01] [Noise] [INFO] old launch line 97
+[09:00:01] [Noise] [INFO] old launch line 98
+[09:00:01] [Noise] [INFO] old launch line 99
+[09:00:01] [Noise] [INFO] old launch line 100
+[09:00:01] [Noise] [INFO] old launch line 101
+[09:00:01] [Noise] [INFO] old launch line 102
+[09:00:01] [Noise] [INFO] old launch line 103
+[09:00:01] [Noise] [INFO] old launch line 104
+[09:00:01] [Noise] [INFO] old launch line 105
+[09:00:01] [Noise] [INFO] old launch line 106
+[09:00:01] [Noise] [INFO] old launch line 107
+[09:00:01] [Noise] [INFO] old launch line 108
+[09:00:01] [Noise] [INFO] old launch line 109
+[09:00:01] [Noise] [INFO] old launch line 110
+[09:00:01] [Noise] [INFO] old launch line 111
+[09:00:01] [Noise] [INFO] old launch line 112
+[09:00:01] [Noise] [INFO] old launch line 113
+[09:00:01] [Noise] [INFO] old launch line 114
+[09:00:01] [Noise] [INFO] old launch line 115
+[09:00:01] [Noise] [INFO] old launch line 116
+[09:00:01] [Noise] [INFO] old launch line 117
+[09:00:01] [Noise] [INFO] old launch line 118
+[09:00:01] [Noise] [INFO] old launch line 119
+[09:00:01] [Noise] [INFO] old launch line 120
+[09:00:01] [Noise] [INFO] old launch line 121
+[09:00:01] [Noise] [INFO] old launch line 122
+[09:00:01] [Noise] [INFO] old launch line 123
+[09:00:01] [Noise] [INFO] old launch line 124
+[09:00:01] [Noise] [INFO] old launch line 125
+[09:00:01] [Noise] [INFO] old launch line 126
+[09:00:01] [Noise] [INFO] old launch line 127
+[09:00:01] [Noise] [INFO] old launch line 128
+[09:00:01] [Noise] [INFO] old launch line 129
+[09:00:01] [Noise] [INFO] old launch line 130
+[09:00:01] [Noise] [INFO] old launch line 131
+[09:00:01] [Noise] [INFO] old launch line 132
+[09:00:01] [Noise] [INFO] old launch line 133
+[09:00:01] [Noise] [INFO] old launch line 134
+[09:00:01] [Noise] [INFO] old launch line 135
+[09:00:01] [Noise] [INFO] old launch line 136
+[09:00:01] [Noise] [INFO] old launch line 137
+[09:00:01] [Noise] [INFO] old launch line 138
+[09:00:01] [Noise] [INFO] old launch line 139
+[09:00:01] [Noise] [INFO] old launch line 140
+[09:00:01] [Noise] [INFO] old launch line 141
+[09:00:01] [Noise] [INFO] old launch line 142
+[09:00:01] [Noise] [INFO] old launch line 143
+[09:00:01] [Noise] [INFO] old launch line 144
+[09:00:01] [Noise] [INFO] old launch line 145
+[09:00:01] [Noise] [INFO] old launch line 146
+[09:00:01] [Noise] [INFO] old launch line 147
+[09:00:01] [Noise] [INFO] old launch line 148
+[09:00:01] [Noise] [INFO] old launch line 149
+[09:00:01] [Noise] [INFO] old launch line 150
+[09:00:01] [Noise] [INFO] old launch line 151
+[09:00:01] [Noise] [INFO] old launch line 152
+[09:00:01] [Noise] [INFO] old launch line 153
+[09:00:01] [Noise] [INFO] old launch line 154
+[09:00:01] [Noise] [INFO] old launch line 155
+[09:00:01] [Noise] [INFO] old launch line 156
+[09:00:01] [Noise] [INFO] old launch line 157
+[09:00:01] [Noise] [INFO] old launch line 158
+[09:00:01] [Noise] [INFO] old launch line 159
+[09:00:01] [Noise] [INFO] old launch line 160
+[09:00:01] [Noise] [INFO] old launch line 161
+[09:00:01] [Noise] [INFO] old launch line 162
+[09:00:01] [Noise] [INFO] old launch line 163
+[09:00:01] [Noise] [INFO] old launch line 164
+[09:00:01] [Noise] [INFO] old launch line 165
+[09:00:01] [Noise] [INFO] old launch line 166
+[09:00:01] [Noise] [INFO] old launch line 167
+[09:00:01] [Noise] [INFO] old launch line 168
+[09:00:01] [Noise] [INFO] old launch line 169
+[09:00:01] [Noise] [INFO] old launch line 170
+[09:00:01] [Noise] [INFO] old launch line 171
+[09:00:01] [Noise] [INFO] old launch line 172
+[09:00:01] [Noise] [INFO] old launch line 173
+[09:00:01] [Noise] [INFO] old launch line 174
+[09:00:01] [Noise] [INFO] old launch line 175
+[09:00:01] [Noise] [INFO] old launch line 176
+[09:00:01] [Noise] [INFO] old launch line 177
+[09:00:01] [Noise] [INFO] old launch line 178
+[09:00:01] [Noise] [INFO] old launch line 179
+[09:00:01] [Noise] [INFO] old launch line 180
+[09:00:01] [Noise] [INFO] old launch line 181
+[09:00:01] [Noise] [INFO] old launch line 182
+[09:00:01] [Noise] [INFO] old launch line 183
+[09:00:01] [Noise] [INFO] old launch line 184
+[09:00:01] [Noise] [INFO] old launch line 185
+[09:00:01] [Noise] [INFO] old launch line 186
+[09:00:01] [Noise] [INFO] old launch line 187
+[09:00:01] [Noise] [INFO] old launch line 188
+[09:00:01] [Noise] [INFO] old launch line 189
+[09:00:01] [Noise] [INFO] old launch line 190
+[09:00:01] [Noise] [INFO] old launch line 191
+[09:00:01] [Noise] [INFO] old launch line 192
+[09:00:01] [Noise] [INFO] old launch line 193
+[09:00:01] [Noise] [INFO] old launch line 194
+[09:00:01] [Noise] [INFO] old launch line 195
+[09:00:01] [Noise] [INFO] old launch line 196
+[09:00:01] [Noise] [INFO] old launch line 197
+[09:00:01] [Noise] [INFO] old launch line 198
+[09:00:01] [Noise] [INFO] old launch line 199
+[09:00:01] [Noise] [INFO] old launch line 200
+[09:00:01] [Noise] [INFO] old launch line 201
+[09:00:01] [Noise] [INFO] old launch line 202
+[09:00:01] [Noise] [INFO] old launch line 203
+[09:00:01] [Noise] [INFO] old launch line 204
+[09:00:01] [Noise] [INFO] old launch line 205
+[09:00:01] [Noise] [INFO] old launch line 206
+[09:00:01] [Noise] [INFO] old launch line 207
+[09:00:01] [Noise] [INFO] old launch line 208
+[09:00:01] [Noise] [INFO] old launch line 209
+[09:00:01] [Noise] [INFO] old launch line 210
+[09:00:01] [Noise] [INFO] old launch line 211
+[09:00:01] [Noise] [INFO] old launch line 212
+[09:00:01] [Noise] [INFO] old launch line 213
+[09:00:01] [Noise] [INFO] old launch line 214
+[09:00:01] [Noise] [INFO] old launch line 215
+[09:00:01] [Noise] [INFO] old launch line 216
+[09:00:01] [Noise] [INFO] old launch line 217
+[09:00:01] [Noise] [INFO] old launch line 218
+[09:00:01] [Noise] [INFO] old launch line 219
+[09:00:01] [Noise] [INFO] old launch line 220
+[09:00:01] [Noise] [INFO] old launch line 221
+[09:00:01] [Noise] [INFO] old launch line 222
+[09:00:01] [Noise] [INFO] old launch line 223
+[09:00:01] [Noise] [INFO] old launch line 224
+[09:00:01] [Noise] [INFO] old launch line 225
+[09:00:01] [Noise] [INFO] old launch line 226
+[09:00:01] [Noise] [INFO] old launch line 227
+[09:00:01] [Noise] [INFO] old launch line 228
+[09:00:01] [Noise] [INFO] old launch line 229
+[09:00:01] [Noise] [INFO] old launch line 230
+[09:00:01] [Noise] [INFO] old launch line 231
+[09:00:01] [Noise] [INFO] old launch line 232
+[09:00:01] [Noise] [INFO] old launch line 233
+[09:00:01] [Noise] [INFO] old launch line 234
+[09:00:01] [Noise] [INFO] old launch line 235
+[09:00:01] [Noise] [INFO] old launch line 236
+[09:00:01] [Noise] [INFO] old launch line 237
+[09:00:01] [Noise] [INFO] old launch line 238
+[09:00:01] [Noise] [INFO] old launch line 239
+[09:00:01] [Noise] [INFO] old launch line 240
+[09:00:01] [Noise] [INFO] old launch line 241
+[09:00:01] [Noise] [INFO] old launch line 242
+[09:00:01] [Noise] [INFO] old launch line 243
+[09:00:01] [Noise] [INFO] old launch line 244
+[09:00:01] [Noise] [INFO] old launch line 245
+[09:00:01] [Noise] [INFO] old launch line 246
+[09:00:01] [Noise] [INFO] old launch line 247
+[09:00:01] [Noise] [INFO] old launch line 248
+[09:00:01] [Noise] [INFO] old launch line 249
+[09:00:01] [Noise] [INFO] old launch line 250
+[09:00:01] [Noise] [INFO] old launch line 251
+[09:00:01] [Noise] [INFO] old launch line 252
+[09:00:01] [Noise] [INFO] old launch line 253
+[09:00:01] [Noise] [INFO] old launch line 254
+[09:00:01] [Noise] [INFO] old launch line 255
+[09:00:01] [Noise] [INFO] old launch line 256
+[09:00:01] [Noise] [INFO] old launch line 257
+[09:00:01] [Noise] [INFO] old launch line 258
+[09:00:01] [Noise] [INFO] old launch line 259
+[09:00:01] [Noise] [INFO] old launch line 260
+[09:00:01] [Noise] [INFO] old launch line 261
+[09:00:01] [Noise] [INFO] old launch line 262
+[09:00:01] [Noise] [INFO] old launch line 263
+[09:00:01] [Noise] [INFO] old launch line 264
+[09:00:01] [Noise] [INFO] old launch line 265
+[09:00:01] [Noise] [INFO] old launch line 266
+[09:00:01] [Noise] [INFO] old launch line 267
+[09:00:01] [Noise] [INFO] old launch line 268
+[09:00:01] [Noise] [INFO] old launch line 269
+[09:00:01] [Noise] [INFO] old launch line 270
+[09:00:01] [Noise] [INFO] old launch line 271
+[09:00:01] [Noise] [INFO] old launch line 272
+[09:00:01] [Noise] [INFO] old launch line 273
+[09:00:01] [Noise] [INFO] old launch line 274
+[09:00:01] [Noise] [INFO] old launch line 275
+[09:00:01] [Noise] [INFO] old launch line 276
+[09:00:01] [Noise] [INFO] old launch line 277
+[09:00:01] [Noise] [INFO] old launch line 278
+[09:00:01] [Noise] [INFO] old launch line 279
+[09:00:01] [Noise] [INFO] old launch line 280
+[09:00:01] [Noise] [INFO] old launch line 281
+[09:00:01] [Noise] [INFO] old launch line 282
+[09:00:01] [Noise] [INFO] old launch line 283
+[09:00:01] [Noise] [INFO] old launch line 284
+[09:00:01] [Noise] [INFO] old launch line 285
+[09:00:01] [Noise] [INFO] old launch line 286
+[09:00:01] [Noise] [INFO] old launch line 287
+[09:00:01] [Noise] [INFO] old launch line 288
+[09:00:01] [Noise] [INFO] old launch line 289
+[09:00:01] [Noise] [INFO] old launch line 290
+[09:00:01] [Noise] [INFO] old launch line 291
+[09:00:01] [Noise] [INFO] old launch line 292
+[09:00:01] [Noise] [INFO] old launch line 293
+[09:00:01] [Noise] [INFO] old launch line 294
+[09:00:01] [Noise] [INFO] old launch line 295
+[09:00:01] [Noise] [INFO] old launch line 296
+[09:00:01] [Noise] [INFO] old launch line 297
+[09:00:01] [Noise] [INFO] old launch line 298
+[09:00:01] [Noise] [INFO] old launch line 299
+[09:00:02] [FPWatcher] [WARN] old 0
+[09:00:02] [FPWatcher] [WARN] old 1
+[09:00:02] [FPWatcher] [WARN] old 2
+[09:00:02] [FPWatcher] [WARN] old 3
+[09:00:02] [FPWatcher] [WARN] old 4
+[09:00:02] [FPWatcher] [WARN] old 5
+[09:00:02] [FPWatcher] [WARN] old 6
+[09:00:02] [FPWatcher] [WARN] old 7
+[09:00:02] [FPWatcher] [WARN] old 8
+[09:00:02] [FPWatcher] [WARN] old 9
+[09:00:02] [FPWatcher] [WARN] old 10
+[09:00:02] [FPWatcher] [WARN] old 11
+[09:00:02] [FPWatcher] [WARN] old 12
+[09:00:02] [FPWatcher] [WARN] old 13
+[09:00:02] [FPWatcher] [WARN] old 14
+[09:00:02] [FPWatcher] [WARN] old 15
+[09:00:02] [FPWatcher] [WARN] old 16
+[09:00:02] [FPWatcher] [WARN] old 17
+[09:00:02] [FPWatcher] [WARN] old 18
+[09:00:02] [FPWatcher] [WARN] old 19
+[09:00:02] [FPWatcher] [WARN] old 20
+[09:00:02] [FPWatcher] [WARN] old 21
+[09:00:02] [FPWatcher] [WARN] old 22
+[09:00:02] [FPWatcher] [WARN] old 23
+[09:00:02] [FPWatcher] [WARN] old 24
+[09:00:02] [FPWatcher] [WARN] old 25
+[09:00:02] [FPWatcher] [WARN] old 26
+[09:00:02] [FPWatcher] [WARN] old 27
+[09:00:02] [FPWatcher] [WARN] old 28
+[09:00:02] [FPWatcher] [WARN] old 29
+[09:00:02] [FPWatcher] [WARN] old 30
+[09:00:02] [FPWatcher] [WARN] old 31
+[09:00:02] [FPWatcher] [WARN] old 32
+[09:00:02] [FPWatcher] [WARN] old 33
+[09:00:02] [FPWatcher] [WARN] old 34
+[09:00:02] [FPWatcher] [WARN] old 35
+[09:00:02] [FPWatcher] [WARN] old 36
+[09:00:02] [FPWatcher] [WARN] old 37
+[09:00:02] [FPWatcher] [WARN] old 38
+[09:00:02] [FPWatcher] [WARN] old 39
+[09:00:02] [FPWatcher] [WARN] old 40
+[09:00:02] [FPWatcher] [WARN] old 41
+[09:00:02] [FPWatcher] [WARN] old 42
+[09:00:02] [FPWatcher] [WARN] old 43
+[09:00:02] [FPWatcher] [WARN] old 44
+[09:00:02] [FPWatcher] [WARN] old 45
+[09:00:02] [FPWatcher] [WARN] old 46
+[09:00:02] [FPWatcher] [WARN] old 47
+[09:00:02] [FPWatcher] [WARN] old 48
+[09:00:02] [FPWatcher] [WARN] old 49
+[10:00:00] [Lifecycle] [INFO] process launch
+[10:00:01] [App] [INFO] line 0
+[10:00:01] [App] [INFO] line extra
+[10:00:01] [App] [INFO] line 1
+[10:00:01] [App] [INFO] line 2
+[10:00:01] [App] [INFO] line 3
+[10:00:01] [App] [INFO] line 4
+[10:00:01] [App] [INFO] line 5
+[10:00:01] [App] [INFO] line 6
+[10:00:01] [App] [INFO] line 7
+[10:00:01] [App] [INFO] line 8
+[10:00:01] [App] [INFO] line 9
+[10:00:01] [App] [INFO] line 10
+[10:00:01] [App] [INFO] line 11
+[10:00:01] [App] [INFO] line 12
+[10:00:01] [App] [INFO] line 13
+[10:00:01] [App] [INFO] line 14
+[10:00:01] [App] [INFO] line 15
+[10:00:01] [App] [INFO] line 16
+[10:00:01] [App] [INFO] line 17
+[10:00:01] [App] [INFO] line 18
+[10:00:01] [App] [INFO] line 19
+[10:00:01] [App] [INFO] line 20
+[10:00:01] [App] [INFO] line 21
+[10:00:01] [App] [INFO] line 22
+[10:00:01] [App] [INFO] line 23
+[10:00:01] [App] [INFO] line 24
+[10:00:01] [App] [INFO] line 25
+[10:00:01] [App] [INFO] line 26
+[10:00:01] [App] [INFO] line 27
+[10:00:01] [App] [INFO] line 28
+[10:00:01] [App] [INFO] line 29
+[10:00:01] [App] [INFO] line 30
+[10:00:01] [App] [INFO] line 31
+[10:00:01] [App] [INFO] line 32
+[10:00:01] [App] [INFO] line 33
+[10:00:01] [App] [INFO] line 34
+[10:00:01] [App] [INFO] line 35
+[10:00:01] [App] [INFO] line 36
+[10:00:01] [App] [INFO] line 37
+[10:00:01] [App] [INFO] line 38
+[10:00:01] [App] [INFO] line 39
+[10:00:01] [App] [INFO] line 40
+[10:00:01] [App] [INFO] line 41
+[10:00:01] [App] [INFO] line 42
+[10:00:01] [App] [INFO] line 43
+[10:00:01] [App] [INFO] line 44
+[10:00:01] [App] [INFO] line 45
+[10:00:01] [App] [INFO] line 46
+[10:00:01] [App] [INFO] line 47
+[10:00:01] [App] [INFO] line 48
+[10:00:01] [App] [INFO] line 49
+[10:00:01] [App] [INFO] line 50
+[10:00:01] [App] [INFO] line 51
+[10:00:01] [App] [INFO] line 52
+[10:00:01] [App] [INFO] line 53
+[10:00:01] [App] [INFO] line 54
+[10:00:01] [App] [INFO] line 55
+[10:00:01] [App] [INFO] line 56
+[10:00:01] [App] [INFO] line 57
+[10:00:01] [App] [INFO] line 58
+[10:00:01] [App] [INFO] line 59
+[10:00:01] [App] [INFO] line 60
+[10:00:01] [App] [INFO] line 61
+[10:00:01] [App] [INFO] line 62
+[10:00:01] [App] [INFO] line 63
+[10:00:01] [App] [INFO] line 64
+[10:00:01] [App] [INFO] line 65
+[10:00:01] [App] [INFO] line 66
+[10:00:01] [App] [INFO] line 67
+[10:00:01] [App] [INFO] line 68
+[10:00:02] [FPWatcher] [INFO] root summary 0
+[10:00:02] [FPWatcher] [INFO] root summary 1
+[10:00:02] [FPWatcher] [INFO] root summary 2
+[10:05:00] [TextContainerGuard] [WARN] session summary shortCircuits=4 rejected=0 identicalSkipped=12 byWidth={334:4}

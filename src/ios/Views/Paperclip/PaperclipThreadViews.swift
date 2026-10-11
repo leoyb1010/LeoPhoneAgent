@@ -286,11 +286,13 @@ struct PaperclipRunCard: View {
                     .accessibilityIdentifier("paperclip.runActivity")
             }
             if let snippet = progress?.lastAssistantSnippet?.trimmingCharacters(in: .whitespacesAndNewlines), !snippet.isEmpty {
+                // Stable identity: the streaming renderer updates in place. Keying the
+                // view by the snippet text rebuilt the whole markdown view (and cross-faded
+                // two copies) on every live event.
                 PaperclipMarkdown(text: snippet, streaming: true)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .transition(.opacity)
-                    .id(snippet)
                     .accessibilityIdentifier("paperclip.runSnippet")
             } else if !queued {
                 PaperclipTypingDots()
@@ -323,7 +325,9 @@ struct PaperclipRunCard: View {
                 .strokeBorder(LeoTheme.ColorToken.accent.opacity(queued ? 0.12 : 0.28), lineWidth: 1)
         }
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: expanded)
-        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: progress?.lastAssistantSnippet)
+        // Animate the snippet appearing, not every text change (each one used
+        // to animate the card's height mid-stream).
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: progress?.lastAssistantSnippet?.isEmpty == false)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paperclip.runCard.\(run.id)")
     }

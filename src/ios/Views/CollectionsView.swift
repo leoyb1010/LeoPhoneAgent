@@ -50,6 +50,8 @@ struct CollectionsView: View {
         self.onClose = onClose
     }
     @State private var items: [CollectedItem] = []
+    /// Latest-wins token for `reload()` / `reloadOffMain()`.
+    @State private var reloadGeneration = 0
     @State private var query = ""
     @State private var filterSource: String? = nil
     @State private var previewItem: CollectedItem?
@@ -485,7 +487,10 @@ struct CollectionsView: View {
             }
         }
         .onAppear {
-            reload()
+            // First open loads synchronously (no empty-state flash); coming
+            // back from an item reloads off the main thread while the pop
+            // animation runs — the list is already on screen.
+            if items.isEmpty { reload() } else { reloadOffMain() }
             processPendingJobs()
             refreshClipboardHint()
         }
@@ -1186,8 +1191,20 @@ struct CollectionsView: View {
     }
 
     private func reload() {
+        reloadGeneration += 1
         items = CollectionStore.load().filter { !pendingDeletion.contains($0.id) }
         syncToRelay()
+    }
+
+    private func reloadOffMain() {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        Task {
+            let loaded = await Task.detached(priority: .userInitiated) { CollectionStore.load() }.value
+            guard generation == reloadGeneration else { return }   // a newer reload won
+            items = loaded.filter { !pendingDeletion.contains($0.id) }
+            syncToRelay()
+        }
     }
 
     /// [T-treasury-sync] Run the cursor-based change exchange. The client
@@ -1262,9 +1279,19 @@ struct CollectionsView: View {
             defer { Task { @MainActor in indexing = false } }
             var batch = jobs
             while !batch.isEmpty, !Task.isCancelled {
+                // One library read per batch (was one full read per job, on
+                // the main actor, while the screen was opening).
+                // A second job for the same item re-reads it: the first job
+                // may have just filled in its title / resolved URL.
+                let snapshot = Dictionary(CollectionStore.load().map { ($0.id, $0) },
+                                          uniquingKeysWith: { first, _ in first })
+                var touched = Set<String>()
                 for job in batch {
                     guard CollectionStore.claimJob(id: job.id) else { continue }
-                    guard let item = CollectionStore.load().first(where: { $0.id == job.itemID }) else {
+                    let fresh = touched.insert(job.itemID).inserted
+                        ? snapshot[job.itemID]
+                        : CollectionStore.load().first(where: { $0.id == job.itemID })
+                    guard let item = fresh else {
                         CollectionStore.completeJob(id: job.id)
                         continue
                     }
@@ -1770,10 +1797,15 @@ private struct TreasuryReadingSheet: View {
                 }
             }
             .task {
-                isRemoteItem = CollectionStore.isRemoteItem(itemID: item.id)
+                // SQLite reads off the main thread: the push animation is running.
+                let id = item.id
+                let (remote, marks) = await Task.detached(priority: .userInitiated) {
+                    (CollectionStore.isRemoteItem(itemID: id), CollectionStore.highlights(itemID: id))
+                }.value
+                isRemoteItem = remote
+                highlights = marks
                 await loadBody()
                 refreshRemoteAttachmentState()
-                reloadHighlights()
             }
             .onChange(of: readingState) { _, _ in persistReadingState() }
             .onDisappear { persistReadingState() }
@@ -1842,7 +1874,10 @@ private struct TreasuryReadingSheet: View {
 
     private func loadBody(forceRemoteFetch: Bool = false) async {
         bodyStatus = "loading"
-        if let cached = CollectionStore.cachedBody(itemID: item.id) {
+        let id = item.id
+        if let cached = await Task.detached(priority: .userInitiated, operation: {
+            CollectionStore.cachedBody(itemID: id)
+        }).value {
             applyBody(cached, status: "available")
             return
         }

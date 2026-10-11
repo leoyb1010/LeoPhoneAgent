@@ -96,7 +96,7 @@ actor ProviderConfigDB {
         Self.ensureGroupTombstoneColumns(db: db)
 
         if current >= schemaVersion {
-            logger.info("[v3] schema up-to-date at version \(current)")
+            logger.verbose("[v3] schema up-to-date at version \(current)")
             return
         }
 

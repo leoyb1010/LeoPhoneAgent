@@ -1238,7 +1238,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             if shouldPlay { return silentAudioActive ? "NOOP(already playing)" : "PLAY" }
             return silentAudioActive ? "STOP" : "NOOP(already stopped)"
         }()
-        logger.info("[BKA][Evaluate] caller=\(caller) isActive=\(self.isActive) bgSpeak=\(self.backgroundSpeakEnabled) bg=\(self.appIsInBackground) sessions=\(sessions) suspended=\(self.silentAudioSuspendCount) playing=\(self.silentAudioActive) stopDebounce=\(self.stopDebouncePending ? "pending" : "nil") → decision=\(decision) reason=\(reason)")
+        // [r7] A no-op that stays stopped (every foreground evaluation) is
+        // verbose; PLAY / STOP / keep-playing stay INFO for the crash timeline.
+        let evaluateLine = "[BKA][Evaluate] caller=\(caller) isActive=\(self.isActive) bgSpeak=\(self.backgroundSpeakEnabled) bg=\(self.appIsInBackground) sessions=\(sessions) suspended=\(self.silentAudioSuspendCount) playing=\(self.silentAudioActive) stopDebounce=\(self.stopDebouncePending ? "pending" : "nil") → decision=\(decision) reason=\(reason)"
+        if !shouldPlay && !silentAudioActive {
+            logger.verbose(evaluateLine)
+        } else {
+            logger.info(evaluateLine)
+        }
 
         if shouldPlay && !silentAudioActive {
             // A fresh background signal (or any condition that re-enables play)

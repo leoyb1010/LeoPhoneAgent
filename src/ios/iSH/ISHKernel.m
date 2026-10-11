@@ -969,7 +969,13 @@ static void handle_process_exit(struct task *task, int code) {
 
 - (void)refreshDns {
     if (!_dnsHostPath) {
-        NSLog(@"ISHKernel: [DNS] Cannot refresh DNS — dnsHostPath not set yet");
+        // [r7] Every network tick before boot hit this (2-3 lines per launch
+        // second); once per process is enough to show the ordering.
+        static BOOL loggedMissingHostPath = NO;
+        if (!loggedMissingHostPath) {
+            loggedMissingHostPath = YES;
+            NSLog(@"ISHKernel: [DNS] Cannot refresh DNS — dnsHostPath not set yet (logged once)");
+        }
         return;
     }
     NSLog(@"ISHKernel: [DNS] Refreshing DNS configuration");

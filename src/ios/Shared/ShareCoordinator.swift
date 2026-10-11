@@ -174,7 +174,6 @@ final class ShareCoordinator: ObservableObject {
 
     /// Check for stale pending shares on app launch (e.g. if the extension wrote one but the URL didn't fire).
     func checkForPendingShare() {
-        shareLog.info("[Share] checkForPendingShare called")
         if let pending = SharedContainerStore.loadPendingShare() {
             let age = Date().timeIntervalSince(pending.timestamp)
             shareLog.info("[Share] Found pending share: \(pending.items.count) items, age=\(String(format: "%.1f", age))s")
@@ -186,7 +185,7 @@ final class ShareCoordinator: ObservableObject {
                 SharedContainerStore.cleanSharedFiles()
             }
         } else {
-            shareLog.info("[Share] No pending share found")
+            shareLog.verbose("[Share] No pending share found")
         }
     }
 }

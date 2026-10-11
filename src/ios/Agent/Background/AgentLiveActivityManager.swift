@@ -388,7 +388,7 @@ final class AgentLiveActivityManager {
             return
         }
         guard !stale.isEmpty else {
-            logger.info("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty")
+            logger.verbose("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty")
             return
         }
         logger.info("[LiveActivity][cleanup src=\(source)] ending \(stale.count) stale activity(ies) from previous session")

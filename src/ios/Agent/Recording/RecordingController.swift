@@ -36,7 +36,13 @@ final class RecordingController: ObservableObject {
         var pausedByInterruption: Bool { isPaused && interrupted && !userPaused }
     }
 
-    @Published private(set) var recordings: [RecordingMetadata] = []
+    @Published private(set) var recordings: [RecordingMetadata] = [] {
+        didSet { listGeneration &+= 1 }
+    }
+    /// Bumped on every change to `recordings`; an off-main reload whose
+    /// snapshot is older than an in-memory edit is dropped.
+    private var listGeneration = 0
+    private var hasLoadedList = false
     @Published private(set) var active: Active?
     /// 正在转写的录音 → (完成单元数, 总单元数)。
     @Published private(set) var transcriptionProgress: [String: (done: Int, total: Int)] = [:]
@@ -74,7 +80,22 @@ final class RecordingController: ObservableObject {
 
     func reload() {
         recoverInterruptedRecordings()
+        hasLoadedList = true
         recordings = store.list()
+    }
+
+    /// [r7] 录音列表出现时用:第一次同步读(不闪"还没有录音");之后从详情返回、
+    /// 重开面板时在后台读目录和每个 meta.json,读完再替换,期间界面上的修改优先。
+    func reloadForDisplay() {
+        guard hasLoadedList else { reload(); return }
+        recoverInterruptedRecordings()
+        let startGeneration = listGeneration
+        let store = self.store
+        Task { @MainActor in
+            let list = await Task.detached(priority: .userInitiated) { store.list() }.value
+            guard startGeneration == self.listGeneration, list != self.recordings else { return }
+            self.recordings = list
+        }
     }
 
     func metadata(_ id: String) -> RecordingMetadata? {

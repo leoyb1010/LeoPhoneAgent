@@ -42250,13 +42250,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已中断 - 点击「继续」以恢复"
+            "value": "已中断，点「继续」接着生成"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已中斷 - 點擊「繼續」以恢復"
+            "value": "已中斷，點「繼續」接著生成"
           }
         }
       }
@@ -130315,6 +130315,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "暫時無法開啟任務"
+          }
+        }
+      }
+    },
+    "检查 AI 服务商": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check AI Provider"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查 AI 服务商"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查 AI 服務商"
+          }
+        }
+      }
+    },
+    "清除说话人标注?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear speaker labels?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除说话人标注?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除說話人標註?"
+          }
+        }
+      }
+    },
+    "清除说话人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Speakers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除说话人"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除說話人"
+          }
+        }
+      }
+    },
+    "说话人标注和改过的名字都会清掉。之后可以重新区分说话人,需要再调用一次模型。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker labels and any names you changed will be cleared. You can identify speakers again later, which calls the model once more."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说话人标注和改过的名字都会清掉。之后可以重新区分说话人,需要再调用一次模型。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "說話人標註和改過的名字都會清掉。之後可以重新區分說話人,需要再呼叫一次模型。"
           }
         }
       }

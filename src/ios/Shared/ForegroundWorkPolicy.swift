@@ -68,3 +68,44 @@ enum SkillDiskFingerprint {
         return hasher.finalize()
     }
 }
+
+/// [r7] Launch-second log compaction. The busiest launch second carried
+/// ~90 lines, most of them per-item repeats (one line per provider, per
+/// FileProvider root, per proxy key) that say "nothing unusual". These
+/// helpers fold each group into one line; the per-item detail stays
+/// available at `.verbose`.
+enum LaunchLogCompaction {
+    /// True when CFNetwork reports a direct connection: no HTTP/HTTPS/SOCKS/PAC
+    /// proxy enabled and the per-URL probe only returns `kCFProxyTypeNone`.
+    /// Only then is the full proxy dump noise.
+    static func isDirectConnection(settings: [String: Any], probeTypes: [String]) -> Bool {
+        for key in ["HTTPEnable", "HTTPSEnable", "SOCKSEnable", "ProxyAutoConfigEnable"] {
+            if ((settings[key] as? Int) ?? 0) != 0 { return false }
+        }
+        return probeTypes.allSatisfy { $0 == "kCFProxyTypeNone" }
+    }
+
+    struct Credential: Equatable {
+        let id: String
+        let type: String
+        let cred: String
+        let enabled: Bool
+        let hasApiKey: Bool
+        let hasOAuthToken: Bool
+        let hasManualOAuth: Bool
+
+        var hasAny: Bool { hasApiKey || hasOAuthToken || hasManualOAuth }
+    }
+
+    /// One line for the whole provider list. Enabled instances without any
+    /// credential are named first (the case worth reading); the rest are
+    /// listed compactly as `id:type/cred`.
+    static func credentialSummary(_ items: [Credential]) -> String {
+        let missing = items.filter { $0.enabled && !$0.hasAny }
+        let parts = items.map { item -> String in
+            let state = !item.enabled ? "off" : (item.hasAny ? "ok" : "MISSING")
+            return "\(item.id.prefix(8)):\(item.type)/\(item.cred)=\(state)"
+        }
+        return "appPhase=active credentials n=\(items.count) missing=\(missing.count) [\(parts.joined(separator: " "))]"
+    }
+}

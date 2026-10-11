@@ -423,7 +423,10 @@ final class TerminalScrollContainerView: UIView {
 
         // Set text container width to exactly match the grid so lines never wrap
         let gridWidth = CGFloat(emulator.cols) * metrics.cellWidth
-        textView.textContainer.size = CGSize(width: gridWidth, height: CGFloat.greatestFiniteMagnitude)
+        let containerSize = CGSize(width: gridWidth, height: CGFloat.greatestFiniteMagnitude)
+        if LeoTextContainer.needsResize(current: textView.textContainer.size, to: containerSize) {
+            textView.textContainer.size = containerSize
+        }
 
         let newSize = CGSize(width: max(contentWidth, 1), height: max(contentHeight, bounds.height))
         if textView.frame.size != newSize {

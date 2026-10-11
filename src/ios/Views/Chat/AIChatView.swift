@@ -5613,6 +5613,12 @@ private struct MoveToSessionSheet: View {
                 }
             }
             .searchable(text: $searchText, prompt: String(localized: "Search chats..."))
+            // [r7] A search with no hits used to leave an empty "Results" header.
+            .overlay {
+                if isSearching, searchMatchedIds != nil, displayedSessions.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                }
+            }
             .onChange(of: searchText) { _ in scheduleSearch() }
             .navigationTitle(String(localized: "Move to…"))
             .navigationBarTitleDisplayMode(.inline)
