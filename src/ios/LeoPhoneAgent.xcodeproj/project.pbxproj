@@ -423,6 +423,7 @@
 		E5COL0003 /* CollectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0002 /* CollectionStore.swift */; };
 		E5TRP001 /* CollectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0002 /* CollectionStore.swift */; };
 		E5TRP002 /* CollectionSearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSI0002 /* CollectionSearchIndex.swift */; };
+		E5TPZ0003 /* TreasuryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TPZ0002 /* TreasuryPresentation.swift */; };
 		E5TRP003 /* NoteBodyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5NBS9002 /* NoteBodyStore.swift */; };
 		E5TRP004 /* PendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000016 /* PendingShare.swift */; };
 		E5TRP005 /* SharedContainerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000017 /* SharedContainerStore.swift */; };
@@ -666,6 +667,7 @@
 		E5MFF9003 /* MacFleetFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFF9002 /* MacFleetFeature.swift */; };
 		E5XTR9001 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5XTR9002 /* ArticleExtractor.swift */; };
 		E5CSI0001 /* CollectionSearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSI0002 /* CollectionSearchIndex.swift */; };
+		E5TPZ0001 /* TreasuryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TPZ0002 /* TreasuryPresentation.swift */; };
 		E5LBV0001 /* LocalBrainSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBV0002 /* LocalBrainSettingsView.swift */; };
 		E5LBR0001 /* LocalBrain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LBR0002 /* LocalBrain.swift */; };
 		E5SNP0001 /* FleetSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SNP0002 /* FleetSnippets.swift */; };
@@ -1678,6 +1680,7 @@
 		E5MFF9002 /* MacFleetFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/MacFleetFeature.swift"; sourceTree = SOURCE_ROOT; };
 		E5XTR9002 /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/ArticleExtractor.swift"; sourceTree = SOURCE_ROOT; };
 		E5CSI0002 /* CollectionSearchIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/CollectionSearchIndex.swift"; sourceTree = SOURCE_ROOT; };
+		E5TPZ0002 /* TreasuryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/TreasuryPresentation.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBV0002 /* LocalBrainSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/LocalBrainSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		E5LBR0002 /* LocalBrain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/LocalIntelligence/LocalBrain.swift"; sourceTree = SOURCE_ROOT; };
 		E5SNP0002 /* FleetSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/FleetSnippets.swift"; sourceTree = SOURCE_ROOT; };
@@ -2727,6 +2730,7 @@
 				E5MFF9002 /* MacFleetFeature.swift */,
 				E5XTR9002 /* ArticleExtractor.swift */,
 				E5CSI0002 /* CollectionSearchIndex.swift */,
+				E5TPZ0002 /* TreasuryPresentation.swift */,
 				E5LBV0002 /* LocalBrainSettingsView.swift */,
 				E5LBR0002 /* LocalBrain.swift */,
 				F1R3LIPF /* LocalIntelligencePolicies.swift */,
@@ -3703,6 +3707,7 @@
                 E5SSHT002 /* RemoteSSHTrust.swift in Sources */,
 				E5TRP001 /* CollectionStore.swift in Sources */,
 				E5TRP002 /* CollectionSearchIndex.swift in Sources */,
+				E5TPZ0003 /* TreasuryPresentation.swift in Sources */,
 				E5TRP003 /* NoteBodyStore.swift in Sources */,
 				E5TRP004 /* PendingShare.swift in Sources */,
 				E5TRP005 /* SharedContainerStore.swift in Sources */,
@@ -4096,6 +4101,7 @@
 				E5MFF9001 /* MacFleetFeature.swift in Sources */,
 				E5XTR9001 /* ArticleExtractor.swift in Sources */,
 				E5CSI0001 /* CollectionSearchIndex.swift in Sources */,
+				E5TPZ0001 /* TreasuryPresentation.swift in Sources */,
 				E5LBV0001 /* LocalBrainSettingsView.swift in Sources */,
 				E5LBR0001 /* LocalBrain.swift in Sources */,
 				E5SNP0001 /* FleetSnippets.swift in Sources */,

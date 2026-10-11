@@ -116,6 +116,8 @@ struct CollectionsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// 卡片 → 阅读 / 预览 / 笔记的缩放转场(Reduce Motion 下回到默认转场)。
+    @Namespace private var zoomNamespace
 
     private var sources: [String] {
         Array(Set(items.map(\.sourceLabel))).sorted()
@@ -203,18 +205,19 @@ struct CollectionsView: View {
             Group {
                 if usesSplit {
                     NavigationSplitView {
-                        collectionList(usesSplit: true, height: geometry.size.height)
+                        // 分栏时列表在侧栏里,宽度按窄屏算(固定 16pt 边距、一列)。
+                        collectionList(usesSplit: true, height: geometry.size.height, width: 0)
                             .toolbar { closeToolbarItem }
                     } detail: {
                         splitReadingDetail
                     }
                 } else if onClose != nil {
                     NavigationStack {
-                        collectionList(usesSplit: false, height: geometry.size.height)
+                        collectionList(usesSplit: false, height: geometry.size.height, width: geometry.size.width)
                             .toolbar { closeToolbarItem }
                     }
                 } else {
-                    collectionList(usesSplit: false, height: geometry.size.height)
+                    collectionList(usesSplit: false, height: geometry.size.height, width: geometry.size.width)
                 }
             }
         }
@@ -229,23 +232,33 @@ struct CollectionsView: View {
         }
     }
 
-    private func collectionList(usesSplit: Bool, height: CGFloat) -> some View {
+    private func collectionList(usesSplit: Bool, height: CGFloat, width: CGFloat) -> some View {
         // 每次重画只筛一遍(以前 isEmpty 和 ForEach 各算一次,搜索时每个字都把全部条目小写化两遍)。
         let shown = visible
         let header = TreasuryHeaderPolicy.layout(containerHeight: height, itemCount: items.count,
                                                  searching: isSearching, editing: editMode.isEditing,
                                                  showsPhoneItems: scope.showsPhoneItems)
+        // 8pt 节奏:卡片离容器边 16pt;宽容器里整列居中限宽(TreasuryGridLayout)。
+        let inset = TreasuryGridLayout.horizontalInset(forWidth: width)
+        // 只有前 8 条做错峰入场,之后的直接出现。
+        let staggerOrder = LeoStaggerPolicy.indices(for: shown.map(\.id))
+        let highlightTerms = LeoMatchHighlight.terms(fromQuery: TreasuryLocalQuery.parse(query).textQuery)
         return List(selection: $selection) {
             if !editMode.isEditing, BrainBrowseScope.showsPicker(configured: brain.isConfigured) {
-                BrainScopePicker(scope: $brainScope)
+                BrainScopePicker(scope: $brainScope, inset: inset)
             }
             if scope.showsPhoneItems {
             // 第一条内容之前的高度有限:概览卡 / 四个新建按钮按 TreasuryHeaderPolicy 收起,
             // 新建随时可以从标题栏「+」进;来源筛选并进视图胶囊那一行。
-            if header.showsOverview { treasuryHero }
-            if header.showsCaptureGrid { captureActions }
-            if header.showsViewPicker { treasuryViewPicker }
-            importRow
+            if header.showsOverview { treasuryHero(inset: inset) }
+            if header.showsCaptureGrid { captureActions(inset: inset) }
+            if header.showsViewPicker { treasuryViewPicker(inset: inset) }
+            importRow(inset: inset)
+            // 「全部」里同时有资料库结果时,两块各带一个分区标题。
+            if scope == .all, isSearching, !items.isEmpty {
+                LeoSectionHeader(title: String(localized: "手机收藏"), count: shown.count, systemImage: "iphone")
+                    .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.xs, bottom: LeoTheme.Spacing.xxs)
+            }
             if items.isEmpty {
                 emptyState
             } else {
@@ -263,17 +276,13 @@ struct CollectionsView: View {
                     .listRowBackground(Color.clear)
                 } else {
                 ForEach(shown) { item in
-                    // 卡片与上方概览卡同一条左右边线(14pt),内容在卡片里再缩 12pt;
-                    // 之前背景是通栏的,列表卡片贴着屏幕边(1.41.0 真机截图)。
-                    row(item, usesSplit: usesSplit)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 26, bottom: 5, trailing: 26))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(LeoTheme.ColorToken.surface)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 2)
-                        )
+                    // 卡片面在行背景里(左滑、多选照常),与上方各块同一条左右边线,
+                    // 内容在卡片里再缩 12pt。
+                    row(item, usesSplit: usesSplit,
+                        snippet: isSearching ? fullTextSnippets[item.id] : nil, terms: highlightTerms)
+                        .leoStaggerEntrance(index: staggerOrder[item.id] ?? Int.max)
+                        .leoScrollDepth()
+                        .leoListCardRow(inset: inset)
                 }
                 .onDelete { offsets in
                     // visible 是计算属性,搜索防抖会在 MainActor 上异步改
@@ -290,7 +299,8 @@ struct CollectionsView: View {
             if scope != .phone, !editMode.isEditing {
                 BrainBrowseSection(scope: scope, query: TreasuryLocalQuery.parse(query).textQuery,
                                    refreshToken: brainRefreshToken,
-                                   onOpenSettings: { showBrainSettings = true })
+                                   onOpenSettings: { showBrainSettings = true },
+                                   containerWidth: width)
             }
         }
         .environment(\.editMode, $editMode)
@@ -338,6 +348,7 @@ struct CollectionsView: View {
         // 收起)都走弹簧,不再瞬间跳变。items 是 Equatable,代价可控。
         .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.3), value: items)
         .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: showArchived)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: treasuryView)
         .toolbar { toolbarContent }
         // [T-attachments] 相册:PhotosPicker 走系统选择器,不必申请相册权限
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection,
@@ -370,7 +381,10 @@ struct CollectionsView: View {
         } message: { failure in
             Text(failure.message)
         }
-        .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
+        .sheet(item: $previewItem) { item in
+            CollectionPreviewSheet(item: item)
+                .leoZoomTransition(id: item.id, in: zoomNamespace)
+        }
         .sheet(item: $editingNote, onDismiss: discardUntouchedNewNote) { note in
             NavigationStack {
                 NoteEditorView(item: note) { updated in
@@ -379,6 +393,7 @@ struct CollectionsView: View {
                     return true
                 }
             }
+            .leoZoomTransition(id: note.id, in: zoomNamespace)
         }
         .sheet(item: $annotating) { target in
             NavigationStack {
@@ -420,6 +435,7 @@ struct CollectionsView: View {
             } onUpdate: {
                 reload()
             }
+            .leoZoomTransition(id: item.id, in: zoomNamespace)
         }
         .fullScreenCover(item: $readerTarget) { target in
             LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode,
@@ -428,6 +444,7 @@ struct CollectionsView: View {
         }
         .sheet(isPresented: $showImportSheet) {
             CollectionImportSheet { added in
+                if added > 0 { LeoHaptics.content(.saved) }
                 reload()
                 processPendingJobs()
                 flash("已收藏 \(added) 条")
@@ -435,32 +452,35 @@ struct CollectionsView: View {
         }
         .overlay(alignment: .bottom) {
             if !pendingDeletion.isEmpty {
-                HStack(spacing: 12) {
+                HStack(spacing: LeoTheme.Spacing.sm) {
                     Image(systemName: "trash")
-                        .font(.system(size: 14))
                         .foregroundStyle(.secondary)
-                    Text("已删除 \(pendingDeletion.count) 条").font(.system(size: 13, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text("已删除 \(pendingDeletion.count) 条")
+                        .contentTransition(.numericText())
                     Button("撤销") { undoPendingDeletion() }
-                        .font(.system(size: 13, weight: .bold))
+                        .fontWeight(.bold)
+                        .foregroundStyle(LeoTheme.ColorToken.accent)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.10), radius: 12, y: 4)
-                .padding(.bottom, 24)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, LeoTheme.Spacing.md)
+                .glassEffect(.regular, in: Capsule())
+                .padding(.bottom, LeoTheme.Spacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let toast {
-                HStack(spacing: 7) {
+                HStack(spacing: LeoTheme.Spacing.xs) {
                     Image(systemName: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(toastIsError ? Color.orange : Color.green)
-                    Text(toast).font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(toastIsError ? LeoTheme.ColorToken.warning : LeoTheme.ColorToken.success)
+                        .symbolEffect(.bounce, value: reduceMotion ? nil : toastID)
+                        .accessibilityHidden(true)
+                    Text(toast)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.10), radius: 12, y: 4)
-                .padding(.bottom, 24)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, LeoTheme.Spacing.md)
+                .padding(.vertical, LeoTheme.Spacing.sm)
+                .glassEffect(.regular, in: Capsule())
+                .padding(.bottom, LeoTheme.Spacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -512,21 +532,18 @@ struct CollectionsView: View {
         return { refreshed in open(refreshed) }
     }
 
-    private var treasuryHero: some View {
+    private func treasuryHero(inset: CGFloat) -> some View {
         let activeCount = items.filter { !$0.archived }.count
         let noteCount = items.filter { !$0.archived && $0.kind == .note }.count
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "sparkles.rectangle.stack.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.orange)
-                    .frame(width: 44, height: 44)
-                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: LeoTheme.Spacing.md) {
+            HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+                LeoIconTile(systemImage: "sparkles.rectangle.stack.fill", size: 44)
+                VStack(alignment: .leading, spacing: LeoTheme.Spacing.xxs) {
                     Text("你的藏宝阁")
-                        .font(.headline.weight(.bold))
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                     Text("收藏、笔记、扫描与文件会统一索引，随时交给 Agent 继续工作。")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -540,33 +557,30 @@ struct CollectionsView: View {
                 treasuryMetric(value: sources.count, label: "来源")
             }
         }
-        .padding(16)
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.orange.opacity(0.16), lineWidth: 0.5)
-        }
-        .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 5, trailing: 14))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        .padding(LeoTheme.Spacing.md)
+        .background(LeoTheme.ColorToken.surface,
+                    in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.xs, bottom: LeoTheme.Spacing.xxs)
         .leoStaggerEntrance(index: 0)
     }
 
-    private func treasuryMetric(value: Int, label: String) -> some View {
+    private func treasuryMetric(value: Int, label: LocalizedStringKey) -> some View {
         VStack(spacing: 2) {
             Text("\(value)")
-                .font(.headline.monospacedDigit().weight(.bold))
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+                .font(.title3.monospacedDigit().weight(.semibold))
+                .contentTransition(.numericText(value: Double(value)))
+            Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
-    private var captureActions: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-        return LazyVGrid(columns: columns, spacing: 8) {
-            treasuryAction("笔记", icon: "square.and.pencil", tint: .indigo, index: 0) { newNote() }
-            treasuryAction("粘贴", icon: "doc.on.clipboard", tint: .orange, index: 1) { showImportSheet = true }
-            treasuryAction("扫描", icon: "doc.viewfinder", tint: .teal, index: 2) {
+    private func captureActions(inset: CGFloat) -> some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: LeoTheme.Spacing.xs), count: 4)
+        return LazyVGrid(columns: columns, spacing: LeoTheme.Spacing.xs) {
+            treasuryAction("笔记", icon: "square.and.pencil", index: 1) { newNote() }
+            treasuryAction("粘贴", icon: "doc.on.clipboard", index: 2) { showImportSheet = true }
+            treasuryAction("扫描", icon: "doc.viewfinder", index: 3) {
                 if VNDocumentCameraViewController.isSupported {
                     showScanner = true
                 } else {
@@ -577,20 +591,19 @@ struct CollectionsView: View {
                 Button { showPhotoPicker = true } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
                 Button { showFileImporter = true } label: { Label("从文件导入", systemImage: "folder") }
             } label: {
-                treasuryActionLabel("导入", icon: "square.and.arrow.down", tint: .blue)
+                treasuryActionLabel("导入…", icon: "square.and.arrow.down")
             }
             .buttonStyle(LeoSquishButtonStyle())
-            .leoStaggerEntrance(index: 3)
+            .leoStaggerEntrance(index: 4)
         }
-        .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.xxs, bottom: LeoTheme.Spacing.xxs)
     }
 
-    private var treasuryViewPicker: some View {
+    private func treasuryViewPicker(inset: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: LeoTheme.Spacing.xs) {
                 ForEach(TreasuryView.allCases) { view in
+                    let selected = treasuryView == view
                     Button {
                         withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
                             treasuryView = view
@@ -598,22 +611,31 @@ struct CollectionsView: View {
                         }
                     } label: {
                         Text(view.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(treasuryView == view ? Color.white : Color.primary)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(treasuryView == view ? Color.orange : LeoTheme.ColorToken.surface,
-                                        in: Capsule())
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(selected ? Color.white : LeoTheme.ColorToken.primaryText)
+                            .padding(.horizontal, LeoTheme.Spacing.sm)
+                            .padding(.vertical, 6)
+                            .background {
+                                // 选中底色在胶囊之间滑动,而不是逐个闪。
+                                if selected {
+                                    Capsule().fill(LeoTheme.ColorToken.accent)
+                                        .matchedGeometryEffect(id: "treasury.view.selection", in: zoomNamespace)
+                                } else {
+                                    Capsule().fill(LeoTheme.ColorToken.surface)
+                                }
+                            }
                             // 胶囊看起来小,点按区域补到 44pt 高。
-                            .frame(minHeight: 44)
+                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityAddTraits(treasuryView == view ? .isSelected : [])
+                    .hoverEffect(.highlight)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
                 // 来源筛选以前单独占一行胶囊;并进这一行,少占一行高度。
                 if sources.count > 1 { sourceMenuChip }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, inset)
         }
         .listRowInsets(EdgeInsets())
         .listRowSeparator(.hidden)
@@ -621,39 +643,42 @@ struct CollectionsView: View {
     }
 
     private func treasuryAction(
-        _ title: String,
+        _ title: LocalizedStringKey,
         icon: String,
-        tint: Color,
         index: Int,
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            LeoHaptics.impact(.light)
             action()
         } label: {
-            treasuryActionLabel(title, icon: icon, tint: tint)
+            treasuryActionLabel(title, icon: icon)
         }
         .buttonStyle(LeoSquishButtonStyle())
         .leoStaggerEntrance(index: index)
     }
 
-    private func treasuryActionLabel(_ title: String, icon: String, tint: Color) -> some View {
-        VStack(spacing: 7) {
+    private func treasuryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
+        VStack(spacing: LeoTheme.Spacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(.title3.weight(.medium))
+                .foregroundStyle(LeoTheme.ColorToken.accent)
+                .accessibilityHidden(true)
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, minHeight: 62)
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 64)
+        .background(LeoTheme.ColorToken.surface,
+                    in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+        .leoCardHover(cornerRadius: LeoTheme.Radius.field)
     }
 
     // MARK: 行
 
-    private func row(_ item: CollectedItem, usesSplit: Bool) -> some View {
+    private func row(_ item: CollectedItem, usesSplit: Bool, snippet: String?, terms: [String]) -> some View {
         Button {
             if usesSplit, !editMode.isEditing {
                 selectedReadingItemID = item.id
@@ -661,7 +686,9 @@ struct CollectionsView: View {
                 open(item)
             }
         } label: {
-            CollectionCard(item: item)
+            CollectionCard(item: item, searchSnippet: snippet, highlightTerms: terms)
+                .leoZoomSource(id: item.id, in: zoomNamespace)
+                .leoCardHover()
         }
         .buttonStyle(.plain)
         // 选择模式里点卡片是勾选,不是打开(以前会直接跳去原 App / 浏览器)。
@@ -677,6 +704,7 @@ struct CollectionsView: View {
                 } label: { Label("在应用内预览", systemImage: "safari") }
                 Button {
                     UIPasteboard.general.string = item.value
+                    LeoHaptics.content(.copied)
                     flash("链接已复制")
                 } label: { Label("拷贝链接", systemImage: "doc.on.doc") }
             }
@@ -737,6 +765,7 @@ struct CollectionsView: View {
                 updated.archived.toggle()
                 updated.updatedAt = Date()
                 CollectionStore.update(updated)
+                LeoHaptics.content(.archived)
                 reload()
             } label: {
                 Label(item.archived ? "取消归档" : "归档",
@@ -873,12 +902,13 @@ struct CollectionsView: View {
         let changed = TreasurySelection.archiving(items, ids: selection, archive: !showArchived)
         for item in changed { CollectionStore.update(item) }
         let count = changed.count
-        withAnimation {
+        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
             selection = []
             editMode = .inactive
         }
         reload()
         if count > 0 {
+            LeoHaptics.content(.archived)
             flash(showArchived ? String(localized: "已取消归档 \(count) 条") : String(localized: "已归档 \(count) 条"))
         }
     }
@@ -886,17 +916,18 @@ struct CollectionsView: View {
     /// 剪贴板里像是有链接时的一键收藏条。PasteButton 不触发"允许粘贴"提示。
     /// 以前只要剪贴板里有任何文字就常驻;现在按 TreasuryClipboardBannerPolicy 只在像链接时出现。
     @ViewBuilder
-    private var importRow: some View {
+    private func importRow(inset: CGFloat) -> some View {
         if TreasuryClipboardBannerPolicy.shows(hasProbableLink: clipboardHasLink,
                                                changeCount: clipboardChangeCount,
                                                dismissedChangeCount: dismissedClipboardChange,
                                                searching: isSearching, editing: editMode.isEditing) {
-            HStack(spacing: 12) {
+            HStack(spacing: LeoTheme.Spacing.sm) {
                 Image(systemName: "doc.on.clipboard.fill")
-                    .font(.system(size: 15))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .frame(width: 36, height: 36)
+                    .background(LeoTheme.ColorToken.accent.gradient,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("剪贴板里有链接").font(.subheadline.weight(.semibold))
@@ -908,6 +939,7 @@ struct CollectionsView: View {
                 PasteButton(payloadType: String.self) { strings in
                     let added = strings.reduce(0) { $0 + CollectionStore.ingestText($1) }
                     Task { @MainActor in
+                        if added > 0 { LeoHaptics.content(.saved) }
                         dismissedClipboardChange = clipboardChangeCount
                         reload()
                         processPendingJobs()
@@ -916,7 +948,7 @@ struct CollectionsView: View {
                 }
                 .labelStyle(.iconOnly)
                 .buttonBorderShape(.capsule)
-                .tint(.orange)
+                .tint(LeoTheme.ColorToken.accent)
                 Button {
                     withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
                         dismissedClipboardChange = clipboardChangeCount
@@ -931,8 +963,12 @@ struct CollectionsView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(Text("不收"))
             }
-            .padding(.vertical, 2)
-            .listRowBackground(Color.orange.opacity(0.07))
+            .padding(.horizontal, LeoTheme.Card.padding)
+            .padding(.vertical, LeoTheme.Spacing.xxs)
+            .background(LeoTheme.ColorToken.accent.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+            .leoListPlainRow(inset: inset)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -988,14 +1024,14 @@ struct CollectionsView: View {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.caption2.weight(.bold))
                 Text(filterSource ?? String(localized: "来源"))
-                    .font(.caption.weight(.semibold))
+                    .font(.footnote.weight(.semibold))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
             }
-            .foregroundStyle(active ? Color.white : Color.primary)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(active ? Color.accentColor : LeoTheme.ColorToken.surface, in: Capsule())
+            .foregroundStyle(active ? Color.white : LeoTheme.ColorToken.primaryText)
+            .padding(.horizontal, LeoTheme.Spacing.sm).padding(.vertical, 6)
+            .background(active ? LeoTheme.ColorToken.accent : LeoTheme.ColorToken.surface, in: Capsule())
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -1141,6 +1177,7 @@ struct CollectionsView: View {
         updated.annotation = text.isEmpty ? nil : text
         updated.updatedAt = Date()
         CollectionStore.update(updated)
+        LeoHaptics.content(.saved)
         annotating = nil
         reload()
         // 不写全文索引:index() 是先删后插,这一写会把已抽取的几万字
@@ -1173,6 +1210,7 @@ struct CollectionsView: View {
         if let selectedReadingItemID, ids.contains(selectedReadingItemID) {
             self.selectedReadingItemID = nil
         }
+        LeoHaptics.content(.deleted)
         withAnimation(LeoMotion.spring(dampingFraction: 0.75)) { pendingDeletion = ids }
         reload()
         pendingDeletionTask = Task { @MainActor in
@@ -1551,6 +1589,11 @@ private struct TreasuryReadingSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    readingHero
+                }
+                .listRowBackground(Color.clear)
+
+                Section {
                     Picker("阅读状态", selection: $readingState) {
                         Text("未读").tag("unread")
                         Text("阅读中").tag("reading")
@@ -1574,7 +1617,15 @@ private struct TreasuryReadingSheet: View {
 
                 Section("正文") {
                     if bodyStatus == "loading" || bodyStatus == "remote_fetching" {
-                        ProgressView("正在读取…")
+                        // 正文到达前:段落骨架,不再只有一个转圈。
+                        VStack(alignment: .leading, spacing: LeoTheme.Spacing.sm) {
+                            LeoSkeletonCard(showsTile: false, lines: 3)
+                            LeoSkeletonCard(showsTile: false, lines: 2)
+                        }
+                        .leoReadingMeasure()
+                        .padding(.vertical, LeoTheme.Spacing.xs)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("正在读取…"))
                     } else if bodyText.isEmpty {
                         LeoEmptyState(systemImage: "doc.text.magnifyingglass",
                                       title: bodyUnavailableTitle, message: bodyUnavailableDescription)
@@ -1586,6 +1637,9 @@ private struct TreasuryReadingSheet: View {
                     } else {
                         SelectableTreasuryText(text: bodyText, selection: $selection)
                             .frame(minHeight: 240)
+                            .frame(maxWidth: LeoTheme.Reading.maxWidth)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, LeoTheme.Spacing.xxs)
                             .accessibilityLabel("收藏正文，可选择文字添加高亮")
                         if bodyStatus == "truncated" {
                             Text("为保持阅读流畅，当前显示前 200,000 个字符；原始正文仍完整保留。")
@@ -1642,14 +1696,22 @@ private struct TreasuryReadingSheet: View {
                 if !highlights.isEmpty {
                     Section("已保存高亮") {
                         ForEach(highlights) { highlight in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(highlight.quoteText)
-                                    .font(.callout)
-                                    .textSelection(.enabled)
-                                if let note = highlight.note, !note.isEmpty {
-                                    Text(note).font(.caption).foregroundStyle(.secondary)
+                            HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+                                // 高亮引用:左侧一条强调色竖线,和正文区分开。
+                                Capsule()
+                                    .fill(LeoTheme.ColorToken.accent.opacity(0.7))
+                                    .frame(width: 3)
+                                VStack(alignment: .leading, spacing: LeoTheme.Spacing.xxs + 2) {
+                                    Text(highlight.quoteText)
+                                        .font(.callout)
+                                        .lineSpacing(3)
+                                        .textSelection(.enabled)
+                                    if let note = highlight.note, !note.isEmpty {
+                                        Text(note).font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                             }
+                            .fixedSize(horizontal: false, vertical: true)
                             .swipeActions {
                                 Button("删除", role: .destructive) {
                                     CollectionStore.deleteHighlight(id: highlight.id)
@@ -1716,6 +1778,29 @@ private struct TreasuryReadingSheet: View {
             .onChange(of: readingState) { _, _ in persistReadingState() }
             .onDisappear { persistReadingState() }
         }
+    }
+
+    /// 头部:类型图块 · 标题 · 来源胶囊 · 时间 · 阅读进度。
+    private var readingHero: some View {
+        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+            LeoIconTile(systemImage: TreasuryKindStyle.symbol(for: item.kind),
+                        tint: leoSourceColor(item.sourceLabel), size: LeoTheme.Card.heroTile)
+            VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                Text(item.title?.isEmpty == false ? item.title! : String(localized: "阅读"))
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                LeoFlowLayout(spacing: 6) {
+                    LeoCapsuleBadge(text: item.sourceLabel, tint: leoSourceColor(item.sourceLabel))
+                    LeoCapsuleBadge(text: leoRelativeDate(item.updatedAt), systemImage: "clock")
+                    if progress > 0 {
+                        LeoCapsuleBadge(text: progress.formatted(.percent.precision(.fractionLength(0))),
+                                        systemImage: "book", tint: LeoTheme.ColorToken.accent, monospaced: true)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, LeoTheme.Spacing.xxs)
     }
 
     private var selectedQuote: String? {
@@ -1882,6 +1967,7 @@ private struct TreasuryReadingSheet: View {
         }
         highlightNote = ""
         selection = NSRange(location: NSNotFound, length: 0)
+        LeoHaptics.content(.saved)
         message = "高亮已保存。"
     }
 
@@ -1912,7 +1998,17 @@ private struct SelectableTreasuryText: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
-        if view.text != text { view.text = text }
+        if view.text != text {
+            // 阅读排版:正文字号 + 6pt 行距;字体是 preferredFont,动态字体照常放大。
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = LeoTheme.Reading.lineSpacing
+            style.paragraphSpacing = LeoTheme.Spacing.xs
+            view.attributedText = NSAttributedString(string: text, attributes: [
+                .font: UIFont.preferredFont(forTextStyle: .body),
+                .foregroundColor: UIColor.label,
+                .paragraphStyle: style,
+            ])
+        }
         context.coordinator.selection = $selection
     }
 
@@ -2005,17 +2101,36 @@ func leoRelativeDate(_ date: Date) -> String {
     return leoRelativeFormatter.localizedString(for: date, relativeTo: Date())
 }
 
+/// 条目类型 → 符号,卡片占位和阅读页头部共用。
+private enum TreasuryKindStyle {
+    static func symbol(for kind: CollectedItem.Kind) -> String {
+        switch kind {
+        case .link: return "link"
+        case .text: return "text.alignleft"
+        case .file: return "doc"
+        case .note: return "note.text"
+        }
+    }
+}
+
+/// [T-treasury-design] 手机收藏卡:缩略图 / 类型图块 · 标题 · 摘录(搜索时是命中片段,
+/// 命中词高亮)· 批注 · 来源 / 时间 / 状态 / 标签一行。元数据行在大字号下换行,不截断。
 private struct CollectionCard: View {
     let item: CollectedItem
-    /// file 类条目的异步缩略图。原来在行里同步 UIImage(contentsOfFile:)
-    /// 把原图整张解码(最长边可达 2400px)再缩到 60×60,滚动掉帧。
-    @State private var fileThumb: UIImage?
+    /// 搜索时全文索引给出的片段;没有就显示摘要。
+    var searchSnippet: String?
+    var highlightTerms: [String] = []
+    /// 缩略图都在后台解码(ImageIO 直接出小图),主线程只拿结果。
+    @State private var thumb: UIImage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var thumbSize = LeoTheme.Card.thumbnail
+
+    private var thumbSide: CGFloat { min(thumbSize, LeoTheme.Card.thumbnail * 1.35) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
             thumbnail
-                .frame(width: 60, height: 60)
-                .accessibilityHidden(true)
+                .frame(width: thumbSide, height: thumbSide)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -2027,70 +2142,117 @@ private struct CollectionCard: View {
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(4)
-                            .background(.indigo, in: Circle())
+                            .background(LeoTheme.ColorToken.accent, in: Circle())
+                            .overlay(Circle().strokeBorder(LeoTheme.ColorToken.surface, lineWidth: 1.5))
                             .offset(x: 4, y: 4)
                     }
                 }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: LeoTheme.Card.lineGap) {
+                HStack(alignment: .firstTextBaseline, spacing: LeoTheme.Spacing.xxs + 1) {
                     if item.pinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10)).foregroundStyle(.orange)
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(Text("已置顶"))
                     }
                     Text(displayTitle)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(LeoTheme.ColorToken.primaryText)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
-                if let summary = item.summary, !summary.isEmpty {
-                    Text(summary)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                excerpt
                 if let note = item.annotation, !note.isEmpty {
                     // 批注:引用样式,和摘要视觉上分开 —— 这是"我的话"
-                    HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(.teal.opacity(0.6)).frame(width: 2)
-                        Text(note).font(.caption).foregroundStyle(.teal)
+                    HStack(spacing: LeoTheme.Spacing.xxs + 1) {
+                        Capsule()
+                            .fill(LeoTheme.ColorToken.accent.opacity(0.6)).frame(width: 2)
+                        Text(note).font(.caption).foregroundStyle(LeoTheme.ColorToken.accent)
                             .lineLimit(1)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 6) {
-                    Text(item.sourceLabel)
-                        .font(.caption2.weight(.semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(leoSourceColor(item.sourceLabel))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(leoSourceColor(item.sourceLabel).opacity(0.13), in: Capsule())
+                LeoFlowLayout(spacing: 6) {
+                    LeoCapsuleBadge(text: item.sourceLabel, tint: leoSourceColor(item.sourceLabel))
                     Text(leoRelativeDate(item.updatedAt))
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(LeoTheme.ColorToken.secondaryText)
                         .lineLimit(1)
-                        .layoutPriority(1)
+                    statusIcon
                     ForEach(item.tags.prefix(2), id: \.self) { tag in
-                        Text("#\(tag)").font(.caption2).foregroundStyle(.secondary)
+                        Text(verbatim: "#\(tag)").font(.caption2)
+                            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                             .lineLimit(1)
                     }
                 }
+                .padding(.top, 2)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .task(id: item.value) {
-            // ThumbnailCache 用 ImageIO 直接产 120px 小图(不整张解码),
-            // 后台队列 + NSCache 都是现成的,直接复用。
-            guard item.kind == .file, item.thumbnailFile == nil,
-                  let file = CollectionStore.fileURL(named: item.value) else { return }
-            let image = await ThumbnailCache.shared.thumbnail(
-                for: file.path, maxSize: 120)
-            // 行被复用去显示别的条目时 task(id:) 会取消本任务 ——
-            // 别把旧条目的图填进新行。
+        .task(id: "\(item.kind.rawValue)|\(item.thumbnailFile ?? "")|\(item.value)") {
+            guard let path = thumbnailPath else { thumb = nil; return }
+            if let cached = ThumbnailCache.shared.cachedThumbnail(for: path, maxSize: 180) {
+                thumb = cached
+                return
+            }
+            let image = await ThumbnailCache.shared.thumbnail(for: path, maxSize: 180)
+            // 行被复用去显示别的条目时 task(id:) 会取消本任务 —— 别把旧条目的图填进新行。
             guard !Task.isCancelled else { return }
-            fileThumb = image
+            thumb = image
+        }
+    }
+
+    /// 封面缩略图优先;没有封面的文件条目用原文件出小图。
+    private var thumbnailPath: String? {
+        if let name = item.thumbnailFile, let dir = CollectionStore.thumbsDirectory {
+            return dir.appendingPathComponent(name).path
+        }
+        if item.kind == .file, let file = CollectionStore.fileURL(named: item.value) {
+            return file.path
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private var excerpt: some View {
+        if let snippet = searchSnippet?.trimmingCharacters(in: .whitespacesAndNewlines), !snippet.isEmpty {
+            LeoHighlightedText(text: snippet, terms: highlightTerms)
+                .font(.footnote)
+                .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                .lineLimit(2)
+        } else if let summary = item.summary, !summary.isEmpty {
+            if highlightTerms.isEmpty {
+                Text(summary)
+                    .font(.footnote)
+                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    .lineLimit(2)
+            } else {
+                LeoHighlightedText(text: summary, terms: highlightTerms)
+                    .font(.footnote)
+                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    /// 后台处理中:同步符号缓慢脉动;失败:警示符号。其余状态不占位。
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch item.processingState {
+        case "queued", "processing":
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(LeoTheme.ColorToken.accent)
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+                .accessibilityLabel(Text("处理中"))
+        case "failed":
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption2)
+                .foregroundStyle(LeoTheme.ColorToken.warning)
+                .accessibilityLabel(Text("失败"))
+        default:
+            EmptyView()
         }
     }
 
@@ -2114,24 +2276,20 @@ private struct CollectionCard: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let thumb = item.thumbnailFile,
-           let dir = CollectionStore.thumbsDirectory,
-           let image = UIImage(contentsOfFile: dir.appendingPathComponent(thumb).path) {
-            Image(uiImage: image).resizable().scaledToFill()
-        } else if item.kind == .file, let image = fileThumb {
-            // 异步缩略图就绪前先落到下面的占位分支,填充后自动刷新
-            Image(uiImage: image).resizable().scaledToFill()
+        if let thumb {
+            Image(uiImage: thumb).resizable().scaledToFill()
         } else {
             // [T-preview] 抓不到封面时不留白:用来源色 + 标题首字做占位,
             // 一眼能认出是哪条(小图标的一片灰认不出任何东西)。
             ZStack {
-                placeholderColor.opacity(0.18)
+                placeholderColor.opacity(0.16)
                 if let ch = placeholderGlyph {
                     Text(String(ch))
-                        .font(.system(size: 26, weight: .medium))
+                        .font(.title2.weight(.medium))
                         .foregroundStyle(placeholderColor)
                 } else {
-                    Image(systemName: iconName).font(.system(size: 22))
+                    Image(systemName: TreasuryKindStyle.symbol(for: item.kind))
+                        .font(.title3)
                         .foregroundStyle(placeholderColor)
                 }
             }
@@ -2145,15 +2303,6 @@ private struct CollectionCard: View {
         let source = (item.title ?? item.sourceLabel).trimmingCharacters(in: .whitespacesAndNewlines)
         return source.first { $0.isLetter || $0.isNumber }
     }
-
-    private var iconName: String {
-        switch item.kind {
-        case .link: return "link"
-        case .text: return "text.alignleft"
-        case .file: return "doc"
-        case .note: return "note.text"
-        }
-    }
 }
 
 // MARK: - 应用内预览
@@ -2161,6 +2310,9 @@ private struct CollectionCard: View {
 private struct CollectionPreviewSheet: View {
     /// 扫描件/图片的 OCR 正文(惰性读盘)
     @State private var ocrText = ""
+    /// 原图在后台解码好再上屏(以前 body 里同步 UIImage(contentsOfFile:),每次重画都解码)。
+    @State private var fullImage: UIImage?
+    @State private var imageLoaded = false
 
     let item: CollectedItem
     @Environment(\.dismiss) private var dismiss
@@ -2221,8 +2373,7 @@ private struct CollectionPreviewSheet: View {
             // files/remote-assets/, where an on-demand download lands. Joining
             // filesDirectory by hand showed "附件已安全下载" and then a generic
             // doc placeholder for every attachment fetched from another device.
-            if let file = CollectionStore.fileURL(named: item.value),
-               let image = UIImage(contentsOfFile: file.path) {
+            if let image = fullImage {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Image(uiImage: image).resizable().scaledToFit()
@@ -2244,11 +2395,21 @@ private struct CollectionPreviewSheet: View {
                     guard ocrText.isEmpty, let file = item.bodyFile else { return }
                     ocrText = await NoteBodyStore.load(file)
                 }
+            } else if !imageLoaded {
+                LeoSkeletonBar(height: 280, cornerRadius: LeoTheme.Radius.surface)
+                    .padding(LeoTheme.Spacing.md)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .accessibilityLabel(Text("正在读取…"))
+                    .task {
+                        let path = CollectionStore.fileURL(named: item.value)?.path
+                        let image = await Task.detached(priority: .userInitiated) {
+                            path.flatMap { UIImage(contentsOfFile: $0)?.preparingForDisplay() }
+                        }.value
+                        fullImage = image
+                        imageLoaded = true
+                    }
             } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "doc").font(.system(size: 40))
-                    Text(item.value).font(.footnote)
-                }
+                LeoEmptyState(systemImage: "doc", title: item.value)
             }
         }
     }

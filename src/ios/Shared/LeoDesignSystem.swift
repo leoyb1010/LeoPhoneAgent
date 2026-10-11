@@ -46,6 +46,28 @@ enum LeoTheme {
     enum TouchTarget {
         static let minimum: CGFloat = 44
     }
+
+    /// [T-treasury-design] Long-form reading: comfortable leading and a capped
+    /// measure so a paragraph never runs the full width of an iPad.
+    enum Reading {
+        static let maxWidth: CGFloat = 680
+        static let lineSpacing: CGFloat = 6
+    }
+
+    /// One card anatomy for content lists (藏宝阁, 资料库): leading visual,
+    /// title, source line, excerpt, meta row — all on the 8-pt rhythm.
+    enum Card {
+        /// Thumbnail / type tile in a list card.
+        static let thumbnail: CGFloat = 56
+        /// Type tile in a detail hero header.
+        static let heroTile: CGFloat = 56
+        /// Content inset inside the card surface.
+        static let padding: CGFloat = Spacing.sm
+        /// Gap between two cards.
+        static let gap: CGFloat = Spacing.xs
+        /// Vertical gap between the anatomy lines.
+        static let lineGap: CGFloat = Spacing.xxs
+    }
 }
 
 /// Motion values are derived from the existing app before visual tuning.
@@ -126,7 +148,171 @@ extension View {
     }
 
 
-    /// An interactive glass surface that reacts to touch. Use for things the
+    /// [T-treasury-design] A content card as a List row: the surface lives in
+    /// the row background (so swipe actions and selection keep working) and the
+    /// content sits `Card.padding` inside it. `inset` is the card's distance
+    /// from the container edge — 16 on phones, wider on large containers so
+    /// the column stays centered (see `TreasuryGridLayout`).
+    func leoListCardRow(inset: CGFloat = LeoTheme.Spacing.md) -> some View {
+        let half = LeoTheme.Card.gap / 2
+        let pad = LeoTheme.Card.padding
+        return listRowInsets(EdgeInsets(top: half + pad, leading: inset + pad,
+                                        bottom: half + pad, trailing: inset + pad))
+            .listRowSeparator(.hidden)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
+                    .fill(LeoTheme.ColorToken.surface)
+                    .padding(.horizontal, inset)
+                    .padding(.vertical, half)
+            )
+    }
+
+    /// A plain List row aligned to the same column as `leoListCardRow`.
+    func leoListPlainRow(inset: CGFloat = LeoTheme.Spacing.md,
+                         top: CGFloat = LeoTheme.Spacing.xxs,
+                         bottom: CGFloat = LeoTheme.Spacing.xxs) -> some View {
+        listRowInsets(EdgeInsets(top: top, leading: inset, bottom: bottom, trailing: inset))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+    }
+
+    /// Pointer hover on iPad: a soft highlight shaped like the card.
+    func leoCardHover(cornerRadius: CGFloat = LeoTheme.Radius.surface) -> some View {
+        contentShape(.hoverEffect, RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .hoverEffect(.highlight)
+    }
+
+    /// Long-form text: reading leading and a capped, centered measure.
+    func leoReadingMeasure() -> some View {
+        lineSpacing(LeoTheme.Reading.lineSpacing)
+            .frame(maxWidth: LeoTheme.Reading.maxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+/// [T-treasury-design] The one status/metadata capsule: privacy, offline,
+/// source, version, locator. Tint fill is a touch stronger in Dark Mode so the
+/// capsule doesn't vanish on a dark surface.
+struct LeoCapsuleBadge: View {
+    let text: String
+    var systemImage: String?
+    var tint: Color = LeoTheme.ColorToken.secondaryText
+    /// Monospaced digits for version / size chips.
+    var monospaced = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .imageScale(.small)
+                    .accessibilityHidden(true)
+            }
+            Text(verbatim: text)
+                .lineLimit(1)
+                .monospacedDigit()
+                .fontDesign(monospaced ? .monospaced : .default)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(tint)
+        .padding(.horizontal, LeoTheme.Spacing.xs - 1)
+        .padding(.vertical, 3)
+        .background(tint.opacity(colorScheme == .dark ? 0.20 : 0.12), in: Capsule())
+        .overlay(Capsule().strokeBorder(tint.opacity(colorScheme == .dark ? 0.28 : 0.16), lineWidth: 0.5))
+    }
+}
+
+/// [T-treasury-design] The leading type tile of a card or a detail hero.
+struct LeoIconTile: View {
+    let systemImage: String
+    var tint: Color = LeoTheme.ColorToken.accent
+    var size: CGFloat = LeoTheme.Card.thumbnail
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.4, weight: .medium))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(colorScheme == .dark ? 0.22 : 0.12),
+                        in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// [T-treasury-design] Section header for content lists: small caps-weight
+/// title, optional count, aligned to the card column.
+struct LeoSectionHeader: View {
+    let title: String
+    var count: Int?
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: LeoTheme.Spacing.xs - 2) {
+            if let systemImage {
+                Image(systemName: systemImage).imageScale(.small).accessibilityHidden(true)
+            }
+            Text(verbatim: title)
+            if let count {
+                Text(verbatim: "\(count)")
+                    .monospacedDigit()
+                    .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// [T-treasury-design] Wrapping row for chips and meta lines: at large
+/// Dynamic Type sizes the chips flow onto a second line instead of clipping.
+struct LeoFlowLayout: Layout {
+    var spacing: CGFloat = LeoTheme.Spacing.xs - 2
+    var lineSpacing: CGFloat = LeoTheme.Spacing.xxs
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: proposal.width.map { min($0, width) } ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.init(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                      proposal: .init(width: min(size.width, bounds.width), height: size.height))
+                x += size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private struct Row { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.init(width: width.isFinite ? width : nil, height: nil))
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.indices.isEmpty && needed > width {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? min(size.width, width) : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
 }
 
 /// Single entry point for user-action feedback. Keep calls in View/UI code so
@@ -146,6 +332,25 @@ enum LeoHaptics {
         case taskFailed
         /// The run stopped and cannot continue without the user (permission
         /// prompt, confirmation, browser takeover).
+    }
+
+    /// [T-treasury-design] Content actions worth feeling: the user did
+    /// something to their data and should know it landed. Browsing, scrolling
+    /// and opening stay silent.
+    enum ContentAction {
+        case saved
+        case archived
+        case deleted
+        case copied
+    }
+
+    static func content(_ action: ContentAction) {
+        switch action {
+        case .saved: notification(.success)
+        case .archived: impact(.soft)
+        case .deleted: impact(.rigid)
+        case .copied: selection()
+        }
     }
 
     static func agent(_ event: AgentEvent) {
