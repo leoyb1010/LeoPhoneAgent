@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.64.0",
+            date: "2026-10-11",
+            title: "藏宝阁与服务器任务焕新",
+            highlights: [
+                "藏宝阁焕新：卡片结构统一、节奏更整齐；iPad 宽屏内容居中，资料库结果排两列；从卡片打开内容有缩放过渡。",
+                "资料库搜索先出骨架占位，命中词直接高亮；资料和知识卡详情有头部信息和更舒适的阅读排版。",
+                "服务器任务重新设计：按「需要处理 / 进行中 / 待处理 / 已完成」分组，标题吸顶可折叠，状态用形状加颜色区分。",
+                "任务详情有大标题和属性胶囊，可以直接点状态修改；运行卡片显示计时，可一键停止；新消息平滑出现。",
+                "所有新动效都遵循「减弱动态效果」，开启后全部静止。"
+            ]
+        ),
+        LeoRelease(
             version: "1.63.0",
             date: "2026-10-11",
             title: "藏宝阁好用了",
