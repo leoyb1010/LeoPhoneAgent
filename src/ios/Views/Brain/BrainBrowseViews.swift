@@ -16,18 +16,18 @@ import UIKit
 
 struct BrainScopePicker: View {
     @Binding var scope: BrainBrowseScope
+    var inset: CGFloat = LeoTheme.Spacing.md
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Picker("范围", selection: $scope) {
+        // 换范围时内容跟着弹簧淡入淡出,不再整页瞬间跳变。
+        Picker("范围", selection: $scope.animation(LeoMotion.smooth(reduceMotion: reduceMotion))) {
             ForEach(BrainBrowseScope.allCases) { s in
                 Text(s.title).tag(s)
             }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 14)
-        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.xs, bottom: LeoTheme.Spacing.xxs)
         .accessibilityLabel(Text("藏宝阁范围"))
     }
 }
@@ -50,11 +50,9 @@ struct BrainPrivacyBadge: View {
 
     var body: some View {
         if privacy == .private {
-            Label("私密", systemImage: "lock.fill")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .foregroundStyle(LeoTheme.ColorToken.warning)
-                .background(LeoTheme.ColorToken.warning.opacity(0.12), in: Capsule())
+            LeoCapsuleBadge(text: String(localized: "私密"), systemImage: "lock.fill",
+                            tint: LeoTheme.ColorToken.warning)
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("私密资料"))
         }
     }
@@ -62,24 +60,35 @@ struct BrainPrivacyBadge: View {
 
 struct BrainOfflineBadge: View {
     var body: some View {
-        Label("离线 · 缓存", systemImage: "icloud.slash")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-            .background(LeoTheme.ColorToken.surface, in: Capsule())
+        LeoCapsuleBadge(text: String(localized: "离线 · 缓存"), systemImage: "icloud.slash")
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("离线,显示的是缓存内容"))
     }
 }
 
-private func brainRowStyle<V: View>(_ v: V) -> some View {
-    v.listRowInsets(EdgeInsets(top: 5, leading: 26, bottom: 5, trailing: 26))
-        .listRowSeparator(.hidden)
-        .listRowBackground(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LeoTheme.ColorToken.surface)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 2)
-        )
+/// [T-treasury-design] 命中高亮的摘录:资料库的 `【…】` 标记、手机收藏按查询词定位,
+/// 命中段用强调色 + 浅底,不显示括号。
+struct LeoHighlightedText: View {
+    let segments: [LeoMatchHighlight.Segment]
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(markedText: String) { segments = LeoMatchHighlight.segments(markedText: markedText) }
+    init(text: String, terms: [String]) { segments = LeoMatchHighlight.segments(text: text, terms: terms) }
+
+    var body: some View {
+        Text(attributed)
+    }
+
+    private var attributed: AttributedString {
+        var out = LeoMatchHighlight.attributed(segments)
+        for run in out.runs where run.inlinePresentationIntent == .stronglyEmphasized {
+            out[run.range].inlinePresentationIntent = nil
+            out[run.range].foregroundColor = LeoTheme.ColorToken.accent
+            out[run.range].backgroundColor = LeoTheme.ColorToken.accent.opacity(colorScheme == .dark ? 0.26 : 0.14)
+            out[run.range].font = .footnote.weight(.semibold)
+        }
+        return out
+    }
 }
 
 // MARK: - Browse section (rows inside the 藏宝阁 List)
@@ -172,12 +181,18 @@ struct BrainBrowseSection: View {
     var refreshToken: Int = 0
     /// 藏宝阁传进来:在当前导航栈里推出资料库设置,不再跳去设置面板(iPad 上会把藏宝阁关掉)。
     var onOpenSettings: (() -> Void)? = nil
+    /// 列表容器宽度:决定卡片左右边距与列数(手机一列,宽容器两列居中)。
+    var containerWidth: CGFloat = 0
     @ObservedObject private var store = BrainStore.shared
     @StateObject private var model = BrainBrowseModel()
     @State private var creatingCard = false
     @State private var retryToken = 0
+    @Namespace private var zoomNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var inset: CGFloat { TreasuryGridLayout.horizontalInset(forWidth: containerWidth) }
+    private var columns: Int { TreasuryGridLayout.columns(forWidth: containerWidth) }
 
     private var phase: BrainBrowsePhase {
         BrainBrowsePhase.resolve(configured: store.isConfigured, scope: scope, query: query,
@@ -227,19 +242,32 @@ struct BrainBrowseSection: View {
         }
     }
 
+    private var connectionHealthy: Bool { store.statusError == nil && store.health?.ok != false }
+
     @ViewBuilder
     private var content: some View {
         if scope == .all {
-            if !trimmed.isEmpty { sectionHeader(String(localized: "资料库")) }
+            if !trimmed.isEmpty {
+                LeoSectionHeader(title: String(localized: "资料库"),
+                                 count: phase == .loading ? nil : model.results.count,
+                                 systemImage: "books.vertical")
+                    .leoListPlainRow(inset: inset, top: LeoTheme.Spacing.md, bottom: LeoTheme.Spacing.xxs)
+            }
         } else if let status = BrainConnectionSummary.text(configured: store.isConfigured, health: store.health,
                                                          statusError: store.statusError) {
-            Label(status, systemImage: store.statusError == nil && store.health?.ok != false
-                  ? "checkmark.circle" : "exclamationmark.circle")
-                .font(.caption)
-                .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                .padding(.horizontal, 14)
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+            HStack(spacing: LeoTheme.Spacing.xs - 2) {
+                // 连接状态变化时图标换形 + 轻弹一下;Reduce Motion 下只换形不弹。
+                Image(systemName: connectionHealthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(connectionHealthy ? LeoTheme.ColorToken.success : LeoTheme.ColorToken.warning)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, value: reduceMotion ? true : connectionHealthy)
+                    .accessibilityHidden(true)
+                Text(status)
+                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+            }
+            .font(.caption)
+            .accessibilityElement(children: .combine)
+            .leoListPlainRow(inset: inset + LeoTheme.Spacing.xxs)
         }
         if case .failed(let error) = phase {
             failedRow(error)
@@ -251,78 +279,125 @@ struct BrainBrowseSection: View {
                 Button {
                     creatingCard = true
                 } label: { Label("新建知识卡", systemImage: "square.and.pencil") }
+                .font(.subheadline.weight(.semibold))
                 .frame(minHeight: 44)
                 .disabled(model.cardsFromCache)
             }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .padding(.horizontal, 14)
-            if phase == .loading {
-                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+            .leoListPlainRow(inset: inset)
+            if phase == .loading && model.cards.isEmpty {
+                skeletonRows
             }
-            ForEach(model.cards) { card in
-                brainRowStyle(
-                    NavigationLink {
-                        BrainCardDetailView(cardId: card.id, initialTitle: card.title)
-                    } label: { BrainCardRow(card: card) }
-                )
+            resultGrid(model.cards, id: \.id) { card in
+                BrainCardDetailView(cardId: card.id, initialTitle: card.title)
+            } label: { card in
+                BrainCardRow(card: card)
             }
             if phase == .empty {
-                hintRow(String(localized: "资料库里还没有知识卡。"))
+                LeoEmptyState(systemImage: "rectangle.on.rectangle.angled",
+                              title: String(localized: "资料库里还没有知识卡。"))
             }
         } else if phase == .idle {
             if scope == .archive {
-                hintRow(String(localized: "输入关键词搜索资料库里的文件。"))
+                LeoEmptyState(systemImage: "text.magnifyingglass",
+                              title: String(localized: "搜索你的资料库"),
+                              message: String(localized: "输入关键词搜索资料库里的文件。"))
             }
         } else {
-            if phase == .loading {
-                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
-            }
             if !store.unlock.unlockedThisSession {
                 Button {
                     Task { _ = await store.unlockPrivate() }
                 } label: {
-                    Label("同时搜索私密资料(需要面容 ID)", systemImage: "lock.open")
-                        .font(.footnote)
+                    Label("同时搜索私密资料(需要面容 ID)", systemImage: "lock")
+                        .font(.footnote.weight(.medium))
                         .frame(minHeight: 44)
                 }
-                .listRowBackground(Color.clear)
-                .padding(.horizontal, 14)
+                .buttonStyle(.borderless)
+                .leoListPlainRow(inset: inset + LeoTheme.Spacing.xxs)
             }
-            ForEach(model.results) { item in
-                brainRowStyle(
-                    NavigationLink {
-                        if item.isCard {
-                            BrainCardDetailView(cardId: item.id, initialTitle: item.title)
-                        } else {
-                            BrainFileDetailView(fileId: item.id, title: item.title, privacy: item.privacy,
-                                                initialLocator: item.match?.locator)
-                        }
-                    } label: { BrainResultRow(item: item) }
-                )
+            if phase == .loading && model.results.isEmpty {
+                skeletonRows
+            }
+            resultGrid(model.results, id: \.id) { item in
+                if item.isCard {
+                    BrainCardDetailView(cardId: item.id, initialTitle: item.title)
+                } else {
+                    BrainFileDetailView(fileId: item.id, title: item.title, privacy: item.privacy,
+                                        initialLocator: item.match?.locator)
+                }
+            } label: { item in
+                BrainResultRow(item: item)
             }
             if phase == .empty {
-                hintRow(String(localized: "资料库里没有匹配的内容。"))
+                LeoEmptyState(systemImage: "doc.text.magnifyingglass",
+                              title: String(localized: "资料库里没有匹配的内容。"))
             }
         }
     }
 
-    private func hintRow(_ text: String) -> some View {
-        Text(text).font(.footnote)
-            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-            .padding(.horizontal, 14)
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+    /// 远端结果到达前的骨架:和真实卡片同一个结构,结果落下时不跳版。
+    @ViewBuilder
+    private var skeletonRows: some View {
+        ForEach(0..<3, id: \.self) { index in
+            LeoSkeletonCard(lines: index == 0 ? 2 : 1)
+                .leoListCardRow(inset: inset)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("正在搜索资料库"))
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-            .padding(.horizontal, 14)
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .accessibilityAddTraits(.isHeader)
+    /// 一列:每条一行(整行可点、带推进箭头)。宽容器:按列分行,每格一张卡。
+    /// 前 8 条错峰入场,之后的直接出现;卡片 → 详情走缩放转场。
+    @ViewBuilder
+    private func resultGrid<Item, ID: Hashable, Destination: View, RowLabel: View>(
+        _ items: [Item], id: KeyPath<Item, ID>,
+        @ViewBuilder destination: @escaping (Item) -> Destination,
+        @ViewBuilder label: @escaping (Item) -> RowLabel
+    ) -> some View {
+        let order = LeoStaggerPolicy.indices(for: items.map { $0[keyPath: id] })
+        if columns <= 1 {
+            ForEach(items, id: id) { item in
+                let key = item[keyPath: id]
+                NavigationLink {
+                    destination(item).leoZoomTransition(id: key, in: zoomNamespace)
+                } label: {
+                    label(item)
+                        .leoZoomSource(id: key, in: zoomNamespace)
+                        .leoCardHover()
+                }
+                .leoStaggerEntrance(index: order[key] ?? Int.max)
+                .leoScrollDepth()
+                .leoListCardRow(inset: inset)
+            }
+        } else {
+            let rows = TreasuryGridLayout.rows(items, columns: columns)
+            ForEach(rows.indices, id: \.self) { rowIndex in
+                HStack(alignment: .top, spacing: TreasuryGridLayout.spacing) {
+                    ForEach(rows[rowIndex], id: id) { item in
+                        let key = item[keyPath: id]
+                        NavigationLink {
+                            destination(item).leoZoomTransition(id: key, in: zoomNamespace)
+                        } label: {
+                            label(item)
+                                .padding(LeoTheme.Card.padding)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .background(LeoTheme.ColorToken.surface,
+                                            in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+                                .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+                                .leoZoomSource(id: key, in: zoomNamespace)
+                                .leoCardHover()
+                        }
+                        .buttonStyle(.plain)
+                        .leoStaggerEntrance(index: order[key] ?? Int.max)
+                    }
+                    // 最后一行不满时占位,保持列宽一致。
+                    ForEach(0..<(columns - rows[rowIndex].count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
+                }
+                .leoScrollDepth()
+                .leoListPlainRow(inset: inset, top: LeoTheme.Card.gap / 2, bottom: LeoTheme.Card.gap / 2)
+            }
+        }
     }
 
     /// 出错一行:说清楚原因,并给下一步(重试 / 去重新连接)。离线时「全部」仍照常显示手机收藏。
@@ -351,68 +426,108 @@ struct BrainBrowseSection: View {
                 EmptyView()
             }
         }
-        .padding(.horizontal, 14)
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        .padding(.horizontal, LeoTheme.Spacing.sm)
+        .background(LeoTheme.ColorToken.warning.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+        .leoListPlainRow(inset: inset)
     }
 }
 
+/// 资料库检索结果卡:类型图块 · 标题 · 来源路径 · 命中摘录(高亮) · 元数据胶囊。
 struct BrainResultRow: View {
     let item: BrainSearchItem
 
+    private var symbol: String {
+        BrainFileKindIcon.symbol(path: item.path ?? item.ext.map { "file.\($0)" }, isCard: item.isCard)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: item.isCard ? "rectangle.on.rectangle.angled" : "doc.text")
-                    .foregroundStyle(LeoTheme.ColorToken.accent)
-                    .accessibilityHidden(true)
-                Text(item.title.isEmpty ? String(localized: "未命名") : item.title)
-                    .font(.body.weight(.medium)).lineLimit(2)
-                Spacer(minLength: 0)
-                BrainPrivacyBadge(privacy: item.privacy)
-            }
-            if let path = item.path, !path.isEmpty {
-                Text(verbatim: path).font(.caption2.monospaced()).lineLimit(1).truncationMode(.middle)
-                    .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
-            }
-            if let excerpt = item.match?.excerpt, !excerpt.isEmpty {
-                Text(verbatim: excerpt).font(.footnote).lineLimit(3)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
-            }
-            HStack(spacing: 8) {
-                if let category = item.category, !category.isEmpty {
-                    Text(verbatim: category).font(.caption2)
+        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+            LeoIconTile(systemImage: symbol, size: 40)
+            VStack(alignment: .leading, spacing: LeoTheme.Card.lineGap) {
+                HStack(alignment: .firstTextBaseline, spacing: LeoTheme.Spacing.xs) {
+                    Text(item.title.isEmpty ? String(localized: "未命名") : item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    BrainPrivacyBadge(privacy: item.privacy)
                 }
-                if let locator = item.match?.locator, !locator.isEmpty {
-                    Label(locator, systemImage: "mappin").font(.caption2)
+                if let path = item.path, !path.isEmpty {
+                    Text(verbatim: path).font(.caption2.monospaced()).lineLimit(1).truncationMode(.middle)
+                        .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
+                }
+                if let excerpt = item.match?.excerpt, !excerpt.isEmpty {
+                    LeoHighlightedText(markedText: excerpt)
+                        .font(.footnote)
+                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                        .lineLimit(3)
+                        .lineSpacing(2)
+                        .padding(.top, 2)
+                }
+                let category = item.category.flatMap { $0.isEmpty ? nil : $0 }
+                let locator = item.match?.locator.flatMap { $0.isEmpty ? nil : $0 }
+                if category != nil || locator != nil {
+                    LeoFlowLayout(spacing: 6) {
+                        if let category { LeoCapsuleBadge(text: category, systemImage: "folder") }
+                        if let locator {
+                            LeoCapsuleBadge(text: locator, systemImage: "mappin", tint: LeoTheme.ColorToken.accent)
+                        }
+                    }
+                    .padding(.top, 2)
                 }
             }
-            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 }
 
+/// 知识卡:图块 · 标题 · 摘要 · 版本 / 状态 / 分类 / 日期胶囊。
 struct BrainCardRow: View {
     let card: BrainCardSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(card.title.isEmpty ? String(localized: "未命名") : card.title)
-                .font(.body.weight(.medium)).lineLimit(2)
-            if let summary = card.summary, !summary.isEmpty {
-                Text(verbatim: summary).font(.footnote).lineLimit(2)
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+            LeoIconTile(systemImage: "rectangle.on.rectangle.angled", size: 40)
+            VStack(alignment: .leading, spacing: LeoTheme.Card.lineGap) {
+                Text(card.title.isEmpty ? String(localized: "未命名") : card.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if let summary = card.summary, !summary.isEmpty {
+                    Text(verbatim: summary).font(.footnote).lineLimit(2)
+                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                }
+                BrainCardMetaChips(version: card.version, status: card.status, category: card.category,
+                                   date: BrainDisplay.date(card.updatedAt))
+                    .padding(.top, 2)
             }
-            Text(verbatim: ["v\(card.version)", BrainDisplay.status(card.status) ?? "", card.category ?? "",
-                            BrainDisplay.date(card.updatedAt) ?? ""]
-                .filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.caption2)
-                .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 知识卡的元数据胶囊:列表行和详情页头部共用。
+struct BrainCardMetaChips: View {
+    let version: Int
+    let status: String?
+    let category: String?
+    let date: String?
+    var fromCache = false
+
+    var body: some View {
+        LeoFlowLayout(spacing: 6) {
+            LeoCapsuleBadge(text: "v\(version)", monospaced: true)
+            if let label = BrainDisplay.status(status) {
+                LeoCapsuleBadge(text: label, systemImage: status == "confirmed" ? "checkmark.seal" : nil,
+                                tint: status == "confirmed" ? LeoTheme.ColorToken.accent : LeoTheme.ColorToken.secondaryText)
+            }
+            if let category, !category.isEmpty { LeoCapsuleBadge(text: category, systemImage: "folder") }
+            if let date, !date.isEmpty { LeoCapsuleBadge(text: date, systemImage: "clock") }
+            if fromCache { BrainOfflineBadge() }
+        }
     }
 }
 
@@ -482,31 +597,7 @@ struct BrainFileDetailView: View {
     private var content: some View {
         List {
             Section {
-                if let meta {
-                    if let path = meta.path { LabeledContent("路径") { Text(verbatim: path).font(.caption.monospaced()) } }
-                    if let category = meta.category { LabeledContent("分类", value: category) }
-                    if let project = meta.project, !project.isEmpty { LabeledContent("项目", value: project) }
-                    if let size = meta.size {
-                        LabeledContent("大小", value: ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
-                    }
-                    if let summary = meta.summary, !summary.isEmpty {
-                        Text(verbatim: summary).font(.footnote).foregroundStyle(LeoTheme.ColorToken.secondaryText)
-                    }
-                    HStack {
-                        BrainPrivacyBadge(privacy: meta.privacy)
-                        if fromCache { BrainOfflineBadge() }
-                    }
-                    if meta.originalAvailable || meta.backupAvailable {
-                        Button {
-                            Task { await download() }
-                        } label: {
-                            if downloading { ProgressView() } else { Label("下载原件", systemImage: "arrow.down.doc") }
-                        }
-                        .disabled(downloading || fromCache)
-                    }
-                } else if loading {
-                    ProgressView()
-                }
+                fileHero
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.footnote).foregroundStyle(LeoTheme.ColorToken.warning)
@@ -534,15 +625,30 @@ struct BrainFileDetailView: View {
                 if total > 0 { Text("共 \(total) 段") }
             }
 
-            ForEach(chunks) { chunk in
-                VStack(alignment: .leading, spacing: 6) {
-                    if let locator = chunk.locator, !locator.isEmpty {
-                        Text(verbatim: locator).font(.caption.weight(.semibold))
-                            .foregroundStyle(LeoTheme.ColorToken.accent)
-                    }
-                    Text(verbatim: chunk.text).font(.callout).textSelection(.enabled)
+            if chunks.isEmpty && loading {
+                // 正文还在路上:段落骨架,和真实段落同宽同节奏。
+                ForEach(0..<3, id: \.self) { _ in
+                    LeoSkeletonCard(showsTile: false, lines: 3)
+                        .leoReadingMeasure()
+                        .padding(.vertical, LeoTheme.Spacing.xs)
                 }
-                .padding(.vertical, 4)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("正在读取…"))
+            }
+
+            ForEach(chunks) { chunk in
+                VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                    if let locator = chunk.locator, !locator.isEmpty {
+                        LeoCapsuleBadge(text: locator, systemImage: "mappin", tint: LeoTheme.ColorToken.accent)
+                    }
+                    Text(verbatim: chunk.text)
+                        .font(.body)
+                        .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .leoReadingMeasure()
+                .padding(.vertical, LeoTheme.Spacing.xs)
             }
 
             if nextOffset < total && !chunks.isEmpty {
@@ -554,6 +660,82 @@ struct BrainFileDetailView: View {
                 .disabled(loading)
             }
         }
+    }
+
+    /// 头部:类型图块 · 标题 · 路径 · 元数据胶囊 · 摘要 · 下载原件。
+    @ViewBuilder
+    private var fileHero: some View {
+        VStack(alignment: .leading, spacing: LeoTheme.Spacing.sm) {
+            HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+                LeoIconTile(systemImage: BrainFileKindIcon.symbol(path: meta?.path ?? meta?.ext.map { "file.\($0)" }),
+                            size: LeoTheme.Card.heroTile)
+                VStack(alignment: .leading, spacing: LeoTheme.Spacing.xxs) {
+                    Text(verbatim: meta?.title ?? title)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if let path = meta?.path, !path.isEmpty {
+                        Text(verbatim: path)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(LeoTheme.ColorToken.tertiaryText)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            if let meta {
+                LeoFlowLayout(spacing: 6) {
+                    if let category = meta.category, !category.isEmpty {
+                        LeoCapsuleBadge(text: category, systemImage: "folder")
+                    }
+                    if let project = meta.project, !project.isEmpty {
+                        LeoCapsuleBadge(text: project, systemImage: "shippingbox")
+                    }
+                    if let size = meta.size {
+                        LeoCapsuleBadge(text: ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file),
+                                        systemImage: "internaldrive", monospaced: true)
+                    }
+                    BrainPrivacyBadge(privacy: meta.privacy)
+                    if fromCache { BrainOfflineBadge() }
+                }
+                if let summary = meta.summary, !summary.isEmpty {
+                    Text(verbatim: summary)
+                        .font(.subheadline)
+                        .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if meta.originalAvailable || meta.backupAvailable {
+                    Button {
+                        Task { await download() }
+                    } label: {
+                        HStack(spacing: LeoTheme.Spacing.xs - 2) {
+                            if downloading {
+                                ProgressView().tint(.white)
+                            } else {
+                                Image(systemName: "arrow.down.doc")
+                            }
+                            Text("下载原件")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, LeoTheme.Spacing.md)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                        .background(LeoTheme.ColorToken.accent, in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(LeoSquishButtonStyle())
+                    .disabled(downloading || fromCache)
+                    .opacity(downloading || fromCache ? 0.55 : 1)
+                }
+            } else if loading {
+                LeoSkeletonBar(width: 200, height: 18, cornerRadius: 9)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, LeoTheme.Spacing.xs)
     }
 
     private func unlock() async {
@@ -654,24 +836,37 @@ struct BrainCardDetailView: View {
     @State private var fromCache = false
     @State private var error: String?
     @State private var editing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         List {
             if let card {
                 Section {
-                    HStack {
-                        Text(verbatim: "v\(card.version)").font(.caption.monospaced())
-                        if let status = BrainDisplay.status(card.status) { Text(verbatim: status).font(.caption) }
-                        if fromCache { BrainOfflineBadge() }
-                        Spacer()
+                    VStack(alignment: .leading, spacing: LeoTheme.Spacing.sm) {
+                        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+                            LeoIconTile(systemImage: "rectangle.on.rectangle.angled", size: LeoTheme.Card.heroTile)
+                            Text(verbatim: card.title.isEmpty ? initialTitle : card.title)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(LeoTheme.ColorToken.primaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+                        }
+                        BrainCardMetaChips(version: card.version, status: card.status, category: card.category,
+                                           date: BrainDisplay.date(card.updatedAt), fromCache: fromCache)
                     }
-                    .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    .padding(.vertical, LeoTheme.Spacing.xs)
                     if let viewingVersion {
                         Label("正在看历史版本 v\(viewingVersion)", systemImage: "clock.arrow.circlepath")
                             .font(.footnote)
+                            .foregroundStyle(LeoTheme.ColorToken.accent)
                         Button("回到最新版本") { Task { await load(version: nil) } }
                     }
+                }
+                Section {
                     SelectableMarkdownView(markdown: card.body)
+                        .frame(maxWidth: LeoTheme.Reading.maxWidth, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, LeoTheme.Spacing.xxs)
                 }
                 if !card.sources.isEmpty {
                     Section("出处") {
@@ -681,7 +876,12 @@ struct BrainCardDetailView: View {
                                 BrainFileDetailView(fileId: source.fileId, title: label, privacy: .general,
                                                     initialLocator: source.locator)
                             } label: {
-                                Text(verbatim: label).font(.footnote)
+                                Label {
+                                    Text(verbatim: label).font(.footnote)
+                                } icon: {
+                                    Image(systemName: "mappin.and.ellipse")
+                                        .foregroundStyle(LeoTheme.ColorToken.accent)
+                                }
                             }
                         }
                     }
@@ -705,7 +905,12 @@ struct BrainCardDetailView: View {
                     }
                 }
             } else if error == nil {
-                ProgressView().frame(maxWidth: .infinity)
+                Section {
+                    LeoSkeletonCard(lines: 4)
+                        .padding(.vertical, LeoTheme.Spacing.xs)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("正在读取…"))
+                }
             }
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -822,6 +1027,7 @@ struct BrainCardEditorView: View {
         .alert("已被其他设备修改", isPresented: $conflict) {
             Button("拷贝我的修改并重新载入") {
                 UIPasteboard.general.string = bodyText
+                LeoHaptics.content(.copied)
                 onDone(nil)
                 dismiss()
             }
@@ -854,6 +1060,7 @@ struct BrainCardEditorView: View {
         do {
             let (saved, data) = try await store.requireClient().saveCard(draft)
             store.cache.storeCard(id: saved.id, data: data)
+            LeoHaptics.content(.saved)
             onDone(saved)
             dismiss()
         } catch BrainError.versionConflict {
