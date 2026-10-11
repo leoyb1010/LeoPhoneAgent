@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.65.0",
+            date: "2026-10-11",
+            title: "更顺手",
+            highlights: [
+                "聊天长回复测量不再重复排版，滚动和流式输出更顺；服务器任务的实时输出不再闪烁。",
+                "藏宝阁打开和返回条目更顺，录音列表返回也更快。",
+                "启动更安静更快：少一轮钥匙串读取，启动日志约减半。",
+                "还没连接模型时，对话里直接给「添加 AI 服务商」，不再是点了也没用的「重试」；清除录音说话人前会先确认。",
+                "卡顿诊断不再把锁屏和后台时间算进去。"
+            ]
+        ),
+        LeoRelease(
             version: "1.64.0",
             date: "2026-10-11",
             title: "藏宝阁与服务器任务焕新",

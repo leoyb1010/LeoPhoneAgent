@@ -2,7 +2,7 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.64.0%20(162)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.65.0%20(163)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.8.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -188,8 +188,9 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.64.0 (162)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.65.0 (163)`;Bundle ID `com.leoyuan.leophoneagent`
 - 2026-10-07 Paperclip 中文发行层 1.1.8：全站 UI 审计（竖排/遮挡/裸语法/中英混排/窄屏）、页面可用性（删除组织 500、登录跳转 7.5 s、轮询降 80%、已取消任务收敛）、源站压缩；见 CHANGELOG。
+- 2026-10-11 1.65.0：两轮丝滑度打磨（重复排版、假卡顿、启动日志减半、首次使用引导）。
 - 2026-10-11 1.64.0：藏宝阁与服务器任务设计升级（布局、动效、阅读排版、分组吸顶、状态形状+颜色）。
 - 2026-10-11 1.63.0：藏宝阁两轮审计修复（搜索框常驻、小屏布局、选择与分享、资料库错误恢复），日常对话按需调用藏宝阁与资料库。
 - 2026-10-10 1.62.0：第二大脑——藏宝阁经 `wenjian.leoyuan.top` 接上 Mac mini 资料库（混合检索、知识卡、私密面容 ID、Agent 带出处查询与入库）。
