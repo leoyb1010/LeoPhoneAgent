@@ -14,7 +14,8 @@ Budgets (fail = exit 1):
   * busiest second among the first 3 s after the last launch marker  > 80 log lines
   * [FPWatcher] lines in the first 10 s after that launch              > 3
   * any `hang` >= 500 ms within 3 s of a cold launch (latest version)
-  * any TextContainerGuard line after that launch                       > 0
+  * any TextContainerGuard line after that launch (except the per-session
+    background summary)                                                 > 0
   * fg.frame p90 (latest version, needs >= 5 samples)                   > 500 ms
 
 The launch marker is the `[Lifecycle] [INFO] process launch` line LoggingManager
@@ -95,7 +96,10 @@ def check_log(lines):
     fp = sum(1 for sec, line in segment if sec < t0 + 10 and "[FPWatcher]" in line)
     results.append(("FPWatcher lines <= %d" % BUDGET_FPWATCHER_LINES,
                     fp <= BUDGET_FPWATCHER_LINES, "%d lines in the first 10 s" % fp))
-    guard = sum(1 for _, line in segment if "TextContainerGuard" in line)
+    # The once-per-session background summary is intended diagnostics, not a
+    # layout loop; only per-event guard lines count against the budget.
+    guard = sum(1 for _, line in segment
+                if "TextContainerGuard" in line and "session summary" not in line)
     results.append(("TextContainerGuard lines <= %d" % BUDGET_TEXT_GUARD_LINES,
                     guard <= BUDGET_TEXT_GUARD_LINES, "%d lines since launch" % guard))
     return results

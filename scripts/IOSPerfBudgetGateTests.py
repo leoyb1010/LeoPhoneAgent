@@ -15,7 +15,7 @@ FIX = HERE / "fixtures" / "perf-budget"
 
 def run(case):
     out = io.StringIO()
-    code = gate.run(str(FIX / case / "perf.jsonl"), str(FIX / case / "day.log"), out=out)
+    code = gate.run(str(FIX / case / "perf.jsonl"), str(FIX / case / "day.txt"), out=out)
     return code, out.getvalue()
 
 
