@@ -2,58 +2,125 @@ import SwiftUI
 
 // MARK: - 头部
 
-/// 详情页紧凑头部：状态胶囊、编号、实时状态、标题、负责人。
+/// 详情页主视觉：状态（可点按更改）、编号、实时状态；大标题；负责人、运行中、优先级、更新时间等属性胶囊。
 struct PaperclipIssueHeader: View {
     let issue: PaperclipIssue
     let assignee: PaperclipAgent?
     let client: PaperclipClient
     let liveState: PaperclipLiveConnection.State?
     let runActive: Bool
+    /// 可以改状态（没有进行中的写入、没有待核实的状态）时为 true；状态胶囊才是菜单。
+    var statusChangeEnabled = false
+    var onChangeStatus: (PaperclipIssueStatus) -> Void = { _ in }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .footnote) private var avatarSize: CGFloat = 18
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                PaperclipStatusCapsule(status: issue.status)
+                statusControl
                 if let identifier = issue.identifier {
                     Text(identifier)
-                        .font(.caption.monospaced())
+                        .font(.footnote.monospaced().weight(.medium))
                         .foregroundStyle(.secondary)
-                }
-                if issue.priority == "high" || issue.priority == "critical" {
-                    Label(PaperclipLabels.priority(issue.priority), systemImage: "flag.fill")
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(issue.priority == "critical" ? LeoTheme.ColorToken.destructive : LeoTheme.ColorToken.warning)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 PaperclipLiveBadge(state: liveState)
             }
             Text(issue.title)
-                .font(.title3.weight(.semibold))
+                .font(.title2.weight(.semibold))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .accessibilityAddTraits(.isHeader)
-            HStack(spacing: 8) {
-                if let assignee {
-                    PaperclipAvatar(client: client, path: PaperclipAvatarPath.normalized(assignee.avatarUrl, origin: client.profile.origin),
-                                    name: assignee.name, size: 22)
-                    Text(assignee.name).font(.subheadline.weight(.medium))
-                    if runActive {
-                        Text("· 正在处理").font(.subheadline).foregroundStyle(LeoTheme.ColorToken.accent)
+            PaperclipFlowLayout(spacing: 8, lineSpacing: 8) {
+                assigneeChip
+                if runActive {
+                    PaperclipPropertyChip(tint: LeoTheme.ColorToken.accent) {
+                        PaperclipLivePulse(active: true, diameter: 7)
+                        Text("正在处理")
                     }
-                } else {
-                    Image(systemName: "person.crop.circle.dashed").foregroundStyle(.tertiary)
-                    Text("尚未分配执行者").font(.subheadline).foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
-                Spacer(minLength: 0)
+                if let symbol = PaperclipPriorityLook.symbol(issue.priority) {
+                    PaperclipPropertyChip(tint: PaperclipStatusStyle.tint(PaperclipPriorityLook.tone(issue.priority))) {
+                        Image(systemName: symbol).font(.caption.weight(.bold))
+                        Text("优先级 \(PaperclipLabels.priority(issue.priority))")
+                    }
+                }
                 if let updated = PaperclipTimeText.relative(issue.updatedAt) {
-                    Text(updated).font(.caption).foregroundStyle(.tertiary)
+                    PaperclipPropertyChip(tint: .secondary) {
+                        Image(systemName: "clock").font(.caption.weight(.semibold))
+                        Text("更新于 \(updated)")
+                    }
                 }
             }
+            .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: runActive)
         }
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    @ViewBuilder private var statusControl: some View {
+        if statusChangeEnabled {
+            Menu {
+                ForEach(PaperclipIssueStatus.allCases) { status in
+                    Button(status.title, systemImage: PaperclipStatusStyle.symbol(status.rawValue)) { onChangeStatus(status) }
+                        .disabled(status.rawValue == issue.status)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    PaperclipStatusCapsule(status: issue.status)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("状态：\(PaperclipLabels.status(issue.status))"))
+            .accessibilityHint(Text("轻点两下更改任务状态"))
+            .accessibilityIdentifier("paperclip.headerStatus")
+        } else {
+            PaperclipStatusCapsule(status: issue.status)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("状态：\(PaperclipLabels.status(issue.status))"))
+        }
+    }
+
+    @ViewBuilder private var assigneeChip: some View {
+        if let assignee {
+            PaperclipPropertyChip(tint: .primary) {
+                PaperclipAvatar(client: client, path: PaperclipAvatarPath.normalized(assignee.avatarUrl, origin: client.profile.origin),
+                                name: assignee.name, size: avatarSize)
+                Text(assignee.name)
+            }
+            .accessibilityLabel(Text("负责人：\(assignee.name)"))
+        } else {
+            PaperclipPropertyChip(tint: .secondary) {
+                Image(systemName: "person.crop.circle.dashed").font(.caption.weight(.semibold))
+                Text("尚未分配执行者")
+            }
+        }
+    }
+}
+
+/// 详情头部的属性胶囊（只读）：图标/头像 + 一段文字。
+struct PaperclipPropertyChip<Content: View>: View {
+    var tint: Color
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(spacing: 6) { content() }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 30)
+            .background(LeoTheme.ColorToken.surface, in: Capsule())
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -76,11 +143,16 @@ struct PaperclipDescriptionCard: View {
 }
 
 /// 智能体消息：左侧 24pt 头像 + 名字，正文整宽 Markdown，无气泡（与端侧助手消息一致）。
-struct PaperclipAgentMessage: View {
+struct PaperclipAgentMessage: View, @MainActor Equatable {
     let comment: PaperclipComment
     let agent: PaperclipAgent?
     let client: PaperclipClient
     let showsHeader: Bool
+
+    /// 轮询、同步标志变化时详情页整体重算；评论内容没变就跳过 Markdown 重排。
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment == rhs.comment && lhs.agent == rhs.agent && lhs.showsHeader == rhs.showsHeader && lhs.client === rhs.client
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -93,6 +165,7 @@ struct PaperclipAgentMessage: View {
                         Text(time).font(.caption).foregroundStyle(.tertiary)
                     }
                 }
+                .accessibilityElement(children: .combine)
             }
             PaperclipMarkdown(text: comment.body)
                 .padding(.leading, 32)
@@ -103,7 +176,7 @@ struct PaperclipAgentMessage: View {
 }
 
 /// 人类消息：右侧用户气泡（tertiarySystemFill、圆角 18），与端侧用户消息一致。
-struct PaperclipHumanMessage: View {
+struct PaperclipHumanMessage: View, Equatable {
     let comment: PaperclipComment
     let mine: Bool
     let showsFooter: Bool
@@ -117,6 +190,7 @@ struct PaperclipHumanMessage: View {
                 }
                 Text(comment.body)
                     .font(.body)
+                    .lineSpacing(2)
                     .foregroundStyle(ChatColors.primaryText)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
@@ -153,6 +227,8 @@ struct PaperclipRunCard: View {
     let telemetryAvailable: Bool
     let client: PaperclipClient
     let onToggleLog: () -> Void
+    /// 停止运行（由详情页二次确认后调用服务器取消接口）；nil 时不显示按钮。
+    var onStop: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var queued: Bool { run.status == "queued" }
@@ -172,17 +248,35 @@ struct PaperclipRunCard: View {
                 if let started = run.startedAt, !queued {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(PaperclipDates.clock(context.date.timeIntervalSince(started)))
-                            .font(.caption.monospacedDigit())
+                            .font(.caption.monospacedDigit().weight(.medium))
                             .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.primary.opacity(0.05), in: Capsule())
                     }
                     .accessibilityLabel(Text("已运行"))
                 }
+                if let onStop {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(Color.primary.opacity(0.06), in: Circle())
+                            .frame(width: LeoTheme.TouchTarget.minimum, height: LeoTheme.TouchTarget.minimum)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .padding(.vertical, -8)
+                    .padding(.trailing, -8)
+                    .accessibilityLabel(Text("停止运行"))
+                    .accessibilityIdentifier("paperclip.stopRun")
+                }
             }
             HStack(spacing: 7) {
-                Circle()
-                    .fill(queued ? LeoTheme.ColorToken.secondaryText : LeoTheme.ColorToken.accent)
-                    .frame(width: 7, height: 7)
-                    .leoPulse(active: !queued)
+                PaperclipLivePulse(active: !queued, tint: queued ? LeoTheme.ColorToken.secondaryText : LeoTheme.ColorToken.accent,
+                                   diameter: 7)
                 Text(activityLine)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(queued ? LeoTheme.ColorToken.secondaryText : LeoTheme.ColorToken.accent)
@@ -223,11 +317,7 @@ struct PaperclipRunCard: View {
             }
         }
         .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
-                .fill(LeoTheme.ColorToken.surface)
-                .overlay(PaperclipShimmer().clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)))
-        }
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
                 .strokeBorder(LeoTheme.ColorToken.accent.opacity(queued ? 0.12 : 0.28), lineWidth: 1)
@@ -274,9 +364,9 @@ struct PaperclipRunSummaryRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: succeeded ? "checkmark.circle.fill" : (run.status == "cancelled" ? "stop.circle.fill" : "exclamationmark.circle.fill"))
+            Image(systemName: PaperclipStatusStyle.symbol(run.status))
                 .font(.subheadline)
-                .foregroundStyle(succeeded ? LeoTheme.ColorToken.success : PaperclipStatusStyle.color(run.status))
+                .foregroundStyle(PaperclipStatusStyle.color(run.status))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -442,6 +532,7 @@ struct PaperclipLiveRunCard: View {
     @ObservedObject var stream: PaperclipRunStream
     let run: PaperclipActiveRunDisplay
     let client: PaperclipClient
+    var onStop: (() -> Void)?
     /// 最近输出变化时回调；详情页据此在用户停在底部时跟随。
     let onActivity: () -> Void
 
@@ -449,7 +540,7 @@ struct PaperclipLiveRunCard: View {
         PaperclipRunCard(run: run, progress: stream.progress[run.id], log: stream.logs[run.id],
                          expanded: stream.expandedLogRunIDs.contains(run.id),
                          telemetryAvailable: !stream.telemetryForbidden, client: client,
-                         onToggleLog: { stream.toggleLog(run.id) })
+                         onToggleLog: { stream.toggleLog(run.id) }, onStop: onStop)
             .onChange(of: stream.progress[run.id]?.lastAssistantSnippet) { _, _ in onActivity() }
     }
 }

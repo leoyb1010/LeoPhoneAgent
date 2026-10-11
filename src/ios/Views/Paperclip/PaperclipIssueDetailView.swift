@@ -7,7 +7,17 @@ final class PaperclipIssueDetailModel: ObservableObject {
     let reference: PaperclipTaskReference
     let runStream: PaperclipRunStream
     @Published var issue: PaperclipIssue?
-    @Published var comments: [PaperclipComment] = [] { didSet { threadCache = nil } }
+    @Published var comments: [PaperclipComment] = [] {
+        didSet {
+            threadCache = nil
+            // 末尾追加少量新评论才做插入动效；首次加载、全量替换、批量补拉静默替换（见 PaperclipInsertMotion）。
+            let animates = PaperclipInsertMotion.animates(old: oldValue.map(\.id), new: comments.map(\.id),
+                                                          reduceMotion: LeoMotion.systemReduceMotion)
+            if animates != animatesInsertion { animatesInsertion = animates }
+        }
+    }
+    /// 最近一次评论变化是否适合弹簧插入。
+    @Published private(set) var animatesInsertion = false
     @Published var runs: [PaperclipRun] = [] { didSet { threadCache = nil } }
     @Published var approvals: [PaperclipApproval] = []
     /// 写请求（回复、状态、审批）进行中；只有它会暂停只读刷新。
@@ -376,6 +386,8 @@ struct PaperclipIssueDetailView: View {
     @State private var logRun: PaperclipRun?
     @State private var positionedConversation = false
     @State private var revealID: String?
+    /// 待二次确认停止的运行（卡片上的停止按钮）。
+    @State private var stopCandidate: PaperclipActiveRunDisplay?
     /// [A6] 已提示过"服务器上还没有这条回复"的请求编号，每条草稿只提示一次。
     @State private var announcedMissingReply: UUID?
     /// 用户停在底部时，新消息、运行进度到达会自动跟随；往上翻阅时不打扰。
@@ -441,7 +453,7 @@ struct PaperclipIssueDetailView: View {
         return ScrollViewReader { proxy in
             conversation(active: active, proxy: proxy)
             .background(LeoTheme.ColorToken.background)
-            .safeAreaInset(edge: .bottom, spacing: 0) { if model.issue != nil { replySection(active: active) } }
+            .safeAreaBar(edge: .bottom, spacing: 0) { if model.issue != nil { replySection(active: active) } }
             .navigationTitle(model.issue?.identifier ?? "任务对话")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
@@ -482,7 +494,18 @@ struct PaperclipIssueDetailView: View {
                 }
                 Button("取消" as String, role: .cancel) {}
             } message: { Text("回复可能已经在服务器生效，请先核对。解除只保存本机核对记录，不会重新发送。") }
+            .confirmationDialog("停止这次运行？", isPresented: Binding(get: { stopCandidate != nil }, set: { if !$0 { stopCandidate = nil } }),
+                                titleVisibility: .visible, presenting: stopCandidate) { run in
+                Button("停止运行", role: .destructive) { Task { await stopRun(run.id) } }
+                Button("取消" as String, role: .cancel) {}
+            } message: { run in Text("会请求服务器停止\(run.agentName)正在进行的运行，已产生的结果保留。") }
         }
+    }
+
+    /// [G4] 停止运行；服务器确认后轻触一下作为回执。
+    private func stopRun(_ runID: String) async {
+        await model.cancelRun(runID)
+        if model.error == nil { LeoHaptics.impact(.medium) }
     }
 
     /// 对话滚动区与自动跟随逻辑（从 body 拆出，避免类型检查超时）。
@@ -492,6 +515,11 @@ struct PaperclipIssueDetailView: View {
                 thread(active: active, proxy: proxy)
                 Color.clear.frame(height: 1).id("paperclip.latest")
             }
+            // 新评论、新运行以轻弹簧插入；首次定位到底部之前、批量补拉都不动画（否则动画中的布局
+            // 会让首次滚到最新消息落空），Reduce Motion 下全部静默。
+            .animation(positionedConversation && model.animatesInsertion ? LeoMotion.spring(reduceMotion: reduceMotion) : nil,
+                       value: model.comments.count)
+            .animation(positionedConversation ? LeoMotion.spring(reduceMotion: reduceMotion) : nil, value: active.map(\.id))
             .padding(.horizontal, LeoTheme.Spacing.md)
             // 输入栏通过 safeAreaInset 计入滚动安全区（随其实际高度与键盘变化）；再留出呼吸空间，最后一张卡片不贴着输入栏。
             .padding(.bottom, LeoTheme.Spacing.lg)
@@ -550,7 +578,11 @@ struct PaperclipIssueDetailView: View {
         if let issue = model.issue {
             let entries = model.threadEntries(activeRunIDs: Set(activeRuns.map(\.id)))
             PaperclipIssueHeader(issue: issue, assignee: agent(issue.assigneeAgentId), client: model.client,
-                                 liveState: model.liveState, runActive: !activeRuns.isEmpty)
+                                 liveState: model.liveState, runActive: !activeRuns.isEmpty,
+                                 statusChangeEnabled: !model.busy && model.pendingStatus == nil) { status in
+                guard !model.busy, model.pendingStatus == nil, status.rawValue != issue.status else { return }
+                statusDecision = status
+            }
                 .padding(.bottom, LeoTheme.Spacing.md)
             if let error = model.error {
                 PaperclipNotice(text: error, actionTitle: "重新同步") { Task { await model.refresh(full: true) } }
@@ -571,7 +603,8 @@ struct PaperclipIssueDetailView: View {
                 entryView(entry)
             }
             ForEach(activeRuns) { run in
-                PaperclipLiveRunCard(stream: stream, run: run, client: model.client) {
+                PaperclipLiveRunCard(stream: stream, run: run, client: model.client,
+                                     onStop: model.busy ? nil : { stopCandidate = run }) {
                     if positionedConversation && nearBottom { followLatest(proxy) }
                 }
                     .id("run-card-" + run.id)
@@ -598,16 +631,13 @@ struct PaperclipIssueDetailView: View {
                 }
                 .padding(.vertical, LeoTheme.Spacing.xs)
             }
-        } else if model.error != nil {
-            PaperclipNotice(text: model.error ?? "", actionTitle: "重新同步") { Task { await model.refresh(full: true) } }
-                .padding(.top, LeoTheme.Spacing.md)
+        } else if let error = model.error {
+            LeoEmptyState(systemImage: "exclamationmark.icloud", title: "暂时无法打开任务", message: error,
+                          actionTitle: "重新同步", actionSystemImage: "arrow.clockwise",
+                          action: { Task { await model.refresh(full: true) } }, actionIdentifier: "paperclip.detailRetry")
+                .padding(.top, LeoTheme.Spacing.xl)
         } else {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("正在加载任务…").foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 80)
+            PaperclipDetailSkeleton()
         }
     }
 
@@ -624,13 +654,15 @@ struct PaperclipIssueDetailView: View {
             Group {
                 if isAgent {
                     PaperclipAgentMessage(comment: comment, agent: agent(comment.authorAgentId), client: model.client, showsHeader: header)
+                        .equatable()
                 } else {
                     PaperclipHumanMessage(comment: comment, mine: comment.authorUserId == model.reference.userID, showsFooter: footer)
+                        .equatable()
                 }
             }
             .padding(.top, header ? LeoTheme.Spacing.md : LeoTheme.Spacing.xs)
             .padding(.bottom, footer ? LeoTheme.Spacing.xs : 0)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity))
         case .run(let run):
             Button { logRun = run } label: {
                 PaperclipRunSummaryRow(run: run, agentName: agent(run.agentId)?.name ?? "智能体")
@@ -686,7 +718,7 @@ struct PaperclipIssueDetailView: View {
                 let running = activeRuns
                 ForEach(running) { run in
                     Button(running.count > 1 ? "停止\(run.agentName)的运行" : "停止运行", systemImage: "stop.circle", role: .destructive) {
-                        Task { await model.cancelRun(run.id) }
+                        Task { await stopRun(run.id) }
                     }
                     .disabled(model.busy)
                     .accessibilityIdentifier("paperclip.cancelRun")
@@ -699,7 +731,7 @@ struct PaperclipIssueDetailView: View {
                     } else {
                         Menu("更改任务状态") {
                             ForEach(PaperclipIssueStatus.allCases) { status in
-                                Button(status.title) {
+                                Button(status.title, systemImage: PaperclipStatusStyle.symbol(status.rawValue)) {
                                     guard !model.busy, model.pendingStatus == nil else { return }
                                     statusDecision = status
                                 }.disabled(status.rawValue == issue.status)
@@ -746,7 +778,10 @@ struct PaperclipIssueDetailView: View {
                                                 livePush: { [model = model] in model.liveOpen })
                         } label: {
                             HStack(spacing: 10) {
-                                Circle().fill(PaperclipStatusStyle.color(run.status)).frame(width: 8, height: 8)
+                                Image(systemName: PaperclipStatusStyle.symbol(run.status))
+                                    .font(.subheadline)
+                                    .foregroundStyle(PaperclipStatusStyle.color(run.status))
+                                    .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(PaperclipLabels.status(run.status)).font(.subheadline.weight(.medium))
                                     Text([agent(run.agentId)?.name, PaperclipTimeText.short(run.startedAt ?? run.createdAt)].compactMap { $0 }.joined(separator: " · "))
@@ -905,6 +940,7 @@ private struct PaperclipStatusDecisionSheet: View {
                         do {
                             let expected = try PaperclipStatusExpectation(status: selected, userID: model.reference.userID, unblockAction: action)
                             await model.changeStatus(expected)
+                            if model.pendingStatus == nil && model.error == nil { LeoHaptics.notification(.success) }
                             if model.pendingStatus != nil || model.error == nil { dismiss() }
                         } catch { model.record(error) }
                     }

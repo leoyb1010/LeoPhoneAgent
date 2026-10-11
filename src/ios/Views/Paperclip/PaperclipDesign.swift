@@ -3,49 +3,279 @@ import UIKit
 
 // MARK: - 状态语义色
 
+/// 状态与优先级的外观：色调与符号来自纯逻辑的 PaperclipStatusLook / PaperclipPriorityLook，
+/// 这里只把色调映射到 LeoTheme（浅色/深色自适应）。形状与颜色同时区分，色弱也能分辨。
 enum PaperclipStatusStyle {
-    /// 进行中 accent、受阻 warning、已完成 success、失败 destructive、取消 secondary。
-    static func color(_ status: String) -> Color {
-        switch status {
-        case "in_progress", "running", "queued": return LeoTheme.ColorToken.accent
-        case "in_review", "pending": return Color(uiColor: .systemIndigo)
-        case "blocked", "revision_requested": return LeoTheme.ColorToken.warning
-        case "done", "succeeded", "approved": return LeoTheme.ColorToken.success
-        case "failed", "timed_out", "error", "rejected": return LeoTheme.ColorToken.destructive
-        default: return LeoTheme.ColorToken.secondaryText
+    static func tint(_ tone: PaperclipTone) -> Color {
+        switch tone {
+        case .accent: return LeoTheme.ColorToken.accent
+        case .review: return Color(uiColor: .systemIndigo)
+        case .attention: return LeoTheme.ColorToken.warning
+        case .success: return LeoTheme.ColorToken.success
+        case .failure: return LeoTheme.ColorToken.destructive
+        case .neutral: return LeoTheme.ColorToken.secondaryText
+        case .muted: return LeoTheme.ColorToken.tertiaryText
         }
     }
+    static func color(_ status: String) -> Color { tint(PaperclipStatusLook.tone(status)) }
+    static func symbol(_ status: String) -> String { PaperclipStatusLook.symbol(status) }
+}
 
-    static func symbol(_ status: String) -> String {
-        switch status {
-        case "in_progress": return "circle.dotted.circle"
-        case "in_review": return "eye.circle"
-        case "blocked": return "exclamationmark.octagon"
-        case "done": return "checkmark.circle.fill"
-        case "cancelled": return "xmark.circle"
-        case "todo": return "circle"
-        default: return "circle.dashed"
+/// 带语义色与形状的状态胶囊；文字就是中文状态，便于朗读与界面测试定位。
+/// 状态变化时符号替换、颜色渐变（Reduce Motion 下直接切换）。
+struct PaperclipStatusCapsule: View {
+    let status: String
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let color = PaperclipStatusStyle.color(status)
+        HStack(spacing: 4) {
+            Image(systemName: PaperclipStatusStyle.symbol(status))
+                .font(compact ? .caption2.weight(.bold) : .caption.weight(.bold))
+                .contentTransition(.symbolEffect(.replace))
+                .accessibilityHidden(true)
+            Text(PaperclipLabels.status(status))
+                .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+                .lineLimit(1)
+                .contentTransition(.opacity)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, compact ? 7 : 9)
+        .padding(.vertical, compact ? 3 : 5)
+        .background(color.opacity(0.13), in: Capsule())
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.panel), value: status)
+    }
+}
+
+/// 列表行首的状态符号：形状区分状态；有运行中的 run 时外圈一圈平静的呼吸光晕（不是转圈）。
+struct PaperclipStatusGlyph: View {
+    let status: String
+    var running = false
+    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 18
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let tint = running ? LeoTheme.ColorToken.accent : PaperclipStatusStyle.color(status)
+        Image(systemName: PaperclipStatusStyle.symbol(status))
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(tint)
+            .contentTransition(.symbolEffect(.replace))
+            .frame(width: size + 6, height: size + 6)
+            .background { PaperclipLivePulse(active: running, tint: tint, diameter: size + 6, showsDot: false) }
+            .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.panel), value: status)
+            .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.panel), value: running)
+            .accessibilityHidden(true)
+    }
+}
+
+/// 优先级符号：紧急、高着色，中、低用三级灰；未知不显示。
+struct PaperclipPriorityGlyph: View {
+    let priority: String
+    var body: some View {
+        if let symbol = PaperclipPriorityLook.symbol(priority) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(PaperclipStatusStyle.tint(PaperclipPriorityLook.tone(priority)))
+                .accessibilityLabel(Text("优先级\(PaperclipLabels.priority(priority))"))
         }
     }
 }
 
-/// 带语义色的状态胶囊；文字就是中文状态，便于朗读与界面测试定位。
-struct PaperclipStatusCapsule: View {
-    let status: String
-    var compact = false
+/// 运行中的平静呼吸：一圈光晕缓慢向外扩散并淡出（1.8 秒一次），不是转圈。
+/// Reduce Motion 或不活跃时完全静止（只留实心点，或什么都不画）。
+struct PaperclipLivePulse: View {
+    let active: Bool
+    var tint: Color = LeoTheme.ColorToken.accent
+    var diameter: CGFloat = 8
+    var showsDot = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded = false
 
     var body: some View {
-        let color = PaperclipStatusStyle.color(status)
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(PaperclipLabels.status(status))
-                .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
-                .lineLimit(1)
+        ZStack {
+            if active && !reduceMotion {
+                Circle()
+                    .stroke(tint.opacity(0.55), lineWidth: max(1, diameter / 8))
+                    .scaleEffect(expanded ? 1.9 : 1)
+                    .opacity(expanded ? 0 : 0.9)
+            }
+            if showsDot {
+                Circle().fill(active ? tint : LeoTheme.ColorToken.tertiaryText)
+            }
         }
-        .foregroundStyle(color)
-        .padding(.horizontal, compact ? 7 : 9)
-        .padding(.vertical, compact ? 3 : 4)
-        .background(color.opacity(0.13), in: Capsule())
+        .frame(width: diameter, height: diameter)
+        .onAppear { start() }
+        .onChange(of: active) { _, _ in start() }
+        .onChange(of: reduceMotion) { _, _ in start() }
+        .accessibilityHidden(true)
+    }
+
+    private func start() {
+        guard active, !reduceMotion else { expanded = false; return }
+        expanded = false
+        withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) { expanded = true }
+    }
+}
+
+// MARK: - 布局
+
+/// 属性胶囊的自动换行：一行放不下就折到下一行，大字号下不截断。
+struct PaperclipFlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width.map { min($0, width) } ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                                      proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height))
+                x += min(size.width, bounds.width) + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+            let itemWidth = min(size.width, width)
+            let next = current.indices.isEmpty ? itemWidth : current.width + spacing + itemWidth
+            if !current.indices.isEmpty && next > width {
+                rows.append(current)
+                current = ([index], itemWidth, size.height)
+            } else {
+                current = (current.indices + [index], next, max(current.height, size.height))
+            }
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
+/// 分组列表里一行的位置：决定圆角（首行上圆角、末行下圆角）与分隔线。
+enum PaperclipRowPosition: Equatable {
+    case single, first, middle, last
+    init(index: Int, count: Int) {
+        switch (index, count) {
+        case (_, 1): self = .single
+        case (0, _): self = .first
+        case (count - 1, _): self = .last
+        default: self = .middle
+        }
+    }
+    var shape: UnevenRoundedRectangle {
+        let r = LeoTheme.Radius.surface
+        let top: CGFloat = (self == .single || self == .first) ? r : 0
+        let bottom: CGFloat = (self == .single || self == .last) ? r : 0
+        return UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: bottom,
+                                      bottomTrailingRadius: bottom, topTrailingRadius: top, style: .continuous)
+    }
+    var showsSeparator: Bool { self == .first || self == .middle }
+}
+
+/// 列表行的按压反馈：底色轻微加深（不缩放，分组容器里的行缩放会错位）。
+struct PaperclipRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay { Color.primary.opacity(configuration.isPressed ? 0.06 : 0).allowsHitTesting(false) }
+    }
+}
+
+// MARK: - 加载占位
+
+/// 骨架占位块：与真实内容同尺寸的圆角灰块，叠一层全 App 共用的流光（Reduce Motion 下静止）。
+struct PaperclipSkeletonBar: View {
+    var width: CGFloat?
+    var height: CGFloat = 12
+    var body: some View {
+        RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: width, height: height)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+    }
+}
+
+/// 流光只落在骨架块上（遮罩为内容本身），空白处不扫过。
+private struct PaperclipSkeletonSheen: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlay { LeoShimmer().mask { content } }
+    }
+}
+
+/// 列表加载中：四行与真实行同版式的骨架，加载完成后原位替换，不跳版。
+struct PaperclipIssueListSkeleton: View {
+    private let widths: [CGFloat] = [0.82, 0.64, 0.74, 0.55]
+    var body: some View {
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                ForEach(widths.indices, id: \.self) { index in
+                    HStack(alignment: .top, spacing: 12) {
+                        Circle().fill(Color.primary.opacity(0.08)).frame(width: 22, height: 22)
+                        VStack(alignment: .leading, spacing: 8) {
+                            PaperclipSkeletonBar(width: 64, height: 10)
+                            PaperclipSkeletonBar(width: max(80, (geo.size.width - 80) * widths[index]), height: 14)
+                            PaperclipSkeletonBar(width: 110, height: 10)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if index < widths.count - 1 { Divider().padding(.leading, 48) }
+                }
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .overlay(LeoShimmer())
+            .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        }
+        .frame(height: 4 * 88)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("正在加载任务"))
+    }
+}
+
+/// 详情加载中：头部与三段对话的骨架。
+struct PaperclipDetailSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            PaperclipSkeletonBar(width: 120, height: 22)
+            PaperclipSkeletonBar(height: 22)
+            PaperclipSkeletonBar(width: 200, height: 22)
+            HStack(spacing: 8) {
+                PaperclipSkeletonBar(width: 90, height: 28)
+                PaperclipSkeletonBar(width: 70, height: 28)
+            }
+            .padding(.bottom, LeoTheme.Spacing.md)
+            ForEach(0..<3, id: \.self) { index in
+                HStack(spacing: 8) {
+                    Circle().fill(Color.primary.opacity(0.08)).frame(width: 24, height: 24)
+                    PaperclipSkeletonBar(width: 90, height: 12)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    PaperclipSkeletonBar(height: 12)
+                    PaperclipSkeletonBar(height: 12)
+                    PaperclipSkeletonBar(width: index == 1 ? 120 : 180, height: 12)
+                }
+                .padding(.leading, 32)
+                .padding(.bottom, LeoTheme.Spacing.sm)
+            }
+        }
+        .modifier(PaperclipSkeletonSheen())
+        .padding(.top, LeoTheme.Spacing.sm)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("正在加载任务"))
     }
 }
 
@@ -254,9 +484,6 @@ struct PaperclipFallbackMarkdown: View {
 
 // MARK: - 动效
 
-/// 运行中卡片的对角流光：已提升为全 App 共用的 LeoShimmer（Views/Components/LeoShimmer.swift）。
-typealias PaperclipShimmer = LeoShimmer
-
 /// 实时状态的小圆点：实时通道已连接时呼吸，轮询时静止灰色。
 struct PaperclipLiveBadge: View {
     let state: PaperclipLiveConnection.State?
@@ -273,10 +500,7 @@ struct PaperclipLiveBadge: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Circle()
-                .fill(connected ? LeoTheme.ColorToken.success : LeoTheme.ColorToken.tertiaryText)
-                .frame(width: 6, height: 6)
-                .leoPulse(active: connected)
+            PaperclipLivePulse(active: connected, tint: LeoTheme.ColorToken.success, diameter: 6)
             Text(label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
@@ -287,16 +511,14 @@ struct PaperclipLiveBadge: View {
 // MARK: - 时间显示
 
 enum PaperclipTimeText {
+    /// 详情页的更新时间（今天显示时刻、昨天带时刻）。
     static func relative(_ value: String?, now: Date = Date()) -> String? {
-        guard let date = PaperclipDates.parse(value) else { return nil }
-        let seconds = now.timeIntervalSince(date)
-        if seconds < 60 { return "刚刚" }
-        if seconds < 3600 { return "\(Int(seconds / 60)) 分钟前" }
-        if Calendar.current.isDateInToday(date) { return date.formatted(date: .omitted, time: .shortened) }
-        if Calendar.current.isDateInYesterday(date) { return "昨天 " + date.formatted(date: .omitted, time: .shortened) }
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        let sameYear = Calendar.current.component(.year, from: now) == parts.year
-        return (sameYear ? "" : "\(parts.year ?? 0)年") + "\(parts.month ?? 0)月\(parts.day ?? 0)日"
+        PaperclipDates.parse(value).map { PaperclipRelativeTime.detail($0, now: now) }
+    }
+
+    /// 列表行的紧凑时间。
+    static func compact(_ value: String?, now: Date) -> String? {
+        PaperclipDates.parse(value).map { PaperclipRelativeTime.compact($0, now: now) }
     }
 
     static func short(_ value: String?) -> String? {

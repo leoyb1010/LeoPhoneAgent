@@ -478,3 +478,197 @@ struct PaperclipRunWatch: Equatable, Sendable {
         return .finished(run)
     }
 }
+
+// MARK: - 展示规则（纯逻辑：状态外观、列表分组排序、相对时间、插入动效门槛）
+
+/// 状态的语义色调；视图层映射到 LeoTheme 色值。每个状态同时有独立的符号形状，
+/// 只看形状也能分辨（色弱、灰度、强光下）。
+enum PaperclipTone: Equatable, Sendable {
+    case accent, review, attention, success, failure, neutral, muted
+}
+
+enum PaperclipStatusLook {
+    /// 工单状态（上游 issue.status）。
+    static let issueStatuses = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"]
+    /// 运行状态（heartbeat run.status）。
+    static let runStatuses = ["queued", "running", "succeeded", "failed", "timed_out", "cancelled"]
+
+    static func tone(_ status: String) -> PaperclipTone {
+        switch status {
+        case "in_progress", "running", "queued": return .accent
+        case "in_review", "pending": return .review
+        case "blocked", "revision_requested": return .attention
+        case "done", "succeeded", "approved": return .success
+        case "failed", "timed_out", "error", "rejected": return .failure
+        case "cancelled": return .muted
+        default: return .neutral
+        }
+    }
+
+    static func symbol(_ status: String) -> String {
+        switch status {
+        case "backlog": return "circle.dashed"
+        case "todo": return "circle"
+        case "in_progress": return "circle.lefthalf.filled"
+        case "in_review": return "eye.circle.fill"
+        case "blocked": return "exclamationmark.octagon.fill"
+        case "done", "succeeded": return "checkmark.circle.fill"
+        case "cancelled": return "xmark.circle"
+        case "queued": return "clock"
+        case "running": return "play.circle.fill"
+        case "failed": return "xmark.octagon.fill"
+        case "timed_out": return "clock.badge.exclamationmark"
+        case "error": return "exclamationmark.triangle.fill"
+        case "pending": return "hourglass"
+        case "approved": return "checkmark.seal.fill"
+        case "rejected": return "xmark.seal.fill"
+        case "revision_requested": return "arrow.uturn.backward.circle"
+        default: return "questionmark.circle"
+        }
+    }
+}
+
+enum PaperclipPriorityLook {
+    /// 紧急 3、高 2、中 1、低 0；未知 -1。
+    static func rank(_ priority: String) -> Int {
+        ["critical": 3, "high": 2, "medium": 1, "low": 0][priority] ?? -1
+    }
+    /// 形状区分优先级：紧急是实心方块感叹号，高向上，中横线，低向下；未知不显示。
+    static func symbol(_ priority: String) -> String? {
+        ["critical": "exclamationmark.square.fill", "high": "arrow.up", "medium": "minus", "low": "arrow.down"][priority]
+    }
+    static func tone(_ priority: String) -> PaperclipTone {
+        switch priority {
+        case "critical": return .failure
+        case "high": return .attention
+        default: return .muted
+        }
+    }
+}
+
+/// 列表按状态分组：需要处理（待审核、受阻）/ 进行中（含有运行中 run 的任务）/ 待处理 / 已完成。
+enum PaperclipIssueGroup: String, CaseIterable, Identifiable, Sendable {
+    case attention, active, pending, finished
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .attention: return "需要处理"
+        case .active: return "进行中"
+        case .pending: return "待处理"
+        case .finished: return "已完成"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .attention: return "exclamationmark.circle"
+        case .active: return "circle.lefthalf.filled"
+        case .pending: return "circle"
+        case .finished: return "checkmark.circle"
+        }
+    }
+
+    static func group(_ issue: PaperclipIssue, running: Bool) -> PaperclipIssueGroup {
+        if running { return .active }
+        switch issue.status {
+        case "in_review", "blocked": return .attention
+        case "in_progress": return .active
+        case "done", "cancelled": return .finished
+        default: return .pending
+        }
+    }
+
+    struct Section: Equatable, Identifiable, Sendable {
+        let group: PaperclipIssueGroup
+        let issues: [PaperclipIssue]
+        var id: PaperclipIssueGroup { group }
+    }
+
+    /// 分组并排序：组按 allCases 顺序，空组省略；组内运行中的在前，其余按更新时间新→旧，
+    /// 时间相同或缺失时保持服务器顺序（稳定，轮询不会让行来回跳）。
+    static func sections(_ issues: [PaperclipIssue], running: Set<String>) -> [Section] {
+        var buckets: [PaperclipIssueGroup: [(index: Int, date: Date, running: Bool, issue: PaperclipIssue)]] = [:]
+        for (index, issue) in issues.enumerated() {
+            let isRunning = running.contains(issue.id)
+            buckets[group(issue, running: isRunning), default: []]
+                .append((index, PaperclipDates.parse(issue.updatedAt) ?? .distantPast, isRunning, issue))
+        }
+        return allCases.compactMap { group in
+            guard let rows = buckets[group], !rows.isEmpty else { return nil }
+            let sorted = rows.sorted { a, b in
+                if a.running != b.running { return a.running }
+                if a.date != b.date { return a.date > b.date }
+                return a.index < b.index
+            }
+            return Section(group: group, issues: sorted.map(\.issue))
+        }
+    }
+}
+
+enum PaperclipRelativeTime {
+    /// 列表行的紧凑时间：刚刚 / N 分钟前 / N 小时前（6 小时内）/ 今天的时刻 / 昨天 / N 天前（一周内）/ M月d日 / yyyy年M月d日。
+    /// 未来时间（服务器时钟略快）按「刚刚」处理。
+    static func compact(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 60 { return "刚刚" }
+        if seconds < 3_600 { return "\(Int(seconds / 60)) 分钟前" }
+        if seconds < 6 * 3_600 { return "\(Int(seconds / 3_600)) 小时前" }
+        if calendar.isDate(date, inSameDayAs: now) { return clock(date, calendar: calendar) }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        if days == 1 { return "昨天" }
+        if days < 7 { return "\(days) 天前" }
+        return day(date, now: now, calendar: calendar)
+    }
+
+    /// 详情页：今天显示时刻，昨天带时刻，更早显示日期。
+    static func detail(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 60 { return "刚刚" }
+        if seconds < 3_600 { return "\(Int(seconds / 60)) 分钟前" }
+        if calendar.isDate(date, inSameDayAs: now) { return clock(date, calendar: calendar) }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        if days == 1 { return "昨天 " + clock(date, calendar: calendar) }
+        return day(date, now: now, calendar: calendar)
+    }
+
+    /// 时刻跟随用户的 12/24 小时制与语言区域。
+    static func clock(_ date: Date, calendar: Calendar) -> String {
+        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        style.calendar = calendar
+        style.timeZone = calendar.timeZone
+        return date.formatted(style)
+    }
+
+    private static func day(_ date: Date, now: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let sameYear = calendar.component(.year, from: now) == parts.year
+        return (sameYear ? "" : "\(parts.year ?? 0)年") + "\(parts.month ?? 0)月\(parts.day ?? 0)日"
+    }
+}
+
+enum PaperclipIssueRowText {
+    /// 列表行的 VoiceOver 朗读：编号、标题、状态、运行中、负责人、优先级、更新时间，一次读完。
+    static func accessibilityLabel(issue: PaperclipIssue, assigneeName: String?, running: Bool, time: String?) -> String {
+        var parts: [String] = []
+        if let identifier = issue.identifier, !identifier.isEmpty { parts.append(identifier) }
+        parts.append(issue.title)
+        parts.append("状态：" + PaperclipLabels.status(issue.status))
+        if running { parts.append("智能体正在运行") }
+        parts.append(assigneeName.map { "负责人：" + $0 } ?? "未分配")
+        if PaperclipPriorityLook.rank(issue.priority) >= 0 { parts.append("优先级：" + PaperclipLabels.priority(issue.priority)) }
+        if let time { parts.append("更新于" + time) }
+        return parts.joined(separator: "，")
+    }
+}
+
+/// 新评论、运行插入时的动效门槛：只有在已有内容末尾追加少量条目时才做弹簧插入；
+/// 首次加载、整页替换、批量补拉（下拉刷新、重连补拉）一律静默替换，避免整页跳动。
+/// Reduce Motion 打开时从不动画。
+enum PaperclipInsertMotion {
+    static let maximumAnimatedInsertions = 3
+
+    static func animates(old: [String], new: [String], reduceMotion: Bool) -> Bool {
+        guard !reduceMotion, !old.isEmpty, new.count > old.count,
+              new.count - old.count <= maximumAnimatedInsertions else { return false }
+        return Array(new.prefix(old.count)) == old
+    }
+}

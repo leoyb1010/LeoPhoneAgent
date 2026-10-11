@@ -1,99 +1,143 @@
 import SwiftUI
 
-/// 列表按状态分组：进行中（含待审核、受阻与有运行中 run 的任务）/ 待处理 / 已完成。
-enum PaperclipIssueGroup: String, CaseIterable, Identifiable {
-    case active, pending, finished
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .active: return "进行中"
-        case .pending: return "待处理"
-        case .finished: return "已完成"
-        }
+/// 任务行：行首状态符号 · 编号与相对时间 · 标题 · 负责人头像与名字、运行中、优先级。
+/// 只比较展示数据（Equatable）：轮询拿回相同内容时整行跳过重绘。
+struct PaperclipIssueRow: View, @MainActor Equatable {
+    let issue: PaperclipIssue
+    let assignee: PaperclipAgent?
+    let running: Bool
+    let selected: Bool
+    let timeText: String?
+    let position: PaperclipRowPosition
+    let client: PaperclipClient
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .footnote) private var avatarSize: CGFloat = 18
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.issue == rhs.issue && lhs.assignee == rhs.assignee && lhs.running == rhs.running && lhs.selected == rhs.selected
+            && lhs.timeText == rhs.timeText && lhs.position == rhs.position && lhs.client === rhs.client
     }
 
-    static func group(_ issue: PaperclipIssue, running: Bool) -> PaperclipIssueGroup {
-        if running { return .active }
-        switch issue.status {
-        case "in_progress", "in_review", "blocked": return .active
-        case "done", "cancelled": return .finished
-        default: return .pending
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            PaperclipStatusGlyph(status: issue.status, running: running)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let identifier = issue.identifier {
+                        Text(identifier)
+                            .font(.caption.monospaced().weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    if let timeText {
+                        Text(timeText)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+                Text(issue.title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                meta.padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum, alignment: .leading)
+        .background(selected ? LeoTheme.ColorToken.accent.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground))
+        .overlay(alignment: .bottom) {
+            if position.showsSeparator && !selected {
+                Rectangle().fill(LeoTheme.ColorToken.separator).frame(height: 0.5).padding(.leading, 50)
+            }
+        }
+        .clipShape(position.shape)
+        .contentShape(.hoverEffect, position.shape)
+        .contentShape(position.shape)
+        .hoverEffect(.highlight)
+    }
+
+    /// 整行一次读完（由外层链接/按钮使用，替换逐个子元素朗读）。
+    var accessibilityText: String {
+        PaperclipIssueRowText.accessibilityLabel(issue: issue, assigneeName: assignee?.name, running: running, time: timeText)
+    }
+
+    @ViewBuilder private var meta: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 8))
+        layout {
+            HStack(spacing: 6) {
+                if let assignee {
+                    PaperclipAvatar(client: client, path: PaperclipAvatarPath.normalized(assignee.avatarUrl, origin: client.profile.origin),
+                                    name: assignee.name, size: avatarSize)
+                    Text(assignee.name).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                } else {
+                    Image(systemName: "person.crop.circle.dashed").font(.footnote).foregroundStyle(.tertiary)
+                    Text("未分配").font(.footnote).foregroundStyle(.tertiary)
+                }
+            }
+            .layoutPriority(1)
+            if running {
+                HStack(spacing: 5) {
+                    PaperclipLivePulse(active: true, diameter: 6)
+                    Text("运行中").font(.footnote.weight(.semibold)).foregroundStyle(LeoTheme.ColorToken.accent).lineLimit(1)
+                }
+                .accessibilityIdentifier("paperclip.running.\(issue.id)")
+            }
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
+            // 「中」是默认优先级，行里不显示，避免每行一个无信息的横线。
+            if PaperclipPriorityLook.rank(issue.priority) != 1 { PaperclipPriorityGlyph(priority: issue.priority) }
         }
     }
 }
 
-/// 任务卡片：状态、编号、运行中标识、相对更新时间、标题、一行摘要、负责人。
-struct PaperclipIssueCard: View {
-    let issue: PaperclipIssue
-    let assignee: PaperclipAgent?
-    let running: Bool
-    let client: PaperclipClient
-
-    private var summary: String? {
-        guard let description = issue.description else { return nil }
-        let line = description.split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#>*- ")) }
-            .first { !$0.isEmpty }
-        return line
-    }
+/// 吸顶分组标题：符号、名称、数量；轻点折叠或展开本组。
+struct PaperclipSectionHeader: View {
+    let group: PaperclipIssueGroup
+    let count: Int
+    let collapsed: Bool
+    let toggle: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                PaperclipStatusCapsule(status: issue.status, compact: true)
-                if let identifier = issue.identifier {
-                    Text(identifier).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1)
-                }
-                if running {
-                    HStack(spacing: 4) {
-                        Circle().fill(LeoTheme.ColorToken.accent).frame(width: 6, height: 6).leoPulse(active: true)
-                        Text("运行中").font(.caption2.weight(.semibold)).foregroundStyle(LeoTheme.ColorToken.accent)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("paperclip.running.\(issue.id)")
-                }
-                Spacer(minLength: 4)
-                if let time = PaperclipTimeText.relative(issue.updatedAt) {
-                    Text(time).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-                }
-            }
-            Text(issue.title)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            if let summary {
-                Text(summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-            }
+        Button(action: toggle) {
             HStack(spacing: 6) {
-                if let assignee {
-                    PaperclipAvatar(client: client, path: PaperclipAvatarPath.normalized(assignee.avatarUrl, origin: client.profile.origin),
-                                    name: assignee.name, size: 20)
-                    Text(assignee.name).font(.caption.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
-                } else {
-                    Image(systemName: "tray").font(.caption).foregroundStyle(.tertiary)
-                    Text("未分配").font(.caption).foregroundStyle(.tertiary)
-                }
+                Image(systemName: group.symbol).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                Text(group.title).font(.footnote.weight(.semibold)).foregroundStyle(.primary)
+                Text("\(count)")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText(value: Double(count)))
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
                 Spacer(minLength: 0)
-                if issue.priority == "high" || issue.priority == "critical" {
-                    Image(systemName: "flag.fill")
-                        .font(.caption2)
-                        .foregroundStyle(issue.priority == "critical" ? LeoTheme.ColorToken.destructive : LeoTheme.ColorToken.warning)
-                        .accessibilityLabel(Text("优先级\(PaperclipLabels.priority(issue.priority))"))
-                }
-                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.quaternary)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(collapsed ? -90 : 0))
             }
+            .padding(.horizontal, 4)
+            .frame(minHeight: 36)
+            .contentShape(Rectangle())
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .overlay {
-            if running {
-                RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
-                    .strokeBorder(LeoTheme.ColorToken.accent.opacity(0.35), lineWidth: 1)
-            }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .buttonStyle(.plain)
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: collapsed)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: LeoMotion.standard), value: count)
+        .padding(.top, LeoTheme.Spacing.xs)
+        .padding(.bottom, LeoTheme.Spacing.xxs)
+        .frame(maxWidth: .infinity)
+        .background(LeoTheme.ColorToken.groupedBackground)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(group.title)，\(count) 个任务"))
+        .accessibilityValue(Text(collapsed ? "已折叠" : "已展开"))
+        .accessibilityHint(Text("轻点两下折叠或展开"))
+        .accessibilityAddTraits([.isHeader, .isButton])
+        .accessibilityIdentifier("paperclip.section.\(group.rawValue)")
     }
 }
 
@@ -169,13 +213,16 @@ struct PaperclipConnectCard: View {
     let busy: Bool
     let hasProfile: Bool
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 14) {
             ZStack {
                 Circle().fill(LeoTheme.ColorToken.accent.opacity(0.12)).frame(width: 64, height: 64)
                 Image(systemName: "server.rack").font(.title2.weight(.semibold)).foregroundStyle(LeoTheme.ColorToken.accent)
+                    .symbolEffect(.pulse, options: .repeating, isActive: busy && !reduceMotion)
             }
+            .accessibilityHidden(true)
             Text(title).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
             Text(busy ? "正在验证连接…" : "登录后即可查看和处理服务器任务，过程实时同步到手机。")
                 .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -190,6 +237,6 @@ struct PaperclipConnectCard: View {
         }
         .padding(LeoTheme.Spacing.lg)
         .frame(maxWidth: .infinity)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface + 6, style: .continuous))
     }
 }
