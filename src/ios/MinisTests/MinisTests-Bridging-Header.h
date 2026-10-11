@@ -9,5 +9,7 @@
 #import "../Shared/JiebaWrapper.h"
 // TextContainerGuardTests drive the real setSize: guard (UIKit only, no iSH).
 #import "../Shared/NSTextContainerSetSizeGuard.h"
+// HangDetectorIntervalTests: pure suspension / sleep exclusion helpers.
+#import "../Debug/HangIntervalFilter.h"
 
 #endif /* MinisTests_Bridging_Header_h */

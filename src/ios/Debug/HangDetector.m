@@ -3,6 +3,9 @@
 //
 
 #import "HangDetector.h"
+#import "HangIntervalFilter.h"
+
+#import <UIKit/UIKit.h>
 
 #import <CoreFoundation/CoreFoundation.h>
 #import <mach/mach.h>
@@ -53,6 +56,13 @@ static const useconds_t kPollUs = 100 * 1000;
 // 100 identical entries.
 static uint64_t g_lastStackHash = 0;
 static uint32_t g_lastStackRepeats = 0;
+
+// [r7] Busy time is measured from max(lastBeat, g_busyFloor). The floor moves
+// past every interval the monitor could not observe: process suspension,
+// device sleep and the whole background stay (see HangIntervalFilter.h).
+static atomic_uint_fast64_t g_busyFloor = ATOMIC_VAR_INIT(0);
+static atomic_bool g_inBackground = ATOMIC_VAR_INIT(false);
+static id g_lifecycleTokens[2] = {nil, nil};
 
 static CFRunLoopObserverRef g_observer = NULL;
 static pthread_t g_monitorThread = (pthread_t)NULL;
@@ -342,6 +352,32 @@ static void *monitorThreadMain(void *arg) {
             }
         }
 
+        // ---- suspension / sleep / background exclusion ----
+        {
+            static uint64_t lastPollCont = 0;
+            static double lastSleepOffsetMs = -1.0;
+            uint64_t cont = mach_continuous_time();
+            uint64_t abst = mach_absolute_time();
+            double sleepOffsetMs = cont > abst ? ticksToMs(cont - abst) : 0.0;
+            double pollGapMs = lastPollCont ? ticksToMs(cont - lastPollCont) : 0.0;
+            double sleepDeltaMs = lastSleepOffsetMs >= 0.0 ? sleepOffsetMs - lastSleepOffsetMs : 0.0;
+            lastPollCont = cont;
+            lastSleepOffsetMs = sleepOffsetMs;
+            bool gap = LeoHangIsSuspensionGap(pollGapMs, kPollUs / 1000.0, sleepDeltaMs);
+            if (gap || atomic_load_explicit(&g_inBackground, memory_order_relaxed)) {
+                atomic_store_explicit(&g_busyFloor, cont, memory_order_relaxed);
+                // Log only when the old math would have reported a fake hang.
+                uint64_t beat = atomic_load_explicit(&g_lastBeat, memory_order_relaxed);
+                uint32_t act = (uint32_t)atomic_load_explicit(&g_lastActivity, memory_order_relaxed);
+                if (gap && beat && act != kCFRunLoopBeforeWaiting && cont > beat &&
+                    ticksToMs(cont - beat) >= thresholdMs) {
+                    NSLog(@"[HangDetector] suspension excluded: %.0fms unscheduled (sleep %.0fms), not a main-thread hang",
+                          pollGapMs, sleepDeltaMs > 0 ? sleepDeltaMs : 0.0);
+                }
+                continue;
+            }
+        }
+
         uint64_t lastBeat = atomic_load_explicit(&g_lastBeat, memory_order_relaxed);
         if (lastBeat == 0) continue; // observer hasn't fired yet
         uint32_t activity = (uint32_t)atomic_load_explicit(&g_lastActivity, memory_order_relaxed);
@@ -362,7 +398,8 @@ static void *monitorThreadMain(void *arg) {
 
         uint64_t now = mach_continuous_time();
         if (now <= lastBeat) continue;
-        double busyMs = ticksToMs(now - lastBeat);
+        uint64_t floorTs = atomic_load_explicit(&g_busyFloor, memory_order_relaxed);
+        double busyMs = LeoHangEffectiveBusyMs(ticksToMs(now), ticksToMs(lastBeat), ticksToMs(floorTs));
         if (busyMs < thresholdMs) continue;
 
         // ---- HANG DETECTED ----
@@ -613,6 +650,22 @@ static void *monitorThreadMain(void *arg) {
     if (!g_mainPthread) return NO;
 
     initMachTimebase();
+    atomic_store_explicit(&g_busyFloor, mach_continuous_time(), memory_order_relaxed);
+    if (!g_lifecycleTokens[0]) {
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        g_lifecycleTokens[0] = [nc addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil
+                                                queue:nil usingBlock:^(NSNotification *note) {
+            (void)note;
+            atomic_store_explicit(&g_inBackground, true, memory_order_relaxed);
+            atomic_store_explicit(&g_busyFloor, mach_continuous_time(), memory_order_relaxed);
+        }];
+        g_lifecycleTokens[1] = [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil
+                                                queue:nil usingBlock:^(NSNotification *note) {
+            (void)note;
+            atomic_store_explicit(&g_busyFloor, mach_continuous_time(), memory_order_relaxed);
+            atomic_store_explicit(&g_inBackground, false, memory_order_relaxed);
+        }];
+    }
     atomic_store_explicit(&g_lastBeat, mach_continuous_time(), memory_order_relaxed);
     atomic_store_explicit(&g_lastActivity, (uint_fast32_t)kCFRunLoopBeforeSources, memory_order_relaxed);
     atomic_store_explicit(&g_running, true, memory_order_release);

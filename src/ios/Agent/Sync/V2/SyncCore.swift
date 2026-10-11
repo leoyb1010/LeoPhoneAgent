@@ -680,7 +680,14 @@ final class SyncCore {
         // have edited them too) but don't count as a visible change, so our own
         // echo doesn't make every open chat reload.
         let visible = summary.appliedIds.filter { recentlyPushedIds[$0.description] == nil }.count
-        logger.info("[SyncCore] inbound from \(transport): applied=\(summary.applied) quarantined=\(summary.quarantined) dropped=\(summary.dropped) blocked=\(summary.blocked)")
+        // Clean one-record batches arrive ~100/s during a catch-up; only
+        // multi-record or problem batches are worth an INFO line.
+        let inboundLine = "[SyncCore] inbound from \(transport): applied=\(summary.applied) quarantined=\(summary.quarantined) dropped=\(summary.dropped) blocked=\(summary.blocked)"
+        if summary.applied <= 1 && summary.quarantined == 0 && summary.dropped == 0 && summary.blocked == 0 {
+            logger.verbose(inboundLine)
+        } else {
+            logger.info(inboundLine)
+        }
         SyncInboundQuarantine.shared.flush()
         if visible > 0 { notifyFetchedChanges() }
         if summary.complete { appliedInDeferredBatch.removeAll() }

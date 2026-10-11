@@ -23,6 +23,18 @@ enum LeoTextContainer {
     static func needsUnboundedRestore(_ height: CGFloat) -> Bool {
         height.isFinite && height < unboundedHeight
     }
+
+    /// The size the guard actually stores for `size` (oversized → sentinel).
+    static func clamped(_ size: CGSize) -> CGSize {
+        CGSize(width: min(size.width, unboundedHeight), height: min(size.height, unboundedHeight))
+    }
+
+    /// Assign `textContainer.size` only when this is true: an identical
+    /// assignment still invalidates the whole layout on TextKit 1.
+    static func needsResize(current: CGSize, to target: CGSize) -> Bool {
+        let t = clamped(target)
+        return abs(current.width - t.width) > 0.5 || abs(current.height - t.height) > 0.5
+    }
 }
 
 // MARK: - Markdown render cap (B21)

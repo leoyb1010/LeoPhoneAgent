@@ -545,7 +545,8 @@ struct MinisApp: App {
             //   detached   — DNS, audio-session reads, FileProvider signal.
             // Inactive↔active churn that never reached .background, and
             // background blips < 2 s, stop after the in-window part.
-            let plan = ForegroundWorkPolicy.plan(isFirstActivation: !Self.didRunFirstActivePass,
+            let isFirstActivation = !Self.didRunFirstActivePass
+            let plan = ForegroundWorkPolicy.plan(isFirstActivation: isFirstActivation,
                                                  backgroundedFor: backgroundedFor)
             Self.didRunFirstActivePass = true
 
@@ -556,7 +557,10 @@ struct MinisApp: App {
             // while suspended. Clear the credential cache once on resume so the
             // first resolve re-reads truth.
             // 标成过期而不是清空:第一帧不再同步查钥匙串,先用旧值、后台重查。
-            ProviderCredentialCache.shared.markAllStale()
+            // 冷启动这一次跳过:缓存是本进程刚查的,再标过期只会把每个实例的钥匙串重查一遍。
+            if !isFirstActivation {
+                ProviderCredentialCache.shared.markAllStale()
+            }
 
             // [T-ios-scenephase-active-sigkill] ALL foreground-resume work is
             // deferred off the synchronous scenePhase→.active callback by one

@@ -14,13 +14,13 @@
 //  Repeated enough times this exceeds the 10s scene-update watchdog
 //  and the system kills the app with 0x8BADF00D.
 //
-//  This guard swizzles setSize: and short-circuits redundant calls in
-//  the same runloop tick. It does NOT modify the size value itself,
-//  it only skips the work when the new size equals the cached size
-//  *and* the same container has already been hit in this tick.
+//  This guard swizzles setSize: and skips calls that would not change
+//  the container's size (UIKit's own sizeThatFits set/restore pairs are
+//  the main source), plus repeated same-value calls in one runloop tick.
+//  Oversized values are clamped to `unboundedDimension`.
 //
-//  Logs a warning when a short-circuit fires so we can monitor how
-//  often this rescues us in production.
+//  Logs one per-session summary (counts by width) when the app leaves the
+//  foreground, and only if something was short-circuited or rejected.
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -42,8 +42,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// The value any larger width/height (incl. .greatestFiniteMagnitude) is clamped to.
 + (CGFloat)unboundedDimension;
 
-/// Short-circuit warnings are logged only when the running total is a power of two.
-+ (BOOL)shouldLogShortCircuitTotal:(uint64_t)total;
+/// Main-thread setSize: calls skipped because the size was already current.
++ (uint64_t)identicalSkipCount;
+
+/// The per-session summary line (nil when nothing was short-circuited or
+/// rejected). `reset` clears the session counters.
++ (nullable NSString *)sessionSummaryResetting:(BOOL)reset;
+
+/// Tests only: count one short-circuit at `width` in the session summary.
++ (void)recordShortCircuitForTestingWidth:(CGFloat)width;
 
 @end
 
