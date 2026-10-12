@@ -9,6 +9,11 @@ import XCTest
 /// a deliberately small text button; the composer card takes taps for its
 /// one-line text view).
 final class AccessibilityAuditUITests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        UITestRecordingPolicy.apply()
+    }
+
     private let audited: XCUIAccessibilityAuditType = [.sufficientElementDescription, .elementDetection, .trait]
 
     func testMainSurfacesHaveNamedControls() throws {

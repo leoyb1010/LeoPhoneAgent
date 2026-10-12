@@ -4,6 +4,11 @@ import XCTest
 /// 被测 App 的安装项,所以不会用 Debug 包覆盖它),每一步截图作为附件,供设计评审和
 /// 能力验收。取图:`xcrun xcresulttool export attachments --path <xcresult> --output-path <dir>`。
 final class LeoDeviceTourUITests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        UITestRecordingPolicy.apply()
+    }
+
     private let bundleId = "com.leoyuan.leophoneagent"
 
     override func setUp() {

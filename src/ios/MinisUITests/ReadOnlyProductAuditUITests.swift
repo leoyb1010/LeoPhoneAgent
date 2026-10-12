@@ -5,6 +5,11 @@ import XCTest
 /// a composer, selects a model, toggles settings, or starts a capability probe.
 @MainActor
 final class ReadOnlyProductAuditUITests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        UITestRecordingPolicy.apply()
+    }
+
     private let app = XCUIApplication(bundleIdentifier: "com.leoyuan.leophoneagent")
 
     override func setUp() { continueAfterFailure = true }
