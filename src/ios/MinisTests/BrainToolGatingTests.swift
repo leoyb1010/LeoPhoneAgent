@@ -10,7 +10,7 @@ final class BrainToolGatingTests: XCTestCase {
     }
 
     func testAllToolsForAttendedTopLevelChat() {
-        XCTAssertEqual(offered(), ["brain_search", "brain_read", "brain_card_save", "brain_capture"])
+        XCTAssertEqual(offered(), ["brain_search", "brain_read", "brain_ask", "brain_card_save", "brain_capture"])
         XCTAssertEqual(offered(source: "chat"), BrainToolGating.allTools)
     }
 
@@ -31,9 +31,9 @@ final class BrainToolGatingTests: XCTestCase {
         XCTAssertEqual(BrainToolGating.requiredScope(for: "brain_card_save"), "write:cards")
         XCTAssertEqual(BrainToolGating.requiredScope(for: "brain_capture"), "write:inbox")
         XCTAssertEqual(BrainToolGating.requiredScope(for: "brain_search"), "read")
-        XCTAssertEqual(offered(scopes: ["read"]), ["brain_search", "brain_read"])
-        XCTAssertEqual(offered(scopes: ["read", "write:cards"]), ["brain_search", "brain_read", "brain_card_save"])
-        XCTAssertEqual(offered(scopes: ["read", "write:inbox"]), ["brain_search", "brain_read", "brain_capture"])
+        XCTAssertEqual(offered(scopes: ["read"]), ["brain_search", "brain_read", "brain_ask"])
+        XCTAssertEqual(offered(scopes: ["read", "write:cards"]), ["brain_search", "brain_read", "brain_ask", "brain_card_save"])
+        XCTAssertEqual(offered(scopes: ["read", "write:inbox"]), ["brain_search", "brain_read", "brain_ask", "brain_capture"])
         XCTAssertTrue(BrainToolGating.scopeDeniedMessage(tool: "brain_capture").contains("write:inbox"))
     }
 

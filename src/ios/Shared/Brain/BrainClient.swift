@@ -118,6 +118,18 @@ final class BrainClient: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         return (try BrainJSON.decode(BrainCard.self, from: data), data)
     }
 
+    /// 提交一次证据问答,返回任务 id。私密资料从不交给资料库的模型。
+    func ask(_ question: String, mode: String = "answer", fileIds: [String]? = nil) async throws -> String {
+        var req = request(endpoint.ask(), method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["question": question, "mode": mode, "include_private": false]
+        if let fileIds, !fileIds.isEmpty { body["file_ids"] = fileIds }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try BrainJSON.decode(BrainAskReceipt.self, from: try await send(req)).id
+    }
+
+    func answer(_ id: String) async throws -> BrainAnswer { try await getDecoded(endpoint.answer(id)).0 }
+
     func audit(limit: Int = 30) async throws -> BrainAuditList {
         try await getDecoded(endpoint.audit(limit: limit)).0
     }

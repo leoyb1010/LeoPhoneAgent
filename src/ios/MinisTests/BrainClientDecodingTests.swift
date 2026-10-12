@@ -17,6 +17,39 @@ final class BrainClientDecodingTests: XCTestCase {
         XCTAssertEqual(h.semanticModel, "bge-m3")
     }
 
+    /// 网关 2.0.0(接了 Gemini)的 health 多了 semantic.job;旧字段必须照样读得出。
+    func testHealthV2WithEmbedJobDecodes() throws {
+        let h = try BrainJSON.decode(BrainHealth.self, from: data("""
+        {"ok":true,"version":"2.0.0","archive":{"files":17377,"documents":791,"chunks":18500,"cards":622,"last_scan":"2026-10-12T10:53:48+08:00"},
+         "semantic":{"ready":true,"model":"bge-m3","vectors":18555,"pending":567,"job":{"state":"failed","done":0,"total":533,"error":"HTTP Error 400"}}}
+        """))
+        XCTAssertTrue(h.ok)
+        XCTAssertEqual(h.cards, 622)
+        XCTAssertTrue(h.semanticReady)
+    }
+
+    func testAskAndAnswerDecode() throws {
+        XCTAssertEqual(try BrainJSON.decode(BrainAskReceipt.self, from: data(#"{"id":"6d985625d51ed1e8c8f6752c704cdb84"}"#)).id,
+                       "6d985625d51ed1e8c8f6752c704cdb84")
+        let running = try BrainJSON.decode(BrainAnswer.self, from: data(#"{"id":"a1","question":"q","status":"running","result":null,"error":null}"#))
+        XCTAssertTrue(running.isRunning)
+        XCTAssertNil(running.answer)
+        let done = try BrainJSON.decode(BrainAnswer.self, from: data("""
+        {"id":"a1","status":"completed","error":null,"result":{"answer":"核心是个人 IP [1]","queries":["私域"],
+         "sources":[{"number":1,"file_id":"f0f0","title":"门店流量池","locator":"第2页","sha256":"ab","method":"text"}],
+         "model_used":true,"model":"gemini-3.8-flash-high","reasoning_effort":"high","warning":""}}
+        """))
+        XCTAssertEqual(done.answer, "核心是个人 IP [1]")
+        XCTAssertEqual(done.sources, [BrainAnswerSource(number: 1, fileId: "f0f0", title: "门店流量池", locator: "第2页")])
+        let out = BrainToolFormatter.askOutput(done)
+        XCTAssertTrue(out.hasPrefix("<brain_ask_result untrusted=\"true\">"))
+        XCTAssertTrue(out.contains("门店流量池"))
+        let failed = try BrainJSON.decode(BrainAnswer.self, from: data(#"{"id":"a2","status":"failed","result":null,"error":"模型接口暂不可用"}"#))
+        XCTAssertTrue(BrainToolFormatter.askOutput(failed).contains("模型接口暂不可用"))
+        XCTAssertEqual(BrainEndpoint(baseString: "https://wenjian.leoyuan.top")!.answer("a1").absoluteString,
+                       "https://wenjian.leoyuan.top/v1/answers/a1")
+    }
+
     func testHealthSemanticNotReady() throws {
         let h = try BrainJSON.decode(BrainHealth.self, from: data(#"{"ok":true,"archive":{"files":1},"semantic":{"ready":false}}"#))
         XCTAssertFalse(h.semanticReady)

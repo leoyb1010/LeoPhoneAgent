@@ -22,6 +22,8 @@ final class QuietTaskScheduler {
     static let shared = QuietTaskScheduler()
     static let identifier = "com.leoyuan.leophoneagent.quiet"
     private static let lastMemoryTidyKey = "leo.quiet.lastMemoryTidyAt"
+    private static let lastDigestKey = "leo.quiet.lastDigestAt"
+    private static let lastRunKey = "leo.quiet.lastRunAt"
 
     private var registered = false
 
@@ -77,7 +79,8 @@ final class QuietTaskScheduler {
         let request = BGProcessingTaskRequest(identifier: Self.identifier)
         request.requiresExternalPower = true
         request.requiresNetworkConnectivity = true
-        request.earliestBeginDate = Self.nextWindowStart(after: Date())
+        request.earliestBeginDate = QuietTaskBudget.nextWindowStart(
+            after: Date(), lastRun: UserDefaults.standard.object(forKey: Self.lastRunKey) as? Date)
         if #available(iOS 27, *) {
             Task { @MainActor in
                 do { try await BGTaskScheduler.shared.submitTaskRequest(request) }
@@ -87,13 +90,6 @@ final class QuietTaskScheduler {
             do { try BGTaskScheduler.shared.submit(request) }
             catch { logger.info("submit failed: \(error.localizedDescription)") }
         }
-    }
-
-    /// 夜里 22:00 之后;已经在 22:00–06:00 之间就立刻可跑。
-    static func nextWindowStart(after now: Date, calendar: Calendar = .current) -> Date {
-        let hour = calendar.component(.hour, from: now)
-        if hour >= 22 || hour < 6 { return now }
-        return calendar.date(bySettingHour: 22, minute: 0, second: 0, of: now) ?? now
     }
 
     private func handle(_ task: BGProcessingTask) {
@@ -113,6 +109,8 @@ final class QuietTaskScheduler {
             DiagnosticRing.shared.record(.contextDecision, entryId: "quiet", message: "低电量模式,安静任务跳过")
             return
         }
+        // 没被系统收回才算今晚跑完;收回了今晚还能再来。
+        defer { if !Task.isCancelled { UserDefaults.standard.set(Date(), forKey: Self.lastRunKey) } }
         // 「夜间充电」规则改由这里触发(插电是请求条件),同样计入每日预算。
         let ruleTokens = await AutomationEngine.shared.fireNightChargingRules(
             tokenBudget: budget.remaining(limit: tokenLimit, now: Date()))
@@ -131,8 +129,8 @@ final class QuietTaskScheduler {
                                                       shouldStop: { $0 >= remaining })
             budget = budget.adding(outcome.tokens, now: Date())
             // 只有真跑完才算整理过;半路被系统收回或超预算,下次还要再整理。
-            if job == .memoryTidy, outcome.finished {
-                UserDefaults.standard.set(Date(), forKey: Self.lastMemoryTidyKey)
+            if outcome.finished {
+                UserDefaults.standard.set(Date(), forKey: job == .memoryTidy ? Self.lastMemoryTidyKey : Self.lastDigestKey)
             }
             if let sid = outcome.sessionId {
                 SessionBadgeStore.shared.pushFront(.unread, for: sid)
@@ -149,6 +147,8 @@ final class QuietTaskScheduler {
         func prompt() async -> String? {
             switch self {
             case .digest:
+                if let last = UserDefaults.standard.object(forKey: QuietTaskScheduler.lastDigestKey) as? Date,
+                   Date().timeIntervalSince(last) < 20 * 3600 { return nil }
                 let cutoff = Date().addingTimeInterval(-24 * 3600)
                 let sessions = await ChatStore.shared.listSessions()
                 let recent = sessions

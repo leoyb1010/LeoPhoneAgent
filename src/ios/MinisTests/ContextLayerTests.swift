@@ -191,6 +191,20 @@ final class ContextLayerTests: XCTestCase {
         XCTAssertEqual(QuietTaskBudget.defaultLimit, 20_000)
     }
 
+    func testQuietWindowRunsOncePerNight() {
+        // 白天:排到当晚 22:00
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(11, 15), calendar: calendar), date(11, 22))
+        // 窗口内、今晚没跑过:立刻
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(12, 0, 54), lastRun: date(10, 23), calendar: calendar), date(12, 0, 54))
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(11, 23), lastRun: date(11, 3), calendar: calendar), date(11, 23))
+        // 凌晨已跑完:排到今晚 22:00,不再每半小时重跑
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(12, 0, 55), lastRun: date(12, 0, 54), calendar: calendar), date(12, 22))
+        // 前一晚 23 点跑完,凌晨再被拉起:仍算同一晚
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(12, 2), lastRun: date(11, 23), calendar: calendar), date(12, 22))
+        // 22 点后已跑完:排到明晚
+        XCTAssertEqual(QuietTaskBudget.nextWindowStart(after: date(11, 23), lastRun: date(11, 22, 30), calendar: calendar), date(12, 22))
+    }
+
     // MARK: D5 专注收尾卡片
 
     func testFocusSummarySplitsDoneAndPendingWithinWindow() throws {

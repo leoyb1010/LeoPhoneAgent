@@ -126,6 +126,17 @@ enum ContextToolPolicy {
 
 /// [D4] 安静任务的每日 token 预算(按本地日期清零)。
 struct QuietTaskBudget: Codable, Equatable {
+    /// 夜里 22:00 之后;已经在 22:00–06:00 之间且今晚还没跑完就立刻可跑。
+    /// 今晚已经跑完就排到下一个 22:00 —— 否则插着电时系统每半小时拉起一次,同样的活反复跑。
+    static func nextWindowStart(after now: Date, lastRun: Date? = nil, calendar: Calendar = .current) -> Date {
+        let hour = calendar.component(.hour, from: now)
+        let today22 = calendar.date(bySettingHour: 22, minute: 0, second: 0, of: now) ?? now
+        guard hour >= 22 || hour < 6 else { return today22 }
+        let windowStart = hour >= 22 ? today22 : (calendar.date(byAdding: .day, value: -1, to: today22) ?? today22)
+        guard let lastRun, lastRun >= windowStart else { return now }
+        return hour >= 22 ? (calendar.date(byAdding: .day, value: 1, to: today22) ?? today22) : today22
+    }
+
     static let defaultLimit = 20_000
     static let limitKey = "leo.quiet.tokenBudget"
     static let usageKey = "leo.quiet.tokenUsage"

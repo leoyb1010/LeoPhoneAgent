@@ -1,5 +1,11 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.66.0 (164) · 安静任务修复 + 资料库 Gemini 证据问答 - 2026-10-12
+
+- 修复安静任务重复执行：BGProcessingTask 跑完后 `schedule()` 立即重排，`nextWindowStart` 在 22:00–06:00 内返回「现在」，插电时系统约每 30 分钟拉起一次；对话摘要没有频率限制，10-12 凌晨 00:54–03:26 跑了 6 次（diag 日志 `quiet.digest` ×6，共约 5.3k token）。现在记录 `leo.quiet.lastRunAt`，今晚已跑完（未被系统收回）就排到下一个 22:00；对话摘要另加 20 小时间隔。`nextWindowStart` 移到 `QuietTaskBudget` 并补测试。
+- 新 Agent 工具 `brain_ask`：对接资料库网关 2.0.0 的 `/v1/ask` → `/v1/answers/{id}`（资料库 Gemini 证据问答），轮询约 150 秒，未完成时把 answer_id 交回模型续取；请求一律 `include_private=false`；结果按不可信数据包装并带来源（file_id + locator）。权限 read，与 brain_search 同样只在有人值守的顶层对话提供。
+- 契约巡检：`scripts/BrainGatewayContractCheck.py`（标准库，只读令牌），按 LeoBot 路径核对 health / search / files / chunks / cards / audit / brain/status，可选跑一次 Gemini 问答；部署在 mini LaunchAgent `com.leo.leobot-brain-check`，每 30 分钟经公网巡检、Gemini 问答每 12 小时一次，连续两次失败经 ntfy 告警。
+
 ## iOS 1.65.0 (163) · 两轮丝滑度打磨（基于真机数据） - 2026-10-11
 
 - 真机 1.63/1.64 实测：冷启动到首页 625–647 ms，回前台 p50 242 ms / p90 391 ms，FPWatcher 刷屏归零。

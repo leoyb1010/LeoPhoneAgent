@@ -801,7 +801,7 @@ extension AIChatViewModel {
             toolOutput = result.output
             toolSuccess = result.success
 
-        case BrainToolGating.search, BrainToolGating.read, BrainToolGating.cardSave, BrainToolGating.capture:
+        case BrainToolGating.search, BrainToolGating.read, BrainToolGating.ask, BrainToolGating.cardSave, BrainToolGating.capture:
             // [T-brain] 结果包成不可信数据;私密资料不交给云端模型。
             let result = await executeBrainTool(name: tu.name, args: toolArgs)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

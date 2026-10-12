@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.66.0",
+            date: "2026-10-12",
+            title: "资料库会思考了",
+            highlights: [
+                "修复：夜里充电时「对话回顾」会每半小时重复跑一次（10 月 12 日凌晨跑了 6 次）。现在每晚最多跑一次，跑完就排到第二天晚上。",
+                "对话里可以直接问资料库：需要跨很多份资料总结、梳理时，LeoBot 会请 Mac mini 上资料库自己的 Gemini 大脑出一份带出处的回答（通常 1–2 分钟），再转述给你。",
+                "这类问答只用普通资料，私密资料不会交给任何模型；回答里的每条结论都标了来源，可以点开原文核对。"
+            ]
+        ),
+        LeoRelease(
             version: "1.65.0",
             date: "2026-10-11",
             title: "更顺手",

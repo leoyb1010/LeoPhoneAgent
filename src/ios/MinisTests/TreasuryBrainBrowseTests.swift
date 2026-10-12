@@ -113,7 +113,7 @@ final class TreasuryBrainBrowseTests: XCTestCase {
         for source: String? in [nil, "chat"] {
             let offered = BrainToolGating.offeredTools(configured: true, isSubAgentChild: false, blocksSideEffectTools: false,
                                                        sessionSource: source, isRemote: false, knownScopes: ["read"])
-            XCTAssertEqual(offered, ["brain_search", "brain_read"], String(describing: source))
+            XCTAssertEqual(offered, ["brain_search", "brain_read", "brain_ask"], String(describing: source))
         }
     }
 
