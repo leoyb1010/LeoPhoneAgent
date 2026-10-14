@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from "react";
 import type { RemoteConnectionRuntimeLog } from "@zcode/shared";
-import { usePlatform } from "@/hooks/usePlatform.js";
 
 export interface RemoteConnectionLogEntry {
   id: string;
@@ -83,77 +81,4 @@ export function appendRemoteConnectionRuntimeLog(
       timestamp: incoming.timestamp,
     },
   ];
-}
-
-function shouldAcceptRemoteConnectionRuntimeLog(
-  entry: Pick<RemoteConnectionRuntimeLog, "requestId">,
-  activeRequestId?: string | null,
-): boolean {
-  const normalizedActiveRequestId = activeRequestId?.trim();
-  if (!normalizedActiveRequestId) {
-    return true;
-  }
-
-  return entry.requestId?.trim() === normalizedActiveRequestId;
-}
-
-export function useRemoteConnectionLogs(activeRequestId?: string | null) {
-  const platform = usePlatform();
-  const activeRequestIdRef = useRef(activeRequestId);
-  const [connectionLogs, setConnectionLogs] = useState<RemoteConnectionLogEntry[]>([]);
-
-  useEffect(() => {
-    activeRequestIdRef.current = activeRequestId;
-  }, [activeRequestId]);
-
-  useEffect(() => {
-    const unsubscribe = platform.onRemoteConnectionLog((entry) => {
-      if (!shouldAcceptRemoteConnectionRuntimeLog(entry, activeRequestIdRef.current)) {
-        return;
-      }
-
-      const normalizedMessage = normalizeRemoteConnectionLogMessage(entry.message);
-      if (!normalizedMessage) {
-        return;
-      }
-
-      setConnectionLogs((currentLogs) =>
-        appendRemoteConnectionRuntimeLog(currentLogs, {
-          id: `${entry.label}-${entry.timestamp}-${currentLogs.length}`,
-          level: entry.level,
-          message: normalizedMessage,
-          timestamp: entry.timestamp,
-        }),
-      );
-    });
-
-    return unsubscribe;
-  }, [platform]);
-
-  const resetConnectionLogs = () => {
-    setConnectionLogs([]);
-  };
-
-  const appendConnectionLog = (level: RemoteConnectionLogEntry["level"], message: string) => {
-    setConnectionLogs((currentLogs) => [
-      ...currentLogs,
-      {
-        id: `${Date.now()}-${currentLogs.length}`,
-        level,
-        message,
-        timestamp: new Date().toLocaleTimeString(undefined, {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-      },
-    ]);
-  };
-
-  return {
-    connectionLogs,
-    resetConnectionLogs,
-    appendConnectionLog,
-  };
 }

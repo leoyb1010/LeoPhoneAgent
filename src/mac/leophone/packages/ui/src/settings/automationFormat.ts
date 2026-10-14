@@ -40,7 +40,7 @@ export function resolveAutomationStatusKind(
   return "active";
 }
 
-/** cron builder 支持的频率类型（覆盖 Feishu 自定义重复里最常用的几种）。 */
+/** cron builder 支持的频率类型（覆盖日历类应用自定义重复里最常用的几种）。 */
 export type CronFrequency = "hourly" | "daily" | "weekdays" | "weekly" | "monthly" | "custom";
 export type CustomRepeatUnit = "minute" | "hourly" | "daily" | "weekly" | "monthly" | "yearly";
 export type CustomMonthlyMode = "date" | "weekday";

@@ -19,7 +19,6 @@ function commands(openServerWorkspace?: () => void) {
       openSkillsSettings: noop,
       openMcpSettings: noop,
       switchTheme: noop,
-      openFeedback: noop,
       openCommunity: noop,
       openProductDocs: noop,
       toggleSidebar: noop,

@@ -6,21 +6,13 @@ export interface DraftSuggestedPromptLocalizedText {
 }
 
 export const DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS = "NAVIGATE:AUTOMATIONS" as const;
-export const DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK =
-  "NAVIGATE:AUTOMATIONS:OFFPEAK" as const;
 
-export type DraftSuggestedPromptAction =
-  | typeof DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS
-  | typeof DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK;
+export type DraftSuggestedPromptAction = typeof DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS;
 
 export interface DraftSuggestedPromptItem {
   id: string;
   /** Lucide canonical 名称，只来自 ClientSceneItem.img；不使用 imgs。 */
   iconName?: string;
-  /** 官方推荐项的市场图标。 */
-  iconUrl?: string;
-  /** 复用插件市场图标的展示样式，不代表绑定插件。 */
-  iconStyle?: "plugin";
   label: DraftSuggestedPromptLocalizedText;
   prompt: DraftSuggestedPromptLocalizedText;
   actions?: DraftSuggestedPromptAction[];
@@ -41,11 +33,6 @@ function parseDraftSuggestedPromptActions(
       case DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS:
         if (!actions.includes(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS)) {
           actions.push(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS);
-        }
-        break;
-      case DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK:
-        if (!actions.includes(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK)) {
-          actions.push(DRAFT_SUGGESTED_PROMPT_NAVIGATE_AUTOMATIONS_OFFPEAK);
         }
         break;
       default:

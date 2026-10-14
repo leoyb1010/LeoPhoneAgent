@@ -183,7 +183,6 @@ export const hostInitLocalMessageSchema = z.object({
   hostId: nonEmptyStringSchema.optional(),
   deliveryKind: taskRealtimeHostDeliveryKindSchema.optional(),
   deviceMid: z.string().optional(),
-  feedbackApiBase: z.string().url().optional(),
   workspacePath: nonEmptyStringSchema.optional(),
   workspaceIdentity: nonEmptyStringSchema.optional(),
   agentWarmupTargets: z.array(hostAgentWarmupTargetSchema).max(3).optional(),
@@ -322,29 +321,6 @@ export const hostTaskOwnerCommandResultMessageSchema = z.object({
   result: taskOwnerCommandResultSchema,
 });
 
-export const hostBotRemoteWorkspaceReconnectResultMessageSchema = z.object({
-  type: z.literal("bot-remote-workspace-reconnect-result"),
-  requestId: nonEmptyStringSchema,
-  ok: z.boolean(),
-  sessionId: nonEmptyStringSchema.optional(),
-  error: z.string().optional(),
-});
-
-export const hostBotRemoteWorkspaceConnectionStatusResultMessageSchema = z.object({
-  type: z.literal("bot-remote-workspace-connection-status-result"),
-  requestId: nonEmptyStringSchema,
-  ok: z.boolean(),
-  connected: z.boolean().optional(),
-  error: z.string().optional(),
-});
-
-export const hostBotRemoteWorkspaceRuntimePortMessageSchema = z.object({
-  type: z.literal("bot-remote-workspace-runtime-port"),
-  requestId: nonEmptyStringSchema,
-  ok: z.boolean(),
-  error: z.string().optional(),
-});
-
 export const sessionMessageRequestSchema = z.object({
   content: nonEmptyStringSchema,
   createdAt: nonEmptyStringSchema,
@@ -374,15 +350,6 @@ export const hostSessionMessageDeliverMessageSchema = z.object({
 export const hostSessionMessageDeliveryResultMessageSchema = z.object({
   type: z.literal("session-message-delivery-result"),
   result: sessionMessageDeliveryResultSchema,
-});
-
-export const hostFeedbackLogArchiveResultMessageSchema = z.object({
-  type: z.literal("feedback-log-archive-result"),
-  requestId: nonEmptyStringSchema,
-  ok: z.boolean(),
-  path: z.string().optional(),
-  size: z.number().int().nonnegative().optional(),
-  error: z.string().optional(),
 });
 
 // main → host：定时任务到点派发。会话内 cron 带 targetTaskId 时直接 sendPrompt 到当前会话；
@@ -489,12 +456,8 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostTaskRunLeaseResultMessageSchema,
   hostTaskOwnerCommandDeliverMessageSchema,
   hostTaskOwnerCommandResultMessageSchema,
-  hostBotRemoteWorkspaceReconnectResultMessageSchema,
-  hostBotRemoteWorkspaceConnectionStatusResultMessageSchema,
-  hostBotRemoteWorkspaceRuntimePortMessageSchema,
   hostSessionMessageDeliverMessageSchema,
   hostSessionMessageDeliveryResultMessageSchema,
-  hostFeedbackLogArchiveResultMessageSchema,
   hostCronRunMessageSchema,
   hostOffPeakRunMessageSchema,
   hostBrowserExecuteResultMessageSchema,
@@ -816,30 +779,6 @@ export const hostTaskOwnerCommandResultResponseSchema = z.object({
   result: taskOwnerCommandResultSchema,
 });
 
-export const hostBotRemoteWorkspaceReconnectRequestResponseSchema = z.object({
-  type: z.literal("bot-remote-workspace-reconnect-request"),
-  requestId: nonEmptyStringSchema,
-  workspacePath: nonEmptyStringSchema,
-  workspaceIdentity: nonEmptyStringSchema,
-  target: remoteTargetSchema,
-});
-
-export const hostBotRemoteWorkspaceConnectionStatusRequestResponseSchema = z.object({
-  type: z.literal("bot-remote-workspace-connection-status-request"),
-  requestId: nonEmptyStringSchema,
-  workspacePath: nonEmptyStringSchema,
-  workspaceIdentity: nonEmptyStringSchema,
-  target: remoteTargetSchema,
-});
-
-export const hostBotRemoteWorkspaceRuntimePortRequestResponseSchema = z.object({
-  type: z.literal("bot-remote-workspace-runtime-port-request"),
-  requestId: nonEmptyStringSchema,
-  workspacePath: nonEmptyStringSchema,
-  workspaceIdentity: nonEmptyStringSchema,
-  target: remoteTargetSchema,
-});
-
 export const hostSessionMessageSendRequestedResponseSchema = z.object({
   type: z.literal("session-message-send-requested"),
   request: sessionMessageRequestSchema,
@@ -853,12 +792,6 @@ export const hostSessionRouteAnnounceResponseSchema = z.object({
 export const hostSessionMessageDeliverResultResponseSchema = z.object({
   type: z.literal("session-message-deliver-result"),
   result: sessionMessageDeliveryResultSchema,
-});
-
-export const hostFeedbackLogArchiveRequestResponseSchema = z.object({
-  type: z.literal("feedback-log-archive-request"),
-  requestId: nonEmptyStringSchema,
-  sourceDir: nonEmptyStringSchema,
 });
 
 // host → main：定时任务派发结果。ok=已成功创建 session 且 prompt 已发出。
@@ -1016,13 +949,9 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostTaskRunLeaseReleaseResponseSchema,
   hostTaskOwnerCommandRequestResponseSchema,
   hostTaskOwnerCommandResultResponseSchema,
-  hostBotRemoteWorkspaceReconnectRequestResponseSchema,
-  hostBotRemoteWorkspaceConnectionStatusRequestResponseSchema,
-  hostBotRemoteWorkspaceRuntimePortRequestResponseSchema,
   hostSessionMessageSendRequestedResponseSchema,
   hostSessionRouteAnnounceResponseSchema,
   hostSessionMessageDeliverResultResponseSchema,
-  hostFeedbackLogArchiveRequestResponseSchema,
   hostBrowserExecuteRequestResponseSchema,
   hostLocalMediaPreviewPathAuthorizeRequestResponseSchema,
   hostNetworkTelemetryBatchResponseSchema,

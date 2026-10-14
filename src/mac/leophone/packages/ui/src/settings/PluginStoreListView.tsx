@@ -1,4 +1,3 @@
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 /* eslint-disable max-lines -- 商店列表页把标题/搜索/已安装条/公开-个人分段/Featured/分类折叠聚合成一个连贯浏览面，拆散反而难以维持 1:1 布局。 */
 import { useMemo, useState } from "react";
 import { Download, Loader2, Settings2 } from "lucide-react";
@@ -18,7 +17,6 @@ import {
   groupItemsByCategory,
   isPublicStoreMarketplaceId,
   resolveItemDisplayName,
-  selectFeaturedItems,
   sortInstalledStripItems,
   sortPersonalMarketplaceGroups,
   storeItemMatches,
@@ -57,8 +55,7 @@ export function PluginStoreListView({
   onOpenManage: () => void;
 }) {
   const { intl, locale } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
-  const modeOrder = isOfficeMode ? order?.work : order?.code;
+  const modeOrder = order?.code;
   const keyword = query.trim().toLowerCase();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   // 旧版会话恢复入口退出市场；统一过滤所有浏览投影，旧缓存/精选也不能重新露出。
@@ -92,10 +89,6 @@ export function PluginStoreListView({
     };
   }, [intl]);
 
-  const featuredItems = useMemo(
-    () => selectFeaturedItems(publicItems, marketplaces),
-    [marketplaces, publicItems],
-  );
   const categoryGroups = useMemo(
     () => groupItemsByCategory(publicItems, locale, modeOrder),
     [locale, publicItems, modeOrder],
@@ -270,7 +263,6 @@ export function PluginStoreListView({
           actions={actions}
           categoryGroups={categoryGroups}
           expandedGroups={expandedGroups}
-          featuredItems={featuredItems}
           loading={loading}
           locale={locale}
           resolveCategoryLabel={resolveCategoryLabel}
@@ -433,7 +425,6 @@ function PublicSegment({
   actions,
   categoryGroups,
   expandedGroups,
-  featuredItems,
   loading,
   locale,
   resolveCategoryLabel,
@@ -442,14 +433,15 @@ function PublicSegment({
   actions: PluginStoreActions;
   categoryGroups: ReturnType<typeof groupItemsByCategory>;
   expandedGroups: Record<string, boolean>;
-  featuredItems: StorePluginItem[];
   loading: boolean;
   locale: string;
   resolveCategoryLabel: (category: string) => string;
   onToggleGroup: (key: string) => void;
 }) {
   const { intl } = useZCodeIntl();
-  const isEmpty = featuredItems.length === 0 && categoryGroups.length === 0;
+  // [leo] 官方市场 CDN 已切断，这里只剩随包内置的插件；原来的「精选」和下面的分类是同一批条目，
+  // 重复展示只会让页面显得空又长，1.9.0 起去掉精选区。
+  const isEmpty = categoryGroups.length === 0;
   if (isEmpty) {
     return (
       <p className="rounded-xl border border-dashed border-border px-4 py-3 text-ui-base text-foreground-subtle">
@@ -465,14 +457,6 @@ function PublicSegment({
   }
   return (
     <div>
-      {featuredItems.length > 0 ? (
-        <StoreSection
-          title={intl.formatMessage({ id: "settings.plugins.store.featured" })}
-          className="py-4 first:pt-0 last:pb-0"
-        >
-          <CardGrid items={featuredItems} actions={actions} locale={locale} />
-        </StoreSection>
-      ) : null}
       {categoryGroups.map((group) => (
         <StoreSection
           key={group.category}

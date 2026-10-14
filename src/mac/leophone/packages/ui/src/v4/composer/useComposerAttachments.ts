@@ -20,13 +20,6 @@ import {
   shouldPreferSpreadsheetClipboardText,
   type ChatComposerAttachment,
 } from "@/lib/chatAttachments.js";
-import {
-  WHITEBOARD_ADD_TO_CHAT_EVENT,
-  buildWhiteboardWorkspaceKey,
-  createWhiteboardPngFile,
-  isWhiteboardAddToChatEvent,
-} from "@/lib/whiteboard.js";
-import { useWhiteboardStore } from "@/store/whiteboardStore.js";
 import type { ChatComposerPasteEvent } from "@/LexicalChatInput.js";
 import type { IPromptAttachmentTransferService } from "@zcode/services";
 import type { IPlatformService } from "@zcode/shared";
@@ -87,7 +80,6 @@ interface ComposerAttachmentsApi {
   handleDragOverComposer: (event: React.DragEvent<HTMLElement>) => void;
   handleDragLeaveComposer: (event: React.DragEvent<HTMLElement>) => void;
   handleDropComposer: (event: React.DragEvent<HTMLElement>) => void;
-  handleWhiteboardMentionSelected: (boardId: string) => Promise<void>;
   removeAttachment: (id: string) => void;
   retryAttachment: (id: string) => void;
   /** 发送成功只清冻结的附件 id；不传表示用户主动清空整个附件区。 */
@@ -115,14 +107,6 @@ interface UseComposerAttachmentsOptions {
    */
   onRuntimeLifecycle?: (listener: (state: "available" | "unavailable") => void) => () => void;
   disabled?: boolean;
-  /**
-   * 是否消费全局 add-to-chat 事件（whiteboard 引用）。
-   * 语义与 useWebElementContexts 等一致：由调用方传 `listenAddToChatEvents && !disabled`
-   * （SessionPane 以 focused 区分聚焦 composer）。SidePane forceMount 常驻多个同
-   * workspace 的 SessionPane，若不门控，一次白板引用会被所有 composer 同时
-   * preventDefault 并各自注入附件，用户看不见的后台草稿被静默塞入画板内容。
-   */
-  listenAddToChatEvents?: boolean;
 }
 
 async function selectAttachmentLocalPaths(
@@ -198,7 +182,6 @@ export function useComposerAttachments(
     onRuntimeRestart,
     onRuntimeLifecycle,
     disabled = false,
-    listenAddToChatEvents = true,
   } = options;
   const platform = usePlatform();
   const { promptAttachmentTransferService } = useServices();
@@ -855,54 +838,6 @@ export function useComposerAttachments(
     [addAttachmentFiles, resetComposerDragFeedback],
   );
 
-  const addWhiteboardToChat = useCallback(
-    async (boardId: string) => {
-      const board = useWhiteboardStore.getState().getBoard({
-        boardId,
-        workspaceIdentity,
-        workspacePath,
-      });
-      if (!board) {
-        setAttachmentError(intl.formatMessage({ id: "whiteboard.exportMissing" }));
-        return;
-      }
-      try {
-        addAttachmentFiles([createWhiteboardPngFile(board)]);
-      } catch (error) {
-        setAttachmentError(
-          intl.formatMessage(
-            { id: "whiteboard.exportFailed" },
-            { message: error instanceof Error ? error.message : String(error) },
-          ),
-        );
-      }
-    },
-    [addAttachmentFiles, intl, workspaceIdentity, workspacePath],
-  );
-  const handleWhiteboardMentionSelected = useCallback(
-    async (boardId: string) => addWhiteboardToChat(boardId),
-    [addWhiteboardToChat],
-  );
-  useEffect(() => {
-    // 与 useWebElementContexts 等同款早退。SidePane forceMount 使非聚焦
-    // 会话的 SessionPane 常驻，只有聚焦 composer（listenAddToChatEvents）才允许消费
-    // add-to-chat 事件，否则同 workspace 的多个 composer 会同时注入附件。
-    if (!listenAddToChatEvents || typeof window === "undefined") return;
-    const handle = (event: Event) => {
-      if (!isWhiteboardAddToChatEvent(event)) return;
-      if (
-        buildWhiteboardWorkspaceKey(event.detail) !==
-        buildWhiteboardWorkspaceKey({ workspacePath, workspaceIdentity })
-      ) {
-        return;
-      }
-      event.preventDefault();
-      void addWhiteboardToChat(event.detail.boardId);
-    };
-    window.addEventListener(WHITEBOARD_ADD_TO_CHAT_EVENT, handle);
-    return () => window.removeEventListener(WHITEBOARD_ADD_TO_CHAT_EVENT, handle);
-  }, [addWhiteboardToChat, listenAddToChatEvents, workspaceIdentity, workspacePath]);
-
   const removeAttachment = useCallback(
     (id: string) => {
       const current = readComposerAttachmentScope(scopeKey);
@@ -1076,7 +1011,6 @@ export function useComposerAttachments(
       handleDragOverComposer,
       handleDragLeaveComposer,
       handleDropComposer,
-      handleWhiteboardMentionSelected,
       removeAttachment,
       retryAttachment,
       clearAttachments,
@@ -1097,7 +1031,6 @@ export function useComposerAttachments(
       handleDragOverComposer,
       handleDropComposer,
       handlePaste,
-      handleWhiteboardMentionSelected,
       isDraggingOverComposer,
       openAttachmentPicker,
       prepareForSend,

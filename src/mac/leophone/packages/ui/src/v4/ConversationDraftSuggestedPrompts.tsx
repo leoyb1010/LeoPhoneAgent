@@ -1,18 +1,7 @@
-import { useState } from "react";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog.js";
 /* New task 草稿页推荐提示词入口。
    推荐配置来自 Client Scenes 的 draft-suggestion scene。 */
 import type { CSSProperties } from "react";
-import { X, Check, Info, LoaderCircle, SquareCode, TriangleAlert } from "lucide-react";
+import { Check, Info, LoaderCircle, SquareCode, TriangleAlert } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ClientSceneLucideIcon } from "@/components/ClientSceneLucideIcon.js";
 import { Button } from "@/components/ui/button.js";
@@ -46,15 +35,11 @@ function DraftSuggestedPromptIcon({ name }: { name?: string }) {
 
 interface ConversationDraftSuggestedPromptsProps {
   className?: string;
-  layout?: "chips" | "list";
   /** 推荐项列表；由上层从 Client Scenes 映射后下发。 */
   items?: DraftSuggestedPromptItem[];
   /** 点击回调；完整配置交给上层解析 prompt 与 Plugin catalog。 */
   onSelect?: (item: DraftSuggestedPromptItem) => void;
   disabled?: boolean;
-  onRefresh?: () => void;
-  onClose?: () => void;
-  refreshDisabled?: boolean;
   pluginActionPopover?: DraftSuggestedPluginActionPopoverState | null;
 }
 
@@ -174,116 +159,14 @@ function DraftSuggestedPluginActionPopoverContent({
 
 export function ConversationDraftSuggestedPrompts({
   className,
-  layout = "chips",
   items = [],
   onSelect,
   disabled = false,
-  onRefresh,
-  onClose,
-  refreshDisabled = false,
   pluginActionPopover,
 }: ConversationDraftSuggestedPromptsProps) {
-  const { locale, intl } = useZCodeIntl();
-  const [confirmClose, setConfirmClose] = useState(false);
+  const { locale } = useZCodeIntl();
 
   if (items.length === 0) return null;
-
-  if (layout === "list") {
-    return (
-      <div
-        data-v4-draft-suggested-prompts="true"
-        className={cn("w-full min-w-0 px-2 py-4", className)}
-      >
-        <div className="flex items-center justify-between gap-2 px-3 pb-2 text-ui-sm text-foreground-subtle">
-          <span>{intl.formatMessage({ id: "occupationOnboarding.suggestionsHeading" })}</span>
-          <div className="flex shrink-0 items-center gap-2">
-            {onRefresh ? (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="px-0 text-ui-sm text-foreground-subtle"
-                disabled={disabled || refreshDisabled}
-                onClick={onRefresh}
-              >
-                {intl.formatMessage({ id: "chat.officeSuggestions.refresh" })}
-              </Button>
-            ) : null}
-            {onClose ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={disabled || refreshDisabled}
-                aria-label={intl.formatMessage({ id: "chat.officeSuggestions.closeTitle" })}
-                onClick={() => setConfirmClose(true)}
-              >
-                <X className="size-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {intl.formatMessage({ id: "chat.officeSuggestions.closeTitle" })}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {intl.formatMessage({ id: "chat.officeSuggestions.closeDescription" })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{intl.formatMessage({ id: "common.cancel" })}</AlertDialogCancel>
-              <AlertDialogAction onClick={onClose}>
-                {intl.formatMessage({ id: "common.confirm" })}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        <ul className="m-0 flex list-none flex-col p-0">
-          {items.map((item) => (
-            <Popover
-              key={item.id}
-              open={pluginActionPopover?.anchorItemId === item.id}
-              modal={false}
-            >
-              <li>
-                <PopoverAnchor asChild>
-                  <button
-                    type="button"
-                    data-draft-suggested-prompt={item.id}
-                    disabled={!onSelect || disabled}
-                    onClick={() => onSelect?.(item)}
-                    className="flex w-full items-center gap-3 rounded-xl p-3 text-left text-ui-base text-foreground hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused disabled:opacity-50"
-                  >
-                    <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface p-px">
-                      <img
-                        src={item.iconUrl}
-                        alt=""
-                        draggable={false}
-                        className={cn(
-                          "shrink-0 rounded-sm object-contain",
-                          // GitHub 素材自带白色方形底，再缩小一圈以露出与其他图标一致的外层留白。
-                          item.iconUrl?.includes("/github/icon.png") ? "size-4.5" : "size-full",
-                        )}
-                      />
-                    </span>
-                    <span className="min-w-0 flex-1 break-words">
-                      {resolveDraftSuggestedPromptText(item.label, locale)}
-                    </span>
-                  </button>
-                </PopoverAnchor>
-                {pluginActionPopover?.anchorItemId === item.id ? (
-                  <DraftSuggestedPluginActionPopoverContent state={pluginActionPopover} />
-                ) : null}
-              </li>
-            </Popover>
-          ))}
-        </ul>
-      </div>
-    );
-  }
 
   return (
     <div

@@ -7,13 +7,14 @@
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { logger } from "@/logger.js";
 import { LeoMark } from "@/leo/LeoMark.js";
 
 const GREETING_BOUNDARY_HOURS = [5, 9, 12, 14, 18, 23] as const;
-const GREETING_MIN_FONT_SIZE_PX = 20;
-const GREETING_MAX_FONT_SIZE_PX = 30;
+// [leo] 1.9.0：首页问候语上限从 30px 降到 24px，配合中性配色让输入框成为视觉焦点。
+// 测量用的隐藏 span 必须和上限同字号（text-2xl = 24px），否则缩放比例会算偏。
+const GREETING_MIN_FONT_SIZE_PX = 18;
+const GREETING_MAX_FONT_SIZE_PX = 24;
 
 type ChatEmptyGreetingMessageId =
   | "chat.empty.greeting.morningEarly"
@@ -79,14 +80,11 @@ function resolveGreetingFontSizePx({
 
 export function ConversationDraftEmptyState({ className }: { className?: string }) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const [greetingDate, setGreetingDate] = useState(() => new Date());
   const [greetingFontSizePx, setGreetingFontSizePx] = useState(GREETING_MAX_FONT_SIZE_PX);
   const greetingContainerRef = useRef<HTMLParagraphElement | null>(null);
   const greetingMeasurementRef = useRef<HTMLSpanElement | null>(null);
-  const greeting = intl.formatMessage({
-    id: isOfficeMode ? "chat.empty.greeting.office" : getChatEmptyGreetingMessageId(greetingDate),
-  });
+  const greeting = intl.formatMessage({ id: getChatEmptyGreetingMessageId(greetingDate) });
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -171,11 +169,11 @@ export function ConversationDraftEmptyState({ className }: { className?: string 
     <div
       className={cn(
         // [leo] 首页只留标志 + 问候:去掉大号线框水印,标志实心、小尺寸,整体上移让输入框成为焦点。
-        "leo-home-hero relative mb-7 flex w-full max-w-2xl flex-col items-center justify-center gap-5 text-foreground sm:mb-6",
+        "leo-home-hero relative mb-6 flex w-full max-w-2xl flex-col items-center justify-center gap-4 text-foreground sm:mb-5",
         className,
       )}
     >
-      <LeoMark className="relative z-10 h-9 w-9 text-foreground" />
+      <LeoMark className="relative z-10 h-8 w-8 text-foreground" />
       <p
         ref={greetingContainerRef}
         data-v4-draft-greeting="true"
@@ -192,7 +190,7 @@ export function ConversationDraftEmptyState({ className }: { className?: string 
         <span
           ref={greetingMeasurementRef}
           aria-hidden="true"
-          className="pointer-events-none invisible absolute whitespace-nowrap text-3xl/[1.2]"
+          className="pointer-events-none invisible absolute whitespace-nowrap text-2xl/[1.2]"
         >
           {greeting}
         </span>

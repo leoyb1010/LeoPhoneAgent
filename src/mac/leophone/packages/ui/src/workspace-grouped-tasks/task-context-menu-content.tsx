@@ -43,7 +43,6 @@ export function GroupedTaskContextMenuContent({
   onMarkTaskAsUnread: (task: ZCodeTaskMeta) => void;
   onOpenTaskPathInFileManager: () => void;
   onCopyText: (label: string, text: string | null) => void;
-  onOpenTaskFeedback: () => void;
   disabledReason?: string;
 }) {
   return (

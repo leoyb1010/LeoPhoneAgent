@@ -6,33 +6,25 @@ import { logger } from "@/logger.js";
 import { WorkspaceSettingsLayer } from "@/root/WorkspaceSettingsLayer.js";
 import type { AppProps } from "@/app-shell/types.js";
 import type { RootProps } from "@/root/types.js";
-import type { IFeedbackService, IServiceAccessor } from "@zcode/services";
+import type { IServiceAccessor } from "@zcode/services";
 import { ConversationTelemetryWorkspaceAttachment } from "@/v4/telemetry/ConversationTelemetryAttachment.js";
 
 const StableWorkspaceApp = memo(App);
 
 interface RootWorkspaceContentProps {
   workspaceScopedServices: IServiceAccessor;
-  baseFeedbackService: IFeedbackService;
   workspaceShellPath: string;
   workspaceIdentity?: string;
   workspaceRemoteSessionId?: string;
   activeWorkspacePath: string | null;
   isSettingsTabActive: boolean;
-  handleConnectRemote: AppProps["onConnectRemote"];
-  handleSelectRemoteProject: AppProps["onSelectRemoteProject"];
-  handleCancelRemoteProject: AppProps["onCancelRemoteProject"];
   handleReconnectRemoteWorkspace: AppProps["onReconnectRemoteWorkspace"];
   handleCreateTask: AppProps["onCreateTask"];
   handleCreateConversationTask: NonNullable<AppProps["onCreateConversationTask"]>;
   handleResolveConversationWorkspace: NonNullable<AppProps["onResolveConversationWorkspace"]>;
   handleOpenWorkspace: AppProps["onOpenWorkspace"];
   handleOpenFolderFromWorkspaceMenu: AppProps["onOpenFolderFromWorkspaceMenu"];
-  handleOpenRemoteWorkspace?: AppProps["onOpenRemoteWorkspace"];
   handleCreateScratchWorkspace: AppProps["onCreateScratchWorkspace"];
-  remoteConnectionInProgress?: AppProps["remoteConnectionInProgress"];
-  remoteWorkspaceSessions: NonNullable<AppProps["remoteWorkspaceSessions"]>;
-  allowRemoteWorkspace: NonNullable<RootProps["allowRemoteWorkspace"]>;
   handleBackFromSettings: () => void;
   handleLogout?: () => void;
   onLogin?: () => void;
@@ -40,7 +32,6 @@ interface RootWorkspaceContentProps {
   reconnectingRemoteWorkspaceKeys: AppProps["reconnectingRemoteWorkspaceKeys"];
   remoteWorkspaceErrorByWorkspaceKey: AppProps["remoteWorkspaceErrorByWorkspaceKey"];
   reconnectingRemoteWorkspaceLogsByWorkspaceKey: AppProps["reconnectingRemoteWorkspaceLogsByWorkspaceKey"];
-  remoteConnectionLogs?: AppProps["remoteConnectionLogs"];
   allowOpenWorkspace: NonNullable<RootProps["allowOpenWorkspace"]>;
   isDesktop?: RootProps["isDesktop"];
   isMacDesktop?: RootProps["isMacDesktop"];
@@ -51,26 +42,18 @@ interface RootWorkspaceContentProps {
 
 export function RootWorkspaceContent({
   workspaceScopedServices,
-  baseFeedbackService,
   workspaceShellPath,
   workspaceIdentity,
   workspaceRemoteSessionId,
   activeWorkspacePath,
   isSettingsTabActive,
-  handleConnectRemote,
-  handleSelectRemoteProject,
-  handleCancelRemoteProject,
   handleReconnectRemoteWorkspace,
   handleCreateTask,
   handleCreateConversationTask,
   handleResolveConversationWorkspace,
   handleOpenWorkspace,
   handleOpenFolderFromWorkspaceMenu,
-  handleOpenRemoteWorkspace,
   handleCreateScratchWorkspace,
-  remoteConnectionInProgress,
-  remoteWorkspaceSessions,
-  allowRemoteWorkspace,
   handleBackFromSettings,
   handleLogout,
   onLogin,
@@ -78,7 +61,6 @@ export function RootWorkspaceContent({
   reconnectingRemoteWorkspaceKeys,
   remoteWorkspaceErrorByWorkspaceKey,
   reconnectingRemoteWorkspaceLogsByWorkspaceKey,
-  remoteConnectionLogs,
   allowOpenWorkspace,
   isDesktop,
   isMacDesktop,
@@ -138,10 +120,6 @@ export function RootWorkspaceContent({
             >
               <StableWorkspaceApp
                 services={workspaceScopedServices}
-                baseFeedbackService={baseFeedbackService}
-                onConnectRemote={handleConnectRemote}
-                onSelectRemoteProject={handleSelectRemoteProject}
-                onCancelRemoteProject={handleCancelRemoteProject}
                 onReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
                 onLogout={handleLogout}
                 onLogin={onLogin}
@@ -151,7 +129,6 @@ export function RootWorkspaceContent({
                 reconnectingRemoteWorkspaceLogsByWorkspaceKey={
                   reconnectingRemoteWorkspaceLogsByWorkspaceKey
                 }
-                remoteConnectionLogs={remoteConnectionLogs}
                 workspaceAbsPath={workspaceShellPath}
                 workspaceRemoteSessionId={workspaceRemoteSessionId}
                 workspaceIdentity={workspaceIdentity}
@@ -160,13 +137,9 @@ export function RootWorkspaceContent({
                 onResolveConversationWorkspace={handleResolveConversationWorkspace}
                 onOpenWorkspace={handleOpenWorkspace}
                 onOpenFolderFromWorkspaceMenu={handleOpenFolderFromWorkspaceMenu}
-                onOpenRemoteWorkspace={handleOpenRemoteWorkspace}
                 onCreateScratchWorkspace={handleCreateScratchWorkspace}
-                remoteConnectionInProgress={remoteConnectionInProgress}
                 onReturnToWorkspace={handleBackFromSettings}
                 allowOpenWorkspace={allowOpenWorkspace}
-                allowRemoteWorkspace={allowRemoteWorkspace}
-                remoteWorkspaceSessions={remoteWorkspaceSessions}
                 isWorkspaceVisible={!isSettingsTabActive}
                 isDesktop={isDesktop}
                 isMacDesktop={isMacDesktop}

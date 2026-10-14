@@ -94,6 +94,11 @@ Mac → Connect Phone → Tailscale direct settings accepts the machine's HTTPS 
 
 ## Pairing panel lifecycle (2026-10-03 audit)
 
+Since Mac 1.9.0 the pairing panel is the Settings → "连接手机" (Phone) section
+(`settingsSectionId: "phone"`), opened from the sidebar phone icon; leaving the
+section unmounts it, which counts as "closing the panel" below. The Tailscale
+direct form, sync-replica and treasury switches live on the same page.
+
 The mounted pairing panel owns one pending issuance and at most one displayed
 one-time code. It does not own or change device grants, task queues or approval
 policy. A refresh clears the displayed image before revoking the previous code;

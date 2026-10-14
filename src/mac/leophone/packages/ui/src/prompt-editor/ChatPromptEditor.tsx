@@ -80,7 +80,6 @@ export function ChatPromptEditor({
   onModifiedSubmit,
   onCancel,
   onFocus,
-  onWhiteboardMentionSelected,
   onPaste,
   onDragOver,
   onDragLeave,
@@ -138,7 +137,6 @@ export function ChatPromptEditor({
   onModifiedSubmit?: (value: string) => boolean | void;
   onCancel?: () => void;
   onFocus?: () => void;
-  onWhiteboardMentionSelected?: (boardId: string) => void | Promise<void>;
   onPaste?: (event: ChatComposerPasteEvent) => void;
   onDragOver?: DragEventHandler<HTMLDivElement>;
   onDragLeave?: DragEventHandler<HTMLDivElement>;
@@ -379,7 +377,6 @@ export function ChatPromptEditor({
           editorApiRef={resolvedInputApiRef}
           promptHistory={promptHistory}
           compactPlaceholder={compactPlaceholder}
-          onWhiteboardMentionSelected={onWhiteboardMentionSelected}
           onPaste={onPaste}
           excludedSlashCommandNames={excludedSlashCommandNames}
           appSlashCommands={appSlashCommands}

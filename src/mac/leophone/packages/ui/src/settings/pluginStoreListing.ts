@@ -305,30 +305,6 @@ export function buildStoreItems(input: {
   return [...items.values()].filter((item) => !INTERNAL_OFFICIAL_PLUGIN_IDS.has(item.id));
 }
 
-/** 公开分段：Featured（CDN featured 名单按序）+ 分类聚合（无分类归 other，排最后）。 */
-export function selectFeaturedItems(
-  publicItems: StorePluginItem[],
-  marketplaces: ZCodePluginMarketplaceSummary[],
-): StorePluginItem[] {
-  const byName = new Map<string, StorePluginItem>();
-  for (const item of publicItems) {
-    if (!byName.has(item.name)) byName.set(item.name, item);
-  }
-  const featured: StorePluginItem[] = [];
-  const seen = new Set<string>();
-  for (const marketplace of marketplaces) {
-    if (!isPublicStoreMarketplaceId(marketplace.id)) continue;
-    for (const name of marketplace.featured ?? []) {
-      const item = byName.get(name);
-      if (item && !seen.has(item.id)) {
-        seen.add(item.id);
-        featured.push(item);
-      }
-    }
-  }
-  return featured;
-}
-
 export function groupItemsByCategory(
   items: StorePluginItem[],
   locale: string,

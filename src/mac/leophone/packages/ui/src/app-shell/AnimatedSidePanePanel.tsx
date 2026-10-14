@@ -17,7 +17,6 @@ import { horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortabl
 import type { BrowserViewScreenshotSurfacePreparePayload, GitChangeSourceId } from "@zcode/shared";
 import { PreviewPane } from "@/PreviewPane.js";
 import { SidePaneTerminalPane } from "@/SidePaneTerminalPane.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { WorkspaceSidePaneToggleButton } from "@/WorkspaceSidePaneToggleButton.js";
 import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import { BrowserUseSidePaneContent } from "@/browser-use/BrowserUseSidePaneContent.js";
@@ -25,8 +24,6 @@ import { findScreenshotSurfaceTabForRender } from "@/browser-use/useBrowserScree
 import { HumanBrowserView } from "@/browser-use/HumanBrowserView.js";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
 import { GitPane } from "@/GitPane.js";
-import { TreemappingPane } from "@/TreemappingPane.js";
-import { WhiteboardPane } from "@/WhiteboardPane.js";
 import { ModelTrajectoryPane } from "@/ModelTrajectoryPane.js";
 import { DeveloperToolsPane } from "@/DeveloperToolsPane.js";
 import { cn } from "@/components/lib/utils.js";
@@ -311,7 +308,6 @@ export function AnimatedSidePanePanel({
   onCloseAllTabs,
   onReopenClosedTab,
   onOpenBrowserTab,
-  onOpenWhiteboard: _onOpenWhiteboard,
   onOpenDeveloperTools,
   onOpenTerminalTab,
   onOpenReviewTab,
@@ -376,7 +372,6 @@ export function AnimatedSidePanePanel({
   onCloseAllTabs: () => void;
   onReopenClosedTab: (tabId: string) => void;
   onOpenBrowserTab: () => void;
-  onOpenWhiteboard: () => void;
   onOpenDeveloperTools: () => void;
   onOpenTerminalTab: () => void;
   onOpenReviewTab: () => void;
@@ -402,7 +397,6 @@ export function AnimatedSidePanePanel({
   onSelectGitSource: (value: GitChangeSourceId) => void;
 }) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const developerToolsEnabled = useDeveloperToolsVisibility();
   const isDragCollapsible = !isVisible;
   const isResizeDisabled = !isVisible;
@@ -705,7 +699,7 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "sidePane.selectionChat" })}</span>
           </DropdownMenuItem>
         ) : null}
-        {!isOfficeMode && !hasReviewTab ? (
+        {!hasReviewTab ? (
           <DropdownMenuItem
             onSelect={() => {
               onOpenReviewTab();
@@ -715,26 +709,15 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "sidePane.review" })}</span>
           </DropdownMenuItem>
         ) : null}
-        {/* 画板入口未启用 */}
-        {/* <DropdownMenuItem
+        <DropdownMenuItem
+          data-side-pane-add-item="terminal"
           onSelect={() => {
-            onOpenWhiteboard();
+            onOpenTerminalTab();
           }}
         >
-          <PaletteIcon className="size-4" />
-          <span>{intl.formatMessage({ id: "whiteboard.title" })}</span>
-        </DropdownMenuItem> */}
-        {!isOfficeMode ? (
-          <DropdownMenuItem
-            data-side-pane-add-item="terminal"
-            onSelect={() => {
-              onOpenTerminalTab();
-            }}
-          >
-            <SquareTerminalIcon className="size-4" />
-            <span>{intl.formatMessage({ id: "terminal.title" })}</span>
-          </DropdownMenuItem>
-        ) : null}
+          <SquareTerminalIcon className="size-4" />
+          <span>{intl.formatMessage({ id: "terminal.title" })}</span>
+        </DropdownMenuItem>
         {supportsEmbeddedBrowser ? (
           <DropdownMenuItem
             data-side-pane-add-item="browser"
@@ -797,9 +780,7 @@ export function AnimatedSidePanePanel({
     developerToolsEnabled,
     hasReviewTab,
     supportsEmbeddedBrowser,
-  })
-    .filter((itemId) => !isOfficeMode || (itemId !== "terminal" && itemId !== "review"))
-    .map((itemId) => openTabLauncherItemById[itemId]);
+  }).map((itemId) => openTabLauncherItemById[itemId]);
   const closeSidePaneButton =
     isVisible && onCloseSidePane ? (
       <div className="flex shrink-0 items-center gap-0.5 [app-region:no-drag]">
@@ -877,8 +858,6 @@ export function AnimatedSidePanePanel({
         browserTitle: intl.formatMessage({ id: "browser.title" }),
         reviewTitle: intl.formatMessage({ id: "sidePane.review" }),
         codeViewerTitle: intl.formatMessage({ id: "codeViewer.title" }),
-        treemappingTitle: intl.formatMessage({ id: "treemapping.title" }),
-        whiteboardTitle: intl.formatMessage({ id: "whiteboard.title" }),
         modelTrajectoryTitle: intl.formatMessage({
           id: "modelTrajectory.title",
         }),
@@ -1222,19 +1201,6 @@ export function AnimatedSidePanePanel({
                             onClose={onCloseGit}
                             onRefresh={onRefreshGit}
                             onRevealFileInTree={onRevealGitFileInTree}
-                          />
-                        ) : tab.type === "treemapping" ? (
-                          <TreemappingPane
-                            activeTaskId={activeTaskId}
-                            workspacePath={workspaceAbsPath}
-                            workspaceIdentity={workspaceIdentity}
-                            source={tab.source ?? { kind: "current" }}
-                          />
-                        ) : tab.type === "whiteboard" ? (
-                          <WhiteboardPane
-                            workspacePath={workspaceAbsPath}
-                            workspaceIdentity={workspaceIdentity}
-                            boardId={tab.boardId}
                           />
                         ) : tab.type === "model-trajectory" ? (
                           <ModelTrajectoryPane

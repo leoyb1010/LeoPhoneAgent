@@ -1223,7 +1223,7 @@ class NodeMcpAdapter implements McpPort {
         });
       }
       // `protocol_negotiation_failed` 枚举与 UI 文案在 shared/i18n 里早已存在，但 adapter
-      // 侧一直没有产出方——auto/pin 模式下 SDK 的 server/discover probe 硬失败（典型：飞书项目
+      // 侧一直没有产出方——auto/pin 模式下 SDK 的 server/discover probe 硬失败（典型：部分第三方
       // MCP 对未知方法回 HTTP 200 + id:null 的非标 JSON-RPC error，body 过不了
       // JSONRPCMessageSchema）会一路落到默认 failureKind "network_unreachable"，设置页因此
       // 显示误导性的"网络不可达"。这里按结构化错误类型（SdkErrorCode / isInstance）识别 SDK

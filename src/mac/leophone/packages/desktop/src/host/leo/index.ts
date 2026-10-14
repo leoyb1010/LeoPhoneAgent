@@ -35,7 +35,7 @@ const LINK_SYNC_MS = 15_000;
 
 /**
  * [leo] 我们自己的几块:藏宝阁、手机连接(Leo Link)、订阅账号(OAuth)模型代理。
- * 聊天机器人遥控(Telegram / 飞书 / 微信)用上游的机器人服务,规则见 services/src/bots/leoBotPolicy.ts。
+ * 上游的聊天机器人遥控已在 1.9.0 删除;手机只经 Leo Link(中继 / Tailscale 直连)控制这台 Mac。
  *
  * 跟着 Window Host 的 services 一起活:会话与权限直接用 IZCodeTaskService,不另起 agent。
  * 每个窗口都有自己的 Host,但本地端口只有一个:谁抢到端口谁负责手机连接 / MCP 登记 / 订阅同步;

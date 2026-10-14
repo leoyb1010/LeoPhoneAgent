@@ -2,7 +2,7 @@
 // 本文件承载旧消息转换层（zcodeChatMessages/zcodeChatMessageHelpers）中仍被存活栈
 // type-only 消费的承重类型：TaskChatMessage / TaskChatToolCall / TaskChatMessagePart。
 // 消费方：ToolCallBlocks(toolCallTree) / PermissionDialog / taskChangeSummary /
-// treemappingActivity / codeViewer / toolDisplay / toolError / app-shell 测试注入通道。
+// codeViewer / toolDisplay / toolError / app-shell 测试注入通道。
 // 旧消息拼装运行时（zcodeChatMessages.ts）删除后，这里是该类型面的唯一事实源。
 import type {
   ZCodeAssistantMessagePart,

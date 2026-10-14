@@ -3,15 +3,13 @@ export type MentionCategory =
   | "skills"
   | "commands"
   | "subagents"
-  | "whiteboards"
   | "sessions"
   | "plugins";
 
 export interface MentionItemData {
-  kind?: "file" | "directory" | "whiteboard";
+  kind?: "file" | "directory";
   path?: string;
   relativePath?: string;
-  boardId?: string;
   scope?: "built-in" | "workspace" | "user" | "plugin";
   source?: "built-in" | "user" | "plugin";
   model?: string;

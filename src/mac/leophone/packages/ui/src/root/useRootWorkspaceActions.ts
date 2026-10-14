@@ -4,7 +4,6 @@ import {
   DesktopCommandIds,
   type AppSettings,
   type IPlatformService,
-  type RemoteTarget,
   type UserInfo,
   type ZCodeTaskClientMode,
 } from "@zcode/shared";
@@ -14,7 +13,6 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { reportAppTelemetryEvent } from "@/lib/appTelemetry.js";
 import { resolveLogoutProviderFamilyDomain } from "@/lib/providerFamilyDomainSettings.js";
 import { isRendererReloadNavigation } from "@/lib/rendererNavigation.js";
-import { parseWslUncWorkspacePath } from "@/lib/wslUncWorkspace.js";
 import { logger } from "@/logger.js";
 import { openFolderFromWorkspaceEntry } from "@/root/openWorkspaceFolderEntry.js";
 import { useConversationWorkspaceActions } from "@/root/useConversationWorkspaceActions.js";
@@ -30,11 +28,6 @@ import { resolveWorkbenchNewTaskTarget } from "@/v4/workbenchNewTaskTarget.js";
 import type { WorkbenchNewTaskTarget } from "@/v4/workbenchNewTaskTarget.js";
 import { useWorkbenchGroupStore } from "@/v4/workbenchGroupStore.js";
 import { persistV4ComposerDraft, V4_DRAFT_SCOPE_ROOT } from "@/v4/composer/composerDraftStore.js";
-
-interface OpenRemoteConnectionPreference {
-  preferredKind?: RemoteTarget["kind"];
-  preferredWslDistro?: string;
-}
 
 /** 新任务落点：identity 缺省一律归一化为 null，供只读校验、focus/addTab 统一消费。 */
 interface NewTaskTargetResolution {
@@ -86,7 +79,6 @@ export function useRootWorkspaceActions({
   setUser,
   onProviderFamilyDomainClearedAfterLogout,
   userId,
-  onOpenRemoteConnection,
   workbenchGroupClientMode = "desktop-continuous",
 }: {
   intl: ReturnType<typeof import("@/i18n/IntlProvider.js").useZCodeIntl>["intl"];
@@ -106,7 +98,6 @@ export function useRootWorkspaceActions({
   setUser: (user: UserInfo | null) => void;
   onProviderFamilyDomainClearedAfterLogout?: () => void;
   userId?: string;
-  onOpenRemoteConnection?: (preference?: OpenRemoteConnectionPreference) => void;
   workbenchGroupClientMode?: ZCodeTaskClientMode;
 }) {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
@@ -364,32 +355,6 @@ export function useRootWorkspaceActions({
     async (path: string) => {
       logger.info("[Root] handleSelectProject called with path:", path);
       try {
-        const wslUncWorkspace = parseWslUncWorkspacePath(path);
-        if (wslUncWorkspace && onOpenRemoteConnection) {
-          const shouldOpenWslConnection = await requestConfirmation({
-            title: intl.formatMessage({ id: "workspace.wslUncPrompt.title" }),
-            description: intl.formatMessage(
-              { id: "workspace.wslUncPrompt.description" },
-              {
-                path,
-              },
-            ),
-            confirmLabel: intl.formatMessage({ id: "workspace.wslUncPrompt.openWsl" }),
-            cancelLabel: intl.formatMessage({ id: "workspace.wslUncPrompt.continuePath" }),
-          });
-          if (shouldOpenWslConnection) {
-            logger.info("[Root] 用户选择通过 WSL 远程连接打开 UNC 工作区", {
-              distro: wslUncWorkspace.distro,
-              path,
-            });
-            onOpenRemoteConnection({
-              preferredKind: "wsl",
-              preferredWslDistro: wslUncWorkspace.distro,
-            });
-            return;
-          }
-        }
-
         // 桌面端：检查是否已有其他窗口打开了该目录，如果是则激活该窗口对应 tab
         const result = await platform.activateOrSetWorkspace(path);
         if (result.activated) {
@@ -426,10 +391,7 @@ export function useRootWorkspaceActions({
     },
     [
       addTab,
-      intl,
-      onOpenRemoteConnection,
       platform,
-      requestConfirmation,
       services.settingService,
       startDraftInWorkspace,
       supportsSettings,

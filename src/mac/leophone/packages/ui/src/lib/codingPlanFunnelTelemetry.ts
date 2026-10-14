@@ -6,7 +6,6 @@ import {
   type IPlatformService,
   type UsageEntitlementSnapshot,
 } from "@zcode/shared";
-import type { ProviderSettingsView } from "@zcode/services";
 import { logger } from "@/logger.js";
 import { reportAppTelemetryEvent } from "@/lib/appTelemetry.js";
 
@@ -73,21 +72,6 @@ export function createCodingPlanFunnelContext(params: {
   };
 }
 
-export function createIdleTimeCodingPlanFunnelContext(params: {
-  providerId: string;
-  eventText: string;
-  entryPlanState: CodingPlanEntryPlanState;
-}): CodingPlanFunnelContext {
-  return createCodingPlanFunnelContext({
-    providerId: params.providerId,
-    upgradeSource: "session_idle_time",
-    eventRegion: "app.session",
-    eventText: params.eventText,
-    entryPlanState: params.entryPlanState,
-    purchaseAudience: "personal",
-  });
-}
-
 export function resolveCodingPlanEntryPlanState(params: {
   displayStatus?: string | null;
   providerId?: string | null;
@@ -125,44 +109,6 @@ export function resolveCodingPlanEntryPlanState(params: {
     return { entryPlanStatus: "start_plan", entryPlanLevel };
   }
   return { entryPlanStatus: "unknown", entryPlanLevel: "" };
-}
-
-export function resolveCodingPlanEntryPlanStateFromProviderSettings(
-  view: ProviderSettingsView | null,
-): CodingPlanEntryPlanState {
-  if (!view) {
-    return resolveCodingPlanEntryPlanState({});
-  }
-  const accountProviders = view.providers.filter(
-    (provider) =>
-      provider.effectiveConfig.access?.type === "zhipu-account" &&
-      provider.effectiveConfig.access.entitled === true,
-  );
-  const codingPlanProvider = accountProviders.find(
-    (provider) =>
-      provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan ||
-      provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan ||
-      // Team 同样持有 Coding Plan；不能用包含 Start 的宽泛 helper 判断套餐。
-      provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.zaiTeamCodingPlan ||
-      provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan,
-  );
-  if (codingPlanProvider) {
-    return resolveCodingPlanEntryPlanState({
-      displayStatus: "purchased",
-      providerId: codingPlanProvider.providerId,
-    });
-  }
-  const startPlanProvider = accountProviders.find((provider) =>
-    isStartPlanProviderId(provider.providerId),
-  );
-  if (startPlanProvider) {
-    return resolveCodingPlanEntryPlanState({
-      displayStatus: "purchased",
-      providerId: startPlanProvider.providerId,
-      planLevel: "start",
-    });
-  }
-  return resolveCodingPlanEntryPlanState({ displayStatus: "notPurchased" });
 }
 
 export function reportCodingPlanUpgradeClick(

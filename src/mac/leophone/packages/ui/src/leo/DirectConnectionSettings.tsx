@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/components/lib/utils.js";
+import { Button } from "@/components/ui/button.js";
+import { Input } from "@/components/ui/input.js";
+import { Switch } from "@/components/ui/switch.js";
+import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsRow.js";
 import type { LeoLinkBridge, LinkStatus } from "./LeoPhoneLinkSection.js";
-const FOCUS_RING =
-  "focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-brand!";
 
 export function DirectConnectionSettings({
   bridge,
@@ -62,120 +63,135 @@ export function DirectConnectionSettings({
       setBusy(false);
     }
   };
-  const inputStyle = cn(
-    "w-full rounded-md border border-border bg-background px-2 py-1.5 text-ui-base",
-    FOCUS_RING,
-  );
+  const devices = status?.direct?.devices ?? [];
   return (
-    <details className="mt-4 border-t border-border pt-3">
-      <summary className={cn("cursor-pointer text-ui-base text-foreground", FOCUS_RING)}>
-        Tailscale 直连与已授权设备
-      </summary>
-      <div className="mt-3 space-y-3 text-ui-caption text-foreground-subtle">
-        <p>
-          {status?.direct?.running
-            ? "本机直连接口已启动；手机验证 HTTPS 和身份后优先使用。"
-            : (status?.direct?.error ?? "直连尚未启用，现有中继连接继续工作。")}
-        </p>
-        <label className="block space-y-1">
-          <span>这台 Mac 的 Tailscale HTTPS 地址</span>
-          <input
-            aria-label="Tailscale HTTPS 地址"
-            type="url"
-            placeholder="https://your-mac.your-tailnet.ts.net"
-            value={baseURL}
-            onChange={(event) => setBaseURL(event.target.value)}
-            className={inputStyle}
+    <>
+      <section className="space-y-3">
+        <div className="text-ui-base font-medium text-foreground-subtle">Tailscale 直连</div>
+        <SettingsGroupCard>
+          <SettingsRow
+            label="Tailscale HTTPS 地址"
+            description={
+              status?.direct?.running
+                ? "本机直连接口已启动；手机验证 HTTPS 和身份后优先使用。"
+                : (status?.direct?.error ?? "直连尚未启用，现有中继连接继续工作。")
+            }
+            controlLayout="wide"
+            control={
+              <Input
+                aria-label="Tailscale HTTPS 地址"
+                type="url"
+                placeholder="https://your-mac.your-tailnet.ts.net"
+                value={baseURL}
+                onChange={(event) => setBaseURL(event.target.value)}
+              />
+            }
           />
-        </label>
-        <label className="block space-y-1">
-          <span>专用本机端口</span>
-          <input
-            aria-label="直连本机端口"
-            type="number"
-            min={1024}
-            max={65535}
-            value={port}
-            onChange={(event) => setPort(event.target.value)}
-            className={inputStyle}
+          <SettingsRow
+            label="专用本机端口"
+            description={`在 Tailscale Serve 中将上面的 HTTPS 地址转发到 127.0.0.1:${port || "38474"}。不会自动修改现有 Serve 或 Funnel 配置。`}
+            control={
+              <Input
+                aria-label="直连本机端口"
+                type="number"
+                min={1024}
+                max={65535}
+                value={port}
+                onChange={(event) => setPort(event.target.value)}
+              />
+            }
           />
-        </label>
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            checked={syncEnabled}
-            onChange={(event) => setSyncEnabled(event.target.checked)}
-            className={FOCUS_RING}
+          <SettingsRow
+            label="同步副本"
+            description="允许已配对设备将同步副本保存到这台 Mac"
+            control={
+              <Switch
+                aria-label="同步副本"
+                checked={syncEnabled}
+                onCheckedChange={setSyncEnabled}
+              />
+            }
           />
-          <span>允许已配对设备将同步副本保存到这台 Mac</span>
-        </label>
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            checked={treasuryEnabled}
-            onChange={(event) => setTreasuryEnabled(event.target.checked)}
-            className={FOCUS_RING}
+          <SettingsRow
+            label="藏宝阁"
+            description="允许已配对设备访问这台 Mac 的藏宝阁"
+            control={
+              <Switch
+                aria-label="藏宝阁"
+                checked={treasuryEnabled}
+                onCheckedChange={setTreasuryEnabled}
+              />
+            }
           />
-          <span>允许已配对设备访问这台 Mac 的藏宝阁</span>
-        </label>
-        <p>
-          在 Tailscale Serve 中将以上 HTTPS 地址转发到 127.0.0.1:{port || "38474"}。不会自动修改现有
-          Serve 或 Funnel 配置。直连和中继复用同一任务。
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={busy || !baseURL.trim()}
-            onClick={() => void save(true)}
-            className={cn(
-              "rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-40",
-              FOCUS_RING,
-            )}
-          >
-            保存并启用
-          </button>
-          <button
-            type="button"
-            disabled={busy || !status?.direct?.running}
-            onClick={() => void save(false)}
-            className={cn(
-              "rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-40",
-              FOCUS_RING,
-            )}
-          >
-            停用直连
-          </button>
-          <button
-            type="button"
-            disabled={busy || pending || !status?.direct?.running}
-            onClick={onPair}
-            className={cn(
-              "rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-40",
-              FOCUS_RING,
-            )}
-          >
-            生成直连配对码
-          </button>
-        </div>
-        {status?.direct?.devices.map((device) => (
-          <div key={device.deviceId} className="flex items-center justify-between gap-2">
-            <span className="min-w-0 break-all">{device.name}</span>
-            <button
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
+            <Button
               type="button"
-              disabled={busy}
-              onClick={() => void revoke(device.deviceId)}
-              aria-label={`撤销 ${device.name} 的访问`}
-              className={cn(
-                "shrink-0 rounded px-2 py-1 text-destructive disabled:opacity-40",
-                FOCUS_RING,
-              )}
+              size="lg"
+              disabled={busy || !baseURL.trim()}
+              onClick={() => void save(true)}
             >
-              撤销访问
-            </button>
+              保存并启用
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={busy || !status?.direct?.running}
+              onClick={() => void save(false)}
+            >
+              停用直连
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={busy || pending || !status?.direct?.running}
+              onClick={onPair}
+            >
+              生成直连配对码
+            </Button>
+            <span className="text-ui-caption text-foreground-subtlest">
+              开关和地址在保存后生效；直连和中继复用同一任务。
+            </span>
           </div>
-        ))}
-        {message ? <p role="status">{message}</p> : null}
-      </div>
-    </details>
+        </SettingsGroupCard>
+        {message ? (
+          <p role="status" className="text-ui-caption text-foreground-subtle">
+            {message}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <div className="text-ui-base font-medium text-foreground-subtle">已授权设备</div>
+        <SettingsGroupCard>
+          {devices.length === 0 ? (
+            <div className="px-4 py-3 text-ui-base text-foreground-subtle">
+              还没有设备通过直连授权。
+            </div>
+          ) : (
+            devices.map((device) => (
+              <SettingsRow
+                key={device.deviceId}
+                label={<span className="break-all">{device.name}</span>}
+                control={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="lg"
+                    className="text-destructive"
+                    disabled={busy}
+                    onClick={() => void revoke(device.deviceId)}
+                    aria-label={`撤销 ${device.name} 的访问`}
+                  >
+                    撤销访问
+                  </Button>
+                }
+              />
+            ))
+          )}
+        </SettingsGroupCard>
+      </section>
+    </>
   );
 }

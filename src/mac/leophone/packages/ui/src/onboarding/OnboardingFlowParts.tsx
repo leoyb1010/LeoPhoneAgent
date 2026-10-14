@@ -23,8 +23,6 @@ import {
   type ImportResourceCategory,
 } from "@/settings/ExternalAgentImportDialog.js";
 
-export { OnboardingWelcomeView } from "@/onboarding/OnboardingWelcomeView.js";
-
 export interface OnboardingWorkspaceCandidate {
   workspacePath: string;
   label: string;

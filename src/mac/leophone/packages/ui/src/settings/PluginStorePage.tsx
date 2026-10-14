@@ -384,7 +384,7 @@ export function PluginStorePage({
       {view === "store" ? (
         <h1
           data-testid="plugin-store-title"
-          className="text-2xl font-semibold tracking-tight text-foreground lg:text-3xl"
+          className="text-ui-xl font-semibold tracking-tight text-foreground"
         >
           {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
         </h1>

@@ -8,12 +8,10 @@ import {
   BugIcon,
   FileCode2Icon,
   FileDiffIcon,
-  MapIcon,
   MessageSquareTextIcon,
   ListTreeIcon,
   NotepadTextIcon,
   PackageIcon,
-  PaletteIcon,
   SquareTerminalIcon,
   TerminalIcon,
   WaypointsIcon,
@@ -312,14 +310,6 @@ export function SidePaneTabIcon({ tab }: { tab: WorkspaceSidePaneTab }) {
     return <FileDiffIcon className="size-3.5" />;
   }
 
-  if (tab.type === "treemapping") {
-    return <MapIcon className="size-3.5" />;
-  }
-
-  if (tab.type === "whiteboard") {
-    return <PaletteIcon className="size-3.5" />;
-  }
-
   if (tab.type === "model-trajectory") {
     return <WaypointsIcon className="size-3.5" />;
   }
@@ -518,14 +508,6 @@ export function getSidePaneTabTitle(
 
   if (tab.type === "git") {
     return formatMessage({ id: "sidePane.review" });
-  }
-
-  if (tab.type === "treemapping") {
-    return formatMessage({ id: "treemapping.title" });
-  }
-
-  if (tab.type === "whiteboard") {
-    return tab.title || formatMessage({ id: "whiteboard.title" });
   }
 
   if (tab.type === "model-trajectory") {

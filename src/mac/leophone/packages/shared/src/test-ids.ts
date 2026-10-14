@@ -207,8 +207,6 @@ export const TID_CONVERSATION_NEW_TASK = "conversation-new-task";
 export const TID_PROJECT_ADD = "project-add";
 /** Composer workspace 选择触发器 */
 export const TID_COMPOSER_WORKSPACE_TRIGGER = "composer-workspace-trigger";
-/** Composer workspace 菜单的远程连接入口 */
-export const TID_COMPOSER_REMOTE_CONNECTION = "composer-remote-connection";
 /** Composer 当前项目解绑按钮 */
 export const TID_COMPOSER_PROJECT_DETACH = "composer-project-detach";
 /** Composer workspace 菜单的非项目工作入口 */
@@ -728,5 +726,3 @@ export function testId(base: string, suffix: string): string {
 
 export const TID_START_PLAN_RECOMMENDATION_DIALOG = "start-plan-recommendation-dialog";
 
-/** 用户反馈的诊断日志授权开关 */
-export const TID_FEEDBACK_LOGS_OPT_IN = "feedback-logs-opt-in";

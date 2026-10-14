@@ -32,9 +32,7 @@ import {
 } from "@/lib/remoteWorkspaceHistory.js";
 import { resolveWorkspaceHeaderProvider } from "@/lib/workspaceHeaderProvider.js";
 import { toast } from "@/components/ui/toast.js";
-import { useFeedbackStore } from "@/feedback/feedbackStore.js";
 import { useModelTrajectoryStore } from "@/store/modelTrajectoryStore.js";
-import { buildTaskFeedbackDescription } from "@/lib/taskFeedbackDraft.js";
 import { resolveGitBranchTriggerLabel } from "@/git-branch-switcher/display.js";
 import type {
   WorkspaceHeaderState,
@@ -104,7 +102,6 @@ export function WorkspaceHeaderTitleSection({
   compact = false,
 }: WorkspaceHeaderTitleSectionProps) {
   const { intl } = useZCodeIntl();
-  const openFeedbackSubmit = useFeedbackStore((state) => state.openSubmit);
   const confirmDialog = useConfirmDialog();
   const services = useWorkspaceServices(workspaceAbsPath, remoteSessionId, workspaceIdentity);
   const baseServices = useBaseWorkspaceServices();
@@ -218,39 +215,6 @@ export function WorkspaceHeaderTitleSection({
   // 新任务草稿还没有稳定 task 作用域，header 再展示 workspace/分支会和空态主文案重复抢焦点。
   // 草稿态继续隐藏上下文入口；已有 task 将工作区与分支收进名称前的图标提示。
   const isDraftNewTask = variant ? variant === "draft" : activeTaskId === null;
-
-  const handleOpenTaskFeedback = async () => {
-    const taskTitle =
-      activeTaskTitle ||
-      intl.formatMessage({
-        id: activeTaskMeta?.forkedFromTaskId ? "taskList.forkedUntitled" : "taskList.untitled",
-      });
-    // Header 更多菜单缺少当前任务的反馈入口，用户只能复制日志再手动新建反馈。
-    // 这里打开反馈表单时预填任务标题、路径和日志线索，截图和诊断日志由用户主动选择。
-    openFeedbackSubmit({
-      title: intl
-        .formatMessage(
-          { id: "feedback.submit.template.section.taskFeedbackTitle" },
-          { title: taskTitle },
-        )
-        .slice(0, 80),
-      type: "bug",
-      module: "Agent任务执行失败",
-      severity: "P2-中",
-      includeLogs: false,
-      description: buildTaskFeedbackDescription({
-        taskTitle,
-        taskId: resolvedTaskActionTaskId ?? undefined,
-        workspacePath: workspaceAbsPath,
-        taskSessionPath: taskSessionFile.path,
-        taskLogPath: taskNativeSessionLogFile.path,
-        formatMessage: (id: string, values?: Record<string, string>) =>
-          intl.formatMessage({ id }, values),
-      }),
-      screenshots: [],
-    });
-    toast(intl.formatMessage({ id: "taskList.feedbackOpened" }));
-  };
 
   const handleStartRenameTask = () => {
     if (!resolvedTaskActionTaskId) {
@@ -668,9 +632,6 @@ export function WorkspaceHeaderTitleSection({
                         nextState: { pinned: isPinned, archived: false },
                       });
                     });
-                }}
-                onOpenTaskFeedback={() => {
-                  void handleOpenTaskFeedback();
                 }}
                 onOpenTaskPathInFileManager={() => {
                   void handleOpenTaskPathInFileManager();

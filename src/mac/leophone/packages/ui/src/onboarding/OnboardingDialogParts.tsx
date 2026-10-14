@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
-export type OnboardingView = "welcome" | "wizard";
 export type OnboardingWizardStep =
   | "session"
   | "skills-import"
@@ -121,7 +120,7 @@ export function OnboardingWizardFooter(props: {
   selectedWorkspaceCount: number;
   finishRunning: boolean;
   finishReady: boolean;
-  onBackToWelcome: () => void;
+  onCancel: () => void;
   onBackStep: () => void;
   onNextStep: () => void;
   onBeginMigration: () => void;
@@ -153,9 +152,9 @@ export function OnboardingWizardFooter(props: {
               variant="secondary"
               size="lg"
               className="h-10 min-w-0 px-5"
-              onClick={props.onBackToWelcome}
+              onClick={props.onCancel}
             >
-              {intl.formatMessage({ id: "common.back" })}
+              {intl.formatMessage({ id: "common.cancel" })}
             </Button>
             <Button
               type="button"

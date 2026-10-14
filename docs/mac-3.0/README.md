@@ -1,15 +1,16 @@
 # LeoPhoneAgent Mac 1.x(ZCode 内核)
 
 Mac 端换成 **ZCode 内核**(zai-org/ZCode,Apache-2.0)并改成我们自己的独立产品,工程在
-`src/mac/leophone/`。`src/mac/leocodebox/`(2.2.x,pi 内核 + 自研壳)只作回退与历史会话查阅,不再开发。
+`src/mac/leophone/`。旧版 `src/mac/leocodebox/`(2.2.x)已在 1.9.0 从主分支移除,源码只存于 tag `archive/leocodebox-2.2.13`。
 
 ## 它是什么
 ZCode 的本地能力都在:会话工作台与分组任务、工具时间线、Git 面板、文件树与搜索、终端、
 内嵌浏览器与 Browser Use、随包插件、MCP、技能、Hooks、斜杠命令、自动化、动态工作流、记忆、
 权限四档(plan / build / ask / yolo)。模型两种接法:订阅账号登录(OAuth),或 API Key 添加供应商。
 
-依赖官方服务器的部分已关闭:官方账号与 Coding Plan、会话分享与导入、闲时任务、官方插件市场远端分片、
-SSH / Docker 远程工作区(远端运行时原本从官方 CDN 下载,后续改由我们自己的更新源提供)。
+依赖官方服务器的部分已关闭:官方账号与 Coding Plan、闲时任务、官方插件市场远端分片、
+SSH / WSL / Docker 远程工作区(远端运行时原本从官方 CDN 下载;1.9.0 起新建入口已删除)。
+会话分享与导入、反馈中心在 1.9.0 整体删除(清单见 `UPSTREAM.md`)。
 
 ## 独立性红线
 - 不连任何 `*.z.ai / bigmodel.cn / zhipuai.cn / zhipu.ai / chatglm.cn / zcode.ai`:源头已切断;
@@ -29,7 +30,6 @@ SSH / Docker 远程工作区(远端运行时原本从官方 CDN 下载,后续改
 - **藏宝阁**:`~/.leoagent/treasury.sqlite`(node:sqlite)。四个工具
   `treasury_search / treasury_get / treasury_save / treasury_update`,首启登记进 `~/.agents/mcp.json`。
   写操作要求 `user_confirmed: true`。
-- **聊天机器人遥控**:用上游的机器人服务,模式固定为「先问我」,规则见 `services/src/bots/leoBotPolicy.ts`。
 - **本机接口**:只绑 `127.0.0.1:38473` 并校验 Host,不开 CORS。钥匙三把、各管一段:主钥匙 `~/.leoagent/key`
   (订阅代理、连接状态、藏宝阁);藏宝阁钥匙 `~/.leoagent/treasury.key`(只能调藏宝阁,写进 `~/.agents/mcp.json`
   的是它);出配对码口令只在主进程与 Host 的内存里,每次启动都换,界面上点了才经 IPC 带上。`/api/leo/health`
@@ -53,17 +53,19 @@ corepack pnpm@10.33.2 leo:finalize:mac                # manifest + latest-mac.ym
 gh release create v<版本> -R leoyb1010/leocodebox-updates <dmg> <zip> \
   packages/desktop/dist/leophone-manifest-darwin-arm64.json packages/desktop/dist/latest-mac.yml
 ```
-不要在 iCloud 目录里构建;worktree 放在 `~/leophone-mac`(也不能放 `/tmp`:electron-builder 拒绝系统路径下的 pnpm 符号链接)。
+不要在 iCloud 目录里构建;Mac 端在 `~/leophone-mac` 这份**独立克隆**里构建(1.9.0 起它不再是指向 iCloud 的符号链接)(也不能放 `/tmp`:electron-builder 拒绝系统路径下的 pnpm 符号链接)。
 
 ## 发版铁律
 每次发版都必须在 `packages/ui/src/leo/leoReleaseNotes.ts` 最前面加一条,版本号等于根 `package.json` 的
 version,内容写这一版真实改了什么。`leo:bundle:mac` 链首就是闸门,漏写打不出包(已反向验证会红)。
 
 ## 手机远程控制(Leo Link)
+入口:侧边栏左下角手机图标 → 设置「连接手机」页(`settings` 分区 `phone`):中继配对码、Tailscale 直连、同步副本与藏宝阁开关、已授权设备。
+上游的聊天机器人遥控(Telegram / 飞书 / 微信 / Webhook)在 1.9.0 整体删除,产品不接入飞书。
 中继帧在进程内交给 `packages/desktop/src/host/leo/link/`(手机协议 v0.4)。对手机只开放 `/health`、`/v1/capabilities`、
 `/v1/grok/token`、`/harness/full-auto`、`/harness/sessions` 及其 `events | send | approval | stop | archive`,其余一律 404。
 跑完一轮后 30 分钟没动的任务报 `available`(手机首页「进行中」只放在跑的和刚跑完的);Mac 重启认回的任务保留日志里最后一条事件的时间。
 `archive` 只把任务从手机列表里拿掉:不动 Mac 上的对话,日志留着(再接管时编号接得上);还在跑的回 409。
 
 ## 这一版没有的
-2.2.x 的会话不迁移,翻旧记录用保留的 leocodebox 2.2。
+2.2.x 的会话不迁移;旧版 leocodebox 只在 tag `archive/leocodebox-2.2.13` 里,需要翻旧记录时从 tag 取出构建。

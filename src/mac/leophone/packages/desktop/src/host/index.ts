@@ -34,7 +34,6 @@ import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
   ServiceCollection,
-  IBotsService,
   IFileService,
   IClientConfigService,
   IMediaPreviewService,
@@ -42,7 +41,6 @@ import {
   IModelSelectionService,
   ISettingService,
   IWindowControllerService,
-  IConversationShareService,
   IZCodeAgentService,
   IZCodeTaskService,
   IZCodeSessionService,
@@ -122,7 +120,6 @@ import {
   createRemoteMediaPreviewProxy,
   type RemoteMediaPreviewProxy,
 } from "./remoteMediaPreviewProxy.js";
-import { watchCronRunBotDelivery } from "./cronBotDelivery.js";
 import { createHostRemoteWorkspaceProxyState } from "./hostRemoteWorkspaceProxyState.js";
 import { createRemoteWorkspaceServiceCollection } from "./remoteWorkspaceServiceCollection.js";
 import { getRemoteProviderProvisioningExecutor } from "./remoteProviderProvisioningService.js";
@@ -144,7 +141,6 @@ import {
   materializeRemotePromptAttachments,
 } from "./remotePromptAttachments.js";
 import { createWindowHostAttachmentRegistry } from "./windowHostAttachmentRegistry.js";
-import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
 import {
   createWindowRemoteConnectionRegistry,
   type WindowRemoteConnectionCloseEvent,
@@ -193,19 +189,11 @@ process.title = formatZCodeHostProcessName(process.env["ZCODE_PROCESS_LABEL"]);
 
 type HostLogLevel = "info" | "warn" | "error";
 
-interface PendingFeedbackLogArchiveRequest {
-  resolve: (archive: { path: string; size: number }) => void;
-  reject: (error: Error) => void;
-  onProgress?: (event: { processedBytes: number; totalBytes: number }) => void;
-}
-
 interface PendingLocalMediaPreviewPathAuthorization {
   resolve: (path: string) => void;
   reject: (error: Error) => void;
 }
 
-const pendingFeedbackLogArchiveRequests = new Map<string, PendingFeedbackLogArchiveRequest>();
-let nextFeedbackLogArchiveRequestSeq = 0;
 const pendingLocalMediaPreviewPathAuthorizations = new Map<
   string,
   PendingLocalMediaPreviewPathAuthorization
@@ -310,37 +298,6 @@ function writeHostLog(level: HostLogLevel, ...args: unknown[]): void {
     level === "error" ? rawConsole.error : level === "warn" ? rawConsole.warn : rawConsole.log;
   consoleFn(prefix, ...args);
   reportHostLog(level, [prefix, ...args]);
-}
-
-function createFullFeedbackLogArchiveViaMain(
-  sourceDir: string,
-  options?: {
-    onProgress?: (event: { processedBytes: number; totalBytes: number }) => void;
-  },
-): Promise<{ path: string; size: number }> {
-  const requestId = `feedback-log-archive-${Date.now()}-${nextFeedbackLogArchiveRequestSeq++}`;
-  options?.onProgress?.({ processedBytes: 0, totalBytes: 0 });
-
-  return new Promise((resolve, reject) => {
-    pendingFeedbackLogArchiveRequests.set(requestId, {
-      resolve,
-      reject,
-      onProgress: options?.onProgress,
-    });
-    // 问题反馈以前在 host service 内走 compactLogArchive 的 full fallback，
-    // 收集范围和“导出日志”不一致，缺少 zcode-cli 日志、rollout/debug 以及导出链路脱敏。
-    // 这里把完整日志打包委托给 main process 的导出日志同源逻辑，host 只拿 zip 路径继续上传。
-    try {
-      parentPort.postMessage({
-        type: HostResponseTypes.FeedbackLogArchiveRequest,
-        requestId,
-        sourceDir,
-      });
-    } catch (error) {
-      pendingFeedbackLogArchiveRequests.delete(requestId);
-      reject(error instanceof Error ? error : new Error(String(error)));
-    }
-  });
 }
 
 const logger = {
@@ -921,26 +878,6 @@ async function dispatchCronRun(request: CronRunDispatchRequest): Promise<{
         mode: request.mode,
       });
     }
-    const botsService = targetServices.getOptional(IBotsService);
-    if (botsService) {
-      try {
-        await watchCronRunBotDelivery({
-          automationId: request.automationId,
-          workspaceKey,
-          workspacePath: request.workspacePath,
-          ...(request.workspaceIdentity ? { workspaceIdentity: request.workspaceIdentity } : {}),
-          taskId: task.taskId,
-          repo: cronAutomationRepo,
-          botsService,
-        });
-      } catch (error) {
-        // Bot 回推是 best-effort 辅助通道；配置/凭据/订阅失败不能阻断 automation 派发与结算。
-        logger.warn(
-          `automation Bot delivery subscription failed automation=${request.automationId} provider=unknown`,
-          error,
-        );
-      }
-    }
     trackedKey = cronRunSubscriptionKey(task.taskId, promptTraceId);
     trackCronRunOutcome({
       zcodeTaskService,
@@ -1294,7 +1231,7 @@ function createReportingRemoteZCodeTaskService<T extends object>(
     const leaseResult = await taskRealtimePort
       .acquireTaskRunLease(mirrorTarget)
       .catch((error: unknown) => {
-        logger.warn("Bot remote runtime realtime lease failed:", error);
+        logger.warn("Remote runtime realtime lease failed:", error);
         return null;
       });
     if (!leaseResult?.acquired) {
@@ -2033,19 +1970,6 @@ function exposeServicesOnMessagePort(
   if (connectionScope) {
     overrides.set(IZCodeAgentService.channelName, connectionScope.service);
   }
-  const conversationShareService = services.getOptional(IConversationShareService);
-  if (conversationShareService) {
-    // Share service 若继续持有 raw Agent，会绕过当前 MessagePort 已握手的 trusted carrier，
-    // rowsRange 会以 connection untrusted 拒绝。必须复用同一 attachment connection scope。
-    overrides.set(
-      IConversationShareService.channelName,
-      scopeConversationShareServiceForAttachment(
-        conversationShareService,
-        clientMode,
-        connectionScope?.service,
-      ),
-    );
-  }
   services.exposeOnChannelServer(server, overrides);
   let disposed = false;
   let flowUpdateChain = Promise.resolve();
@@ -2337,21 +2261,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
   }
   if (msg.type === HostMessageTypes.ResourceUsageSnapshotCancel) {
     hostResourceUsageResponder.cancelRequest(msg.requestId);
-    return;
-  }
-
-  if (msg.type === HostMessageTypes.FeedbackLogArchiveResult) {
-    const pending = pendingFeedbackLogArchiveRequests.get(msg.requestId);
-    if (!pending) {
-      return;
-    }
-    pendingFeedbackLogArchiveRequests.delete(msg.requestId);
-    if (msg.ok && msg.path && typeof msg.size === "number") {
-      pending.onProgress?.({ processedBytes: msg.size, totalBytes: msg.size });
-      pending.resolve({ path: msg.path, size: msg.size });
-      return;
-    }
-    pending.reject(new Error(msg.error ?? "反馈日志归档创建失败"));
     return;
   }
 
@@ -2726,16 +2635,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
     return;
   }
 
-  if (
-    msg.type === HostMessageTypes.BotRemoteWorkspaceReconnectResult ||
-    msg.type === HostMessageTypes.BotRemoteWorkspaceConnectionStatusResult ||
-    msg.type === HostMessageTypes.BotRemoteWorkspaceRuntimePort
-  ) {
-    // Bugfix: Bot bridge 也监听 parentPort，main 回传的 runtime MessagePort 是给 Bot 作为
-    // 远端 RPC client 使用的。host 入口必须跳过这些控制消息，避免误把同一个端口注册成 ChannelServer。
-    return;
-  }
-
   if (msg.type === HostMessageTypes.AttachServicePort) {
     if (!port) {
       logger.error("attach-service-port message missing MessagePort");
@@ -2861,11 +2760,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               zcodeBuiltinProviderConfigFilePath: msg.zcodeBuiltinProviderConfigFilePath,
               processLifecycleReporter: runtimeProcessLifecycleReporter,
               taskRuntimeReporter: runtimeTaskReporter,
-              feedback: {
-                getDeviceMid: () => msg.deviceMid,
-                apiBaseUrl: msg.feedbackApiBase,
-                createFullLogArchive: createFullFeedbackLogArchiveViaMain,
-              },
               forwardSessionMessageSendRequested: (request) => {
                 parentPort?.postMessage({
                   type: HostResponseTypes.SessionMessageSendRequested,
@@ -2938,7 +2832,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
           });
         logWindowHostTopology("base-attachment-ready");
         logger.info("local services ready, all channels registered");
-        // [leo] 藏宝阁与 Telegram:用同一份 services,不另起 agent 进程。
+        // [leo] 藏宝阁与手机连接:用同一份 services,不另起 agent 进程。
         startLeoHostServices({ services, logger });
       },
     });

@@ -132,7 +132,7 @@ export function PluginStoreDetailView({
           data-testid="plugin-store-title-actions"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="min-w-0 truncate text-ui-xl font-semibold tracking-tight text-foreground">
               {displayName}
             </h1>
             <PluginStorePaidPlanBadge item={item} />

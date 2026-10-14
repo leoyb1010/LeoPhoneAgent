@@ -33,8 +33,6 @@ import { requestV4ComposerDraftWorkspaceTransfer } from "@/v4/composer/composerD
 import { ChatEmptyWorkspacePreviewMenu } from "@/ChatEmptyState.js";
 import { DesktopTopOverlay } from "@/DesktopTopOverlay.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
-import { WorkspacePluginPreview } from "@/WorkspacePluginPreview.js";
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { GitBranchSwitcher } from "@/GitBranchSwitcher.js";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
 
@@ -94,11 +92,13 @@ import {
 import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { consumeModelSettingsAfterWelcome } from "@/leo/leoLocal.js";
-import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
 
-const WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 264;
-const WORKSPACE_SIDEBAR_MIN_WIDTH_PX = 264;
+// [leo] 1.9.0：之前默认 264px 且最小值也是 264px，侧栏完全拖不窄、占地偏大；
+// 默认收到 232px，最小 200px，用户可以按需拖宽或拖窄。
+const WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 232;
+const WORKSPACE_SIDEBAR_MIN_WIDTH_PX = 200;
+// 旧版本里"没拖过"的用户本地存的就是旧默认值 264；读到它按未设置处理，让新默认生效。
+const LEGACY_WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX = 264;
 const WORKSPACE_SIDEBAR_MAX_WIDTH_RATIO = 0.5;
 const WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY = "zcode:workspace-shell:sidebar-width-px";
 const LEGACY_WORKSPACE_SHELL_LAYOUT_STORAGE_KEY =
@@ -112,9 +112,6 @@ const CONVERSATION_AUTO_COLLAPSE_SIDE_PANE_WIDTH_PX = 480;
 const EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY: NonNullable<
   WorkspaceShellLayoutProps["reconnectingRemoteWorkspaceLogsByWorkspaceKey"]
 > = {};
-const EMPTY_REMOTE_WORKSPACE_SESSIONS: NonNullable<
-  WorkspaceShellLayoutProps["remoteWorkspaceSessions"]
-> = [];
 const CONVERSATION_AUTO_COLLAPSE_SIDEBAR_WIDTH_PX = 360;
 const CONVERSATION_AUTO_COLLAPSE_RESIZE_IDLE_MS = 300;
 // 性能修复：ResizablePanelGroup 收到深相等的新 panelIds 数组，
@@ -152,6 +149,9 @@ function readStoredWorkspaceSidebarWidthPx(): number | null {
       return null;
     }
     const parsed = Number(raw);
+    if (parsed === LEGACY_WORKSPACE_SIDEBAR_DEFAULT_WIDTH_PX) {
+      return null;
+    }
     return Number.isFinite(parsed) && parsed > 0 ? clampWorkspaceSidebarWidth(parsed) : null;
   } catch {
     return null;
@@ -200,9 +200,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenAutomations,
   handleOpenPluginStore,
   handleManageInstalledPlugins,
-  onConnectRemote,
-  onSelectRemoteProject,
-  onCancelRemoteProject,
   onReconnectRemoteWorkspace,
   onLogout,
   onLogin,
@@ -215,11 +212,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   onResolveConversationWorkspace,
   onOpenWorkspace,
   onOpenFolderFromWorkspaceMenu,
-  onOpenRemoteWorkspace,
   onCreateScratchWorkspace,
   allowOpenWorkspace = true,
-  allowRemoteWorkspace = true,
-  remoteWorkspaceSessions = EMPTY_REMOTE_WORKSPACE_SESSIONS,
   workspaceAbsPath,
   workspaceRemoteSessionId,
   workspaceIdentity,
@@ -300,8 +294,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleToggleTerminal,
   handleToggleBrowser,
   handleOpenBrowserTab,
-  handleOpenTreemapping,
-  handleOpenWhiteboard,
   handleOpenDeveloperTools,
   handleOpenTerminalTab,
   handleToggleGit,
@@ -335,7 +327,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   taskFindDialogProps,
 }: WorkspaceShellLayoutProps) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
   // [leo] 欢迎页选了「用 API Key 添加模型供应商」:工作区外壳就绪后打开 设置 → 模型供应商。
@@ -1157,20 +1148,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     workspaceAbsPath,
     workspaceIdentity,
   ]);
-  const handleSelectComposerPlugin = useCallback(
-    (mention: ComposerMentionPrefill) => {
-      useZCodeSessionStore
-        .getState()
-        .requestComposerTextInsert(
-          workspaceAbsPath,
-          mention.markdown,
-          workspaceIdentity,
-          mention,
-          "prepend-if-missing",
-        );
-    },
-    [workspaceAbsPath, workspaceIdentity],
-  );
   // v4 pane 生命周期回调（稳定引用，供 memo 友好的 pane 宿主消费）：
   // createSession/fork 后接入既有选择路径；删除会话后回 draft。
   const handleV4SessionCreated = useCallback(
@@ -1189,7 +1166,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         <ChatEmptyWorkspacePreviewMenu
           workspacePath={workspaceAbsPath}
           workspaceIdentity={workspaceIdentity}
-          isWindowsDesktop={isWindowsDesktop}
           workspaceTabs={workspaceTabs}
           onSelectWorkspace={(workspaceTab) =>
             handleStartDraftInWorkspaceInChat(
@@ -1201,21 +1177,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           onSelectConversationWorkspace={handleSelectConversationWorkspace}
           onOpenFolder={onOpenFolderFromWorkspaceMenu}
           allowOpenWorkspace={allowOpenWorkspace}
-          allowRemoteWorkspace={allowRemoteWorkspace}
-          remoteWorkspaceSessions={remoteWorkspaceSessions}
-          onConnectRemote={onConnectRemote}
-          onSelectRemoteProject={onSelectRemoteProject}
-          onCancelRemoteProject={onCancelRemoteProject}
         />
-        {isOfficeMode ? (
-          <WorkspacePluginPreview
-            onOpen={handleOpenPluginStore}
-            onSelectPlugin={handleSelectComposerPlugin}
-            workspacePath={workspaceAbsPath}
-            workspaceIdentity={workspaceIdentity}
-            remoteSessionId={workspaceRemoteSessionId ?? undefined}
-          />
-        ) : !isOfficeMode && activeWorkspacePurpose === "project" ? (
+        {activeWorkspacePurpose === "project" ? (
           <GitBranchSwitcher
             workspacePath={workspaceAbsPath}
             gitSummary={gitState.summary}
@@ -1232,24 +1195,14 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       </>
     ),
     [
-      isOfficeMode,
-      workspaceRemoteSessionId,
-      handleOpenPluginStore,
-      handleSelectComposerPlugin,
       allowOpenWorkspace,
-      allowRemoteWorkspace,
       activeWorkspacePurpose,
       gitDirtyFileCount,
       gitState.summary,
       handleRefreshGit,
       handleSelectConversationWorkspace,
       handleStartDraftInWorkspaceInChat,
-      isWindowsDesktop,
-      onCancelRemoteProject,
-      onConnectRemote,
       onOpenFolderFromWorkspaceMenu,
-      onSelectRemoteProject,
-      remoteWorkspaceSessions,
       workspaceAbsPath,
       workspaceIdentity,
       workspaceTabs,
@@ -1478,7 +1431,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onCloseAllTabs={handleCloseAllSidePaneTabs}
       onReopenClosedTab={handleReopenClosedSidePaneTab}
       onOpenBrowserTab={handleOpenBrowserTab}
-      onOpenWhiteboard={handleOpenWhiteboard}
       onOpenDeveloperTools={handleOpenDeveloperTools}
       onOpenTerminalTab={handleOpenTerminalTab}
       onOpenReviewTab={handleToggleGit}
@@ -1587,11 +1539,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     onCreateTask={handleCreateTaskInChat}
                     onCreateConversationTask={handleCreateConversationTaskInChat}
                     onOpenFolderFromWorkspaceMenu={onOpenFolderFromWorkspaceMenu}
-                    onOpenRemoteWorkspace={onOpenRemoteWorkspace}
                     theme={theme}
-                    onConnectRemote={onConnectRemote}
-                    onSelectRemoteProject={onSelectRemoteProject}
-                    onCancelRemoteProject={onCancelRemoteProject}
                     onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
                     reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
                     remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}

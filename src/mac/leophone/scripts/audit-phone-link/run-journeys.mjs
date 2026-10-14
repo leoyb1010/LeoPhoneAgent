@@ -73,7 +73,7 @@ try {
   await waitText("待发 0 · 已签发 3 · 未撤销 0 · 已撤销 3");
   await button("打开面板").click();
   await button("状态错误：关").click();
-  await waitText("读不到连接状态(连接状态读取失败，正在重试)");
+  await waitText("读不到连接状态（连接状态读取失败，正在重试）");
   assert.equal(await button("扫码连接手机").isDisabled(), true);
   await screenshot(
     "05-status-failure",
@@ -81,7 +81,7 @@ try {
   );
   await button("状态错误：开").click();
   await waitText("Synthetic Mac 已连上中继 · 中继 0.2");
-  await page.getByText("Tailscale 直连与已授权设备", { exact: true }).click();
+  await page.getByText("Tailscale 直连", { exact: true }).waitFor();
   await page.getByLabel("Tailscale HTTPS 地址", { exact: true }).fill("https://invalid.example");
   await button("保存并启用").click();
   await waitText("Invalid synthetic direct configuration");

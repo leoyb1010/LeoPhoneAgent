@@ -268,7 +268,7 @@ nodes:
         file: packages/ui/src/prompt-editor/ChatPromptActionMenu.tsx
   - id: surface.composer-at-context-picker
     kind: ui-surface
-    label: Composer @ context picker (Plugins, files, sessions, Whiteboards)
+    label: Composer @ context picker (Plugins, files, sessions)
     aliases:
       - "@ context picker"
       - "@ 面板"
@@ -279,8 +279,6 @@ nodes:
         file: packages/ui/src/mentions/providers/fileMentionProvider.ts
       - symbol: useSessionsMentionProvider
         file: packages/ui/src/mentions/providers/sessionsMentionProvider.ts
-      - symbol: useWhiteboardMentionProvider
-        file: packages/ui/src/mentions/providers/whiteboardMentionProvider.ts
   - id: surface.composer-slash-capability-picker
     kind: ui-surface
     label: Composer slash picker (commands, Skills, Subagents)

@@ -262,7 +262,7 @@ type MessageLinkOpenTarget = "app-browser" | "external-browser";
 
 /**
  * 交互语义：右键菜单的两项是显式互补的目标选择，只有左键单击才走本机/私网启发式。
- * 之前菜单「打开」复用了左键默认行为，公网链接（如飞书文档）两项都会跳系统浏览器。
+ * 之前菜单「打开」复用了左键默认行为，公网链接（如在线文档）两项都会跳系统浏览器。
  */
 export function resolveMessageLinkOpenTarget(input: {
   href: string;

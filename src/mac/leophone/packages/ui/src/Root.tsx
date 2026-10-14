@@ -5,7 +5,6 @@ import {
   APP_RUNTIME_PREFERENCES_CHANGED_BROADCAST_CHANNEL,
   DesktopCommandIds,
   appRuntimePreferencesChangedBroadcastPayloadSchema,
-  type RemoteTarget,
 } from "@zcode/shared";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { LeoWhatsNew } from "@/leo/LeoWhatsNew.js";
@@ -18,7 +17,6 @@ import { useTabPersistence } from "@/hooks/useTabPersistence.js";
 import { useTokenRefresh } from "@/hooks/useTokenRefresh.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { SSHDialog } from "@/SSHDialog.js";
 import { SettingsPage } from "@/SettingsPage.js";
 import { CodingPlanUpgradeDialogProvider } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { WelcomeScreen, type LoginCompleteReason } from "@/WelcomeScreen.js";
@@ -43,7 +41,6 @@ import { logger } from "@/logger.js";
 import { RootShell } from "@/root/RootShell.js";
 import { RootWorkspaceContent } from "@/root/RootWorkspaceContent.js";
 import { resolveRootWorkspaceShellTarget } from "@/root/rootWorkspaceShellTarget.js";
-import { OccupationOnboarding } from "@/onboarding/OccupationOnboarding.js";
 import { OnboardingDialog } from "@/onboarding/OnboardingDialog.js";
 import { useRemoteWorkspaceHistory } from "@/root/useRemoteWorkspaceHistory.js";
 import { useRemoteWorkspaceTabLifecycle } from "@/root/useRemoteWorkspaceTabLifecycle.js";
@@ -55,13 +52,11 @@ import { consumeZcodeJwtInvalidRestartMarker } from "@/root/zcodeJwtInvalidResta
 import { useDesktopNativeThemeSync } from "@/root/useDesktopNativeThemeSync.js";
 import { useRootPlatformEffects } from "@/root/useRootPlatformEffects.js";
 import { useRootWorkspaceActions } from "@/root/useRootWorkspaceActions.js";
-import { useBotBroadcastEffects } from "@/root/useBotBroadcastEffects.js";
 import { registerBaseWorkspaceServices } from "@/store/remoteWorkspaceSessionStore.js";
 import type { RootProps } from "@/root/types.js";
 import { DiffsWorkerPoolProvider } from "@/root/DiffsWorkerPoolProvider.js";
 import { useGlobalTaskList } from "@/hooks/useGlobalTaskList.js";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
-import { useRemoteConnectionLogs } from "@/hooks/useRemoteConnectionLogs.js";
 import {
   CODE_COMMENT_REMOVE_BROADCAST_CHANNEL,
   CODE_COMMENT_PREVIEW_RESTORE_BROADCAST_CHANNEL,
@@ -86,11 +81,6 @@ import {
 } from "@/v4/telemetry/ConversationTelemetryAttachment.js";
 
 const DEFAULT_LUCIDE_STROKE_WIDTH = 1.5;
-interface RemoteConnectionOpenPreference {
-  preferredKind?: RemoteTarget["kind"];
-  preferredWslDistro?: string;
-}
-
 type WelcomeScreenOpenReason =
   | "startup-provider-required"
   | "manual-login"
@@ -230,20 +220,12 @@ function RootInner({
     () => services.modelSelectionService.getView(),
     [services.modelSelectionService],
   );
-  const [remoteConnectionDialogOpen, setRemoteConnectionDialogOpen] = useState(false);
-  const [remoteConnectionOpenPreference, setRemoteConnectionOpenPreference] =
-    useState<RemoteConnectionOpenPreference | null>(null);
   const [directoryBrowserOpen, setDirectoryBrowserOpen] = useState(false);
-  const [remoteConnectionInProgress, setRemoteConnectionInProgress] = useState(false);
-  const [remoteConnectionRequestId, setRemoteConnectionRequestId] = useState<string | null>(null);
   const [isCreatingFallbackWorkspace, setIsCreatingFallbackWorkspace] = useState(false);
-  const { connectionLogs: remoteConnectionLogs, resetConnectionLogs: resetRemoteConnectionLogs } =
-    useRemoteConnectionLogs(remoteConnectionRequestId);
   const [isBootstrappingInitialWorkspace, setIsBootstrappingInitialWorkspace] = useState(
     Boolean(initialWorkspaceAbsPath),
   );
   const acknowledgingReleaseNotesVersionRef = useRef<string | null>(null);
-  const previousRemoteConnectionInProgressRef = useRef(false);
   const didRequestFallbackWorkspaceRef = useRef(false);
   const rootInnerMountedRef = useRef(true);
   const [hasEnteredNativeThemeSyncSurface, setHasEnteredNativeThemeSyncSurface] = useState(false);
@@ -269,9 +251,6 @@ function RootInner({
         void refreshAppSettings();
         void services.zcodeAgentService.syncAppRuntimePreferences(parsed.data).catch((error) => {
           logger.warn("[settings] 同步跨窗口运行时偏好失败", error);
-        });
-        void services.botsService.syncAppRuntimePreferences(parsed.data).catch((error) => {
-          logger.warn("[settings] 同步跨窗口 Bot 运行时偏好失败", error);
         });
         return;
       }
@@ -306,7 +285,6 @@ function RootInner({
     };
   }, [
     refreshAppSettings,
-    services.botsService,
     services.broadcastService,
     services.zcodeAgentService,
   ]);
@@ -324,19 +302,9 @@ function RootInner({
       .catch((error) => {
         logger.warn("[settings] 初始化运行时偏好失败", error);
       });
-    void services.botsService
-      .syncAppRuntimePreferences({
-        askUserQuestionAutoResolutionEnabled:
-          appSettings.askUserQuestionAutoResolutionEnabled !== false,
-        modelIoFullRetentionEnabled: appSettings.modelIoFullRetentionEnabled === true,
-      })
-      .catch((error) => {
-        logger.warn("[settings] 初始化 Bot 运行时偏好失败", error);
-      });
   }, [
     appSettings?.askUserQuestionAutoResolutionEnabled,
     appSettings?.modelIoFullRetentionEnabled,
-    services.botsService,
     services.zcodeAgentService,
   ]);
 
@@ -365,22 +333,6 @@ function RootInner({
     workspaceShellIdentity,
   );
 
-  const localWorkspacePathForRemoteConnection = useTabStore((state) => {
-    const activeTab = state.activeTabId
-      ? state.tabs.find((tab) => tab.id === state.activeTabId)
-      : null;
-    if (
-      !activeTab ||
-      !isWorkspaceTab(activeTab) ||
-      activeTab.remoteSessionId ||
-      activeTab.remoteTarget ||
-      activeTab.workspaceIdentity ||
-      activeTab.workspacePurpose === "conversation"
-    ) {
-      return undefined;
-    }
-    return activeTab.workspacePath;
-  });
   const totalUnreadTaskCount = useZCodeSessionStore((state) =>
     countAllUnreadTasks(state.workspaces),
   );
@@ -476,12 +428,7 @@ function RootInner({
     registerBaseWorkspaceServices(services);
   }, [services]);
 
-  useBotBroadcastEffects(services, tabStoreApi);
 
-  const handleOpenRemoteConnection = useCallback((preference?: RemoteConnectionOpenPreference) => {
-    setRemoteConnectionOpenPreference(preference ?? null);
-    setRemoteConnectionDialogOpen(true);
-  }, []);
   const handleOpenDirectoryBrowser = useCallback(() => {
     setDirectoryBrowserOpen(true);
   }, []);
@@ -523,7 +470,6 @@ function RootInner({
       setWelcomeScreenOpenReason("logout-provider-required");
     },
     userId: user?.id,
-    onOpenRemoteConnection: allowRemoteWorkspace ? handleOpenRemoteConnection : undefined,
   });
   const handleRemoteWorkspaceActivated = useCallback(
     ({
@@ -539,19 +485,14 @@ function RootInner({
   );
 
   const {
-    remoteWorkspaceSessions,
     reconnectingRemoteWorkspaceKeys,
     remoteWorkspaceErrorByWorkspaceKey,
     reconnectingRemoteWorkspaceLogsByWorkspaceKey,
     buildPersistedTabPatch,
     restorePersistedSession,
-    handleCancelRemoteProject,
-    handleSelectRemoteProject,
-    handleConnectRemote,
     handleReconnectRemoteWorkspace,
     handleRemoteWorkspaceTabsClosed,
   } = useRemoteWorkspaceHistory({
-    intl,
     services,
     platform,
     supportsSettings,
@@ -563,7 +504,6 @@ function RootInner({
     unavailableWorkspacePath,
     tabStoreApi,
     activateTabByPath,
-    addTab,
     onWorkspaceActivated: handleRemoteWorkspaceActivated,
   });
 
@@ -668,14 +608,11 @@ function RootInner({
     isDesktop,
     locale,
     tabs,
-    activeWorkspacePath,
-    activeWorkspaceIdentity,
     reconnectingRemoteWorkspaceKeys,
     remoteWorkspaceErrorByWorkspaceKey,
     totalUnreadTaskCount,
     hasCompletedFullTabRestore: hasCompletedFullRestore,
     intl,
-    isRestoringOAuthSession: isResolvingStartupAuthState || providerStartupSyncPending,
   });
 
   useEffect(() => {
@@ -903,30 +840,6 @@ function RootInner({
       workspaceShellPath,
     ],
   );
-  const handleRemoteConnectionDialogOpenChange = useCallback((open: boolean) => {
-    setRemoteConnectionDialogOpen(open);
-    if (!open) {
-      setRemoteConnectionOpenPreference(null);
-    }
-  }, []);
-
-  const remoteConnectionDialog = allowRemoteWorkspace ? (
-    <SSHDialog
-      onConnect={handleConnectRemote}
-      onSelectProject={handleSelectRemoteProject}
-      onCancelSession={handleCancelRemoteProject}
-      localWorkspacePath={localWorkspacePathForRemoteConnection}
-      isWindowsDesktop={isWindowsDesktop}
-      remoteWorkspaceSessions={remoteWorkspaceSessions}
-      open={remoteConnectionDialogOpen}
-      onOpenChange={handleRemoteConnectionDialogOpenChange}
-      onFlowActiveChange={setRemoteConnectionInProgress}
-      onFlowRequestIdChange={setRemoteConnectionRequestId}
-      preferredKind={remoteConnectionOpenPreference?.preferredKind}
-      preferredWslDistro={remoteConnectionOpenPreference?.preferredWslDistro}
-      hideTriggerWhenClosed
-    />
-  ) : null;
   const directoryBrowserDialog = directoryBrowserOpen ? (
     <ScopedErrorBoundary
       scope="directory-browser"
@@ -944,13 +857,6 @@ function RootInner({
     </ScopedErrorBoundary>
   ) : null;
 
-  useEffect(() => {
-    const wasInProgress = previousRemoteConnectionInProgressRef.current;
-    if (!wasInProgress && remoteConnectionInProgress) {
-      resetRemoteConnectionLogs();
-    }
-    previousRemoteConnectionInProgressRef.current = remoteConnectionInProgress;
-  }, [remoteConnectionInProgress, resetRemoteConnectionLogs]);
 
   const settingsLayerProps = {
     isDesktop,
@@ -971,7 +877,6 @@ function RootInner({
     return (
       <RootShell>
         {rootModelSelectionErrorNode}
-        {remoteConnectionDialog}
         {directoryBrowserDialog}
         {/* HTML 启动壳已经展示 ZCode SVG，但 React 接管 root 后旧壳会被整棵替换。
             之前阻塞恢复 tab / 初始 workspace 注入时重新渲染纯文字“加载中...”，所以启动被拆成两套 loading。
@@ -985,7 +890,6 @@ function RootInner({
     return (
       <RootShell>
         {rootModelSelectionErrorNode}
-        {remoteConnectionDialog}
         {directoryBrowserDialog}
         <WelcomeScreen onComplete={handleWelcomeScreenComplete} />
       </RootShell>
@@ -1012,80 +916,60 @@ function RootInner({
   return (
     <RootShell>
       {rootModelSelectionErrorNode}
-      {remoteConnectionDialog}
       {directoryBrowserDialog}
-      <OccupationOnboarding
-        showWindowControls={Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop))}
-        showChildrenWhileLoading={!workspaceShellPath && isSettingsTabActive}
-        isMacDesktop={isMacDesktop}
-        isWindowsDesktop={isWindowsDesktop}
+      {!workspaceShellPath ? (
+        isSettingsTabActive ? (
+          <ScopedErrorBoundary
+            scope="settings-page"
+            resetKeys={["settings-root"]}
+            variant="panel"
+            className="h-full"
+          >
+            <SettingsPage {...settingsLayerProps} />
+          </ScopedErrorBoundary>
+        ) : null
+      ) : (
+        <RootWorkspaceContent
+          workspaceScopedServices={workspaceScopedServices}
+          workspaceShellPath={workspaceShellPath}
+          workspaceIdentity={workspaceShellIdentity}
+          workspaceRemoteSessionId={workspaceShellRemoteSessionId}
+          activeWorkspacePath={activeWorkspacePath}
+          isSettingsTabActive={isSettingsTabActive}
+          handleReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
+          handleCreateTask={handleCreateTask}
+          handleCreateConversationTask={handleCreateConversationTask}
+          handleResolveConversationWorkspace={handleResolveConversationWorkspace}
+          handleOpenWorkspace={handleOpenWorkspace}
+          handleOpenFolderFromWorkspaceMenu={handleOpenFolderFromWorkspaceMenu}
+          handleCreateScratchWorkspace={handleCreateScratchWorkspace}
+          handleBackFromSettings={handleBackFromSettings}
+          handleLogout={user ? handleLogout : undefined}
+          onLogin={!user ? handleOpenLoginEntry : undefined}
+          user={user}
+          reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
+          remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
+          reconnectingRemoteWorkspaceLogsByWorkspaceKey={
+            reconnectingRemoteWorkspaceLogsByWorkspaceKey
+          }
+          allowOpenWorkspace={allowOpenWorkspace}
+          isDesktop={isDesktop}
+          isMacDesktop={isMacDesktop}
+          isWindowsDesktop={isWindowsDesktop}
+          supportsEmbeddedBrowser={supportsEmbeddedBrowser}
+        />
+      )}
+      <ScopedErrorBoundary
+        scope="onboarding-dialog"
+        resetKeys={[workspaceShellIdentity?.trim() || workspaceShellPath]}
+        variant="silent"
       >
-        {/* 新引导属于应用级偏好；无项目时也要挂载，才能响应设置页的手动打开请求。 */}
-        {!workspaceShellPath ? (
-          isSettingsTabActive ? (
-            <ScopedErrorBoundary
-              scope="settings-page"
-              resetKeys={["settings-root"]}
-              variant="panel"
-              className="h-full"
-            >
-              <SettingsPage {...settingsLayerProps} />
-            </ScopedErrorBoundary>
-          ) : null
-        ) : (
-          <RootWorkspaceContent
-            workspaceScopedServices={workspaceScopedServices}
-            baseFeedbackService={services.feedbackService}
-            workspaceShellPath={workspaceShellPath}
-            workspaceIdentity={workspaceShellIdentity}
-            workspaceRemoteSessionId={workspaceShellRemoteSessionId}
-            activeWorkspacePath={activeWorkspacePath}
-            isSettingsTabActive={isSettingsTabActive}
-            handleConnectRemote={handleConnectRemote}
-            handleSelectRemoteProject={handleSelectRemoteProject}
-            handleCancelRemoteProject={handleCancelRemoteProject}
-            handleReconnectRemoteWorkspace={handleReconnectRemoteWorkspace}
-            handleCreateTask={handleCreateTask}
-            handleCreateConversationTask={handleCreateConversationTask}
-            handleResolveConversationWorkspace={handleResolveConversationWorkspace}
-            handleOpenWorkspace={handleOpenWorkspace}
-            handleOpenFolderFromWorkspaceMenu={handleOpenFolderFromWorkspaceMenu}
-            handleOpenRemoteWorkspace={
-              allowRemoteWorkspace ? handleOpenRemoteConnection : undefined
-            }
-            handleCreateScratchWorkspace={handleCreateScratchWorkspace}
-            remoteConnectionInProgress={remoteConnectionInProgress}
-            remoteWorkspaceSessions={remoteWorkspaceSessions}
-            allowRemoteWorkspace={allowRemoteWorkspace}
-            handleBackFromSettings={handleBackFromSettings}
-            handleLogout={user ? handleLogout : undefined}
-            onLogin={!user ? handleOpenLoginEntry : undefined}
-            user={user}
-            reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
-            remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
-            reconnectingRemoteWorkspaceLogsByWorkspaceKey={
-              reconnectingRemoteWorkspaceLogsByWorkspaceKey
-            }
-            remoteConnectionLogs={remoteConnectionLogs}
-            allowOpenWorkspace={allowOpenWorkspace}
-            isDesktop={isDesktop}
-            isMacDesktop={isMacDesktop}
-            isWindowsDesktop={isWindowsDesktop}
-            supportsEmbeddedBrowser={supportsEmbeddedBrowser}
-          />
-        )}
-        <ScopedErrorBoundary
-          scope="onboarding-dialog"
-          resetKeys={[workspaceShellIdentity?.trim() || workspaceShellPath]}
-          variant="silent"
-        >
-          <OnboardingDialog
-            workspacePath={workspaceShellPath || undefined}
-            workspaceIdentity={workspaceShellIdentity}
-            isDesktop={isDesktop}
-          />
-        </ScopedErrorBoundary>
-      </OccupationOnboarding>
+        <OnboardingDialog
+          workspacePath={workspaceShellPath || undefined}
+          workspaceIdentity={workspaceShellIdentity}
+          isDesktop={isDesktop}
+        />
+      </ScopedErrorBoundary>
     </RootShell>
   );
 }

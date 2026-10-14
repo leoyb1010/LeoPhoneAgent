@@ -3,7 +3,6 @@ export type QuickPickCommandIcon =
   | "browser"
   | "community"
   | "diff"
-  | "feedback"
   | "folder"
   | "login"
   | "logout"
@@ -52,7 +51,6 @@ interface QuickPickCommandHandlers {
   openSkillsSettings: () => void;
   openMcpSettings: () => void;
   switchTheme: () => void;
-  openFeedback: () => void | Promise<void>;
   openCommunity: () => void | Promise<void>;
   openProductDocs: () => void | Promise<void>;
   login?: () => void | Promise<void>;
@@ -73,8 +71,6 @@ interface CreateQuickPickCommandsOptions {
   isSidebarVisible: boolean;
   isLoggedIn: boolean;
   supportsEmbeddedBrowser?: boolean;
-  supportsTerminal?: boolean;
-  supportsReview?: boolean;
   themeTarget: "dark" | "light";
   shortcuts: {
     newTask: string;
@@ -89,8 +85,6 @@ export function createQuickPickCommands({
   allowOpenWorkspace,
   isSidebarVisible,
   supportsEmbeddedBrowser = true,
-  supportsTerminal = true,
-  supportsReview = true,
   themeTarget,
   shortcuts,
   handlers,
@@ -243,10 +237,5 @@ export function createQuickPickCommands({
   // [leo] 上游在这里追加「反馈 / 用户社群 / 产品文档 / 登录·登出」命令，
   // 它们都连官方服务或官方账号，LeoPhoneAgent 不提供，命令一并去掉。
 
-  return commands.filter(
-    (command) =>
-      (supportsTerminal ||
-        (command.id !== "toggle-terminal" && command.id !== "add-terminal-tab")) &&
-      (supportsReview || command.id !== "add-review-tab"),
-  );
+  return commands;
 }

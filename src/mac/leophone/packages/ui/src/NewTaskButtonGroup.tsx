@@ -30,7 +30,7 @@ export function NewTaskButtonGroup({
         }
       }}
       className={cn(
-        "group w-full h-8 rounded-lg inline-flex shrink-0 items-center justify-stretch gap-2 overflow-hidden pl-2.5 pr-2.5 hover:bg-surface-hover hover:text-foreground active:translate-y-0 cursor-pointer",
+        "group w-full h-7 rounded-md inline-flex shrink-0 items-center justify-stretch gap-2 overflow-hidden px-2 hover:bg-surface-hover hover:text-foreground active:translate-y-0 cursor-pointer",
         disabled &&
           "cursor-not-allowed text-foreground-subtlest hover:bg-transparent hover:text-foreground-subtlest",
       )}

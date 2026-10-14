@@ -47,7 +47,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import type { Locale, RemoteTarget, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
+import type { Locale, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
 import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
@@ -234,11 +234,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateTask,
   onCreateConversationTask,
   onOpenFolderFromWorkspaceMenu,
-  onOpenRemoteWorkspace,
   theme,
-  onConnectRemote: _onConnectRemote,
-  onSelectRemoteProject: _onSelectRemoteProject,
-  onCancelRemoteProject: _onCancelRemoteProject,
   onReconnectRemoteWorkspace,
   onLogout,
   onLogin,
@@ -282,15 +278,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateTask: (request?: CreateTaskRequest) => void;
   onCreateConversationTask: () => void;
   onOpenFolderFromWorkspaceMenu: () => void;
-  onOpenRemoteWorkspace?: () => void;
   theme: Theme;
-  onConnectRemote: (options: RemoteTarget, requestId?: string) => Promise<string>;
-  onSelectRemoteProject: (
-    sessionId: string,
-    path: string,
-    localWorkspacePath?: string,
-  ) => Promise<void>;
-  onCancelRemoteProject: (sessionId: string) => Promise<void>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onLogout?: () => void;
   onLogin?: () => void;
@@ -1290,7 +1278,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               variant="ghost"
               onClick={onOpenCommandCenter}
               data-icon="inline-start"
-              size="lg"
               className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
             >
               <Search className="size-4" />
@@ -1301,30 +1288,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 {commandCenterShortcutLabel}
               </span>
             </Button>
-            {/* 远程入口展示策略统一走 useRemoteConnectionEntryVisibility，避免与其他入口出现分叉。*/}
-            {/* {showRemoteConnectionEntry ? (
-              <SSHDialog
-                onConnect={onConnectRemote}
-                onSelectProject={onSelectRemoteProject}
-                onCancelSession={onCancelRemoteProject}
-                isWindowsDesktop={isWindowsDesktop}
-                triggerVariant="ghost"
-                triggerSize="lg"
-                triggerClassName="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-                trigger={
-                  <>
-                    <Cloud className="size-4" />
-                    <span>{intl.formatMessage({ id: "remote.trigger" })}</span>
-                  </>
-                }
-              />
-            ) : null} */}
             <Button
               variant="ghost"
               onClick={handleOpenAutomationsMain}
               data-icon="inline-start"
               data-testid={TID_AUTOMATIONS_OPEN}
-              size="lg"
               aria-pressed={automationsActive}
               className={cn(
                 "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
@@ -1339,7 +1307,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               onClick={handleOpenPluginStoreMain}
               data-icon="inline-start"
               data-testid="plugin-store-sidebar-open"
-              size="lg"
               aria-pressed={pluginStoreActive}
               className={cn(
                 "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
@@ -1356,7 +1323,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 onClick={openServerWorkspace}
                 data-icon="inline-start"
                 data-testid="server-tasks-sidebar-open"
-                size="lg"
                 className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
               >
                 <Paperclip className="size-4" />
@@ -1492,14 +1458,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                         id: "workspace.openFolder",
                                       })}
                                     </DropdownMenuItem>
-                                    {onOpenRemoteWorkspace ? (
-                                      <DropdownMenuItem onSelect={onOpenRemoteWorkspace}>
-                                        <Cloud className="size-4" />
-                                        {intl.formatMessage({
-                                          id: "remote.trigger",
-                                        })}
-                                      </DropdownMenuItem>
-                                    ) : null}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               }

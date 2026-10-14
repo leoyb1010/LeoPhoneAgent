@@ -1,6 +1,5 @@
 /* Automations 列表状态筛选：定时 / 闲时两类任务共用同一组筛选项。
    分组口径以卡片实际展示的状态徽章为准，用户在列表上看到什么颜色的徽章，就落在哪一组。 */
-import type { ZCodeOffPeakTask } from "@zcode/shared";
 import {
   hasAutomationFailureState,
   resolveAutomationStatusKind,
@@ -19,21 +18,6 @@ export const AUTOMATION_STATUS_FILTERS: readonly AutomationStatusFilter[] = [
   "failed",
 ];
 
-/** 闲时六态 → 三组：排队/暂停/运行都还会推进，算进行中；取消与失败同为非正常结束，并入失败。 */
-function resolveOffPeakStatusFilterKind(
-  task: Pick<ZCodeOffPeakTask, "status">,
-): AutomationStatusFilterKind {
-  switch (task.status) {
-    case "completed":
-      return "completed";
-    case "failed":
-    case "cancelled":
-      return "failed";
-    default:
-      return "inProgress";
-  }
-}
-
 type AutomationFilterLike = Parameters<typeof resolveAutomationStatusKind>[0] &
   Parameters<typeof hasAutomationFailureState>[0];
 
@@ -43,14 +27,6 @@ function resolveAutomationStatusFilterKind(
 ): AutomationStatusFilterKind {
   if (hasAutomationFailureState(automation)) return "failed";
   return resolveAutomationStatusKind(automation) === "completed" ? "completed" : "inProgress";
-}
-
-export function filterOffPeakTasksByStatus<T extends Pick<ZCodeOffPeakTask, "status">>(
-  tasks: readonly T[],
-  filter: AutomationStatusFilter,
-): readonly T[] {
-  if (filter === "all") return tasks;
-  return tasks.filter((task) => resolveOffPeakStatusFilterKind(task) === filter);
 }
 
 export function filterAutomationsByStatus<T extends AutomationFilterLike>(

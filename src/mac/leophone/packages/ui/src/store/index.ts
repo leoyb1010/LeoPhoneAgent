@@ -39,13 +39,6 @@ import {
 import type { Theme } from "../useTheme.js";
 import { applyTheme, normalizeThemePreference, resolveTheme } from "../useTheme.js";
 
-import {
-  INTERFACE_MODE_STORAGE_KEY,
-  normalizeInterfaceMode,
-  type InterfaceMode,
-} from "@/lib/interfaceMode.js";
-import { logger } from "@/logger.js";
-
 export type LoginEntryPurpose = "app-login";
 
 // v4 重构：类型与默认值下沉到 @/lib/codePreviewSettings.ts，
@@ -100,10 +93,6 @@ function loadPerformanceMode(): boolean {
 // ============================================================================
 
 export interface ZCodeState {
-  /** 展示详情偏好，不改变 Agent 权限或执行能力。 */
-  interfaceMode: InterfaceMode;
-  setInterfaceMode: (mode: InterfaceMode) => void;
-
   /** 当前主题 */
   theme: Theme;
   setTheme: (theme: Theme) => void;
@@ -199,11 +188,9 @@ export interface ZCodeState {
     reservation: CodingPlanQuotaResetAutoPlayReservation,
   ) => Promise<void>;
 
-  /** 手动请求打开 onboarding 弹窗 */
-  newUserOnboardingOpen: boolean;
-  setNewUserOnboardingOpen: (open: boolean) => void;
-  onboardingDialogRequested: boolean | "migration";
-  requestOnboardingDialog: (entry?: "migration") => void;
+  /** 手动请求打开「从其他 Agent 迁移」弹窗 */
+  onboardingDialogRequested: boolean;
+  requestOnboardingDialog: () => void;
   clearOnboardingDialogRequest: () => void;
 }
 
@@ -211,9 +198,9 @@ export interface ZCodeState {
 // 需要广播的字段 —— 只有这些字段的变更会发送给其他窗口
 // ============================================================================
 
-const BROADCAST_FIELDS = new Set(["theme", "locale", "uiFontSizePx", "interfaceMode"]);
+const BROADCAST_FIELDS = new Set(["theme", "locale", "uiFontSizePx"]);
 
-type BroadcastField = "theme" | "locale" | "uiFontSizePx" | "interfaceMode";
+type BroadcastField = "theme" | "locale" | "uiFontSizePx";
 
 /** 广播频道名前缀 */
 const STATE_CHANNEL_PREFIX = "state:";
@@ -240,18 +227,6 @@ export function createZCodeStore(
   let syncSystemThemeListener = (_theme: Theme) => {};
 
   const useStore = create<ZCodeState>()((set, get) => ({
-    interfaceMode: normalizeInterfaceMode(readSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY)),
-    setInterfaceMode: (mode) => {
-      const interfaceMode = normalizeInterfaceMode(mode);
-      if (get().interfaceMode !== interfaceMode) {
-        logger.debug("[InterfaceMode] 切换界面模式", {
-          interfaceMode,
-          source: applyingBroadcast ? "broadcast" : "local",
-        });
-      }
-      writeSafeLocalStorage(INTERFACE_MODE_STORAGE_KEY, interfaceMode);
-      set({ interfaceMode });
-    },
     // 默认主题统一收敛到 Zai dark，避免首次启动时 store 与其他主题入口表现不一致。
     // 仍然优先尊重 localStorage 中已保存的用户选择，不覆盖已有偏好。
     theme: normalizeThemePreference((readSafeLocalStorage("zcode-theme") as Theme) || "zai-dark"),
@@ -390,10 +365,8 @@ export function createZCodeStore(
       writeState: (updater) => set((state) => updater(state)),
     }),
 
-    newUserOnboardingOpen: false,
-    setNewUserOnboardingOpen: (open) => set({ newUserOnboardingOpen: open }),
     onboardingDialogRequested: false,
-    requestOnboardingDialog: (entry) => set({ onboardingDialogRequested: entry ?? true }),
+    requestOnboardingDialog: () => set({ onboardingDialogRequested: true }),
     clearOnboardingDialogRequest: () => set({ onboardingDialogRequested: false }),
   }));
 
@@ -475,11 +448,6 @@ export function createZCodeStore(
         state.setTheme(msg.payload as Theme);
       } else if (field === "locale" && typeof msg.payload === "string") {
         state.setLocale(msg.payload);
-      } else if (
-        field === "interfaceMode" &&
-        (msg.payload === "office" || msg.payload === "coding")
-      ) {
-        state.setInterfaceMode(normalizeInterfaceMode(msg.payload));
       } else if (field === "uiFontSizePx" && typeof msg.payload === "number") {
         state.setUiFontSizePx(msg.payload);
       }

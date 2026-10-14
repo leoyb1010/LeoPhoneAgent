@@ -1,5 +1,4 @@
 /* oxlint-disable eslint(max-lines) -- v4 逐行 row 渲染分发集中收口（每种 row 一个 memo 叶子 + timelineMarker 分隔线），拆分会打散行类型对照。 */
-import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArchiveIcon,
@@ -128,7 +127,6 @@ import {
 import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsAction.js";
 import { formatModelChangeLabel } from "@/v4/composer/modelTriggerDisplay.js";
 import { formatMessageTimeLabel } from "@/v4/messageTimeLabel.js";
-import { parseConversationShareContext } from "@/lib/conversationShareContext.js";
 
 function RowShell({
   rowId,
@@ -873,13 +871,6 @@ const UserInputRowView = memo(function UserInputRowView({
       }),
     [bodyText, context.workspaceIdentity, context.workspacePath],
   );
-  // 只用于把历史消息里的 share URL 尾块从可见正文里剥掉。
-  // 该块已不再产出（见 ConversationComposer 的 promptText 注释）；这里保留解析，是为了让
-  // 接线修复到本次删除之间发出的消息不至于把裸 markup 当正文显示出来。
-  const parsedShareContext = useMemo(
-    () => parseConversationShareContext(parsedPrompt.visibleContent),
-    [parsedPrompt.visibleContent],
-  );
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState(row.text);
@@ -912,7 +903,7 @@ const UserInputRowView = memo(function UserInputRowView({
       : intl.formatMessage({
           id: `chat.edit.resetConversationAndFiles.${editWorkspaceRewindAvailability?.reason ?? "noFiles"}`,
         });
-  const visibleText = parsedShareContext.visibleContent;
+  const visibleText = parsedPrompt.visibleContent;
   const codeCommentContexts = parsedPrompt.codeComments;
   const webElementContexts = parsedPrompt.webElements;
   const pptxElementReferences = parsedPrompt.pptxElements;
@@ -946,7 +937,7 @@ const UserInputRowView = memo(function UserInputRowView({
 
   useEffect(() => {
     if (!editing) {
-      setDraft(parsedShareContext.visibleContent);
+      setDraft(parsedPrompt.visibleContent);
       setEditAttachments([...(row.attachments ?? [])]);
       setEditAttachmentIndices((row.attachments ?? []).map((_, index) => index));
       setEditPromptContexts(parsedPrompt);
@@ -970,20 +961,20 @@ const UserInputRowView = memo(function UserInputRowView({
   const handleOpenEdit = useCallback(() => {
     // v4 迁移时把 user query 编辑误接成“直接读取主 composer 提交”，
     // 主 composer 为空时点击只会 warn。这里恢复旧行内编辑态。
-    setDraft(parsedShareContext.visibleContent);
+    setDraft(parsedPrompt.visibleContent);
     setEditAttachments([...(row.attachments ?? [])]);
     setEditAttachmentIndices((row.attachments ?? []).map((_, index) => index));
     setEditPromptContexts(parsedPrompt);
     setEditing(true);
-  }, [parsedPrompt, parsedShareContext, row.attachments]);
+  }, [parsedPrompt, row.attachments]);
 
   const handleCancelEdit = useCallback(() => {
-    setDraft(parsedShareContext.visibleContent);
+    setDraft(parsedPrompt.visibleContent);
     setEditAttachments([...(row.attachments ?? [])]);
     setEditAttachmentIndices((row.attachments ?? []).map((_, index) => index));
     setEditPromptContexts(parsedPrompt);
     setEditing(false);
-  }, [parsedPrompt, parsedShareContext, row.attachments]);
+  }, [parsedPrompt, row.attachments]);
 
   const handleRemoveEditAttachment = useCallback((index: number) => {
     setEditAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
@@ -1502,7 +1493,6 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
   codeCommentProjectionEnabled?: boolean;
 }) {
   const streaming = row.state === "streaming";
-  const isOfficeMode = useIsOfficeMode();
   const codeCommentCardsEnabled = useAssistantCodeCommentFeatureEnabled();
   const projectsCodeComments = codeCommentCardsEnabled && codeCommentProjectionEnabled === true;
   const visibleText = useMemo(
@@ -1529,7 +1519,6 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           workspaceRemoteSessionId={context.workspaceRemoteSessionId}
           theme={context.theme}
           codePreviewSettings={context.codePreviewSettings}
-          forceCodeWrap={isOfficeMode}
           onOpenCodeViewer={context.onOpenCodeViewer}
           onOpenFileLink={context.onOpenFileLink}
           onOpenExternalUrl={context.onOpenBrowserUrl}
@@ -1754,7 +1743,6 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
   context: ConversationRowRenderContext;
 }) {
   const { intl } = useZCodeIntl();
-  const isOfficeMode = useIsOfficeMode();
   const marker = row.marker;
   const modelSelectionView = context.modelSelectionView ?? null;
   const view = useMemo((): {
@@ -1765,8 +1753,6 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
     switch (marker.type) {
       case "compact": {
         const running = marker.status === "running";
-        const automaticOptimization = isOfficeMode && marker.origin === "auto";
-        const scope = automaticOptimization ? "chat.contextOptimization" : "chat.contextCompaction";
         const statusMessage =
           marker.status === "running"
             ? "started"
@@ -1776,12 +1762,12 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
                 ? "interrupted"
                 : marker.status === "failed"
                   ? "failed"
-                  : marker.origin === "auto" && !automaticOptimization
+                  : marker.origin === "auto"
                     ? "completedAuto"
                     : "completed";
         return {
           icon: MARKER_ARCHIVE_ICON,
-          label: intl.formatMessage({ id: `${scope}.${statusMessage}` }),
+          label: intl.formatMessage({ id: `chat.contextCompaction.${statusMessage}` }),
           running,
         };
       }
@@ -1853,7 +1839,7 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
       default:
         return null;
     }
-  }, [intl, isOfficeMode, marker, modelSelectionView]);
+  }, [intl, marker, modelSelectionView]);
 
   // fork 跳父会话（Tier 1）：仅 forkNotice 且宿主提供 onNavigateToRow 时可点，
   // 切到 marker.parentSessionId（rowId 预留 Tier 2 精确滚动，当前恒 0 占位）。

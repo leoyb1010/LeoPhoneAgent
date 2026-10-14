@@ -3,7 +3,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { ZCodeProvider } from "@zcode/shared";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { createPortal } from "react-dom";
-import { PaletteIcon, WandSparkles } from "lucide-react";
+import { WandSparkles } from "lucide-react";
 import {
   $createTextNode,
   $getSelection,
@@ -48,7 +48,6 @@ import { useFileMentionProvider } from "./providers/fileMentionProvider.js";
 import { usePluginsMentionProvider } from "./providers/pluginsMentionProvider.js";
 import { useSessionsMentionProvider } from "./providers/sessionsMentionProvider.js";
 import { useSkillsMentionProvider } from "./providers/skillsMentionProvider.js";
-import { useWhiteboardMentionProvider } from "./providers/whiteboardMentionProvider.js";
 import type { MentionItem } from "./mentionTypes.js";
 import {
   getActivePromptInputTokenReplacementRange,
@@ -64,7 +63,6 @@ interface MentionPluginProps {
   /** 已有 Session 的 id；null/undefined = 新建草稿。决定 Plugins 分组的 catalog authority。 */
   sessionId?: string | null;
   disabled?: boolean;
-  onWhiteboardMentionSelected?: (boardId: string) => void | Promise<void>;
 }
 
 function getWrappedMentionIndex(currentIndex: number, delta: number, itemCount: number): number {
@@ -136,7 +134,6 @@ export function MentionPlugin({
   provider,
   container,
   disabled = false,
-  onWhiteboardMentionSelected,
 }: MentionPluginProps & { provider: ZCodeProvider }) {
   const [editor] = useLexicalComposerContext();
   const { intl } = useZCodeIntl();
@@ -188,14 +185,6 @@ export function MentionPlugin({
     intl.formatMessage({ id: "chat.mention.files.empty" }),
     intl.formatMessage({ id: "chat.mention.files.title" }),
     fileDefaultPreviewLimit,
-  );
-  const whiteboardResult = useWhiteboardMentionProvider(
-    workspacePath,
-    workspaceIdentity,
-    deferredActiveQuery,
-    isOpen && isContextTrigger && Boolean(onWhiteboardMentionSelected),
-    intl.formatMessage({ id: "chat.mention.whiteboards.empty" }),
-    intl.formatMessage({ id: "chat.mention.whiteboards.title" }),
   );
   const sessionsResult = useSessionsMentionProvider(
     provider,
@@ -253,17 +242,9 @@ export function MentionPlugin({
         errorText: skillsResult.error?.message ?? null,
         emptyText: skillsResult.emptyText,
       },
-      whiteboards: {
-        id: "whiteboards",
-        title: whiteboardResult.title,
-        items: whiteboardResult.items,
-        loading: whiteboardResult.loading,
-        errorText: whiteboardResult.error?.message ?? null,
-        emptyText: whiteboardResult.emptyText,
-      },
     } satisfies Record<MentionPanelGroupId, MentionResultGroup<MentionItem>>;
 
-    // 产品约束：@ 固定为 Plugin → 文件 → 对话 → 画板；旧 # / $ 面板继续走
+    // 产品约束：@ 固定为 Plugin → 文件 → 对话；旧 # / $ 面板继续走
     // 原单分组 provider。这里仅重排发现入口，候选自身的 canonical markdown 不变。
     return buildVisibleMentionGroups(
       getMentionPanelGroupOrder(activeTrigger?.trigger).map((groupId) => groupsById[groupId]),
@@ -285,11 +266,6 @@ export function MentionPlugin({
     sessionsResult.items,
     sessionsResult.loading,
     sessionsResult.title,
-    whiteboardResult.emptyText,
-    whiteboardResult.error,
-    whiteboardResult.items,
-    whiteboardResult.loading,
-    whiteboardResult.title,
     skillsResult.emptyText,
     skillsResult.error,
     skillsResult.items,
@@ -326,19 +302,6 @@ export function MentionPlugin({
                 </span>
                 <span className="min-w-0 truncate text-ui-xs text-foreground-subtlest">
                   {item.description}
-                </span>
-              </span>
-            ) : item.category === "whiteboards" ? (
-              <span className="min-w-0 flex flex-1 items-center gap-2">
-                <PaletteIcon className="size-3.5 shrink-0 text-foreground" />
-                <span className="shrink-0 whitespace-nowrap text-ui-base font-medium text-foreground">
-                  {item.label}
-                </span>
-                <span className="min-w-0 truncate text-ui-xs text-foreground-subtlest">
-                  {intl.formatMessage(
-                    { id: "chat.mention.whiteboards.strokeCount" },
-                    { count: item.description },
-                  )}
                 </span>
               </span>
             ) : item.category === "sessions" ? (
@@ -454,58 +417,6 @@ export function MentionPlugin({
 
   const insertMentionItem = useCallback(
     (item: MentionItem) => {
-      if (item.category === "whiteboards" && onWhiteboardMentionSelected) {
-        editor.update(() => {
-          const selectionState = getCurrentTextNodeSelection();
-          if (!selectionState) {
-            return;
-          }
-
-          const snapshotRange = getActivePromptInputTokenReplacementRange(
-            activeTokenRef.current,
-            selectionState,
-          );
-          const activeMentionTrigger = snapshotRange
-            ? activeTokenRef.current
-            : extractActivePromptInputTrigger(selectionState.textBeforeCursor);
-          if (
-            !activeMentionTrigger ||
-            (activeMentionTrigger.trigger !== "@" && activeMentionTrigger.trigger !== "$")
-          ) {
-            return;
-          }
-
-          const tokenStart =
-            snapshotRange?.start ??
-            selectionState.cursorOffset - activeMentionTrigger.query.length - 1;
-          const tokenEnd =
-            snapshotRange?.end ??
-            selectionState.cursorOffset +
-              getActivePromptInputTokenTailLength(
-                activeMentionTrigger,
-                selectionState.textAfterCursor,
-                [item.label, item.value, item.markdown],
-              );
-          selectionState.selection.setTextNodeRange(
-            selectionState.node,
-            tokenStart,
-            selectionState.node,
-            tokenEnd,
-          );
-          selectionState.selection.insertText("");
-        });
-
-        dismissedSignatureRef.current = null;
-        activeTokenRef.current = null;
-        setActiveTrigger(null);
-        setSelectedIndex(0);
-        void onWhiteboardMentionSelected(item.value);
-        requestAnimationFrame(() => {
-          editor.focus();
-        });
-        return;
-      }
-
       editor.update(() => {
         const selectionState = getCurrentTextNodeSelection();
         if (!selectionState) {
@@ -569,7 +480,7 @@ export function MentionPlugin({
         editor.focus();
       });
     },
-    [editor, onWhiteboardMentionSelected],
+    [editor],
   );
 
   const selectOption = useCallback(
