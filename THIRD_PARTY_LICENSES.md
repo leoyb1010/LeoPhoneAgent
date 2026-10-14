@@ -31,6 +31,38 @@ Direct packages declared in `src/ios/LeoPhoneAgent.xcodeproj`:
 
 Transitive packages (pinned in `Package.resolved`), all **Apache-2.0**, maintained by Apple / the Swift Server Workgroup: `async-http-client`, `swift-algorithms`, `swift-asn1`, `swift-async-algorithms`, `swift-atomics`, `swift-certificates`, `swift-collections`, `swift-crypto`, `swift-distributed-tracing`, `swift-http-structured-headers`, `swift-http-types`, `swift-log`, `swift-nio` (+ `-extras`, `-http2`, `-ssl`, `-transport-services`), `swift-numerics`, `swift-service-context`, `swift-service-lifecycle`, `swift-system`.
 
+## iOS — adapted source (not a package dependency)
+
+| Component | Origin | License | Notes |
+|---|---|---|---|
+| Code-block syntax highlighter (lexer, language catalog, highlight scheduling) | Adapted from [MarkdownView](https://github.com/Lakr233/MarkdownView) by Lakr233 — `Sources/MarkdownView/Components/CodeView/Syntax/` (`SyntaxToken`, `SyntaxWord`, `SyntaxLanguage`, `SyntaxLanguage+Catalog`, `SyntaxHighlighter`) and the design of `CodeHighlighter.swift` | **MIT**, Copyright (c) 2025 Lakr Aream | Rewritten in Swift (Foundation only) into `src/ios/Agent/Markdown/CodeSyntax{Lexer,Languages,Highlighter,Palette}.swift` for the chat code blocks. Each file keeps the origin and copyright in its header; `CodeSyntaxLexer.swift` carries the full permission notice. No upstream package is linked. (Upstream's `LICENSE` also lists swift-markdown-ui, MIT, Copyright (c) 2020 Guillermo Gonzalez, for other parts of that repository; none of that code is used here.) |
+
+License text of the adapted MarkdownView code (MIT):
+
+```
+MIT License
+
+Copyright (c) 2025 Lakr Aream
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Android — Gradle dependencies
 
 | Library | Version | License |

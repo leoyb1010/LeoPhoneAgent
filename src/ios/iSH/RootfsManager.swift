@@ -55,7 +55,14 @@ class RootfsManager {
         return tag.trimmingCharacters(in: .whitespacesAndNewlines) == currentArch
     }
 
+    /// [T-kernel-lazy-boot] 解包可能同时从两处来:内核启动(专用线程)和「全新安装后台预解包」,
+    /// 还有设置页的手动安装 / 重置。没有这把锁时两边都会看到「没装好」,各自再解一遍。
+    /// 只串行 install / reset;`isInstalled` 等只读检查不加锁。
+    private let installLock = NSLock()
+
     func installIfNeeded() throws {
+        installLock.lock()
+        defer { installLock.unlock() }
         if FileManager.default.fileExists(atPath: rootfsPath.path) && !isInstalled {
             print("RootfsManager: Arch mismatch or missing tag, reinstalling \(currentArch) rootfs...")
             try FileManager.default.removeItem(at: rootfsPath)
@@ -107,6 +114,9 @@ class RootfsManager {
     /// - Returns: URL of backup directory if keepUserData was true, nil otherwise
     @discardableResult
     func reset(keepUserData: Bool = false) throws -> URL? {
+        // 正在解包(内核启动 / 预解包)时,等它结束再删,免得一边写一边删出半截 rootfs。
+        installLock.lock()
+        defer { installLock.unlock() }
         print("RootfsManager: Resetting rootfs...")
 
         var backupURL: URL?
@@ -295,12 +305,35 @@ class RootfsManager {
     }
 
     /// 覆盖内容来自 App 包,进程内不会变:每个进程铺一次就够。以前每开一个对话都重铺一遍
-    /// (删掉重拷 20 多个文件、上百次 meta.db 读写),新对话会卡在"Booting Kernel"。只在主线程调用。
-    private(set) var isDefaultMountOverlayApplied = false
+    /// (删掉重拷 20 多个文件、上百次 meta.db 读写),新对话会卡在"Booting Kernel"。
+    ///
+    /// [T-kernel-lazy-boot] 现在跟着内核启动一起在专用线程上跑(不再在主线程)。线程安全:
+    /// 并发调用(启动流程 + 旧的直接调用点)由 `overlayRunLock` 串行,后来者等前一个铺完再返回,
+    /// 不会在覆盖层只铺了一半时就当作「已就绪」。`isDefaultMountOverlayApplied` 另用一把只护这个布尔的
+    /// 小锁:主线程读它时不会被一次 100–250 ms 的铺设挡住。
+    var isDefaultMountOverlayApplied: Bool {
+        overlayFlagLock.lock()
+        defer { overlayFlagLock.unlock() }
+        return overlayApplied
+    }
+
+    private let overlayRunLock = NSLock()
+    private let overlayFlagLock = NSLock()
+    private var overlayApplied = false
+
+    private func markOverlayApplied() {
+        overlayFlagLock.lock()
+        overlayApplied = true
+        overlayFlagLock.unlock()
+    }
 
     func applyDefaultMountOverlay() {
+        overlayRunLock.lock()
+        defer { overlayRunLock.unlock() }
         guard !isDefaultMountOverlayApplied else { return }
-        isDefaultMountOverlayApplied = true
+        // 任何出口(包括包里没有 default_mount)都算铺过:和以前「进函数就置位」的语义一致,
+        // 区别是现在在函数结束时才置位,等待中的并发调用者因此不会提前放行。
+        defer { markOverlayApplied() }
         let totalStart = CFAbsoluteTimeGetCurrent()
         logger.info("[DefaultMount] applyDefaultMountOverlay() called")
 

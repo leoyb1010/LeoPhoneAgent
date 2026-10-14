@@ -2,7 +2,7 @@
 //  AnthropicRequestSettings.swift
 //  MinisApp
 //
-//  Anthropic 请求里 SDK 不支持的字段(工具结果图片、思考档位、兼容代理的推理回放),
+//  Anthropic 请求里 SDK 不支持的字段(工具结果图片、思考档位与「关思考」的写法、兼容代理的推理回放),
 //  由 URLProtocol 里的 RequestBodyPatcher 补进请求体。
 //
 //  以前这些放在进程级「一次性」全局槽里:第一次网络尝试就被取走,-1005/-1009 自动重试时请求里就没了
@@ -22,6 +22,11 @@ struct AnthropicRequestSettings {
     var thinkingEffort: String?
     /// 自适应模型默认会思考,「关」要明确发出去。
     var thinkingDisabled = false
+    /// 「关」的线上写法,只在 `thinkingDisabled` 时用。nil = 改写请求体时按模型 id 查种子表
+    /// (`resolveThinkingOffStyle`),所以只设了 `thinkingDisabled` 的调用方也不会对已知的坏模型发 disabled。
+    var thinkingOffStyle: ThinkingOffStyle?
+    /// `.adaptiveLow` 时 output_config.effort 用的值(该模型最低档);nil = "low"。
+    var thinkingOffEffort: String?
     /// 兼容代理的推理回放:每个助手回合一项。
     var reasoningHistory: [String?]?
     var reasoningInjectPlaceholder = false

@@ -618,6 +618,9 @@ enum ThinkingRuleResolver {
                 body["reasoning_effort"] = clamped
                 return (requested, clamped)
             }
+            // 这是 DeepSeek V4 自己的「关」(OpenAI 兼容路径,golden snapshot 钉着,别改)。
+            // Anthropic 线格式的「关」不走这里:同样写成 {"type":"disabled"} 对 Claude 各型号并不通用
+            // (sonnet-5-5 要 between_tools,opus-5-5 / fable 只能 adaptive + 最低档 effort),见 ThinkingOffStyle.swift。
             body["thinking"] = ["type": "disabled"]
             return (nil, nil)
 

@@ -720,13 +720,20 @@ final class MCPStore: ObservableObject {
                 // guest CLI could still do it — but only if the kernel is up.
                 AppLogger(category: "MCPStore")
                     .warning("native MCP listTools failed for \(server): \(error.localizedDescription)")
-                guard ISHKernel.shared.isBooted else {
+                // [leo] 内核改为按需启动：打开设置直接刷新 MCP 时内核可能还没起，这里按需启动再回退到 CLI。
+                do {
+                    try await KernelBootManager.shared.ensureKernelBooted(reason: "mcp-refresh")
+                } catch {
                     throw ToolsRefreshError.cliFailed(error.localizedDescription)
                 }
             }
         }
 
-        guard ISHKernel.shared.isBooted else { throw ToolsRefreshError.kernelNotBooted }
+        do {
+            try await KernelBootManager.shared.ensureKernelBooted(reason: "mcp-refresh")
+        } catch {
+            throw ToolsRefreshError.kernelNotBooted
+        }
         // Shell-quote the name defensively (names are also file keys, but a
         // space or quote must not break the command line).
         let quoted = "'" + server.replacingOccurrences(of: "'", with: "'\\''") + "'"

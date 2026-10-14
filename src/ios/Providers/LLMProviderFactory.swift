@@ -93,6 +93,13 @@ enum LLMProviderFactory {
     // MARK: - Per-Provider Builders
 
     static func makeAnthropicProvider(instance: ProviderInstance, model: LLMModel) -> AnthropicProvider {
+        let provider = buildAnthropicProvider(instance: instance, model: model)
+        // [leo] 「关思考」的写法按「实例 + 模型」记忆（见 ThinkingOffStyle）；不设置则退回按接入点分组。
+        provider.providerInstanceId = instance.id
+        return provider
+    }
+
+    private static func buildAnthropicProvider(instance: ProviderInstance, model: LLMModel) -> AnthropicProvider {
         // One Keychain read decides both the credential and the base URL.
         let manualToken = instance.storedManualToken()
         let customBase = instance.effectiveCustomBaseURL(manualToken: manualToken)
@@ -148,8 +155,10 @@ enum LLMProviderFactory {
         }
         switch OpenCodeGo.wireProtocol(for: model.id) {
         case .anthropicMessages:
-            return AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, perRequestHeaders: resolve,
-                                     requestTimeout: ProviderResponseTimeout.requestSeconds(instanceId: instance.id))
+            let provider = AnthropicProvider(manualToken: key, model: model, basePath: OpenCodeGo.apiRoot, appendV1Suffix: true, customUserAgent: MinisUserAgent.default, perRequestHeaders: resolve,
+                                             requestTimeout: ProviderResponseTimeout.requestSeconds(instanceId: instance.id))
+            provider.providerInstanceId = instance.id
+            return provider
         case .responses:
             let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: OpenCodeGo.apiRoot, appendV1Suffix: true)
             provider.forceResponsesAPI = true

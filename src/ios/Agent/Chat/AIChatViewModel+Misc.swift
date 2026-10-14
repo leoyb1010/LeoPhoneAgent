@@ -12,12 +12,22 @@ extension AIChatViewModel {
 
     // MARK: - Kernel Boot
 
+    /// 让这个会话「等着内核」:内核已就绪就立刻标 `.booted`,否则标 `.booting`,在后台等共享的那一次启动。
+    ///
+    /// [T-kernel-lazy-boot] 真正的启动在 `KernelBootManager`(单飞、专用线程、不占主线程)。
+    /// 这里只是把它投影到本 VM 的 `kernelStatus` 上,给「Booting Kernel / 重试」界面和发送路径里的
+    /// `while kernelStatus == .booting` 等待用。聊天页出现不再调用它(以前每次 onAppear 都调,冷启动、
+    /// 后台拉起也因此各起一遍内核);只有发送 / 重试 / 继续这些真要跑 agent 的入口才调。
+    /// 以前这里的 `Task {}` 继承主 actor,`ISHKernel.boot` + 挂载覆盖层整段同步跑在主线程
+    /// (真机实测中位 180 ms,9 次里 3 次叠在 ≥250 ms 的卡顿上)。
     func ensureKernelBooted() {
         guard kernelStatus == .notBooted else { return }
+        let manager = KernelBootManager.shared
         // 内核已经起来、默认挂载也铺过了:直接可用,不再盖一层"Booting Kernel"。
-        if ISHKernel.shared.isBooted, RootfsManager.shared.isDefaultMountOverlayApplied {
+        if manager.isBooted {
             // 覆盖层只铺一次,但 pip 的 EXTERNALLY-MANAGED 标记可能被 apk upgrade 装回来:每个新对话仍清一次。
-            RootfsManager.shared.removeExternallyManagedMarker()
+            // 列一次 /usr/lib + 几次 stat,放到后台,不占主线程。
+            Task.detached(priority: .utility) { RootfsManager.shared.removeExternallyManagedMarker() }
             kernelStatus = .booted
             return
         }
@@ -26,72 +36,25 @@ extension AIChatViewModel {
         kernelBootShowsOverlay = !RootfsManager.shared.isInstalled
         kernelStatus = .booting
 
-        Task {
-            let bootStart = CFAbsoluteTimeGetCurrent()
+        // 后台时带 `-bg`:perf.jsonl 的 kernel.boot 记录里能直接看出「后台拉起还有没有人在起内核」。
+        let reason = UIApplication.shared.applicationState == .background ? "chat-run-bg" : "chat-run"
+        // 这个 Task 继承主 actor,只负责等结果、发布状态;await 期间主线程是空的。
+        Task { [weak self] in
             do {
-                // 首次解包 rootfs 要好几秒:放到后台串行队列做,不卡主线程(以前这个 Task 继承主 actor,整段同步跑在主线程)。
-                try await Self.installRootfsOffMain()
-                try Self.bootKernelIfNeeded()
-                let bootMs = (CFAbsoluteTimeGetCurrent() - bootStart) * 1000
-                RootfsManager.shared.applyDefaultMountOverlay()
-                Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }
-                kernelStatus = .booted
-                let totalElapsed = (CFAbsoluteTimeGetCurrent() - bootStart) * 1000
-                logger.info("[KernelBoot] TOTAL: \(String(format: "%.1f", totalElapsed))ms")
-                LeoPerf.record("kernel.boot", ms: totalElapsed,
-                               extra: ["bootMs": bootMs.rounded(), "overlayMs": (totalElapsed - bootMs).rounded()])
+                try await manager.ensureKernelBooted(reason: reason)
+                self?.kernelStatus = .booted
             } catch {
-                kernelStatus = .failed(error.localizedDescription)
-                logger.error("[KernelBoot] error: \(error.localizedDescription)")
+                self?.kernelStatus = .failed(error.localizedDescription)
             }
         }
     }
 
-    /// [T-selftest-1.41] 内核启动序列的唯一实现:聊天和能力自检都走这里,
-    /// 保证 fakefs 变更跟踪、路径钩子只装一次且顺序不变。已启动时直接返回。
-    struct KernelBootError: LocalizedError {
-        let code: Int32
-        // #31: localized. The zh text keeps "kernel" so
-        // AgentActivityFailureClassifier still routes it to Retry Kernel.
-        var errorDescription: String? { String(localized: "Kernel boot failed: \(Int(code))") }
-    }
-
-    nonisolated private static let rootfsInstallQueue = DispatchQueue(label: "leo.rootfs.install", qos: .userInitiated)
-
-    /// 在后台串行队列上解包 rootfs(已装好时立即返回)。多个会话同时启动也只解包一次。
-    nonisolated static func installRootfsOffMain() async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            rootfsInstallQueue.async {
-                do { try RootfsManager.shared.installIfNeeded(); cont.resume() }
-                catch { cont.resume(throwing: error) }
-            }
-        }
-    }
-
+    /// 旧的同步入口,只剩能力自检(Settings/CapabilitySelfTestView)在用。
+    /// 不再在调用线程上直接 boot:改成阻塞等 `KernelBootManager` 共享的那一次启动,
+    /// 这样不会出现第二个启动线程(iSH 的 init 进程绑定在启动线程上,只能有一个)。
+    /// 新代码请用 `try await KernelBootManager.shared.ensureKernelBooted()`。
     static func bootKernelIfNeeded() throws {
-        guard !ISHKernel.shared.isBooted else { return }
-        let installStart = CFAbsoluteTimeGetCurrent()
-        try RootfsManager.shared.installIfNeeded()
-        let installElapsed = (CFAbsoluteTimeGetCurrent() - installStart) * 1000
-        logger.info("[KernelBoot] installIfNeeded: \(String(format: "%.1f", installElapsed))ms")
-
-        let kernelStart = CFAbsoluteTimeGetCurrent()
-        let rootPath = RootfsManager.shared.rootfsPath.path
-        let err = ISHKernel.shared.boot(withRootPath: rootPath)
-        let kernelElapsed = (CFAbsoluteTimeGetCurrent() - kernelStart) * 1000
-        logger.info("[KernelBoot] kernel boot call: \(String(format: "%.1f", kernelElapsed))ms")
-        if err < 0 { throw KernelBootError(code: err) }
-        // Wire fakefs change events into the iCloud Sync v2
-        // SessionFile dirty pipeline. Must be done after boot
-        // (the C-side dispatch source is created by this call)
-        // and before any bind mount, so the first realfs op
-        // already has a consumer registered.
-        installSessionFileChangeTracker(kernel: ISHKernel.shared)
-
-        // Install per-session path-translate hook. Must run
-        // before any session task is spawned so the first
-        // /var/minis/* access already routes correctly.
-        MinisFsRouter.shared.installHook()
+        try KernelBootManager.shared.ensureKernelBootedBlocking(reason: "capability-self-test")
     }
 
     /// Explicit recovery path for the kernel failure overlay. A retry is only

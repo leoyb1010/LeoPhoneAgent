@@ -55,7 +55,10 @@ struct MountedFoldersSettingsView: View {
                             MountedFolderRow(
                                 entry: entry,
                                 state: model.state(for: entry.id),
-                                sourceURL: model.resolvedURL(for: entry.id)
+                                sourceURL: model.resolvedURL(for: entry.id),
+                                needsReauthorization: model.needsReauthorization(entry),
+                                isRetrying: model.retrying.contains(entry.id),
+                                onRetry: { model.retry(id: entry.id) }
                             )
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -277,6 +280,11 @@ private struct MountedFolderRow: View {
     /// nil while the mount is still being resolved.
     let state: MountActivationState?
     let sourceURL: URL?
+    /// [T-mount-backoff] 连续失败、现在没在用:授权多半已经失效,自动重试已按退避暂停。
+    var needsReauthorization = false
+    /// 手动重试正在后台解析书签。
+    var isRetrying = false
+    var onRetry: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -286,6 +294,11 @@ private struct MountedFolderRow: View {
                 Text(entry.name)
                     .font(.body.weight(.medium))
                 accessBadge
+                if needsReauthorization && !isRetrying {
+                    LeoCapsuleBadge(text: String(localized: "需要重新授权"),
+                                    systemImage: "key.fill",
+                                    tint: LeoTheme.ColorToken.warning)
+                }
                 Spacer()
             }
             Text("/var/minis/mounts/\(entry.name)")
@@ -298,10 +311,20 @@ private struct MountedFolderRow: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if state == nil {
+            if isRetrying || state == nil {
                 Label(String(localized: "Checking access…"), systemImage: "clock")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            } else if needsReauthorization {
+                // 和别处失败提示同一个组件(LeoInlineError):说清发生了什么 + 一个重试入口。
+                // 重试会清零退避、在后台重新解析书签;仍失败就换成删掉后重新选择文件夹。
+                LeoInlineError(
+                    message: String(localized: "这个文件夹的授权已失效,已暂停自动重试。点「重试」再试一次;仍然失败的话,请删除这个挂载后重新选择文件夹。"),
+                    retryTitle: String(localized: "重试"),
+                    onRetry: onRetry,
+                    style: .card
+                )
+                .padding(.top, 2)
             } else if let problem = stateProblem {
                 Label(problem, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2)
@@ -484,6 +507,27 @@ final class MountedFoldersViewModel: ObservableObject {
     /// True while some mount has no resolution result yet.
     var hasPendingStates: Bool {
         entries.contains { states[$0.id] == nil }
+    }
+
+    /// [T-mount-backoff] 正在手动重试的挂载(后台解析书签,最长约 5 秒)。
+    @Published private(set) var retrying: Set<UUID> = []
+
+    /// 这个挂载需要用户重新授权:有连续失败记录,而且现在没有在用。
+    /// (失败记录持久化在 MountedFolderEntry 里,所以冷启动后、解析还没跑完之前也能立刻判断。)
+    func needsReauthorization(_ entry: MountedFolderEntry) -> Bool {
+        guard entry.hasFailureStreak else { return false }
+        return !(states[entry.id]?.isActive ?? false)
+    }
+
+    /// 手动重试:清零退避,在后台重新解析书签(带超时,不占主线程);完成后刷新这一页。
+    func retry(id: UUID) {
+        guard !retrying.contains(id) else { return }
+        retrying.insert(id)
+        Task {
+            await MountedFoldersManager.shared.retryActivation(id: id)
+            retrying.remove(id)
+            refresh()
+        }
     }
 
     /// Resolved host URL for a mount, if currently active. Exposed to row views

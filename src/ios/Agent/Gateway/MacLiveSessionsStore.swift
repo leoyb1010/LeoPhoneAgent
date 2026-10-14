@@ -104,13 +104,33 @@ final class MacLiveSessionsStore: ObservableObject {
         var failedHosts: Set<String> = []
         /// 成功的主机列出的全部会话(任何状态):不再出现的,「已清理」记录随之删掉。
         var listed: Set<String> = []
-        await withTaskGroup(of: (GatewayHost, [HarnessSessionSummary]?).self) { group in
+        let store = GatewayHostStore.shared
+        await withTaskGroup(of: (GatewayHost, Result<[HarnessSessionSummary], Error>).self) { group in
             for host in hosts {
-                guard let client = GatewayHostStore.shared.client(for: host) else { continue }
-                group.addTask { (host, try? await client.harnessSessions()) }
+                // [T-link-problem] 已确认要用户处理的问题(密钥被拒、Mac 撤销授权…):在用户点主按钮之前
+                // 不再每 20 秒敲一次门。上一轮的行照旧保留(同下面的「请求失败 ≠ 没有会话」)。
+                if store.isLinkPaused(host.id) { failedHosts.insert(host.id); continue }
+                guard let client = store.client(for: host) else { continue }
+                group.addTask {
+                    do { return (host, .success(try await client.harnessSessions())) }
+                    catch { return (host, .failure(error)) }
+                }
             }
-            for await (host, sessions) in group {
-                guard let sessions else { failedHosts.insert(host.id); continue }
+            for await (host, result) in group {
+                let sessions: [HarnessSessionSummary]
+                switch result {
+                case .success(let fetched):
+                    sessions = fetched
+                    store.recordLinkProblem(nil, for: host.id)
+                case .failure(let error):
+                    failedHosts.insert(host.id)
+                    // 只有「要用户处理」的问题才记下并暂停;瞬时失败沿用 20 秒一轮的节奏。
+                    guard !LeoLinkProblem.isCancellation(error) else { continue }
+                    let problem = LeoLinkProblem.from(
+                        error: error, context: .init(.session, host: host.harnessBase?.host, machineName: host.name))
+                    if problem.pausesAutoReconnect { store.recordLinkProblem(problem, for: host.id) }
+                    continue
+                }
                 for session in sessions {
                     let row = Row(hostId: host.id, hostName: host.name, session: session)
                     listed.insert(row.id)

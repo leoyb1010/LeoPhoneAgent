@@ -37,6 +37,24 @@ final class AnthropicProvider: LLMProvider {
     /// where signature-less thinking blocks are rejected.
     let isOfficialAnthropicEndpoint: Bool
 
+    /// Provider 实例 id,由 `LLMProviderFactory` 建好 provider 后设置(和 `OpenAIProvider.providerInstanceId` 同一约定)。
+    /// 「关思考」写法的记忆按它分开记;还没设置时退回接入点地址,见 `thinkingOffScope`。
+    var providerInstanceId: String?
+
+    /// 去掉账号、口令、查询串后的接入点(host + path),只用来给记忆分组,绝不带凭据。
+    private let endpointKey: String
+
+    /// 「关思考」写法记忆的作用域:优先 provider 实例 id;工厂没设置时用接入点 ——
+    /// 同一个接入点上的同一个模型表现一致,所以退化后仍然是有意义的分组。
+    var thinkingOffScope: String {
+        providerInstanceId.map { "instance:" + $0 } ?? "endpoint:" + endpointKey
+    }
+
+    private static func makeEndpointKey(for base: String) -> String {
+        guard let url = URL(string: base), let host = url.host?.lowercased() else { return "unknown" }
+        return host + (url.port.map { ":\($0)" } ?? "") + url.path
+    }
+
     /// Parse the `-<major>-<minor>` (or `-<major>.<minor>`) version out of a Claude model id.
     /// The minor segment is optional: a single-segment version (`claude-fable-5`,
     /// `claude-opus-5`) parses as `(major, 0)`. Returns nil for non-Claude ids or
@@ -107,6 +125,7 @@ final class AnthropicProvider: LLMProvider {
             ? stripV1Suffix(basePath ?? "https://api.anthropic.com")
             : (basePath ?? "https://api.anthropic.com")
         self.isOfficialAnthropicEndpoint = Self.isOfficialEndpoint(resolvedBase)
+        self.endpointKey = Self.makeEndpointKey(for: resolvedBase)
         self.service = AnthropicServiceFactory.service(
             apiKey: apiKey,
             basePath: resolvedBase,
@@ -127,6 +146,7 @@ final class AnthropicProvider: LLMProvider {
             ? stripV1Suffix(basePath ?? "https://api.anthropic.com")
             : (basePath ?? "https://api.anthropic.com")
         self.isOfficialAnthropicEndpoint = Self.isOfficialEndpoint(resolvedBase)
+        self.endpointKey = Self.makeEndpointKey(for: resolvedBase)
         self.service = AnthropicServiceFactory.service(
             apiKey: manualToken,
             basePath: resolvedBase,

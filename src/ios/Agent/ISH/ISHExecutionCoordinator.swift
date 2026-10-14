@@ -114,7 +114,11 @@ actor ISHExecutionCoordinator {
         lineCallback: @escaping (String) -> Void,
         pidCallback: @escaping (Int32) -> Void
     ) async throws -> ISHCommandResult {
-        guard ISHKernel.shared.isBooted else {
+        // [leo] 内核按需启动：第一次真的要跑 shell 时才启动（并发合并，已启动立即返回）。
+        // 以前靠聊天页 onAppear 在主线程提前启动，后台任务/子代理走到这里内核没起就直接报错。
+        do {
+            try await KernelBootManager.shared.ensureKernelBooted(reason: "shell-tool")
+        } catch {
             throw ISHCoordinatorError.kernelNotBooted
         }
 
@@ -175,7 +179,9 @@ actor ISHExecutionCoordinator {
 
     /// Ensure the static mount layer (memory/skills/shared + external folders)
     /// is in place. Safe to call repeatedly; idempotent at the iSH kernel level.
-    func ensureMounted(for sessionId: String) {
+    func ensureMounted(for sessionId: String) async {
+        // [leo] 挂载层依赖内核；先按需启动，失败则跳过（下面的 guard 会记日志）。
+        try? await KernelBootManager.shared.ensureKernelBooted(reason: "mount")
         guard ISHKernel.shared.isBooted else {
             logger.warning("MOUNT ensureMounted(\(sessionId)) skipped — kernel not booted")
             return

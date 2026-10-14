@@ -41,6 +41,12 @@ final class LoggingManager: ObservableObject {
     private static let sharedWriterQueue = DispatchQueue(label: "LoggingManager.writer", qos: .utility)
     private var writeCount = 0
 
+    /// 捕获到的 stderr / NSLog 行不经过 `linePipeline` 的按类别限流。内核启动同一秒约 250 行,
+    /// 在这里按「行首词」分族限流(`StderrBurstFilter`):只管写盘,console 那份 tee 不受影响;
+    /// 含 error / fail / warn 字样的行永不限流。两个属性只在 `writerQueue` 上访问。
+    private var stderrBurstFilter = StderrBurstFilter()
+    private var burstSummaryScheduled = false
+
     /// [S1] AppLogger lines skip NSLog + the stderr pipe entirely: the caller
     /// enqueues (lock + token bucket + async) and this queue formats, redacts
     /// and writes. Enabled only while capture is on, exactly like the file.
@@ -322,11 +328,21 @@ final class LoggingManager: ObservableObject {
             let lines = safeText.split(separator: "\n", omittingEmptySubsequences: false)
                 .dropLast(safeText.hasSuffix("\n") ? 1 : 0)
             for line in lines {
+                switch stderrBurstFilter.verdict(for: line, at: capturedAt) {
+                case .drop:
+                    continue
+                case .write(let family, let summaryBefore):
+                    if summaryBefore > 0 {
+                        out.append(contentsOf: Array(Self.burstSummaryLine(ts: timestamp, family: family, count: summaryBefore).utf8))
+                    }
+                }
                 out.append(contentsOf: prefixBytes)
                 out.append(contentsOf: line.utf8)
                 out.append(0x0A) // "\n"
             }
             if !out.isEmpty { _ = safeWrite(out) }
+            // 刷屏停下后没有同族的新行再来,汇总靠定时器补一行(同 LogLinePipeline 的做法)。
+            if stderrBurstFilter.pendingDrops > 0 { scheduleBurstSummaryFlush() }
         } else {
             if EnvVarPrivacyStore.isEnabled() {
                 let timestamp = timeDateFormatter.string(from: capturedAt)
@@ -347,6 +363,26 @@ final class LoggingManager: ObservableObject {
         writeCount += 1
         if writeCount % 1000 == 0 {
             truncateIfNeeded()
+        }
+    }
+
+    private static func burstSummaryLine(ts: String, family: String, count: Int) -> String {
+        "[\(ts)] [LoggingManager] [WARN] suppressed \(count) stderr lines \"\(family)\" (burst limit)\n"
+    }
+
+    /// Runs on `writerQueue`: 1 s after the first suppressed line, write one summary per family still owing one.
+    private func scheduleBurstSummaryFlush() {
+        guard !burstSummaryScheduled else { return }
+        burstSummaryScheduled = true
+        writerQueue.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            self.burstSummaryScheduled = false
+            let drained = self.stderrBurstFilter.drainSummaries()
+            guard !drained.isEmpty else { return }
+            let ts = self.timeDateFormatter.string(from: Date())
+            let text = drained.map { Self.burstSummaryLine(ts: ts, family: $0.family, count: $0.count) }.joined()
+            self.rotateLogFileIfNeeded()
+            _ = self.safeWrite(Data(text.utf8))
         }
     }
 

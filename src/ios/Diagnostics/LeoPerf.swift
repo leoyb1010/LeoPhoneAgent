@@ -14,12 +14,16 @@ import os
 ///
 /// 事件:
 /// - cold        冷启动:进程启动 → 首帧(firstFrame,display link 真实上屏)→ 会话列表(listLoaded)
-///               → 首页列表上屏(homeReady)或输入框出现(inputReady),先到者结束;`end` 字段记是哪一个
+///               → 首页列表上屏(homeReady)或输入框出现(inputReady),先到者结束;`end` 字段记是哪一个。
+///               `prewarm`:系统预热拉起;`bg`:进程是被后台拉起的(BGTask / 推送 / 静默通知等),
+///               过了一阵才被用户点开。两者都不是「用户点图标到首页」,门禁计冷启动预算时一律剔除。
+///               老版本记录没有 `bg`,读者按 false 处理。
 /// - fg.frame    回前台 → 前台回调跑完后的第一帧
 /// - send.firstToken      本机对话:点发送 → 第一个文字增量
 /// - mac.ack / mac.firstToken  发给 Mac:点发送 → 中继回执 / 第一个 message.delta
 /// - push.arrive 前台收到推送;负载带 sent_at 时记录送达耗时
-/// - hang        主线程无响应 ≥250 ms(只计时,不抓栈)
+/// - hang        主线程无响应 ≥250 ms(只计时,不抓栈);`stream`:卡顿开始前 2 s 内刚刷过流式文字
+///               (见 `noteStreamingFlush`),门禁据此数「流式期间的卡顿」。老版本记录没有 `stream`,无法归类
 /// - scroll.hitch        一次滚动的 hitch ratio(ms/s)
 /// - mx.hang     MetricKit 日报里的卡顿直方图(参考)
 enum LeoPerf {
@@ -43,6 +47,7 @@ enum LeoPerf {
     /// 在 App init 最早处调用一次。
     static func start() {
         _ = processStart
+        captureLaunchState()
         HangCounter.shared.start()
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
@@ -121,6 +126,57 @@ enum LeoPerf {
     private static var foregroundAt: CFTimeInterval?
     private static var wasInBackground = false
 
+    // MARK: - 后台拉起判定
+
+    /// 进程启动那一刻系统报告的 applicationState 是不是 `.background`。
+    private static var launchStateWasBackground = false
+    private static var backgroundLaunchMarked = false
+
+    /// 首帧晚于进程启动这么久才出现,又在启动时处在后台,就判为「被后台拉起、后来才被点开」。
+    /// 用户点图标的冷启动首帧在 1–2 s 内;8 s 以上不是在量「点图标到首页」。
+    /// 比 `prewarm` 的 60 s 线更早:此前后台唤醒(BGTask / 推送)的进程只要在 60–120 s 内被点开,
+    /// 就会被当成一次冷启动记进 p50/p90(审计时 `cold` 记录里没有任何后台拉起标记)。
+    static let bgLaunchGraceMs: Double = 8_000
+
+    /// 场景式生命周期下,第一个场景连上之前系统一律报 `.background`,所以这个状态只是线索,
+    /// 不能单独定论;定论还要看首帧是不是很晚才出现(`isBackgroundLaunch`)。
+    private static func captureLaunchState() {
+        guard Thread.isMainThread else { return }
+        let background = MainActor.assumeIsolated { UIApplication.shared.applicationState == .background }
+        lock.lock(); launchStateWasBackground = background; lock.unlock()
+    }
+
+    /// 已知的后台入口(BGTask 处理器、静默推送、`BackgroundKeepAliveManager.setup()` 观察到后台拉起)
+    /// 可以显式声明「这个进程是被后台拉起的」,比首帧时刻的推断更准。
+    static func markBackgroundLaunch() {
+        lock.lock(); backgroundLaunchMarked = true; lock.unlock()
+    }
+
+    static func isBackgroundLaunch(marked: Bool, stateWasBackground: Bool, firstFrameMs: Double) -> Bool {
+        marked || (stateWasBackground && firstFrameMs > bgLaunchGraceMs)
+    }
+
+    // MARK: - 流式标记
+
+    /// 最近一次流式文字刷新的时刻(CACurrentMediaTime)。`hang` 记录据此带上 `stream`:卡顿开始前
+    /// `streamFreshSeconds` 内刚刷过流式文字,就算「流式期间」。
+    /// 不用 acquire/release 计数:计数一旦漏掉一次 release,之后所有卡顿都会被误标成流式,门禁就会误报。
+    private static var lastStreamFlushAt: CFTimeInterval?
+    static let streamFreshSeconds: Double = 2
+
+    /// 流式文字每刷新一次调用一次(`StreamingHangLogger.recordStreamingFlush`,主线程):一把锁加一次赋值。
+    static func noteStreamingFlush() {
+        let now = CACurrentMediaTime()
+        lock.lock(); lastStreamFlushAt = now; lock.unlock()
+    }
+
+    /// `began`:这次卡顿的起点(主线程被卡住前最后一次 ping 发出的时刻)。
+    static func isStreaming(hangBeganAt began: CFTimeInterval) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard let last = lastStreamFlushAt else { return false }
+        return began - last <= streamFreshSeconds
+    }
+
     /// [WP8] 首帧:下一次屏幕刷新(display link)时记 firstFrame,而不是 .task 开始的时刻。
     static func coldFirstFrame() {
         FirstFrameProbe.once { coldStep("firstFrame") }
@@ -152,6 +208,8 @@ enum LeoPerf {
         let finished = coldEndSteps.contains(step)
         if finished { coldDone = true }
         let steps = coldSteps
+        let marked = backgroundLaunchMarked
+        let stateWasBackground = launchStateWasBackground
         lock.unlock()
         signposter.emitEvent("cold", "\(step, privacy: .public) \(ms, format: .fixed(precision: 1), privacy: .public)ms")
         guard finished else { return }
@@ -160,7 +218,11 @@ enum LeoPerf {
         // 一分钟以上的,一律按预热算。
         let prewarm = ProcessInfo.processInfo.environment["ActivePrewarm"] == "1"
             || (steps["firstFrame"] ?? 0) > 60_000 || ms > 120_000
-        var extra: [String: Any] = ["prewarm": prewarm, "end": step]
+        // 后台拉起(BGTask / 推送 / 静默通知)后来才被点开:同样不是「点图标到首页」,单独标出来。
+        // 旧读者忽略这个新字段,旧记录没有它(读者按 false 处理)。
+        let bg = isBackgroundLaunch(marked: marked, stateWasBackground: stateWasBackground,
+                                    firstFrameMs: steps["firstFrame"] ?? ms)
+        var extra: [String: Any] = ["prewarm": prewarm, "end": step, "bg": bg]
         for (k, v) in steps where k != step { extra[k] = (v * 10).rounded() / 10 }
         record("cold", ms: ms, extra: extra)
     }
@@ -302,7 +364,10 @@ final class HangCounter {
         lock.unlock()
         guard let sent, isActive else { return }
         let ms = (now - sent) * 1000
-        if ms >= Self.thresholdMs { LeoPerf.record("hang", ms: ms) }
+        // `sent` 之后主线程才被卡住,所以它就是卡顿的起点;`stream` 标明起点前是否刚刷过流式文字。
+        if ms >= Self.thresholdMs {
+            LeoPerf.record("hang", ms: ms, extra: ["stream": LeoPerf.isStreaming(hangBeganAt: sent)])
+        }
     }
 }
 

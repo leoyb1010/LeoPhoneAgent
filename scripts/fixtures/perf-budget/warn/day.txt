@@ -1,0 +1,33 @@
+[11:00:00] [Lifecycle] [INFO] process launch
+[11:00:01] [App] [INFO] line 0
+[11:00:01] [App] [INFO] line 1
+[11:00:01] [App] [INFO] line 2
+[11:00:01] [App] [INFO] line 3
+[11:00:01] [App] [INFO] line 4
+[11:00:01] [App] [INFO] line 5
+[11:00:01] [App] [INFO] line 6
+[11:00:01] [App] [INFO] line 7
+[11:00:01] [App] [INFO] line 8
+[11:00:01] [App] [INFO] line 9
+[11:00:01] [App] [INFO] line 10
+[11:00:01] [App] [INFO] line 11
+[11:00:01] [App] [INFO] line 12
+[11:00:01] [App] [INFO] line 13
+[11:00:01] [App] [INFO] line 14
+[11:00:01] [App] [INFO] line 15
+[11:00:01] [App] [INFO] line 16
+[11:00:01] [App] [INFO] line 17
+[11:00:01] [App] [INFO] line 18
+[11:00:01] [App] [INFO] line 19
+[11:00:01] [App] [INFO] line 20
+[11:00:01] [App] [INFO] line 21
+[11:00:01] [App] [INFO] line 22
+[11:00:01] [App] [INFO] line 23
+[11:00:01] [App] [INFO] line 24
+[11:00:01] [App] [INFO] line 25
+[11:00:01] [App] [INFO] line 26
+[11:00:01] [App] [INFO] line 27
+[11:00:01] [App] [INFO] line 28
+[11:00:01] [App] [INFO] line 29
+[11:00:02] [FPWatcher] [INFO] root summary 0
+[11:00:02] [FPWatcher] [INFO] root summary 1

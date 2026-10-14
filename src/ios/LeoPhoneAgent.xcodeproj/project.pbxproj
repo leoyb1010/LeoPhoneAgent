@@ -215,6 +215,7 @@
 		AA26CCBC2F31080100AECF2D /* ISHTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */; };
 		AA26CCBC2F324FE400AECF2D /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBB2F324FE400AECF2D /* FileBrowserView.swift */; };
 		AA26CCBE2F31080100AECF2D /* RootfsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26CCBF2F31080100AECF2D /* RootfsManager.swift */; };
+		LF384783631F /* KernelBootManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB234C51AEE /* KernelBootManager.swift */; };
 		AA26CCC12F31090000AECF2D /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCC22F31090000AECF2D /* SystemConfiguration.framework */; };
 		AA26CCC32F31090100AECF2D /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCC42F31090100AECF2D /* libresolv.tbd */; };
 		AA71B0222F44BEB200A28A5E /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA71B0212F44BEB200A28A5E /* Launch Screen.storyboard */; };
@@ -352,7 +353,9 @@
 		E5L3KMMB /* KeyedMemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3KMMR /* KeyedMemo.swift */; };
 		E5L3KMMT /* KeyedMemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3KMMR /* KeyedMemo.swift */; };
 		E5L3FWPB /* ForegroundWorkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3FWPR /* ForegroundWorkPolicy.swift */; };
+		LF36FAE28768 /* MountActivationBackoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCF5DAFE138 /* MountActivationBackoff.swift */; };
 		E5L3FWPT /* ForegroundWorkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3FWPR /* ForegroundWorkPolicy.swift */; };
+		LFB093608F05 /* MountActivationBackoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFCF5DAFE138 /* MountActivationBackoff.swift */; };
 		E5L3WRCB /* WidgetReloadCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3WRCR /* WidgetReloadCoalescer.swift */; };
 		E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3WRCR /* WidgetReloadCoalescer.swift */; };
 		E5WBR001 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WBR011 /* WatchBridge.swift */; };
@@ -389,9 +392,11 @@
 		E5CFG0021 /* EnvVarsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CFG0031 /* EnvVarsCollection.swift */; };
 		E5CKB0001 /* CookieBackupStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CKB0002 /* CookieBackupStore.swift */; };
 		E5CR00001 /* ShellCommandRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00011 /* ShellCommandRingBuffer.swift */; };
+		LFCB3E5FA251 /* KernelBootCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF31AB8B297 /* KernelBootCoalescer.swift */; };
 		E5STO0001 /* ShellTimeoutOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STO0011 /* ShellTimeoutOutput.swift */; };
 		E5STO0002 /* ShellTimeoutOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STO0011 /* ShellTimeoutOutput.swift */; };
 		E5CR00004 /* ShellCommandRingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00011 /* ShellCommandRingBuffer.swift */; };
+		LF47B0E4041E /* KernelBootCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF31AB8B297 /* KernelBootCoalescer.swift */; };
 		E5CR00002 /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CR00012 /* CrashReporter.swift */; };
 		E5PF00002 /* LeoPerf.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PF00012 /* LeoPerf.swift */; };
 		E5RD00002 /* ResourceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RD00012 /* ResourceDiagnostics.swift */; };
@@ -446,8 +451,11 @@
 		E5F200001 /* MarkdownPrepRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200011 /* MarkdownPrepRegex.swift */; };
 		E5F200002 /* MinisMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200012 /* MinisMediaViews.swift */; };
 		E5F200003 /* AssistantBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200013 /* AssistantBlockView.swift */; };
+		LF099F434DEF /* LongTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF438118BBB7 /* LongTextReader.swift */; };
 		E5R3R0001 /* ChatRenderLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3R0011 /* ChatRenderLimits.swift */; };
+		LF8945EA3BE9 /* LongTextCollapse.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE7E080DA98 /* LongTextCollapse.swift */; };
 		E5R3R0002 /* ChatRenderLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3R0011 /* ChatRenderLimits.swift */; };
+		LF0B67AADDC6 /* LongTextCollapse.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE7E080DA98 /* LongTextCollapse.swift */; };
 		E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = E5J000031 /* NSTextContainerSetSizeGuard.m */; };
 		E5F200004 /* ChatMessageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200014 /* ChatMessageViews.swift */; };
 		E5F200005 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200015 /* ChatInputBar.swift */; };
@@ -571,6 +579,7 @@
 		E5WPL0001 /* WorkerPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WPL0002 /* WorkerPool.swift */; };
 		E5MRC0001 /* MemoryRecall.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRC0002 /* MemoryRecall.swift */; };
 		E5RHV0001 /* RemoteHostSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHV0002 /* RemoteHostSettingsView.swift */; };
+		LF0764B2B50D /* LeoLinkProblemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFDCE7361DDE /* LeoLinkProblemView.swift */; };
 		E5AUV0001 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUV0002 /* AutomationSettingsView.swift */; };
 		E5ATL0001 /* AgentTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ATL0002 /* AgentTimelineView.swift */; };
 		E5WRG0001 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WRG0002 /* WindowRegistry.swift */; };
@@ -596,6 +605,11 @@
 		E5M000001 /* cmark-gfm in Frameworks */ = {isa = PBXBuildFile; productRef = E5M000021 /* cmark-gfm */; };
 		E5M000002 /* cmark-gfm-extensions in Frameworks */ = {isa = PBXBuildFile; productRef = E5M000022 /* cmark-gfm-extensions */; };
 		E5M000003 /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
+		LF938B8B4EA3 /* CodeSyntaxFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBF8A190CA0 /* CodeSyntaxFence.swift */; };
+		LF9D15E016A3 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF39422438F /* CodeSyntaxHighlighter.swift */; };
+		LF4958C08C1F /* CodeSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC8E7338DE4 /* CodeSyntaxPalette.swift */; };
+		LF37A50F5EA8 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF44566BC585 /* CodeSyntaxLanguages.swift */; };
+		LF4499E2C903 /* CodeSyntaxLexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFA3761E38D7 /* CodeSyntaxLexer.swift */; };
 		E5MDS0003 /* MarkdownStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDS0013 /* MarkdownStripper.swift */; };
 		E5MDS0003T /* MarkdownStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDS0013 /* MarkdownStripper.swift */; };
 		E5MDT0001 /* ModelDisplayTraits.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDT0011 /* ModelDisplayTraits.swift */; };
@@ -625,7 +639,11 @@
 		E5Q000002 /* cl100k_base.tiktoken in Resources */ = {isa = PBXBuildFile; fileRef = E5Q000012 /* cl100k_base.tiktoken */; };
 		E5Q000003 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000013 /* AppLogger.swift */; };
 		E5L3LLPB /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
+		LF4BFF0E4A36 /* LogNoiseControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF08BDF6DE26 /* LogNoiseControl.swift */; };
+		LF653CC0D303 /* LogContentDigest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF262B3FEB94 /* LogContentDigest.swift */; };
 		E5L3LLPT /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
+		LFEDD8663B14 /* LogNoiseControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF08BDF6DE26 /* LogNoiseControl.swift */; };
+		LFDBA0D05082 /* LogContentDigest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF262B3FEB94 /* LogContentDigest.swift */; };
 		E5Q000004 /* FontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000014 /* FontSettings.swift */; };
 		E5LEO0001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
 		E5LEO0002 /* ChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0012 /* ChatColors.swift */; };
@@ -702,10 +720,18 @@
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
 		E5RMC0001 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
+		LF3C05D63FF2 /* LeoLinkProblem+Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB557B4F4FD /* LeoLinkProblem+Errors.swift */; };
+		LF2F87E4EE74 /* LeoLinkProblem.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBBFB592A46 /* LeoLinkProblem.swift */; };
+		LFCB1A48CF8F /* GatewayError.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF72B90255DE /* GatewayError.swift */; };
 		E5RMC0003 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
+		LFB90A6BC484 /* LeoLinkProblem+Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB557B4F4FD /* LeoLinkProblem+Errors.swift */; };
+		LF6DF60D94B4 /* LeoLinkProblem.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBBFB592A46 /* LeoLinkProblem.swift */; };
+		LF597E22B569 /* GatewayError.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF72B90255DE /* GatewayError.swift */; };
 		E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
 		E5TT0001 /* ThinkingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TT0002 /* ThinkingTypes.swift */; };
+		LF459FD1EE36 /* ThinkingOffStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF3D490AADF /* ThinkingOffStyle.swift */; };
 		E5TT0003 /* ThinkingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TT0002 /* ThinkingTypes.swift */; };
+		LFE28E0EDD82 /* ThinkingOffStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF3D490AADF /* ThinkingOffStyle.swift */; };
 		E5MG0003 /* ModelGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00014 /* ModelGroup.swift */; };
 		E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH013 /* RunDueScheduledTasksIntent.swift */; };
 		E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH014 /* ScheduledTaskSettingsView.swift */; };
@@ -849,6 +875,11 @@
 		E5R3HX005A /* MarkdownHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX005F /* MarkdownHardening.swift */; };
 		E5R3HX005T /* MarkdownHardening.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3HX005F /* MarkdownHardening.swift */; };
 		E5R3HX101T /* MinisMarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5M000013 /* MinisMarkdownParser.swift */; };
+		LFFDD0926C38 /* CodeSyntaxFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFBF8A190CA0 /* CodeSyntaxFence.swift */; };
+		LFBABDF3B87E /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFF39422438F /* CodeSyntaxHighlighter.swift */; };
+		LF31A95CD0A6 /* CodeSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFC8E7338DE4 /* CodeSyntaxPalette.swift */; };
+		LF0D626BA509 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF44566BC585 /* CodeSyntaxLanguages.swift */; };
+		LFFC3699A425 /* CodeSyntaxLexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFA3761E38D7 /* CodeSyntaxLexer.swift */; };
 		E5R3HX102T /* MarkdownPrepRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200011 /* MarkdownPrepRegex.swift */; };
 		E5R3HXP11 /* cmark-gfm in Frameworks */ = {isa = PBXBuildFile; productRef = E5R3HXP01 /* cmark-gfm */; };
 		E5R3HXP12 /* cmark-gfm-extensions in Frameworks */ = {isa = PBXBuildFile; productRef = E5R3HXP02 /* cmark-gfm-extensions */; };
@@ -886,6 +917,7 @@
 		E5W000080 /* ForceSyncHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W000180 /* ForceSyncHelper.swift */; };
 		E5X000001 /* SwiftMathRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5X000011 /* SwiftMathRenderer.swift */; };
 		E5Y000001 /* MathRenderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Y000011 /* MathRenderScheduler.swift */; };
+		LFE990FC3DBF /* CodeSyntaxTextBinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFEC36335DF2 /* CodeSyntaxTextBinder.swift */; };
 		E7A000001 /* OpenRouterModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000011 /* OpenRouterModelsAPI.swift */; };
 		E7A000002 /* OpenRouterOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000012 /* OpenRouterOAuthManager.swift */; };
 		E8A000001 /* OffloadPermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000011 /* OffloadPermissionManager.swift */; };
@@ -1242,6 +1274,7 @@
 		AA26CCBB2F324FE400AECF2D /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		AA26CCBD2F31080100AECF2D /* ISHTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISHTerminalView.swift; sourceTree = "<group>"; };
 		AA26CCBF2F31080100AECF2D /* RootfsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootfsManager.swift; sourceTree = "<group>"; };
+		LFB234C51AEE /* KernelBootManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelBootManager.swift; sourceTree = "<group>"; };
 		AA26CCC02F31080100AECF2D /* ISHKernel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ISHKernel.h; sourceTree = "<group>"; };
 		AA26CCC22F31090000AECF2D /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		AA26CCC42F31090100AECF2D /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
@@ -1356,6 +1389,7 @@
 		E5WMIR011 /* WidgetDataMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataMirror.swift; sourceTree = "<group>"; };
 		E5L3KMMR /* KeyedMemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyedMemo.swift; sourceTree = "<group>"; };
 		E5L3FWPR /* ForegroundWorkPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundWorkPolicy.swift; sourceTree = "<group>"; };
+		LFCF5DAFE138 /* MountActivationBackoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountActivationBackoff.swift; sourceTree = "<group>"; };
 		E5L3WRCR /* WidgetReloadCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetReloadCoalescer.swift; sourceTree = "<group>"; };
 		E5WBR011 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5AWS0002 /* ActiveWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWindowScene.swift; sourceTree = "<group>"; };
@@ -1366,6 +1400,7 @@
 		E5WPL0002 /* WorkerPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPool.swift; sourceTree = "<group>"; };
 		E5MRC0002 /* MemoryRecall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRecall.swift; sourceTree = "<group>"; };
 		E5RHV0002 /* RemoteHostSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostSettingsView.swift; sourceTree = "<group>"; };
+		LFDCE7361DDE /* LeoLinkProblemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoLinkProblemView.swift; sourceTree = "<group>"; };
 		E5AUV0002 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
 		E5ATL0002 /* AgentTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTimelineView.swift; sourceTree = "<group>"; };
 		E5WRG0002 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
@@ -1415,6 +1450,7 @@
 		E5CKB0002 /* CookieBackupStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBackupStore.swift; sourceTree = "<group>"; };
 		E5CAL0002 /* CookieAuditLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieAuditLogger.swift; sourceTree = "<group>"; };
 		E5CR00011 /* ShellCommandRingBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCommandRingBuffer.swift; sourceTree = "<group>"; };
+		LFF31AB8B297 /* KernelBootCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelBootCoalescer.swift; sourceTree = "<group>"; };
 		E5STO0011 /* ShellTimeoutOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellTimeoutOutput.swift; sourceTree = "<group>"; };
 		E5CR00012 /* CrashReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporter.swift; sourceTree = "<group>"; };
 		E5PF00012 /* LeoPerf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoPerf.swift; sourceTree = "<group>"; };
@@ -1464,7 +1500,9 @@
 		E5F200011 /* MarkdownPrepRegex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPrepRegex.swift; sourceTree = "<group>"; };
 		E5F200012 /* MinisMediaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisMediaViews.swift; sourceTree = "<group>"; };
 		E5F200013 /* AssistantBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantBlockView.swift; sourceTree = "<group>"; };
+		LF438118BBB7 /* LongTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongTextReader.swift; sourceTree = "<group>"; };
 		E5R3R0011 /* ChatRenderLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderLimits.swift; sourceTree = "<group>"; };
+		LFE7E080DA98 /* LongTextCollapse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongTextCollapse.swift; sourceTree = "<group>"; };
 		E5F200014 /* ChatMessageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageViews.swift; sourceTree = "<group>"; };
 		E5F200015 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		E5QTP0011 /* QuickTaskPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskPickerSheet.swift; sourceTree = "<group>"; };
@@ -1623,6 +1661,11 @@
 		E5LOCK102 /* FaceIDProtectionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceIDProtectionSettingsView.swift; sourceTree = "<group>"; };
 		E5LOCK103 /* AppLockOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockOverlay.swift; sourceTree = "<group>"; };
 		E5M000013 /* MinisMarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisMarkdownParser.swift; sourceTree = "<group>"; };
+		LFBF8A190CA0 /* CodeSyntaxFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxFence.swift; sourceTree = "<group>"; };
+		LFF39422438F /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
+		LFC8E7338DE4 /* CodeSyntaxPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxPalette.swift; sourceTree = "<group>"; };
+		LF44566BC585 /* CodeSyntaxLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLanguages.swift; sourceTree = "<group>"; };
+		LFA3761E38D7 /* CodeSyntaxLexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLexer.swift; sourceTree = "<group>"; };
 		E5MDS0013 /* MarkdownStripper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStripper.swift; sourceTree = "<group>"; };
 		E5MDT0011 /* ModelDisplayTraits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDisplayTraits.swift; sourceTree = "<group>"; };
 		E5MNT0101 /* MountedFoldersManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MountedFoldersManager.swift; sourceTree = "<group>"; };
@@ -1648,6 +1691,8 @@
 		E5Q000012 /* cl100k_base.tiktoken */ = {isa = PBXFileReference; lastKnownFileType = text; path = cl100k_base.tiktoken; sourceTree = "<group>"; };
 		E5Q000013 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		E5L3LLPR /* LogLinePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogLinePipeline.swift; sourceTree = "<group>"; };
+		LF08BDF6DE26 /* LogNoiseControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogNoiseControl.swift; sourceTree = "<group>"; };
+		LF262B3FEB94 /* LogContentDigest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogContentDigest.swift; sourceTree = "<group>"; };
 		E5Q000014 /* FontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontSettings.swift; sourceTree = "<group>"; };
 		E5LEO0011 /* LeoDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoDesignSystem.swift; sourceTree = "<group>"; };
 		E5LEO0012 /* ChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatColors.swift; sourceTree = "<group>"; };
@@ -1714,6 +1759,9 @@
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
 		E5RMC0002 /* RelayMachinesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayMachinesClient.swift; sourceTree = SOURCE_ROOT; };
+		LFB557B4F4FD /* LeoLinkProblem+Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/LeoLinkProblem+Errors.swift"; sourceTree = SOURCE_ROOT; };
+		LFBBFB592A46 /* LeoLinkProblem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoLinkProblem.swift; sourceTree = SOURCE_ROOT; };
+		LF72B90255DE /* GatewayError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayError.swift; sourceTree = SOURCE_ROOT; };
 		E5SCH013 /* RunDueScheduledTasksIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDueScheduledTasksIntent.swift; sourceTree = "<group>"; };
 		E5SCH014 /* ScheduledTaskSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskSettingsView.swift; sourceTree = "<group>"; };
 		E5CAP012 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
@@ -1772,6 +1820,7 @@
 		E5T0000A2 /* AskMinisIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMinisIntent.swift; sourceTree = "<group>"; };
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
 		E5TT0002 /* ThinkingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingTypes.swift; sourceTree = "<group>"; };
+		LFF3D490AADF /* ThinkingOffStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingOffStyle.swift; sourceTree = "<group>"; };
 		E5UMP0011 /* UnifiedModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedModelPicker.swift; sourceTree = "<group>"; };
 		E5V000012 /* AlternateIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AlternateIcons; path = Resources/AlternateIcons; sourceTree = "<group>"; };
 		E5V100011 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
@@ -1841,6 +1890,7 @@
 		E5W000180 /* ForceSyncHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForceSyncHelper.swift; sourceTree = "<group>"; };
 		E5X000011 /* SwiftMathRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftMathRenderer.swift; sourceTree = "<group>"; };
 		E5Y000011 /* MathRenderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MathRenderScheduler.swift; sourceTree = "<group>"; };
+		LFEC36335DF2 /* CodeSyntaxTextBinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxTextBinder.swift; sourceTree = "<group>"; };
 		E7A000011 /* OpenRouterModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterModelsAPI.swift; sourceTree = "<group>"; };
 		E7A000012 /* OpenRouterOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterOAuthManager.swift; sourceTree = "<group>"; };
 		E8A000011 /* OffloadPermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionManager.swift; sourceTree = "<group>"; };
@@ -2168,6 +2218,7 @@
 			children = (
 				E52000011 /* LLMTypes.swift */,
 				E5TT0002 /* ThinkingTypes.swift */,
+				LFF3D490AADF /* ThinkingOffStyle.swift */,
 				E52000012 /* LLMError.swift */,
 				E5R3HX004F /* StreamHardening.swift */,
 				E5OARC030 /* OAuthRefreshCoordinator.swift */,
@@ -2394,6 +2445,7 @@
 				E55000012 /* ISHShellExecutor.m */,
 				AA0838CB2F3CA8A900049557 /* Terminal */,
 				AA26CCBF2F31080100AECF2D /* RootfsManager.swift */,
+				LFB234C51AEE /* KernelBootManager.swift */,
 				AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */,
 				AA0838D32F3B941A00049557 /* RootfsPatch.bundle */,
 			);
@@ -2500,6 +2552,8 @@
 				E5AT00011 /* AudioTogglePlaybackIntent.swift */,
 				E5Q000013 /* AppLogger.swift */,
 				E5L3LLPR /* LogLinePipeline.swift */,
+				LF08BDF6DE26 /* LogNoiseControl.swift */,
+				LF262B3FEB94 /* LogContentDigest.swift */,
 				E5Q000011 /* BPETokenizer.swift */,
 				E5MDS0013 /* MarkdownStripper.swift */,
 				E5Q000012 /* cl100k_base.tiktoken */,
@@ -2548,6 +2602,7 @@
 				E5WMIR011 /* WidgetDataMirror.swift */,
 				E5L3KMMR /* KeyedMemo.swift */,
 				E5L3FWPR /* ForegroundWorkPolicy.swift */,
+				LFCF5DAFE138 /* MountActivationBackoff.swift */,
 				E5L3WRCR /* WidgetReloadCoalescer.swift */,
 				E5WBR011 /* WatchBridge.swift */,
 				E5E15706F /* SessionHandoff.swift */,
@@ -2774,6 +2829,9 @@
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
+				LFB557B4F4FD /* LeoLinkProblem+Errors.swift */,
+				LFBBFB592A46 /* LeoLinkProblem.swift */,
+				LF72B90255DE /* GatewayError.swift */,
 				E5RTG0003 /* LeoAgentRouting.swift */,
 				F0AC10000000000000000001 /* PaperclipContract.swift */,
 				F0AC10000000000000000002 /* PaperclipClient.swift */,
@@ -2940,9 +2998,15 @@
 			isa = PBXGroup;
 			children = (
 				E5M000013 /* MinisMarkdownParser.swift */,
+				LFBF8A190CA0 /* CodeSyntaxFence.swift */,
+				LFF39422438F /* CodeSyntaxHighlighter.swift */,
+				LFC8E7338DE4 /* CodeSyntaxPalette.swift */,
+				LF44566BC585 /* CodeSyntaxLanguages.swift */,
+				LFA3761E38D7 /* CodeSyntaxLexer.swift */,
 				E5R3HX005F /* MarkdownHardening.swift */,
 				E5X000011 /* SwiftMathRenderer.swift */,
 				E5Y000011 /* MathRenderScheduler.swift */,
+				LFEC36335DF2 /* CodeSyntaxTextBinder.swift */,
 			);
 			path = Markdown;
 			sourceTree = "<group>";
@@ -3005,6 +3069,7 @@
 				E5F000011 /* ISHExecutionCoordinator.swift */,
 				E5F000012 /* MinisFsRouter.swift */,
 				E5CR00011 /* ShellCommandRingBuffer.swift */,
+				LFF31AB8B297 /* KernelBootCoalescer.swift */,
 				E5STO0011 /* ShellTimeoutOutput.swift */,
 			);
 			path = ISH;
@@ -3100,7 +3165,9 @@
 				E5F200011 /* MarkdownPrepRegex.swift */,
 				E5F200012 /* MinisMediaViews.swift */,
 				E5F200013 /* AssistantBlockView.swift */,
+				LF438118BBB7 /* LongTextReader.swift */,
 				E5R3R0011 /* ChatRenderLimits.swift */,
+				LFE7E080DA98 /* LongTextCollapse.swift */,
 				E5F2R3010F /* LongImageShareView.swift */,
 				E5F2R3009F /* TurnAccessibilityAnnouncer.swift */,
 				E5F2R3008F /* MemoryUndoAction.swift */,
@@ -3159,6 +3226,7 @@
 				E5SCH014 /* ScheduledTaskSettingsView.swift */,
 				E5C15611F /* ShortcutRecipesView.swift */,
 				E5RHV0002 /* RemoteHostSettingsView.swift */,
+				LFDCE7361DDE /* LeoLinkProblemView.swift */,
 				E5AUV0002 /* AutomationSettingsView.swift */,
 				E5ATL0002 /* AgentTimelineView.swift */,
 				E5CAP012 /* CapabilitiesView.swift */,
@@ -3716,6 +3784,9 @@
 				E5TRP005 /* SharedContainerStore.swift in Sources */,
 				E5TRP007 /* CollectionIntents.swift in Sources */,
 				E5RMC0003 /* RelayMachinesClient.swift in Sources */,
+				LFB90A6BC484 /* LeoLinkProblem+Errors.swift in Sources */,
+				LF6DF60D94B4 /* LeoLinkProblem.swift in Sources */,
+				LF597E22B569 /* GatewayError.swift in Sources */,
 				E5DVC0002 /* DirectDeviceRoute.swift in Sources */,
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
 				E5CUR0023 /* PromptCacheKey.swift in Sources */,
@@ -3730,6 +3801,7 @@
 				E5UPT09T /* VisionGroupText.swift in Sources */,
 				E5CUR0033 /* ToolExecutionLanes.swift in Sources */,
 				E5TT0003 /* ThinkingTypes.swift in Sources */,
+				LFE28E0EDD82 /* ThinkingOffStyle.swift in Sources */,
 				E5SUB0101T /* SubAgentPolicy.swift in Sources */,
 				E5ASK0001T /* AskUserState.swift in Sources */,
 				E5BRN01T /* BrainCore.swift in Sources */,
@@ -3779,9 +3851,12 @@
 				E5MDS0003T /* MarkdownStripper.swift in Sources */,
 				E5L3KMMT /* KeyedMemo.swift in Sources */,
 				E5L3FWPT /* ForegroundWorkPolicy.swift in Sources */,
+				LFB093608F05 /* MountActivationBackoff.swift in Sources */,
 				E5L3WRCT /* WidgetReloadCoalescer.swift in Sources */,
 				E5L3AWPT /* AppGroupWatchPlanner.swift in Sources */,
 				E5L3LLPT /* LogLinePipeline.swift in Sources */,
+				LFEDD8663B14 /* LogNoiseControl.swift in Sources */,
+				LFDBA0D05082 /* LogContentDigest.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5CSM0002 /* ContextSizeMeter.swift in Sources */,
@@ -3799,9 +3874,11 @@
 				E5R3P0013 /* OffloadPermissionPolicy.swift in Sources */,
 				E5STO0002 /* ShellTimeoutOutput.swift in Sources */,
 				E5CR00004 /* ShellCommandRingBuffer.swift in Sources */,
+				LF47B0E4041E /* KernelBootCoalescer.swift in Sources */,
 				E5GWF0004 /* GeminiWireFormat.swift in Sources */,
 				E5JB10001 /* JiebaWrapper.mm in Sources */,
 				E5R3R0002 /* ChatRenderLimits.swift in Sources */,
+				LF0B67AADDC6 /* LongTextCollapse.swift in Sources */,
 				E5R3R0003 /* NSTextContainerSetSizeGuard.m in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
 				E5VC1000A /* SentenceSplitter.swift in Sources */,
@@ -3827,6 +3904,11 @@
 				E5R3HX004T /* StreamHardening.swift in Sources */,
 				E5R3HX005T /* MarkdownHardening.swift in Sources */,
 				E5R3HX101T /* MinisMarkdownParser.swift in Sources */,
+				LFFDD0926C38 /* CodeSyntaxFence.swift in Sources */,
+				LFBABDF3B87E /* CodeSyntaxHighlighter.swift in Sources */,
+				LF31A95CD0A6 /* CodeSyntaxPalette.swift in Sources */,
+				LF0D626BA509 /* CodeSyntaxLanguages.swift in Sources */,
+				LFFC3699A425 /* CodeSyntaxLexer.swift in Sources */,
 				E5R3HX102T /* MarkdownPrepRegex.swift in Sources */,
 				E521D59DA5102F112A67270D /* MIMEMessage.swift in Sources */,
 				E5A04910E1B075BC86214111 /* IMAPResponse.swift in Sources */,
@@ -3965,6 +4047,7 @@
 				AA26CCBC2F31080100AECF2D /* ISHTerminalView.swift in Sources */,
 				AA26CCBC2F324FE400AECF2D /* FileBrowserView.swift in Sources */,
 				AA26CCBE2F31080100AECF2D /* RootfsManager.swift in Sources */,
+				LF384783631F /* KernelBootManager.swift in Sources */,
 				E51000001 /* MinisApp.swift in Sources */,
 				E5QA0001 /* QuickActionRouter.swift in Sources */,
 				E5QA0003 /* QuickActionWorkflow.swift in Sources */,
@@ -3980,6 +4063,7 @@
 				E5SHV0003 /* SharedFoldersSettingsView.swift in Sources */,
 				E5SHV0004 /* MountDetailView.swift in Sources */,
 				E5TT0001 /* ThinkingTypes.swift in Sources */,
+				LF459FD1EE36 /* ThinkingOffStyle.swift in Sources */,
 				E52000001 /* LLMTypes.swift in Sources */,
 				E52000002 /* LLMError.swift in Sources */,
 				E52000003 /* LLMProvider.swift in Sources */,
@@ -4037,7 +4121,9 @@
 				E5F200001 /* MarkdownPrepRegex.swift in Sources */,
 				E5F200002 /* MinisMediaViews.swift in Sources */,
 				E5F200003 /* AssistantBlockView.swift in Sources */,
+				LF099F434DEF /* LongTextReader.swift in Sources */,
 				E5R3R0001 /* ChatRenderLimits.swift in Sources */,
+				LF8945EA3BE9 /* LongTextCollapse.swift in Sources */,
 				E5F200004 /* ChatMessageViews.swift in Sources */,
 				E5F2009A1 /* EquatableContextMenu.swift in Sources */,
 		E5RCE0001 /* ReplyContentExtractor.swift in Sources */,
@@ -4138,6 +4224,9 @@
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,
 				E5RMC0001 /* RelayMachinesClient.swift in Sources */,
+				LF3C05D63FF2 /* LeoLinkProblem+Errors.swift in Sources */,
+				LF2F87E4EE74 /* LeoLinkProblem.swift in Sources */,
+				LFCB1A48CF8F /* GatewayError.swift in Sources */,
 				E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */,
 				E5CST0001 /* CorrectionStore.swift in Sources */,
 				E5RHS0001 /* RemoteHostStore.swift in Sources */,
@@ -4145,6 +4234,7 @@
 				E5WPL0001 /* WorkerPool.swift in Sources */,
 				E5MRC0001 /* MemoryRecall.swift in Sources */,
 				E5RHV0001 /* RemoteHostSettingsView.swift in Sources */,
+				LF0764B2B50D /* LeoLinkProblemView.swift in Sources */,
 				E5AUV0001 /* AutomationSettingsView.swift in Sources */,
 				E5ATL0001 /* AgentTimelineView.swift in Sources */,
 				E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */,
@@ -4158,6 +4248,7 @@
 				E5F000001 /* ISHExecutionCoordinator.swift in Sources */,
 				E5F000002 /* MinisFsRouter.swift in Sources */,
 				E5CR00001 /* ShellCommandRingBuffer.swift in Sources */,
+				LFCB3E5FA251 /* KernelBootCoalescer.swift in Sources */,
 				E5STO0001 /* ShellTimeoutOutput.swift in Sources */,
 				E5BRM0001 /* BrowserResourceMonitor.swift in Sources */,
 				E5CR00002 /* CrashReporter.swift in Sources */,
@@ -4334,6 +4425,7 @@
 				E5WMIR001 /* WidgetDataMirror.swift in Sources */,
 				E5L3KMMB /* KeyedMemo.swift in Sources */,
 				E5L3FWPB /* ForegroundWorkPolicy.swift in Sources */,
+				LF36FAE28768 /* MountActivationBackoff.swift in Sources */,
 				E5L3WRCB /* WidgetReloadCoalescer.swift in Sources */,
 				E5WBR001 /* WatchBridge.swift in Sources */,
 				E5AWS0001 /* ActiveWindowScene.swift in Sources */,
@@ -4352,8 +4444,14 @@
 				E5LEO0003 /* SelectableMarkdownTheme.swift in Sources */,
 				E5K000002 /* ChatTurnScreenshot.swift in Sources */,
 				E5M000003 /* MinisMarkdownParser.swift in Sources */,
+				LF938B8B4EA3 /* CodeSyntaxFence.swift in Sources */,
+				LF9D15E016A3 /* CodeSyntaxHighlighter.swift in Sources */,
+				LF4958C08C1F /* CodeSyntaxPalette.swift in Sources */,
+				LF37A50F5EA8 /* CodeSyntaxLanguages.swift in Sources */,
+				LF4499E2C903 /* CodeSyntaxLexer.swift in Sources */,
 				E5X000001 /* SwiftMathRenderer.swift in Sources */,
 				E5Y000001 /* MathRenderScheduler.swift in Sources */,
+				LFE990FC3DBF /* CodeSyntaxTextBinder.swift in Sources */,
 				E5N0000012F3B941A00049557 /* SkillStore.swift in Sources */,
 				F1MCPSTOREB /* MCPStore.swift in Sources */,
 				F1MCPOAUTHB /* MCPOAuthController.swift in Sources */,
@@ -4398,6 +4496,8 @@
 				E5MDS0003 /* MarkdownStripper.swift in Sources */,
 				E5Q000003 /* AppLogger.swift in Sources */,
 				E5L3LLPB /* LogLinePipeline.swift in Sources */,
+				LF4BFF0E4A36 /* LogNoiseControl.swift in Sources */,
+				LF653CC0D303 /* LogContentDigest.swift in Sources */,
 				F1S00012 /* ChatSessionIdEnvironment.swift in Sources */,
 				E5Q000004 /* FontSettings.swift in Sources */,
 				E5S000001 /* DeviceIdentity.swift in Sources */,
@@ -4631,7 +4731,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4640,7 +4740,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4655,12 +4755,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4675,7 +4775,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4691,7 +4791,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4706,7 +4806,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4718,7 +4818,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4865,7 +4965,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -4895,7 +4995,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -4921,7 +5021,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -4951,7 +5051,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -4972,7 +5072,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -4984,7 +5084,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -4999,7 +5099,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -5011,7 +5111,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5026,7 +5126,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5038,7 +5138,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5053,7 +5153,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5065,7 +5165,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5080,7 +5180,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5092,7 +5192,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5107,7 +5207,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5119,7 +5219,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5134,7 +5234,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -5143,7 +5243,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5160,7 +5260,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 167;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
@@ -5168,7 +5268,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.68.0;
+				MARKETING_VERSION = 1.69.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;

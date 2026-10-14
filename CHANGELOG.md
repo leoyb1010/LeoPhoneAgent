@@ -1,5 +1,25 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.69.0 (167) · 关思考修复、内核按需启动、长回复折叠、代码块着色 - 2026-10-14
+
+- 修复「关闭思考」被 Anthropic 拒绝：真实 API 实测 `claude-sonnet-5-5` 要求 `thinking:{type:"between_tools"}`，`claude-opus-5-5`、`claude-fable-5`、`claude-fable-5-1` 不接受 disabled 也不接受 between_tools，只能 `adaptive` + `output_config.effort:low`。新增 `ThinkingOffStyle`（静态种子 + 按报错学习并只重试一次，按「实例 + 模型」持久化到 `leo.thinkingOffStyle.v1`），自动标题对 sonnet-5-5 不再 7/7 失败。Mac 端经核查不受影响（这些模型在 Mac 的档位里没有「关」），未改动。
+- iSH 内核按需启动：不再在聊天页出现、冷启动、回前台、后台拉起时在主线程同步启动（真机实测阻塞 141–533 ms，与 3 起 ≥250 ms 卡顿重叠）。`KernelBootManager.ensureKernelBooted(reason:)` 单一入口（并发合并），boot 在专用常驻线程上执行；shell 工具、挂载、MCP 刷新入口按需触发；终端不再 `semaphore.wait()`。
+- 失效的文件夹授权书签不再每次启动白等 5 秒：按 1h/6h/24h 退避，设置页显示「需要重新授权」并可手动重试。
+- 回前台路径加 `fg.step.*` signpost，供下一次 Instruments 归因 826 ms 的 p90。
+- 超过 2 万字的已完成回复先折叠，「展开全文」进分页阅读器（此前一条 6.9 万字回复会让主线程卡死 1.07 s + 1.18 s）；复制 / 分享 / 朗读等消息级操作仍用完整原文。
+- 代码块按语法着色（移植 Lakr233/MarkdownView 的词法器，MIT），异步 + LRU + 阈值回退；Markdown 主题改为与 LeoTheme 一致的中性灰青绿，16 个 token 色对比度均 ≥ 4.5:1。
+- Leo Link：`LeoLinkProblem` 把失败归类为「谁的问题 + 一个主按钮」，不可恢复的错误暂停自动重连；新增协议兼容台账 `docs/specs/protocol-compat.md`（48 条）。
+- 日志：Release 不再写助手回复原文；同步僵尸条目日志去重；LiveActivity 非前台错误降级；性能门禁覆盖所有启动、排除后台拉起、样本不足显式 WARN，并新增 scroll / 流式预算。
+- 工具：`scripts/IOSAddSourceFile.py` / `IOSRemoveSourceFile.py` 在主 App target 登记 / 摘除新文件（主工程不是同步文件夹）。
+- 验证：iOS 逻辑测试 1552 → 1778 项全部通过；Debug 构建通过。
+
+## iOS 1.68.0 (166) · 一键把服务商带到 Mac - 2026-10-14
+
+- 设置 → AI 服务商 → 右上角「+」新增「全部发送到 Mac（含密钥）」：确认后生成一个包含全部服务商和 Key 的文件，隔空投送到 Mac，在 LeoBot Mac 1.9「从 iPhone 导入」里一次导入，不用再逐个补填 Key。此前唯一的导出（服务商详情页的分享按钮）一律去掉密钥，导入 Mac 后要重新手填每个 Key。
+- 这个文件只在分享面板打开期间存在，关闭即从手机删除（写入完整文件保护的临时文件）；ChatGPT / xAI / Kimi 等登录账号不导出，需要在 Mac 上单独登录。每个服务商沿用既有的 `exportInstanceJSON`（含密钥），打包成 `{providers:[…]}`。
+- 数据更正（针对下方 iOS 1.65.0 条目里的三个数字，依据 4 天真机日志与 perf.jsonl 2032 行复核）：「回前台 p50 242 ms / p90 391 ms」只是 1.63.0 的 5 个样本，样本到 57 个之后是 p50 244–363 ms、p90 826–858 ms；「启动最忙一秒日志约 89 → 46 行」的 46 行只是 16 次启动里的 1 次，中位数是 77 行；「FPWatcher 刷屏归零」并未归零，现在是每次启动 3 行。
+- 证据：源码审阅（提交 `d5982c54`：`ProviderInstancesView.swift`、版本说明与工程文件）；该版本的构建、测试与真机导入没有记录在此，不作声明。
+
 ## Mac 1.9.0 · 自动拉模型、中性界面、设置重组、大幅减法 - 2026-10-14
 
 - 供应商：填好 Base URL 和 Key 自动读取模型列表（OpenAI / Anthropic 格式，失败时回退内置列表和 models.dev），显示名与能力来自 models.dev；本机地址不填 Key 也能用；新建自定义供应商默认 Chat Completions。新增「从 iPhone 导入」，配合 iOS 1.68 的「全部发送到 Mac（含密钥）」。
@@ -27,6 +47,7 @@
 - 第 1 轮：NSTextContainer 相同尺寸 setSize 直接跳过（UIKit 测量自身引起的重复排版）、Guard 改为每会话一行汇总；HangDetector 排除挂起与睡眠；冷启动少一轮钥匙串；藏宝阁条目读写移出主线程；服务器任务实时片段不再按事件重建。
 - 第 2 轮：启动最忙一秒日志约 89 → 46 行（网络/代理、DNS、凭据、FPSyncTrace、iCloud 设备各合并为一行）；未配置模型时给「添加 AI 服务商」；错误分类整词匹配；录音清除说话人确认、列表返回后台读；「移动到…」无结果提示；文案统一。
 - 性能门禁：每会话汇总行豁免；门禁测试样例改为 .txt 提交（*.log 被忽略导致此前样例缺失）。逻辑测试 1521 → 1549。
+- 数据更正：上面「回前台」「启动最忙一秒」「FPWatcher 归零」三个数字的真实情况见 iOS 1.68.0 条目。
 
 ## iOS 1.64.0 (162) · 藏宝阁与服务器任务设计升级 - 2026-10-11
 

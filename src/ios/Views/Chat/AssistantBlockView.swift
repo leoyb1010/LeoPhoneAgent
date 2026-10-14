@@ -154,22 +154,48 @@ struct AssistantBlockView: View {
         }
     }
 
+    /// [T-long-reply-collapse] 已完成的超长文本块只渲染开头,后面接一行「展开全文」。
+    /// 依据:真机日志里一条 68,857 字的回复被画成一个 360×75629 的 UITextView,打开会话卡死 ~1 s。
+    /// 流式期间不折叠(isStreamingText),也不折「本轮还在进行时的最后一个块」:续写 / 重试会让
+    /// 同一个块在折叠与展开之间闪。这一轮结束、会话重新打开时,已完成的长块直接折叠渲染。
+    /// 没超阈值的块在缓存里 O(1) 返回 nil。
+    private var collapsedText: LongTextCollapseCache.Collapse? {
+        let isLiveTail = isActiveMessage && message.blocks.last?.id == block.id
+        return LongTextCollapseCache.shared.collapse(for: block, isLiveTail: isLiveTail)
+    }
+
     @ViewBuilder
     private var textBlockView: some View {
-        SelectableMarkdownView(
-            markdown: block.content,
-            cachedContent: block.cachedMarkdown,
-            cachedAttributedString: block.cachedAttributedString,
-            isStreaming: block.isStreamingText,
-            messageId: message.id,
-            blockId: block.id,
-            onTapBlank: onTapBlank,
-            onCopyScreenshot: onCopyScreenshot,
-            onReadAloud: onReadAloud,
-            onSpeakText: onSpeakText
-        )
-        .fixedSize(horizontal: false, vertical: true)
-        .modifier(MinisOpenURLHandler())
+        let collapse = collapsedText
+        // 结构固定为「文本视图 + 可选的一行」:折叠状态翻转时 SelectableMarkdownView 保持同一个身份,
+        // 不会被重建。折叠时传给它的是 head 和 head 自己的解析 / 渲染结果(见 LongTextCollapseCache),
+        // 绝不能传 block.cachedMarkdown / cachedAttributedString —— 它们是全文的。
+        // 复制 / 分享 / 朗读 / 重新生成 / 导出都读 message.blocks 的 content,不读这个视图的文本。
+        // 唯一例外:选区菜单的「Copy Markdown」复制文本视图的 rawMarkdown(= 这里的 markdown 参数),
+        // 折叠时只有 head;要补全需要 SelectableMarkdownView 另开一个「复制用全文」入口。
+        VStack(alignment: .leading, spacing: 0) {
+            SelectableMarkdownView(
+                markdown: collapse?.head ?? block.content,
+                cachedContent: collapse.map { $0.markdownContent() } ?? block.cachedMarkdown,
+                cachedAttributedString: collapse.map { $0.attributedString(fontSize: FontSettings.shared.scaledMessage(16.5)) }
+                    ?? block.cachedAttributedString,
+                isStreaming: block.isStreamingText,
+                messageId: message.id,
+                blockId: block.id,
+                onTapBlank: onTapBlank,
+                onCopyScreenshot: onCopyScreenshot,
+                onReadAloud: onReadAloud,
+                onSpeakText: onSpeakText
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(MinisOpenURLHandler())
+            if let collapse {
+                // 阅读器拿的是 block.content(完整原文),不是被截断的 head。
+                LongTextExpandRow(characterCount: collapse.totalCount) {
+                    LongTextReaderPresenter.present(markdown: block.content, characterCount: collapse.totalCount)
+                }
+            }
+        }
     }
 }
 

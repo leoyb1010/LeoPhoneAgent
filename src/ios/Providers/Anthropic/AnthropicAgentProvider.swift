@@ -95,7 +95,16 @@ final class AnthropicAgentProvider: AgentProvider {
             // thinking_tokens=256/256, empty body). Legacy (<=4.5) models
             // default to no thinking, so absence is fine there.
             requestSettings.thinkingDisabled = true
-            logger.info("Thinking explicitly DISABLED (adaptive default-on model, level=off)")
+            // [T-thinking-off-style] 「关」的写法因模型而异(见 ThinkingOffStyle):先看这个接入点上
+            // 按报错学到的,再看实测种子表,最后才是 disabled。
+            let learnedOffStyle = ThinkingOffStyleMemory.learned(scope: provider.thinkingOffScope, modelId: model.id)
+            let offStyle = resolveThinkingOffStyle(modelId: model.id, learned: learnedOffStyle)
+            requestSettings.thinkingOffStyle = offStyle
+            // adaptiveLow 要带 effort:该模型声明过档位(且声明确实属于这个接入点)就取它的最低档,否则 low。
+            // 不论当前写法是什么都先算好 —— 被拒后换成 adaptiveLow 重试时直接用。
+            let declaredEfforts = (model.effortDeclarationIsAuthoritative ?? false) ? model.reasoningEffortValues : nil
+            requestSettings.thinkingOffEffort = ThinkingRuleResolver.clampEffort(ThinkingOffStyle.adaptiveLowEffort, to: declaredEfforts)
+            logger.info("Thinking explicitly DISABLED (adaptive default-on model, level=off) style=\(offStyle.rawValue)\(learnedOffStyle != nil ? " (learned)" : "")")
         }
 
         // Anthropic-compat proxies (e.g. DeepSeek's deepseek-v4-pro endpoint
@@ -171,78 +180,110 @@ final class AnthropicAgentProvider: AgentProvider {
             logger.info("Compat-proxy thinking echo: queued \(history.compactMap { $0 }.count) reasoning block(s) across \(history.count) assistant turn(s), placeholder=\(injectPlaceholder)")
         }
 
-        let settingsMarker = AnthropicRequestSettingsRegistry.register(requestSettings)
-        defer { AnthropicRequestSettingsRegistry.release(settingsMarker) }
-        let parameter = MessageParameter(
-            model: .other(model.id),
-            messages: cachedMessages,
-            maxTokens: maxTokens,
-            system: provider.resolveSystemPrompt(systemPrompt),
-            stopSequences: [settingsMarker],
-            temperature: provider.effectiveTemperature(0.7),
-            tools: anthropicTools,
-            toolChoice: .init(type: .auto)
-        )
+        // 登记这次请求的设置并建立流。网络瞬断的透明重试在这里面;错误原样抛出(含 SDK 的 APIError),
+        // 由下面决定要不要换「关思考」的写法再试,最后才转成 LLMError。
+        // 每次尝试各登记一份设置:换写法重试时请求里带的是新写法,同一次尝试里的网络重试仍复用同一份。
+        func openStream(_ settings: AnthropicRequestSettings) async throws -> AsyncThrowingStream<MessageStreamResponse, Error> {
+            let settingsMarker = AnthropicRequestSettingsRegistry.register(settings)
+            defer { AnthropicRequestSettingsRegistry.release(settingsMarker) }
+            let parameter = MessageParameter(
+                model: .other(model.id),
+                messages: cachedMessages,
+                maxTokens: maxTokens,
+                system: provider.resolveSystemPrompt(systemPrompt),
+                stopSequences: [settingsMarker],
+                temperature: provider.effectiveTemperature(0.7),
+                tools: anthropicTools,
+                toolChoice: .init(type: .auto)
+            )
 
-        #if DEBUG
-        // Note: request body is captured by the URLProtocol layer (EagerStreamingURLProtocol / DualAuthURLProtocol).
-        // Do NOT call JSONEncoder().encode(parameter) here — MessageParameter can contain
-        // non-Encodable or deeply nested content that triggers a runtime trap (EXC_BREAKPOINT).
-        AgentRequestTrace.shared.step("anthropic.streamMessage.prepare")
-        provider.logRequestParameter(parameter)
-        #endif
+            #if DEBUG
+            // Note: request body is captured by the URLProtocol layer (EagerStreamingURLProtocol / DualAuthURLProtocol).
+            // Do NOT call JSONEncoder().encode(parameter) here — MessageParameter can contain
+            // non-Encodable or deeply nested content that triggers a runtime trap (EXC_BREAKPOINT).
+            AgentRequestTrace.shared.step("anthropic.streamMessage.prepare")
+            provider.logRequestParameter(parameter)
+            #endif
 
-        #if DEBUG
-        AgentRequestTrace.shared.step("anthropic.streamMessage", detail: "calling provider.service.streamMessage")
-        #endif
-        // Bounded transparent retry for transient network drops while OPENING the
-        // stream. A `-1005` (NetworkConnectionLost) / `-1009` (NotConnectedToInternet)
-        // here means the connection died before any event was yielded to the
-        // consumer, so retrying is invisible — nothing has been emitted to replay.
-        // Retries are intentionally confined to this establishment phase: a drop
-        // mid-stream (after deltas have been yielded, see the consumer Task below)
-        // CANNOT be transparently retried without duplicating content, so that
-        // path stays terminal. Only transient NSURLError codes are retried; auth
-        // (401), rate-limit (429), 4xx/5xx and any non-network error fall straight
-        // through to mapError() → group fallback, unchanged. [diag-0800 Q2 / -1005]
-        let stream: AsyncThrowingStream<MessageStreamResponse, Error>
-        var establishAttempt = 0
-        while true {
-            do {
-                stream = try await provider.service.streamMessage(parameter)
-                if establishAttempt > 0 {
-                    logger.info("streamMessage recovered after \(establishAttempt) network retry(ies)")
+            #if DEBUG
+            AgentRequestTrace.shared.step("anthropic.streamMessage", detail: "calling provider.service.streamMessage")
+            #endif
+            // Bounded transparent retry for transient network drops while OPENING the
+            // stream. A `-1005` (NetworkConnectionLost) / `-1009` (NotConnectedToInternet)
+            // here means the connection died before any event was yielded to the
+            // consumer, so retrying is invisible — nothing has been emitted to replay.
+            // Retries are intentionally confined to this establishment phase: a drop
+            // mid-stream (after deltas have been yielded, see the consumer Task below)
+            // CANNOT be transparently retried without duplicating content, so that
+            // path stays terminal. Only transient NSURLError codes are retried; auth
+            // (401), rate-limit (429), 4xx/5xx and any non-network error fall straight
+            // through to mapError() → group fallback, unchanged. [diag-0800 Q2 / -1005]
+            var establishAttempt = 0
+            while true {
+                do {
+                    let opened = try await provider.service.streamMessage(parameter)
+                    if establishAttempt > 0 {
+                        logger.info("streamMessage recovered after \(establishAttempt) network retry(ies)")
+                    }
+                    return opened
+                } catch {
+                    // Transparent retry only for transient network drops, capped.
+                    if Self.isTransientNetworkError(error), establishAttempt < Self.maxStreamConnectRetries {
+                        try Task.checkCancellation()
+                        establishAttempt += 1
+                        // 1s, 2s backoff (attempt 1 → 1s, attempt 2 → 2s).
+                        let backoffNs = UInt64(establishAttempt) * 1_000_000_000
+                        logger.warning("streamMessage transient network error (\((error as NSError).code)) — retry \(establishAttempt)/\(Self.maxStreamConnectRetries) after \(establishAttempt)s")
+                        try? await Task.sleep(nanoseconds: backoffNs)
+                        continue
+                    }
+                    throw error
                 }
-                break
-            } catch {
-                // Transparent retry only for transient network drops, capped.
-                if Self.isTransientNetworkError(error), establishAttempt < Self.maxStreamConnectRetries {
-                    try Task.checkCancellation()
-                    establishAttempt += 1
-                    // 1s, 2s backoff (attempt 1 → 1s, attempt 2 → 2s).
-                    let backoffNs = UInt64(establishAttempt) * 1_000_000_000
-                    logger.warning("streamMessage transient network error (\((error as NSError).code)) — retry \(establishAttempt)/\(Self.maxStreamConnectRetries) after \(establishAttempt)s")
-                    try? await Task.sleep(nanoseconds: backoffNs)
-                    continue
-                }
-                // Capture failed request for debug server / Copy Requests
-                let errorDesc = (error as NSError).localizedDescription
-                logger.error("streamMessage failed: \(errorDesc)")
-                #if DEBUG
-                let debugBody = "// ERROR: \(errorDesc.prefix(500))\n// model: \(model.id)\n// maxTokens: \(maxTokens)\n// messages: \(cachedMessages.count)\n// tools: \(anthropicTools.count)"
-                LastAPIRequestBody.shared.set(debugBody, provider: "Anthropic")
-                LastAPIRequestBody.shared.setRequestMeta(
-                    url: "anthropic:///v1/messages",
-                    method: "POST",
-                    headers: nil
-                )
-                #endif
-                #if DEBUG
-                AgentRequestTrace.shared.step("anthropic.error", detail: "\(error)")
-                AgentRequestTrace.shared.finish(error: "\(error)")
-                #endif
-                throw provider.mapError(error)
             }
+        }
+
+        let stream: AsyncThrowingStream<MessageStreamResponse, Error>
+        do {
+            if requestSettings.thinkingDisabled, let sentOffStyle = requestSettings.thinkingOffStyle {
+                // [T-thinking-off-style] 「关」被 400 拒绝、且报错里建议了另一种写法(between_tools /
+                // adaptive + effort)时,换那种写法**只再试一次**;第二次无论成败都不再重试。
+                // 请求在 400 时还没产出任何内容,重发不会重复。成功后把这种写法记到这个接入点 + 模型上,
+                // 下次一开始就用对。自定义 Base URL / 中转站走同一条路。
+                let baseSettings = requestSettings
+                let opened = try await ThinkingOffRetry.run(
+                    style: sentOffStyle,
+                    attempt: { style in
+                        var settings = baseSettings
+                        settings.thinkingOffStyle = style
+                        return try await openStream(settings)
+                    },
+                    learn: { error, sent in await self.suggestedThinkingOffStyle(after: error, sent: sent) }
+                )
+                stream = opened.value
+                if opened.style != sentOffStyle {
+                    ThinkingOffStyleMemory.remember(opened.style, scope: provider.thinkingOffScope, modelId: model.id)
+                }
+            } else {
+                stream = try await openStream(requestSettings)
+            }
+        } catch {
+            // Capture failed request for debug server / Copy Requests
+            let errorDesc = (error as NSError).localizedDescription
+            logger.error("streamMessage failed: \(errorDesc)")
+            #if DEBUG
+            let debugBody = "// ERROR: \(errorDesc.prefix(500))\n// model: \(model.id)\n// maxTokens: \(maxTokens)\n// messages: \(cachedMessages.count)\n// tools: \(anthropicTools.count)"
+            LastAPIRequestBody.shared.set(debugBody, provider: "Anthropic")
+            LastAPIRequestBody.shared.setRequestMeta(
+                url: "anthropic:///v1/messages",
+                method: "POST",
+                headers: nil
+            )
+            #endif
+            #if DEBUG
+            AgentRequestTrace.shared.step("anthropic.error", detail: "\(error)")
+            AgentRequestTrace.shared.finish(error: "\(error)")
+            #endif
+            throw provider.mapError(error)
         }
 
         return AsyncThrowingStream { continuation in
@@ -410,6 +451,22 @@ final class AnthropicAgentProvider: AgentProvider {
     }
 
     // MARK: - Thinking Config
+
+    /// [T-thinking-off-style] 「关思考」被 400 拒绝时,报错里建议的另一种写法;不是这类拒绝返回 nil。
+    ///
+    /// 流式路径的 SDK 错误只有「status code 400」、不带响应体,正文要从 URLProtocol 捕获的错误体里取
+    /// (只读不清:不重试时 mapError 还要用它)。要求状态码是 400,免得把更早某次失败留下的旧错误体
+    /// 当成这次的。返回非 nil 时日志只打这一行,并清掉已经用掉的错误体。
+    private func suggestedThinkingOffStyle(after error: Error, sent: ThinkingOffStyle) async -> ThinkingOffStyle? {
+        let description = String(describing: error)
+        guard AnthropicProvider.httpStatus(inDescription: description) == 400 else { return nil }
+        let body = await LastAPIErrorBody.shared.waitForBody(upTo: 0.25)
+        guard let suggested = ThinkingOffRejection.suggestedStyle(
+            status: 400, text: (body ?? "") + " " + description, excluding: sent) else { return nil }
+        logger.info("Thinking-off style '\(sent.rawValue)' rejected (400) for \(model.id); retrying once with '\(suggested.rawValue)'")
+        _ = LastAPIErrorBody.shared.take()
+        return suggested
+    }
 
     /// Compute thinking budget for Anthropic models based on level.
     /// Returns 0 if the model doesn't support thinking.

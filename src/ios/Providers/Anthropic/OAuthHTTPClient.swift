@@ -29,6 +29,27 @@ final class LastAPIErrorBody: @unchecked Sendable {
         _body = nil
         return val
     }
+
+    /// 只读不清:调用方读完还要把同一份错误体留给 `mapError()`。
+    func peek() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _body
+    }
+
+    /// 等错误体到(最多 `timeout` 秒)。流式路径遇到非 200,SDK 立刻抛错、不读响应体,
+    /// 错误体是 URLProtocol 在另一条线程异步收到的,两者没有先后保证。本机模拟「响应体比响应头晚 80ms」时
+    /// 错误体仍先到了,但这个先后不是 API 承诺的;只在要靠错误体做判断(换「关思考」的写法)时多等一下,
+    /// 已经到了就零等待。
+    func waitForBody(upTo timeout: TimeInterval) async -> String? {
+        var waited: TimeInterval = 0
+        while true {
+            if let body = peek() { return body }
+            guard waited < timeout else { return nil }
+            try? await Task.sleep(nanoseconds: 25_000_000)
+            waited += 0.025
+        }
+    }
 }
 
 // MARK: - Last Request Body Capture (Debug)
@@ -632,26 +653,25 @@ enum RequestBodyPatcher {
             // server default is thinking-on); legacy models are off by
             // omission, and enable-intent always wins if both were set.
             if useAdaptive, budget <= 0, effort == nil {
-                json["thinking"] = ["type": "disabled"]
+                // [T-thinking-off-style] 「关」不能一律写 {"type":"disabled"}:2026-10-14 实测
+                // sonnet-5-5 要 between_tools,opus-5-5 / fable-5 / fable-5-1 连 between_tools 也拒,
+                // 只能 adaptive + 最低档 effort,否则 400 invalid_request_error。
+                // 写法由调用方按「学到的 → 种子表 → disabled」决定;只设了 thinkingDisabled 的调用方
+                // 这里再按模型 id 查一次种子表。自定义 Base URL / 中转站走同一条改写,所以同样生效。
+                let style = settings?.thinkingOffStyle ?? resolveThinkingOffStyle(modelId: modelId, learned: nil)
+                let usesEffort = style.apply(to: &json, effort: settings?.thinkingOffEffort)
                 if let newBody = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) {
                     request.httpBody = newBody
                 }
+                // adaptiveLow 发了 output_config.effort,和「开」一样要带 effort 的 beta 头。
+                if usesEffort { appendBeta("effort-2025-11-24", to: request) }
             }
             if budget <= 0, effort == nil { return }
         }
 
         // Beta headers: each protocol needs its own beta token. Append without
         // disturbing any tokens the SDK / OAuth path already set.
-        var betas: [String] = []
-        if let existing = request.value(forHTTPHeaderField: "anthropic-beta"), !existing.isEmpty {
-            betas = existing.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        }
-        if useAdaptive {
-            if !betas.contains("effort-2025-11-24") { betas.append("effort-2025-11-24") }
-        } else {
-            if !betas.contains("interleaved-thinking-2025-05-14") { betas.append("interleaved-thinking-2025-05-14") }
-        }
-        request.setValue(betas.joined(separator: ","), forHTTPHeaderField: "anthropic-beta")
+        appendBeta(useAdaptive ? "effort-2025-11-24" : "interleaved-thinking-2025-05-14", to: request)
 
         if useAdaptive {
             // Adaptive: thinking.type=adaptive, no budget_tokens; effort goes
@@ -701,6 +721,16 @@ enum RequestBodyPatcher {
         if let newBody = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) {
             request.httpBody = newBody
         }
+    }
+
+    /// Append one token to `anthropic-beta` (de-duplicated), keeping whatever the SDK / OAuth path already set.
+    private static func appendBeta(_ token: String, to request: NSMutableURLRequest) {
+        var betas: [String] = []
+        if let existing = request.value(forHTTPHeaderField: "anthropic-beta"), !existing.isEmpty {
+            betas = existing.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        }
+        if !betas.contains(token) { betas.append(token) }
+        request.setValue(betas.joined(separator: ","), forHTTPHeaderField: "anthropic-beta")
     }
 
     /// Injects `"ttl": "1h"` into every `cache_control` object in messages and system prompt.

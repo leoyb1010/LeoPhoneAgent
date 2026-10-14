@@ -259,6 +259,9 @@ final class HarnessSessionDriver: ObservableObject {
     /// unanswerable from any surface, CLI blocked forever.
     @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
+    /// [T-link-problem] 连接类失败的结构化说明:谁的问题 + 一个主按钮。控制台优先显示它,
+    /// 没有才退回 lastError 的文字。要用户处理的问题还会让自动重连停下(见 follow)。
+    @Published private(set) var problem: LeoLinkProblem?
     /// A follow-up that never reached the Mac; the console puts it back in its input.
     @Published var unsentText: String?
     /// How the last turn ended; "idle" alone can't tell a finished turn from a failed one.
@@ -280,7 +283,8 @@ final class HarnessSessionDriver: ObservableObject {
 
     let harness: HarnessKind
     let cwd: String
-    private let client: LeoAgentClient
+    /// var:重新配对 / 改地址后宿主会换新的 client,resumeAfterProblem 据此换上(旧的还带着旧密钥)。
+    private var client: LeoAgentClient
     private(set) var sessionId: String?
     private var lastSeq = 0
     private var streamTask: Task<Void, Never>?
@@ -303,6 +307,7 @@ final class HarnessSessionDriver: ObservableObject {
 
     func start(prompt: String, thinking: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
+        problem = nil
         firstPrompt = prompt
         isRunning = true
         status = "starting"
@@ -342,6 +347,7 @@ final class HarnessSessionDriver: ObservableObject {
                 await MainActor.run {
                     self.fail(error.localizedDescription)
                     self.status = "pending"   // recoverable: nothing was created
+                    self.report(error)
                 }
             }
         }
@@ -408,7 +414,7 @@ final class HarnessSessionDriver: ObservableObject {
         } catch let error where Self.neverLeftThisDevice(error) {
             // 请求根本没发出去(没网、地址不对、没授权):明确告知没送到，原文放回输入框。
             guard finishRejectedOutbox(entry) == true else { return }
-            steerFailed(text, Self.describe(error))
+            steerFailed(text, Self.describe(error), problem: LeoLinkProblem.from(error: error, context: linkContext))
         } catch GatewayError.http(let status, let message)
                     where HarnessFullAuto.isRefusal(status: status, harnessKey: harness.key, requestedFullAuto: fullAuto == true) {
             // 明确的拒绝才允许使用新编号降级重发，未知结果永不走此路径。
@@ -418,7 +424,9 @@ final class HarnessSessionDriver: ObservableObject {
             await sendSteer(sessionId: sessionId, text: text)
         } catch GatewayError.http(let status, let message) where (400..<500).contains(status) && status != 409 && status != 408 {
             guard finishRejectedOutbox(entry) == true else { return }
-            steerFailed(text, message ?? "HTTP \(status)")
+            steerFailed(text, message ?? "HTTP \(status)",
+                        problem: LeoLinkProblem.from(error: GatewayError.http(status: status, message: message),
+                                                     context: linkContext))
         } catch {
             // timeout/5xx/409 都可能已经发生副作用；保留原编号，不放回可盲重发的输入框。
             if !relayQueued.contains(where: { $0.id == entry.id }) { relayQueued.append(entry) }
@@ -453,8 +461,9 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     /// The Mac never got it: say so, stop claiming it's working, give the text back.
-    private func steerFailed(_ text: String, _ reason: String) {
+    private func steerFailed(_ text: String, _ reason: String, problem found: LeoLinkProblem? = nil) {
         lastError = reason
+        if let found { adopt(found) }
         items.append(GatewayTranscriptItem(kind: .failure, text: String(localized: "没送到 Mac：\(reason)")))
         if status == "running" { status = "idle" }
         unsentText = text
@@ -542,6 +551,9 @@ final class HarnessSessionDriver: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 guard let self, !Task.isCancelled else { return }
+                // [T-link-problem] 这台主机已确认要用户处理(密钥被拒等):查回执也是白敲,等用户点主按钮后再继续。
+                // 不消耗 receiptAttempts,恢复后接着查。
+                if let hostId = self.client.hostId, GatewayHostStore.shared.isLinkPaused(hostId) { continue }
                 _ = await self.checkRelayQueue()
                 // 网络 await 期间可能又发送了一条，退出前重读当前队列，不能丢掉新监视。
                 if self.relayQueued.isEmpty { break }
@@ -644,6 +656,7 @@ final class HarnessSessionDriver: ObservableObject {
         }
         items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
         lastError = nil
+        problem = nil
         if status == "idle" { status = "running" }
         if !isRunning {
             // Not following any more (reconnects gave up, the session read as over):
@@ -668,12 +681,16 @@ final class HarnessSessionDriver: ObservableObject {
     func stopAndWait() async {
         guard let sessionId else { return }
         do { try await client.stopHarness(sessionId: sessionId) }
-        catch { lastError = error.localizedDescription }
+        catch {
+            lastError = error.localizedDescription
+            report(error)
+        }
     }
 
     func respond(to approval: GatewayApprovalRequest, choice: String) {
         guard let sessionId, approval.choices.contains(choice) else { return }
         WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
+        problem = nil
         pendingApprovals.removeAll { $0.approvalId == approval.approvalId }
         status = pendingApprovals.isEmpty ? "running" : "waiting_for_approval"
         if let next = pendingApprovals.first { armWatch(for: next) }
@@ -694,6 +711,7 @@ final class HarnessSessionDriver: ObservableObject {
                     }
                     self.status = "waiting_for_approval"
                     self.lastError = error.localizedDescription
+                    self.report(error)
                     // Re-arm the wrist too: restoring only the phone card would
                     // leave the watch button silently dead on a retry.
                     self.armWatch(for: approval)
@@ -719,6 +737,8 @@ final class HarnessSessionDriver: ObservableObject {
     func resumeIfNeeded() {
         restoreOutbox()   // back on screen: reload durable intents before asking again
         guard !isRunning else { return }
+        problem = nil   // 回到页面本身就是一次用户操作:重新试一次,还不行会再次给出说明
+        if let hostId = client.hostId { GatewayHostStore.shared.resumeLink(hostId) }
         if let sessionId, status == "detached" {
             isRunning = true
             status = "running"
@@ -727,6 +747,21 @@ final class HarnessSessionDriver: ObservableObject {
             status = "idle"
             start(prompt: prompt)
         }
+    }
+
+    /// 问题块的主按钮点下后:清掉说明、解除这台主机的暂停、换上最新的 client,然后接着跟 / 重新开始。
+    /// 重新配对或改了地址后宿主会换新的 client;沿用旧的会带着旧密钥再失败一遍。
+    func resumeAfterProblem() {
+        problem = nil
+        lastError = nil
+        if let hostId = client.hostId {
+            let store = GatewayHostStore.shared
+            store.resumeLink(hostId)
+            if let host = store.hosts.first(where: { $0.id == hostId }), let fresh = store.client(for: host) {
+                client = fresh
+            }
+        }
+        resumeIfNeeded()
     }
 
     /// 接管 Mac 上已存在的会话:从 seq 0 全量回放再实时跟随。
@@ -750,8 +785,10 @@ final class HarnessSessionDriver: ObservableObject {
     private func follow(sessionId: String) async {
         var attempt = 0
         var seenAtAttemptStart = lastSeq
+        var lastProblem: LeoLinkProblem?
         while !Task.isCancelled {
             var cleanClose = false
+            var failure: Error?
             do {
                 await MainActor.run { self.journalStatus = HarnessJournalStatus() }
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
@@ -786,10 +823,23 @@ final class HarnessSessionDriver: ObservableObject {
                         self.lastSeq = T6RelayLogic.advance(current: self.lastSeq, minAfter: minAfter)
                     }
                 } else {
+                    failure = error
                     await MainActor.run { self.lastError = error.localizedDescription }
                 }
             }
             if Task.isCancelled { return }
+
+            // [T-link-problem] 先看这次失败是谁的问题。密钥被拒、Mac 撤销授权、地址不对这类要用户处理的,
+            // 再退避六轮(约 90 秒)也不会好:立刻停下,把说明交给控制台,等用户点主按钮(resumeAfterProblem)。
+            // 瞬时故障(Mac 睡着、没网、超时)照旧退避;退避用尽才把说明摆出来。
+            if let failure, !LeoLinkProblem.isCancellation(failure) {
+                let found = LeoLinkProblem.from(error: failure, context: linkContext)
+                if found.pausesAutoReconnect {
+                    pauseFollowing(because: found)
+                    return
+                }
+                lastProblem = found
+            }
 
             if cleanClose {
                 // The server closes the stream deliberately when a session is
@@ -801,7 +851,7 @@ final class HarnessSessionDriver: ObservableObject {
             // Reset once a reconnect actually delivered something: the budget
             // is for CONSECUTIVE failures, not for a long healthy session that
             // happened to blip seven times over an hour.
-            if lastSeq > seenAtAttemptStart { attempt = 0 }
+            if lastSeq > seenAtAttemptStart { attempt = 0; lastProblem = nil }
             seenAtAttemptStart = lastSeq
             attempt += 1
             if attempt > 6 {
@@ -812,6 +862,7 @@ final class HarnessSessionDriver: ObservableObject {
                     self.status = "detached"
                     self.isRunning = false
                     self.note(String(localized: "Still running on your Mac; reopen to follow along."))
+                    if let lastProblem { self.problem = lastProblem }
                 }
                 return
             }
@@ -989,6 +1040,33 @@ final class HarnessSessionDriver: ObservableObject {
 
     private func note(_ text: String) {
         items.append(GatewayTranscriptItem(kind: .notice, text: text))
+    }
+
+    // MARK: [T-link-problem] 连接问题
+
+    private var linkContext: LeoLinkProblem.Context {
+        .init(.session, host: client.harnessBaseURL?.host, machineName: client.hostName)
+    }
+
+    /// 摆出这个问题。要用户处理的(pausesAutoReconnect)同时记进宿主:该主机的轮询在用户点主按钮前也停下。
+    private func adopt(_ found: LeoLinkProblem) {
+        problem = found
+        if found.pausesAutoReconnect, let hostId = client.hostId {
+            GatewayHostStore.shared.recordLinkProblem(found, for: hostId)
+        }
+    }
+
+    /// 一次请求失败了:把错误翻译成「谁的问题 + 一个按钮」。取消(离开页面)不算失败。
+    private func report(_ error: Error) {
+        guard !LeoLinkProblem.isCancellation(error) else { return }
+        adopt(LeoLinkProblem.from(error: error, context: linkContext))
+    }
+
+    /// 停下自动重连:不再退避,把控制台停在「已脱离」,说明交给界面。
+    private func pauseFollowing(because found: LeoLinkProblem) {
+        adopt(found)
+        status = "detached"
+        isRunning = false
     }
 
     private func fail(_ message: String) {

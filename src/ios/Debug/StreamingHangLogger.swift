@@ -15,6 +15,10 @@ import Foundation
 /// streaming is zero; while streaming it adds a single 50ms-polled monitor
 /// thread + a ~6KB bounded ring buffer of recent flushes. See HangDetector.h
 /// for the suspend/sample protocol used to capture main-thread frames.
+///
+/// 隐私:这份日志可以在「设置 → 日志」里分享,所以 Release 下绝不写入任何助手回复 / 界面文字的原文,
+/// 只写长度、行数与原文 SHA-256 前 8 位(`LogContentDigest`)。原文(流式尾巴、最近 10 次赋值的完整
+/// markdown、文本框开头 40 字)只在 `#if DEBUG` 里采集和输出。
 final class StreamingHangLogger {
 
     static let shared = StreamingHangLogger()
@@ -42,8 +46,9 @@ final class StreamingHangLogger {
         let timestamp: TimeInterval
         let messageIdShort: String
         let blockIdShort: String
-        let totalLen: Int
-        /// Tail of the text (last `streamTailChars` chars) at this flush.
+        /// 整段文本的字符数 / 行数 / SHA-256 前 8 位;Release 日志里只允许出现这个。
+        let digest: LogContentDigest
+        /// DEBUG 专用:文本末尾 `streamTailChars` 个字符。Release 不采集,日志里也就没有东西可泄露。
         let tail: String
         /// `cacheAttributedString` flag from the flush (final-flush marker).
         let finalFlush: Bool
@@ -75,6 +80,7 @@ final class StreamingHangLogger {
     private struct AssignedSample {
         let timestamp: TimeInterval
         let messageIdShort: String
+        /// 仅在内存里持有(COW 引用,不拷贝);Release 只在转储时算出摘要,绝不把它写进日志,完整分片转储只在 DEBUG。
         let markdown: String  // FULL markdown — bounded only by ring cap
         let attrLen: Int
         let path: String      // "fast-append" / "full-replace(prefix-mismatch)" / etc
@@ -251,11 +257,16 @@ final class StreamingHangLogger {
     private static func walkSubviews(_ view: UIView, into out: inout [TextViewSample]) {
         if let tv = view as? UITextView {
             let attrLen = tv.textStorage.length
+            // 文本框开头 40 字是界面上的真实文字(回复、输入框),只在 DEBUG 采集;Release 日志只有 attrLen。
+            #if DEBUG
             let head = attrLen > 0
                 ? (tv.textStorage.string as NSString)
                     .substring(to: min(40, attrLen))
                     .replacingOccurrences(of: "\n", with: "⏎")
                 : ""
+            #else
+            let head = ""
+            #endif
             let ptr = String(format: "%p", Int(bitPattern: Unmanaged.passUnretained(tv).toOpaque()))
             // TEMP(2026-05-13 codex review): break down attachment counts by
             // class. Costs one enumeration over the attributedText but only
@@ -294,8 +305,8 @@ final class StreamingHangLogger {
         for sub in view.subviews { walkSubviews(sub, into: &out) }
     }
 
-    /// Record one streaming-text flush. Cheap: a substring + struct push on
-    /// a background queue. Called from `AIChatViewModel.setStreamingTextBlockContent`.
+    /// Record one streaming-text flush. Cheap: a struct push on a background
+    /// queue. Called from `AIChatViewModel.setStreamingTextBlockContent`.
     /// No-op when no streaming session is active.
     func recordStreamingFlush(
         messageId: UUID,
@@ -303,6 +314,13 @@ final class StreamingHangLogger {
         text: String,
         finalFlush: Bool
     ) {
+        // 流式文字刚刷出过:LeoPerf 据此给随后记录的主线程卡顿打 `stream` 标记(perf.jsonl 的 hang.stream),
+        // 性能门禁才能数「流式期间的卡顿」。只是一把锁加一次赋值。
+        LeoPerf.noteStreamingFlush()
+        let now = Date().timeIntervalSince1970
+        let mShort = String(messageId.uuidString.prefix(8))
+        let bShort = String(blockId.uuidString.prefix(8))
+        #if DEBUG
         // Snapshot the tail on the caller (main) so we don't retain the full
         // attributed text reference across the dispatch hop.
         let totalLen = text.count
@@ -311,9 +329,11 @@ final class StreamingHangLogger {
             let startIdx = text.index(text.endIndex, offsetBy: -streamTailChars)
             return String(text[startIdx...])
         }()
-        let now = Date().timeIntervalSince1970
-        let mShort = String(messageId.uuidString.prefix(8))
-        let bShort = String(blockId.uuidString.prefix(8))
+        #else
+        // Release 不采集原文片段;长度 / 行数 / 哈希在下面的后台队列里算,
+        // 主线程不再为这个诊断做任何与文本长度成正比的工作。
+        let tail = ""
+        #endif
 
         queue.async {
             guard self.refCount > 0 else { return }
@@ -322,7 +342,7 @@ final class StreamingHangLogger {
                 timestamp: now,
                 messageIdShort: mShort,
                 blockIdShort: bShort,
-                totalLen: totalLen,
+                digest: LogContentDigest(text),
                 tail: tail,
                 finalFlush: finalFlush
             )
@@ -341,6 +361,9 @@ final class StreamingHangLogger {
     /// (the actual input that triggered _fillLayoutHole), so when a hang
     /// fires we can reproduce it from the log. Bounded by `assignedBufferCap`
     /// entries so memory stays small even under stream bursts.
+    ///
+    /// 只有 DEBUG 构建会把这份 markdown 原文分片写进日志;Release 转储时只输出
+    /// 长度 / 行数 / SHA-256 前 8 位(转储时才算,平时不为每次赋值付哈希的代价)。
     func recordAssignedText(messageId: UUID?, markdown: String, attrLen: Int, path: String) {
         let mShort = messageId.map { String($0.uuidString.prefix(8)) } ?? "—"
         let now = Date().timeIntervalSince1970
@@ -404,7 +427,12 @@ final class StreamingHangLogger {
             for (i, sample) in inv.top.enumerated() {
                 let dims = String(format: "%.0fx%.0f", sample.bounds.width, sample.bounds.height)
                 let hidden = sample.isHidden ? " HIDDEN" : ""
-                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   tv#\(i) ptr=\(sample.ptr) attrLen=\(sample.attrLen) bounds=\(dims)\(hidden) attach=\(sample.attachTotal)(table=\(sample.attachTable),image=\(sample.attachImage),other=\(sample.attachOther)) head=\"\(sample.head)\"")
+                #if DEBUG
+                let headField = " head=\"\(sample.head)\""
+                #else
+                let headField = ""   // Release:文本框里的字是界面内容,日志里只留 attrLen
+                #endif
+                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   tv#\(i) ptr=\(sample.ptr) attrLen=\(sample.attrLen) bounds=\(dims)\(hidden) attach=\(sample.attachTotal)(table=\(sample.attachTable),image=\(sample.attachImage),other=\(sample.attachOther))\(headField)")
             }
             // TEMP(2026-05-14) — UICollectionView visible cells.
             if !inv.visibleCells.isEmpty {
@@ -420,14 +448,18 @@ final class StreamingHangLogger {
 
         // Emit the streaming content snapshot before the stacks so a log
         // reader sees the "what" before the "where". Each sample is one
-        // line; the tail is single-line escaped.
+        // line. Release 只有长度 / 行数 / 哈希;DEBUG 另带单行转义后的尾巴。
         if !streamBuffer.isEmpty {
             mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang] === streaming content snapshot (\(streamBuffer.count) flush(es), totalSeen=\(streamFlushCount)) ===")
             for (i, sample) in streamBuffer.enumerated() {
                 let ts = String(format: "%.3f", sample.timestamp)
                 let finalMark = sample.finalFlush ? "FINAL" : "incr"
-                let escaped = Self.escapeForLog(sample.tail)
-                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   flush[\(i)] t=\(ts) msg=\(sample.messageIdShort) blk=\(sample.blockIdShort) len=\(sample.totalLen) \(finalMark) tail=\"\(escaped)\"")
+                #if DEBUG
+                let tailField = " tail=\"\(Self.escapeForLog(sample.tail))\""
+                #else
+                let tailField = ""
+                #endif
+                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   flush[\(i)] t=\(ts) msg=\(sample.messageIdShort) blk=\(sample.blockIdShort) \(sample.digest.fields) \(finalMark)\(tailField)")
             }
             // Clear so the next hang event reports only flushes that
             // happened since this dump.
@@ -436,16 +468,18 @@ final class StreamingHangLogger {
             mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang] === streaming content snapshot: (empty) ===")
         }
 
-        // REPRO-DIAG(2026-05-16): dump the FULL markdown of the last few
-        // textView.attributedText assignments. This is the actual hang
-        // input — UIKit's _fillLayoutHole runs over whatever this markdown
-        // resolved to. Chunked across multiple log lines (800 char each)
-        // so a single line stays readable in `tail -f`.
+        // REPRO-DIAG(2026-05-16): the last few textView.attributedText
+        // assignments. This is the actual hang input — UIKit's
+        // _fillLayoutHole runs over whatever this markdown resolved to.
+        // Release 每条只写长度 / 行数 / SHA-256 前 8 位(够判断「是不是同一段」),
+        // 绝不写原文;完整 markdown 按 800 字符分片写入日志只在 DEBUG 构建里。
         if !assignedBuffer.isEmpty {
             mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang] === assignedText snapshot (\(assignedBuffer.count) entries) ===")
             for (i, sample) in assignedBuffer.enumerated() {
                 let ts = String(format: "%.3f", sample.timestamp)
-                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   assign[\(i)] t=\(ts) msg=\(sample.messageIdShort) attrLen=\(sample.attrLen) path=\(sample.path) mdLen=\(sample.markdown.count)")
+                let digest = LogContentDigest(sample.markdown)
+                mgr.writeRawLine(category: cat, level: lvl, message: "[StreamHang]   assign[\(i)] t=\(ts) msg=\(sample.messageIdShort) attrLen=\(sample.attrLen) path=\(sample.path) \(digest.fields)")
+                #if DEBUG
                 // Emit full markdown in 800-char slices with newlines escaped.
                 let escaped = sample.markdown
                     .replacingOccurrences(of: "\n", with: "⏎")
@@ -459,6 +493,7 @@ final class StreamingHangLogger {
                     idx = end
                     sliceIdx += 1
                 }
+                #endif
             }
             assignedBuffer.removeAll(keepingCapacity: true)
         } else {
@@ -527,8 +562,9 @@ final class StreamingHangLogger {
         try? text.write(to: CrashReporter.hangSnapshotURL, atomically: true, encoding: .utf8)
     }
 
+    #if DEBUG
     /// Replace CR/LF and other control chars with visible escapes so a tail
-    /// stays single-line in the log file.
+    /// stays single-line in the log file. 只服务于 DEBUG 的原文尾巴,Release 里没有这个函数。
     private static func escapeForLog(_ s: String) -> String {
         var out = ""
         out.reserveCapacity(s.count + 8)
@@ -543,4 +579,5 @@ final class StreamingHangLogger {
         }
         return out
     }
+    #endif
 }

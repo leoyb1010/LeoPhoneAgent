@@ -229,8 +229,22 @@ final class GatewayRunDriver: ObservableObject {
     private func pollUntilSettled(runId: String) async {
         var attempt = 0
         while !Task.isCancelled {
-            guard let snapshot = try? await client.runStatus(runId: runId) else {
+            let snapshot: GatewayRunStatus
+            do {
+                snapshot = try await client.runStatus(runId: runId)
+            } catch {
                 attempt += 1
+                // [T-link-problem] 密钥被拒、地址不对这类要用户处理的问题,再退避六轮也不会好:
+                // 立刻停下并说清楚,而不是 90 秒后才说「联系不上」。瞬时故障保持原来的退避。
+                let problem = LeoLinkProblem.from(
+                    error: error, context: .init(.session, host: client.baseURL.host, machineName: nil))
+                if !Task.isCancelled, problem.pausesAutoReconnect {
+                    await MainActor.run {
+                        GatewayHostStore.shared.recordLinkProblem(problem, for: self.hostId)
+                        self.fail(problem.message)
+                    }
+                    return
+                }
                 if attempt > maxReconnects {
                     await MainActor.run { self.fail(String(localized: "Lost contact with that Mac.")) }
                     return

@@ -50,6 +50,21 @@ struct MountedFolderEntry: Codable, Identifiable, Equatable {
     /// this field existed.
     var userAllowWrite: Bool = true
 
+    /// [T-mount-backoff] 最近一次「书签解析 / 授权失败」的时间,以及连续失败了几次。
+    /// 自动重试按它们退避(1 小时 → 6 小时 → 24 小时封顶,见 `MountActivationBackoff`),
+    /// 失效的书签不再每次启动都白等约 5 秒。成功一次或用户手动重试就清零。
+    /// 存在同一个 mounted-folders.json 里;老文件没有这两个键,解码时按「没失败过」处理。
+    var lastFailureAt: Date?
+    var consecutiveFailures: Int = 0
+
+    /// 有连续失败记录:这个挂载的授权多半已经失效(被收回 / 文件夹挪走 / 提供方迟迟不响应),需要重新授权。
+    var hasFailureStreak: Bool { consecutiveFailures > 0 }
+
+    /// 退避期结束、下一次自动尝试的最早时刻;没有失败记录时为 nil。
+    var nextAutoRetryAt: Date? {
+        MountActivationBackoff.nextAttemptAt(consecutiveFailures: consecutiveFailures, lastFailureAt: lastFailureAt)
+    }
+
     /// Effective writable flag — both must be true to allow writes.
     var effectiveWritable: Bool {
         isWritable && userAllowWrite
@@ -57,6 +72,7 @@ struct MountedFolderEntry: Codable, Identifiable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, sourceDisplayName, bookmark, createdAt, isWritable, userAllowWrite
+        case lastFailureAt, consecutiveFailures
     }
 
     init(
@@ -87,6 +103,9 @@ struct MountedFolderEntry: Codable, Identifiable, Equatable {
         // New fields — default to true for entries saved before they existed.
         self.isWritable = try c.decodeIfPresent(Bool.self, forKey: .isWritable) ?? true
         self.userAllowWrite = try c.decodeIfPresent(Bool.self, forKey: .userAllowWrite) ?? true
+        // [T-mount-backoff] 退避记录:老文件里没有,按「没失败过」处理。
+        self.lastFailureAt = try c.decodeIfPresent(Date.self, forKey: .lastFailureAt)
+        self.consecutiveFailures = try c.decodeIfPresent(Int.self, forKey: .consecutiveFailures) ?? 0
     }
 
     /// Returns true if `name` is a valid mount directory name (no /, not empty, not . or ..).
@@ -441,10 +460,31 @@ final class MountedFoldersManager {
     func ensureActivated() async {
         if didCompleteActivationPass { return }
         if let existing = activationPass { await existing.value; return }
-        let snapshot = entries
+
+        // [T-mount-backoff] 还在退避期内的书签这一轮不再解析,直接标「需要重新授权」。
+        // 真机日志(4 天 31 次启动):两个失效书签每次启动都各白等约 5 秒(XPC 超时)才报「没有权限」,
+        // 而且旧代码在同一轮里串行解析,后面健康的挂载要等它们 —— 启动后十来秒才有外部挂载。
+        // 退避 1 小时 → 6 小时 → 24 小时封顶;用户在设置页手动重试会清零(见 retryActivation)。
+        let now = Date()
+        var due: [MountedFolderEntry] = []
+        for entry in entries {
+            if MountActivationBackoff.shouldAttempt(consecutiveFailures: entry.consecutiveFailures,
+                                                    lastFailureAt: entry.lastFailureAt, now: now) {
+                due.append(entry)
+            } else {
+                activationStates[entry.id] = .failed(Self.needsReauthorizationMessage)
+                let retryAt = entry.nextAutoRetryAt.map { "\($0)" } ?? "-"
+                mountLog.info("activate '\(entry.name)' [\(entry.id.uuidString.prefix(8))] skipped — backing off after \(entry.consecutiveFailures) failure(s), next auto-try \(retryAt)")
+            }
+        }
+        let snapshot = due
         let pass = Task.detached(priority: .userInitiated) {
-            for entry in snapshot {
-                await Self.resolveAndCommit(entry: entry)
+            // 并发解析:一个迟迟不回的书签只拖它自己,整轮耗时取最慢的那个,而不是各个相加。
+            // 解析本身在后台任务里、带 5 秒超时,提交结果才回到主 actor;主线程全程只是在 await。
+            await withTaskGroup(of: Void.self) { group in
+                for entry in snapshot {
+                    group.addTask { await Self.resolveAndCommit(entry: entry) }
+                }
             }
             await MainActor.run {
                 let manager = MountedFoldersManager.shared
@@ -471,6 +511,49 @@ final class MountedFoldersManager {
         if !didCompleteActivationPass {
             mountLog.warning("ensureActivated(timeout:) gave up after \(Int(timeout))s — run starts without external mounts; the pass continues")
         }
+    }
+
+    // MARK: - Failure backoff [T-mount-backoff]
+
+    /// 退避期内被跳过的书签的状态文案(设置页和 `apple-files list` 都会读到)。
+    static var needsReauthorizationMessage: String { String(localized: "需要重新授权") }
+
+    /// 记一次解析 / 授权失败并持久化:连续失败 +1,时间记为现在。
+    /// 只在「这个挂载确实用不了」时调用;书签还能用(只是快过期)不算。
+    private func recordActivationFailure(id: UUID, now: Date = Date()) {
+        guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
+        // 封顶 99:退避早在第 3 次就到 24 小时上限,计数再往上涨没有意义,只会无谓地增长。
+        entries[idx].consecutiveFailures = min(entries[idx].consecutiveFailures + 1, 99)
+        entries[idx].lastFailureAt = now
+        save()
+        let retryAt = entries[idx].nextAutoRetryAt.map { "\($0)" } ?? "-"
+        mountLog.info("backoff '\(entries[idx].name)': \(entries[idx].consecutiveFailures) consecutive failure(s), next auto-try \(retryAt)")
+    }
+
+    /// 清零退避记录(成功,或用户手动重试)。没有记录时什么都不做,不白写盘。
+    private func clearActivationFailures(id: UUID) {
+        guard let idx = entries.firstIndex(where: { $0.id == id }),
+              entries[idx].consecutiveFailures != 0 || entries[idx].lastFailureAt != nil else { return }
+        entries[idx].consecutiveFailures = 0
+        entries[idx].lastFailureAt = nil
+        save()
+    }
+
+    /// 设置页的「重试」:清零退避,在后台重新解析书签(带 5 秒超时,不占主线程),返回最终状态。
+    ///
+    /// 和启动时一样走 `resolveAndCommit`:解析在后台任务里,只有提交结果回主 actor。
+    /// 仍然失败的话,按新的一轮记 1 次失败(之后重新从 1 小时开始退避)。
+    @discardableResult
+    func retryActivation(id: UUID) async -> MountActivationState? {
+        guard let entry = entries.first(where: { $0.id == id }) else { return nil }
+        clearActivationFailures(id: id)
+        // 已经在用的就不用再解析了(例如另一条路径刚好把它激活了)。
+        if activeURLs[id] == nil {
+            await Self.resolveAndCommit(entry: entry)
+        }
+        pushExternalMountSnapshot()
+        AIChatViewModel.refreshMountedFolderSymlinks()
+        return activationStates[id]
     }
 
     /// Resolve a single bookmark on a background queue (off the main thread)
@@ -558,9 +641,11 @@ final class MountedFoldersManager {
                 let msg = "resolve timed out after 5s (FileProvider unresponsive)"
                 // Shown in Settings → Mount External Folders; the log keeps the English detail.
                 manager.activationStates[entry.id] = .failed(String(localized: "The app that stores this folder didn't respond in time. Open the folder once in the Files app, then come back."))
+                manager.recordActivationFailure(id: entry.id)
                 mountLog.warning("activate '\(entry.name)' [\(idPrefix)] \(msg) (elapsed=\(elapsedMs)ms)")
             case .failure(let error):
                 manager.activationStates[entry.id] = .failed(error.localizedDescription)
+                manager.recordActivationFailure(id: entry.id)
                 mountLog.warning("activate '\(entry.name)' [\(idPrefix)] resolve failed: \(error.localizedDescription) (elapsed=\(elapsedMs)ms)")
             case .success(let (url, stale)):
                 mountLog.info("resolveAndCommit '\(entry.name)' [\(idPrefix)] resolved in \(elapsedMs)ms stale=\(stale) -> \(url.path)")
@@ -581,10 +666,14 @@ final class MountedFoldersManager {
         let idPrefix = String(entry.id.uuidString.prefix(8))
         guard url.startAccessingSecurityScopedResource() else {
             activationStates[entry.id] = .permissionDenied
+            // 书签能解析但拿不到 scope:这个挂载用不了,和解析失败一样计入退避。
+            recordActivationFailure(id: entry.id)
             mountLog.warning("activate '\(entry.name)' [\(idPrefix)] scope denied for \(url.path) — bookmark resolved but startAccessingSecurityScopedResource() returned false")
             return
         }
         activeURLs[entry.id] = url
+        // 解析 + 拿到 scope = 挂载眼下能用:清掉退避记录(只有确实有记录时才写盘)。
+        clearActivationFailures(id: entry.id)
 
         if stale {
             if let refreshed = try? url.bookmarkData(
@@ -596,6 +685,8 @@ final class MountedFoldersManager {
                 save()
                 mountLog.info("refreshed stale bookmark for '\(entry.name)' [\(idPrefix)]")
             } else {
+                // 书签快过期、刷新失败,但挂载眼下是能用的,所以不计入退避 ——
+                // 否则退避期内下次启动会整个跳过它,反而把能用的挂载关掉。
                 activationStates[entry.id] = .stale
                 mountLog.warning("activate '\(entry.name)' [\(idPrefix)] bookmark stale and refresh failed")
                 return
@@ -834,6 +925,11 @@ final class MountedFoldersManager {
     }
 
     /// Re-activate a single entry (used on add and manual reauth).
+    ///
+    /// [T-mount-backoff] 这是「明确的手动 / 新增」路径:不看退避,一进来就把退避清零再试;失败按新的一轮重新记。
+    /// 注意它是**同步**的,书签解析走 XPC,调用线程会被阻塞到它返回 —— 设置页的「重试」请用
+    /// `retryActivation(id:)`(后台解析 + 超时,不占主线程)。这里留给还没改成 async 的旧调用点
+    /// (`add`、apple-files 的 reauth)。
     @discardableResult
     func activate(entry: MountedFolderEntry) -> MountActivationState {
         // If already active with a URL, skip.
@@ -842,6 +938,8 @@ final class MountedFoldersManager {
             activationStates[entry.id] = state
             return state
         }
+
+        clearActivationFailures(id: entry.id)
 
         var stale = false
         let url: URL
@@ -855,6 +953,7 @@ final class MountedFoldersManager {
         } catch {
             let state = MountActivationState.failed(error.localizedDescription)
             activationStates[entry.id] = state
+            recordActivationFailure(id: entry.id)
             mountLog.warning("activate '\(entry.name)' resolve failed: \(error.localizedDescription)")
             return state
         }
@@ -862,6 +961,7 @@ final class MountedFoldersManager {
         guard url.startAccessingSecurityScopedResource() else {
             let state = MountActivationState.permissionDenied
             activationStates[entry.id] = state
+            recordActivationFailure(id: entry.id)
             mountLog.warning("activate '\(entry.name)' scope denied")
             return state
         }

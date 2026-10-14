@@ -3,9 +3,53 @@ import SwiftUI
 import ObjectiveC
 import FileProvider
 import UserNotifications
+import os
 
 private let shareLog = AppLogger(category: "Share")
 private let lifecycleLog = AppLogger(category: "Lifecycle")
+
+// MARK: - Foreground signposts
+
+/// [T-fg-attribution] 回前台各步骤的 signpost 区间,名称统一 `fg.step.<name>`。
+///
+/// 真机 `fg.frame` p90 是 826 ms(项目预算 500 ms),根因没定位:这里只加观测、不改任何行为,
+/// 让下一次用 Instruments 抓回前台时,能把这一段时间归因到具体步骤。
+/// 复用 `LeoPerf.signposter`(subsystem com.leoyuan.leophoneagent,Points of Interest 类别),
+/// 所以和 `listSessions.full` 等区间出现在同一条轨道上。
+///
+/// 开销:名字是 StaticString、不带消息,没有任何字符串分配;没人在录 signpost 时,
+/// 每个区间只是一次 `os_signpost_enabled` 判断。
+/// 命名约定:不带后缀的区间是「同步跑在主线程上的一段」,可以直接当主线程耗时读;
+/// 带 `.async` 的是一个 Task 从开始到结束的墙钟时间(中间有 await 让出),只用来对照,不等于主线程耗时。
+private struct FgStepInterval {
+    let name: StaticString
+    let state: OSSignpostIntervalState
+
+    func end() { LeoPerf.signposter.endInterval(name, state) }
+}
+
+private enum FgStep {
+    @inline(__always)
+    static func begin(_ name: StaticString) -> FgStepInterval {
+        FgStepInterval(name: name, state: LeoPerf.signposter.beginInterval(name))
+    }
+}
+
+/// 一串首尾相接的步骤:`next` 结束上一段、开始下一段,`finish` 收尾。
+/// 这样每个步骤只多一行,不用把原有语句包进闭包 / 改缩进。
+private struct FgStepChain {
+    private var current: FgStepInterval?
+
+    mutating func next(_ name: StaticString) {
+        current?.end()
+        current = FgStep.begin(name)
+    }
+
+    mutating func finish() {
+        current?.end()
+        current = nil
+    }
+}
 
 // MARK: - Bundle Language Override
 
@@ -348,23 +392,40 @@ struct MinisApp: App {
     /// Runs once that frame is on screen (`LeoPerf.afterNextFrame`).
     @MainActor
     private static func runAfterForegroundFrame() {
+        // [T-fg-attribution] 这一整段和 `fg.frame` 的记录跑在同一个显示链路 tick 里,先后顺序不定:
+        // 它可能排在 fg.frame 的回调之前、被算进那 826 ms。按步骤记区间,看是不是它。
+        let fgAfterFrame = FgStep.begin("fg.step.afterFrame")
+        defer { fgAfterFrame.end() }
+        var fgSteps = FgStepChain()
+        defer { fgSteps.finish() }
+
+        fgSteps.next("fg.step.pushRegistrar")
         PushRegistrar.shared.refreshAuthorizationAndRegister()
+        fgSteps.next("fg.step.crashReporterLaunch")
         CrashReporter.shared.onAppLaunch()
         // [T-resource-diag] 60s port/resource sampler; idempotent, off main.
+        fgSteps.next("fg.step.resourceDiagStart")
         ResourceDiagnostics.start()
         // Gathered here, written on CrashReporter's marker queue.
+        fgSteps.next("fg.step.crashMarker")
         CrashReporter.shared.updateMarkerPhase(phase: "active")
 
+        fgSteps.next("fg.step.liveActivityCleanup")
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "scenePhase.active")
         // [T-brain] devicectl 拷进来的资料库令牌文件:导入钥匙串后立即删除。
+        fgSteps.next("fg.step.brainProvision")
         BrainStore.shared.importProvisionFileIfPresent()
         // [T-ios-live-activity-soft-finish] If a completed task's Live
         // Activity is lingering (soft-finished, awaiting the user), the
         // user is now back in the app — dismiss it.
+        fgSteps.next("fg.step.liveActivityDismiss")
         AgentLiveActivityManager.shared.dismissFinishedActivityOnForeground()
 
+        fgSteps.next("fg.step.badgeKick")
         Task { @MainActor in
+            let badgeStoreInit = FgStep.begin("fg.step.badgeStoreInit")
             _ = SessionBadgeStore.shared
+            badgeStoreInit.end()
             // [T-ios-session-paused-badge-hardkill] Reconcile .paused badges
             // against the DB's interrupted-session set. The background-expiry
             // push only fires on a graceful task expiry; a hard kill (jetsam/
@@ -379,7 +440,9 @@ struct MinisApp: App {
             // runs to waitingForUser exactly once when its singleton opens
             // (its database was opened off-main at App.init; this is one
             // indexed SELECT).
+            let badgeQuery = FgStep.begin("fg.step.badgeResumableQuery")
             let persistedInterruptedSessions = AgentActivityLog.shared.resumableSessionIds()
+            badgeQuery.end()
             // Exclude sessions that are actively streaming RIGHT NOW: a
             // resumed/running session's DB tail still looks "interrupted"
             // (mid-loop shape), but it is executing, not paused — flagging it
@@ -387,10 +450,13 @@ struct MinisApp: App {
             // never paused. (Mirrors the Android foreground reconcile.)
             let activeNow = SessionActivityTracker.shared.activeSessions
             let allInterrupted = interruptedSessions.union(persistedInterruptedSessions)
+            let badgeReconcile = FgStep.begin("fg.step.badgeReconcile")
             SessionBadgeStore.shared.reconcileInterruptedSessions(allInterrupted.subtracting(activeNow))
+            badgeReconcile.end()
 
             try? await UNUserNotificationCenter.current().setBadgeCount(0)
         }
+        fgSteps.next("fg.step.interruptionCheck")
         BackgroundInterruptionTracker.shared.checkOnForeground()
         // [T-shortcuts-diag-and-pending] Scan for AppIntent runs that
         // were marked pending but never cleared (i.e. the process was
@@ -398,16 +464,21 @@ struct MinisApp: App {
         // user hadn't enabled Background Keep-Alive at the time get a
         // one-shot guidance notification with the setting to turn on;
         // stale (>24h) records are dropped silently.
+        fgSteps.next("fg.step.shortcutPendingCheck")
         ShortcutRunTracker.checkPendingOnForeground()
         // [S6] Skills: at most every 5 min, and only if an off-main mtime
         // fingerprint of the skills directory changed (was: every SKILL.md
         // re-read on the main thread on every return).
+        fgSteps.next("fg.step.skillsReloadKick")
         Task { @MainActor in
+            let skillsReload = FgStep.begin("fg.step.skillsReload.async")
+            defer { skillsReload.end() }
             let t0 = CFAbsoluteTimeGetCurrent()
             if await SkillStore.shared.reloadIfChangedOnDisk() {
                 LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
             }
         }
+        fgSteps.next("fg.step.skillNotifierDrain")
         if #available(iOS 17.0, *) {
             SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
         }
@@ -416,7 +487,11 @@ struct MinisApp: App {
         // Cheap (one SQL scan + one small file read) and only on
         // foreground, so it never competes with the agent loop. Timeline
         // reloads are coalesced into one pass 2 s after the return.
+        fgSteps.next("fg.step.widgetKick")
         Task {
+            // 整个 Task 一个墙钟区间:里面是一串 await,对照主线程轨道看有没有叠上卡顿。
+            let widgetPass = FgStep.begin("fg.step.widgetAndScheduleRefresh.async")
+            defer { widgetPass.end() }
             // Catch-up: publishes any briefing whose session finished
             // while we were suspended (the observer would have died).
             await WidgetDataMirror.resolvePendingBriefings(reason: "foreground")
@@ -433,9 +508,11 @@ struct MinisApp: App {
             await SessionSpotlightIndexer.reindexAll()
         }
 
+        fgSteps.next("fg.step.mountWritability")
         MountedFoldersManager.shared.refreshAllWritability()
 
         // Credential-presence diagnostic (Keychain reads off-main)
+        fgSteps.next("fg.step.credentialDiagKick")
         let credInstances: [(id: String, type: ProviderType, cred: String, enabled: Bool)] =
             ProviderConfigStore.shared.instances.map {
                 ($0.id, $0.providerType, $0.credentialType.rawValue, $0.isEnabled)
@@ -530,6 +607,12 @@ struct MinisApp: App {
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            // [T-fg-attribution] 整个同步回调一个区间,下面再按步骤细分(只观测,见 FgStep)。
+            let fgActivePass = FgStep.begin("fg.step.activePass")
+            defer { fgActivePass.end() }
+            var fgSteps = FgStepChain()
+            defer { fgSteps.finish() }
+            fgSteps.next("fg.step.lifecycleLog")
             let remaining = UIApplication.shared.backgroundTimeRemaining
             let backgroundedFor = backgroundEntryDate.map { Date().timeIntervalSince($0) }
             if let elapsed = backgroundedFor {
@@ -548,6 +631,7 @@ struct MinisApp: App {
             //   detached   — DNS, audio-session reads, FileProvider signal.
             // Inactive↔active churn that never reached .background, and
             // background blips < 2 s, stop after the in-window part.
+            fgSteps.next("fg.step.foregroundPlan")
             let isFirstActivation = !Self.didRunFirstActivePass
             let plan = ForegroundWorkPolicy.plan(isFirstActivation: isFirstActivation,
                                                  backgroundedFor: backgroundedFor)
@@ -561,6 +645,7 @@ struct MinisApp: App {
             // first resolve re-reads truth.
             // 标成过期而不是清空:第一帧不再同步查钥匙串,先用旧值、后台重查。
             // 冷启动这一次跳过:缓存是本进程刚查的,再标过期只会把每个实例的钥匙串重查一遍。
+            fgSteps.next("fg.step.credentialStale")
             if !isFirstActivation {
                 ProviderCredentialCache.shared.markAllStale()
             }
@@ -574,16 +659,23 @@ struct MinisApp: App {
             // table deref hits freed memory → SIGKILL (CODESIGNING Invalid Page).
             // Yielding first lets the view-graph transition settle; all the work
             // runs on a later tick, outside the fragile window.
+            fgSteps.next("fg.step.scheduleResumeUI")
             Task { @MainActor in
                 await Task.yield()
+                // 让出之后的两段同步主线程工作各记一个区间,这是回前台里最容易和视图重建叠在一起的部分。
+                let resumeUI = FgStep.begin("fg.step.resumeStreamingUI")
                 ViewModelCache.shared.resumeAllStreamingUI()
+                resumeUI.end()
+                let appLock = FgStep.begin("fg.step.evaluateAppLock")
                 SessionLockStore.shared.evaluateAppLock()
+                appLock.end()
             }
             // Unified audio re-assertion on any return from the background: stop
             // the keep-alive track and re-apply the correct session category for
             // the current intent (reply TTS / capture), fixing stale-category
             // silence. The AVAudioSession reads and writes run on the
             // coordinator's queue.
+            fgSteps.next("fg.step.audioReassert")
             if plan == .full || backgroundedFor != nil {
                 AudioSessionCoordinator.shared.reassertForForeground()
             }
@@ -592,15 +684,19 @@ struct MinisApp: App {
                 return
             }
 
+            fgSteps.next("fg.step.widgetNoteForeground")
             WidgetReloads.noteForeground()
+            fgSteps.next("fg.step.scheduleDetached")
             Task.detached(priority: .utility) {
                 ISHKernel.shared.refreshDns()
                 Self.signalFileProvider()
             }
+            fgSteps.next("fg.step.scheduleAfterFrame")
             LeoPerf.afterNextFrame {
                 Self.runAfterForegroundFrame()
             }
             #if DEBUG
+            fgSteps.next("fg.step.debugServer")
             debugServer.restartIfDead(port: 8321)
             #endif
 
@@ -611,8 +707,12 @@ struct MinisApp: App {
             // active tick, observed as endless `[iCloud] mergeRemoteMessage
             // SKIP (local newer)` log spam plus continuous v1-side dirty
             // drain that competes with v2's send pipeline.
+            fgSteps.next("fg.step.syncKick")
             if #available(iOS 17.0, *) {
                 Task { @MainActor in
+                    // 墙钟区间:await 期间主线程是空的,和主线程耗时分开看。
+                    let syncKick = FgStep.begin("fg.step.syncKick.async")
+                    defer { syncKick.end() }
                     if SyncV2Bootstrap.shouldPauseV1() {
                         await SyncCore.shared.fetchNow(trigger: .foregroundTimer)
                         await SyncCore.shared.sendNow(trigger: .foregroundTimer)
@@ -624,6 +724,10 @@ struct MinisApp: App {
             }
 
         case .inactive:
+            // `.inactive` 也在「回前台」的路上(后台 → inactive → active),所以同样记一个区间;
+            // 进后台时它也会跑一次,看轨道时间线区分即可。
+            let fgInactivePass = FgStep.begin("fg.step.inactivePass")
+            defer { fgInactivePass.end() }
             let remaining = UIApplication.shared.backgroundTimeRemaining
             lifecycleLog.info("[Lifecycle] → Inactive (remaining: \(Self.formatTimeRemaining(remaining)))")
             CrashReporter.shared.updateMarkerPhase(phase: "inactive")

@@ -42,6 +42,8 @@ struct GatewaySettingsView: View {
     @State private var reachable: [String: Bool] = [:]
     @State private var showQuickSetup = false
     @State private var scanMessage: String?
+    /// [T-link-problem] 正在跑的检测数,>0 时问题块的主按钮置灰(避免连点叠出多个探测)。
+    @State private var activeRefreshes = 0
     /// [T-gateway-delete-confirm] 左滑删除待确认的机器。存机器本身,不存行号:
     /// 确认框弹着时列表可能因为刷新变动。删除会连同本机保存的访问密钥一起删掉。
     @State private var pendingDeleteHost: GatewayHost?
@@ -118,18 +120,34 @@ struct GatewaySettingsView: View {
             } else {
                 Section("已连接的机器") {
                     ForEach(store.hosts) { host in
-                        Button {
-                            editor.beginEdit(host)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                GatewayHostRow(host: host, isReachable: reachable[host.id], route: store.routeStatuses[host.id])
-                                if let deviceId = host.device?.deviceId,
-                                   sshStore.hosts.contains(where: { $0.deviceId == deviceId }) {
-                                    Label("SSH 已配置", systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
+                        let problem = store.linkProblem(for: host.id)
+                        VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                            Button {
+                                editor.beginEdit(host)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    GatewayHostRow(host: host, isReachable: reachable[host.id],
+                                                   route: store.routeStatuses[host.id], problem: problem)
+                                    if let deviceId = host.device?.deviceId,
+                                       sshStore.hosts.contains(where: { $0.deviceId == deviceId }) {
+                                        Label("SSH 已配置", systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                             }
+                            .buttonStyle(.plain)
+                            // [T-link-problem] 失败时:是谁的问题 + 一个主按钮,技术细节折叠。
+                            // 放在行按钮外面:嵌在 Button 里会和整行的点击(进入编辑)抢手势。
+                            if let problem {
+                                LeoLinkProblemView(
+                                    problem: problem,
+                                    isBusy: activeRefreshes > 0,
+                                    onRetry: { Task { await refresh() } },
+                                    onRescan: { scanPairCode() },
+                                    onEditAddress: { editor.beginEdit(host) },
+                                    onActed: { store.resumeLink(host.id) })
+                                    .padding(.leading, 20)   // 与行内文字对齐(状态圆点 8 + 间距 12)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
                         if let index = offsets.first, store.hosts.indices.contains(index) {
@@ -210,6 +228,10 @@ struct GatewaySettingsView: View {
             }
         }
         .task { await refresh() }
+        // [T-link-problem] 从 Tailscale / 系统设置回来:还有问题在显示就重新检测一遍,不用再下拉刷新。
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if !store.linkBook.problems.isEmpty { Task { await refresh() } }
+        }
         .alert("扫码", isPresented: Binding(
             get: { scanMessage != nil },
             set: { if !$0 { scanMessage = nil } }
@@ -230,23 +252,112 @@ struct GatewaySettingsView: View {
     }
 
     private func scanPairCode() {
+        GatewayPairing.scan(store: store) { message, paired in
+            scanMessage = message
+            if paired { Task { await refresh() } }
+        }
+    }
+
+    private func refresh() async {
+        activeRefreshes += 1
+        defer { activeRefreshes -= 1 }
+        // [T-relay-key-fallback] 同一个中继根下可能存着好几把密钥(每台主机一把)。
+        // 逐把试,第一把成功就不再重复列举;第一把失效时后面的还有机会,
+        // 而不是像以前那样整条发现链跟着 hosts[0] 一起死。
+        var succeededRoots: [String] = []
+        // [T-link-problem] 中继这一层的结论:列表拉成功 → 记下在线的机器名;失败 → 记下原因
+        // (同一个根下的每台机器是同一个问题:密钥被拒、中继连不上)。
+        var liveByRoot: [String: Set<String>] = [:]
+        var failureByRoot: [String: LeoLinkProblem] = [:]
+        for credential in RelayMachinesClient.credentials(from: GatewayPairing.relayCredentialCandidates(store)) {
+            if succeededRoots.contains(where: { RelayMachinesClient.sameApiRoot($0, credential.apiRoot) }) {
+                continue
+            }
+            let root = Self.rootKey(credential.apiRoot)
+            do {
+                let live = try await RelayMachinesClient.list(apiRoot: credential.apiRoot, key: credential.key)
+                succeededRoots.append(credential.apiRoot)
+                failureByRoot[root] = nil
+                liveByRoot[root] = Set(live.filter(\.online).map { $0.name.lowercased() })
+                store.upsertDiscovered(live, key: credential.key, apiRoot: credential.apiRoot)
+            } catch {
+                // 页面被关掉时请求会被取消,那不是连接问题。
+                if Task.isCancelled || LeoLinkProblem.isCancellation(error) { return }
+                // 同一个根下后面的密钥还有机会(上面的 key-fallback):全都失败才算这个根的问题,记第一个原因。
+                if failureByRoot[root] == nil {
+                    failureByRoot[root] = LeoLinkProblem.from(
+                        error: error, context: .init(.discovery, host: URL(string: credential.apiRoot)?.host))
+                }
+            }
+        }
+        for host in store.hosts {
+            // 编辑期间不做后台探测:探测回写会触发整页重算。
+            if editor.draft != nil { return }
+            let problem = await diagnose(host, liveByRoot: liveByRoot, failureByRoot: failureByRoot)
+            if Task.isCancelled { return }
+            reachable[host.id] = problem == nil
+            store.recordLinkProblem(problem, for: host.id)
+            if problem == nil { store.markSeen(id: host.id) }
+        }
+    }
+
+    /// 这台机器现在好不好,不好就是谁的问题。
+    /// 经中继的机器先看中继这一层:列表拉失败 = 同一个问题(密钥被拒 / 连不上);
+    /// 拉成功但它不在在线列表里 = 它没连着中继(原来的 /health 探测对中继机器只证明「中继在线」,
+    /// 机器睡着了也会显示在线)。其余走原来的 /health 探测。
+    private func diagnose(_ host: GatewayHost, liveByRoot: [String: Set<String>],
+                          failureByRoot: [String: LeoLinkProblem]) async -> LeoLinkProblem? {
+        if let root = RelayMachinesClient.apiRoot(fromHarnessURL: host.harnessURL) {
+            let key = Self.rootKey(root)
+            if let failure = failureByRoot[key] { return failure }
+            if let live = liveByRoot[key] {
+                let machine = Self.relayMachine(of: host)
+                if !live.contains(machine) && !live.contains(host.id.lowercased()) {
+                    return LeoLinkProblem.macOffline(machineName: host.name, detail: "不在中继的在线列表里: \(machine)")
+                }
+            }
+        }
+        return await GatewayHostStore.diagnose(host)
+    }
+
+    private static func rootKey(_ apiRoot: String) -> String {
+        RelayMachinesClient.normalizeApiRoot(apiRoot).lowercased()
+    }
+
+    /// harnessURL 里 `/m/` 之后的机器名(小写)。
+    private static func relayMachine(of host: GatewayHost) -> String {
+        guard let raw = host.harnessURL, let range = raw.range(of: "/m/", options: .backwards) else { return host.id.lowercased() }
+        return String(raw[range.upperBound...]).lowercased()
+    }
+}
+
+/// 扫码配对:设置页的「扫码添加」和问题块的「重新扫码」共用。
+/// 结果文案经 onResult 交给调用方显示(设置页用弹窗);paired == true 表示真的配上了,调用方该刷新。
+@MainActor
+enum GatewayPairing {
+    static func scan(store: GatewayHostStore? = nil,
+                     onResult: @escaping (_ message: String, _ paired: Bool) -> Void) {
+        let store = store ?? GatewayHostStore.shared
         CameraOffloadBridge.scanCode { data, error in
             Task { @MainActor in
                 if let error {
-                    scanMessage = error as String
+                    onResult(error as String, false)
                     return
                 }
                 let raw = (data?["payload"] as? String) ?? ""
                 if let directPair = DirectPairPayload.parse(raw) {
                     do {
                         let host = try await store.pairDirect(directPair, name: UIDevice.current.name)
-                        scanMessage = "已加入 \(host.name)"
-                        await refresh()
-                    } catch { scanMessage = "直连配对失败，请让 Mac 重新出示配对码。" }
+                        onResult("已加入 \(host.name)", true)
+                    } catch {
+                        // 配对码过期 / 无效 → 让 Mac 重新出示;连不上 → 说清是谁的问题(多半是 Tailscale)。
+                        onResult(LeoLinkProblem.from(
+                            error: error, context: .init(.pairing, host: URL(string: directPair.apiRoot)?.host)).message, false)
+                    }
                     return
                 }
                 guard let pair = RelayPairPayload.parse(raw) else {
-                    scanMessage = "不是本 App 的配对码。码里应是中继根和机器名。"
+                    onResult("不是本 App 的配对码。码里应是中继根和机器名。", false)
                     return
                 }
                 if let join = pair.join, !join.isEmpty {
@@ -255,53 +366,30 @@ struct GatewaySettingsView: View {
                         store.upsertDiscovered([
                             RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
                         ], key: joined.key, apiRoot: pair.apiRoot, explicit: true)
-                        scanMessage = "已加入 \(pair.machine)"
-                        Task { await refresh() }
+                        onResult("已加入 \(pair.machine)", true)
                     } catch {
-                        scanMessage = "短码已过期或无效，请让对端重新出示。"
+                        // 以前不论什么原因都说「短码已过期或无效」:没网、Tailscale 没开时这句话是错的。
+                        onResult(LeoLinkProblem.from(
+                            error: error, context: .init(.pairing, host: URL(string: pair.apiRoot)?.host)).message, false)
                     }
                     return
                 }
                 guard let credential = RelayMachinesClient.credential(
                     matching: pair.apiRoot,
-                    from: relayCredentialCandidates()
+                    from: relayCredentialCandidates(store)
                 ) else {
-                    scanMessage = "这是旧码。请让对端出示带短码的新配对码，或先粘贴中继密钥。"
+                    onResult("这是旧码。请让对端出示带短码的新配对码，或先粘贴中继密钥。", false)
                     return
                 }
                 store.upsertDiscovered([
                     RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
                 ], key: credential.key, apiRoot: credential.apiRoot, explicit: true)
-                scanMessage = "已加入 \(pair.machine)"
-                Task { await refresh() }
+                onResult("已加入 \(pair.machine)", true)
             }
         }
     }
 
-    private func refresh() async {
-        // [T-relay-key-fallback] 同一个中继根下可能存着好几把密钥(每台主机一把)。
-        // 逐把试,第一把成功就不再重复列举;第一把失效时后面的还有机会,
-        // 而不是像以前那样整条发现链跟着 hosts[0] 一起死。
-        var succeededRoots: [String] = []
-        for credential in RelayMachinesClient.credentials(from: relayCredentialCandidates()) {
-            if succeededRoots.contains(where: { RelayMachinesClient.sameApiRoot($0, credential.apiRoot) }) {
-                continue
-            }
-            if let live = try? await RelayMachinesClient.list(apiRoot: credential.apiRoot, key: credential.key) {
-                succeededRoots.append(credential.apiRoot)
-                store.upsertDiscovered(live, key: credential.key, apiRoot: credential.apiRoot)
-            }
-        }
-        for host in store.hosts {
-            // 编辑期间不做后台探测:探测回写会触发整页重算。
-            if editor.draft != nil { return }
-            let ok = await GatewayHostStore.probe(host)
-            reachable[host.id] = ok
-            if ok { store.markSeen(id: host.id) }
-        }
-    }
-
-    private func relayCredentialCandidates() -> [RelayCredentialCandidate] {
+    static func relayCredentialCandidates(_ store: GatewayHostStore) -> [RelayCredentialCandidate] {
         store.hosts.map { host in
             RelayCredentialCandidate(
                 harnessURL: host.harnessURL,
@@ -318,6 +406,8 @@ private struct QuickFleetSetupSheet: View {
     @State private var key = ""
     @State private var testing = false
     @State private var result: String?
+    /// [T-link-problem] 发现失败时:谁的问题 + 一个主按钮(替代原来那句「连不上中继…」)。
+    @State private var problem: LeoLinkProblem?
     @State private var copiedCommand = false
     @State private var discovered: [RelayDiscoveredMachine] = []
     private let apiRoot = LeoRelayConfig.apiRoot
@@ -371,26 +461,18 @@ private struct QuickFleetSetupSheet: View {
                 }
                 Section {
                     Button {
-                        testing = true
-                        Task {
-                            do {
-                                guard let apiRoot else { throw RelayDiscoveryError.badURL }
-                                let rows = try await RelayMachinesClient.list(apiRoot: apiRoot, key: key)
-                                discovered = rows
-                                result = rows.isEmpty
-                                    ? (fleet.isEmpty ? "中继已通，但现在没有在线机器。" : "中继已通，但现在没有在线机器。仍可一键填入预设设备。")
-                                    : "发现 \(rows.count) 台：\(rows.map(\.name).joined(separator: "、"))"
-                            } catch {
-                                discovered = []
-                                result = "连不上中继。若本机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
-                            }
-                            testing = false
-                        }
+                        discover()
                     } label: {
                         HStack { Text("从中继发现机器"); Spacer(); if testing { ProgressView() } }
                     }
-                    .disabled(apiRoot == nil || key.trimmingCharacters(in: .whitespaces).count < 16)
-                    if let result {
+                    .disabled(apiRoot == nil || testing || key.trimmingCharacters(in: .whitespaces).count < 16)
+                    if let problem {
+                        LeoLinkProblemView(problem: problem, isBusy: testing, onRetry: { discover() })
+                        // 原来这句提示保留:代理软件把 *.ts.net 拦了,表现和连不上中继一样。
+                        Text("若这台 iPhone 开着代理，把 *.ts.net 设为直连或暂时关闭再试。")
+                            .font(.caption)
+                            .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                    } else if let result {
                         Text(result).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                 }
@@ -411,10 +493,35 @@ private struct QuickFleetSetupSheet: View {
     }
 }
 
+extension QuickFleetSetupSheet {
+    fileprivate func discover() {
+        testing = true
+        problem = nil
+        Task {
+            do {
+                guard let apiRoot else { throw RelayDiscoveryError.badURL }
+                let rows = try await RelayMachinesClient.list(apiRoot: apiRoot, key: key)
+                discovered = rows
+                result = rows.isEmpty
+                    ? (fleet.isEmpty ? "中继已通，但现在没有在线机器。" : "中继已通，但现在没有在线机器。仍可一键填入预设设备。")
+                    : "发现 \(rows.count) 台：\(rows.map(\.name).joined(separator: "、"))"
+            } catch {
+                discovered = []
+                result = nil
+                problem = LeoLinkProblem.from(
+                    error: error, context: .init(.discovery, host: apiRoot.flatMap { URL(string: $0)?.host }))
+            }
+            testing = false
+        }
+    }
+}
+
 private struct GatewayHostRow: View {
     let host: GatewayHost
     let isReachable: Bool?
     var route: GatewayRouteStatus? = nil
+    /// [T-link-problem] 有问题时状态行写「谁的问题」,不再只有一句「连不上」。
+    var problem: LeoLinkProblem? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -467,7 +574,7 @@ private struct GatewayHostRow: View {
     private var statusText: String {
         switch isReachable {
         case .some(true): return String(localized: "在线")
-        case .some(false): return String(localized: "连不上")
+        case .some(false): return problem?.owner.blame ?? String(localized: "连不上")
         case .none: return String(localized: "检测中…")
         }
     }
@@ -531,6 +638,8 @@ private struct GatewayHostEditor: View {
     let onCancel: () -> Void
 
     @State private var testResult: String?
+    /// [T-link-problem] 测试失败时:谁的问题 + 一个主按钮(替代原来一行「连不上这台 Mac…」)。
+    @State private var testProblem: LeoLinkProblem?
     @State private var isTesting = false
 
     /// 只收 https:访问密钥挂在每个请求的 Authorization 头上,而本 app 开了
@@ -615,7 +724,9 @@ private struct GatewayHostEditor: View {
                         }
                     }
                     .disabled(!canTest || isTesting)
-                    if let testResult {
+                    if let testProblem {
+                        LeoLinkProblemView(problem: testProblem, isBusy: isTesting, onRetry: { Task { await test() } })
+                    } else if let testResult {
                         Text(testResult).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                 }
@@ -641,13 +752,16 @@ private struct GatewayHostEditor: View {
     private func test() async {
         isTesting = true
         defer { isTesting = false }
+        testResult = nil
+        testProblem = nil
         let host = draft.makeHost()
         // 优先测编码会话地址(主用途);没填才测引擎地址。
         let harnessProbe = host.harnessBase.map {
             GatewayHost(id: host.id, name: host.name, baseURL: $0.absoluteString)
         }
-        guard await GatewayHostStore.probe(harnessProbe ?? host) else {
-            testResult = "连不上这台 Mac。检查地址拼写,以及本机上的 Tailscale 是否已打开。"
+        // 连不上:说清是谁的问题(Tailscale 没开 / 网络 / 中继 / Mac 不在线),而不是一句笼统的「检查地址和 Tailscale」。
+        if let problem = await GatewayHostStore.diagnose(harnessProbe ?? host) {
+            testProblem = problem
             return
         }
         guard !draft.accessKey.isEmpty else {
@@ -656,7 +770,7 @@ private struct GatewayHostEditor: View {
         }
         let base = harnessProbe?.url ?? host.url
         guard let url = base else {
-            testResult = "地址无效。"
+            testProblem = LeoLinkProblem.from(error: GatewayError.badURL)
             return
         }
         let client = LeoAgentClient(baseURL: url, apiKey: draft.accessKey,
@@ -672,7 +786,8 @@ private struct GatewayHostEditor: View {
                 testResult = "连接成功(\(caps.platform))。"
             }
         } catch {
-            testResult = "密钥被拒绝或服务异常:\(error.localizedDescription)"
+            testProblem = LeoLinkProblem.from(
+                error: error, context: .init(.session, host: url.host, machineName: host.name))
         }
     }
 }
@@ -1004,7 +1119,9 @@ struct HarnessLauncherView: View {
     @State private var selected: HarnessKind?
     @State private var cwd = "~"
     @State private var prompt = ""
-    @State private var loadError: String?
+    /// [T-link-problem] 加载 CLI 列表失败:谁的问题 + 一个主按钮(替代原来一行红字)。
+    @State private var linkProblem: LeoLinkProblem?
+    @State private var pairMessage: String?
     @State private var isLoading = true
     @State private var liveSessions: [HarnessSessionSummary] = []
 
@@ -1059,7 +1176,7 @@ struct HarnessLauncherView: View {
             Section {
                 if isLoading {
                     HStack { ProgressView(); Text("正在检测装了哪些 CLI…").foregroundStyle(.secondary) }
-                } else if kinds.isEmpty {
+                } else if kinds.isEmpty && linkProblem == nil {
                     // 引擎也回 /v1/capabilities,只是没有 harnesses 字段——
                     // 这里为空通常是地址填成了引擎端口,不是真没装 CLI。
                     Text("在 \(host.name) 上没找到可控的编码 CLI。若那台 Mac 的 LeoAgent 服务在跑,检查「编码会话地址」是否填了 8647 端口。")
@@ -1081,8 +1198,17 @@ struct HarnessLauncherView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                if let loadError {
-                    Text(loadError).font(.system(size: 13)).foregroundStyle(.red)
+                if let linkProblem {
+                    LeoLinkProblemView(
+                        problem: linkProblem,
+                        isBusy: isLoading,
+                        onRetry: { Task { await load() } },
+                        onRescan: {
+                            GatewayPairing.scan { message, paired in
+                                if paired { Task { await load() } } else { pairMessage = message }
+                            }
+                        },
+                        onActed: { GatewayHostStore.shared.resumeLink(host.id) })
                 }
             } header: {
                 Text("选一个编码 CLI")
@@ -1121,21 +1247,8 @@ struct HarnessLauncherView: View {
         }
         .navigationTitle(Text("编码任务"))
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            do {
-                kinds = try await client.harnessKinds()
-                selected = kinds.first
-            } catch {
-                loadError = error.localizedDescription
-            }
-            isLoading = false
-            // 进行中会话列表:失败不挡住新建流程,静默降级。
-            if let sessions = try? await client.harnessSessions() {
-                liveSessions = sessions.filter {
-                    !["orphaned", "completed", "failed", "cancelled"].contains($0.status)
-                }
-            }
-        }
+        .task { await load() }
+        .pairingResultAlert($pairMessage)
         .refreshable {
             if let sessions = try? await client.harnessSessions() {
                 liveSessions = sessions.filter {
@@ -1154,6 +1267,46 @@ struct HarnessLauncherView: View {
         default: return status
         }
     }
+
+    private func load() async {
+        isLoading = true
+        linkProblem = nil
+        let store = GatewayHostStore.shared
+        do {
+            kinds = try await client.harnessKinds()
+            selected = kinds.first
+            store.recordLinkProblem(nil, for: host.id)
+        } catch {
+            if !LeoLinkProblem.isCancellation(error) {
+                let problem = LeoLinkProblem.from(
+                    error: error, context: .init(.session, host: client.harnessBaseURL?.host, machineName: host.name))
+                linkProblem = problem
+                // 要用户处理的问题同时让这台主机的后台轮询暂停(见 MacLiveSessionsStore)。
+                if problem.pausesAutoReconnect { store.recordLinkProblem(problem, for: host.id) }
+            }
+        }
+        isLoading = false
+        // 进行中会话列表:失败不挡住新建流程,静默降级。
+        if let sessions = try? await client.harnessSessions() {
+            liveSessions = sessions.filter {
+                !["orphaned", "completed", "failed", "cancelled"].contains($0.status)
+            }
+        }
+    }
+}
+
+/// 扫码结果弹窗:Mac 控制台和编码任务页的「重新扫码」共用。
+private extension View {
+    func pairingResultAlert(_ message: Binding<String?>) -> some View {
+        alert("扫码", isPresented: Binding(
+            get: { message.wrappedValue != nil },
+            set: { if !$0 { message.wrappedValue = nil } }
+        )) {
+            Button("好", role: .cancel) { message.wrappedValue = nil }
+        } message: {
+            Text(message.wrappedValue ?? "")
+        }
+    }
 }
 
 /// Live view of one coding CLI working on the Mac.
@@ -1170,6 +1323,7 @@ struct HarnessConsoleView: View {
     var onSessionCreated: (() -> Void)? = nil
     @State private var input = ""
     @State private var started = false
+    @State private var pairMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1235,6 +1389,23 @@ struct HarnessConsoleView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14).padding(.vertical, 4)
+            } else if let problem = driver.problem {
+                // [T-link-problem] 是谁的问题 + 一个主按钮。要用户处理的问题(密钥被拒、Mac 撤销授权…)
+                // 已经停了自动重连,点按钮才恢复;可重试的问题点「重试」立刻重连。
+                LeoLinkProblemView(
+                    problem: problem,
+                    onRetry: { driver.resumeAfterProblem() },
+                    onRescan: {
+                        GatewayPairing.scan { message, paired in
+                            if paired { driver.resumeAfterProblem() } else { pairMessage = message }
+                        }
+                    },
+                    // 主按钮不是「重试」的瞬时问题(例如「打开 Tailscale」):点下的同时接着重连,
+                    // 用户去处理的时候退避继续跑。要用户处理的问题等处理完(扫码成功)再恢复,
+                    // 免得白敲一次又停下、块闪一下;「重试」本身就是 resumeAfterProblem。
+                    onActed: (problem.pausesAutoReconnect || problem.primaryAction == .retry)
+                        ? nil : { driver.resumeAfterProblem() })
+                    .padding(.horizontal, 14).padding(.vertical, 4)
             } else if let err = driver.lastError {
                 Text(err)
                     .font(.caption).foregroundStyle(.red)
@@ -1286,6 +1457,7 @@ struct HarnessConsoleView: View {
             } else { driver.resumeIfNeeded() }
         }
         .onDisappear { driver.detach() }
+        .pairingResultAlert($pairMessage)
         // 建任务失败(Mac 离线、钥匙不对):把第一条指令放回输入框,改一下或直接再发,不会丢。
         .onChange(of: driver.status) { newStatus in
             if newStatus == "pending", input.isEmpty, !firstPrompt.isEmpty { input = firstPrompt }

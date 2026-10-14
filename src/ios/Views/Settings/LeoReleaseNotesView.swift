@@ -12,6 +12,19 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.69.0",
+            date: "2026-10-14",
+            title: "更稳、更快、代码更好看",
+            highlights: [
+                "修复：Claude Sonnet 5.5、Opus 5.5 这类模型把思考调到「关」时不再被拒绝，自动标题也恢复正常。",
+                "终端内核改为用到时才启动，不再在每次进入聊天、回到前台时卡一下；失效的文件夹授权不再每次启动卡住几秒，并提示重新授权。",
+                "超过 2 万字的长回复先折叠，点「展开全文」分页阅读，不再一打开就卡死。",
+                "代码块按语法着色，配色改成和界面一致的中性灰青绿。",
+                "连接 Mac 失败时直接告诉你是谁的问题、该点哪个按钮；无法自动恢复的错误不再在后台反复重连。",
+                "日志不再记录助手回复原文，重复刷屏的同步日志大幅减少。"
+            ]
+        ),
+        LeoRelease(
             version: "1.68.0",
             date: "2026-10-14",
             title: "一键把服务商带到 Mac",

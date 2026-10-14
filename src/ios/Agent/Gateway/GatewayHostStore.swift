@@ -13,6 +13,7 @@
 
 import Foundation
 import Security
+import UIKit
 
 struct GatewayHost: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString.lowercased()
@@ -66,6 +67,8 @@ final class GatewayHostStore: ObservableObject {
 
     @Published private(set) var hosts: [GatewayHost]
     @Published private(set) var routeStatuses: [String: GatewayRouteStatus] = [:]
+    /// [T-link-problem] 每台主机当前的连接问题,以及哪些主机的自动重连 / 轮询已暂停(等用户点主按钮)。
+    @Published private(set) var linkBook = LeoLinkProblemBook()
     /// Built clients live here, not in a view body: `client(for:)` does a
     /// synchronous Keychain read and spins up a URLSession, and SwiftUI would
     /// re-run both on every redraw of the host list.
@@ -77,6 +80,11 @@ final class GatewayHostStore: ObservableObject {
             hosts = decoded
         } else {
             hosts = []
+        }
+        // [T-link-problem] 回到前台也算用户回来了:解除所有主机的暂停(见 LeoLinkProblemBook.resumeAll)。
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.resumeAllLinks() }
         }
     }
 
@@ -117,6 +125,8 @@ final class GatewayHostStore: ObservableObject {
             // 机器多时下拉手感直接被拖住,而绝大多数刷新密钥根本没变。
             if Self.accessKey(hostId: id) != Self.normalizedAccessKey(key) {
                 Self.saveAccessKey(key, hostId: id)
+                // 换了密钥(重新配对):之前「密钥被拒」之类的结论作废,轮询重新开始。
+                recordLinkProblem(nil, for: id)
             }
             if let index = hosts.firstIndex(where: { $0.id == id }) {
                 let before = hosts[index]
@@ -196,6 +206,7 @@ final class GatewayHostStore: ObservableObject {
             hosts.append(saved)
         }
         clients.removeValue(forKey: host.id)   // address or key may have changed
+        recordLinkProblem(nil, for: host.id)   // 地址或密钥可能改了:旧的连接结论不再可信
         persist()
         PushRegistrar.shared.reregisterIfPossible()
     }
@@ -205,6 +216,7 @@ final class GatewayHostStore: ObservableObject {
         if let deviceId = hosts.first(where: { $0.id == id })?.device?.deviceId { deletedIds.insert(deviceId) }
         hosts.removeAll { $0.id == id }
         clients.removeValue(forKey: id)
+        recordLinkProblem(nil, for: id)
         Self.deleteKey(hostId: id)
         Self.deleteKey(hostId: id + ".direct")
         persist()
@@ -266,7 +278,36 @@ final class GatewayHostStore: ObservableObject {
     func markSeen(id: String) {
         guard let index = hosts.firstIndex(where: { $0.id == id }) else { return }
         hosts[index].lastSeenAt = Date()
+        recordLinkProblem(nil, for: id)   // 刚联系上:有问题也已经好了
         persist()
+    }
+
+    // MARK: - [T-link-problem] 连接问题与暂停
+
+    func linkProblem(for hostId: String) -> LeoLinkProblem? { linkBook.problem(for: hostId) }
+
+    /// 要用户处理的问题(密钥被拒、Mac 撤销授权…)会让这台主机的自动重连 / 轮询暂停。
+    func isLinkPaused(_ hostId: String) -> Bool { linkBook.isPaused(hostId) }
+
+    /// 记下 / 清掉这台主机的连接问题。轮询和探测每次都会调,所以只在真的变了才发布,
+    /// 否则观察它的列表会跟着每次探测重绘。
+    func recordLinkProblem(_ problem: LeoLinkProblem?, for hostId: String) {
+        var next = linkBook
+        next.record(problem, for: hostId)
+        if next != linkBook { linkBook = next }
+    }
+
+    /// 用户点了主按钮:解除暂停。问题继续显示,直到下一次探测给出结论。
+    func resumeLink(_ hostId: String) {
+        var next = linkBook
+        next.resume(hostId)
+        if next != linkBook { linkBook = next }
+    }
+
+    func resumeAllLinks() {
+        var next = linkBook
+        next.resumeAll()
+        if next != linkBook { linkBook = next }
     }
 
     private func persist() {
@@ -382,25 +423,51 @@ final class GatewayHostStore: ObservableObject {
     /// failure here means "unreachable", not "wrong key" — the two need
     /// different fixes and the UI should not conflate them.
     nonisolated static func probe(_ host: GatewayHost) async -> Bool {
+        await diagnose(host) == nil
+    }
+
+    /// 同一次探测,失败时带回「谁的问题 + 一个按钮」;nil = 连得通。
+    /// 判定与 probe 完全一致(probe 就是 diagnose == nil),只是不再把原因丢掉。
+    nonisolated static func diagnose(_ host: GatewayHost) async -> LeoLinkProblem? {
         // 引擎地址可留空(只控编码 CLI 的主机):/health 两个服务都有,
         // 用哪个可用的地址探测都成立。
         let engineValid = host.url.flatMap { $0.host != nil ? $0 : nil }
-        guard let base = engineValid ?? host.harnessBase else { return false }
+        let context = { (base: URL?) in
+            LeoLinkProblem.Context(.session, host: base?.host, machineName: host.name)
+        }
+        guard let base = engineValid ?? host.harnessBase else {
+            return LeoLinkProblem.from(error: GatewayError.badURL, context: context(nil))
+        }
         // relay 地址自带路径前缀,绝对路径 resolve 会把它吞掉——拼接。
         var parts = URLComponents(url: base, resolvingAgainstBaseURL: false)
         let basePath = base.path.hasSuffix("/") ? String(base.path.dropLast()) : base.path
         parts?.path = basePath + "/health"
-        guard let url = parts?.url else { return false }
+        guard let url = parts?.url else {
+            return LeoLinkProblem.from(error: GatewayError.badURL, context: context(base))
+        }
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
-              let http = response as? HTTPURLResponse else { return false }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            return LeoLinkProblem.from(error: error, context: context(base))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            return LeoLinkProblem.from(error: GatewayError.malformedResponse("not an HTTP response"), context: context(base))
+        }
         // 401/403 = 服务在、只是这条路径要钥匙(relay 的机器路径就是这样)。
         // 可达性问的是"那头有没有人",不是"钥匙对不对"。
-        if http.statusCode == 401 || http.statusCode == 403 { return true }
-        guard http.statusCode == 200,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return false }
-        return (obj["status"] as? String) == "ok"
+        if http.statusCode == 401 || http.statusCode == 403 { return nil }
+        guard http.statusCode == 200 else {
+            return LeoLinkProblem.from(error: GatewayError.http(status: http.statusCode, message: nil), context: context(base))
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (obj["status"] as? String) == "ok"
+        else {
+            return LeoLinkProblem.from(error: GatewayError.malformedResponse("health payload"), context: context(base))
+        }
+        return nil
     }
 }

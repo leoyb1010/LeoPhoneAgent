@@ -60,8 +60,10 @@ actor SessionFileChangeTracker {
         minisBaseURL: URL
     ) {
         var accepted = 0, ignored = 0, upserts = 0, deletes = 0
+        var noiseIgnored = 0
         var firstSid: String? = nil
         var firstRel: String? = nil
+        // 第一个「值得看」的被忽略路径:/dev/null 这类从设计上就不会同步的路径不算,不然 sample 永远是它。
         var firstIgnoredPath: String? = nil
         for (sid, rawPath, opCode, _) in events {
             totalRecorded &+= 1
@@ -70,7 +72,11 @@ actor SessionFileChangeTracker {
             ) else {
                 totalIgnored &+= 1
                 ignored += 1
-                if firstIgnoredPath == nil { firstIgnoredPath = rawPath }
+                if IgnoredFilePathNoise.isNoise(rawPath) {
+                    noiseIgnored += 1
+                } else if firstIgnoredPath == nil {
+                    firstIgnoredPath = rawPath
+                }
                 continue
             }
             let isDelete = (opCode == 1)
@@ -87,9 +93,15 @@ actor SessionFileChangeTracker {
             let sample = "\(firstSid?.prefix(8) ?? "?"):\(firstRel ?? "?")"
             logger.info("[SessionFileTracker] batch recv: events=\(events.count) accepted=\(accepted) ignored=\(ignored) upsert=\(upserts) delete=\(deletes) sample=\(sample) pending_sessions=\(self.pending.count)")
         } else if ignored > 0 {
-            // Bumped to info + sample so we can diagnose why otherwise
-            // valid-looking shell writes never reach the SessionFile pipeline.
-            logger.info("[SessionFileTracker] batch recv: events=\(events.count) all ignored (paths outside session subdirs) sample=\(firstIgnoredPath ?? "?")")
+            if noiseIgnored == ignored {
+                // 整批都是 /dev/null 之类不可能同步的路径(每条 `> /dev/null` 的命令一批;真机 994 批,
+                // 抽样全是它):INFO 只是噪声,降到 verbose,复现问题时开 verbose 仍能看到。
+                logger.verbose("[SessionFileTracker] batch recv: events=\(events.count) all ignored (never-synced paths such as /dev/null)")
+            } else {
+                // Bumped to info + sample so we can diagnose why otherwise
+                // valid-looking shell writes never reach the SessionFile pipeline.
+                logger.info("[SessionFileTracker] batch recv: events=\(events.count) all ignored (paths outside session subdirs) sample=\(firstIgnoredPath ?? "?")")
+            }
         }
     }
 

@@ -439,6 +439,27 @@ fileprivate final class MarkdownNSRenderer {
     private var codeBlockIndex = 0
     private var tableIndex = 0
 
+    /// [T-codeblock-syntax] 正在渲染的源码是否结束在一个还没闭合的围栏代码块里（流式消息的最后一个围栏还开着）。
+    /// 由 `updateUIView` 在每次 render 前写入。文档里只有最后一个代码块可能没闭合。
+    var streamingTailFenceOpen = false
+
+    /// 给代码块附件打上 `isFenceOpen`：只有文档里最后一个代码块、且源码确实结束在未闭合围栏内才为 true。
+    /// 由 true 变回 false（围栏闭合，或流式结束）会让附件通知视图着色一次，见 `CodeBlockAttachment.isFenceOpen`。
+    private func markStreamingTailFence() {
+        let last = codeBlockIndex - 1
+        for idx in 0..<codeBlockIndex {
+            codeBlockAttachmentCache[idx]?.isFenceOpen = streamingTailFenceOpen && idx == last
+        }
+    }
+
+    /// 回复已不再流式：即使文本从没闭合过围栏（被截断的回复），也不再有「开着的围栏」。
+    /// 没有开着的围栏时是 O(1)，所以可以放在 updateUIView 的热路径上。
+    func settleStreamingFence() {
+        guard streamingTailFenceOpen else { return }
+        streamingTailFenceOpen = false
+        markStreamingTailFence()
+    }
+
     private struct RenderedBlock {
         let attributed: NSAttributedString
         let topMargin: CGFloat?
@@ -461,6 +482,7 @@ fileprivate final class MarkdownNSRenderer {
         let tableCountBefore = tableAttachmentCache.count
 
         let result = renderBlockSequence(blocks, listDepth: 0, quoteDepth: 0, tightSpacing: false).attributed
+        markStreamingTailFence()
         let elapsed = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
         // Only log noisy cases to keep signal-to-noise high: slow renders, or
@@ -1348,6 +1370,19 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// Left inset for blockquote nesting (matches text indent).
     var leftInset: CGFloat { CGFloat(quoteDepth) * 13 }
 
+    /// [T-codeblock-syntax] 围栏还没闭合（流式消息里最后一个代码块）。渲染器每轮 render 后写入。
+    /// 由 true 变 false（结束围栏到了）时立刻通知已绑定的视图着色一次：此时内容哈希没变，
+    /// 附件对象被原样复用，makeView / updateExistingView 都不会再被调用，只能靠这个通知。
+    var isFenceOpen = false {
+        didSet {
+            if oldValue, !isFenceOpen { highlightBinder?.fenceDidClose() }
+        }
+    }
+
+    /// [T-codeblock-syntax] 本附件当前驱动的那个视图的着色状态（makeView / updateExistingView 时写入）。
+    /// 弱引用：它的生命周期归代码文本视图。
+    private weak var highlightBinder: CodeSyntaxBinder?
+
     init(code: String, language: String?, theme: SelectableMarkdownTheme, quoteDepth: Int = 0) {
         self.code = code
         self.language = language
@@ -1383,19 +1418,25 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// Cached content height from sizeThatFits, keyed by code hash + width.
     private var cachedContentHeight: (hash: Int, height: CGFloat)?
 
+    /// [T-codeblock-syntax] 代码文本的字体 + 段落样式。测量高度和实际显示共用这一份：
+    /// 语法着色只在它上面加 `.foregroundColor`，所以不可能改变测量出来的高度。
+    private static func codeTextAttributes(theme: SelectableMarkdownTheme) -> [NSAttributedString.Key: Any] {
+        let codeStyle = NSMutableParagraphStyle()
+        codeStyle.lineSpacing = 4
+        codeStyle.lineBreakMode = .byClipping
+        return [
+            .font: theme.codeBlockFont,
+            .paragraphStyle: codeStyle,
+        ]
+    }
+
     /// Measure actual code text height using the same approach as makeView.
     private func measureCodeHeight() -> CGFloat {
         let codeHash = code.hashValue
         if let cached = cachedContentHeight, cached.hash == codeHash {
             return cached.height
         }
-        let codeStyle = NSMutableParagraphStyle()
-        codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
-        let attrStr = NSAttributedString(string: code, attributes: [
-            .font: theme.codeBlockFont,
-            .paragraphStyle: codeStyle,
-        ])
+        let attrStr = NSAttributedString(string: code, attributes: Self.codeTextAttributes(theme: theme))
         let tv = UITextView()
         tv.isScrollEnabled = false
         tv.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
@@ -1451,6 +1492,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         let container = UIView()
         container.backgroundColor = theme.codeBlockBackground
         container.layer.cornerRadius = theme.codeBlockCornerRadius
+        container.layer.cornerCurve = .continuous
         container.clipsToBounds = true
 
         var topOffset: CGFloat = 12
@@ -1460,7 +1502,8 @@ final class CodeBlockAttachment: NSTextAttachment {
             let langLabel = UILabel()
             langLabel.text = language.lowercased()
             langLabel.font = .systemFont(ofSize: 11, weight: .medium)
-            langLabel.textColor = .white.withAlphaComponent(0.4)
+            // [T-codeblock-leo-theme] 原来是写死的半透明白（为旧的纯黑底做的），放到浅色中性底上会看不见。
+            langLabel.textColor = theme.codeBlockChromeColor
             langLabel.frame = CGRect(x: 12, y: 8, width: contentWidth - 60, height: 16)
             container.addSubview(langLabel)
             topOffset = 28
@@ -1474,7 +1517,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         scrollView.alwaysBounceVertical = true
         scrollView.clipsToBounds = true
 
-        let codeTextView = UITextView()
+        let codeTextView = CodeSyntaxTextView()
         codeTextView.isEditable = false
         codeTextView.isSelectable = true
         codeTextView.isScrollEnabled = false // scrollView handles scrolling
@@ -1483,15 +1526,17 @@ final class CodeBlockAttachment: NSTextAttachment {
         codeTextView.textContainer.lineFragmentPadding = 0
         codeTextView.textContainer.lineBreakMode = .byClipping
 
-        let codeStyle = NSMutableParagraphStyle()
-        codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
-        let codeAttr = NSAttributedString(string: code, attributes: [
-            .font: theme.codeBlockFont,
-            .foregroundColor: theme.codeBlockTextColor,
-            .paragraphStyle: codeStyle,
-        ])
-        codeTextView.attributedText = codeAttr
+        // [T-codeblock-syntax] 缓存里已有着色就当场带着颜色（第一帧之前，不闪）；否则先显示纯文本，
+        // 结果好了由着色器回填——只动 `.foregroundColor`，所以下面测出来的尺寸不会变。
+        highlightBinder = codeTextView.syntaxBinder
+        codeTextView.attributedText = codeTextView.syntaxBinder.makeAttributedText(
+            code: code,
+            language: language,
+            theme: theme,
+            isFenceOpen: isFenceOpen,
+            baseAttributes: Self.codeTextAttributes(theme: theme),
+            for: codeTextView
+        )
 
         // Measure content size (unconstrained width)
         let fitting = codeTextView.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
@@ -1525,7 +1570,9 @@ final class CodeBlockAttachment: NSTextAttachment {
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 9, weight: .medium)
         let copyButton = UIButton(type: .system)
         copyButton.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-        copyButton.tintColor = .white.withAlphaComponent(0.5)
+        // [T-codeblock-leo-theme] 用主题的次要色，不再写死半透明白。
+        let chromeColor = theme.codeBlockChromeColor
+        copyButton.tintColor = chromeColor
         copyButton.frame = CGRect(x: contentWidth - 44, y: 0, width: 44, height: 44)
         let performCopy: () -> Void = { [weak codeTextView, weak copyButton] in
             // Read directly from the UITextView so we always copy the latest
@@ -1535,7 +1582,7 @@ final class CodeBlockAttachment: NSTextAttachment {
             copyButton?.tintColor = .systemGreen
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 copyButton?.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-                copyButton?.tintColor = .white.withAlphaComponent(0.5)
+                copyButton?.tintColor = chromeColor
             }
         }
         copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
@@ -1568,17 +1615,20 @@ final class CodeBlockAttachment: NSTextAttachment {
     func updateExistingView(_ wrapper: UIView) {
         guard let container = wrapper.subviews.first else { return }
         guard let scrollView = container.subviews.first(where: { $0 is UIScrollView }) as? UIScrollView else { return }
-        guard let codeTextView = scrollView.subviews.first(where: { $0 is UITextView }) as? UITextView else { return }
+        guard let codeTextView = scrollView.subviews.first(where: { $0 is CodeSyntaxTextView }) as? CodeSyntaxTextView else { return }
 
-        let codeStyle = NSMutableParagraphStyle()
-        codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
-        let codeAttr = NSAttributedString(string: code, attributes: [
-            .font: theme.codeBlockFont,
-            .foregroundColor: theme.codeBlockTextColor,
-            .paragraphStyle: codeStyle,
-        ])
-        codeTextView.attributedText = codeAttr
+        // [T-codeblock-syntax] 流式时每次 flush 都会重建文本。着色器把上一轮的着色原样套到变长后的文本上
+        // （整块不会闪回单色），并控制下一次后台高亮的节奏：围栏没闭合时最多每 700ms 一次，
+        // 超过 8K 字符则等围栏闭合后再着色。
+        highlightBinder = codeTextView.syntaxBinder
+        codeTextView.attributedText = codeTextView.syntaxBinder.makeAttributedText(
+            code: code,
+            language: language,
+            theme: theme,
+            isFenceOpen: isFenceOpen,
+            baseAttributes: Self.codeTextAttributes(theme: theme),
+            for: codeTextView
+        )
 
         let fitting = codeTextView.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
         codeTextView.frame.size = fitting
@@ -6766,6 +6816,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
         let n = rendererCache.count
         rendererCache.removeAll()
         rendererLRU.removeAll()
+        // [T-codeblock-syntax] 代码块高亮缓存同样是可重建的缓存，内存告警时一并清掉（下次显示时后台重算）。
+        LeoCodeHighlighter.shared.removeAll()
         return n
     }
 
@@ -6858,6 +6910,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         if _curW > 1 {
             context.coordinator.lastRenderedWidth = _curW
         }
+        // [T-codeblock-syntax] 回复结束但没有新文本：模型没闭合的围栏到此为止，补着色一次
+        // （这种情况不会触发重新渲染，所以要在这里通知）。
+        if !isStreaming { context.coordinator.renderer.settleStreamingFence() }
         // [T-stream-table-tail] A reply can finish without new text (the last
         // flush already carried it); the plain tail still has to become a table row.
         let tailNeedsFinalRender = context.coordinator.lastHadPlainSuffix && !isStreaming
@@ -7104,6 +7159,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
         } else {
             renderer.messageId = messageId
             renderer.blockId = blockId
+            // [T-codeblock-syntax] 最后一个围栏是否还开着（决定流式着色的节奏；
+            // cmark 不给这个标志，见 CodeSyntaxFence.swift）
+            renderer.streamingTailFenceOpen = isStreaming && MarkdownFenceTracker.endsInsideOpenFence(_splitForUpdate.prefix)
             let renderedBody = autoreleasepool {
                 renderer.render(blocks: content.blocks)
             }

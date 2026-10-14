@@ -341,9 +341,6 @@ class ISHTerminalViewModel: ObservableObject {
         guard !isShellStarted else { return }
         isShellStarted = true
 
-        let totalStart = CFAbsoluteTimeGetCurrent()
-        var stepStart = totalStart
-
         // [T-rootfs-reset-terminal-crash] If the rootfs was reset while the
         // kernel was already booted this session, the kernel's fakefs is mounted
         // against a deleted data/ + meta.db tree. It cannot be re-mounted or
@@ -361,54 +358,55 @@ class ISHTerminalViewModel: ObservableObject {
             return
         }
 
-        // Boot kernel if needed
-        if !ISHKernel.shared.isBooted {
-            do {
-                stepStart = CFAbsoluteTimeGetCurrent()
-                try RootfsManager.shared.installIfNeeded()
-                logger.info("[StartShell] installIfNeeded: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
-            } catch {
-                let msg = "Failed to install rootfs: \(error.localizedDescription)\r\n"
-                if let data = msg.data(using: .utf8) {
-                    emulator.feed(data)
-                }
-                return
-            }
+        // [T-kernel-lazy-boot] 启动内核、挂载会话目录都改成 async 等待,主线程不再被阻塞:
+        // 以前这里在 onAppear 里同步装 rootfs + boot + 铺覆盖层,还用信号量在主线程上硬等
+        // mountForSession。现在 await 期间主线程是空的,终端先出现,shell 随后起。
+        Task { @MainActor [weak self] in
+            await self?.bootKernelAndLaunchShell(sessionId: sessionId, initCommand: initCommand)
+        }
+    }
 
-            stepStart = CFAbsoluteTimeGetCurrent()
-            let rootPath = RootfsManager.shared.rootfsPath.path
-            let err = ISHKernel.shared.boot(withRootPath: rootPath)
-            logger.info("[StartShell] boot: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
-            if err < 0 {
-                let msg = "Failed to boot kernel: \(err)\r\n"
-                if let data = msg.data(using: .utf8) {
-                    emulator.feed(data)
-                }
-                return
-            }
-        } else {
-            logger.info("[StartShell] kernel already booted, skipping install+boot")
+    @MainActor
+    private func bootKernelAndLaunchShell(sessionId: String?, initCommand: String?) async {
+        let totalStart = CFAbsoluteTimeGetCurrent()
+        var stepStart = totalStart
+
+        // 内核通常不到 300 ms 就起来了:超过这个时间才在终端里亮出「启动中」,免得一闪而过;
+        // 起来之后再把这一行擦掉(返回值:有没有亮过)。
+        let statusLine = Task { @MainActor [weak self] () -> Bool in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled, let self else { return false }
+            let text = "\u{1B}[2m" + String(localized: "Booting Kernel") + "…\u{1B}[0m"
+            self.emulator.feed(Data(text.utf8))
+            return true
         }
 
-        stepStart = CFAbsoluteTimeGetCurrent()
-        RootfsManager.shared.applyDefaultMountOverlay()
-        logger.info("[StartShell] applyDefaultMountOverlay: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
-
-        Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }
+        do {
+            try await KernelBootManager.shared.ensureKernelBooted(reason: "terminal")
+        } catch {
+            statusLine.cancel()
+            _ = await statusLine.value
+            // 失败可重试:下次终端再出现时重新来一遍(以前失败后这个 VM 就再也不会重试)。
+            isShellStarted = false
+            let msg = "\r\nFailed to boot kernel: \(error.localizedDescription)\r\n"
+            if let data = msg.data(using: .utf8) {
+                emulator.feed(data)
+            }
+            return
+        }
+        statusLine.cancel()
+        if await statusLine.value {
+            emulator.feed(Data("\r\u{1B}[2K".utf8))
+        }
+        logger.info("[StartShell] ensureKernelBooted: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
 
         // Mount /var/minis/* for this session BEFORE starting the shell.
-        // We must do this synchronously before executeCommand so the shell sees the mounts.
-        // Use Task.detached to avoid inheriting main actor isolation (which would deadlock
-        // the semaphore since .onAppear runs on the main actor).
+        // The shell must see the mounts, so wait for mountForSession — but wait with `await`
+        // (the old code parked the main thread on a semaphore here).
         if let sid = sessionId {
             stepStart = CFAbsoluteTimeGetCurrent()
             print("[ISHTerminal] Mounting /var/minis for session \(sid) before shell start")
-            let semaphore = DispatchSemaphore(value: 0)
-            Task.detached {
-                await ISHExecutionCoordinator.shared.mountForSession(sid)
-                semaphore.signal()
-            }
-            semaphore.wait()
+            await ISHExecutionCoordinator.shared.mountForSession(sid)
             logger.info("[StartShell] mountForSession: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
         }
 
@@ -427,11 +425,20 @@ class ISHTerminalViewModel: ObservableObject {
         let err = ISHKernel.shared.executeCommand(["/bin/sh", "-l"])
         logger.info("[StartShell] executeCommand(/bin/sh -l): \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - stepStart) * 1000))ms")
         if err < 0 {
+            isShellStarted = false
             let msg = "Failed to start shell: \(err)\r\n"
             if let data = msg.data(using: .utf8) {
                 emulator.feed(data)
             }
             return
+        }
+        isShellLaunched = true
+        // executeCommand 在后台线程里才建 PTY,尺寸要等 PTY 存在后才设得上。启动变成异步之后,
+        // 画布的第一次 onResize 一定早于 PTY,那次尺寸会被丢掉 —— 这里按记下的尺寸补发,隔一会儿再补一次兜底。
+        for delay in [0.0, 0.1, 0.4] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.applyGridSizeToKernel()
+            }
         }
 
         logger.info("[StartShell] TOTAL: \(String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - totalStart) * 1000))ms (sessionId=\(sessionId ?? "nil"))")
@@ -459,6 +466,16 @@ class ISHTerminalViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// 终端当前的列 / 行数(画布量出来的);shell 起来之前先记着。
+    private var lastGridSize: (cols: Int, rows: Int)?
+    /// `executeCommand` 已经成功发起。之前的 `handleResize` 没有 PTY 可设,只记尺寸。
+    private var isShellLaunched = false
+
+    private func applyGridSizeToKernel() {
+        guard let size = lastGridSize else { return }
+        ISHKernel.shared.setTerminalSize(Int32(size.cols), rows: Int32(size.rows))
     }
 
     /// Serial queue for sending input to the kernel TTY.
@@ -489,6 +506,9 @@ class ISHTerminalViewModel: ObservableObject {
 
     func handleResize(cols: Int, rows: Int) {
         emulator.resize(cols: cols, rows: rows)
+        lastGridSize = (cols, rows)
+        // shell 还没起来(内核启动是异步的)就没有 PTY 可设:尺寸先记着,起来后由 startShell 补发。
+        guard isShellLaunched else { return }
         ISHKernel.shared.setTerminalSize(Int32(cols), rows: Int32(rows))
     }
 }

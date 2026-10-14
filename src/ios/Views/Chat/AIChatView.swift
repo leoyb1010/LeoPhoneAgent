@@ -1205,7 +1205,12 @@ struct AIChatView: View {
             vm.initialGroupId = initialGroupId
             vm.initialEntryKey = initialEntryKey
             if let sessionId { AIChatViewModel.activeSessionId = sessionId }
-            vm.ensureKernelBooted()
+            // [T-kernel-lazy-boot] 聊天页出现不再启动内核(以前每次 onAppear 都调一遍,冷启动、回前台、
+            // 后台拉起的 UI 也各起一遍,启动本身还同步跑在主线程)。内核只在第一次真的要用时才起:
+            // 发送 / 重试 / 继续(AIChatViewModel.ensureKernelBooted)、终端、能力自检。
+            // 这里只在全新安装时,在后台把 rootfs 解包做掉,免得第一次发送卡在整屏「Booting Kernel」上好几秒;
+            // 平时(已安装)它只是后台一次检查,不启动内核。
+            KernelBootManager.shared.prewarmRootfsInstallIfNeeded()
             if let sessionId {
                 if cached.isNew || (vm.messages.isEmpty && !vm.isLoadingSession) {
                     // Load session if: (a) VM is freshly created, or (b) cache hit but messages

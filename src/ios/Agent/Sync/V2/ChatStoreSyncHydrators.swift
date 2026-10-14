@@ -18,6 +18,35 @@ enum ChatStoreSyncHydrators {
 
     private static var artifactChangeObserver: NSObjectProtocol?
 
+    // MARK: - 「最近在本机删除」SKIP 日志去重
+
+    /// 云端那份旧副本每轮拉取都会被带回来,每次都被本地墓碑拦下,日志第一次之后不再提供新信息:
+    /// 真机 4 天里同一批已删除的模型条目产生了 10,716 行(占全部日志 24%),最多的一个 5,774 次。
+    /// 同一个 id 本进程只记第一行,之后只累计;累计满 500 次,或这一轮拉取结束(静默 3 秒)时出一行汇总。
+    /// 墓碑本身(`deleted_record_tombstones`)与这里的拦截逻辑一字未动,只是日志变少。
+    private static var recentlyDeletedSkips = RepeatedLogSummarizer(summaryEvery: 500, maxFirstLines: 20)
+    private static var recentlyDeletedSkipFlush: Task<Void, Never>?
+
+    /// - Parameters:
+    ///   - kind: 合并函数名,和 id 一起作去重 key。
+    ///   - id: 与原日志里显示的一致(同一个显示串视为同一条)。
+    ///   - firstLine: 第一次出现时原样记的那一行(autoclosure:被压掉的几千次不拼字符串)。
+    private static func noteRecentlyDeletedSkip(kind: String, id: String, firstLine: @autoclosure () -> String) {
+        let note = recentlyDeletedSkips.note("\(kind):\(id)")
+        if note.isFirst { logger.info(firstLine()) }
+        if let summary = note.summary {
+            logger.info("[v3] SKIP (recently deleted locally) repeats suppressed: \(summary.text)")
+        }
+        guard recentlyDeletedSkips.pendingCount > 0, recentlyDeletedSkipFlush == nil else { return }
+        recentlyDeletedSkipFlush = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            recentlyDeletedSkipFlush = nil
+            if let summary = recentlyDeletedSkips.drain() {
+                logger.info("[v3] SKIP (recently deleted locally) repeats suppressed: \(summary.text)")
+            }
+        }
+    }
+
     static func registerAll() async {
         let h = SyncCoreHydrators.shared
 
@@ -733,7 +762,8 @@ enum ChatStoreSyncHydrators {
         // before the cloud delete lands; without this check the import path's
         // "doesn't exist locally → always apply" branch would resurrect it.
         if await ChatStore.shared.isRecentlyDeletedRecord(type: "Skill", id: id, remoteUpdatedAt: updatedAt) {
-            logger.info("[SyncCore] mergeSkill SKIP (recently deleted locally): id=\(id.prefix(8))")
+            noteRecentlyDeletedSkip(kind: "mergeSkill", id: String(id.prefix(8)),
+                firstLine: "[SyncCore] mergeSkill SKIP (recently deleted locally): id=\(id.prefix(8))")
             return
         }
         let installedAt = dateField(record, "installedAt") ?? Date()
@@ -932,7 +962,8 @@ enum ChatStoreSyncHydrators {
         // a just-deleted server re-fetched by fetchRecentV2 before the cloud
         // delete lands must not resurrect.
         if await ChatStore.shared.isRecentlyDeletedRecord(type: "MCPServerItem", id: name, remoteUpdatedAt: updatedAt) {
-            logger.info("[SyncCore] mergeMCPServerItem SKIP (recently deleted locally): '\(name)'")
+            noteRecentlyDeletedSkip(kind: "mergeMCPServerItem", id: name,
+                firstLine: "[SyncCore] mergeMCPServerItem SKIP (recently deleted locally): '\(name)'")
             return
         }
         // [T-icloud-local-edit-clobber] While this server has a pending local
@@ -1040,7 +1071,8 @@ enum ChatStoreSyncHydrators {
         // just-deleted variable re-fetched by fetchRecentV2 before the cloud
         // delete lands would resurrect without this check.
         if await ChatStore.shared.isRecentlyDeletedRecord(type: "EnvVarItem", id: id, remoteUpdatedAt: updatedAt) {
-            logger.info("[SyncCore] mergeEnvVarItem SKIP (recently deleted locally): id=\(id.prefix(8))")
+            noteRecentlyDeletedSkip(kind: "mergeEnvVarItem", id: String(id.prefix(8)),
+                firstLine: "[SyncCore] mergeEnvVarItem SKIP (recently deleted locally): id=\(id.prefix(8))")
             return
         }
         // [T-icloud-local-edit-clobber] In-flight local edit guard.
@@ -1418,7 +1450,8 @@ enum ChatStoreSyncHydrators {
         if await ChatStore.shared.isRecentlyDeletedRecord(
             type: "ProviderInstanceV3", id: id,
             remoteUpdatedAt: Date(timeIntervalSince1970: updatedAt)) {
-            logger.info("[v3] mergeProviderInstanceV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
+            noteRecentlyDeletedSkip(kind: "mergeProviderInstanceV3", id: String(id.prefix(8)),
+                firstLine: "[v3] mergeProviderInstanceV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
             return
         }
         let applied = try await db.upsertInstanceFromInbound(
@@ -1527,7 +1560,10 @@ enum ChatStoreSyncHydrators {
                 type: "ProviderModelEntryV3", id: rawId, remoteUpdatedAt: entryUpdatedAt)
         }
         if recentlyDeleted {
-            logger.info("[v3] mergeProviderModelEntryV3 SKIP (recently deleted locally): id=\(id.prefix(16))")
+            // rawId 与规范 id 不同,说明云端这份旧副本是迁移前按随机 uuid 命名的 CKRecord,而本地删除的
+            // 墓碑和 op=delete 都按规范 id 发,够不着它——这是它被反复带回来的最可能原因,记下来留作判断依据。
+            noteRecentlyDeletedSkip(kind: "mergeProviderModelEntryV3", id: String(id.prefix(16)),
+                firstLine: "[v3] mergeProviderModelEntryV3 SKIP (recently deleted locally): id=\(id.prefix(16))\(rawId == id ? "" : " cloudRecord=\(rawId.prefix(8)) (differs from canonical id)")")
             return
         }
         let applied = try await db.upsertEntryFromInbound(
@@ -1659,7 +1695,8 @@ enum ChatStoreSyncHydrators {
         if await ChatStore.shared.isRecentlyDeletedRecord(
             type: "ProviderModelGroupV3", id: id,
             remoteUpdatedAt: dateField(record, "updatedAt") ?? Date()) {
-            logger.info("[v3] mergeProviderModelGroupV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
+            noteRecentlyDeletedSkip(kind: "mergeProviderModelGroupV3", id: String(id.prefix(8)),
+                firstLine: "[v3] mergeProviderModelGroupV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
             return
         }
         // [T-icloud-modelgroup-member-loss] Diagnostic: log the member count

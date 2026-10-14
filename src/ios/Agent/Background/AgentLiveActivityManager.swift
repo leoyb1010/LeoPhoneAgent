@@ -34,6 +34,13 @@ final class AgentLiveActivityManager {
     private var lastRenewDate: Date = .distantPast
     private static let minRenewInterval: TimeInterval = 5.0
 
+    /// `Activity.request` 在 app 刚滑到后台的瞬间会以「Target is not foreground」失败。这是已知且有补救的
+    /// 预期情况(renew 路径存 `pendingStartState`、回前台重启),不是故障,不该占 ERROR 位
+    /// (真机 4 天 20 条 ERROR;ERROR 不受日志限流,看日志时还会被当成真问题)。
+    nonisolated static func isNotForegroundFailure(_ error: Error) -> Bool {
+        "\(error.localizedDescription) \(error)".lowercased().contains("not foreground")
+    }
+
     /// [T-ios-liveactivity-renew-bg-race] When a renew ends the old activity but
     /// the restart fails because the app slipped to the background mid-renew
     /// ("Target is not foreground"), we stash the state here and re-`start` it on
@@ -500,7 +507,11 @@ final class AgentLiveActivityManager {
             lastPushDate = now
             logger.info("[LiveActivity][start] Started activity id=\(activity.id) sessions=\(sessions.count) audioLoaded=\(state.isAudioLoaded)")
         } catch {
-            logger.error("[LiveActivity][start] Failed to start: \(error.localizedDescription)")
+            if Self.isNotForegroundFailure(error) {
+                logger.info("[LiveActivity][start] not started: app not foreground (\(error.localizedDescription))")
+            } else {
+                logger.error("[LiveActivity][start] Failed to start: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -985,7 +996,11 @@ final class AgentLiveActivityManager {
                 // ~27ms gap). If the restart still fails, stash the state and re-start
                 // on the next foreground return so we recover instead of going dark.
                 self.pendingStartState = state
-                logger.error("[LiveActivity][renew] Failed to restart: \(error.localizedDescription) — pendingStart set for foreground recovery")
+                if Self.isNotForegroundFailure(error) {
+                    logger.info("[LiveActivity][renew] restart deferred: app not foreground — pendingStart set for foreground recovery")
+                } else {
+                    logger.error("[LiveActivity][renew] Failed to restart: \(error.localizedDescription) — pendingStart set for foreground recovery")
+                }
             }
         }
     }
@@ -1015,7 +1030,11 @@ final class AgentLiveActivityManager {
             pendingStartState = nil
             logger.info("[LiveActivity][renew] pendingStart recovered on foreground — new id=\(activity.id)")
         } catch {
-            logger.error("[LiveActivity][renew] pendingStart recovery still failed: \(error.localizedDescription)")
+            if Self.isNotForegroundFailure(error) {
+                logger.info("[LiveActivity][renew] pendingStart recovery still deferred: app not foreground — will retry on the next foreground return")
+            } else {
+                logger.error("[LiveActivity][renew] pendingStart recovery still failed: \(error.localizedDescription)")
+            }
         }
     }
 
