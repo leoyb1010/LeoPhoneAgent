@@ -122,8 +122,9 @@ final class CapabilitySelfTest: ObservableObject {
 
         // 先把内核起起来(和聊天走同一段启动代码)。
         do {
-            try AIChatViewModel.bootKernelIfNeeded()
-            RootfsManager.shared.applyDefaultMountOverlay()
+            // 异步等共享的那一次启动(启动流程里已铺默认挂载覆盖层);以前用同步入口,
+            // 在主 actor 上阻塞到内核起来,首次自检会卡住界面。
+            try await KernelBootManager.shared.ensureKernelBooted(reason: "capability-self-test")
         } catch {
             for i in checks.indices where checks[i].command != nil {
                 checks[i].status = .failed

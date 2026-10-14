@@ -41,7 +41,7 @@ enum SwiftMathRenderer {
 
         // Check for parse errors before rendering.
         if let error = label.error {
-            logger.warning("parse error for '\(latex.prefix(60))': \(error.localizedDescription)")
+            logger.warning("parse error for formula [\(LogContentDigest(latex).fields)]: \(error.localizedDescription)")
             return nil
         }
 
@@ -49,7 +49,7 @@ enum SwiftMathRenderer {
         label.sizeToFit()
         let size = label.intrinsicContentSize
         guard size.width > 0, size.height > 0 else {
-            logger.warning("zero size for '\(latex.prefix(60))'")
+            logger.warning("zero size for formula [\(LogContentDigest(latex).fields)]")
             return nil
         }
 

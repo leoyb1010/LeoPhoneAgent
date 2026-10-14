@@ -4736,6 +4736,9 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     private var lastSizedTableGenSum: UInt64 = 0
     /// Raw markdown source for "Copy Markdown" action.
     var rawMarkdown: String = ""
+    /// [T-long-reply-collapse] 折叠显示时这里放完整原文:视图里只画了开头(rawMarkdown = head),
+    /// 「Copy Markdown」要复制的是整条回复。nil = 就用 rawMarkdown。
+    var copyMarkdownSource: String?
 
     // MARK: Attachment-layout re-entry guards (defensive — image-attachment hang)
     /// Set while `refreshAttachmentViews` is executing. Same-runloop re-entry
@@ -5353,7 +5356,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // $...$ / $$...$$ form that most LaTeX editors expect. LLM output often
         // uses the \(...\) / \[...\] alternate delimiters which are valid LaTeX
         // but not recognized by many markdown renderers.
-        var md = rawMarkdown
+        var md = copyMarkdownSource ?? rawMarkdown
         md = md.replacingOccurrences(of: "\\(", with: "$")
         md = md.replacingOccurrences(of: "\\)", with: "$")
         md = md.replacingOccurrences(of: "\\[", with: "$$")
@@ -6223,16 +6226,15 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             let elapsed = (CACurrentMediaTime() - layoutStart) * 1000
             if elapsed >= 50 {
                 let attrLen = self.textStorage.length
+                // writeRawLine 不经脱敏:只写开头 40 字的摘要,不写原文(同一段文字的哈希一致,够对照)。
                 let head = attrLen > 0
-                    ? (self.textStorage.string as NSString)
-                        .substring(to: min(40, attrLen))
-                        .replacingOccurrences(of: "\n", with: "⏎")
+                    ? LogContentDigest((self.textStorage.string as NSString).substring(to: min(40, attrLen))).sha8
                     : ""
                 let ptr = String(format: "%p", Int(bitPattern: Unmanaged.passUnretained(self).toOpaque()))
                 LoggingManager.shared.writeRawLine(
                     category: "MarkdownLayout",
                     level: "WARN",
-                    message: "[HangFix][LayoutSubviews] 💀 \(String(format: "%.0f", elapsed))ms tv=\(ptr) attrLen=\(attrLen) bounds=\(String(format: "%.0fx%.0f", self.bounds.width, self.bounds.height)) head=\"\(head)\""
+                    message: "[HangFix][LayoutSubviews] 💀 \(String(format: "%.0f", elapsed))ms tv=\(ptr) attrLen=\(attrLen) bounds=\(String(format: "%.0fx%.0f", self.bounds.width, self.bounds.height)) headSha=\(head)"
                 )
                 LoggingManager.shared.flush()
             }
@@ -6750,6 +6752,8 @@ struct SelectableMarkdownView: UIViewRepresentable {
     var onReadAloud: (() -> Void)?
     /// [T-selection-menu-minis-tts] "Read Selection" (selected text) via LeoPhoneAgent TTS.
     var onSpeakText: ((String) -> Void)?
+    /// [T-long-reply-collapse] `markdown` 只是折叠后的开头时,传入完整原文给「Copy Markdown」用。
+    var fullMarkdownForCopy: String? = nil
     @Environment(\.openURL) private var openURL
 
     func makeCoordinator() -> Coordinator {
@@ -6832,6 +6836,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         textView.onCopyScreenshot = onCopyScreenshot
         textView.onReadAloud = onReadAloud
         textView.onSpeakText = onSpeakText
+        textView.copyMarkdownSource = fullMarkdownForCopy
         #if DEBUG
         // [T-ios-markdown-rerender-burst] makeUIView creates a FRESH textView +
         // resets lastMarkdown="", forcing the next updateUIView through a full
@@ -6852,6 +6857,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         textView.onCopyScreenshot = onCopyScreenshot
         textView.onReadAloud = onReadAloud
         textView.onSpeakText = onSpeakText
+        textView.copyMarkdownSource = fullMarkdownForCopy
 
         let currentFontSize = FontSettings.shared.scaledMessage(16.5)
         let fontChanged = context.coordinator.lastFontSize != currentFontSize

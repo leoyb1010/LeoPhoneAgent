@@ -71,23 +71,6 @@ final class KernelBootManager: @unchecked Sendable {
         try await coalescer.run { [self] in try await bootFlight(reason: reason) }
     }
 
-    /// 同步等待内核就绪 —— 只给还没改成 async 的旧调用点(能力自检)留的兼容入口。
-    /// 会阻塞调用线程直到共享的那次启动完成(它不需要主线程,所以主线程上调用也不会死锁)。
-    /// 新代码用 `ensureKernelBooted()`。
-    func ensureKernelBootedBlocking(reason: String = "blocking") throws {
-        if coalescer.isCompleted { return }
-        let box = BlockingOutcome()
-        Task.detached(priority: .userInitiated) { [self] in
-            do {
-                try await ensureKernelBooted(reason: reason)
-                box.finish(nil)
-            } catch {
-                box.finish(error)
-            }
-        }
-        if let error = box.wait() { throw error }
-    }
-
     /// 全新安装时,在后台把 rootfs 解包做掉(只解包,不启动内核)。
     ///
     /// 内核改成按需之后,第一次发送消息才会解包,那要好几秒,会卡在整屏「Booting Kernel」上。
@@ -134,7 +117,11 @@ final class KernelBootManager: @unchecked Sendable {
             LeoPerf.record("kernel.boot", ms: totalMs,
                            extra: ["bootMs": timing.bootMs.rounded(), "overlayMs": timing.overlayMs.rounded(),
                                    "offMain": true, "reason": reason])
-            Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }
+            Task { @MainActor in
+                MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded()
+                // 后台起的内核也要有 CPU 调速器(BKA 进后台时内核还没起,当时没装)。
+                BackgroundKeepAliveManager.shared.kernelDidBoot()
+            }
         } catch {
             setStatus(.failed(error.localizedDescription))
             logger.error("[KernelBoot] error: \(error.localizedDescription)")
@@ -220,22 +207,5 @@ private final class KernelThread: @unchecked Sendable {
             condition.unlock()
             job()
         }
-    }
-}
-
-/// `ensureKernelBootedBlocking` 的结果信箱。
-private final class BlockingOutcome: @unchecked Sendable {
-    private let semaphore = DispatchSemaphore(value: 0)
-    private let lock = NSLock()
-    private var failure: Error?
-
-    func finish(_ error: Error?) {
-        lock.withLock { failure = error }
-        semaphore.signal()
-    }
-
-    func wait() -> Error? {
-        semaphore.wait()
-        return lock.withLock { failure }
     }
 }

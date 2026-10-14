@@ -405,7 +405,7 @@ extension AIChatViewModel {
                         let idx = await MainActor.run {
                             guard msgIdx < messages.count else { return -1 }
                             let blockCount = messages[msgIdx].blocks.count
-                            let prevBlockKind: String = blockCount > 0 ? "\(messages[msgIdx].blocks[blockCount - 1].kind)" : "none"
+                            let prevBlockKind: String = blockCount > 0 ? messages[msgIdx].blocks[blockCount - 1].kind.logTag : "none"
                             messages[msgIdx].blocks.append(
                                 AssistantBlock(kind: .text, content: "")
                             )

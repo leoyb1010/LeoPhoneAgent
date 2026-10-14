@@ -159,7 +159,11 @@ enum FullAutoLog {
     static func note(_ what: String, sessionId: String?) {
         let source = TaskSourceRegistry.source(for: sessionId)
         let summary = String(what.prefix(80))
-        AppLogger(category: "FullAuto").info("[FullAuto] 自动批准 \(summary) 来源=\(source.rawValue)")
+        // 文件日志只记动作类别(第一个空格前,如「在本机执行终端命令」)和细节摘要:细节是整条命令 / 路径,
+        // 可能带对话内容。活动记录(App 内可见)仍保留可读的摘要。
+        let action = what.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+        let detail = what.dropFirst(action.count).trimmingCharacters(in: .whitespaces)
+        AppLogger(category: "FullAuto").info("[FullAuto] 自动批准 \(action) detailLen=\(detail.count) 来源=\(source.rawValue)")
         guard let sid = sessionId,
               let runId = SessionActivityTracker.shared.currentRunId(for: sid) else { return }
         _ = AgentActivityLog.shared.append(AgentActivityEvent(

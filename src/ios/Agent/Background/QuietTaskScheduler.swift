@@ -59,6 +59,9 @@ final class QuietTaskScheduler {
     func register() {
         guard !registered else { return }
         registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.identifier, using: nil) { task in
+            // 系统按计划把进程从后台拉起来跑安静任务:声明一下,之后用户点开时这次冷启动不进 p50/p90。
+            // 进程本来就在前台时 cold 记录早已落盘,这里不影响。
+            LeoPerf.markBackgroundLaunch()
             guard let processing = task as? BGProcessingTask else {
                 task.setTaskCompleted(success: false)
                 return

@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.70.0",
+            date: "2026-10-14",
+            title: "只聊天更省电，日志更干净",
+            highlights: [
+                "只聊天、不跑命令时，不再启动终端内核；用到命令、MCP 或挂载的文件夹时才启动。读挂载文件夹前会先铺好挂载，不会读错位置。",
+                "后台没有内核时，不再每秒唤醒 10 次做 CPU 调速；卡顿检测在后台也不再遍历界面。",
+                "超长回复折叠时，选中文字后「Copy Markdown」复制的是全文，不再只有开头。",
+                "日志不再记录输入框文字、命令内容和回复片段；手机上已有的旧日志会自动清洗一次。",
+                "Mac 连接问题提示、长文阅读器等新文案补上英文和繁体中文。"
+            ]
+        ),
+        LeoRelease(
             version: "1.69.0",
             date: "2026-10-14",
             title: "更稳、更快、代码更好看",

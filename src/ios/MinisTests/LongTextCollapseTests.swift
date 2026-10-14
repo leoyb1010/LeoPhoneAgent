@@ -578,6 +578,16 @@ final class LongTextCollapseTests: XCTestCase {
         XCTAssertTrue(view.contains("?? block.cachedAttributedString"))
     }
 
+    /// 折叠时文本视图里只有开头;选区菜单「Copy Markdown」必须复制完整原文。
+    func testWiring_copyMarkdownCopiesTheFullTextWhenCollapsed() throws {
+        let view = try source("Views/Chat/AssistantBlockView.swift")
+        XCTAssertTrue(view.contains("fullMarkdownForCopy: collapse == nil ? nil : block.content"))
+        let md = try source("Views/Chat/SelectableMarkdownView.swift")
+        XCTAssertTrue(md.contains("var md = copyMarkdownSource ?? rawMarkdown"))
+        // makeUIView 和 updateUIView 都要接上,复用的视图不能带着上一个块的全文。
+        XCTAssertEqual(md.components(separatedBy: "textView.copyMarkdownSource = fullMarkdownForCopy").count - 1, 2)
+    }
+
     func testWiring_readerPresentsFromUIKitNotFromTheCell() throws {
         let reader = try source("Views/Chat/LongTextReader.swift")
         XCTAssertTrue(reader.contains("UIHostingController"), "cells run with disablesAnimations; the list presents sheets outside them")

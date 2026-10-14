@@ -17,7 +17,8 @@ extension AIChatViewModel {
     /// [T-kernel-lazy-boot] 真正的启动在 `KernelBootManager`(单飞、专用线程、不占主线程)。
     /// 这里只是把它投影到本 VM 的 `kernelStatus` 上,给「Booting Kernel / 重试」界面和发送路径里的
     /// `while kernelStatus == .booting` 等待用。聊天页出现不再调用它(以前每次 onAppear 都调,冷启动、
-    /// 后台拉起也因此各起一遍内核);只有发送 / 重试 / 继续这些真要跑 agent 的入口才调。
+    /// 后台拉起也因此各起一遍内核)。发送 / 重试 / 继续也不再调(1.70):真要用内核的工具自己经
+    /// `KernelBootManager` 按需启动,这里只剩启动失败界面的「重试」在用。
     /// 以前这里的 `Task {}` 继承主 actor,`ISHKernel.boot` + 挂载覆盖层整段同步跑在主线程
     /// (真机实测中位 180 ms,9 次里 3 次叠在 ≥250 ms 的卡顿上)。
     func ensureKernelBooted() {
@@ -47,14 +48,6 @@ extension AIChatViewModel {
                 self?.kernelStatus = .failed(error.localizedDescription)
             }
         }
-    }
-
-    /// 旧的同步入口,只剩能力自检(Settings/CapabilitySelfTestView)在用。
-    /// 不再在调用线程上直接 boot:改成阻塞等 `KernelBootManager` 共享的那一次启动,
-    /// 这样不会出现第二个启动线程(iSH 的 init 进程绑定在启动线程上,只能有一个)。
-    /// 新代码请用 `try await KernelBootManager.shared.ensureKernelBooted()`。
-    static func bootKernelIfNeeded() throws {
-        try KernelBootManager.shared.ensureKernelBootedBlocking(reason: "capability-self-test")
     }
 
     /// Explicit recovery path for the kernel failure overlay. A retry is only

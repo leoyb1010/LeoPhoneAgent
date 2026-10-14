@@ -194,6 +194,8 @@ final class StreamingHangLogger {
     private func captureInventoryAsync() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // 后台没有界面可查(检测器从启动起一直开着):不在前台就不走视图树,保留上一份快照。
+            guard UIApplication.shared.applicationState == .active else { return }
             let snap = Self.snapshotTextViews(top: self.inventoryTopN)
             self.queue.async {
                 self.lastInventory = snap

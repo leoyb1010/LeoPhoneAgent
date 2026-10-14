@@ -284,4 +284,110 @@ final class LogHygieneTests: XCTestCase {
         XCTAssertTrue(text.contains("LeoPerf.record(\"hang\", ms: ms, extra: [\"stream\": LeoPerf.isStreaming(hangBeganAt: sent)])"))
         XCTAssertTrue(text.contains("static func noteStreamingFlush()"))
     }
+
+    // MARK: - [1.70] 旧日志清洗 + 剩余泄露点
+
+    func testScrubberCutsSnapshotTailAndDropsItsContinuationLines() {
+        let log = """
+        [18:01:05] [SnapshotDiag] [INFO] [SnapshotDiag]   block[4] kind=shellTool(command: "cat ~/.ssh/config") id=936FBF25 contentLen=27 tail="osts
+        my secret line
+        [18:01:06] [AIChatVM] [INFO] fine line
+        """
+        let r = LegacyLogScrubber.scrub(log)
+        XCTAssertEqual(r.text, """
+        [18:01:05] [SnapshotDiag] [INFO] [SnapshotDiag]   block[4] kind=shellTool[redacted]
+        [18:01:06] [AIChatVM] [INFO] fine line
+        """)
+        XCTAssertEqual(r.changedLines, 2)
+        XCTAssertFalse(r.text.contains("ssh"))
+        XCTAssertFalse(r.text.contains("secret"))
+    }
+
+    func testScrubberHandlesEveryLegacyMarker() {
+        let lines = [
+            "[01:00:00] [MinisURL] [INFO] 🔑DRAFT performSend vm=1 inputText='我的私事' isProcessing=false",
+            "[01:00:01] [MentionPicker] [INFO] [MentionPicker] event=dismiss inputLen=3 caretPos=1 textPrefix=\"私事\"",
+            "[01:00:02] [MarkdownLayout] [WARN] [HangFix][LayoutSubviews] 💀 80ms tv=0x1 attrLen=9 bounds=1x1 head=\"私事\"",
+            "[01:00:03] [Math] [WARN] parse error for '\\私事': bad",
+            "[01:00:04] [Math] [WARN] zero size for '私事'",
+            "[01:00:05] [AIChatVM] [INFO] [TextDrift] empty→filled blockIdx=5 prevBlockKind=fileReadTool(path: \"/私事\") len=1",
+        ]
+        let r = LegacyLogScrubber.scrub(lines.joined(separator: "\n"))
+        XCTAssertEqual(r.changedLines, lines.count)
+        XCTAssertFalse(r.text.contains("私事"))
+        for line in r.text.split(separator: "\n") {
+            XCTAssertTrue(line.hasSuffix("[redacted]"), String(line))
+            XCTAssertTrue(LegacyLogScrubber.startsRecord(line), "时间戳保留")
+        }
+    }
+
+    func testScrubberKeepsOnlyTheFullAutoActionWord() {
+        let old = "[18:00:59] [FullAuto] [INFO] [FullAuto] 自动批准 在本机执行终端命令 cat ~/.ssh/config 来源=App"
+        XCTAssertEqual(LegacyLogScrubber.scrub(old).text,
+                       "[18:00:59] [FullAuto] [INFO] [FullAuto] 自动批准 在本机执行终端命令 [redacted]")
+        let new = "[18:00:59] [FullAuto] [INFO] [FullAuto] 自动批准 在本机执行终端命令 detailLen=12 来源=App"
+        XCTAssertEqual(LegacyLogScrubber.scrub(new).changedLines, 0, "1.70 的格式不再动")
+    }
+
+    func testScrubberLeavesCleanLogsUntouched() {
+        let clean = "[01:00:00] [A] [INFO] ok\n2026-10-13 18:00:59.445 LeoPhoneAgent[1:2] raw\n\n[01:00:01] [B] [INFO] len=3 lines=1 sha256=ba7816bf"
+        let r = LegacyLogScrubber.scrub(clean)
+        XCTAssertEqual(r.changedLines, 0)
+        XCTAssertEqual(r.text, clean)
+    }
+
+    func testStartsRecordRecognisesOnlyTimestampPrefixes() {
+        XCTAssertTrue(LegacyLogScrubber.startsRecord("[18:01:05] x"))
+        XCTAssertFalse(LegacyLogScrubber.startsRecord("osts"))
+        XCTAssertFalse(LegacyLogScrubber.startsRecord("[ab:cd:ef] x"))
+        XCTAssertFalse(LegacyLogScrubber.startsRecord("[1:2:3]"))
+    }
+
+    func testLegacyScrubRunsOnceOffTheLoggingPath() throws {
+        let mgr = try source("Shared/LoggingManager.swift")
+        XCTAssertTrue(mgr.contains("Self.scrubLegacyLogsIfNeeded(in: dir, today: today)"))
+        XCTAssertTrue(mgr.contains("DispatchQueue.global(qos: .utility).async {\n            Self.pruneOldLogs(in: dir)\n            Self.scrubLegacyLogsIfNeeded"))
+        XCTAssertTrue(mgr.contains("guard name.hasPrefix(\"minis-\"), url.pathExtension == \"log\""))
+        XCTAssertTrue(mgr.contains("options: .atomic"))
+    }
+
+    /// 块类型的关联值(命令、路径、标题)不进日志;正文尾巴、输入框内容、公式原文也不进。
+    func testRemainingLeakSitesLogOnlyShapes() throws {
+        let models = try source("Agent/Chat/ChatModels.swift")
+        XCTAssertTrue(models.contains("var logTag: String"))
+        for file in ["Agent/Chat/AIChatViewModel.swift", "Agent/Chat/AIChatViewModel+SSEStream.swift",
+                     "Agent/MessageList/CollectionViewMessageListV3.swift"] {
+            let text = releaseVisibleSource(try source(file))
+            XCTAssertFalse(text.contains("kind=\\(block.kind)"), file)
+            XCTAssertFalse(text.contains(".kind)\" : \"none\""), file)
+        }
+        let list = try source("Agent/MessageList/CollectionViewMessageListV3.swift")
+        XCTAssertFalse(list.contains("tail=\\\"\\(tail)"))
+        XCTAssertTrue(list.contains("kind=\\(block.kind.logTag) id=\\(block.id.uuidString.prefix(8)) \\(LogContentDigest(block.content).fields)"))
+        XCTAssertFalse(try source("Views/Chat/AIChatView.swift").contains("inputText='"))
+        XCTAssertFalse(try source("Agent/Chat/AIChatViewModel+MentionMenu.swift").contains("textPrefix="))
+        XCTAssertFalse(try source("Views/Chat/SelectableMarkdownView.swift").contains("head=\\\"\\(head)"))
+        XCTAssertFalse(try source("Agent/Markdown/SwiftMathRenderer.swift").contains("latex.prefix("))
+        let fullAuto = try source("Agent/Session/FullAuto.swift")
+        XCTAssertTrue(fullAuto.contains("自动批准 \\(action) detailLen=\\(detail.count)"))
+        XCTAssertFalse(fullAuto.contains("自动批准 \\(summary)"))
+    }
+
+    /// 后台拉起要有明确的声明点:安静任务的 BGProcessingTask 处理器(唯一能冷启动进程的后台入口)。
+    func testQuietTaskHandlerMarksTheBackgroundLaunch() throws {
+        let scheduler = try source("Agent/Background/QuietTaskScheduler.swift")
+        let reg = try XCTUnwrap(scheduler.range(of: "BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.identifier"))
+        let body = String(scheduler[reg.lowerBound...].prefix(600))
+        XCTAssertTrue(body.contains("LeoPerf.markBackgroundLaunch()"))
+    }
+
+    /// 卡顿检测器从启动起常开:视图树快照只在前台做。
+    func testHangInventorySkipsTheViewWalkOutsideTheForeground() throws {
+        let logger = try source("Debug/StreamingHangLogger.swift")
+        let body = try XCTUnwrap(logger.range(of: "private func captureInventoryAsync()"))
+        let text = String(logger[body.lowerBound...].prefix(600))
+        let gate = try XCTUnwrap(text.range(of: "guard UIApplication.shared.applicationState == .active else { return }"))
+        let walk = try XCTUnwrap(text.range(of: "Self.snapshotTextViews(top:"))
+        XCTAssertLessThan(gate.lowerBound, walk.lowerBound)
+    }
 }

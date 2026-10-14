@@ -30,6 +30,24 @@ enum LeoRunPolicy: Int, CaseIterable, Sendable {
 final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let shared = BackgroundKeepAliveManager()
 
+    /// [T-kernel-lazy-boot] 调速器是 10 Hz 的定时器 + 内核时钟钩子,只为限住 iSH 的后台 CPU。
+    /// 内核按需启动后,大多数后台拉起根本没有内核,不再白白每秒醒 10 次;
+    /// 内核在后台才起来时由 `kernelDidBoot()` 补上。
+    private func armCPUGovernorIfKernelBooted(caller: String) {
+        guard ISHKernel.shared.isBooted else {
+            logger.info("[BKA] CPU governor not armed (\(caller)) — kernel not booted")
+            return
+        }
+        ISHKernel.shared.beginBackgroundCPUGovernor()
+        logger.info("[BKA] iSH background CPU governor STARTED (\(caller))")
+    }
+
+    /// 内核刚启动完成(`KernelBootManager`)。若此时在后台,补装调速器(幂等)。
+    func kernelDidBoot() {
+        guard appIsInBackground else { return }
+        armCPUGovernorIfKernelBooted(caller: "kernelDidBoot")
+    }
+
     /// Applies only additive preparation for the next task. Standard respects
     /// the user's current switches; Background Ready enables the existing
     /// keep-alive, Live Activity and notification paths without requesting a
@@ -424,8 +442,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             logger.info("[BKA][Lifecycle] setup() observed background launch — seeding appIsInBackground=true")
             // [T-ish-bg-cpu-governor] A background launch never receives
             // didEnterBackground, so arm the CPU governor here (idempotent).
-            ISHKernel.shared.beginBackgroundCPUGovernor()
-            logger.info("[BKA] launched in background — iSH CPU governor armed at setup")
+            armCPUGovernorIfKernelBooted(caller: "setup.launchedInBackground")
             scheduleBackgroundLocationArming()
             evaluateSilentAudio(caller: "setup.launchedInBackground")
         }
@@ -463,8 +480,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
                 // [T-ish-bg-cpu-governor] Closed-loop governor replaces the
                 // fixed 80% duty cycle, which sat on the iOS background CPU
                 // kill line (measured 91%).
-                ISHKernel.shared.beginBackgroundCPUGovernor()
-                logger.info("[BKA] iSH background CPU governor STARTED")
+                self.armCPUGovernorIfKernelBooted(caller: "didEnterBackground")
                 self.logLifecycleSnapshot("Background")
                 // [T-ios-bg-location-arm-delay] Don't start location keep-alive
                 // immediately on backgrounding — arm it after a delay so a brief

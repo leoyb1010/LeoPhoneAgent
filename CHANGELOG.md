@@ -1,5 +1,16 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.70.0 (168) · 内核按需启动补齐、日志脱敏、Copy Markdown 全文、补译 - 2026-10-14
+
+- 发送 / 重试 / 继续不再调用 `ensureKernelBooted()`：纯对话一轮不碰 iSH；shell 工具、MCP、挂载各自经 `KernelBootManager` 按需启动。读 `/var/minis/mounts/…` 前先 `ensureMounted`（此前内核未起时挂载表为空，会落到会话回退路径读到假位置）。
+- 能力自检改为 `await KernelBootManager.ensureKernelBooted`，删除同步阻塞入口 `bootKernelIfNeeded` / `ensureKernelBootedBlocking`（主 actor 上会卡界面）。
+- 后台 CPU 调速器（10 Hz 定时器 + 时钟钩子）只在内核已启动时装；内核在后台才起时由 `kernelDidBoot()` 补装。`StreamingHangLogger` 的视图树快照只在前台做。
+- 长回复折叠时，选区菜单「Copy Markdown」复制 `block.content` 全文（`fullMarkdownForCopy`）。
+- 日志：块类型只记 `logTag`（此前 `kind=shellTool(command: …)` 会把整条命令连 heredoc 正文写进日志）；SnapshotDiag 的 `tail=`、`inputText=`、`textPrefix=`、HangFix `head=`、公式原文、全自动命令预览改为长度 / 哈希。新增 `LegacyLogScrubber`：升级后把 1.69 及以前的 `minis-*.log` 一次性截掉泄露字段（保留时间戳与类别）。
+- 安静任务的 BGProcessingTask 处理器调用 `LeoPerf.markBackgroundLaunch()`。
+- 1.69 新增的 57 条中文文案补 en / zh-Hant。
+- 工具：`IOSAddSourceFile.py` 照抄兄弟文件的登记行（支持 `SOURCE_ROOT` 全路径与 `name =`），文件名按 pbxproj 规则加引号；新增 `IOSAddSourceFileTests.py`。
+
 ## iOS 1.69.0 (167) · 关思考修复、内核按需启动、长回复折叠、代码块着色 - 2026-10-14
 
 - 修复「关闭思考」被 Anthropic 拒绝：真实 API 实测 `claude-sonnet-5-5` 要求 `thinking:{type:"between_tools"}`，`claude-opus-5-5`、`claude-fable-5`、`claude-fable-5-1` 不接受 disabled 也不接受 between_tools，只能 `adaptive` + `output_config.effort:low`。新增 `ThinkingOffStyle`（静态种子 + 按报错学习并只重试一次，按「实例 + 模型」持久化到 `leo.thinkingOffStyle.v1`），自动标题对 sonnet-5-5 不再 7/7 失败。Mac 端经核查不受影响（这些模型在 Mac 的档位里没有「关」），未改动。

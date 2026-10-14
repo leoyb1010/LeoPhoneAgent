@@ -130406,6 +130406,1260 @@
           }
         }
       }
+    },
+    "1. 在 Mac 的 LeoBot 打开「连接手机」，出示配对二维码。\n2. 回到这里点「扫码」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. On your Mac, open LeoBot → Connect Phone to show the pairing QR code.\n2. Come back here and tap Scan."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 在 Mac 的 LeoBot 打开「连接手机」，出示配对二维码。\n2. 回到这里点「扫码」。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 在 Mac 的 LeoBot 打開「連接手機」，出示配對 QR 碼。\n2. 回到這裡點「掃碼」。"
+          }
+        }
+      }
+    },
+    "Mac 上较早的事件已过期，会从可用的位置继续。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Older events on the Mac have expired; continuing from the earliest available point."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上较早的事件已过期，会从可用的位置继续。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上較早的事件已過期，會從可用的位置繼續。"
+          }
+        }
+      }
+    },
+    "Mac 或中继不认这个请求，版本可能太旧或不匹配。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Mac or relay didn't accept this request; its version may be too old or mismatched."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 或中继不认这个请求，版本可能太旧或不匹配。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 或中繼不認這個請求，版本可能太舊或不相符。"
+          }
+        }
+      }
+    },
+    "Mac 的问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac issue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 的问题"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 的問題"
+          }
+        }
+      }
+    },
+    "Mac 返回了错误（HTTP %lld），详情见技术细节。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Mac returned an error (HTTP %lld). See technical details."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 返回了错误（HTTP %lld），详情见技术细节。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 回傳了錯誤（HTTP %lld），詳情見技術細節。"
+          }
+        }
+      }
+    },
+    "Mac 返回了错误（HTTP %lld）：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Mac returned an error (HTTP %lld): %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 返回了错误（HTTP %lld）：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 回傳了錯誤（HTTP %lld）：%@"
+          }
+        }
+      }
+    },
+    "SSH 已配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH configured"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 已配置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 已設定"
+          }
+        }
+      }
+    },
+    "%@ 字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ characters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 字"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 字"
+          }
+        }
+      }
+    },
+    "%@不再认这台 iPhone，需要在 Mac 上重新配对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ no longer recognizes this iPhone. Pair again on the Mac."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@不再认这台 iPhone，需要在 Mac 上重新配对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@不再認這台 iPhone，需要在 Mac 上重新配對。"
+          }
+        }
+      }
+    },
+    "%@没有按时响应，它可能在休眠或忙不过来。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ didn't respond in time. It may be asleep or busy."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@没有按时响应，它可能在休眠或忙不过来。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@沒有按時回應，它可能在休眠或忙不過來。"
+          }
+        }
+      }
+    },
+    "%@当前不在线，它会自动重连，稍后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is offline right now. It will reconnect on its own; try again shortly."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@当前不在线，它会自动重连，稍后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@目前不在線，它會自動重新連線，稍後再試。"
+          }
+        }
+      }
+    },
+    "iPhone 的问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone issue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone 的问题"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone 的問題"
+          }
+        }
+      }
+    },
+    "中继": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼"
+          }
+        }
+      }
+    },
+    "中继地址或路径不对：请到「设置 → 我的设备」检查。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The relay address or path is wrong. Check it in Settings → My Devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继地址或路径不对：请到「设置 → 我的设备」检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼位址或路徑不對：請到「設定 → 我的裝置」檢查。"
+          }
+        }
+      }
+    },
+    "中继暂时不可用，稍后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The relay is temporarily unavailable. Try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继暂时不可用，稍后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼暫時無法使用，稍後再試。"
+          }
+        }
+      }
+    },
+    "中继暂时出了问题，稍后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The relay ran into a problem. Try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继暂时出了问题，稍后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼暫時出了問題，稍後再試。"
+          }
+        }
+      }
+    },
+    "中继的问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay issue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继的问题"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼的問題"
+          }
+        }
+      }
+    },
+    "中继返回的内容不对，请检查中继地址是否写对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The relay returned unexpected content. Check that the relay address is correct."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继返回的内容不对，请检查中继地址是否写对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中繼回傳的內容不對，請檢查中繼位址是否正確。"
+          }
+        }
+      }
+    },
+    "全文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全文"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全文"
+          }
+        }
+      }
+    },
+    "去 Mac 重新配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair again on Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去 Mac 重新配对"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去 Mac 重新配對"
+          }
+        }
+      }
+    },
+    "在阅读页中查看完整内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the full text in the reader"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在阅读页中查看完整内容"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在閱讀頁中查看完整內容"
+          }
+        }
+      }
+    },
+    "地址不对：请到「设置 → 我的设备」检查地址（必须是完整的 https 地址）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is wrong. Check it in Settings → My Devices (it must be a full https address)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址不对：请到「设置 → 我的设备」检查地址（必须是完整的 https 地址）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位址不對：請到「設定 → 我的裝置」檢查位址（必須是完整的 https 位址）。"
+          }
+        }
+      }
+    },
+    "复制全文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Full Text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制全文"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製全文"
+          }
+        }
+      }
+    },
+    "复制诊断信息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制诊断信息"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製診斷資訊"
+          }
+        }
+      }
+    },
+    "好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "安全证书没通过校验，可能是代理在干扰，或地址不对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The security certificate failed validation. A proxy may be interfering, or the address is wrong."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全证书没通过校验，可能是代理在干扰，或地址不对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全憑證未通過驗證，可能是代理在干擾，或位址不對。"
+          }
+        }
+      }
+    },
+    "安全连接没建立起来，可能是代理或地址的问题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't establish a secure connection. Check your proxy or the address."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全连接没建立起来，可能是代理或地址的问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全連線沒有建立起來，可能是代理或位址的問題。"
+          }
+        }
+      }
+    },
+    "展开全文（共 %@ 字）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show full text (%@ characters)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展开全文（共 %@ 字）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展開全文（共 %@ 字）"
+          }
+        }
+      }
+    },
+    "已取消。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。"
+          }
+        }
+      }
+    },
+    "打开 Tailscale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Tailscale"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Tailscale"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開 Tailscale"
+          }
+        }
+      }
+    },
+    "扫码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "掃碼"
+          }
+        }
+      }
+    },
+    "找不到中继，请检查网络是否正常。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't find the relay. Check your network connection."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到中继，请检查网络是否正常。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到中繼，請檢查網路是否正常。"
+          }
+        }
+      }
+    },
+    "技术细节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Technical Details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技术细节"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技術細節"
+          }
+        }
+      }
+    },
+    "收到的回应对不上这个 App，Mac 或中继的版本可能太旧或不匹配。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The response doesn't match this app. The Mac or relay may be outdated or mismatched."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收到的回应对不上这个 App，Mac 或中继的版本可能太旧或不匹配。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收到的回應對不上這個 App，Mac 或中繼的版本可能太舊或不相符。"
+          }
+        }
+      }
+    },
+    "检查中继地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Relay Address"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查中继地址"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查中繼位址"
+          }
+        }
+      }
+    },
+    "直连已发出但没有收到回应，中继也连不上；这条的结果未确认。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent directly but got no response, and the relay is unreachable too. The result of this message is unconfirmed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直连已发出但没有收到回应，中继也连不上；这条的结果未确认。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直連已送出但沒有收到回應，中繼也連不上；這則的結果未確認。"
+          }
+        }
+      }
+    },
+    "等了太久没有回应，网络可能不稳。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No response for too long. The network may be unstable."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等了太久没有回应，网络可能不稳。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等了太久沒有回應，網路可能不穩。"
+          }
+        }
+      }
+    },
+    "网络": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "網路"
+          }
+        }
+      }
+    },
+    "网络的问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network issue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络的问题"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "網路的問題"
+          }
+        }
+      }
+    },
+    "若这台 iPhone 开着代理，把 *.ts.net 设为直连或暂时关闭再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If this iPhone uses a proxy, set *.ts.net to direct or turn the proxy off and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若这台 iPhone 开着代理，把 *.ts.net 设为直连或暂时关闭再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若這台 iPhone 開著代理，把 *.ts.net 設為直連或暫時關閉再試。"
+          }
+        }
+      }
+    },
+    "访问密钥被拒绝，可能已过期或被撤销，需要重新配对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The access key was rejected. It may have expired or been revoked; pair again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "访问密钥被拒绝，可能已过期或被撤销，需要重新配对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存取金鑰被拒絕，可能已過期或被撤銷，需要重新配對。"
+          }
+        }
+      }
+    },
+    "请求太频繁，中继让稍等一会儿再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many requests. The relay asked to wait a moment before retrying."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求太频繁，中继让稍等一会儿再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求太頻繁，中繼要求稍等一會兒再試。"
+          }
+        }
+      }
+    },
+    "这个地址被重定向到了别处：请到「设置 → 我的设备」检查地址。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This address redirects elsewhere. Check it in Settings → My Devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个地址被重定向到了别处：请到「设置 → 我的设备」检查地址。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個位址被重新導向到別處：請到「設定 → 我的裝置」檢查位址。"
+          }
+        }
+      }
+    },
+    "这个文件夹的授权已失效,已暂停自动重试。点「重试」再试一次;仍然失败的话,请删除这个挂载后重新选择文件夹。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access to this folder has expired and automatic retries are paused. Tap Retry to try again; if it still fails, remove this mount and choose the folder again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个文件夹的授权已失效,已暂停自动重试。点「重试」再试一次;仍然失败的话,请删除这个挂载后重新选择文件夹。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個資料夾的授權已失效，已暫停自動重試。點「重試」再試一次；仍然失敗的話，請刪除這個掛載後重新選擇資料夾。"
+          }
+        }
+      }
+    },
+    "这台 Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 Mac"
+          }
+        }
+      }
+    },
+    "这台 Mac 还没填编码会话地址，请到「设置 → 我的设备」补上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac has no coding-session address yet. Add it in Settings → My Devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac 还没填编码会话地址，请到「设置 → 我的设备」补上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 Mac 還沒填寫編碼工作階段位址，請到「設定 → 我的裝置」補上。"
+          }
+        }
+      }
+    },
+    "这台 iPhone 现在没有网络，联网后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iPhone is offline. Try again once it's connected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 iPhone 现在没有网络，联网后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 iPhone 現在沒有網路，連網後再試。"
+          }
+        }
+      }
+    },
+    "这台 iPhone 的日期时间可能不对，证书校验没通过。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iPhone's date and time may be wrong, so certificate validation failed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 iPhone 的日期时间可能不对，证书校验没通过。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 iPhone 的日期時間可能不對，憑證驗證沒有通過。"
+          }
+        }
+      }
+    },
+    "这台 iPhone 还没和这台 Mac 配对，请扫码配对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iPhone isn't paired with this Mac yet. Scan the code to pair."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 iPhone 还没和这台 Mac 配对，请扫码配对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 iPhone 還沒和這台 Mac 配對，請掃碼配對。"
+          }
+        }
+      }
+    },
+    "这条发出后没收到确认，结果未知。请先在 Mac 上核对，不要急着重发。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No confirmation after sending, so the result is unknown. Check on the Mac before resending."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条发出后没收到确认，结果未知。请先在 Mac 上核对，不要急着重发。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這則送出後沒收到確認，結果未知。請先在 Mac 上核對，不要急著重送。"
+          }
+        }
+      }
+    },
+    "连不上中继，它可能暂时不可用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach the relay. It may be temporarily unavailable."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上中继，它可能暂时不可用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不上中繼，它可能暫時無法使用。"
+          }
+        }
+      }
+    },
+    "连不上：这台 iPhone 的 Tailscale 可能没开，或 Mac 不在同一个 tailnet。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't connect: Tailscale may be off on this iPhone, or the Mac isn't on the same tailnet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上：这台 iPhone 的 Tailscale 可能没开，或 Mac 不在同一个 tailnet。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不上：這台 iPhone 的 Tailscale 可能沒開，或 Mac 不在同一個 tailnet。"
+          }
+        }
+      }
+    },
+    "连接出了点问题，可以重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something went wrong with the connection. You can retry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接出了点问题，可以重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線出了點問題，可以重試。"
+          }
+        }
+      }
+    },
+    "配对码已过期或无效，请让 Mac 重新出示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing code has expired or is invalid. Show a new one on the Mac."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对码已过期或无效，请让 Mac 重新出示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配對碼已過期或無效，請讓 Mac 重新出示。"
+          }
+        }
+      }
+    },
+    "配对码无效，请让 Mac 重新出示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing code is invalid. Show a new one on the Mac."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对码无效，请让 Mac 重新出示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配對碼無效，請讓 Mac 重新出示。"
+          }
+        }
+      }
+    },
+    "重新扫码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Again"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新扫码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新掃碼"
+          }
+        }
+      }
+    },
+    "需要重新授权": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs Reauthorization"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要重新授权"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要重新授權"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

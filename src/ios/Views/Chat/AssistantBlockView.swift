@@ -171,8 +171,7 @@ struct AssistantBlockView: View {
         // 不会被重建。折叠时传给它的是 head 和 head 自己的解析 / 渲染结果(见 LongTextCollapseCache),
         // 绝不能传 block.cachedMarkdown / cachedAttributedString —— 它们是全文的。
         // 复制 / 分享 / 朗读 / 重新生成 / 导出都读 message.blocks 的 content,不读这个视图的文本。
-        // 唯一例外:选区菜单的「Copy Markdown」复制文本视图的 rawMarkdown(= 这里的 markdown 参数),
-        // 折叠时只有 head;要补全需要 SelectableMarkdownView 另开一个「复制用全文」入口。
+        // 选区菜单的「Copy Markdown」读文本视图自己的文本,折叠时那只有 head:用 fullMarkdownForCopy 把全文给它。
         VStack(alignment: .leading, spacing: 0) {
             SelectableMarkdownView(
                 markdown: collapse?.head ?? block.content,
@@ -185,7 +184,8 @@ struct AssistantBlockView: View {
                 onTapBlank: onTapBlank,
                 onCopyScreenshot: onCopyScreenshot,
                 onReadAloud: onReadAloud,
-                onSpeakText: onSpeakText
+                onSpeakText: onSpeakText,
+                fullMarkdownForCopy: collapse == nil ? nil : block.content
             )
             .fixedSize(horizontal: false, vertical: true)
             .modifier(MinisOpenURLHandler())

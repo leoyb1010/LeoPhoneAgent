@@ -455,6 +455,23 @@ enum AssistantBlockKind: Equatable {
     /// [T-subagent] A `subagent_task` call (delegate or a control action).
     case delegateTool(title: String)
     case info
+
+    /// 日志用:只有类型名。`"\(kind)"` 会把关联值(整条 shell 命令、文件路径、委派标题)原样写进日志。
+    var logTag: String {
+        switch self {
+        case .text: return "text"
+        case .thinking: return "thinking"
+        case .shellTool: return "shellTool"
+        case .fileReadTool: return "fileReadTool"
+        case .fileWriteTool: return "fileWriteTool"
+        case .fileEditTool: return "fileEditTool"
+        case .browserTool: return "browserTool"
+        case .readImageTool: return "readImageTool"
+        case .memoryTool: return "memoryTool"
+        case .delegateTool: return "delegateTool"
+        case .info: return "info"
+        }
+    }
 }
 
 enum KernelStatus: Equatable {

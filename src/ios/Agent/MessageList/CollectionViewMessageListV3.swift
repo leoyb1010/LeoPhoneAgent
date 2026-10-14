@@ -2923,9 +2923,8 @@ extension CollectionViewMessageListV3 {
             if let lastAssistant = messages.last(where: { $0.role == .assistant }) {
                 snapLog.info("[SnapshotDiag] caller=\(caller) totalItems=\(newItems.count) blockItems=\(blockItems.count) lastAssistantBlocks=\(lastAssistant.blocks.count) msgCount=\(messages.count)")
                 for (i, block) in lastAssistant.blocks.enumerated() {
-                    let contentLen = block.content.count
-                    let tail = String(block.content.suffix(20))
-                    snapLog.info("[SnapshotDiag]   block[\(i)] kind=\(block.kind) id=\(block.id.uuidString.prefix(8)) contentLen=\(contentLen) tail=\"\(tail)\"")
+                    // 不写正文尾巴、不写块的关联值(命令 / 路径):只记类型和内容摘要。
+                    snapLog.info("[SnapshotDiag]   block[\(i)] kind=\(block.kind.logTag) id=\(block.id.uuidString.prefix(8)) \(LogContentDigest(block.content).fields)")
                 }
             }
 

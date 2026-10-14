@@ -456,7 +456,53 @@ final class LoggingManager: ObservableObject {
         let dir = logDirectory
         DispatchQueue.global(qos: .utility).async {
             Self.pruneOldLogs(in: dir)
+            Self.scrubLegacyLogsIfNeeded(in: dir, today: today)
         }
+    }
+
+    // MARK: - [1.70] 旧日志清洗
+
+    /// 1.70 首次运行那天记作截止日;截止日之前的 `minis-*.log` 立即清洗一遍(见 `LegacyLogScrubber`)。
+    /// 截止日当天的文件还在被写,不碰;等到下一天轮转时它不再是「今天」,再清洗它,之后永不再跑。
+    /// 截止日之后的文件由 1.70 的代码写出,本来就不含正文。
+    private static let scrubCutoffKey = "leo.logs.legacyScrubCutoff"
+    private static let scrubCutoffDoneKey = "leo.logs.legacyScrubCutoffDone"
+
+    private static func scrubLegacyLogsIfNeeded(in directory: URL, today: String) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: scrubCutoffDoneKey) else { return }
+        let cutoff: String
+        if let saved = defaults.string(forKey: scrubCutoffKey) {
+            guard saved < today else { return }   // 截止日还是今天:明天再清它
+            cutoff = saved
+        } else {
+            cutoff = today
+            defaults.set(today, forKey: scrubCutoffKey)
+        }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) else { return }
+        var changedLines = 0
+        var changedFiles = 0
+        for url in files {
+            let name = url.lastPathComponent
+            guard name.hasPrefix("minis-"), url.pathExtension == "log" else { continue }
+            let day = String(name.dropFirst("minis-".count).dropLast(".log".count))
+            // 截止日之前的全部清洗;截止日本身只有在它已不是今天时才清洗。
+            guard day < cutoff || (day == cutoff && cutoff < today) else { continue }
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let text = String(decoding: data, as: UTF8.self)
+            let result = LegacyLogScrubber.scrub(text)
+            guard result.changedLines > 0 else { continue }
+            do {
+                try Data(result.text.utf8).write(to: url, options: .atomic)
+                changedLines += result.changedLines
+                changedFiles += 1
+            } catch {
+                NSLog("[LoggingManager] legacy scrub failed for \(name): \(error.localizedDescription)")
+            }
+        }
+        if cutoff < today { defaults.set(true, forKey: scrubCutoffDoneKey) }
+        NSLog("[LoggingManager] legacy log scrub cutoff=\(cutoff) files=\(changedFiles) lines=\(changedLines)")
     }
 
     /// [T-log-auto-prune] Days of log history to keep. Files whose modification

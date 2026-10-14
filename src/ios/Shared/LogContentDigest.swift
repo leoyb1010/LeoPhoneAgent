@@ -34,3 +34,71 @@ struct LogContentDigest: Equatable, Sendable {
     /// 固定格式,日志与测试共用:`len=1234 lines=56 sha256=ab12cd34`。
     var fields: String { "len=\(length) lines=\(lines) sha256=\(sha8)" }
 }
+
+/// [1.70] 1.69 及以前写下的日志里还有对话片段:SnapshotDiag 的 `tail="…"`、块类型的关联值
+/// (`kind=shellTool(command: "…")`,整条命令连 heredoc 正文)、`inputText='…'`、`textPrefix="…"`、
+/// HangFix 的 `head="…"`、公式 `'…'`、全自动的命令预览。日志保留 15 天,可在「设置 → 日志」分享出去。
+/// 升级后把旧文件清洗一遍:泄露字段从标记处截断,补一个 `[redacted]`;被截断的字符串里若有真换行,
+/// 后面没有时间戳的续行一并删掉。时间戳、类别、长度这些诊断信息保留。
+enum LegacyLogScrubber {
+    static let redaction = "[redacted]"
+
+    /// 从这些标记开始,行的剩余部分都是对话 / 命令内容。
+    static let markers = [
+        "tail=\"", "inputText='", "textPrefix=\"", " head=\"",
+        "(command: \"", "(path: \"", "(action: \"", "(title: \"",
+        "parse error for '", "zero size for '",
+    ]
+    /// 全自动的旧格式:`[FullAuto] 自动批准 <动作> <命令…> 来源=App`,只留动作。
+    static let fullAutoMarker = "[FullAuto] 自动批准 "
+
+    /// 每条记录以 `[HH:MM:SS]` 开头;不是的行是上一条记录里字符串的续行。
+    static func startsRecord(_ line: Substring) -> Bool {
+        let chars = Array(line.prefix(10).utf8)
+        guard chars.count == 10, chars[0] == UInt8(ascii: "["), chars[9] == UInt8(ascii: "]"),
+              chars[3] == UInt8(ascii: ":"), chars[6] == UInt8(ascii: ":") else { return false }
+        return [1, 2, 4, 5, 7, 8].allSatisfy { (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(chars[$0]) }
+    }
+
+    /// 返回清洗后的文本和被改动 / 删除的行数。没有泄露时原样返回、计数为 0。
+    static func scrub(_ text: String) -> (text: String, changedLines: Int) {
+        var out: [Substring] = []
+        var changed = 0
+        var droppingContinuation = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            if droppingContinuation {
+                if startsRecord(line) {
+                    droppingContinuation = false
+                } else {
+                    changed += 1
+                    continue
+                }
+            }
+            if let cut = redactedPrefix(of: line) {
+                out.append(Substring(cut))
+                changed += 1
+                droppingContinuation = true
+            } else {
+                out.append(line)
+            }
+        }
+        return changed == 0 ? (text, 0) : (out.joined(separator: "\n"), changed)
+    }
+
+    private static func redactedPrefix(of line: Substring) -> String? {
+        var earliest: String.Index?
+        for marker in markers {
+            if let r = line.range(of: marker), earliest.map({ r.lowerBound < $0 }) ?? true {
+                earliest = r.lowerBound
+            }
+        }
+        if let r = line.range(of: fullAutoMarker), earliest.map({ r.lowerBound < $0 }) ?? true {
+            let rest = line[r.upperBound...]
+            let action = rest.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+            // 新格式(`… detailLen=N 来源=…`)已经不含命令,不要再动它。
+            if rest.contains(" detailLen=") { return earliest.map { String(line[..<$0]) + redaction } }
+            return String(line[..<r.upperBound]) + action + " " + redaction
+        }
+        return earliest.map { String(line[..<$0]) + redaction }
+    }
+}

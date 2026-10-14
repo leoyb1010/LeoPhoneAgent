@@ -35,6 +35,40 @@ def make_id(existing, seed):
         n += 1
 
 
+# pbxproj 里不加引号也合法的字符;其余(+、空格、中文…)都要加引号。
+_PLAIN = re.compile(r"^[A-Za-z0-9_$/:.\-]+$")
+
+
+def pbx_quote(value):
+    if _PLAIN.match(value):
+        return value
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _unquote(value):
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return value
+
+
+def clone_ref_line(sib_line, sib_id, new_id, sibling, new_name):
+    """把兄弟的 PBXFileReference 行改成新文件的:id、注释、name、path 的最后一段换成新文件名。"""
+    line = sib_line.replace(f"{sib_id} /* {sibling} */", f"{new_id} /* {new_name} */", 1)
+
+    def swap(match):
+        key, raw = match.group(1), match.group(2)
+        value = _unquote(raw)
+        head, _, tail = value.rpartition("/")
+        if tail != sibling:
+            return match.group(0)
+        return f"{key} = {pbx_quote((head + '/' if head else '') + new_name)};"
+
+    line = re.sub(r'\b(path|name) = ("(?:[^"\\]|\\.)*"|[^;]+);', swap, line)
+    if new_name not in line.split("*/", 1)[1]:
+        sys.exit(f"兄弟文件的登记格式无法识别: {sib_line.strip()}")
+    return line
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("path", help="新文件路径(仓库内相对路径或绝对路径)")
@@ -68,11 +102,9 @@ def main():
         new_ref_id = make_id(all_ids, new_name + ":ref")
         all_ids.add(new_ref_id)
 
-        # 1) PBXFileReference:插在兄弟那行后面
-        ref_line = (
-            f"\t\t{new_ref_id} /* {new_name} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; "
-            f"path = {new_name}; sourceTree = \"<group>\"; }};\n"
-        )
+        # 1) PBXFileReference:照抄兄弟那一行,只换 id 和文件名 —— 兄弟用 SOURCE_ROOT 全路径、
+        #    或带 name = 登记时,新文件也得照同样的方式写,不能一律写成 <group> 相对的裸文件名。
+        ref_line = clone_ref_line(sib_ref.group(1), sib_ref_id, new_ref_id, sibling, new_name)
         text = text.replace(sib_ref.group(1), sib_ref.group(1) + ref_line, 1)
 
         # 2) 所在的 PBXGroup children:插在兄弟后面

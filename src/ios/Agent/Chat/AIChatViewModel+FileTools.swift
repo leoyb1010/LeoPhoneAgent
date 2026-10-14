@@ -115,6 +115,12 @@ extension AIChatViewModel {
             return nil
         }
         if linuxPath.hasPrefix("/var/minis/") || linuxPath == "/var/minis" {
+            // [T-kernel-lazy-boot] 用户挂载的外部文件夹只在挂载表里;内核按需启动后,一轮对话里第一次
+            // 读挂载目录时挂载表可能还是空的,会落到下面的会话回退路径、读到不存在的假位置。
+            // 和写入路径一样先把挂载铺好(必要时起内核)。
+            if linuxPath.hasPrefix("/var/minis/mounts/"), let sid = self.subAgentFSSessionId {
+                await ISHExecutionCoordinator.shared.ensureMounted(for: sid)
+            }
             if let resolved = await ISHExecutionCoordinator.shared.hostURL(for: linuxPath) {
                 let exists = FileManager.default.fileExists(atPath: resolved.path)
                 logger.notice("📂[RESOLVE] \(linuxPath) → \(resolved.path) exists=\(exists) sid=\(self.sessionId ?? "nil")")

@@ -2638,8 +2638,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         errorMessage = nil
         logger.info("🔄SESSION [vm=\(self.vmInstanceId)] send START session=\(self.sessionId ?? "nil")")
 
-        // Ensure kernel is booted before running
-        ensureKernelBooted()
+        // [T-kernel-lazy-boot] 不在这里起内核:shell 工具、MCP、挂载目录读写各自经
+        // KernelBootManager 按需启动,纯对话一轮不碰内核。
         beginBackgroundProcessing()
 
         currentTask = Task { [weak self] in
@@ -3045,7 +3045,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         isNearBottom = true
         forceScrollToBottom.send()
 
-        ensureKernelBooted()
         beginBackgroundProcessing()
 
         currentTask = Task { [weak self] in
@@ -3200,7 +3199,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         errorMessage = nil
         isProcessing = true
 
-        ensureKernelBooted()
         beginBackgroundProcessing()
 
         currentTask = Task { [weak self] in
@@ -3509,7 +3507,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         isProcessing = true
         forceScrollToBottom.send()
 
-        ensureKernelBooted()
         beginBackgroundProcessing()
 
         currentTask = Task { [weak self] in
@@ -6096,10 +6093,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 // [T-ios-concurrent-toolcall-dup-id] PRIMARY SUSPECT for the
                 // concurrent cancel-bubble bug: if outcome stitching drops an
                 // entry, that block stays .streaming and lands here.
-                logger.warning("[SafetyNet] force-closing .streaming → .cancelled toolUseId=\(block.toolUseId ?? "nil") kind=\(block.kind) content_len=\(block.content.count)")
+                logger.warning("[SafetyNet] force-closing .streaming → .cancelled toolUseId=\(block.toolUseId ?? "nil") kind=\(block.kind.logTag) content_len=\(block.content.count)")
                 block.toolStatus = .cancelled
             case .running:
-                logger.warning("[SafetyNet] force-closing .running → .cancelled toolUseId=\(block.toolUseId ?? "nil") kind=\(block.kind) content_len=\(block.content.count)")
+                logger.warning("[SafetyNet] force-closing .running → .cancelled toolUseId=\(block.toolUseId ?? "nil") kind=\(block.kind.logTag) content_len=\(block.content.count)")
                 block.toolStatus = .cancelled
             default:
                 break
@@ -6311,7 +6308,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if wasEmpty && !text.isEmpty,
            let message = messages.first(where: { $0.blocks.contains(where: { $0.id == block.id }) }) {
             let blockIdx = message.blocks.firstIndex(where: { $0.id == block.id }) ?? -1
-            let prevBlockKind: String = blockIdx > 0 ? "\(message.blocks[blockIdx - 1].kind)" : "none"
+            let prevBlockKind: String = blockIdx > 0 ? message.blocks[blockIdx - 1].kind.logTag : "none"
             logger.info("[TextDrift] empty→filled blockIdx=\(blockIdx) prevBlockKind=\(prevBlockKind) len=\(text.count)")
             blockContentFilledSignal.send((messageId: message.id, blockId: block.id))
         }

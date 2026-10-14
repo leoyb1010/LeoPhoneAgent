@@ -49,7 +49,11 @@ final class KernelLazyBootWiringTests: XCTestCase {
         // perf.jsonl 的 kernel.boot 记录带 reason / offMain。
         XCTAssertTrue(manager.contains("\"offMain\": true, \"reason\": reason"))
         // 启动完成后的状态发布不阻塞启动线程。
-        XCTAssertTrue(manager.contains("Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }"))
+        XCTAssertTrue(manager.contains("Task { @MainActor in\n                MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded()"))
+        // 后台起的内核补装 CPU 调速器。
+        XCTAssertTrue(manager.contains("BackgroundKeepAliveManager.shared.kernelDidBoot()"))
+        // 同步阻塞入口已删:没有调用方,留着就会有人在主线程上用。
+        XCTAssertFalse(manager.contains("ensureKernelBootedBlocking"))
     }
 
     func testBootOrderIsKeptInsideTheKernelThreadJob() throws {
@@ -76,12 +80,12 @@ final class KernelLazyBootWiringTests: XCTestCase {
         XCTAssertTrue(chat.contains("KernelBootManager.shared.prewarmRootfsInstallIfNeeded()"))
     }
 
-    /// 发送 / 重试 / 继续这些真要跑 agent 的入口仍然走 VM 的 ensureKernelBooted(),
-    /// 它只把共享启动投影到 kernelStatus 上,不再自己 boot。
+    /// VM 的 ensureKernelBooted() 只把共享启动投影到 kernelStatus 上,不再自己 boot;
+    /// 现在只剩启动失败界面的「重试」在用。
     func testViewModelKernelEntryOnlyProjectsTheSharedBoot() throws {
         let misc = try source("Agent/Chat/AIChatViewModel+Misc.swift")
         XCTAssertTrue(misc.contains("try await manager.ensureKernelBooted(reason: reason)"))
-        XCTAssertTrue(misc.contains("KernelBootManager.shared.ensureKernelBootedBlocking("), "旧同步入口改成等共享启动")
+        XCTAssertFalse(misc.contains("bootKernelIfNeeded"), "同步入口已删")
         // 记下是谁触发的;后台触发带 -bg,验证「后台拉起不再起内核」时直接看 perf.jsonl。
         XCTAssertTrue(misc.contains("\"chat-run-bg\""))
         XCTAssertFalse(misc.contains("ISHKernel.shared.boot"))
@@ -93,6 +97,47 @@ final class KernelLazyBootWiringTests: XCTestCase {
         }
         let vm = try source("Agent/Chat/AIChatViewModel.swift")
         XCTAssertTrue(vm.contains("@Published var kernelStatus: KernelStatus = .notBooted"))
+    }
+
+    /// [1.70] 发送 / 重试 / 继续不再起内核:纯对话一轮不碰内核,真要用的工具各自按需启动。
+    func testSendingAMessageDoesNotStartTheKernel() throws {
+        let vm = try source("Agent/Chat/AIChatViewModel.swift")
+        XCTAssertFalse(vm.contains("ensureKernelBooted()"), "发送路径不再调用 ensureKernelBooted()")
+        let coordinator = try source("Agent/ISH/ISHExecutionCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("ensureKernelBooted(reason: \"shell-tool\")"), "shell 工具自己按需启动")
+        XCTAssertTrue(coordinator.contains("ensureKernelBooted(reason: \"mount\")"), "挂载按需启动")
+    }
+
+    /// 内核没起时挂载表是空的:读用户挂载目录前要先铺挂载,否则落到会话回退路径读到假位置。
+    func testReadingAMountedFolderPrimesTheMountTableFirst() throws {
+        let files = try source("Agent/Chat/AIChatViewModel+FileTools.swift")
+        let body = try XCTUnwrap(files.range(of: "func resolvePathForDirectRead("))
+        let text = String(files[body.lowerBound...])
+        let prime = try XCTUnwrap(text.range(of: "await ISHExecutionCoordinator.shared.ensureMounted(for: sid)"))
+        let lookup = try XCTUnwrap(text.range(of: "await ISHExecutionCoordinator.shared.hostURL(for: linuxPath)"))
+        XCTAssertLessThan(prime.lowerBound, lookup.lowerBound)
+        XCTAssertTrue(text.contains("linuxPath.hasPrefix(\"/var/minis/mounts/\"), let sid = self.subAgentFSSessionId"))
+    }
+
+    /// 能力自检在主 actor 上:不能同步阻塞等内核。
+    func testCapabilitySelfTestAwaitsTheKernel() throws {
+        let view = try source("Views/Settings/CapabilitySelfTestView.swift")
+        XCTAssertTrue(view.contains("try await KernelBootManager.shared.ensureKernelBooted(reason: \"capability-self-test\")"))
+    }
+
+    /// 后台 CPU 调速器(10 Hz)只在内核真起来时装;内核在后台才起时补装。
+    func testBackgroundCPUGovernorOnlyArmsWithABootedKernel() throws {
+        let bka = try source("Agent/Background/BackgroundKeepAliveManager.swift")
+        let begins = bka.components(separatedBy: "ISHKernel.shared.beginBackgroundCPUGovernor()").count - 1
+        XCTAssertEqual(begins, 1, "只有 armCPUGovernorIfKernelBooted 一处装调速器")
+        let helper = try XCTUnwrap(bka.range(of: "private func armCPUGovernorIfKernelBooted("))
+        let after = String(bka[helper.lowerBound...])
+        let guardRange = try XCTUnwrap(after.range(of: "guard ISHKernel.shared.isBooted else"))
+        let begin = try XCTUnwrap(after.range(of: "ISHKernel.shared.beginBackgroundCPUGovernor()"))
+        XCTAssertLessThan(guardRange.lowerBound, begin.lowerBound)
+        XCTAssertTrue(bka.contains("func kernelDidBoot()"))
+        XCTAssertTrue(bka.contains("armCPUGovernorIfKernelBooted(caller: \"didEnterBackground\")"))
+        XCTAssertTrue(bka.contains("armCPUGovernorIfKernelBooted(caller: \"setup.launchedInBackground\")"))
     }
 
     // MARK: - 终端

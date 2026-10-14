@@ -72,8 +72,7 @@ extension AIChatViewModel {
             // when text has `@` but show was already false. Most
             // keystrokes that hit this branch are no-ops.
             if showMentionMenu {
-                let preview = String(inputText.prefix(60))
-                mentionPickerLogger.info("[MentionPicker] event=dismiss reason=caretLeftAnchor inputLen=\(nsText.length) caretPos=\(caret) textPrefix=\"\(preview)\"")
+                mentionPickerLogger.info("[MentionPicker] event=dismiss reason=caretLeftAnchor inputLen=\(nsText.length) caretPos=\(caret)")
                 dismissMentionMenu()
             }
             return
