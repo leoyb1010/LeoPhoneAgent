@@ -1,6 +1,4 @@
 /* eslint-disable max-lines -- 子智能体管理页集中维护作用域列表、表单和启用状态，避免状态分散 */
-import { useStartPlanRecommendation } from "@/hooks/useStartPlanRecommendation.js";
-import { hasExplicitModelChanged } from "@/lib/startPlanRecommendation.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Bot, Check, Plus, Trash2 } from "lucide-react";
 import { completeNewModelSelection } from "@zcode/provider";
@@ -40,6 +38,7 @@ import { cn } from "@/components/lib/utils.js";
 import { logger } from "@/logger.js";
 import { settingsResourceRowInteraction } from "@/settings/settingsResourceRowInteraction.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
+import { useModelPickerQuickAccess } from "@/hooks/useModelPickerQuickAccess.js";
 import { useModelSelectionServiceView } from "@/hooks/useModelSelectionView.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -604,8 +603,8 @@ function SubagentModelOverrideControl({
     config: { model?: string; thoughtLevel?: string },
   ) => Promise<void>;
 }) {
-  const recommendStartPlan = useStartPlanRecommendation(modelSelectionView, "subagent");
   const { intl } = useZCodeIntl();
+  const modelPickerQuickAccess = useModelPickerQuickAccess();
   const [pending, setPending] = useState(false);
   const [config, setConfig] = useState<{
     model?: string;
@@ -668,8 +667,7 @@ function SubagentModelOverrideControl({
       try {
         let selectedConfig = nextConfig;
         if (nextConfig.model && nextConfig.model !== config.model) {
-          const selection = toSubagentModelSelection(nextConfig.model, nextConfig.thoughtLevel);
-          const chosen = selection ? await recommendStartPlan(selection) : null;
+          const chosen = toSubagentModelSelection(nextConfig.model, nextConfig.thoughtLevel);
           if (!chosen) {
             setConfig(previousConfig);
             return;
@@ -687,7 +685,7 @@ function SubagentModelOverrideControl({
         setPending(false);
       }
     },
-    [agent, config, onModelOverrideChange, pending, recommendStartPlan],
+    [agent, config, onModelOverrideChange, pending],
   );
   const handleValueChange = useCallback(
     (nextValue: string) => {
@@ -759,6 +757,7 @@ function SubagentModelOverrideControl({
             triggerClassName="h-8 w-fit max-w-52 min-w-0 justify-between rounded-lg border border-input-border bg-input px-3 py-1.5 text-foreground hover:border-input-border-hover hover:bg-input focus-visible:border-input-border-focused focus-visible:bg-input-focused"
             triggerLabelClassName="inline-flex min-w-0 truncate text-left"
             disabled={disabled || pending}
+            quickAccess={modelPickerQuickAccess}
           />
         </span>
         <SubagentReasoningField
@@ -812,8 +811,8 @@ function SubagentForm({
   workspaceTabs: WorkspaceTabState[];
   onScopeKeyChange: (scopeKey: string) => void;
 }) {
-  const recommendStartPlan = useStartPlanRecommendation(modelSelectionView, "subagent");
   const { intl } = useZCodeIntl();
+  const modelPickerQuickAccess = useModelPickerQuickAccess();
   const initialFormStateKey = createSubagentFormInitialStateKey(initial);
   const initialFormState = useMemo(
     () => createSubagentFormInitialState(initial),
@@ -1001,12 +1000,7 @@ function SubagentForm({
     if (!validate()) {
       return;
     }
-    let selection = toSubagentModelSelection(persistedModel, thoughtLevel);
-    if (hasExplicitModelChanged(initial?.modelSelection, selection)) {
-      const chosen = await recommendStartPlan(selection);
-      if (!chosen) return;
-      selection = chosen;
-    }
+    const selection = toSubagentModelSelection(persistedModel, thoughtLevel);
     await onSave({
       name: name.trim(),
       description: description.trim(),
@@ -1115,6 +1109,7 @@ function SubagentForm({
               labelVisibilityClassName="inline-flex min-w-0"
               triggerClassName="h-8 w-fit max-w-full min-w-0 justify-between rounded-lg border border-input-border bg-input bg-clip-border px-3 py-1.5 text-foreground hover:border-input-border-hover hover:bg-input focus-visible:border-input-border-focused focus-visible:bg-input-focused"
               triggerLabelClassName="inline-flex min-w-0 truncate text-left"
+              quickAccess={modelPickerQuickAccess}
             />
             <SubagentReasoningField
               intl={intl}
@@ -1314,18 +1309,8 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
   const pluginInventoryWorkspacePath = targetWorkspacePath || workspaceTabs[0]?.workspacePath;
   const chatModelSelectGroups = useMemo(() => {
     if (!modelSelectionView) return [];
-    return buildRegistryModelSelectGroups(ZCODE_AGENT_PROVIDER, modelSelectionView, {
-      startPlanBadgeLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.startPlanBadge",
-      }),
-      apiKeyLabel: intl.formatMessage({
-        id: "settings.modelProvider.apiKey",
-      }),
-      codingPlanLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.codingPlan",
-      }),
-    });
-  }, [intl, modelSelectionView]);
+    return buildRegistryModelSelectGroups(ZCODE_AGENT_PROVIDER, modelSelectionView);
+  }, [modelSelectionView]);
   const subagentModelSelectGroups = chatModelSelectGroups;
   const loadAgents = useCallback(
     async (showBlockingLoading: boolean) => {

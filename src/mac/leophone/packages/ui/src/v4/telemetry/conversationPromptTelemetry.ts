@@ -1,4 +1,4 @@
-import { ZCODE_AGENT_PROVIDER, type PlanIdentitySnapshot, type ZCodeProvider } from "@zcode/shared";
+import { ZCODE_AGENT_PROVIDER, type ZCodeProvider } from "@zcode/shared";
 import { buildPromptTelemetryExtraDetail } from "@/lib/messageTelemetry.js";
 import { encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import {
@@ -40,7 +40,6 @@ export function buildV4ConversationPromptTelemetryExtraDetail(params: {
   modelName?: string | null;
   askMode?: string | null;
   providerBaseURL?: string | null;
-  planIdentitySnapshot?: PlanIdentitySnapshot | null;
 }): Record<string, string> {
   const agentProvider = params.agentProvider ?? ZCODE_AGENT_PROVIDER;
   const base = buildPromptTelemetryExtraDetail({
@@ -48,7 +47,6 @@ export function buildV4ConversationPromptTelemetryExtraDetail(params: {
     modelName: resolveLegacyConversationModelValue(params),
     provider: agentProvider,
     providerBaseURL: params.providerBaseURL,
-    planIdentitySnapshot: params.planIdentitySnapshot,
   });
   return {
     ...base,

@@ -26,14 +26,15 @@ export function RootStartupLoading({ label, children, busy = true }: RootStartup
 
 /** 启动加载的品牌图标。 */
 function ZCodeStartupLogoBadge() {
-  // [leo] 启动加载的品牌标志换成 LeoPhoneAgent 图标;动效保留为轻微呼吸。
+  // [leo] 启动加载用 LeoBot 机器人标志；1.9.0 起和 HTML 启动壳同尺寸、同圆角、不再呼吸，
+  // React 接管前后是同一个静止的标志，启动过程不跳不闪。
   return (
     <img
       src={leoLogoUrl}
       alt=""
       aria-hidden="true"
       draggable={false}
-      className="size-24 shrink-0 rounded-3xl shadow-xl/20 motion-safe:animate-pulse"
+      className="size-18 shrink-0 rounded-[22px] shadow-lg/20"
     />
   );
 }

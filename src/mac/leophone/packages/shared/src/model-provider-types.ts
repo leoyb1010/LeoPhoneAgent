@@ -79,3 +79,6 @@ export type ModelConnectivityResult =
         readonly code?: "provider-unavailable" | "model-unavailable";
       };
     };
+
+/** 官方账号连接可用性检查失败原因（账号 Provider 适配层使用）。 */
+export type CodingPlanUnavailableReason = "not_authenticated" | "request_failed";

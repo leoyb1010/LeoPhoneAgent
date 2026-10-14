@@ -246,10 +246,6 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - @jridgewell/trace-mapping@0.3.31 — MIT
 
-- @larksuiteoapi/node-sdk@1.61.1 — MIT
-
-- @larksuiteoapi/node-sdk@1.64.0 — MIT
-
 - @lexical/clipboard@0.42.0 — MIT
 
 - @lexical/code-core@0.42.0 — MIT
@@ -4415,40 +4411,6 @@ SOFTWARE.
 ````text
 # License
 
-MIT
-
-````
-
-### Notice f9bfd5e309b1523a2dd3937b44f516e6018605eb05b35336485b0a34cbd9f373
-
-- @larksuiteoapi/node-sdk@1.61.1: LICENSE
-
-- @larksuiteoapi/node-sdk@1.64.0: LICENSE
-
-
-
-````text
-MIT License
-
-Copyright (c) 2022 Lark Technologies Pte. Ltd.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice, shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-````
-
-### Notice d0de7064760700e47a0fdedd12ae4e027146e16e9cec0233505fe7c4ed5b3344
-
-- @larksuiteoapi/node-sdk@1.61.1: README.md (license section)
-
-- @larksuiteoapi/node-sdk@1.64.0: README.md (license section)
-
-
-
-````text
-## LICENSE
 MIT
 
 ````

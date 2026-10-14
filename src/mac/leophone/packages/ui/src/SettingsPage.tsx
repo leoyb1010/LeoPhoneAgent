@@ -4,8 +4,10 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import type {
@@ -13,13 +15,14 @@ import type {
   IntegratedTerminalShellOption,
   IntegratedTerminalShellSelection,
   Locale,
-  UsageEntitlementSnapshot,
   UserInfo,
   ZCodeInteractionBehavior,
 } from "@zcode/shared";
 import {
-  BUILTIN_MODEL_PROVIDER_IDS,
   TID_SETTINGS_BACK_BUTTON,
+  TID_SETTINGS_EXTENSIONS_TAB,
+  TID_SETTINGS_NAV_SEARCH_INPUT,
+  TID_SETTINGS_NAV_SEARCH_RESULT,
   TID_SETTINGS_PAGE,
   TID_SETTINGS_SECTION_NAV,
   TID_SETTINGS_USAGE_TAB,
@@ -31,8 +34,6 @@ import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { getPathLeaf } from "@/lib/path.js";
-import { useProviderSettingsView } from "@/hooks/useProviderSettingsView.js";
-import { useUsageEntitlement } from "@/hooks/useUsageEntitlement.js";
 import {
   addPendingSettingsSectionListener,
   clearPendingSettingsPluginOrigin,
@@ -42,27 +43,11 @@ import {
   consumePendingSettingsPluginScopeKey,
   consumePendingSettingsPluginTab,
   consumePendingSettingsModelProviderTarget,
-  consumePendingSettingsUsageTab,
   resolveSettingsSection,
-  shouldFallbackSettingsUsageTabToApp,
-  writeLastSettingsSectionPreference,
   type SettingsModelProviderTarget,
 } from "@/lib/settingsNavigation.js";
-import { readSidebarUsageCodingPlanSourcePreference } from "@/lib/sidebarUsageCodingPlanProviderPreference.js";
-import {
-  resolveEntitledAccountProviderAccess,
-  resolveEntitledAccountProviderAccessFingerprint,
-} from "@/lib/accountProviderAccess.js";
-import { buildUsageEntitlementCacheKey } from "@/lib/usageEntitlementCache.js";
 import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
-import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
-import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
-import { UsageStatsSection, type UsageStatsSectionTab } from "@/settings/UsageStatsSection.js";
-import {
-  buildCodingPlanUsageSources,
-  type CodingPlanUsageSource,
-} from "@/settings/usage-stats/CodingPlanUsagePanel.js";
-import { buildPersonalCodingPlanUsageSource } from "@/lib/codingPlanUsageSources.js";
+import { UsageStatsSection } from "@/settings/UsageStatsSection.js";
 import { SubagentsSection } from "@/settings/SubagentsSection.js";
 import { AutomationsSection } from "@/settings/AutomationsSection.js";
 import { SegmentPill } from "@/settings/PluginStoreListView.js";
@@ -76,6 +61,13 @@ import { ShortcutSettingsSection } from "@/settings/ShortcutSettingsSection.js";
 import { MigrationSection } from "@/settings/MigrationSection.js";
 import { LeoPhoneLinkSection } from "@/leo/LeoPhoneLinkSection.js";
 import { SETTINGS_FRAME_CONTENT_CLASSNAME } from "@/settings/SettingsPageParts.js";
+import { SettingsSearchInput } from "@/settings/SettingsSearchInput.js";
+import { resolveSettingsNavEntryId } from "@/settings/settingsPageConfig.js";
+import {
+  buildSettingsSearchCandidates,
+  filterSettingsSearchCandidates,
+  type SettingsSearchCandidate,
+} from "@/settings/settingsSearch.js";
 import {
   SettingsBreadcrumbProvider,
   SettingsHeaderBreadcrumb,
@@ -134,96 +126,17 @@ function runSettingsActionAsync<T>(options: {
   });
 }
 
-function SettingsUsageProviderTabs({
-  activeTab,
-  codingPlanSources,
-  onTabChange,
-}: {
-  activeTab: UsageStatsSectionTab;
-  codingPlanSources: CodingPlanUsageSource[];
-  onTabChange: (tab: UsageStatsSectionTab) => void;
-}) {
+function SettingsUsageProviderTabs() {
   const { intl } = useZCodeIntl();
-  const tabItems = [
-    {
-      id: "app" as const,
-      label: intl.formatMessage({ id: "settings.usage.tab.appUsage" }),
-    },
-    ...codingPlanSources.map((source, index) => ({
-      id: createSettingsUsageCodingPlanTabId(source.id),
-      label: resolveSettingsUsageCodingPlanTabLabel({
-        defaultLabel: intl.formatMessage({
-          id: "settings.usage.tab.codingPlan",
-        }),
-        hasMultiplePersonalSources:
-          codingPlanSources.filter((item) => !isTeamCodingPlanUsageSource(item)).length > 1,
-        index,
-        source,
-      }),
-    })),
-  ];
-  const visibleActiveTab =
-    activeTab === "codingPlan" && codingPlanSources[0]
-      ? createSettingsUsageCodingPlanTabId(codingPlanSources[0].id)
-      : activeTab;
-
   return (
     <div className="flex items-center gap-1.5">
-      {tabItems.map((item) => (
-        <SegmentPill
-          key={item.id}
-          active={visibleActiveTab === item.id}
-          label={item.label}
-          testId={testId(TID_SETTINGS_USAGE_TAB, item.id)}
-          onClick={() => onTabChange(item.id)}
-        />
-      ))}
+      <SegmentPill
+        active
+        label={intl.formatMessage({ id: "settings.usage.tab.appUsage" })}
+        testId={testId(TID_SETTINGS_USAGE_TAB, "app")}
+        onClick={() => undefined}
+      />
     </div>
-  );
-}
-
-function isTeamCodingPlanUsageSource(source: CodingPlanUsageSource): boolean {
-  return "planKind" in source.accountAccess && source.accountAccess.planKind === "team-coding-plan";
-}
-
-function createSettingsUsageCodingPlanTabId(sourceId: string): UsageStatsSectionTab {
-  return `codingPlan:${sourceId}`;
-}
-
-function resolveSettingsUsageCodingPlanSourceId(tab: UsageStatsSectionTab): string | null {
-  return tab.startsWith("codingPlan:") ? tab.slice("codingPlan:".length) : null;
-}
-
-function resolveSettingsUsageCodingPlanTabLabel({
-  defaultLabel,
-  hasMultiplePersonalSources,
-  source,
-}: {
-  defaultLabel: string;
-  hasMultiplePersonalSources: boolean;
-  index: number;
-  source: CodingPlanUsageSource;
-}): string {
-  if (isTeamCodingPlanUsageSource(source)) {
-    return source.label.replace(/^BigModel\s*-\s*/i, "").trim() || source.label;
-  }
-  if (hasMultiplePersonalSources) {
-    return source.label.replace(/\s*-\s*Coding Plan$/i, "").trim() || source.label;
-  }
-  return defaultLabel;
-}
-
-function hasActiveCodingPlanSnapshot(
-  snapshot: UsageEntitlementSnapshot | null,
-  providerId: string,
-): boolean {
-  return (
-    snapshot?.provider?.id === providerId &&
-    snapshot.unavailableReason !== "no_plan" &&
-    (Boolean(snapshot.subscription?.details.length) ||
-      // quota 暂时失败时服务仍能确认当前 provider，但旧过滤条件会把
-      // Coding Plan tab 当成未开通套餐删除。只有明确 no_plan 才应隐藏入口。
-      snapshot.unavailableReason === "unavailable")
   );
 }
 
@@ -248,7 +161,8 @@ function SettingsSidebarButton({
         type={buttonProps.type ?? "button"}
         aria-label={label}
         className={cn(
-          "flex h-8 w-full items-center gap-2 rounded-xl px-2.5 text-left transition-colors",
+          // [leo] 紧凑导航：行高 h-7、小图标，与 iOS 设置列表的密度对齐。
+          "flex h-7 w-full items-center gap-2 rounded-lg px-2.5 text-left transition-colors",
           "max-lg:mx-auto max-lg:size-10 max-lg:justify-center max-lg:px-0",
           active
             ? "bg-surface-hover text-foreground"
@@ -257,7 +171,7 @@ function SettingsSidebarButton({
         )}
       >
         <span className="flex size-4 shrink-0 items-center justify-center text-current">
-          <Icon className="size-4 text-foreground" />
+          <Icon className="size-3.5 text-foreground-subtle max-lg:size-4" />
         </span>
         <span className="min-w-0 flex-1 max-lg:sr-only">
           {children ?? <span className="truncate text-ui-base text-foreground">{label}</span>}
@@ -295,7 +209,7 @@ export function SettingsPage({
   user?: UserInfo | null;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
-  const { settingsSectionGroups, settingsSections } = useMemo(
+  const settingsPageConfig = useMemo(
     () =>
       createSettingsPageConfig({
         isDesktop: Boolean(isDesktop),
@@ -304,20 +218,15 @@ export function SettingsPage({
       }),
     [isDesktop, isMacDesktop, isWindowsDesktop],
   );
+  const { settingsSectionGroups, settingsSections, extensionSections, extensionsNavEntry } =
+    settingsPageConfig;
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || isLinuxDesktop);
   const platform = usePlatform();
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>(() => {
-    const initialSection = consumeInitialSettingsSection("general");
-    const visibleInitialSection = resolveSettingsSectionForPlatform(
-      initialSection,
-      settingsSections,
-    );
-    // 设置页首次挂载时也要写入当前落点。否则用户直接打开再退出，
-    // 下一次仍可能因为没有偏好记录而回到旧默认入口。
-    writeLastSettingsSectionPreference(visibleInitialSection);
-    return visibleInitialSection;
-  });
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(() =>
+    // [leo] 没有显式意图时落在「AI 服务商」，见 docs/specs/leo-settings-ia.md。
+    resolveSettingsSectionForPlatform(consumeInitialSettingsSection(), settingsSections),
+  );
   const [pluginTab, setPluginTab] = useState(() => consumePendingSettingsPluginTab());
   const [pluginNavigationOrigin, setPluginNavigationOrigin] = useState(() =>
     consumePendingSettingsPluginOrigin(),
@@ -345,268 +254,16 @@ export function SettingsPage({
   const setNotificationEnabled = useZCodeStore((state) => state.setNotificationEnabled);
   const notificationSoundEnabled = useZCodeStore((state) => state.notificationSoundEnabled);
   const setNotificationSoundEnabled = useZCodeStore((state) => state.setNotificationSoundEnabled);
-  const usageProviderSettingsRead = useProviderSettingsView();
-  const usageProviderSettingsView =
-    usageProviderSettingsRead.state.status === "ready"
-      ? usageProviderSettingsRead.state.view
-      : null;
-  const usageProviderSettingsLoading = usageProviderSettingsRead.state.status !== "ready";
-  const usageZaiProvider = usageProviderSettingsView?.providers.find(
-    (provider) => provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-  );
-  const usageBigmodelProvider = usageProviderSettingsView?.providers.find(
-    (provider) => provider.providerId === BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-  );
-  const usageZaiProviderAccess = resolveEntitledAccountProviderAccess(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-  );
-  const usageBigmodelProviderAccess = resolveEntitledAccountProviderAccess(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-  );
-  const usageZaiProviderFingerprint = resolveEntitledAccountProviderAccessFingerprint(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-  );
-  const usageBigmodelProviderFingerprint = resolveEntitledAccountProviderAccessFingerprint(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-  );
-  const usageZaiTeamProviderFingerprint = resolveEntitledAccountProviderAccessFingerprint(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.zaiTeamCodingPlan,
-  );
-  const usageBigmodelTeamProviderFingerprint = resolveEntitledAccountProviderAccessFingerprint(
-    usageProviderSettingsView,
-    BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan,
-  );
-  const usageZaiEntitlement = useUsageEntitlement({
-    enabled:
-      activeSection === "usage" &&
-      !usageProviderSettingsLoading &&
-      Boolean(usageZaiProviderFingerprint),
-    includeSubscription: true,
-    preferredProviderId: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-    accountAccess: usageZaiProviderAccess?.access,
-    allowDisabledPreferredProvider: true,
-    requirePreferredProvider: true,
-    allowEnvApiKey: false,
-    cacheKey: buildUsageEntitlementCacheKey({
-      providerId: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-      providerFingerprint: usageZaiProviderFingerprint,
-    }),
-    // 个人 Usage source 依赖 entitlement snapshot；冷启动无缓存时若不先探测，
-    // source 不会渲染，子面板也无法触发 access 刷新。共享 freshness window 继续负责限频。
-    refreshOnMount: true,
-  });
-  const usageBigmodelEntitlement = useUsageEntitlement({
-    enabled:
-      activeSection === "usage" &&
-      !usageProviderSettingsLoading &&
-      Boolean(usageBigmodelProviderFingerprint),
-    includeSubscription: true,
-    preferredProviderId: BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-    accountAccess: usageBigmodelProviderAccess?.access,
-    allowDisabledPreferredProvider: true,
-    requirePreferredProvider: true,
-    allowEnvApiKey: false,
-    cacheKey: buildUsageEntitlementCacheKey({
-      providerId: BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-      providerFingerprint: usageBigmodelProviderFingerprint,
-    }),
-    refreshOnMount: true,
-  });
-  // 原只拉 bigmodel family 的企业 pricing，zai team plan 在使用统计页
-  // 永远拿不到 team project 上下文；后续又误用 Individual Provider 的权益作为 Team
-  // 商品门禁，导致仅有 Team Plan 的账号仍然没有 Usage 来源。企业商品只依赖对应的
-  // Team Account Provider，个人额度继续依赖 Individual Provider，避免两个产品身份串线。
-  const usageBigmodelEnterpriseProducts = useEnterpriseCodingPlanProducts({
-    enabled: !usageProviderSettingsLoading && Boolean(usageBigmodelTeamProviderFingerprint),
-    authenticated: true,
-    family: "bigmodel",
-  });
-  const usageZaiEnterpriseProducts = useEnterpriseCodingPlanProducts({
-    enabled: !usageProviderSettingsLoading && Boolean(usageZaiTeamProviderFingerprint),
-    authenticated: true,
-    family: "zai",
-  });
-  const usageSubscribedTeamProducts = useMemo(
-    () => [
-      ...(usageBigmodelEnterpriseProducts.snapshot?.productList.filter(
-        (product) => product.subscribed === true,
-      ) ?? []),
-      ...(usageZaiEnterpriseProducts.snapshot?.productList.filter(
-        (product) => product.subscribed === true,
-      ) ?? []),
-    ],
-    [
-      usageBigmodelEnterpriseProducts.snapshot?.productList,
-      usageZaiEnterpriseProducts.snapshot?.productList,
-    ],
-  );
-  const [usageActiveTab, setUsageActiveTab] = useState<UsageStatsSectionTab>(() => {
-    const pendingTab = consumePendingSettingsUsageTab();
-    return pendingTab === "codingPlan" ? "codingPlan" : (pendingTab ?? "app");
-  });
-  const usagePersonalCodingPlanSources = useMemo(() => {
-    const sources: CodingPlanUsageSource[] = [];
-    if (
-      usageZaiProviderAccess &&
-      hasActiveCodingPlanSnapshot(
-        usageZaiEntitlement.snapshot,
-        BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-      )
-    ) {
-      sources.push(
-        buildPersonalCodingPlanUsageSource({
-          providerId: BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-          accountAccess: usageZaiProviderAccess.access,
-          label: usageZaiProvider?.providerName,
-        }),
-      );
-    }
-    if (
-      usageBigmodelProviderAccess &&
-      hasActiveCodingPlanSnapshot(
-        usageBigmodelEntitlement.snapshot,
-        BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-      )
-    ) {
-      sources.push(
-        buildPersonalCodingPlanUsageSource({
-          providerId: BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan,
-          accountAccess: usageBigmodelProviderAccess.access,
-          label: usageBigmodelProvider?.providerName,
-        }),
-      );
-    }
-    return sources;
-  }, [
-    usageBigmodelEntitlement.snapshot,
-    usageBigmodelProvider,
-    usageBigmodelProviderAccess,
-    usageZaiEntitlement.snapshot,
-    usageZaiProvider,
-    usageZaiProviderAccess,
-  ]);
-  const usageTeamCodingPlanSources = useMemo(
-    () =>
-      buildCodingPlanUsageSources({
-        accountAccesses: {
-          ...(resolveEntitledAccountProviderAccess(
-            usageProviderSettingsView,
-            BUILTIN_MODEL_PROVIDER_IDS.zaiTeamCodingPlan,
-          )?.access
-            ? {
-                zai: resolveEntitledAccountProviderAccess(
-                  usageProviderSettingsView,
-                  BUILTIN_MODEL_PROVIDER_IDS.zaiTeamCodingPlan,
-                )!.access,
-              }
-            : {}),
-          ...(resolveEntitledAccountProviderAccess(
-            usageProviderSettingsView,
-            BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan,
-          )?.access
-            ? {
-                bigmodel: resolveEntitledAccountProviderAccess(
-                  usageProviderSettingsView,
-                  BUILTIN_MODEL_PROVIDER_IDS.bigmodelTeamCodingPlan,
-                )!.access,
-              }
-            : {}),
-        },
-        subscribedTeamProducts: usageSubscribedTeamProducts,
-      }),
-    [usageProviderSettingsView, usageSubscribedTeamProducts],
-  );
-  const usageCodingPlanSources = useMemo(
-    () => [...usagePersonalCodingPlanSources, ...usageTeamCodingPlanSources],
-    [usagePersonalCodingPlanSources, usageTeamCodingPlanSources],
-  );
-  const selectedUsageCodingPlanSourceId =
-    usageActiveTab === "codingPlan"
-      ? (usageCodingPlanSources[0]?.id ?? null)
-      : resolveSettingsUsageCodingPlanSourceId(usageActiveTab);
-  const selectedUsageCodingPlanSource =
-    usageCodingPlanSources.find((source) => source.id === selectedUsageCodingPlanSourceId) ?? null;
-  const showUsageCodingPlanTab = usageCodingPlanSources.length > 0;
-  const checkingUsageZaiCodingPlanTab = Boolean(
-    usageZaiProviderFingerprint &&
-    (usageZaiEntitlement.loading || (!usageZaiEntitlement.snapshot && !usageZaiEntitlement.error)),
-  );
-  const checkingUsageBigmodelCodingPlanTab = Boolean(
-    usageBigmodelProviderFingerprint &&
-    (usageBigmodelEntitlement.loading ||
-      (!usageBigmodelEntitlement.snapshot && !usageBigmodelEntitlement.error)),
-  );
-  const checkingUsageCodingPlanTab =
-    usageProviderSettingsLoading ||
-    checkingUsageZaiCodingPlanTab ||
-    checkingUsageBigmodelCodingPlanTab ||
-    usageBigmodelEnterpriseProducts.loading ||
-    usageZaiEnterpriseProducts.loading;
   const [initialModelProviderTarget] = useState(() => consumePendingSettingsModelProviderTarget());
-  const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
   const [pendingModelProviderTarget, setPendingModelProviderTarget] = useState<
     SettingsModelProviderTarget | undefined
   >(() => initialModelProviderTarget);
-  const handleUsageTabSelect = useCallback((tab: UsageStatsSectionTab) => {
-    setUsageActiveTab(tab);
-  }, []);
-  /*
-   * 使用统计是账号级 sources，不再绑定当前 workspace 连接方式。
-   * 旧入口只会写入 "codingPlan" 意图；等 sources 加载后需要落到真实来源。
-   * 剩余额度「更多」等入口会先写入来源偏好（当前 coding plan 类型/团队项目），
-   * 解析时优先选中该来源，缺失或已不可用时回退第一份真实来源。
-   */
-  useEffect(() => {
-    if (usageActiveTab !== "codingPlan" || !usageCodingPlanSources[0]) {
-      return;
-    }
-    const preferredSourceId = readSidebarUsageCodingPlanSourcePreference();
-    const preferredSource = preferredSourceId
-      ? usageCodingPlanSources.find((source) => source.id === preferredSourceId)
-      : undefined;
-    setUsageActiveTab(
-      createSettingsUsageCodingPlanTabId((preferredSource ?? usageCodingPlanSources[0]).id),
-    );
-  }, [usageActiveTab, usageCodingPlanSources]);
-  useEffect(() => {
-    if (
-      usageActiveTab === "app" ||
-      usageActiveTab === "codingPlan" ||
-      selectedUsageCodingPlanSource
-    ) {
-      return;
-    }
-    setUsageActiveTab(
-      usageCodingPlanSources[0]
-        ? createSettingsUsageCodingPlanTabId(usageCodingPlanSources[0].id)
-        : "app",
-    );
-  }, [selectedUsageCodingPlanSource, usageActiveTab, usageCodingPlanSources]);
   const requestOnboardingDialog = useZCodeStore((state) => state.requestOnboardingDialog);
   const setActiveSettingsSection = useCallback(
     (section: SettingsSectionId, fallbackSection: SettingsSectionId = activeSection) => {
-      const resolvedSection = resolveSettingsSection(section, fallbackSection);
-      setActiveSection(resolvedSection);
-      writeLastSettingsSectionPreference(resolvedSection);
+      setActiveSection(resolveSettingsSection(section, fallbackSection));
     },
     [activeSection],
-  );
-  const handleOpenCodingPlanUpgradeSettings = useCallback(
-    (
-      providerId: string,
-      funnelContext?: import("@/lib/codingPlanFunnelTelemetry.js").CodingPlanFunnelContext,
-    ) => {
-      openCodingPlanUpgrade({
-        providerId,
-        funnelContext,
-      });
-    },
-    [openCodingPlanUpgrade],
   );
   const handleOpenModelProviderSettings = useCallback(() => {
     setActiveSettingsSection("modelProvider");
@@ -699,7 +356,6 @@ export function SettingsPage({
     desktopChromiumHardwareAccelerationEnabled,
     setDesktopChromiumHardwareAccelerationEnabled,
   ] = useState(true);
-  const [receivePreviewUpdates, setReceivePreviewUpdates] = useState(false);
   const [autoDownloadAndInstallUpdates, setAutoDownloadAndInstallUpdates] = useState(false);
   const [messageStreamShowReasoning, setMessageStreamShowReasoning] = useState(true);
   const [messageStreamShowTodos, setMessageStreamShowTodos] = useState(false);
@@ -711,30 +367,6 @@ export function SettingsPage({
   const [defaultHomeDir, setDefaultHomeDir] = useState("");
   const [hostPlatform, setHostPlatform] = useState("");
 
-  useEffect(() => {
-    if (
-      !shouldFallbackSettingsUsageTabToApp({
-        activeTab: usageActiveTab === "app" ? "app" : "codingPlan",
-        checkingCodingPlanTab: checkingUsageCodingPlanTab,
-        loadingModelProviders: usageProviderSettingsLoading,
-        showCodingPlanTab: showUsageCodingPlanTab,
-      })
-    ) {
-      return;
-    }
-
-    // 剩余额度入口会先写入 Coding Plan tab 意图，再打开设置页。
-    // 如果首帧 provider/entitlement 仍在加载就立刻回退，会让“更多”看起来只打开了 App Usage。
-    // 这里等数据确认没有套餐后再回退，避免空入口误导用户。
-    setUsageActiveTab("app");
-  }, [
-    checkingUsageCodingPlanTab,
-    showUsageCodingPlanTab,
-    usageSubscribedTeamProducts.length,
-    usageActiveTab,
-    usageProviderSettingsLoading,
-  ]);
-
   useEffect(
     () =>
       addPendingSettingsSectionListener((section, detail) => {
@@ -744,9 +376,6 @@ export function SettingsPage({
         setActiveSettingsSection(section, activeSection);
         // 设置入口是一级路由边界。即使仍落在同一 section，也必须销毁旧的 New/Edit/Detail 子状态。
         setSettingsSectionNavigationVersion((version) => version + 1);
-        if (section === "usage" && detail?.usageTab) {
-          setUsageActiveTab(detail.usageTab);
-        }
         if (resolveSettingsSection(section) === "plugin" && detail?.pluginTab) {
           setPluginTab(detail.pluginTab);
           setPluginNavigationOrigin(detail.pluginOrigin);
@@ -783,7 +412,6 @@ export function SettingsPage({
         setDesktopChromiumHardwareAccelerationEnabled(
           settings.desktopChromiumHardwareAccelerationEnabled ?? true,
         );
-        setReceivePreviewUpdates(settings.receivePreviewUpdates ?? false);
         setAutoDownloadAndInstallUpdates(settings.autoDownloadAndInstallUpdates ?? false);
         setMessageStreamShowReasoning(settings.messageStreamShowReasoning ?? true);
         setMessageStreamShowTodos(settings.messageStreamShowTodos ?? false);
@@ -824,7 +452,6 @@ export function SettingsPage({
     setToolGroupingTerminalEnabled(sharedSettings.toolGroupingTerminalEnabled ?? true);
     setToolGroupingChangesEnabled(sharedSettings.toolGroupingChangesEnabled ?? false);
     setZCodeInteractionBehavior(sharedSettings.zcodeInteractionBehavior ?? "queue");
-    setReceivePreviewUpdates(sharedSettings.receivePreviewUpdates ?? false);
     setAutoDownloadAndInstallUpdates(sharedSettings.autoDownloadAndInstallUpdates ?? false);
   }, [sharedSettings]);
   const handleTerminalInheritSystemProfileChange = useCallback(
@@ -833,7 +460,10 @@ export function SettingsPage({
         featureId: "settings.terminal",
         action: "toggle_system_profile",
         trigger: "switch",
-        operation: () => services.settingService.update({ terminalInheritSystemProfile: enabled }),
+        operation: () =>
+          services.settingService.update({
+            terminalInheritSystemProfile: enabled,
+          }),
         completed: {
           resultSource: "setting_service",
           stateAfter: enabled ? "enabled" : "disabled",
@@ -851,8 +481,13 @@ export function SettingsPage({
         action: "save_font_family",
         trigger: "button",
         operation: () =>
-          services.settingService.update({ terminalFontFamily: normalizedFontFamily }),
-        completed: { resultSource: "setting_service", configured: normalizedFontFamily.length > 0 },
+          services.settingService.update({
+            terminalFontFamily: normalizedFontFamily,
+          }),
+        completed: {
+          resultSource: "setting_service",
+          configured: normalizedFontFamily.length > 0,
+        },
       });
       setTerminalFontFamily(normalizedFontFamily);
     },
@@ -864,7 +499,10 @@ export function SettingsPage({
         featureId: "settings.terminal",
         action: "change_shell",
         trigger: "select",
-        operation: () => services.settingService.update({ integratedTerminalShell: selection }),
+        operation: () =>
+          services.settingService.update({
+            integratedTerminalShell: selection,
+          }),
         completed: {
           resultSource: "setting_service",
           valueAfter: selection.mode === "auto" ? "auto" : "explicit",
@@ -895,7 +533,10 @@ export function SettingsPage({
         featureId: "settings.conversation",
         action: "toggle_ask_user_auto_resolution",
         trigger: "switch",
-        operation: () => updateSharedSettings({ askUserQuestionAutoResolutionEnabled: enabled }),
+        operation: () =>
+          updateSharedSettings({
+            askUserQuestionAutoResolutionEnabled: enabled,
+          }),
         completed: {
           resultSource: "shared_settings",
           stateAfter: enabled ? "enabled" : "disabled",
@@ -975,7 +616,10 @@ export function SettingsPage({
             // Bugfix: 清空 No Proxy 必须传空串，否则旧绕过规则会继续影响下次启动。
             httpProxyNoProxy: normalizedNoProxy,
           }),
-        completed: { resultSource: "setting_service", configured: normalizedNoProxy.length > 0 },
+        completed: {
+          resultSource: "setting_service",
+          configured: normalizedNoProxy.length > 0,
+        },
       });
       setHttpProxyNoProxy(normalizedNoProxy);
       toast(intl.formatMessage({ id: "settings.httpProxySavedHint" }));
@@ -1042,8 +686,14 @@ export function SettingsPage({
         featureId: "settings.task",
         action: "change_auto_archive_days",
         trigger: "select",
-        operation: () => services.settingService.update({ taskAutoArchiveOlderThanDays: days }),
-        completed: { resultSource: "setting_service", valueAfter: String(days) },
+        operation: () =>
+          services.settingService.update({
+            taskAutoArchiveOlderThanDays: days,
+          }),
+        completed: {
+          resultSource: "setting_service",
+          valueAfter: String(days),
+        },
       });
       setTaskAutoArchiveOlderThanDays(days);
     },
@@ -1089,7 +739,9 @@ export function SettingsPage({
         action: "toggle_hardware_acceleration",
         trigger: "switch",
         operation: () =>
-          services.settingService.update({ desktopChromiumHardwareAccelerationEnabled: enabled }),
+          services.settingService.update({
+            desktopChromiumHardwareAccelerationEnabled: enabled,
+          }),
         completed: {
           resultSource: "setting_service",
           stateAfter: enabled ? "enabled" : "disabled",
@@ -1112,7 +764,9 @@ export function SettingsPage({
         action: "toggle_insecure_certificates",
         trigger: "switch",
         operation: () =>
-          services.settingService.update({ embeddedBrowserAllowInsecureCertificates: enabled }),
+          services.settingService.update({
+            embeddedBrowserAllowInsecureCertificates: enabled,
+          }),
         completed: {
           resultSource: "setting_service",
           stateAfter: enabled ? "enabled" : "disabled",
@@ -1128,22 +782,6 @@ export function SettingsPage({
       );
     },
     [services.settingService, intl],
-  );
-  const handleReceivePreviewUpdatesChange = useCallback(
-    async (enabled: boolean) => {
-      await runSettingsActionAsync({
-        featureId: "settings.update",
-        action: "toggle_preview_updates",
-        trigger: "switch",
-        operation: () => updateSharedSettings({ receivePreviewUpdates: enabled }),
-        completed: {
-          resultSource: "shared_settings",
-          stateAfter: enabled ? "enabled" : "disabled",
-        },
-      });
-      setReceivePreviewUpdates(enabled);
-    },
-    [updateSharedSettings],
   );
   const handleAutoDownloadAndInstallUpdatesChange = useCallback(
     async (enabled: boolean) => {
@@ -1258,7 +896,11 @@ export function SettingsPage({
     (value: string) => {
       if (value === "system") {
         runUserAction({
-          input: { featureId: "settings.locale", action: "change_locale", trigger: "select" },
+          input: {
+            featureId: "settings.locale",
+            action: "change_locale",
+            trigger: "select",
+          },
           operation: () => setLocalePreference("system"),
           completed: { resultSource: "local_commit", valueAfter: "system" },
           failureStage: "local_commit",
@@ -1267,7 +909,11 @@ export function SettingsPage({
       }
       if (value === "zh-CN" || value === "en-US") {
         runUserAction({
-          input: { featureId: "settings.locale", action: "change_locale", trigger: "select" },
+          input: {
+            featureId: "settings.locale",
+            action: "change_locale",
+            trigger: "select",
+          },
           operation: () => setLocalePreference(value as Locale),
           completed: { resultSource: "local_commit", valueAfter: value },
           failureStage: "local_commit",
@@ -1286,7 +932,11 @@ export function SettingsPage({
         value === "system"
       ) {
         runUserAction({
-          input: { featureId: "settings.appearance", action: "change_theme", trigger: "select" },
+          input: {
+            featureId: "settings.appearance",
+            action: "change_theme",
+            trigger: "select",
+          },
           operation: () => setTheme(value as Theme),
           completed: { resultSource: "local_commit", valueAfter: value },
           failureStage: "local_commit",
@@ -1315,7 +965,9 @@ export function SettingsPage({
         completed: {
           resultSource: "local_commit",
           ...(typeof value === "boolean"
-            ? { stateAfter: value ? ("enabled" as const) : ("disabled" as const) }
+            ? {
+                stateAfter: value ? ("enabled" as const) : ("disabled" as const),
+              }
             : { valueAfter: String(value) }),
         },
         failureStage: "local_commit",
@@ -1323,6 +975,110 @@ export function SettingsPage({
     },
     [setCodePreviewSettings],
   );
+  // [leo] 导航搜索：分区 + 扩展 tab + 常规里的设置行，见 docs/specs/leo-settings-ia.md。
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
+  const [settingsSearchHighlight, setSettingsSearchHighlight] = useState(0);
+  const [pendingSearchRowId, setPendingSearchRowId] = useState<string | null>(null);
+  const settingsSearchInputRef = useRef<HTMLInputElement>(null);
+  const settingsSearchCandidates = useMemo(
+    () =>
+      buildSettingsSearchCandidates({
+        config: settingsPageConfig,
+        formatMessage: (id) => intl.formatMessage({ id }),
+        isDesktop: Boolean(isDesktop),
+        isWindowsDesktop: Boolean(isWindowsDesktop),
+        isWindowsHost: hostPlatform === "win32",
+      }),
+    [hostPlatform, intl, isDesktop, isWindowsDesktop, settingsPageConfig],
+  );
+  const settingsSearchResults = useMemo(
+    () => filterSettingsSearchCandidates(settingsSearchQuery, settingsSearchCandidates),
+    [settingsSearchCandidates, settingsSearchQuery],
+  );
+  const isSettingsSearching = settingsSearchQuery.trim().length > 0;
+  const openSettingsSearchResult = useCallback(
+    (result: SettingsSearchCandidate) => {
+      runUserAction({
+        input: {
+          featureId: "settings.navigation",
+          action: "open_section",
+          trigger: "keyboard",
+        },
+        operation: () => {
+          setPluginNavigationOrigin(undefined);
+          setSettingsSectionNavigationVersion((version) => version + 1);
+          setActiveSettingsSection(result.sectionId);
+          setPendingSearchRowId(result.rowId ?? null);
+          setSettingsSearchQuery("");
+          setSettingsSearchHighlight(0);
+        },
+        completed: {
+          resultSource: "local_commit",
+          sectionId: result.sectionId,
+        },
+        failureStage: "navigation_commit",
+      });
+    },
+    [setActiveSettingsSection],
+  );
+  const handleSettingsSearchKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (settingsSearchQuery) {
+          setSettingsSearchQuery("");
+          setSettingsSearchHighlight(0);
+        } else {
+          event.currentTarget.blur();
+        }
+        return;
+      }
+      if (!isSettingsSearching || settingsSearchResults.length === 0) return;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        setSettingsSearchHighlight(
+          (current) =>
+            (current + step + settingsSearchResults.length) % settingsSearchResults.length,
+        );
+        return;
+      }
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        const result =
+          settingsSearchResults[
+            Math.min(settingsSearchHighlight, settingsSearchResults.length - 1)
+          ];
+        if (result) openSettingsSearchResult(result);
+      }
+    },
+    [
+      isSettingsSearching,
+      openSettingsSearchResult,
+      settingsSearchHighlight,
+      settingsSearchQuery,
+      settingsSearchResults,
+    ],
+  );
+  useEffect(() => {
+    if (!pendingSearchRowId || activeSection !== "general") return;
+    // 常规页渲染完成后再定位，命中行短暂高亮。高亮移除计时器独立于本 effect，
+    // 因为下面清空 pendingSearchRowId 会触发 cleanup，不能顺带把高亮停在半路。
+    const frame = requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(
+        `[data-settings-row-id="${pendingSearchRowId}"]`,
+      );
+      setPendingSearchRowId(null);
+      if (!row) return;
+      row.scrollIntoView({ block: "center", behavior: "smooth" });
+      row.dataset.searchHit = "true";
+      setTimeout(() => {
+        delete row.dataset.searchHit;
+      }, 1600);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeSection, pendingSearchRowId]);
+  const isExtensionSection = extensionSections.some((section) => section.id === activeSection);
   const activeSectionMeta = settingsSections.find((section) => section.id === activeSection);
   // 灰度裁决异步到达：sections 列表可能在挂载后变化（如 computerUse 区被灰度移除）。
   // 若用户正停留在被移除的 section，回落到第一个可见区，避免整页 return null。
@@ -1348,6 +1104,17 @@ export function SettingsPage({
   const showActiveSectionTitle =
     !hasVisibleSettingsBreadcrumb ||
     (activeSection === "plugin" && pluginNavigationOrigin === "plugin-store");
+  // 扩展的各 tab 共用「扩展」标题与说明；面包屑仍以 tab 名为根，保持详情页层级不变。
+  const headerEntry =
+    isExtensionSection && extensionsNavEntry && pluginNavigationOrigin !== "plugin-store"
+      ? extensionsNavEntry
+      : activeSectionMeta;
+  const headerTitle =
+    headerEntry === activeSectionMeta
+      ? activeSectionLabel
+      : intl.formatMessage({ id: headerEntry.titleId });
+  const headerHint = headerEntry.hintId ? intl.formatMessage({ id: headerEntry.hintId }) : null;
+  const activeNavEntryId = resolveSettingsNavEntryId(activeSection);
 
   return (
     <>
@@ -1437,7 +1204,86 @@ export function SettingsPage({
                 // 并在还有内容时给底边加渐隐（leo-scroll-fade，见 leo-skin.css）。
                 className="leo-scroll-fade flex-1 overflow-y-auto px-2 pb-3"
               >
-                <div className="space-y-3">
+                <div className="px-0.5 pb-3 max-lg:hidden">
+                  <SettingsSearchInput
+                    ref={settingsSearchInputRef}
+                    value={settingsSearchQuery}
+                    placeholder={intl.formatMessage({
+                      id: "settings.navSearch.placeholder",
+                    })}
+                    aria-label={intl.formatMessage({
+                      id: "settings.navSearch.placeholder",
+                    })}
+                    aria-controls="settings-nav-search-results"
+                    aria-activedescendant={
+                      isSettingsSearching && settingsSearchResults[settingsSearchHighlight]
+                        ? `settings-nav-search-${settingsSearchResults[settingsSearchHighlight].key}`
+                        : undefined
+                    }
+                    data-testid={TID_SETTINGS_NAV_SEARCH_INPUT}
+                    clearLabel={intl.formatMessage({
+                      id: "settings.navSearch.clear",
+                    })}
+                    className="h-7 rounded-lg text-ui-base"
+                    onChange={(event) => {
+                      setSettingsSearchQuery(event.currentTarget.value);
+                      setSettingsSearchHighlight(0);
+                    }}
+                    onKeyDown={handleSettingsSearchKeyDown}
+                    onClear={() => {
+                      setSettingsSearchQuery("");
+                      setSettingsSearchHighlight(0);
+                      settingsSearchInputRef.current?.focus();
+                    }}
+                  />
+                </div>
+                {isSettingsSearching ? (
+                  <div
+                    id="settings-nav-search-results"
+                    role="listbox"
+                    aria-label={intl.formatMessage({
+                      id: "settings.navSearch.placeholder",
+                    })}
+                    className="space-y-0.5 max-lg:hidden"
+                  >
+                    {settingsSearchResults.length === 0 ? (
+                      <div className="px-2.5 py-1 text-ui-sm text-foreground-subtle">
+                        {intl.formatMessage({ id: "settings.navSearch.empty" })}
+                      </div>
+                    ) : (
+                      settingsSearchResults.map((result, index) => (
+                        <button
+                          key={result.key}
+                          id={`settings-nav-search-${result.key}`}
+                          type="button"
+                          role="option"
+                          aria-selected={index === settingsSearchHighlight}
+                          tabIndex={-1}
+                          data-testid={testId(TID_SETTINGS_NAV_SEARCH_RESULT, result.key)}
+                          className={cn(
+                            "flex h-7 w-full items-center gap-2 rounded-lg px-2.5 text-left transition-colors",
+                            index === settingsSearchHighlight
+                              ? "bg-surface-hover text-foreground"
+                              : "text-foreground hover:bg-surface-hover",
+                          )}
+                          onMouseEnter={() => setSettingsSearchHighlight(index)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => openSettingsSearchResult(result)}
+                        >
+                          <span className="min-w-0 flex-1 truncate text-ui-base">
+                            {result.label}
+                          </span>
+                          {result.context ? (
+                            <span className="shrink-0 text-ui-xs text-foreground-subtlest">
+                              {result.context}
+                            </span>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+                <div className={cn("space-y-3", isSettingsSearching && "lg:hidden")}>
                   {settingsSectionGroups.map((group, groupIndex) => {
                     const groupLabel = intl.formatMessage({
                       id: group.titleId,
@@ -1450,18 +1296,18 @@ export function SettingsPage({
                         role="group"
                         aria-labelledby={groupLabelId}
                         className={cn(
-                          "space-y-1",
+                          "space-y-0.5",
                           groupIndex > 0 && "max-lg:border-t max-lg:border-border max-lg:pt-3",
                         )}
                       >
                         <div
                           id={groupLabelId}
-                          className="px-2.5 pb-1 text-ui-sm font-medium text-foreground-subtlest max-lg:sr-only"
+                          className="px-2.5 pb-0.5 text-ui-xs font-medium text-foreground-subtlest max-lg:sr-only"
                         >
                           {groupLabel}
                         </div>
                         {group.sections.map(({ id, icon: Icon, titleId }) => {
-                          const isActive = activeSection === id;
+                          const isActive = activeNavEntryId === id;
                           const label = intl.formatMessage({ id: titleId });
 
                           return (
@@ -1482,9 +1328,17 @@ export function SettingsPage({
                                   operation: () => {
                                     setPluginNavigationOrigin(undefined);
                                     setSettingsSectionNavigationVersion((version) => version + 1);
-                                    setActiveSettingsSection(id);
+                                    // 已在扩展某个 tab 时再点「扩展」保持当前 tab。
+                                    setActiveSettingsSection(
+                                      id === "extensions" && isExtensionSection
+                                        ? activeSection
+                                        : id,
+                                    );
                                   },
-                                  completed: { resultSource: "local_commit", sectionId: id },
+                                  completed: {
+                                    resultSource: "local_commit",
+                                    sectionId: id,
+                                  },
                                   failureStage: "navigation_commit",
                                 });
                               }}
@@ -1507,7 +1361,6 @@ export function SettingsPage({
                   onThemeChange={handleFooterThemeChange}
                   onSettingsButtonClick={onBack}
                   onUsageClick={handleOpenUsageSettings}
-                  onUpgradeClick={handleOpenCodingPlanUpgradeSettings}
                   onLogin={onLogin}
                   onLogout={onLogout}
                   settingsButtonMode="back"
@@ -1587,7 +1440,7 @@ export function SettingsPage({
                     <div
                       className={cn(
                         SETTINGS_FRAME_CONTENT_CLASSNAME,
-                        "flex flex-col gap-8",
+                        "flex flex-col gap-6",
                         isMacDesktop && "pt-0",
                         // isWindowsDesktop && "pt-12",
                       )}
@@ -1597,7 +1450,7 @@ export function SettingsPage({
                           <div className="flex min-w-0 flex-wrap items-center gap-3">
                             {showActiveSectionTitle ? (
                               <h2 className="text-ui-xl font-semibold tracking-tight text-foreground">
-                                {activeSectionLabel}
+                                {headerTitle}
                               </h2>
                             ) : null}
                             {!hasVisibleSettingsBreadcrumb && activeSectionMeta.titleBadgeId ? (
@@ -1607,17 +1460,44 @@ export function SettingsPage({
                                 })}
                               </span>
                             ) : null}
-                            {/* [leo] 使用统计只保留本机「应用用量」；Coding Plan 额度 tab（官方账号数据）不再展示。 */}
-                            {activeSection === "usage" ? (
-                              <SettingsUsageProviderTabs
-                                activeTab="app"
-                                codingPlanSources={[]}
-                                onTabChange={handleUsageTabSelect}
-                              />
-                            ) : null}
+                            {/* [leo] 使用统计只保留本机「应用用量」。 */}
+                            {activeSection === "usage" ? <SettingsUsageProviderTabs /> : null}
                           </div>
                         </div>
                         {/* [leo] 常规页标题下原有一个只回显界面语言的徽标,和下面的「界面语言」选项重复,去掉。 */}
+                        {showActiveSectionTitle && headerHint ? (
+                          <p className="mt-1 text-ui-sm text-foreground-subtle">{headerHint}</p>
+                        ) : null}
+                        {headerEntry !== activeSectionMeta && !hasVisibleSettingsBreadcrumb ? (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {extensionSections.map((tab) => (
+                              <SegmentPill
+                                key={tab.id}
+                                active={activeSection === tab.id}
+                                label={intl.formatMessage({ id: tab.titleId })}
+                                testId={testId(TID_SETTINGS_EXTENSIONS_TAB, tab.id)}
+                                onClick={() => {
+                                  runUserAction({
+                                    input: {
+                                      featureId: "settings.navigation",
+                                      action: "open_section",
+                                      trigger: "button",
+                                    },
+                                    operation: () => {
+                                      setSettingsSectionNavigationVersion((version) => version + 1);
+                                      setActiveSettingsSection(tab.id);
+                                    },
+                                    completed: {
+                                      resultSource: "local_commit",
+                                      sectionId: tab.id,
+                                    },
+                                    failureStage: "navigation_commit",
+                                  });
+                                }}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="space-y-8">
                         {activeSection === "general" ? (
@@ -1633,7 +1513,6 @@ export function SettingsPage({
                             desktopChromiumHardwareAccelerationEnabled={
                               desktopChromiumHardwareAccelerationEnabled
                             }
-                            receivePreviewUpdates={receivePreviewUpdates}
                             autoDownloadAndInstallUpdates={autoDownloadAndInstallUpdates}
                             dataBaseDir={dataBaseDir}
                             terminalInheritSystemProfile={terminalInheritSystemProfile}
@@ -1714,7 +1593,6 @@ export function SettingsPage({
                             onDesktopChromiumHardwareAccelerationChange={
                               handleDesktopChromiumHardwareAccelerationChange
                             }
-                            onReceivePreviewUpdatesChange={handleReceivePreviewUpdatesChange}
                             onAutoDownloadAndInstallUpdatesChange={
                               handleAutoDownloadAndInstallUpdatesChange
                             }
@@ -1813,7 +1691,10 @@ export function SettingsPage({
                             onCreateTask={onCreateTask}
                             onOpenPluginStore={(_returnScopeKey, intent) => {
                               // 添加市场与浏览插件都先离开设置层，再显示商店。
-                              requestPluginStoreOpen({ returnScopeKey: "user", intent });
+                              requestPluginStoreOpen({
+                                returnScopeKey: "user",
+                                intent,
+                              });
                               onBack?.();
                             }}
                           />
@@ -1826,7 +1707,10 @@ export function SettingsPage({
                             onCreateTask={onCreateTask}
                             onOpenPluginStore={(_returnScopeKey, intent) => {
                               // 添加市场与浏览插件都先离开设置层，再显示商店。
-                              requestPluginStoreOpen({ returnScopeKey: "user", intent });
+                              requestPluginStoreOpen({
+                                returnScopeKey: "user",
+                                intent,
+                              });
                               onBack?.();
                             }}
                           />
@@ -1839,7 +1723,10 @@ export function SettingsPage({
                             onCreateTask={onCreateTask}
                             onOpenPluginStore={(_returnScopeKey, intent) => {
                               // 添加市场与浏览插件都先离开设置层，再显示商店。
-                              requestPluginStoreOpen({ returnScopeKey: "user", intent });
+                              requestPluginStoreOpen({
+                                returnScopeKey: "user",
+                                intent,
+                              });
                               onBack?.();
                             }}
                           />
@@ -1850,13 +1737,7 @@ export function SettingsPage({
                             isDesktop={isDesktop}
                           />
                         ) : activeSection === "usage" ? (
-                          <UsageStatsSection
-                            activeTab="app"
-                            providerSourcesLoading={usageProviderSettingsLoading}
-                            selectedCodingPlanSource={null}
-                            workspaceIdentity={activeWorkspaceIdentity}
-                            workspacePath={activeWorkspacePath ?? undefined}
-                          />
+                          <UsageStatsSection />
                         ) : activeSection === "subagents" ? (
                           <SubagentsSection
                             onManageModels={handleOpenModelProviderSettings}
@@ -1876,7 +1757,10 @@ export function SettingsPage({
                             onCreateTask={onCreateTask}
                             onOpenPluginStore={(_returnScopeKey, intent) => {
                               // 添加市场与浏览插件都先离开设置层，再显示商店。
-                              requestPluginStoreOpen({ returnScopeKey: "user", intent });
+                              requestPluginStoreOpen({
+                                returnScopeKey: "user",
+                                intent,
+                              });
                               onBack?.();
                             }}
                           />

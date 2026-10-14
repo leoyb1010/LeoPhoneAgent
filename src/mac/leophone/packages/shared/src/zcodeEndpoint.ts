@@ -102,32 +102,6 @@ export function normalizeZCodeEndpointOrigin(value: string): string {
   return parsed.origin;
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-}
-
-export function isTrustedCodingPlanWebviewOrigin(
-  value: string | null | undefined,
-  options?: {
-    e2eStoreBridgeEnabled?: boolean;
-  },
-): boolean {
-  if (!value) return false;
-  try {
-    const origin = normalizeZCodeEndpointOrigin(value);
-    if (
-      origin === DEFAULT_ZCODE_ENDPOINT_ORIGIN ||
-      origin === resolveRuntimeZCodeEndpointOrigin()
-    ) {
-      return true;
-    }
-    const parsed = new URL(origin);
-    return options?.e2eStoreBridgeEnabled === true && isLoopbackHostname(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
 export function resolveZCodeEndpointOrigin(options?: {
   env?: ZCodeEnv;
   envBaseOrigin?: string | null;
@@ -184,19 +158,6 @@ export function buildBigModelApiUrl(
 ): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${resolveBigModelApiOrigin(env)}${normalizedPath}`;
-}
-
-export function buildBigModelCodingPlanPersonalManageUrl(
-  env: RuntimeBigModelApiEnv = readProductEndpointEnv(),
-): string {
-  // 管理页与业务 API 共用显式 origin，避免把已登录账号带到另一个部署。
-  return buildBigModelApiUrl(env, "/coding-plan/personal/overview");
-}
-
-export function buildBigModelCodingPlanTeamManageUrl(
-  env: RuntimeBigModelApiEnv = readProductEndpointEnv(),
-): string {
-  return buildBigModelApiUrl(env, "/coding-plan/team/plans");
 }
 
 export function resolveZaiOAuthOrigin(

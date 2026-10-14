@@ -1,5 +1,14 @@
 # LeoPhoneAgent 更新记录
 
+## Mac 1.9.0 · 自动拉模型、中性界面、设置重组、大幅减法 - 2026-10-14
+
+- 供应商：填好 Base URL 和 Key 自动读取模型列表（OpenAI / Anthropic 格式，失败时回退内置列表和 models.dev），显示名与能力来自 models.dev；本机地址不填 Key 也能用；新建自定义供应商默认 Chat Completions。新增「从 iPhone 导入」，配合 iOS 1.68 的「全部发送到 Mac（含密钥）」。
+- 界面：灰阶全中性、青绿为唯一强调色，圆角回到默认，侧栏 232px 可拖到 200px，新装默认跟随系统主题，启动页 / 登录页 / 关于窗口统一为机器人标志。
+- 设置：4 组可搜索（AI 服务商 / 智能体 / 我的设备 / 通用），「扩展」合并插件、MCP、技能、命令、钩子，「连接手机」独立成页；去掉不起作用的「接收预览版更新」。
+- 模型选择器：打开即搜，iOS 同款打分，「常用」「最近使用」持久化。
+- 删除：职业 / 模式引导、办公模式、画板与 Treemapping、聊天机器人（含飞书 SDK）、会话分享、反馈、闲时任务界面、SSH / WSL / Docker 新建入口、官方套餐；旧版 leocodebox 2.2.x 移出主分支（tag `archive/leocodebox-2.2.13`）。
+- 构建：agent 打包别名补上 `model-discovery` / `provider-import`，并加单测防止再漏。
+
 ## iOS 1.67.0 (165) · 键盘下滑收起、图标放大、空对话标志 - 2026-10-12
 
 - 新增 `KeyboardSwipeDismisser`（Shared）：键盘可见时在每个 App 窗口挂一个并行、不吞触摸的下滑识别器；起手点在当前第一响应者上方、下滑 ≥40pt 且以纵向为主即 `endEditing`。起手于输入控件内（滚动多行输入、拖选）不接；终端（TerminalTextView / TerminalKeyInputView）不参与。补上了设置子页、sheet、内容不够滚动的列表、非滚动页面下滑收不起键盘的问题（聊天列表原本就有 `.onDrag`）。

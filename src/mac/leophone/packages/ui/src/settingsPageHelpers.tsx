@@ -49,7 +49,6 @@ export function GeneralSectionContent({
   closeToTrayOnWindows,
   keepAwakeWhileRunning = false,
   desktopChromiumHardwareAccelerationEnabled = true,
-  receivePreviewUpdates,
   autoDownloadAndInstallUpdates,
   dataBaseDir,
   terminalInheritSystemProfile = true,
@@ -91,7 +90,6 @@ export function GeneralSectionContent({
   onCloseToTrayOnWindowsChange,
   onKeepAwakeWhileRunningChange = async () => {},
   onDesktopChromiumHardwareAccelerationChange = async () => {},
-  onReceivePreviewUpdatesChange,
   onAutoDownloadAndInstallUpdatesChange,
   onMessageStreamShowReasoningChange,
   onMessageStreamShowTodosChange,
@@ -109,7 +107,6 @@ export function GeneralSectionContent({
   closeToTrayOnWindows: boolean;
   keepAwakeWhileRunning?: boolean;
   desktopChromiumHardwareAccelerationEnabled?: boolean;
-  receivePreviewUpdates: boolean;
   autoDownloadAndInstallUpdates: boolean;
   dataBaseDir: string;
   terminalInheritSystemProfile: boolean;
@@ -152,7 +149,6 @@ export function GeneralSectionContent({
   onCloseToTrayOnWindowsChange: (enabled: boolean) => Promise<void>;
   onKeepAwakeWhileRunningChange?: (enabled: boolean) => Promise<void>;
   onDesktopChromiumHardwareAccelerationChange?: (enabled: boolean) => Promise<void>;
-  onReceivePreviewUpdatesChange: (enabled: boolean) => Promise<void>;
   onAutoDownloadAndInstallUpdatesChange: (enabled: boolean) => Promise<void>;
   onMessageStreamShowReasoningChange: (enabled: boolean) => Promise<void>;
   onMessageStreamShowTodosChange: (enabled: boolean) => Promise<void>;
@@ -272,6 +268,7 @@ export function GeneralSectionContent({
     <div className="space-y-4">
       <SettingsGroupCard>
         <SettingsRow
+          rowId="locale"
           label={intl.formatMessage({ id: "settings.locale" })}
           description={intl.formatMessage({ id: "settings.localeDescription" })}
           control={
@@ -311,10 +308,326 @@ export function GeneralSectionContent({
         />
       </SettingsGroupCard>
 
+      {/* [leo] 常规按个人用户的使用频率排序，见 docs/specs/leo-settings-ia.md。「接收预览版更新」已移除：Leo 只读 releases/latest 的单一 manifest，channel 参数对静态资产无效。 */}
       <SettingsGroupCard>
         <SettingsRow
+          rowId="notification"
+          label={intl.formatMessage({ id: "settings.notification" })}
+          description={intl.formatMessage({
+            id: "settings.notificationDescription",
+          })}
+          control={
+            <Switch checked={notificationEnabled} onCheckedChange={setNotificationEnabled} />
+          }
+        />
+        <SettingsRow
+          rowId="notificationSound"
+          label={intl.formatMessage({ id: "settings.notificationSound" })}
+          description={intl.formatMessage({
+            id: "settings.notificationSoundDescription",
+          })}
+          control={
+            <Switch
+              checked={notificationSoundEnabled}
+              disabled={!notificationEnabled}
+              onCheckedChange={setNotificationSoundEnabled}
+            />
+          }
+        />
+        {isDesktop ? (
+          <SettingsRow
+            rowId="keepAwake"
+            label={intl.formatMessage({ id: "settings.keepAwakeWhileRunning" })}
+            description={intl.formatMessage({
+              id: "settings.keepAwakeWhileRunningDescription",
+            })}
+            control={
+              <Switch
+                aria-label={intl.formatMessage({
+                  id: "settings.keepAwakeWhileRunning",
+                })}
+                checked={keepAwakeWhileRunning}
+                onCheckedChange={(checked) => {
+                  void onKeepAwakeWhileRunningChange(checked);
+                }}
+              />
+            }
+          />
+        ) : null}
+        {isWindowsDesktop ? (
+          <SettingsRow
+            rowId="closeToTray"
+            label={intl.formatMessage({ id: "settings.closeToTrayOnWindows" })}
+            description={intl.formatMessage({
+              id: "settings.closeToTrayOnWindowsDescription",
+            })}
+            control={
+              <Switch
+                checked={closeToTrayOnWindows}
+                onCheckedChange={(checked) => {
+                  void onCloseToTrayOnWindowsChange(checked);
+                }}
+              />
+            }
+          />
+        ) : null}
+        {isDesktop ? (
+          <SettingsRow
+            rowId="autoUpdate"
+            label={intl.formatMessage({
+              id: "settings.autoDownloadAndInstallUpdates",
+            })}
+            description={intl.formatMessage({
+              id: "settings.autoDownloadAndInstallUpdatesDescription",
+            })}
+            control={
+              <Switch
+                aria-label={intl.formatMessage({
+                  id: "settings.autoDownloadAndInstallUpdates",
+                })}
+                checked={autoDownloadAndInstallUpdates}
+                onCheckedChange={(checked) => {
+                  void onAutoDownloadAndInstallUpdatesChange(checked);
+                }}
+              />
+            }
+          />
+        ) : null}
+      </SettingsGroupCard>
+
+      <SettingsGroupCard>
+        <SettingsRow
+          rowId="interactionBehavior"
+          label={intl.formatMessage({
+            id: "settings.zcodeInteractionBehavior",
+          })}
+          description={intl.formatMessage({
+            id: "settings.zcodeInteractionBehaviorDescription",
+          })}
+          control={
+            <Select
+              value={zcodeInteractionBehavior}
+              onValueChange={(value) => {
+                void onZCodeInteractionBehaviorChange(value as ZCodeInteractionBehavior);
+              }}
+            >
+              <SelectTrigger size="lg" className="w-[260px] min-w-0 justify-between">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ZCODE_INTERACTION_BEHAVIOR_OPTIONS.map((behavior) => (
+                  <SelectItem key={behavior} value={behavior}>
+                    {intl.formatMessage({
+                      id: `settings.zcodeInteractionBehavior.option.${behavior}`,
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+        <SettingsRow
+          rowId="askUserQuestionAutoResolution"
+          label={intl.formatMessage({
+            id: "settings.askUserQuestionAutoResolution",
+          })}
+          description={intl.formatMessage({
+            id: "settings.askUserQuestionAutoResolutionDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.askUserQuestionAutoResolution",
+              })}
+              checked={askUserQuestionAutoResolutionEnabled}
+              data-testid={TID_SETTINGS_ASK_USER_QUESTION_AUTO_RESOLUTION_SWITCH}
+              onCheckedChange={(checked) => {
+                void onAskUserQuestionAutoResolutionEnabledChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="messageStreamShowReasoning"
+          label={intl.formatMessage({
+            id: "settings.messageStreamShowReasoning",
+          })}
+          description={intl.formatMessage({
+            id: "settings.messageStreamShowReasoningDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.messageStreamShowReasoning",
+              })}
+              checked={messageStreamShowReasoning}
+              onCheckedChange={(checked) => {
+                void onMessageStreamShowReasoningChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="messageStreamShowTodos"
+          label={intl.formatMessage({ id: "settings.messageStreamShowTodos" })}
+          description={intl.formatMessage({
+            id: "settings.messageStreamShowTodosDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.messageStreamShowTodos",
+              })}
+              checked={messageStreamShowTodos}
+              onCheckedChange={(checked) => {
+                void onMessageStreamShowTodosChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="toolGroupingExplore"
+          label={intl.formatMessage({ id: "settings.toolGroupingExplore" })}
+          description={intl.formatMessage({
+            id: "settings.toolGroupingExploreDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.toolGroupingExplore",
+              })}
+              checked={toolGroupingExploreEnabled}
+              onCheckedChange={(checked) => {
+                void onToolGroupingExploreEnabledChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="toolGroupingTerminal"
+          label={intl.formatMessage({ id: "settings.toolGroupingTerminal" })}
+          description={intl.formatMessage({
+            id: "settings.toolGroupingTerminalDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.toolGroupingTerminal",
+              })}
+              checked={toolGroupingTerminalEnabled}
+              onCheckedChange={(checked) => {
+                void onToolGroupingTerminalEnabledChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="toolGroupingChanges"
+          label={intl.formatMessage({ id: "settings.toolGroupingChanges" })}
+          description={intl.formatMessage({
+            id: "settings.toolGroupingChangesDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.toolGroupingChanges",
+              })}
+              checked={toolGroupingChangesEnabled}
+              onCheckedChange={(checked) => {
+                void onToolGroupingChangesEnabledChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="modelIoFullRetention"
+          label={intl.formatMessage({ id: "settings.modelIoFullRetention" })}
+          description={intl.formatMessage({
+            id: "settings.modelIoFullRetentionDescription",
+          })}
+          control={
+            <Switch
+              aria-label={intl.formatMessage({
+                id: "settings.modelIoFullRetention",
+              })}
+              checked={modelIoFullRetentionEnabled}
+              onCheckedChange={(checked) => {
+                void onModelIoFullRetentionEnabledChange(checked);
+              }}
+            />
+          }
+        />
+      </SettingsGroupCard>
+
+      <SettingsGroupCard>
+        <SettingsRow
+          rowId="dataBaseDir"
+          label={intl.formatMessage({ id: "settings.dataBaseDir" })}
+          description={intl.formatMessage({
+            id: "settings.dataBaseDirDescription",
+          })}
+          control={
+            <DataBaseDirControl
+              dataBaseDir={dataBaseDir}
+              defaultHomeDir={defaultHomeDir}
+              onDataBaseDirChange={onDataBaseDirChange}
+              onSelectDataBaseDir={onSelectDataBaseDir}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="taskAutoArchive"
+          label={intl.formatMessage({ id: "settings.taskAutoArchive" })}
+          description={intl.formatMessage({
+            id: "settings.taskAutoArchiveDescription",
+          })}
+          control={
+            <Switch
+              checked={taskAutoArchiveEnabled}
+              onCheckedChange={(checked) => {
+                void onTaskAutoArchiveEnabledChange(checked);
+              }}
+            />
+          }
+        />
+        <SettingsRow
+          rowId="taskAutoArchiveDays"
+          label={intl.formatMessage({ id: "settings.taskAutoArchiveDays" })}
+          description={intl.formatMessage({
+            id: "settings.taskAutoArchiveDaysDescription",
+          })}
+          control={
+            <Select
+              value={String(taskAutoArchiveOlderThanDays)}
+              onValueChange={(value) => {
+                void onTaskAutoArchiveOlderThanDaysChange(Number(value));
+              }}
+              disabled={!taskAutoArchiveEnabled}
+            >
+              <SelectTrigger size="lg" className="w-[260px] min-w-0 justify-between">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TASK_AUTO_ARCHIVE_DAY_OPTIONS.map((days) => (
+                  <SelectItem key={days} value={String(days)}>
+                    {intl.formatMessage({
+                      id: `settings.taskAutoArchiveDays.option.${days}`,
+                    })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+      </SettingsGroupCard>
+
+      <SettingsGroupCard>
+        <SettingsRow
+          rowId="terminalProfile"
           label={intl.formatMessage({ id: "settings.terminalProfile" })}
-          description={intl.formatMessage({ id: "settings.terminalProfileDescription" })}
+          description={intl.formatMessage({
+            id: "settings.terminalProfileDescription",
+          })}
           control={
             <Switch
               checked={terminalInheritSystemProfile}
@@ -325,8 +638,11 @@ export function GeneralSectionContent({
           }
         />
         <SettingsRow
+          rowId="terminalFontFamily"
           label={intl.formatMessage({ id: "settings.terminalFontFamily" })}
-          description={intl.formatMessage({ id: "settings.terminalFontFamilyDescription" })}
+          description={intl.formatMessage({
+            id: "settings.terminalFontFamilyDescription",
+          })}
           control={
             <Button
               type="button"
@@ -358,7 +674,10 @@ export function GeneralSectionContent({
         />
         {showIntegratedTerminalShell ? (
           <SettingsRow
-            label={intl.formatMessage({ id: "settings.integratedTerminalShell" })}
+            rowId="integratedTerminalShell"
+            label={intl.formatMessage({
+              id: "settings.integratedTerminalShell",
+            })}
             description={intl.formatMessage({
               id: "settings.integratedTerminalShellDescription",
             })}
@@ -374,7 +693,9 @@ export function GeneralSectionContent({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="auto">
-                    {intl.formatMessage({ id: "settings.integratedTerminalShell.auto" })}
+                    {intl.formatMessage({
+                      id: "settings.integratedTerminalShell.auto",
+                    })}
                   </SelectItem>
                   {visibleIntegratedTerminalShellOptions.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
@@ -387,6 +708,7 @@ export function GeneralSectionContent({
           />
         ) : null}
         <SettingsRow
+          rowId="nativeSearchEnhancements"
           label={intl.formatMessage({
             id: "settings.nativeSearchEnhancements",
           })}
@@ -410,8 +732,11 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         <SettingsRow
+          rowId="httpProxy"
           label={intl.formatMessage({ id: "settings.httpProxy" })}
-          description={intl.formatMessage({ id: "settings.httpProxyDescription" })}
+          description={intl.formatMessage({
+            id: "settings.httpProxyDescription",
+          })}
           control={
             <Button
               type="button"
@@ -443,6 +768,7 @@ export function GeneralSectionContent({
         />
         {/* No Proxy 与 HTTP 代理共同决定同一出口策略，必须贴在代理地址下面。*/}
         <SettingsRow
+          rowId="httpProxyNoProxy"
           label={intl.formatMessage({ id: "settings.httpProxyNoProxy" })}
           description={intl.formatMessage({
             id: "settings.httpProxyNoProxyDescription",
@@ -478,6 +804,7 @@ export function GeneralSectionContent({
         />
         {/* 自定义 CA 属于 HTTP 代理的同一网络出口策略，必须跟代理输入放在同一卡片里。*/}
         <SettingsRow
+          rowId="httpProxyCaCertPath"
           label={intl.formatMessage({ id: "settings.httpProxyCaCertPath" })}
           description={intl.formatMessage({
             id: "settings.httpProxyCaCertPathDescription",
@@ -515,325 +842,29 @@ export function GeneralSectionContent({
 
       <SettingsGroupCard>
         {isDesktop ? (
-          <>
-            <SettingsRow
-              label={intl.formatMessage({
-                id: "settings.desktopChromiumHardwareAcceleration",
-              })}
-              description={intl.formatMessage({
-                id: "settings.desktopChromiumHardwareAccelerationDescription",
-              })}
-              control={
-                <Switch
-                  aria-label={intl.formatMessage({
-                    id: "settings.desktopChromiumHardwareAcceleration",
-                  })}
-                  checked={desktopChromiumHardwareAccelerationEnabled}
-                  onCheckedChange={(checked) => {
-                    void onDesktopChromiumHardwareAccelerationChange(checked);
-                  }}
-                />
-              }
-            />
-            <SettingsRow
-              label={intl.formatMessage({ id: "settings.receivePreviewUpdates" })}
-              description={intl.formatMessage({
-                id: "settings.receivePreviewUpdatesDescription",
-              })}
-              control={
-                <Switch
-                  aria-label={intl.formatMessage({ id: "settings.receivePreviewUpdates" })}
-                  checked={receivePreviewUpdates}
-                  onCheckedChange={(checked) => {
-                    void onReceivePreviewUpdatesChange(checked);
-                  }}
-                />
-              }
-            />
-            <SettingsRow
-              label={intl.formatMessage({
-                id: "settings.autoDownloadAndInstallUpdates",
-              })}
-              description={intl.formatMessage({
-                id: "settings.autoDownloadAndInstallUpdatesDescription",
-              })}
-              control={
-                <Switch
-                  aria-label={intl.formatMessage({
-                    id: "settings.autoDownloadAndInstallUpdates",
-                  })}
-                  checked={autoDownloadAndInstallUpdates}
-                  onCheckedChange={(checked) => {
-                    void onAutoDownloadAndInstallUpdatesChange(checked);
-                  }}
-                />
-              }
-            />
-          </>
-        ) : null}
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.notification" })}
-          description={intl.formatMessage({
-            id: "settings.notificationDescription",
-          })}
-          control={
-            <Switch checked={notificationEnabled} onCheckedChange={setNotificationEnabled} />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.notificationSound" })}
-          description={intl.formatMessage({
-            id: "settings.notificationSoundDescription",
-          })}
-          control={
-            <Switch
-              checked={notificationSoundEnabled}
-              disabled={!notificationEnabled}
-              onCheckedChange={setNotificationSoundEnabled}
-            />
-          }
-        />
-        {isWindowsDesktop ? (
           <SettingsRow
-            label={intl.formatMessage({ id: "settings.closeToTrayOnWindows" })}
-            description={intl.formatMessage({
-              id: "settings.closeToTrayOnWindowsDescription",
+            rowId="hardwareAcceleration"
+            label={intl.formatMessage({
+              id: "settings.desktopChromiumHardwareAcceleration",
             })}
-            control={
-              <Switch
-                checked={closeToTrayOnWindows}
-                onCheckedChange={(checked) => {
-                  void onCloseToTrayOnWindowsChange(checked);
-                }}
-              />
-            }
-          />
-        ) : null}
-        {isDesktop ? (
-          <SettingsRow
-            label={intl.formatMessage({ id: "settings.keepAwakeWhileRunning" })}
             description={intl.formatMessage({
-              id: "settings.keepAwakeWhileRunningDescription",
+              id: "settings.desktopChromiumHardwareAccelerationDescription",
             })}
             control={
               <Switch
                 aria-label={intl.formatMessage({
-                  id: "settings.keepAwakeWhileRunning",
+                  id: "settings.desktopChromiumHardwareAcceleration",
                 })}
-                checked={keepAwakeWhileRunning}
+                checked={desktopChromiumHardwareAccelerationEnabled}
                 onCheckedChange={(checked) => {
-                  void onKeepAwakeWhileRunningChange(checked);
+                  void onDesktopChromiumHardwareAccelerationChange(checked);
                 }}
               />
             }
           />
         ) : null}
-      </SettingsGroupCard>
-
-      <SettingsGroupCard>
         <SettingsRow
-          label={intl.formatMessage({ id: "settings.zcodeInteractionBehavior" })}
-          description={intl.formatMessage({
-            id: "settings.zcodeInteractionBehaviorDescription",
-          })}
-          control={
-            <Select
-              value={zcodeInteractionBehavior}
-              onValueChange={(value) => {
-                void onZCodeInteractionBehaviorChange(value as ZCodeInteractionBehavior);
-              }}
-            >
-              <SelectTrigger size="lg" className="w-[260px] min-w-0 justify-between">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ZCODE_INTERACTION_BEHAVIOR_OPTIONS.map((behavior) => (
-                  <SelectItem key={behavior} value={behavior}>
-                    {intl.formatMessage({
-                      id: `settings.zcodeInteractionBehavior.option.${behavior}`,
-                    })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({
-            id: "settings.askUserQuestionAutoResolution",
-          })}
-          description={intl.formatMessage({
-            id: "settings.askUserQuestionAutoResolutionDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({
-                id: "settings.askUserQuestionAutoResolution",
-              })}
-              checked={askUserQuestionAutoResolutionEnabled}
-              data-testid={TID_SETTINGS_ASK_USER_QUESTION_AUTO_RESOLUTION_SWITCH}
-              onCheckedChange={(checked) => {
-                void onAskUserQuestionAutoResolutionEnabledChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.modelIoFullRetention" })}
-          description={intl.formatMessage({
-            id: "settings.modelIoFullRetentionDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.modelIoFullRetention" })}
-              checked={modelIoFullRetentionEnabled}
-              onCheckedChange={(checked) => {
-                void onModelIoFullRetentionEnabledChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.messageStreamShowReasoning" })}
-          description={intl.formatMessage({
-            id: "settings.messageStreamShowReasoningDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.messageStreamShowReasoning" })}
-              checked={messageStreamShowReasoning}
-              onCheckedChange={(checked) => {
-                void onMessageStreamShowReasoningChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.messageStreamShowTodos" })}
-          description={intl.formatMessage({
-            id: "settings.messageStreamShowTodosDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.messageStreamShowTodos" })}
-              checked={messageStreamShowTodos}
-              onCheckedChange={(checked) => {
-                void onMessageStreamShowTodosChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.toolGroupingExplore" })}
-          description={intl.formatMessage({
-            id: "settings.toolGroupingExploreDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.toolGroupingExplore" })}
-              checked={toolGroupingExploreEnabled}
-              onCheckedChange={(checked) => {
-                void onToolGroupingExploreEnabledChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.toolGroupingTerminal" })}
-          description={intl.formatMessage({
-            id: "settings.toolGroupingTerminalDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.toolGroupingTerminal" })}
-              checked={toolGroupingTerminalEnabled}
-              onCheckedChange={(checked) => {
-                void onToolGroupingTerminalEnabledChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.toolGroupingChanges" })}
-          description={intl.formatMessage({
-            id: "settings.toolGroupingChangesDescription",
-          })}
-          control={
-            <Switch
-              aria-label={intl.formatMessage({ id: "settings.toolGroupingChanges" })}
-              checked={toolGroupingChangesEnabled}
-              onCheckedChange={(checked) => {
-                void onToolGroupingChangesEnabledChange(checked);
-              }}
-            />
-          }
-        />
-      </SettingsGroupCard>
-
-      <SettingsGroupCard>
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.taskAutoArchive" })}
-          description={intl.formatMessage({
-            id: "settings.taskAutoArchiveDescription",
-          })}
-          control={
-            <Switch
-              checked={taskAutoArchiveEnabled}
-              onCheckedChange={(checked) => {
-                void onTaskAutoArchiveEnabledChange(checked);
-              }}
-            />
-          }
-        />
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.taskAutoArchiveDays" })}
-          description={intl.formatMessage({
-            id: "settings.taskAutoArchiveDaysDescription",
-          })}
-          control={
-            <Select
-              value={String(taskAutoArchiveOlderThanDays)}
-              onValueChange={(value) => {
-                void onTaskAutoArchiveOlderThanDaysChange(Number(value));
-              }}
-              disabled={!taskAutoArchiveEnabled}
-            >
-              <SelectTrigger size="lg" className="w-[260px] min-w-0 justify-between">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TASK_AUTO_ARCHIVE_DAY_OPTIONS.map((days) => (
-                  <SelectItem key={days} value={String(days)}>
-                    {intl.formatMessage({
-                      id: `settings.taskAutoArchiveDays.option.${days}`,
-                    })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
-        />
-      </SettingsGroupCard>
-
-      <SettingsGroupCard>
-        <SettingsRow
-          label={intl.formatMessage({ id: "settings.dataBaseDir" })}
-          description={intl.formatMessage({
-            id: "settings.dataBaseDirDescription",
-          })}
-          control={
-            <DataBaseDirControl
-              dataBaseDir={dataBaseDir}
-              defaultHomeDir={defaultHomeDir}
-              onDataBaseDirChange={onDataBaseDirChange}
-              onSelectDataBaseDir={onSelectDataBaseDir}
-            />
-          }
-        />
-      </SettingsGroupCard>
-
-      <SettingsGroupCard>
-        <SettingsRow
+          rowId="onboarding"
           label={intl.formatMessage({ id: "settings.onboarding" })}
           description={intl.formatMessage({
             id: "settings.onboardingDescription",

@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import {
   DesktopCommandIds,
   TID_LOGIN_TRIGGER,
-  TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON,
+  TID_SIDEBAR_USAGE_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
 } from "@zcode/shared";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
@@ -43,14 +43,12 @@ import {
   setPendingSettingsSection,
   setPendingSettingsUsageIntent,
 } from "@/lib/settingsNavigation.js";
-import type { CodingPlanFunnelContext } from "@/lib/codingPlanFunnelTelemetry.js";
-import type { SidebarUsageCodingPlanProviderId } from "@/lib/sidebarUsageCodingPlanProviderPreference.js";
 
 const DESKTOP_ZOOM_MIN_LEVEL = -3;
 const DESKTOP_ZOOM_MAX_LEVEL = 5;
 
 // [leo] LeoPhoneAgent 没有平台账号：头像菜单只是偏好设置入口，名字固定显示产品名；
-// 账号头像、套餐徽标、Coding Plan 升级、登录/退出入口都已去掉（相关 props 保留仅为兼容调用方）。
+// 账号头像、套餐徽标、登录/退出入口都已去掉（相关 props 保留仅为兼容调用方）。
 const SIDEBAR_PROFILE_NAME = "LeoBot";
 
 export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterComponent({
@@ -72,10 +70,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onThemeChange: (value: string) => void;
   onSettingsButtonClick?: () => void;
   onUsageClick?: () => void;
-  onUpgradeClick?: (
-    providerId: SidebarUsageCodingPlanProviderId,
-    funnelContext: CodingPlanFunnelContext,
-  ) => void;
   onLogin?: () => void;
   onLogout?: () => void;
   settingsButtonMode?: "settings" | "back";
@@ -264,17 +258,17 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             ) : null}
-            {/* [leo] 只保留本机「使用统计」；Coding Plan 升级与登录/退出入口已去掉。 */}
+            {/* [leo] 只保留本机「使用统计」；登录/退出入口已去掉。 */}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              data-testid={TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON}
+              data-testid={TID_SIDEBAR_USAGE_BUTTON}
               onSelect={() => {
                 setPendingSettingsUsageIntent();
                 usageButtonClick?.();
               }}
             >
               <BarChart3Icon className="size-4" />
-              {intl.formatMessage({ id: "sidebar.usage.plan.openStats" })}
+              {intl.formatMessage({ id: "sidebar.usage.openStats" })}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

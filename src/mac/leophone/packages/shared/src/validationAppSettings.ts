@@ -32,6 +32,8 @@ const appSettingsOccupationSchema = z.enum([
 export const appSettingsOccupationEnum = appSettingsOccupationSchema;
 
 const nonEmptyStringSchema = z.string().trim().min(1);
+// 模型选择器常用/最近使用列表；截断在 UI 纯逻辑里做。这里不加 max，避免一条超长列表让整份设置解析失败。
+const modelPickerValueListSchema = z.array(z.string());
 
 export const localeSchema = z.enum(["zh-CN", "en-US"]);
 const localePreferenceSchema = z.enum(["system", "zh-CN", "en-US"]);
@@ -474,6 +476,8 @@ const appSettingsObjectSchema = z.object({
   settingsSyncFirstRunPromptHandled: z.boolean().optional(),
   zcodeEndpointOrigin: zcodeEndpointOriginSchema.optional(),
   paperclipPreferences: paperclipPreferencesSchema.optional(),
+  modelPickerPinnedValues: modelPickerValueListSchema.optional(),
+  modelPickerRecentValues: modelPickerValueListSchema.optional(),
 });
 
 export const appSettingsSchema = z.preprocess(
@@ -562,4 +566,6 @@ export const appSettingsPatchSchema = z.object({
   settingsSyncFirstRunPromptHandled: z.boolean().optional(),
   zcodeEndpointOrigin: zcodeEndpointOriginSchema.optional(),
   paperclipPreferences: paperclipPreferencesSchema.optional(),
+  modelPickerPinnedValues: modelPickerValueListSchema.optional(),
+  modelPickerRecentValues: modelPickerValueListSchema.optional(),
 });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import type { ICodingPlanSubscriptionService } from "@zcode/services";
+import type { IFeatureConfigService } from "@zcode/services";
 import {
   useDynamicWorkflowAvailabilityStore,
   type DynamicWorkflowAvailabilitySnapshot,
@@ -23,7 +23,7 @@ export function useDynamicWorkflowAvailability(): DynamicWorkflowAvailabilitySna
  * 取数与失败重试的规则见 dynamicWorkflowAvailabilityStore。
  */
 export function useDynamicWorkflowAvailabilityLoader(
-  service: ICodingPlanSubscriptionService,
+  service: IFeatureConfigService,
 ): void {
   const ensureLoaded = useDynamicWorkflowAvailabilityStore((state) => state.ensureLoaded);
   useEffect(() => {

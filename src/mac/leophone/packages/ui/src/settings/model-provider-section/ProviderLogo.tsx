@@ -13,7 +13,6 @@ import moonshotKimiLogo from "@/assets/provider-icons/model-provider-moonshot-ki
 import openAiLogo from "@/assets/provider-icons/model-provider-openai.png";
 import xAiLogo from "@/assets/provider-icons/model-provider-xai.png";
 import xiaomiMimoLogo from "@/assets/provider-icons/model-provider-xiaomi-mimo.png";
-import startPlanLogo from "@/assets/provider-icons/model-provider-start-plan.png";
 import zaiLogo from "@/assets/provider-icons/model-provider-zai-app.png";
 import openrouterLight from "@/assets/provider-icons/model-provider-openrouter-light.svg";
 import openrouterDark from "@/assets/provider-icons/model-provider-openrouter-dark.svg";
@@ -32,7 +31,6 @@ const BUILTIN_PROVIDER_LOGO_ASSETS: Readonly<Record<string, BuiltinProviderLogoA
   // 用户指定 Dock 应用图标；同名旧 SVG 带灰色描边，不能当作同一素材复用。
   zai: { light: zaiLogo },
   bigmodel: { light: bigModelLogo },
-  "start-plan": { light: startPlanLogo },
   "moonshot-kimi": { light: moonshotKimiLogo },
   minimax: { light: miniMaxLogo },
   deepseek: { light: deepSeekLogo },

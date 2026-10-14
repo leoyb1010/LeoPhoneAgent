@@ -41,7 +41,6 @@ import {
   TID_V4_ATTACHMENT_UPLOAD_RETRY,
   TID_V4_STOP,
   testId,
-  type PlanIdentitySnapshot,
   type ZCodeProvider,
 } from "@zcode/shared";
 import type {
@@ -407,8 +406,6 @@ interface ConversationComposerProps {
   provider?: ZCodeProvider;
   /** 宿主 pane 与 workspace 遮罩共同裁决的真实可见性，仅用于 visible-only telemetry。 */
   telemetryVisible?: boolean;
-  /** 点击发送时读取套餐身份；二次确认会继续复用同一份冻结 seed。 */
-  readPlanIdentitySnapshot?: () => PlanIdentitySnapshot;
   onSendText: (
     text: string,
     options?: ConversationComposerSendOptions,
@@ -447,7 +444,6 @@ interface ConversationComposerProps {
   onDismissError?: () => void;
   /** 无可用模型横幅的恢复动作；由 SessionPane 注入壳层导航，组件不直接操作 tab。 */
   onOpenModelSettings?: () => void;
-  onOpenModelUpgrade?: () => void;
   onOpenCodeViewer?: (source: CodeViewerSource) => void;
   /**
    * 是否监听全局「加入对话」事件（workspace file tree / 画板按钮）。
@@ -508,7 +504,6 @@ function ConversationComposerImpl({
   onRuntimeLifecycle,
   provider,
   telemetryVisible = true,
-  readPlanIdentitySnapshot,
   onSendText,
   onTextChange,
   onDraftStateChange,
@@ -524,7 +519,6 @@ function ConversationComposerImpl({
   error,
   onDismissError,
   onOpenModelSettings,
-  onOpenModelUpgrade,
   onOpenCodeViewer,
   listenAddToChatEvents = true,
   externalTextInsertRequest = null,
@@ -1205,7 +1199,6 @@ function ConversationComposerImpl({
             configProvider: telemetryConfig?.provider,
             agentProvider: provider,
             providerBaseURL: resolveProviderBaseURL(telemetryConfig?.provider, modelSelectionView),
-            planIdentitySnapshot: readPlanIdentitySnapshot?.(),
           }),
         };
         const sendTrigger = sendTriggerRef.current;
@@ -1422,7 +1415,6 @@ function ConversationComposerImpl({
       modelSelectionView,
       onSendText,
       provider,
-      readPlanIdentitySnapshot,
       removeCodeCommentContext,
       removeConversationSelectionReference,
       removePptxElementReference,
@@ -2193,7 +2185,6 @@ function ConversationComposerImpl({
             error={visibleError}
             onDismiss={onDismissError}
             onOpenModelSettings={onOpenModelSettings}
-            onOpenUpgrade={onOpenModelUpgrade}
           />
         </div>
       ) : null}

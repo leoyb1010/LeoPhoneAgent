@@ -319,6 +319,12 @@ export const TID_SETTINGS_PAGE = "settings-page";
 export const TID_SETTINGS_BACK_BUTTON = "settings-back-button";
 /** 设置页左侧分区入口（动态后缀为 section id） */
 export const TID_SETTINGS_SECTION_NAV = "settings-section-nav";
+/** 设置页导航顶部的搜索框 */
+export const TID_SETTINGS_NAV_SEARCH_INPUT = "settings-nav-search-input";
+/** 设置页导航搜索结果（动态后缀为结果 key） */
+export const TID_SETTINGS_NAV_SEARCH_RESULT = "settings-nav-search-result";
+/** 「扩展」页的 tab（动态后缀为 section id） */
+export const TID_SETTINGS_EXTENSIONS_TAB = "settings-extensions-tab";
 /** 常规设置中的增强 Find/Grep 开关 */
 export const TID_SETTINGS_NATIVE_SEARCH_SWITCH = "settings-native-search-switch";
 /** 常规设置中的数据存储路径只读输入框 */
@@ -417,10 +423,8 @@ export const TID_SUBAGENT_ROW = "subagent-row";
 export const TID_SUBAGENT_BUILT_IN_MODEL_TRIGGER = "subagent-built-in-model-trigger";
 /** 设置页使用统计顶层 tab（动态后缀为 usage tab id） */
 export const TID_SETTINGS_USAGE_TAB = "settings-usage-tab";
-/** 侧边栏头像菜单剩余额度子菜单入口 */
-export const TID_SIDEBAR_USAGE_REMAINING_TRIGGER = "sidebar-usage-remaining-trigger";
 /** 侧边栏头像菜单使用统计入口 */
-export const TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON = "sidebar-coding-plan-usage-button";
+export const TID_SIDEBAR_USAGE_BUTTON = "sidebar-usage-button";
 
 // Model Provider Settings
 /** 模型供应商顶部添加按钮 */
@@ -433,15 +437,6 @@ export const TID_MODEL_PROVIDER_TEMPLATE_ITEM = "model-provider-template-item";
 export const TID_MODEL_PROVIDER_TEMPLATE_BACK_BUTTON = "model-provider-template-back-button";
 /** 模型供应商左侧导航条目（动态后缀为 provider node key） */
 export const TID_MODEL_PROVIDER_NAV_ITEM = "model-provider-nav-item";
-/** 模型供应商连接方式下拉触发器 */
-export const TID_MODEL_PROVIDER_CONNECTION_MODE_TRIGGER = "model-provider-connection-mode-trigger";
-/** 设置页已有 Start Plan 的数量快捷入口。 */
-export const TID_MODEL_PROVIDER_START_PLAN_COUNT_SHORTCUT =
-  "model-provider-start-plan-count-shortcut";
-export const TID_MODEL_PROVIDER_START_PLAN_SWITCH_PREFIX =
-  "model-provider-start-plan-switch-prefix";
-/** 模型供应商连接方式下拉项（动态后缀为连接方式 key） */
-export const TID_MODEL_PROVIDER_CONNECTION_MODE_ITEM = "model-provider-connection-mode-item";
 /** 模型供应商详情 API Key 输入框 */
 export const TID_MODEL_PROVIDER_API_KEY_INPUT = "model-provider-api-key-input";
 /** 模型供应商名称编辑按钮 */
@@ -723,6 +718,3 @@ export const TID_CONFIRM_DIALOG_CONFIRM = "confirm-dialog-confirm";
 export function testId(base: string, suffix: string): string {
   return `${base}-${suffix}`;
 }
-
-export const TID_START_PLAN_RECOMMENDATION_DIALOG = "start-plan-recommendation-dialog";
-

@@ -1,10 +1,7 @@
 import type { ZCodeConfigOption, ZCodeProvider } from "@zcode/shared";
 import type { ModelSelectionView } from "@zcode/services";
 import type { ModelSelectGroup, ModelSelectGroupItem } from "@/ModelConfigSelect.js";
-import {
-  buildRegistryModelSelectGroups,
-  type ModelProviderGroupLabelOptions,
-} from "@/lib/modelSelectionGroups.js";
+import { buildRegistryModelSelectGroups } from "@/lib/modelSelectionGroups.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { resolveV4ModelTriggerLabel } from "@/v4/composer/modelTriggerDisplay.js";
 
@@ -26,14 +23,9 @@ const AUTOMATION_MODE_VALUES = ["build", "edit", "plan", "yolo"] as const;
 
 export function buildAutomationModelSelectGroups(params: {
   selectedProvider: ZCodeProvider;
-  labels: ModelProviderGroupLabelOptions;
   registrySelectionView: ModelSelectionView;
 }): ModelSelectGroup[] {
-  return buildRegistryModelSelectGroups(
-    params.selectedProvider,
-    params.registrySelectionView,
-    params.labels,
-  );
+  return buildRegistryModelSelectGroups(params.selectedProvider, params.registrySelectionView);
 }
 
 export function buildAutomationModeOption(currentValue: string): ZCodeConfigOption {

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { ProviderSettingsFormModel } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
+import { prettifyModelId } from "@zcode/shared/model-discovery";
 import { Loader2Icon, Trash2, Unplug } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { ModelInputCapabilityBadge } from "@/components/ModelInputCapabilityBadge.js";
@@ -242,13 +243,25 @@ export function ModelRowInput({
     { value: contextWindowLabel },
   );
 
+  const displayName = prettifyModelId(model.modelId);
+  const hasDisplayName = displayName !== model.modelId;
+
   return (
     <div className="space-y-2 px-3 py-2">
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {/* [leo] 1.9.0：先显示可读名称（与模型选择器一致），原始 ID 用等宽小字放在后面；
+              名称和 ID 相同（已是可读写法）时只显示一次。存储的 ID 不变。 */}
+          {hasDisplayName ? (
+            <span className="shrink-0 text-ui-base text-foreground">{displayName}</span>
+          ) : null}
           <span
             data-testid={inputTestId}
-            className="min-w-0 truncate font-mono text-ui-base text-foreground"
+            className={
+              hasDisplayName
+                ? "min-w-0 truncate font-mono text-ui-sm text-foreground-subtlest"
+                : "min-w-0 truncate font-mono text-ui-base text-foreground"
+            }
           >
             {model.modelId}
           </span>

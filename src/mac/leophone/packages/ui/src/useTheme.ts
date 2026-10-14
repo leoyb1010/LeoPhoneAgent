@@ -82,8 +82,8 @@ function isTheme(value: string | null): value is Theme {
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    // 默认主题统一收敛到 Zai dark，避免旧 hook 兜底值和 Zustand store 默认值分叉。
-    return isTheme(saved) ? normalizeThemePreference(saved) : "zai-dark";
+    // 默认主题与 Zustand store 默认值保持一致（[leo] 1.9.0 起为跟随系统），避免两处兜底分叉。
+    return isTheme(saved) ? normalizeThemePreference(saved) : "system";
   });
 
   const setTheme = useCallback((t: Theme) => {

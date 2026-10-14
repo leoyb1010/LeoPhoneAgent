@@ -82,9 +82,9 @@ function registerE2EStoreBridgesIfEnabled() {
   });
 }
 
-// 初始化主题：默认 Zai dark，后续由 useTheme hook 接管
+// 初始化主题：默认跟随系统（[leo] 1.9.0，与 store 默认值一致），后续由 useTheme hook 接管
 {
-  const saved = localStorage.getItem("zcode-theme") || "zai-dark";
+  const saved = localStorage.getItem("zcode-theme") || "system";
   const resolved =
     saved === "system"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches

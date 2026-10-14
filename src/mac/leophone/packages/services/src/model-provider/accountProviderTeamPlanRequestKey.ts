@@ -12,7 +12,7 @@ import {
   copyBigModelTeamPlanProjectApiKeySecret,
   ensureBigModelTeamPlanProjectApiKey,
 } from "#src/bigmodel/teamPlanApiKey.js";
-import { createZaiLoginAuthHeaders } from "#src/coding-plan-subscription/bigmodelCodingPlanSubscriptionProvider.js";
+import { createZaiLoginAuthHeaders } from "./officialLoginAuthHeaders.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { readApiJson } from "#src/providers/api/apiJson.js";
 import type { RemoteCustomerInfo } from "./accountProviderApiTypes.js";

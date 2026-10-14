@@ -1,6 +1,4 @@
 /* eslint-disable max-lines -- 设置导航意图集中管理 sessionStorage、事件桥接和解析校验，拆分会让一次性意图消费顺序更难保证。 */
-import { logger } from "@/logger.js";
-
 export type SettingsSectionId =
   | "general"
   | "appearance"
@@ -20,9 +18,11 @@ export type SettingsSectionId =
   | "computerUse"
   | "automations"
   | "shortcuts"
-  | "phone";
+  | "phone"
+  // [leo] 「扩展」导航入口：本身不是页面，解析为 plugin；实际页面仍是 plugin/mcp/skill/commands/hooks。
+  | "extensions";
 
-type SettingsUsageTabTarget = "app" | "codingPlan";
+type SettingsUsageTabTarget = "app";
 type SettingsPluginTabTarget = "plugins" | "mcps" | "skills" | "commands";
 type SettingsPluginNavigationOrigin = "plugin-store";
 
@@ -32,8 +32,7 @@ const SETTINGS_SECTION_INTENT_KEY = "zcode-settings-section-intent",
   SETTINGS_PLUGIN_ORIGIN_INTENT_KEY = "zcode-settings-plugin-origin-intent",
   SETTINGS_PLUGIN_SCOPE_KEY_INTENT_KEY = "zcode-settings-plugin-scope-key-intent";
 const SETTINGS_MODEL_PROVIDER_ID_INTENT_KEY = "zcode-settings-model-provider-id-intent";
-const SETTINGS_SECTION_INTENT_EVENT = "zcode:settings-section-intent",
-  SETTINGS_LAST_SECTION_STORAGE_KEY = "zcode-settings-last-section";
+const SETTINGS_SECTION_INTENT_EVENT = "zcode:settings-section-intent";
 const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
   // 产品语义：定时任务是 workspace 主视图，不能再作为设置页分区出现。
   // 注意：hooks 已是正式设置页分区，不在此列。
@@ -79,7 +78,8 @@ function isSettingsSectionId(value: string): value is SettingsSectionId {
     value === "computerUse" ||
     value === "automations" ||
     value === "shortcuts" ||
-    value === "phone"
+    value === "phone" ||
+    value === "extensions"
   );
 }
 
@@ -91,90 +91,16 @@ export function resolveSettingsSection(
   section: SettingsSectionId,
   fallbackSection: SettingsSectionId = "general",
 ): SettingsSectionId {
-  if (section === "plugins") return "plugin";
+  if (section === "plugins" || section === "extensions") return "plugin";
   return isSettingsSectionEnabled(section) ? section : fallbackSection;
 }
 
-function getLocalStorage(): Storage | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    return window.localStorage;
-  } catch (error) {
-    // 部分 WebView / 移动远控容器可能禁用 localStorage。
-    // 设置页分区记忆只是 UI 偏好，存储不可用时回退默认入口，不应阻断打开设置页。
-    logger.warn("[settingsNavigation] localStorage 不可用", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-function readLastSettingsSectionPreference(
-  fallbackSection: SettingsSectionId = "general",
-): SettingsSectionId {
-  const storage = getLocalStorage();
-  if (!storage) {
-    return fallbackSection;
-  }
-
-  try {
-    const raw = storage.getItem(SETTINGS_LAST_SECTION_STORAGE_KEY);
-    // 旧 section id 已并入 plugin；迁移持久化值，避免继续传播历史路由语义。
-    if (raw === "plugins") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "plugin");
-      setPendingPluginTab("plugins");
-      return "plugin";
-    }
-    if (raw === "skills") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "skill");
-      return "skill";
-    }
-    // 旧版“代码预览”已并入“外观”，保留用户上次停留位置的迁移语义。
-    if (raw === "codePreview") {
-      storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, "appearance");
-      return "appearance";
-    }
-    if (raw && isSettingsSectionId(raw)) {
-      return resolveSettingsSection(raw, fallbackSection);
-    }
-    if (raw !== null) {
-      storage.removeItem(SETTINGS_LAST_SECTION_STORAGE_KEY);
-    }
-  } catch (error) {
-    logger.warn("[settingsNavigation] 读取上次设置分区失败", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return fallbackSection;
-}
-
-export function writeLastSettingsSectionPreference(section: SettingsSectionId): void {
-  const resolvedSection = resolveSettingsSection(section);
-  const storage = getLocalStorage();
-  if (!storage) {
-    return;
-  }
-
-  try {
-    storage.setItem(SETTINGS_LAST_SECTION_STORAGE_KEY, resolvedSection);
-  } catch (error) {
-    logger.warn("[settingsNavigation] 写入上次设置分区失败", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
 export function consumeInitialSettingsSection(
-  fallbackSection: SettingsSectionId = "general",
+  fallbackSection: SettingsSectionId = "modelProvider",
 ): SettingsSectionId {
-  const lastSection = readLastSettingsSectionPreference(fallbackSection);
-  // 普通打开设置页以前把 consumePendingSettingsSection 的 fallback 写死为
-  // modelProvider，导致没有显式跳转意图时也总进“模型供应商”。这里先读上次停留分区，
-  // 再让 quickpick / 管理模型这类一次性意图覆盖它，保留显式入口的直达语义。
-  return resolveSettingsSection(consumePendingSettingsSection(lastSection), lastSection);
+  // [leo] 与 iOS 一致：没有显式跳转意图时总是落在「AI 服务商」，不再记忆上次停留分区
+  // （旧 localStorage 值直接忽略）。quickpick / 横幅等一次性意图仍然优先。
+  return resolveSettingsSection(consumePendingSettingsSection(fallbackSection), fallbackSection);
 }
 
 export function setPendingSettingsSection(section: SettingsSectionId): void {
@@ -184,12 +110,6 @@ export function setPendingSettingsSection(section: SettingsSectionId): void {
 export function setPendingSettingsUsageIntent(): void {
   // 使用统计入口只负责打开 Usage 分区，不强行覆盖用户要看的具体统计 tab。
   setPendingSettingsSectionIntent("usage");
-}
-
-export function setPendingSettingsUsageCodingPlanIntent(): void {
-  // 剩余额度详情入口需要直达 Coding Plan 使用统计；
-  // 头像菜单入口则只打开 Usage 分区，避免覆盖用户上次查看的统计 tab。
-  setPendingSettingsSectionIntent("usage", { usageTab: "codingPlan" });
 }
 
 export function setPendingSettingsPluginIntent(
@@ -318,15 +238,6 @@ function consumePendingSettingsSection(
   return fallbackSection;
 }
 
-function setPendingPluginTab(tab: SettingsPluginTabTarget): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(SETTINGS_PLUGIN_TAB_INTENT_KEY, tab);
-  } catch {
-    // 忽略浏览器存储异常，不影响设置页打开。
-  }
-}
-
 export function consumePendingSettingsPluginTab(): SettingsPluginTabTarget | undefined {
   if (typeof window === "undefined") return undefined;
   try {
@@ -376,23 +287,6 @@ export function clearPendingSettingsPluginOrigin(): void {
   }
 }
 
-export function consumePendingSettingsUsageTab(): SettingsUsageTabTarget | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(SETTINGS_USAGE_TAB_INTENT_KEY);
-    if (raw !== null) {
-      window.sessionStorage.removeItem(SETTINGS_USAGE_TAB_INTENT_KEY);
-    }
-    return raw === "app" || raw === "codingPlan" ? raw : undefined;
-  } catch {
-    // 忽略浏览器存储异常，不影响主流程。
-    return undefined;
-  }
-}
-
 export function consumePendingSettingsModelProviderTarget():
   | SettingsModelProviderTarget
   | undefined {
@@ -413,27 +307,6 @@ export function consumePendingSettingsModelProviderTarget():
     // 忽略浏览器存储异常，不影响主流程。
     return undefined;
   }
-}
-
-export function shouldFallbackSettingsUsageTabToApp({
-  activeTab,
-  checkingCodingPlanTab,
-  loadingModelProviders,
-  showCodingPlanTab,
-}: {
-  activeTab: SettingsUsageTabTarget;
-  checkingCodingPlanTab: boolean;
-  loadingModelProviders: boolean;
-  showCodingPlanTab: boolean;
-}): boolean {
-  // Coding Plan 跳转意图可能先于 provider/entitlement 数据完成加载。
-  // 只有确认不再 loading 且仍没有有效套餐时才回退到 App Usage，避免“更多”点击后被首帧误改回默认 tab。
-  return (
-    activeTab === "codingPlan" &&
-    !showCodingPlanTab &&
-    !loadingModelProviders &&
-    !checkingCodingPlanTab
-  );
 }
 
 export function addPendingSettingsSectionListener(

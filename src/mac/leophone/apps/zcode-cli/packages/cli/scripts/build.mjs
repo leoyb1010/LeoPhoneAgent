@@ -164,6 +164,16 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/process-diagnostic.ts",
   ),
+  // [leo] 1.9.0：provider 包（随 agent 一起打包）引用了「从接口获取模型」的免 Key 判定，
+  // 漏声明会被通用前缀拼成 `src/index.ts/model-discovery`，Desktop agent 打包失败。
+  "@zcode/shared/model-discovery": resolve(
+    rootDirectory,
+    "../../packages/shared/src/model-discovery.ts",
+  ),
+  "@zcode/shared/provider-import": resolve(
+    rootDirectory,
+    "../../packages/shared/src/provider-import.ts",
+  ),
   "@zcode/shared/config-schema": resolve(
     rootDirectory,
     "../../packages/shared/src/config-schema.ts",

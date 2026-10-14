@@ -42,21 +42,6 @@ function isItemBusy(item: StorePluginItem, actions: PluginStoreActions): boolean
   );
 }
 
-/**
- * 付费套餐提示：目录条目声明 `listing.requiresPaidPlan` 时，在标题右侧展示渐变徽标。
- * 表达的是「需要付费套餐才好用」这个使用条件，不是「插件是收费商品」——不做安装门禁。
- * 商店卡片与详情页标题共用同一渐变徽标。
- * 徽标使用短文案，完整条件由 Tooltip 和 aria-label 表达；缺字段时整个标记不渲染。
- * hover 提示走 ControlHintTooltip（Root Provider 的 delayDuration=0，即时弹出），
- * 不用原生 title——后者有约 1s 系统延迟。
- */
-export function PluginStorePaidPlanBadge(_props: {
-  item: Pick<StorePluginItem, "id" | "listing">;
-}) {
-  // [leo] 这个「编程套餐」徽标指向官方 Coding Plan 订阅；LeoPhoneAgent 没有官方订阅，不再渲染。
-  return null;
-}
-
 /** 已安装条目的「…」菜单：启用/禁用、更新（有更新时）、卸载。卡片与详情页共用。 */
 export function PluginStoreItemMenu({
   item,
@@ -296,7 +281,6 @@ export function PluginStoreCard({
           <span className="min-w-0 truncate text-ui-base font-semibold text-foreground">
             {displayName}
           </span>
-          <PluginStorePaidPlanBadge item={item} />
           <PluginStoreUpdateBadge item={item} />
         </div>
         {item.orphaned ? (

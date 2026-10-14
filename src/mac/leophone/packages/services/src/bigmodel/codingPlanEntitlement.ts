@@ -29,7 +29,7 @@ const teamSchema = z.object({
 });
 type PersonalCodingPlanSubscription = z.infer<typeof personalSchema>;
 type TeamCodingPlanSubscription = z.infer<typeof teamSchema>;
-export type CodingPlanEntitlement<T> =
+type CodingPlanEntitlement<T> =
   | { kind: "available"; subscription: T }
   | { kind: "unavailable"; reason?: "expired" | "unassigned" }
   | { kind: "unknown" };
@@ -42,7 +42,7 @@ function isCodingPlanProduct(value: unknown): boolean {
   );
 }
 
-export function isActivePersonalCodingPlan(subscription: {
+function isActivePersonalCodingPlan(subscription: {
   productId?: string;
   productName?: string;
   status?: string;

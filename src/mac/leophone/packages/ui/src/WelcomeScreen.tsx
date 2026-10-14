@@ -382,8 +382,22 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
             >
               用 API Key 添加模型供应商
             </Button>
+            {/* [leo] 1.9.0：iPhone 上已经配好服务商的，直接到模型设置里「从 iPhone 导入」，
+                不用再一个个手填（导入按钮就在模型设置顶部，选文件需要用户点击，所以这里只负责带过去）。 */}
+            <Button
+              variant="ghost"
+              size="lg"
+              className="h-auto min-h-9 w-full whitespace-normal break-words py-1.5 text-center text-ui-base text-foreground-subtle"
+              onClick={() => {
+                requestModelSettingsAfterWelcome();
+                resetApiKeyForm();
+                void onComplete("apiKey");
+              }}
+            >
+              已在 iPhone 上配好？从 iPhone 导入
+            </Button>
             <p className="text-center text-ui-sm text-foreground-subtle">
-              订阅账号在浏览器里授权，模型自动出现在「订阅账号」供应商下；API Key 支持 Anthropic、OpenAI、OpenRouter、DeepSeek 等及自定义端点。凭据只保存在本机。
+              订阅账号在浏览器里授权；API Key 填好地址和 Key 后会自动读取可用模型。凭据只保存在本机。
             </p>
           </div>
         ) : null}
@@ -484,7 +498,7 @@ function LoginPanelHeader({
     <header className="flex flex-col items-center gap-3 text-center">
       <LoginPanelLogo />
       <div className="flex flex-col items-center gap-1 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-ui-xl font-semibold tracking-tight">{title}</h1>
         <p className="text-ui-base/relaxed text-foreground-subtle">{description}</p>
       </div>
       {children}
@@ -495,7 +509,7 @@ function LoginPanelHeader({
 function LoginPanelLogo() {
   return (
     // [leo] 我们的图标自带底色与圆角,直接铺满,不再外套一层深色方块。
-    <div className="relative mb-1 size-16 shadow-lg/20" aria-label="LeoBot" role="img">
+    <div className="relative mb-1 size-14" aria-label="LeoBot" role="img">
       <ZCodeAboutLogo className="size-full" />
     </div>
   );

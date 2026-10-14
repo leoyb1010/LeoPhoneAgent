@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- 定时任务编辑整页集中维护 Settings/History 两个 tab、cron builder、项目/模型选择器与运行历史，集中更利于交互一致。 */
-import { useStartPlanRecommendation } from "@/hooks/useStartPlanRecommendation.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { completeNewModelSelection } from "@zcode/provider";
 import {
@@ -126,6 +125,7 @@ import {
 } from "@/settings/automationEditValidation.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
+import { useModelPickerQuickAccess } from "@/hooks/useModelPickerQuickAccess.js";
 import { useAutomationProjectOptions } from "@/hooks/useAutomationProjectOptions.js";
 import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
 import { resolveModelThoughtOption } from "@/lib/modelThoughtOption.js";
@@ -1213,6 +1213,7 @@ export function AutomationEditView({
   onOpenSession,
 }: AutomationEditViewProps) {
   const { intl } = useZCodeIntl();
+  const modelPickerQuickAccess = useModelPickerQuickAccess();
   const confirmDialog = useConfirmDialog();
   const [tab, setTab] = useState<AutomationSettingsHistoryTab>("settings");
   const [runsPage, setRunsPage] = useState(1);
@@ -1486,33 +1487,9 @@ export function AutomationEditView({
     if (!modelSelectionView) return [];
     return buildAutomationModelSelectGroups({
       selectedProvider: ZCODE_AGENT_PROVIDER,
-      labels: {
-        apiKeyLabel: intl.formatMessage({ id: "settings.modelProvider.apiKey" }),
-        apiKeyBadgeLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.apiKeyBadge",
-        }),
-        codingPlanLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.codingPlan",
-        }),
-        codingPlanBadgeLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.codingPlanBadge",
-        }),
-        startPlanLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.startPlan",
-        }),
-        startPlanBadgeLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.startPlanBadge",
-        }),
-        teamPlanBadgeLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.teamPlanBadge",
-        }),
-        teamPlanFallbackLabel: intl.formatMessage({
-          id: "settings.modelProvider.connectionMode.teamPlan",
-        }),
-      },
       registrySelectionView: modelSelectionView,
     });
-  }, [intl, modelSelectionView]);
+  }, [modelSelectionView]);
   const isSelectedConversationWorkspace = selectedWorkspace?.workspacePurpose === "conversation";
   // automation 数据只持久化 workspaceKey/path，编辑态曾直接把 conversation
   // backing path 当项目展示成 default。匹配当前 canonical 候选恢复 purpose 后，
@@ -1767,7 +1744,6 @@ export function AutomationEditView({
   // 字段才能触发未保存提示，否则仅打开已有任务再返回也会被误判为修改。
   const hasUnsavedChanges = Boolean(editing) && changedFields.length > 0;
 
-  const recommendStartPlan = useStartPlanRecommendation(modelSelectionView);
   const submitAutomation = useCallback(
     async (options: { validationSource: "save" | "run-now"; returnToList?: boolean }) => {
       if (saving) return false;
@@ -1799,11 +1775,6 @@ export function AutomationEditView({
           : null;
       // 只禁用按钮无法覆盖快捷键或异步回调；提交边界也必须拒绝无有效项目的新建。
       if (!target) return false;
-      if (input.modelSelection && (!editing || changedFields.includes("model"))) {
-        const chosen = await recommendStartPlan(input.modelSelection);
-        if (!chosen) return false;
-        input.modelSelection = chosen;
-      }
       const trace = startUserAction({
         featureId: "automation.lifecycle",
         action: editing ? "update" : "create",
@@ -1827,8 +1798,6 @@ export function AutomationEditView({
     },
     [
       buildSubmitInput,
-      changedFields,
-      recommendStartPlan,
       canSubmit,
       editing,
       onBack,
@@ -2685,6 +2654,7 @@ export function AutomationEditView({
                       )}
                       triggerIconClassName="inline-flex @sm/composer:hidden"
                       disabled={modelSelectionRead.state.status !== "ready"}
+                      quickAccess={modelPickerQuickAccess}
                     />
                     {modelSelectionRead.state.status === "error" ? (
                       <Button

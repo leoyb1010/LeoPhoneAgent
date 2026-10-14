@@ -8,15 +8,21 @@ export function SettingsRow({
   control,
   detail,
   controlLayout = "default",
+  rowId,
 }: {
   label: ReactNode;
   description?: ReactNode;
   control: ReactNode;
   detail?: ReactNode;
   controlLayout?: "default" | "wide";
+  /** 设置导航搜索命中该行时用于滚动定位与短暂高亮（data-search-hit）。 */
+  rowId?: string;
 }) {
   return (
-    <div className="border-t border-border px-4 py-3 first:border-t-0">
+    <div
+      data-settings-row-id={rowId}
+      className="border-t border-border px-4 py-3 transition-colors duration-500 first:border-t-0 data-[search-hit=true]:bg-selected"
+    >
       <div
         className={cn(
           "grid items-center gap-4",

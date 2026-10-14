@@ -9,7 +9,7 @@ export interface BigModelTeamPlanBizContext {
   projectId: string;
 }
 
-export interface BigModelTeamPlanApiKeySummary {
+interface BigModelTeamPlanApiKeySummary {
   apiKey?: string | null;
   keyType?: number | null;
   name?: string | null;
@@ -26,15 +26,15 @@ interface BigModelBizEnvelope<T> {
   data?: T | null;
 }
 
-export type BigModelTeamPlanApiKeyEnsureStatus = "existing" | "created" | "missing";
+type BigModelTeamPlanApiKeyEnsureStatus = "existing" | "created" | "missing";
 
-export interface BigModelTeamPlanApiKeyEnsureResult {
+interface BigModelTeamPlanApiKeyEnsureResult {
   apiKey: BigModelTeamPlanApiKeySummary | null;
   diagnostics: BigModelTeamPlanApiKeyEnsureDiagnostics;
   status: BigModelTeamPlanApiKeyEnsureStatus;
 }
 
-export interface BigModelTeamPlanApiKeyEnsureDiagnostics {
+interface BigModelTeamPlanApiKeyEnsureDiagnostics {
   create?: BigModelBizEnvelopeDiagnostics & {
     dataHasApiKey: boolean;
     dataKeyType: number | null;
@@ -46,7 +46,7 @@ export interface BigModelTeamPlanApiKeyEnsureDiagnostics {
   };
 }
 
-export interface BigModelBizEnvelopeDiagnostics {
+interface BigModelBizEnvelopeDiagnostics {
   code: number | null;
   msg: string | null;
   success: boolean | null;
@@ -96,7 +96,7 @@ export async function ensureBigModelTeamPlanProjectApiKey(params: {
   return result.apiKey;
 }
 
-export async function ensureBigModelTeamPlanProjectApiKeyWithStatus(params: {
+async function ensureBigModelTeamPlanProjectApiKeyWithStatus(params: {
   apiClient: ApiClient;
   authorization: string;
   host: string;

@@ -22,14 +22,6 @@
       "normalization": "Official 300x300 square SVG downloads, unchanged. Decoded logoLightSquareSvg / logoDarkSquareSvg from brand page asset index-CmefrukV.js. Retrieved 2026-09-07."
     },
     {
-      "brand": "Start Plan",
-      "file": "model-provider-start-plan.png",
-      "providerIds": ["account:zai-start-plan", "account:bigmodel-start-plan"],
-      "sourceUrl": "user-provided:icon_512.png",
-      "sourceOwner": "User-provided asset",
-      "normalization": "Byte-for-byte copy of the user-provided 128x128 RGBA PNG on 2026-09-17. Shared by both Start Plans in light and dark themes."
-    },
-    {
       "brand": "Z.AI",
       "file": "model-provider-zai-app.png",
       "providerIds": [

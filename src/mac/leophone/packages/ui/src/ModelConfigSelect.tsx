@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -46,6 +47,21 @@ import {
 } from "@/lib/pickerFocus.js";
 import { RollingToolbarLabel } from "@/chat-input-toolbar/RollingToolbarLabel.js";
 import { ModelInputCapabilityBadge } from "@/components/ModelInputCapabilityBadge.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import type { ModelPickerQuickAccess } from "@/hooks/useModelPickerQuickAccess.js";
+import {
+  flattenModelPickerEntries,
+  rankModelPickerEntries,
+  resolveQuickAccessEntries,
+  type ModelPickerEntry,
+} from "@/lib/modelPickerQuickAccess.js";
+import {
+  ModelPickerRow,
+  ModelPickerSearchInput,
+  ModelPickerSectionLabel,
+  ModelPickerStarButton,
+  type ModelPickerPinControl,
+} from "@/ModelPickerRows.js";
 
 export interface ModelSelectGroupItem {
   key: string;
@@ -183,6 +199,18 @@ interface ModelConfigSelectProps {
   leadingItems?: readonly ModelSelectGroupItem[];
   /** 触发器里标签之后的小徽标（如「会话模型」「不可用」）；缺省即无。 */
   triggerBadge?: ReactNode;
+  /** 常用 / 最近使用（`useModelPickerQuickAccess`）；缺省时不显示快速区和星标，搜索仍可用。 */
+  quickAccess?: ModelPickerQuickAccess;
+}
+
+const MODEL_PICKER_FIRST_MENU_ITEM_SELECTOR =
+  '[role^="menuitem"]:not([data-model-picker-row]):not([aria-disabled="true"])';
+
+function isTypeToFilterKey(event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) {
+  // 空格保留给菜单项的原生「选中」语义。
+  return (
+    event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey
+  );
 }
 
 export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
@@ -226,8 +254,15 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
   contentAlign = "start",
   leadingItems,
   triggerBadge,
+  quickAccess,
 }: ModelConfigSelectProps) {
+  const { intl } = useZCodeIntl();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const menuContentRef = useRef<HTMLDivElement | null>(null);
+  const activeRowRef = useRef<HTMLDivElement | null>(null);
   const open = controlledOpen ?? uncontrolledOpen;
   const lastOpenRequestKeyRef = useRef(openRequestKey);
   const hasSelectableModel = modelGroups.length > 0;
@@ -281,6 +316,165 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
     [onValueChange],
   );
 
+  // 搜索词与高亮只属于这一次打开；关闭（含父组件受控关闭）即重置。
+  useEffect(() => {
+    if (open) return;
+    setSearchQuery("");
+    setActiveIndex(-1);
+  }, [open]);
+
+  const trimmedSearchQuery = searchQuery.trim();
+  const pickerEntries = useMemo(
+    () => (open ? flattenModelPickerEntries(modelGroups, leadingItems) : []),
+    [leadingItems, modelGroups, open],
+  );
+  const showSearch = pickerEntries.length > 0;
+  const searchResults = useMemo(
+    () => (trimmedSearchQuery ? rankModelPickerEntries(pickerEntries, trimmedSearchQuery) : []),
+    [pickerEntries, trimmedSearchQuery],
+  );
+  const quickEntries = useMemo(() => {
+    if (!quickAccess || trimmedSearchQuery) return { pinned: [], recent: [] };
+    return resolveQuickAccessEntries(
+      pickerEntries,
+      quickAccess.pinnedValues,
+      quickAccess.recentValues,
+    );
+  }, [pickerEntries, quickAccess, trimmedSearchQuery]);
+  // ↑/↓ 在搜索框里移动的拍平列表：有查询时是搜索结果，没有时是快速区。
+  const navigableEntries = useMemo<ModelPickerEntry<ModelSelectGroupItem>[]>(
+    () => (trimmedSearchQuery ? searchResults : [...quickEntries.pinned, ...quickEntries.recent]),
+    [quickEntries, searchResults, trimmedSearchQuery],
+  );
+
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, trimmedSearchQuery]);
+
+  const getPinControl = useCallback(
+    (value: string): ModelPickerPinControl | undefined => {
+      if (!quickAccess) return undefined;
+      const pinned = quickAccess.pinnedValues.includes(value);
+      return {
+        pinned,
+        disabled: !pinned && quickAccess.pinnedValues.length >= quickAccess.maxPinned,
+        maxPinned: quickAccess.maxPinned,
+        onToggle: () => quickAccess.togglePinned(value),
+      };
+    },
+    [quickAccess],
+  );
+
+  const selectPickerValue = useCallback(
+    (value: string) => {
+      if (isItemLocked(value)) return;
+      handleModelValueChange(value);
+      handlePopoverOpenChange(false);
+    },
+    [handleModelValueChange, handlePopoverOpenChange, isItemLocked],
+  );
+
+  // 打开即可输入搜索：输入框挂载（commit 阶段）时先拿到焦点，Radix FocusScope 随后的 effect
+  // 发现焦点已在菜单内就不会再把焦点移到菜单根节点。触屏设备不主动聚焦，避免一打开就弹软键盘。
+  const attachSearchInput = useCallback((element: HTMLInputElement | null) => {
+    searchInputRef.current = element;
+    if (element && !isCoarseTouchDevice()) {
+      element.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    // 有查询时默认高亮第一条，输入后直接回车即可选中最相关的模型。
+    setActiveIndex(value.trim() ? 0 : -1);
+  }, []);
+
+  const handleSearchKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape") {
+        // Esc 交给 DropdownMenuContent.onEscapeKeyDown：先清空查询，再关闭。
+        return;
+      }
+      // 阻止冒泡到 Radix Menu：否则字符会触发菜单 typeahead，把焦点从搜索框抢走。
+      event.stopPropagation();
+      if (event.nativeEvent.isComposing) return;
+      const count = navigableEntries.length;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (activeIndex < count - 1) {
+          setActiveIndex(activeIndex + 1);
+          return;
+        }
+        if (!trimmedSearchQuery) {
+          // 快速区之后交给原有菜单项的方向键焦点（含 provider 子菜单）。
+          const firstMenuItem = menuContentRef.current?.querySelector<HTMLElement>(
+            MODEL_PICKER_FIRST_MENU_ITEM_SELECTOR,
+          );
+          if (firstMenuItem) {
+            setActiveIndex(-1);
+            firstMenuItem.focus();
+          }
+        }
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveIndex(Math.max(trimmedSearchQuery ? 0 : -1, activeIndex - 1));
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const entry = navigableEntries[activeIndex];
+        if (entry) selectPickerValue(entry.item.value);
+      }
+    },
+    [activeIndex, navigableEntries, selectPickerValue, trimmedSearchQuery],
+  );
+
+  const handleMenuKeyDownCapture = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      // 焦点在菜单项上时直接打字也能搜索（type-to-filter），代替 Radix 的首字母 typeahead。
+      if (!showSearch || event.target === searchInputRef.current || !isTypeToFilterKey(event)) {
+        return;
+      }
+      const target = event.target as HTMLElement;
+      // React 事件会穿过 portal 冒泡：连接方式 Select 弹层不在菜单 DOM 内，不能劫持它的按键。
+      if (!menuContentRef.current?.contains(target)) return;
+      if (target.closest("input, textarea, [contenteditable='true']")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleSearchChange(searchQuery + event.key);
+      searchInputRef.current?.focus();
+    },
+    [handleSearchChange, searchQuery, showSearch],
+  );
+
+  const renderPickerRows = (
+    entries: readonly ModelPickerEntry<ModelSelectGroupItem>[],
+    offset: number,
+    keyPrefix: string,
+  ) =>
+    entries.map((entry, index) => {
+      const rowIndex = offset + index;
+      const active = rowIndex === activeIndex;
+      return (
+        <ModelPickerRow
+          key={`${keyPrefix}:${entry.item.value}`}
+          ref={active ? activeRowRef : undefined}
+          item={entry.item}
+          providerLabel={entry.groupLabel || undefined}
+          active={active}
+          selected={entry.item.value === normalizedValue}
+          locked={isItemLocked(entry.item.value)}
+          lockReasonMessage={lockReasonMessage}
+          pin={getPinControl(entry.item.value)}
+          onActivate={() => setActiveIndex(rowIndex)}
+          onSelect={() => selectPickerValue(entry.item.value)}
+          testId={testId(TID_CHAT_MODEL_SELECT_ITEM, `${keyPrefix}:${entry.item.value}`)}
+        />
+      );
+    });
+
   const triggerAriaLabel = useMemo(() => {
     return pending && pendingLabel ? pendingLabel : (tooltipTitle ?? currentTriggerTitle);
   }, [currentTriggerTitle, pending, pendingLabel, tooltipTitle]);
@@ -291,6 +485,7 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
       const itemSelected = item.value === normalizedValue;
       // React 的 key 不能跟随 props spread 传入，否则开发环境会在 CDP console 报警。
       const itemKey = item.key;
+      const pinControl = getPinControl(item.value);
       const commonProps = {
         "data-model-option-locked": itemLocked ? "true" : undefined,
         "data-model-option-selected": itemSelected ? "true" : undefined,
@@ -315,6 +510,7 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
             ) : null}
             {item.supportsVisionInput ? <ModelInputCapabilityBadge /> : null}
           </span>
+          {pinControl ? <ModelPickerStarButton {...pinControl} /> : null}
           {itemLocked ? (
             <TooltipProvider>
               <Tooltip>
@@ -350,7 +546,7 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
           <DropdownMenuItem
             key={itemKey}
             {...commonProps}
-            className="min-h-8 cursor-not-allowed gap-2 px-2 text-ui-base text-foreground-subtlest data-[highlighted]:text-foreground-subtlest"
+            className="group/model-row min-h-8 cursor-not-allowed gap-2 px-2 text-ui-base text-foreground-subtlest data-[highlighted]:text-foreground-subtlest"
             onSelect={(event) => event.preventDefault()}
           >
             {content}
@@ -363,7 +559,7 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
           key={itemKey}
           {...commonProps}
           value={item.value}
-          className="min-h-8 gap-2 pl-2 pr-8 text-ui-base"
+          className="group/model-row min-h-8 gap-2 pl-2 pr-8 text-ui-base"
           onSelect={() => {
             handleModelValueChange(item.value);
             handlePopoverOpenChange(false);
@@ -374,6 +570,7 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
       );
     },
     [
+      getPinControl,
       handleModelValueChange,
       handlePopoverOpenChange,
       isItemLocked,
@@ -550,13 +747,29 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
       )}
       {open ? (
         <DropdownMenuContent
+          ref={menuContentRef}
           className={cn(
-            shouldShowProviderLevel
-              ? "w-max min-w-48 max-w-[calc(100vw-2rem)]"
-              : "w-48 max-h-72 overflow-y-auto",
+            showSearch
+              ? // 搜索结果会随输入变化；固定宽度避免菜单边输入边抖动，长名截断并保留悬停提示。
+                cn(
+                  "w-80 max-w-[calc(100vw-2rem)]",
+                  shouldShowProviderLevel
+                    ? "max-h-[min(28rem,var(--radix-dropdown-menu-content-available-height))]"
+                    : "max-h-80 overflow-y-auto",
+                )
+              : shouldShowProviderLevel
+                ? "w-max min-w-48 max-w-[calc(100vw-2rem)]"
+                : "w-48 max-h-72 overflow-y-auto",
           )}
           align={contentAlign}
           side={contentSide}
+          onKeyDownCapture={handleMenuKeyDownCapture}
+          onEscapeKeyDown={(event) => {
+            if (!searchQuery) return;
+            event.preventDefault();
+            handleSearchChange("");
+            searchInputRef.current?.focus();
+          }}
           onCloseAutoFocus={(event) => {
             if (!focusSelectorOnClose) {
               // Automations 没有聊天输入框可恢复；保留 Radix 默认行为，
@@ -577,13 +790,57 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
             input?.focus();
           }}
         >
-          {leadingItems !== undefined && leadingItems.length > 0 ? (
+          {showSearch ? (
+            <ModelPickerSearchInput
+              ref={attachSearchInput}
+              value={searchQuery}
+              placeholder={intl.formatMessage({ id: "chat.toolbar.model.searchPlaceholder" })}
+              onChange={handleSearchChange}
+              onKeyDown={handleSearchKeyDown}
+            />
+          ) : null}
+          {trimmedSearchQuery ? (
+            searchResults.length > 0 ? (
+              <div role="group" data-model-picker-section="results">
+                {renderPickerRows(searchResults, 0, "search")}
+              </div>
+            ) : (
+              <div
+                className="flex min-h-8 items-center px-2 text-ui-sm text-foreground-subtle"
+                data-model-picker-section="empty"
+              >
+                {intl.formatMessage({ id: "chat.toolbar.model.empty" })}
+              </div>
+            )
+          ) : null}
+          {!trimmedSearchQuery && leadingItems !== undefined && leadingItems.length > 0 ? (
             <>
               {renderModelItems(leadingItems)}
               {hasSelectableModel ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {hasSelectableModel && shouldShowProviderLevel
+          {!trimmedSearchQuery && quickEntries.pinned.length > 0 ? (
+            <div role="group" data-model-picker-section="pinned">
+              <ModelPickerSectionLabel>
+                {intl.formatMessage({ id: "chat.toolbar.model.section.pinned" })}
+              </ModelPickerSectionLabel>
+              {renderPickerRows(quickEntries.pinned, 0, "pinned")}
+            </div>
+          ) : null}
+          {!trimmedSearchQuery && quickEntries.recent.length > 0 ? (
+            <div role="group" data-model-picker-section="recent">
+              <ModelPickerSectionLabel>
+                {intl.formatMessage({ id: "chat.toolbar.model.section.recent" })}
+              </ModelPickerSectionLabel>
+              {renderPickerRows(quickEntries.recent, quickEntries.pinned.length, "recent")}
+            </div>
+          ) : null}
+          {!trimmedSearchQuery &&
+          hasSelectableModel &&
+          quickEntries.pinned.length + quickEntries.recent.length > 0 ? (
+            <DropdownMenuSeparator />
+          ) : null}
+          {trimmedSearchQuery ? null : hasSelectableModel && shouldShowProviderLevel
             ? modelGroups.map((group, index) => {
                 const groupSeparator = shouldRenderModelGroupSeparator(
                   modelGroups[index - 1],

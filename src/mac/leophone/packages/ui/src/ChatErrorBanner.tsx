@@ -128,7 +128,6 @@ export function ChatErrorBanner({
   retryDisabled?: boolean;
   onDismiss?: () => void;
   onOpenModelSettings?: () => void;
-  onOpenUpgrade?: () => void;
 }) {
   const { intl } = useZCodeIntl();
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);

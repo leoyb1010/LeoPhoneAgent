@@ -16,6 +16,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { useModelPickerQuickAccess } from "@/hooks/useModelPickerQuickAccess.js";
 import {
   MODEL_CONFIG_SELECT_BADGE_CLASS_NAME,
   ModelConfigSelect,
@@ -62,6 +63,7 @@ export function WorkflowRunSettingsModelField({
   value: string;
 }) {
   const { intl } = useZCodeIntl();
+  const modelPickerQuickAccess = useModelPickerQuickAccess();
   const levelTriggerRef = useRef<HTMLSpanElement | null>(null);
   const [levelOpen, setLevelOpen] = useState(false);
   const label = intl.formatMessage({ id: "chat.toolCall.workflow.run.settings.model" });
@@ -91,6 +93,7 @@ export function WorkflowRunSettingsModelField({
             isItemLocked={MODEL_ITEM_NEVER_LOCKED}
             onValueChange={onValueChange}
             leadingItems={leadingItems}
+            quickAccess={modelPickerQuickAccess}
             contentSide="bottom"
             contentAlign="start"
             focusSelectorOnClose={null}

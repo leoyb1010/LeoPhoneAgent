@@ -27,28 +27,27 @@ function getThemeHeroPalette(theme: Theme): ThemeHeroPalette {
         heading: "text-slate-900",
         description: "text-slate-700/80",
       };
-    // [leo] 两套 Zai 主题的欢迎背景从智谱蓝换成 Leo 的暖白 / 暖石墨 + 青绿(与鸿蒙端同一个青绿)。
+    // [leo] 1.9.0：两套 Zai 主题的欢迎背景改成中性灰阶的极淡渐变，不再有青绿光斑
+    // （之前暖白 + 青绿 mesh 和全局的米黄底叠在一起，正是"米黄色奇奇怪怪"的来源之一）。
     case "zai-light":
       return {
-        meshBase: "#f7f6f3",
-        meshLight: "#8fd6d0",
-        panel:
-          "bg-[linear-gradient(180deg,#fcfbf9_0%,#f7f6f3_42%,#e6f2f0_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.9),transparent_24%),radial-gradient(circle_at_82%_14%,rgba(46,139,139,0.14),transparent_26%),radial-gradient(circle_at_70%_84%,rgba(143,214,208,0.2),transparent_30%)]",
-        glowPrimary: "bg-[#8FD6D0]/40 mix-blend-multiply",
-        glowSecondary: "bg-[#E6F2F0]/80 mix-blend-multiply",
-        heading: "text-[#1D1B19]",
-        description: "text-[#5F5A54]",
+        meshBase: "#fafafa",
+        meshLight: "#e4e4e7",
+        panel: "bg-[linear-gradient(180deg,#ffffff_0%,#fafafa_55%,#f4f4f5_100%)]",
+        glowPrimary: "bg-transparent",
+        glowSecondary: "bg-transparent",
+        heading: "text-[#18181b]",
+        description: "text-[#71717a]",
       };
     case "zai-dark":
       return {
-        meshBase: "#10292a",
-        meshLight: "#4dd9d9",
-        panel:
-          "bg-[linear-gradient(180deg,#151413_0%,#1b1a18_46%,#0f2627_100%)] before:absolute before:inset-0 before:content-[''] before:bg-[radial-gradient(circle_at_18%_18%,rgba(77,217,217,0.12),transparent_24%),radial-gradient(circle_at_82%_12%,rgba(168,241,226,0.12),transparent_26%),radial-gradient(circle_at_66%_84%,rgba(77,217,217,0.1),transparent_28%)]",
-        glowPrimary: "bg-[#4DD9D9]/14 mix-blend-screen",
-        glowSecondary: "bg-[#A8F1E2]/10 mix-blend-screen",
-        heading: "text-[#EFEBE5]",
-        description: "text-[#A8A29B]",
+        meshBase: "#131315",
+        meshLight: "#232326",
+        panel: "bg-[linear-gradient(180deg,#18181b_0%,#131315_55%,#0f0f11_100%)]",
+        glowPrimary: "bg-transparent",
+        glowSecondary: "bg-transparent",
+        heading: "text-[#e4e4e7]",
+        description: "text-[#a1a1aa]",
       };
     case "dark":
     case "system":

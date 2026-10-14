@@ -20,12 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Loader2Icon } from "lucide-react";
 import { ProviderStatusIndicator } from "./ProviderStatusIndicator.js";
 
-import {
-  resolveModelProviderFamilySpecByProviderId,
-  isStartPlanModelProviderId,
-  TID_MODEL_PROVIDER_NAV_ITEM,
-  testId,
-} from "@zcode/shared";
+import { TID_MODEL_PROVIDER_NAV_ITEM, testId } from "@zcode/shared";
 import { useCallback, useMemo, type KeyboardEvent } from "react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -40,12 +35,9 @@ function getSortableProviderId(
   item: ModelProviderNavItem,
   reorderableProviderIds?: ReadonlySet<string>,
 ): string | null {
-  if ((item.type === "custom" || item.type === "preset") && item.provider) {
-    return !reorderableProviderIds || reorderableProviderIds.has(item.provider.providerId)
-      ? item.provider.providerId
-      : null;
-  }
-  return null;
+  return !reorderableProviderIds || reorderableProviderIds.has(item.provider.providerId)
+    ? item.provider.providerId
+    : null;
 }
 
 function resolveReorderedProviderIdsForGroup(params: {
@@ -59,27 +51,6 @@ function resolveReorderedProviderIdsForGroup(params: {
     return [...params.providerIds];
   }
   return arrayMove([...params.providerIds], activeIndex, overIndex);
-}
-
-function shouldShowModelProviderGroupLoadingIndicator(params: {
-  groupId: ModelProviderNavGroup["id"];
-  presetLoading: boolean;
-  customLoading: boolean;
-}): boolean {
-  if (params.groupId === "preset") {
-    return params.presetLoading;
-  }
-  return params.customLoading;
-}
-
-function resolveModelProviderSideNavLabel(item: ModelProviderNavItem): string {
-  if (item.type === "preset") {
-    return resolveModelProviderFamilySpecByProviderId(item.presetId)?.label ?? item.label;
-  }
-  if (item.type === "codingPlan" && isStartPlanModelProviderId(item.presetId)) {
-    return "Start Plan";
-  }
-  return item.label;
 }
 
 function ModelProviderNavigationButton({
@@ -96,43 +67,30 @@ function ModelProviderNavigationButton({
   showIcon?: boolean;
 }) {
   const isSelected = item.key === selectedNodeKey;
-  const isLoadingItem = item.type === "codingPlanLoading";
   const inactiveItemClassName = "border-transparent text-foreground hover:border-border-hover/60";
 
   return (
     <ControlHintTooltip title={label} side="right">
       <button
         type="button"
-        disabled={isLoadingItem}
         aria-label={label}
         aria-selected={isSelected}
         data-state={isSelected ? "selected" : "idle"}
         data-testid={testId(TID_MODEL_PROVIDER_NAV_ITEM, item.key)}
-        onClick={() => {
-          if (isLoadingItem) {
-            return;
-          }
-          onSelectNavItem(item);
-        }}
+        onClick={() => onSelectNavItem(item)}
         className={`relative box-border flex h-8 w-full items-center gap-2 rounded-lg border px-2 py-1 text-left text-ui-base font-medium transition-colors max-md:size-8 max-md:justify-center max-md:gap-0 max-md:px-0 ${
           isSelected
             ? "border-border-hover bg-card-selected text-foreground"
             : inactiveItemClassName
         } disabled:cursor-not-allowed disabled:opacity-60`}
       >
-        {isLoadingItem ? (
-          <Loader2Icon className="size-4 shrink-0 animate-spin text-foreground-subtlest" />
-        ) : showIcon ? (
+        {showIcon ? (
           <span className="shrink-0 text-current">{renderModelProviderNavIcon(item)}</span>
         ) : null}
         <span className="flex min-w-0 flex-1 items-center gap-1.5 max-md:sr-only">
           <span className="min-w-0 truncate">{label}</span>
         </span>
-        {"provider" in item ? (
-          <ProviderStatusIndicator
-            provider={item.type === "preset" ? item.statusProvider : item.provider}
-          />
-        ) : null}
+        <ProviderStatusIndicator provider={item.provider} />
       </button>
     </ControlHintTooltip>
   );
@@ -208,37 +166,9 @@ function SortableModelProviderNavigationButton({
         <span className="flex min-w-0 flex-1 items-center gap-1.5 max-md:sr-only">
           <span className="min-w-0 truncate">{label}</span>
         </span>
-        {"provider" in item ? (
-          <ProviderStatusIndicator
-            provider={item.type === "preset" ? item.statusProvider : item.provider}
-          />
-        ) : null}
+        <ProviderStatusIndicator provider={item.provider} />
       </div>
     </ControlHintTooltip>
-  );
-}
-
-function PresetProviderCardNavigation({
-  group,
-  selectedNodeKey,
-  onSelectNavItem,
-}: {
-  group: ModelProviderNavGroup;
-  selectedNodeKey: string | null;
-  onSelectNavItem: (item: ModelProviderNavItem) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 max-md:items-center max-md:gap-1">
-      {group.items.map((item) => (
-        <ModelProviderNavigationButton
-          key={item.key}
-          item={item}
-          label={resolveModelProviderSideNavLabel(item)}
-          selectedNodeKey={selectedNodeKey}
-          onSelectNavItem={onSelectNavItem}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -397,31 +327,19 @@ export function ModelProviderSectionNavigation({
               <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
                 {/* 导航分组标题也承担定位信息；本次实际主题subtlest仅2.4:1，使用可读次级文字。 */}
                 <h3 className="text-ui-sm font-semibold text-foreground-subtle">{group.title}</h3>
-                {shouldShowModelProviderGroupLoadingIndicator({
-                  groupId: group.id,
-                  presetLoading,
-                  customLoading,
-                }) ? (
+                {customLoading ? (
                   <Loader2Icon className="size-3 animate-spin text-foreground-subtlest" />
                 ) : null}
               </div>
 
-              {group.id === "preset" ? (
-                <PresetProviderCardNavigation
-                  group={group}
-                  selectedNodeKey={selectedNodeKey}
-                  onSelectNavItem={onSelectNavItem}
-                />
-              ) : (
-                <SortableProviderNavigationGroup
-                  group={group}
-                  selectedNodeKey={selectedNodeKey}
-                  onSelectNavItem={onSelectNavItem}
-                  onReorderProviderIds={onReorderProviderIds}
-                  reorderableProviderIds={reorderableProviderIds}
-                  sensors={sensors}
-                />
-              )}
+              <SortableProviderNavigationGroup
+                group={group}
+                selectedNodeKey={selectedNodeKey}
+                onSelectNavItem={onSelectNavItem}
+                onReorderProviderIds={onReorderProviderIds}
+                reorderableProviderIds={reorderableProviderIds}
+                sensors={sensors}
+              />
             </div>
           ))}
         {/* [leo] 预置组已清空，没有自定义供应商时左栏原来整片空白；给出空状态，说明右侧可以添加。 */}
