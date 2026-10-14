@@ -14,7 +14,7 @@
 手机端本身是一个完整的端上 Agent（模型接入、Linux 沙箱、浏览器自动化、
 技能与记忆);同时通过自营中继,在任意网络(蜂窝/WiFi)远程指挥任意一台
 Mac 上的编码 CLI(Claude Code / Codex / Cursor / Grok),支持断线续传、远程审批、
-会话接管。Mac 侧当前桌面与运行时主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 保留作归档。
+会话接管。Mac 侧当前桌面与运行时主工程是 `src/mac/leophone/`；旧 Cindy 系的 `leocodebox` 已从主分支移除（tag `archive/leocodebox-2.2.13`）。
 
 Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Standard
 与 Power 两种构建；Power 版为 Accessibility、Shizuku 与受控系统操作预留
@@ -53,9 +53,9 @@ Mac mini 原生服务的 CLI 与登录状态属于服务器用户；远端浏览
 [「Android Agent 交接与发布铁律」](#android-agent-交接与发布铁律)。**
 
 - 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
-- 本机唯一开发入口：开发 Mac 上 `~/Documents/` 下的这一份 `LeoPhoneAgent` checkout。旧路径 `~/leophone-mac` 已归档旧内容并改为指向此入口的兼容符号链接；两条路径对应同一仓库，不再维护旧工作副本。
+- 本机开发入口：`~/Documents/` 下的 `LeoPhoneAgent` checkout（在 iCloud 里）用于 iOS / Android 等日常开发；**Mac 桌面端的构建、打包只在 `~/leophone-mac` 这份独立克隆里做**（不在 iCloud 里，iCloud 会生成 `xxx 2` 副本并把文件换成占位符）。两份都以 `origin/main` 为准，切换前先 `git pull`。
 - Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
-  `src/mac/leophone/`（当前 1.x 主线）。`src/mac/leocodebox/` 是旧版桌面归档；
+  `src/mac/leophone/`（当前 1.x 主线）。旧版桌面 leocodebox 已移除（tag `archive/leocodebox-2.2.13`）；
   `src/mac/leoagent/` 中 relay.py 仍在服务，其他部分是协议兼容/灰度回退，不是 Android UI 工程。
   藏宝阁 iOS / Android / Mac 三端升级必须先读：
   [`docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md`](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md)。
@@ -179,7 +179,6 @@ src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Wa
 src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
 src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
 src/mac/leophone/       当前 LeoPhoneAgent · Mac 1.x:桌面、CLI/runtime、Leo Link、同步副本
-src/mac/leocodebox/     旧版桌面 2.2.13 归档，不能替代当前 Mac 的构建/测试
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
                         ※ 当前桌面主线为 leophone；leoagent 保留作灰度回退，relay.py 继续服役
@@ -488,9 +487,8 @@ pnpm --dir apps/zcode-cli build
 pnpm build:bootstrap
 ```
 
-`src/mac/leocodebox/` 是旧版 2.2.13 桌面归档。其历史安装包与热更新不能替代
-当前 1.x 主线；下载前查看对应 [Release](https://github.com/leoyb1010/LeoPhoneAgent/releases)
-的版本、目标平台与验收说明。旧工程的 `npm` 构建命令仅用于维护该归档。
+旧版 2.2.13 桌面 leocodebox 已在 Mac 1.9.0 从主分支移除，源码保留在 tag
+`archive/leocodebox-2.2.13`（需要时 `git checkout archive/leocodebox-2.2.13 -- src/mac/leocodebox`）。
 
 旧版 `src/mac/leoagent/` 保留作协议灰度回退,`relay.py` 继续服务中继。
 合并和迁移边界见
@@ -501,8 +499,8 @@ pnpm build:bootstrap
 - 主仓库:GPLv3,fork 自 OpenMinis(基线
   [`9cf3a855`](https://github.com/OpenMinis/OpenMinis/commit/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd),
   保留 `upstream` remote;升级流程见 [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md))。
-- `src/mac/leocodebox/` 保留其 AGPL-3.0-or-later、NOTICE 与第三方归属;
-  合并不改变该目录原有许可。
+- Mac 桌面端 `src/mac/leophone/` 基于 ZCode,保留其 Apache-2.0、NOTICE 与第三方归属。
+- 已移除的旧版 leocodebox(tag `archive/leocodebox-2.2.13`)按其 AGPL-3.0-or-later 与 NOTICE 保留在该 tag 中。
 - LeoAgentDesktop(Cindy/Apache-2.0 改造)目录已从仓库移除,仅存于 git 历史,
   其 NOTICE 随历史保留;未使用其商标。
 - 第三方致谢与许可证文本:[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。

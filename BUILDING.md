@@ -244,9 +244,9 @@ configuration and preserve the vendored `LICENSE` files. See
 ## Current Mac desktop and source-only audit checks
 
 The active Mac 1.x workspace is `src/mac/leophone/` (version is owned by its
-`package.json`). `src/mac/leocodebox/` is the archived desktop generation;
+`package.json`). The previous desktop generation (leocodebox 2.2.x) was removed
+from main in Mac 1.9.0 and lives only in the tag `archive/leocodebox-2.2.13`.
 `src/mac/leoagent/relay.py` remains the active relay and has independent tests.
-Do not substitute the archived desktop's check result for the current app.
 
 Use Node 24.14.0 and pnpm 10.33.2 from `src/mac/leophone/mise.toml`:
 

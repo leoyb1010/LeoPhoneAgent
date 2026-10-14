@@ -6,7 +6,7 @@ T2.5 唯一强调色：青绿。警告色、品牌色（如 xAI 橙）不改。
 |---|---|---|---|
 | Android | `#2E8B8B` | `#4DD9D9` | `src/android/.../ui/theme/Theme.kt` |
 | iOS | `#2A8282` | `#2E9C9C` | `Assets.xcassets/AccentColor` → `LeoTheme.ColorToken.accent`（`ChatColors` 只转发） |
-| Mac | HSL `175 77% 26%` | HSL `158 84% 64%` | `src/mac/leocodebox/src/styles/tokens.css` |
+| Mac | `#2A8282` | `#2E9C9C` | `src/mac/leophone/packages/ui/src/leo/skin/leo-skin.css`（1.9.0 起灰阶全中性，青绿是唯一强调色） |
 | Harmony | `#2E8B8B` | `#4DD9D9` | `src/harmony/.../theme/Tokens.ets` |
 
 设置四组（各端同一顺序、同一用词）：我的设备 / Agent / 外观与通用 / 数据与关于。

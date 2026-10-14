@@ -60,13 +60,12 @@ corresponding source under its terms.
 | Directory | Origin | License | Notices to keep |
 |---|---|---|---|
 | `src/mac/leophone/` (current Mac 1.x) | ZCode desktop/CLI kernel, Copyright 2026 Z.AI Co., Ltd | **Apache-2.0** (`src/mac/leophone/LICENSE`) | `src/mac/leophone/NOTICE.md`, `src/mac/leophone/THIRD-PARTY-NOTICES.md` and `src/mac/leophone/third-party/` (per-dependency terms) |
-| `src/mac/leocodebox/` (archived 2.2.x, fallback only) | Based on [CloudCLI UI](https://github.com/siteboon/claudecodeui) | **AGPL-3.0-or-later** with CloudCLI UI's Section 7 attribution terms (`src/mac/leocodebox/LICENSE`) | `src/mac/leocodebox/NOTICE`, which also credits [CC Switch](https://github.com/farion1231/cc-switch) (MIT, provider-switch reference), [CodexBar](https://github.com/steipete/CodexBar) (MIT, layout reference; no source bundled) and [CodexHost](https://github.com/BytePioneer-AI/codex-host) 0.4.4 (MIT, bundled `@codexhost/cli` with its own notices) |
 
-Distribution boundary: the root project is GPL-3.0; `src/mac/leocodebox/` is an
-AGPL-3.0-or-later subtree and `src/mac/leophone/` is an Apache-2.0 subtree. They
-are kept as separate programs in one source repository. Anyone offering the
-archived leocodebox build (including over a network, per AGPL §13) must make its
-complete corresponding source available under AGPL-3.0-or-later; Apache-2.0
+Distribution boundary: the root project is GPL-3.0 and `src/mac/leophone/` is an
+Apache-2.0 subtree, kept as a separate program in one source repository. The
+former AGPL-3.0-or-later leocodebox desktop was removed from main in Mac 1.9.0;
+its source, LICENSE and NOTICE remain in the tag `archive/leocodebox-2.2.13`, and
+anyone offering that archived build must comply with AGPL-3.0-or-later. Apache-2.0
 code from `src/mac/leophone/` that is combined into a GPL-3.0 work is
 compatible one-way (Apache-2.0 → GPL-3.0), not the reverse.
 

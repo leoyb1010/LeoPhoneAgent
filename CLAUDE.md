@@ -14,7 +14,7 @@
   version,并在 `packages/ui/src/leo/leoReleaseNotes.ts` 的 `LEO_RELEASE_NOTES` **最前面**加一条。
   发版链 `leo:bundle:mac` 链首就是闸门(`scripts/leo-verify-release-notes.mjs`),漏写就构建不出来 ——
   别去绕过它,补条目才是对的。详见 `docs/mac-3.0/README.md`。
-  旧的 `src/mac/leocodebox/`(2.2.x)只作回退,不再发版。
+  旧的 `src/mac/leocodebox/`(2.2.x)已在 Mac 1.9.0 从主分支移除,只存于 tag `archive/leocodebox-2.2.13`。
 - Android 每次公开 APK 必须遵守 README「Android Agent 交接与发布铁律」：递增
   versionCode/versionName、双 flavor 门禁、固定 Alpha 签名指纹、上一可用版覆盖安装、
   Fold8 冷启动/Logcat、README/Release digest 一致，缺一不得上传。

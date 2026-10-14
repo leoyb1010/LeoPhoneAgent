@@ -21,11 +21,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      include_legacy_mac:
-        description: 'Also check the archived leocodebox desktop (not current Mac 1.x)'
-        type: boolean
-        default: false
 # 只读即可:本工作流只跑测试和审计,不写仓库。不声明就继承仓库默认权限,
 # 默认可能是可写的 —— android.yml 早就声明了,这里一直漏。
 permissions:
@@ -262,33 +257,6 @@ jobs:
             native-model-audit-results/${{ matrix.label }}/**/attachments/*.txt
           if-no-files-found: warn
           retention-days: 14
-
-  legacy-mac-quality:
-    # Archived desktop remains independently checkable; it is not the current
-    # leophone product and cannot supply its green check.
-    if: github.event_name == 'workflow_dispatch' && inputs.include_legacy_mac
-    runs-on: macos-15
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: src/mac/leocodebox
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: src/mac/leocodebox/package-lock.json
-      - name: Install exact Mac dependencies
-        run: npm ci
-      - name: Typecheck, lint, test and build Mac app
-        run: |
-          set -euo pipefail
-          npm run typecheck
-          npm run lint
-          npm test
-          npm run build
-
 
   mac-quality:
     name: Current Mac 1.x source checks
