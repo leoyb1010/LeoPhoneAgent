@@ -3,19 +3,15 @@
  *
  * 只改变量和几个稳定钩子(data-*、上游已有的语义 class),不改上游组件源码,
  * 同步上游时这里基本不冲突。强调色与 iOS 1.57 统一的青绿一致(浅 #2A8282 / 深 #2E9C9C,
- * 白色图标/文字压在上面都清楚),中性色偏暖。
+ * 白色图标/文字压在上面都清楚),灰阶全中性。
+ * 1.9.0 去掉了每次切视图都播的 <main> 位移动画:设置页切分区时会闪一下,不丝滑。
  * 全部规则挂在 html[data-leo-skin] 下;localStorage["leo.skin"] = "off" 即整层关闭(见 leoSkin.ts)。
  */
 
-/* ── 形状与节奏:两套主题共用 ─────────────────────────────── */
+/* ── 节奏:两套主题共用 ───────────────────────────────────
+   1.9.0 起圆角回到内核默认(之前整体放大一档,28px 按钮接近胶囊,整体显得"大"和"软")。 */
 html[data-leo-skin] {
-  /* 圆角整体放大一档:按钮 8/10,卡片 14,输入卡 18,对话框 20 */
-  --radius-md: 0.5rem;
-  --radius-lg: 0.625rem;
-  --radius-xl: 0.875rem;
-  --radius-2xl: 1.125rem;
-  --radius-3xl: 1.25rem;
-  /* 所有 transition 默认用同一条收尾曲线:起步干脆、落地轻 */
+  /* 所有 transition 默认用同一条收尾曲线:起步干脆、落地轻(与 iOS LeoMotion 同一组档位) */
   --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --leo-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -25,50 +21,54 @@ html[data-leo-skin] {
   --leo-dur-4: 350ms;
 }
 
-/* ── 深色:暖石墨 + 青绿(与 iOS 同一个 #2E9C9C) ───────────────── */
+/* ── 深色:中性石墨 + 青绿(与 iOS 同一个 #2E9C9C) ─────────────
+   1.9.0:去掉暖色调。之前灰阶和边框都带奶油色 rgba(255,244,228),主按钮是米白,
+   和上游没覆盖到的冷灰变量混在一起显得发黄发脏;现在灰阶全中性,青绿是唯一强调色。 */
 html[data-leo-skin].theme-zai-dark {
   --leo-brand: #2e9c9c;
   --leo-brand-soft: rgba(46, 156, 156, 0.14);
   --leo-attention: #f0b86e;
-  --leo-mark-from: #f5f1e8;
-  --leo-mark-to: #8fabc8;
+  --leo-mark-from: #e4e4e7;
+  --leo-mark-to: #2e9c9c;
   --leo-shadow-composer:
-    inset 0 1px 0 rgba(255, 250, 240, 0.035), 0 14px 36px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.7);
   --leo-shadow-card: 0 18px 48px -20px rgba(0, 0, 0, 0.75);
 
   --color-brand: var(--leo-brand);
-  --color-background: #151413;
-  --color-background-win-alt: #2a2825;
-  --color-background-alt: color-mix(in oklab, #2a2825 60%, transparent);
-  --color-header: #1b1a18;
-  --color-panel: #1b1a18;
-  --color-sidebar: #121110;
-  --color-card: #22201e;
+  --color-background: #131315;
+  --color-background-win-alt: #232326;
+  --color-background-alt: color-mix(in oklab, #232326 60%, transparent);
+  --color-header: #18181b;
+  --color-panel: #18181b;
+  --color-sidebar: #111113;
+  --color-card: #1f1f22;
   --color-card-border: var(--color-border);
-  --color-popover: #22201e;
-  --color-popover-header: #1b1a18;
-  --color-input: #1e1c1a;
-  --color-menu: #22201e;
-  --color-menu-hover: #2c2a27;
-  --color-tab: #1b1a18;
-  --color-tab-active: #151413;
-  --color-tooltip: #2a2825;
-  --color-toast: #22201e;
-  --color-secondary: #2c2a27;
-  --color-tag: #2c2a27;
-  --color-tooltip-tag: #33302d;
-  --color-border: rgba(255, 244, 228, 0.085);
-  --color-border-hover: rgba(255, 244, 228, 0.15);
-  --color-hover: rgba(255, 244, 228, 0.05);
-  --color-selected: rgba(255, 244, 228, 0.085);
-  --color-surface: rgba(255, 244, 228, 0.045);
-  --color-surface-hover: rgba(255, 244, 228, 0.08);
-  --color-foreground: #dcd8d2;
-  --color-foreground-subtle: color-mix(in oklab, #dcd8d2 60%, transparent);
-  --color-foreground-subtlest: color-mix(in oklab, #dcd8d2 32%, transparent);
-  --color-foreground-inverse: #0e0d0c;
-  --color-primary: #efebe5;
-  --color-primary-foreground: #151413;
+  --color-popover: #1f1f22;
+  --color-popover-header: #18181b;
+  --color-input: #1b1b1e;
+  --color-menu: #1f1f22;
+  --color-menu-hover: #29292d;
+  --color-tab: #18181b;
+  --color-tab-active: #131315;
+  --color-tooltip: #29292d;
+  --color-toast: #1f1f22;
+  --color-secondary: #29292d;
+  --color-tag: #29292d;
+  --color-tooltip-tag: #333338;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-hover: rgba(255, 255, 255, 0.05);
+  --color-selected: rgba(255, 255, 255, 0.08);
+  --color-surface: rgba(255, 255, 255, 0.04);
+  --color-surface-hover: rgba(255, 255, 255, 0.07);
+  --color-workflow-rule: rgba(255, 255, 255, 0.06);
+  --color-foreground: #e4e4e7;
+  --color-foreground-subtle: color-mix(in oklab, #e4e4e7 60%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, #e4e4e7 32%, transparent);
+  /* 主按钮/发送按钮是青绿底,压在上面的图标和字用白色 */
+  --color-foreground-inverse: #ffffff;
+  --color-primary: #2e9c9c;
+  --color-primary-foreground: #ffffff;
   --color-accent: rgba(46, 156, 156, 0.16);
   --color-input-border-focused: rgba(46, 156, 156, 0.6);
   --color-interaction-ask-surface: rgba(46, 156, 156, 0.12);
@@ -77,49 +77,53 @@ html[data-leo-skin].theme-zai-dark {
   --color-terminal-selection: rgba(46, 156, 156, 0.28);
 }
 
-/* ── 浅色:暖纸白 + 青绿(与 iOS 同一个 #2A8282) ─────────────── */
+/* ── 浅色:中性白 + 青绿(与 iOS 同一个 #2A8282) ──────────────
+   1.9.0:去掉米黄。之前背景 #f7f6f3、侧栏 #f0eeea、分割线棕色 rgba(40,32,20),
+   再叠上窗口毛玻璃的 70% 暖白,整个界面发黄;现在全部换成中性灰阶。 */
 html[data-leo-skin].theme-zai-light {
   --leo-brand: #2a8282;
   --leo-brand-soft: rgba(42, 130, 130, 0.1);
   --leo-attention: #b86e12;
-  --leo-mark-from: #9fb9d2;
-  --leo-mark-to: #3a5a80;
-  --leo-shadow-composer:
-    0 1px 2px rgba(40, 32, 20, 0.04), 0 12px 30px -16px rgba(40, 32, 20, 0.22);
-  --leo-shadow-card: 0 18px 44px -22px rgba(40, 32, 20, 0.28);
+  --leo-mark-from: #2a8282;
+  --leo-mark-to: #1d5f5f;
+  --leo-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -16px rgba(0, 0, 0, 0.18);
+  --leo-shadow-card: 0 18px 44px -22px rgba(0, 0, 0, 0.24);
 
   --color-brand: var(--leo-brand);
-  --color-background: #f7f6f3;
-  --color-background-win-alt: #e9e6e1;
-  --color-background-alt: color-mix(in oklab, #f7f6f3 70%, transparent);
-  --color-header: #fcfbf9;
-  --color-panel: #fcfbf9;
-  --color-sidebar: #f0eeea;
+  --color-background: #fafafa;
+  --color-background-win-alt: #ececee;
+  --color-background-alt: color-mix(in oklab, #fafafa 72%, transparent);
+  --color-header: #ffffff;
+  --color-panel: #ffffff;
+  --color-sidebar: #f4f4f5;
   --color-card: #ffffff;
   --color-popover: #ffffff;
-  --color-popover-header: #f7f6f3;
+  --color-popover-header: #fafafa;
   --color-input: #ffffff;
   --color-menu: #ffffff;
-  --color-menu-hover: #f1efeb;
-  --color-tab: #f0eeea;
+  --color-menu-hover: #f4f4f5;
+  --color-tab: #f4f4f5;
   --color-tab-active: #ffffff;
-  --color-tooltip: #f0eeea;
-  --color-secondary: #e6e3de;
-  --color-tag: #e6e3de;
-  --color-border: rgba(40, 32, 20, 0.1);
-  --color-border-hover: rgba(40, 32, 20, 0.17);
-  --color-hover: rgba(40, 32, 20, 0.045);
-  --color-selected: rgba(40, 32, 20, 0.065);
-  --color-surface: rgba(40, 32, 20, 0.03);
-  --color-surface-hover: rgba(40, 32, 20, 0.055);
-  --color-foreground: #2a2724;
-  --color-foreground-subtle: color-mix(in oklab, #2a2724 62%, transparent);
-  --color-foreground-subtlest: color-mix(in oklab, #2a2724 40%, transparent);
-  --color-primary: #1d1b19;
+  --color-tooltip: #f4f4f5;
+  --color-secondary: #e9e9eb;
+  --color-tag: #e9e9eb;
+  --color-tooltip-tag: #e4e4e7;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-hover: rgba(0, 0, 0, 0.14);
+  --color-hover: rgba(0, 0, 0, 0.045);
+  --color-selected: rgba(0, 0, 0, 0.06);
+  --color-surface: rgba(0, 0, 0, 0.025);
+  --color-surface-hover: rgba(0, 0, 0, 0.05);
+  --color-workflow-rule: rgba(0, 0, 0, 0.05);
+  --color-foreground: #18181b;
+  --color-foreground-subtle: color-mix(in oklab, #18181b 60%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, #18181b 38%, transparent);
+  --color-foreground-inverse: #ffffff;
+  --color-primary: #2a8282;
   --color-primary-foreground: #ffffff;
-  --color-accent: #e3f1f0;
+  --color-accent: rgba(42, 130, 130, 0.09);
   --color-input-border-focused: rgba(42, 130, 130, 0.42);
-  --color-interaction-ask-surface: #e3f1f0;
+  --color-interaction-ask-surface: rgba(42, 130, 130, 0.09);
   --color-interaction-ask-foreground: #1f6b6b;
   --color-terminal-cursor: #2a8282;
   --color-terminal-selection: rgba(42, 130, 130, 0.2);
@@ -178,22 +182,6 @@ html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled) {
 }
 html[data-leo-skin] [data-testid="v4-composer-send"]:not(:disabled):active {
   transform: scale(0.94);
-}
-
-/* ── 视图切换:聊天 / 自动化 / 插件 / 设置各自的 <main> 挂载时淡入 + 轻微上移 ── */
-html[data-leo-skin] main {
-  animation: leo-view-in var(--leo-dur-3) var(--leo-ease) both;
-}
-
-@keyframes leo-view-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /* ── 审批卡:从输入框的位置滑入 ─────────────────────────── */
@@ -288,7 +276,6 @@ html[data-leo-skin] [data-leo-approval] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-leo-skin] main,
   html[data-leo-skin] [data-leo-approval],
   .leo-home-hero,
   .leo-home-status,
