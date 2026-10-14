@@ -10,6 +10,12 @@ struct ProviderInstancesView: View {
     @State private var importMessage: String?
     @State private var showImportResult = false
     @State private var forceSyncToast: String?
+    // [leo] 1.68：「全部发送到 Mac（含密钥）」。原来唯一的导出入口固定不带密钥，
+    // Mac 端导入后每个服务商都要再补填一次 Key；这里显式确认后导出带密钥的合集文件。
+    @State private var showSendToMacConfirm = false
+    @State private var sendToMacFile: SendToMacFile?
+    /// sheet(item:) 关闭时先把 item 置 nil 再回调 onDismiss，所以单独记住待删除的文件路径。
+    @State private var pendingSendToMacURL: URL?
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
 
     var body: some View {
@@ -99,6 +105,13 @@ struct ProviderInstancesView: View {
                     } label: {
                         Label(String(localized: "Import Provider"), systemImage: "square.and.arrow.down")
                     }
+                    if !store.instances.isEmpty {
+                        Button {
+                            showSendToMacConfirm = true
+                        } label: {
+                            Label("全部发送到 Mac（含密钥）", systemImage: "laptopcomputer.and.arrow.down")
+                        }
+                    }
                     if #available(iOS 17.0, *), iCloudSyncEnabled {
                         Divider()
                         Button {
@@ -143,6 +156,16 @@ struct ProviderInstancesView: View {
                 break
             }
         }
+        .confirmationDialog("全部发送到 Mac", isPresented: $showSendToMacConfirm, titleVisibility: .visible) {
+            Button("生成文件并分享") { prepareSendToMacFile() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("文件里包含全部服务商的 API Key。只隔空投送给你自己的 Mac，在 LeoBot Mac「设置 → 模型供应商 → 从 iPhone 导入」里打开。已登录的账号（ChatGPT、xAI、Kimi）不会导出，需要在 Mac 上单独登录。")
+        }
+        .sheet(item: $sendToMacFile, onDismiss: removeSendToMacFile) { file in
+            ProviderBundleShareSheet(url: file.url)
+                .presentationDetents([.medium, .large])
+        }
         .alert(String(localized: "Import"), isPresented: $showImportResult) {
             Button("OK") {}
         } message: {
@@ -161,6 +184,42 @@ struct ProviderInstancesView: View {
             }
         }
         .animation(LeoMotion.spring(), value: forceSyncToast)
+    }
+
+    /// 把所有服务商（含密钥）打成 `{"providers": [...]}` 合集，写进只本机可读的临时文件。
+    /// 每一项沿用 `exportInstanceJSON` 的格式，Mac 端「从 iPhone 导入」按同一格式解析。
+    private func prepareSendToMacFile() {
+        var providers: [Any] = []
+        for instance in store.instances {
+            guard let json = store.exportInstanceJSON(instance.id, includeSecrets: true),
+                  let data = json.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) else { continue }
+            providers.append(object)
+        }
+        guard !providers.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: ["providers": providers],
+                                                     options: [.prettyPrinted, .sortedKeys]) else {
+            importMessage = String(localized: "Failed to export provider configuration.")
+            showImportResult = true
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LeoBot-服务商-含密钥.json")
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            pendingSendToMacURL = url
+            sendToMacFile = SendToMacFile(url: url)
+        } catch {
+            importMessage = String(localized: "Failed to export provider configuration.")
+            showImportResult = true
+        }
+    }
+
+    /// 分享面板一关就删掉临时文件，含密钥的文件不在手机上留存。
+    private func removeSendToMacFile() {
+        guard let url = pendingSendToMacURL else { return }
+        try? FileManager.default.removeItem(at: url)
+        pendingSendToMacURL = nil
     }
 
     @available(iOS 17.0, *)
@@ -353,4 +412,17 @@ extension ProviderInstance {
         case .unsupported: return false // synced from newer build
         }
     }
+}
+
+private struct SendToMacFile: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+private struct ProviderBundleShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }

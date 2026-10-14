@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.68.0",
+            date: "2026-10-14",
+            title: "一键把服务商带到 Mac",
+            highlights: [
+                "设置 → AI 服务商 → 右上角「+」新增「全部发送到 Mac（含密钥）」：确认后生成一个包含全部服务商和 Key 的文件，隔空投送给 Mac，在 LeoBot Mac 1.9「从 iPhone 导入」里一次导入，不用再逐个补填 Key。",
+                "这个文件只在分享面板打开期间存在，关掉就从手机上删除；ChatGPT、xAI、Kimi 这类登录账号不会导出，需要在 Mac 上单独登录。"
+            ]
+        ),
+        LeoRelease(
             version: "1.67.0",
             date: "2026-10-12",
             title: "键盘不再挂着",
