@@ -1,5 +1,11 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.67.0 (165) · 键盘下滑收起、图标放大、空对话标志 - 2026-10-12
+
+- 新增 `KeyboardSwipeDismisser`（Shared）：键盘可见时在每个 App 窗口挂一个并行、不吞触摸的下滑识别器；起手点在当前第一响应者上方、下滑 ≥40pt 且以纵向为主即 `endEditing`。起手于输入控件内（滚动多行输入、拖选）不接；终端（TerminalTextView / TerminalKeyInputView）不参与。补上了设置子页、sheet、内容不够滚动的列表、非滚动页面下滑收不起键盘的问题（聊天列表原本就有 `.onDrag`）。
+- App 图标：机器人占画面约 52% → 约 69%（浅色、深色、手表全部尺寸同源重出）。
+- 新对话空状态：键盘收起时在空白处居中显示 64pt LeoBot 标志（新增 `LeoBotMark` 浅/深色图），输入框聚焦即隐藏。
+
 ## iOS 1.66.0 (164) · 安静任务修复 + 资料库 Gemini 证据问答 - 2026-10-12
 
 - 修复安静任务重复执行：BGProcessingTask 跑完后 `schedule()` 立即重排，`nextWindowStart` 在 22:00–06:00 内返回「现在」，插电时系统约每 30 分钟拉起一次；对话摘要没有频率限制，10-12 凌晨 00:54–03:26 跑了 6 次（diag 日志 `quiet.digest` ×6，共约 5.3k token）。现在记录 `leo.quiet.lastRunAt`，今晚已跑完（未被系统收回）就排到下一个 22:00；对话摘要另加 20 小时间隔。`nextWindowStart` 移到 `QuietTaskBudget` 并补测试。

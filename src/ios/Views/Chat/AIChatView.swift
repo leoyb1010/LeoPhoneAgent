@@ -2572,6 +2572,7 @@ struct AIChatView: View {
                 && !vm.isLoadingSession
                 && vm.inputText.isEmpty && !isShortHeight {
                 EmptyChatWorkspaceCard(
+                    showsMark: !inputFocused,
                     mounts: MountedFoldersManager.shared.entries.map { ($0.id, $0.name) },
                     selectedMountId: vm.pendingWorkspaceMountId,
                     onPrompt: { prompt in
@@ -6174,6 +6175,8 @@ private struct StatRow: View {
 /// Mac controller. This keeps the local-device execution boundary explicit and moves
 /// file-system detail behind the real browser action.
 private struct EmptyChatWorkspaceCard: View {
+    /// 键盘收起时在空白处放一个淡淡的 LeoBot 标志;键盘弹起就让位给起手式。
+    var showsMark = true
     var mounts: [(id: UUID, name: String)] = []
     var selectedMountId: UUID?
     var onPrompt: (String) -> Void
@@ -6191,6 +6194,16 @@ private struct EmptyChatWorkspaceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if showsMark {
+                Image("LeoBotMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
+                    .opacity(0.9)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
             ForEach(prompts, id: \.0) { prompt in
                 pill(prompt.0, icon: prompt.1) { onPrompt(prompt.0) }
             }
@@ -6205,6 +6218,7 @@ private struct EmptyChatWorkspaceCard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(.bottom, 6)
+        .animation(.easeOut(duration: 0.2), value: showsMark)
         .accessibilityElement(children: .contain)
     }
 

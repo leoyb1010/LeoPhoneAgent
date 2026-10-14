@@ -104,6 +104,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // [D4] BGProcessingTask handlers must be registered before launch ends;
         // reloadMonitoring then submits the quiet-task request.
         QuietTaskScheduler.shared.register()
+        // 键盘弹着时,在输入框上方任意位置下滑就收起(全局兜底)。
+        KeyboardSwipeDismisser.shared.start()
         AutomationEngine.shared.reloadMonitoring()
 
         // [T-widget-run-in-place] Teach the shared widget intent how to reach

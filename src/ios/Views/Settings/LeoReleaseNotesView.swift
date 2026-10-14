@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.67.0",
+            date: "2026-10-12",
+            title: "键盘不再挂着",
+            highlights: [
+                "键盘弹着时，在输入框上方任意位置往下一滑就收起，所有页面都一样（终端除外，那里键盘就是输入设备）。在输入框里上下滑动长文字不受影响。",
+                "新图标：机器人放大，留白更少，主屏上更醒目；手表图标同步更新。",
+                "新对话的空白处放了一个淡淡的 LeoBot 标志，开始打字就让开。"
+            ]
+        ),
+        LeoRelease(
             version: "1.66.0",
             date: "2026-10-12",
             title: "资料库会思考了",
