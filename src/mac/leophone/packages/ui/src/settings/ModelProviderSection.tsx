@@ -39,6 +39,7 @@ import {
 import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
 import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
+import { ProviderImportButton } from "./model-provider-section/ProviderImportButton.js";
 import type { CodingPlanLoginOptions } from "./model-provider-section/codingPlanPricingCards.js";
 import { useModelProviderNavigation } from "./model-provider-section/useModelProviderNavigation.js";
 import { reportPresetSubscriptionSuccess } from "./model-provider-section/oauthActions.js";
@@ -1077,6 +1078,18 @@ export function ModelProviderSection({
       onSelectNavItem={handleSelectNavItem}
       onReorderProviderIds={handleReorderProviderIds}
       reorderableProviderIds={reorderableProviderIds}
+      headerExtra={
+        <ProviderImportButton
+          onImported={() => void reload()}
+          onOpenProvider={(providerId) => {
+            const item = navigationItems.find(
+              (candidate) =>
+                candidate.type === "custom" && candidate.provider.providerId === providerId,
+            );
+            if (item) handleSelectNavItem(item);
+          }}
+        />
+      }
     >
       {(invalidProviderTarget || navigationUnavailable) && !templatePickerOpen ? (
         <p role="alert" className="mb-3 text-ui-base text-destructive">

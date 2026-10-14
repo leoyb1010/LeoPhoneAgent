@@ -20,10 +20,14 @@ import {
   type providerTemplateDataSchema,
 } from "./provider-data-schema.js";
 import { validateConfigSchema } from "./schema-validation.js";
+import { isKeylessLocalBaseUrl } from "@zcode/shared/model-discovery";
 import type { ModelId, ProviderId, ProviderTemplateId } from "./ids.js";
 import type { ProviderConfigRuleData } from "./rule-data-schema.js";
 
 export type ProviderApiType = z.infer<typeof providerApiTypeDataSchema>;
+
+/** [leo] 新建自定义供应商(无模板)默认的接口格式:第三方中转大多是 OpenAI 兼容。 */
+export const DEFAULT_CUSTOM_PROVIDER_API_TYPE: ProviderApiType = "openai-chat-completions";
 export type ProviderGroup = z.infer<typeof providerGroupDataSchema>;
 export type ZhipuAccountMode = z.infer<typeof zhipuAccountModeDataSchema>;
 
@@ -246,7 +250,15 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
 
   validateComplete(path: readonly string[] = []): readonly ConfigValidationIssue[] {
     // 不再用字段存在性代替值域验证，也不把展示/成员等可选字段变成执行必填项。
-    return validateConfigSchema(completeProviderConfigDataSchema, this.toJSON(), path);
+    const issues = validateConfigSchema(completeProviderConfigDataSchema, this.toJSON(), path);
+    if (!allowsKeylessAccess(this)) return issues;
+    // [leo] Ollama / LM Studio 等本机端点不需要 Key。以前空 Key 一律判为缺必填项,
+    // 这类供应商永远进不了 Registry;只对本机 OpenAI 兼容端点豁免 apiKey 必填,
+    // 运行时 openai-compatible 在没有 Key 时本就不带 Authorization 头。
+    const apiKeyPath = [...path, "access", "apiKey"].join(".");
+    return issues.filter(
+      (issue) => !(issue.code === "required-field-missing" && issue.path.join(".") === apiKeyPath),
+    );
   }
 
   toJSON(): ProviderConfigObject {
@@ -354,6 +366,14 @@ export class ProviderTemplateMap extends ConfigOverlay<ProviderTemplateMap> {
   toJSON(): ProviderTemplateObject[] {
     return this.entries().map(([, template]) => template.toJSON());
   }
+}
+
+function allowsKeylessAccess(config: ProviderConfig): boolean {
+  return (
+    config.access?.type === "api-key" &&
+    config.api?.type === "openai-chat-completions" &&
+    isKeylessLocalBaseUrl(config.api.baseUrl)
+  );
 }
 
 function freezeProviderLogo(

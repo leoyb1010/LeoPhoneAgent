@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 模型供应商卡片仍在迁移期集中维护多个紧耦合区块，后续拆分时再移除。 */
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -12,7 +13,7 @@ import type {
   ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
-import type { ProviderApiType } from "@zcode/provider";
+import { DEFAULT_CUSTOM_PROVIDER_API_TYPE, type ProviderApiType } from "@zcode/provider";
 import {
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
   TID_MODEL_PROVIDER_BASE_URL_INPUT,
@@ -22,7 +23,16 @@ import {
   TID_MODEL_PROVIDER_NAME_INPUT,
   testId,
 } from "@zcode/shared";
-import { InfoIcon, LockKeyholeIcon, Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
+import {
+  CloudDownloadIcon,
+  InfoIcon,
+  LockKeyholeIcon,
+  Plus,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+} from "lucide-react";
+import type { DiscoveredModel } from "@zcode/shared/model-discovery";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import {
@@ -47,6 +57,8 @@ import {
 import { SortableProviderModelList } from "@/settings/model-provider-section/SortableProviderModelList.js";
 import { useProviderModelDraft } from "@/settings/model-provider-section/useProviderModelDraft.js";
 import { ProviderLogo } from "@/settings/model-provider-section/ProviderLogo.js";
+import { ProviderModelDiscoveryDialog } from "@/settings/model-provider-section/ProviderModelDiscoveryDialog.js";
+import { useProviderModelDiscovery } from "@/hooks/useProviderModelDiscovery.js";
 import type { ProviderConfigObject } from "@zcode/provider";
 
 export { formatModelContextWindowLabel } from "@/lib/tokenNumberFormat.js";
@@ -203,7 +215,7 @@ export function ProviderConnectionSection({
   const { intl } = useZCodeIntl();
   const showApiFormat = shouldShowProviderApiFormat(provider);
   const readOnlyBaseUrl = provider.config.api?.baseUrl ?? "";
-  const resolvedApiFormat = provider.config.api?.type ?? "anthropic-messages";
+  const resolvedApiFormat = provider.config.api?.type ?? DEFAULT_CUSTOM_PROVIDER_API_TYPE;
 
   const renderReadOnlyField = (label: string, value: string) => (
     <div>
@@ -278,6 +290,7 @@ export function ProviderConnectionSection({
 export function ProviderApiKeySection({
   apiKeyValue,
   apiKeyVisible,
+  apiKeyInvalid,
   readOnly,
   presetApiKeyUrl,
   onOpenPresetApiKey,
@@ -290,6 +303,8 @@ export function ProviderApiKeySection({
 }: {
   apiKeyValue: string;
   apiKeyVisible: boolean;
+  /** [leo] 「从接口获取模型」返回 401/403 时标红 Key 输入框。 */
+  apiKeyInvalid?: boolean;
   readOnly?: boolean;
   presetApiKeyUrl?: string;
   onOpenPresetApiKey?: () => void;
@@ -315,6 +330,7 @@ export function ProviderApiKeySection({
       <ApiKeyInput
         value={apiKeyValue}
         visible={apiKeyVisible}
+        invalid={apiKeyInvalid}
         readOnly={readOnly}
         onChange={onApiKeyChange}
         onBlur={onApiKeyBlur}
@@ -326,6 +342,9 @@ export function ProviderApiKeySection({
     </div>
   );
 }
+
+/** 自动获取每个 provider+地址 每次启动只跑一次,避免反复打开设置页时重复弹出。 */
+const autoDiscoveredKeys = new Set<string>();
 
 function createEmptyModel(): ProviderSettingsFormModel {
   return {
@@ -356,6 +375,11 @@ export function ProviderModelsSection({
   onAddModel,
   onReorderModelIds,
   settingsRevision = 0,
+  discoveryEnabled = false,
+  autoDiscoverKey = null,
+  onBeforeDiscover,
+  onAddDiscoveredModels,
+  onDiscoveryAuthError,
 }: {
   providerId: string;
   providerName?: string;
@@ -373,9 +397,37 @@ export function ProviderModelsSection({
   onAddModel: (model: ProviderSettingsFormModel) => void | Promise<void>;
   onReorderModelIds?: (modelIds: string[]) => void;
   settingsRevision?: number;
+  /** [leo] 已填 Base URL,可以「从接口获取模型」。 */
+  discoveryEnabled?: boolean;
+  /** [leo] 非空时表示满足自动获取条件(有地址 + Key/本机免 Key + 零模型),同一个 key 每次启动只自动跑一次。 */
+  autoDiscoverKey?: string | null;
+  onBeforeDiscover?: () => Promise<void>;
+  onAddDiscoveredModels?: (models: DiscoveredModel[]) => Promise<void>;
+  onDiscoveryAuthError?: (failed: boolean) => void;
 }) {
   const { intl } = useZCodeIntl();
   const { providerSettingsService } = useServices();
+  const discovery = useProviderModelDiscovery({ providerId, beforeDiscover: onBeforeDiscover });
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const runDiscovery = useCallback(async () => {
+    const result = await discovery.discover();
+    onDiscoveryAuthError?.(result?.error?.kind === "auth");
+    return result;
+  }, [discovery.discover, onDiscoveryAuthError]);
+  const openDiscovery = useCallback(() => {
+    setDiscoveryOpen(true);
+    void runDiscovery();
+  }, [runDiscovery]);
+  useEffect(() => {
+    if (!autoDiscoverKey || !onAddDiscoveredModels || autoDiscoveredKeys.has(autoDiscoverKey)) {
+      return;
+    }
+    autoDiscoveredKeys.add(autoDiscoverKey);
+    // 自动获取只在真的列出了模型时才弹出选择框,失败不打扰用户(手动按钮仍可重试并看到原因)。
+    void runDiscovery().then((result) => {
+      if (result && result.models.some((model) => !model.hidden)) setDiscoveryOpen(true);
+    });
+  }, [autoDiscoverKey, onAddDiscoveredModels, runDiscovery]);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const addSavingRef = useRef(false);
@@ -470,17 +522,38 @@ export function ProviderModelsSection({
         <span className="text-ui-base text-foreground-subtle">
           {intl.formatMessage({ id: "settings.modelProvider.models" })}
         </span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="default"
-          className="rounded-lg"
-          data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
-          onClick={openAddDialog}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
-        </Button>
+        <div className="flex items-center gap-2">
+          {onAddDiscoveredModels ? (
+            <Button
+              type="button"
+              variant="default"
+              size="default"
+              className="rounded-lg"
+              data-testid="model-provider-discover-models-button"
+              disabled={!discoveryEnabled}
+              title={
+                discoveryEnabled
+                  ? undefined
+                  : intl.formatMessage({ id: "settings.modelProvider.discovery.missingBaseUrl" })
+              }
+              onClick={openDiscovery}
+            >
+              <CloudDownloadIcon data-icon="inline-start" aria-hidden="true" />
+              {intl.formatMessage({ id: "settings.modelProvider.discovery.fetch" })}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="default"
+            className="rounded-lg"
+            data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
+            onClick={openAddDialog}
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
+          </Button>
+        </div>
       </div>
       {models.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-input-border bg-input">
@@ -548,6 +621,16 @@ export function ProviderModelsSection({
           {intl.formatMessage({ id: "settings.modelProvider.modelsEmpty" })}
         </div>
       )}
+      {onAddDiscoveredModels ? (
+        <ProviderModelDiscoveryDialog
+          open={discoveryOpen}
+          onOpenChange={setDiscoveryOpen}
+          state={discovery.state}
+          existingModelIds={models.map((model) => model.modelId)}
+          onRetry={() => void runDiscovery()}
+          onConfirm={onAddDiscoveredModels}
+        />
+      ) : null}
       <>
         <ProviderModelMetadataDialog
           onRestore={() => {
@@ -575,6 +658,13 @@ export function ProviderModelsSection({
           onModelIdBlur={() => {
             void editor.flush().catch(() => undefined);
           }}
+          modelIdSuggestions={
+            discovery.state.status === "done"
+              ? discovery.state.result.models
+                  .map((model) => model.id)
+                  .filter((id) => !models.some((model) => model.modelId === id))
+              : undefined
+          }
         />
       </>
     </div>

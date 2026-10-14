@@ -51,6 +51,8 @@ export interface ModelSelectGroupItem {
   key: string;
   value: string;
   name: string;
+  /** [leo] name 是美化后的展示名时,原始模型 ID 放这里作为悬停提示。 */
+  modelId?: string;
   badgeLabel?: string;
   supportsVisionInput?: boolean;
 }
@@ -298,7 +300,14 @@ export const ModelConfigSelect = memo(function ModelConfigSelectComponent({
       const content = (
         <>
           <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-            <span className="min-w-0 truncate" title={item.name}>
+            <span
+              className="min-w-0 truncate"
+              title={
+                item.modelId && item.modelId !== item.name
+                  ? `${item.name} · ${item.modelId}`
+                  : item.name
+              }
+            >
               {item.name}
             </span>
             {item.badgeLabel ? (

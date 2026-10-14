@@ -10,7 +10,9 @@ import type {
 } from "./config/index.js";
 import {
   ApiKeyAccessConfig,
+  DEFAULT_CUSTOM_PROVIDER_API_TYPE,
   ModelConfig,
+  ProviderApiConfig,
   ProviderConfigMap,
   ProviderConfig as ProviderConfigValue,
   ProviderTemplateMap,
@@ -254,6 +256,12 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
         config: new ProviderConfigValue({
           group: "standard-personal",
           access: templateId ? undefined : new ApiKeyAccessConfig(),
+          // [leo] 自定义供应商以前不写 api.type,界面再按 anthropic-messages 兜底;
+          // 而第三方中转绝大多数是 OpenAI 兼容,新建时显式写入 openai-chat-completions。
+          // 只在创建时写显式值,已有配置与运行时对缺失 type 的处理保持不变。
+          api: templateId
+            ? undefined
+            : new ProviderApiConfig({ type: DEFAULT_CUSTOM_PROVIDER_API_TYPE }),
           personalModelIds: [],
           modelOrder: [],
         }).overlay(initial),

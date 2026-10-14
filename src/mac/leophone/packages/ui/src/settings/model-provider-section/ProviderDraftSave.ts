@@ -1,4 +1,8 @@
-import { isApiKeyAccess, type ProviderApiType } from "@zcode/provider";
+import {
+  DEFAULT_CUSTOM_PROVIDER_API_TYPE,
+  isApiKeyAccess,
+  type ProviderApiType,
+} from "@zcode/provider";
 import {
   getProviderFormLabel,
   type ProviderSettingsFormProvider,
@@ -48,7 +52,8 @@ export function resolvePendingProviderDraftSave({
   // 名称只在 Enter/失焦确认；连接的闲时保存、测试和卸载不能夹带未确认的名称。
   const labelChanged = nameConfirmed && label !== getProviderFormLabel(provider);
   const typeChanged =
-    !readOnlyEndpoints && draft.apiFormat !== (provider.config.api?.type ?? "anthropic-messages");
+    !readOnlyEndpoints &&
+    draft.apiFormat !== (provider.config.api?.type ?? DEFAULT_CUSTOM_PROVIDER_API_TYPE);
   const urlChanged = !readOnlyEndpoints && baseURL !== (provider.config.api?.baseUrl ?? "");
   const keyChanged =
     isApiKeyAccess(provider.config.access) &&

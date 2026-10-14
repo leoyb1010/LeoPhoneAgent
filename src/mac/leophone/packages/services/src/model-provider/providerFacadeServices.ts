@@ -18,7 +18,19 @@ import {
 } from "@zcode/provider";
 import { createServiceDescriptor } from "../descriptors.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
+import {
+  modelDiscoveryRequestSchema,
+  type ModelDiscoveryRequest,
+  type ModelDiscoveryResult,
+} from "@zcode/shared/model-discovery";
 import { createServiceLogger } from "../logger/serviceLogger.js";
+import type { ModelDiscoveryTarget, ProviderModelDiscoverer } from "./providerModelDiscovery.js";
+import {
+  providerImportRequestSchema,
+  type ProviderImportRequest,
+  type ProviderImportResult,
+} from "@zcode/shared/provider-import";
+import { executeProviderImport } from "./iosProviderImportExecutor.js";
 
 export type {
   ProviderSettingsProviderView,
@@ -68,6 +80,16 @@ export interface IProviderSettingsService {
   testModelConnectivity(
     input: ProviderSettingsConnectivityRequest,
   ): Promise<ModelConnectivityResult>;
+  /**
+   * [leo] 从供应商接口列出可用模型。传 providerId 时 Base URL / 格式 / Key 都在 Host 侧
+   * 从已保存配置解析,Key 不经 Renderer 往返;未保存的草稿才直接传 baseUrl/apiFormat/apiKey。
+   */
+  discoverModels(input: ModelDiscoveryRequest): Promise<ModelDiscoveryResult>;
+  /**
+   * [leo] 导入 LeoBot iOS「导出服务商」JSON。Renderer 只传文件文本;解析、映射、去重与写入都在 Host,
+   * 结果不含 Key,原始 JSON 不落盘。
+   */
+  importProviders(input: ProviderImportRequest): Promise<ProviderImportResult>;
 }
 
 export const IProviderSettingsService = createServiceDescriptor<IProviderSettingsService>(
@@ -110,6 +132,7 @@ export function createProviderSettingsService(
   facade: ProviderSettingsFacade,
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
+  discoverModels?: ProviderModelDiscoverer,
 ): IProviderSettingsService {
   return {
     onDidChange: toEvent((listener) => facade.onDidChange(listener)),
@@ -206,6 +229,70 @@ export function createProviderSettingsService(
         modelId: input.modelId,
       });
     },
+    discoverModels: async (rawInput) => {
+      await ensureReady();
+      if (!discoverModels) {
+        throw new Error("当前 Environment 未装配模型发现能力");
+      }
+      const input = modelDiscoveryRequestSchema.parse(rawInput);
+      if ("providerId" in input) {
+        // 草稿可能刚失焦提交,等同一 Provider 的写入队列落盘后再读配置。
+        await facade.waitForProviderOperations(input.providerId);
+      }
+      const target = resolveModelDiscoveryTarget(facade.getView(), input);
+      if (!target) {
+        return {
+          models: [],
+          source: "builtin",
+          error: { kind: "unknown", message: "missing-base-url" },
+        };
+      }
+      return discoverModels(target);
+    },
+    importProviders: async (rawInput) => {
+      await ensureReady();
+      return executeProviderImport(facade, providerImportRequestSchema.parse(rawInput));
+    },
+  };
+}
+
+/** providerId → 已保存的 Base URL / 格式 / Key / 自定义头 / 内置模型;草稿请求原样转换。 */
+export function resolveModelDiscoveryTarget(
+  view: Pick<ProviderSettingsView, "providers" | "providerTemplates">,
+  input: ModelDiscoveryRequest,
+): ModelDiscoveryTarget | null {
+  if (!("providerId" in input)) {
+    const template = input.templateId
+      ? view.providerTemplates.find((item) => item.templateId === input.templateId)
+      : undefined;
+    const apiKey = input.apiKey?.trim();
+    return {
+      baseUrl: input.baseUrl,
+      apiFormat: input.apiFormat,
+      ...(apiKey ? { apiKey } : {}),
+      ...(template?.config.builtinModelIds
+        ? { builtinModelIds: template.config.builtinModelIds }
+        : {}),
+    };
+  }
+  const provider = view.providers.find((item) => item.providerId === input.providerId);
+  const config = provider?.effectiveConfig;
+  const baseUrl = config?.api?.baseUrl?.trim();
+  if (!provider || !config || !baseUrl) return null;
+  const template = provider.templateId
+    ? view.providerTemplates.find((item) => item.templateId === provider.templateId)
+    : undefined;
+  const access = config.access;
+  const apiKey =
+    access && access.type !== "zhipu-account" ? access.apiKey?.trim() || undefined : undefined;
+  const builtinModelIds = config.builtinModelIds ?? template?.config.builtinModelIds ?? undefined;
+  return {
+    baseUrl,
+    // 与创建默认值一致:没有显式格式的自定义供应商按 OpenAI 兼容处理。
+    apiFormat: config.api?.type ?? "openai-chat-completions",
+    ...(apiKey ? { apiKey } : {}),
+    ...(config.api?.headers ? { headers: config.api.headers } : {}),
+    ...(builtinModelIds && builtinModelIds.length > 0 ? { builtinModelIds } : {}),
   };
 }
 

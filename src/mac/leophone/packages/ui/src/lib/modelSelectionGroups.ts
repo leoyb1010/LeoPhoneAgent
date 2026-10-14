@@ -9,6 +9,7 @@ import type { ModelSelectionView } from "@zcode/services";
 import type { ModelSelectGroup } from "@/ModelConfigSelect.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { shouldShowModelVisionBadge } from "@/lib/modelVisionBadge.js";
+import { prettifyModelId } from "@zcode/shared/model-discovery";
 
 export interface ModelProviderGroupLabelOptions {
   apiKeyLabel?: string;
@@ -54,7 +55,10 @@ export function buildRegistryModelSelectGroups(
         items: provider.models.map(({ modelId, config }) => ({
           key: `registry-provider:${provider.providerId}:${modelId}`,
           value: encodeCustomModelValue(provider.providerId, modelId),
-          name: modelId,
+          // [leo] API Key 供应商的模型 ID 各家写法不同(claude-opus-5-5 / gpt-5.5),列表里显示可读名,
+          // 原始 ID 作为悬停提示;存储与请求仍用原始 ID。账号套餐模型保持官方 ID 原样。
+          name: accountPresentation ? modelId : prettifyModelId(modelId),
+          modelId,
           ...(shouldShowModelVisionBadge(
             modelId,
             config.properties?.inputFormat?.supportsImage,

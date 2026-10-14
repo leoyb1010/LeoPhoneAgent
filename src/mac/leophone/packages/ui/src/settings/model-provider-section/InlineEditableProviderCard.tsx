@@ -1,5 +1,11 @@
 /* oxlint-disable eslint(max-lines) -- provider 卡片同时承载名称、连接、鉴权、模型和映射编辑；本阶段先维持单组件，后续再按表单域拆分。 */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isKeylessLocalBaseUrl, type DiscoveredModel } from "@zcode/shared/model-discovery";
+import { resolveDiscoveredModelConfig } from "@/settings/model-provider-section/discoveredModelConfig.js";
+import {
+  clearProviderNeedsKey,
+  providerNeedsKeyAfterImport,
+} from "@/settings/model-provider-section/providerImportKeyHints.js";
 import {
   getProviderFormApiKey,
   getProviderFormLabel,
@@ -8,6 +14,7 @@ import {
 } from "@/lib/providerSettingsFormTypes.js";
 import type { ModelConnectivityResult } from "@zcode/shared";
 import {
+  DEFAULT_CUSTOM_PROVIDER_API_TYPE,
   isApiKeyAccess,
   type ProviderApiType,
   type SavePersonalModelDraftInput,
@@ -186,11 +193,18 @@ export function InlineEditableProviderCard({
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(getProviderFormLabel(provider));
   const [apiFormat, setApiFormat] = useState<ProviderApiType>(
-    provider.config.api?.type ?? "anthropic-messages",
+    provider.config.api?.type ?? DEFAULT_CUSTOM_PROVIDER_API_TYPE,
   );
   const [baseUrlValue, setBaseUrlValue] = useState(provider.config.api?.baseUrl ?? "");
   const [apiKeyValue, setApiKeyValue] = useState(getProviderFormApiKey(provider));
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [apiKeyInvalid, setApiKeyInvalid] = useState(() =>
+    providerNeedsKeyAfterImport(provider.providerId),
+  );
+  useEffect(() => {
+    // 从 iPhone 导入但没带 Key 的供应商,打开时直接标红 Key 输入框提示补填。
+    setApiKeyInvalid(providerNeedsKeyAfterImport(provider.providerId));
+  }, [provider.providerId]);
   const [savingEnabled, setSavingEnabled] = useState(false);
   const authoritativeModels = useMemo(
     () => resolveVisibleProviderModelsForEdit(provider),
@@ -229,13 +243,13 @@ export function InlineEditableProviderCard({
   };
   const draftRef = useRef<ProviderDraftValues>({
     nameValue: getProviderFormLabel(provider),
-    apiFormat: provider.config.api?.type ?? "anthropic-messages",
+    apiFormat: provider.config.api?.type ?? DEFAULT_CUSTOM_PROVIDER_API_TYPE,
     baseUrlValue: provider.config.api?.baseUrl ?? "",
     apiKeyValue: getProviderFormApiKey(provider),
   });
 
   useEffect(() => {
-    const resolvedApiFormat = provider.config.api?.type ?? "anthropic-messages";
+    const resolvedApiFormat = provider.config.api?.type ?? DEFAULT_CUSTOM_PROVIDER_API_TYPE;
     const resolvedBaseUrl = provider.config.api?.baseUrl ?? "";
     const resolvedApiKey = getProviderFormApiKey(provider);
     const resolvedLabel = getProviderFormLabel(provider);
@@ -517,6 +531,8 @@ export function InlineEditableProviderCard({
       markDraftDirty("apiKeyValue");
       draftRef.current.apiKeyValue = value;
       setApiKeyValue(value);
+      setApiKeyInvalid(false);
+      clearProviderNeedsKey(providerIdRef.current);
       scheduleIdleDraftSave();
     },
     [markDraftDirty, scheduleIdleDraftSave],
@@ -725,6 +741,47 @@ export function InlineEditableProviderCard({
     [onAddPersonalModel, provider.providerId, runSaveOperation],
   );
 
+  const handleAddDiscoveredModels = useCallback(
+    async (discovered: DiscoveredModel[]) => {
+      if (!onAddPersonalModel) throw new Error("当前设置入口未装配 Personal Model 添加能力");
+      const existing = new Set(models.map((model) => model.modelId));
+      const pending = discovered.filter((model) => !existing.has(model.id));
+      if (pending.length === 0) return;
+      await runSaveOperation(async () => {
+        // 同一 Provider 的成员写入要串行:并发 add 会基于同一个旧成员列表各写一次,互相覆盖。
+        for (const model of pending) {
+          await onAddPersonalModel(
+            provider.providerId,
+            model.id,
+            resolveDiscoveredModelConfig(model),
+            true,
+          );
+        }
+      });
+    },
+    [models, onAddPersonalModel, provider.providerId, runSaveOperation],
+  );
+
+  const handleBeforeDiscover = useCallback(
+    () => commitPendingDraft("model-discovery"),
+    [commitPendingDraft],
+  );
+
+  const savedBaseUrl = provider.config.api?.baseUrl?.trim() ?? "";
+  const savedApiKey = isApiKeyAccess(provider.config.access)
+    ? (provider.config.access.apiKey?.trim() ?? "")
+    : "";
+  const discoveryEnabled =
+    Boolean(onAddPersonalModel) && Boolean(baseUrlValue.trim() || savedBaseUrl);
+  // 以已保存的配置判断自动获取条件:Host 只读得到落盘的地址和 Key。
+  const autoDiscoverKey =
+    discoveryEnabled &&
+    models.length === 0 &&
+    savedBaseUrl &&
+    (savedApiKey || isKeylessLocalBaseUrl(savedBaseUrl))
+      ? `${provider.providerId}|${savedBaseUrl}`
+      : null;
+
   const handleReorderModelIds = useCallback(
     (modelIds: string[]) => {
       if (!onReorderModelIds) return;
@@ -828,6 +885,7 @@ export function InlineEditableProviderCard({
           <ProviderApiKeySection
             apiKeyValue={apiKeyValue}
             apiKeyVisible={apiKeyVisible}
+            apiKeyInvalid={apiKeyInvalid}
             presetApiKeyUrl={presetApiKeyUrl}
             onOpenPresetApiKey={onOpenPresetApiKey}
             onApiKeyChange={handleApiKeyValueChange}
@@ -854,6 +912,13 @@ export function InlineEditableProviderCard({
           onAddModel={handleAddModel}
           onReorderModelIds={onReorderModelIds ? handleReorderModelIds : undefined}
           settingsRevision={settingsRevision ?? 0}
+          discoveryEnabled={discoveryEnabled}
+          autoDiscoverKey={autoDiscoverKey}
+          onBeforeDiscover={handleBeforeDiscover}
+          onAddDiscoveredModels={
+            onAddPersonalModel && !isAccountProvider ? handleAddDiscoveredModels : undefined
+          }
+          onDiscoveryAuthError={setApiKeyInvalid}
         />
       </div>
     </div>

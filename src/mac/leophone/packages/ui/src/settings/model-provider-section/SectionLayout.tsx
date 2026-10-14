@@ -21,6 +21,8 @@ interface ModelProviderSectionLayoutProps {
   onSelectNavItem: (item: ModelProviderNavGroup["items"][number]) => void;
   onReorderProviderIds?: (providerIds: string[]) => Promise<void>;
   reorderableProviderIds?: ReadonlySet<string>;
+  /** [leo] 与订阅登录并列的额外入口(如「从 iPhone 导入」)。 */
+  headerExtra?: ReactNode;
   children: ReactNode;
 }
 
@@ -45,6 +47,7 @@ export function ModelProviderSectionLayout({
   onSelectNavItem,
   onReorderProviderIds,
   reorderableProviderIds,
+  headerExtra,
   children,
 }: ModelProviderSectionLayoutProps) {
   const refreshButtonLoading = shouldShowModelProviderRefreshLoading({
@@ -76,6 +79,7 @@ export function ModelProviderSectionLayout({
         >
           订阅账号登录（ChatGPT / Copilot / OpenCode Go）
         </Button>
+        {headerExtra}
         <span className="text-ui-sm text-foreground-subtle">
           在浏览器里完成授权；登录后模型出现在「订阅账号」供应商下，凭据只存本机。
         </span>

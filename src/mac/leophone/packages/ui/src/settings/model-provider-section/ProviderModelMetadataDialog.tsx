@@ -61,6 +61,7 @@ export function ProviderModelMetadataDialog({
   saving = false,
   modelDefaultsLoaded = false,
   onModelIdBlur,
+  modelIdSuggestions,
 }: {
   mode?: "add" | "edit";
   open: boolean;
@@ -79,6 +80,8 @@ export function ProviderModelMetadataDialog({
   saving?: boolean;
   modelDefaultsLoaded?: boolean;
   onModelIdBlur?: () => void;
+  /** [leo] 上一次「从接口获取模型」的结果,手动添加时作为模型 ID 候选,减少敲错。 */
+  modelIdSuggestions?: readonly string[];
 }) {
   const { intl } = useZCodeIntl();
   const [validationAttempt, setValidationAttempt] = useState(0);
@@ -88,6 +91,8 @@ export function ProviderModelMetadataDialog({
   };
   const contextWindowInputId = useId();
   const maxOutputInputId = useId();
+  const modelIdSuggestionListId = useId();
+  const showModelIdSuggestions = mode === "add" && (modelIdSuggestions?.length ?? 0) > 0;
   const smart = draft.useRecommendedConfigValue !== false;
   const activeOverrides = smart ? overrideFields : new Set<string>();
   const overridden = (field: string, legacy = false) =>
@@ -188,6 +193,7 @@ export function ProviderModelMetadataDialog({
                   size="lg"
                   className={cn("font-mono", modelEditorControlStyle(false))}
                   readOnly={modelIdReadOnly}
+                  list={showModelIdSuggestions ? modelIdSuggestionListId : undefined}
                   value={draft.idValue}
                   placeholder={intl.formatMessage({
                     id: "settings.modelProvider.modelId",
@@ -200,6 +206,13 @@ export function ProviderModelMetadataDialog({
                   onCompositionEnd={handleCompositionEnd}
                   onKeyDown={handleTechnicalInputKeyDown}
                 />
+                {showModelIdSuggestions ? (
+                  <datalist id={modelIdSuggestionListId}>
+                    {modelIdSuggestions!.map((id) => (
+                      <option key={id} value={id} />
+                    ))}
+                  </datalist>
+                ) : null}
               </div>
             </div>
           </ModelSettingsGroup>

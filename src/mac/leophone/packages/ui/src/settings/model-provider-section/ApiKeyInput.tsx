@@ -8,6 +8,7 @@ import { TECHNICAL_INPUT_ATTRIBUTES } from "@/lib/technicalInputAttributes.js";
 export function ApiKeyInput({
   value,
   visible,
+  invalid,
   readOnly,
   onChange,
   onBlur,
@@ -18,6 +19,7 @@ export function ApiKeyInput({
 }: {
   value: string;
   visible: boolean;
+  invalid?: boolean;
   readOnly?: boolean;
   onChange: (value: string) => void;
   onBlur: () => void;
@@ -41,6 +43,7 @@ export function ApiKeyInput({
           id: "settings.modelProvider.apiKeyPlaceholder",
         })}
         value={value}
+        aria-invalid={invalid || undefined}
         readOnly={readOnly}
         disabled={readOnly}
         onChange={(event) => {
