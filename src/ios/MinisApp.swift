@@ -154,9 +154,9 @@ struct MinisApp: App {
         // [T-voice-input-mode-preference-ios] Pin the lazy static to the real
         // launch instant.
         _ = Self.processLaunchedAt
-        // [T-local-first] 每次冷启动都从本机开始;上次停在服务器任务页(或点过它的通知、灵动岛、
-        // Spotlight)不该让下次打开还落在那里。深链/通知在 init 之后才处理,照常切过去。
-        IOSExecutionBackend.selectLocal()
+        // [T-paperclip-retired] 1.72 下架了服务器任务(Paperclip):清掉老版本留下的配置、
+        // 网页登录数据、Spotlight 条目和通知。只跑一次,全在后台,不占启动路径。
+        PaperclipRetirement.runOnce()
         // [T-perf-1.39] 度量最先起:冷启动计时、回前台首帧、主线程卡顿计数。
         LeoPerf.start()
         // [S1/WP8] File capture starts here, not in the first .onAppear, so the
@@ -219,11 +219,7 @@ struct MinisApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                IOSWorkspaceRootView { ContentView() }
-                    // 服务器任务对话复用端侧同款 Markdown 渲染（独立验证宿主不含此组件，使用原生回退）。
-                    .environment(\.paperclipMarkdownRenderer, PaperclipMarkdownRenderer { markdown, streaming in
-                        AnyView(SelectableMarkdownView(markdown: markdown, isStreaming: streaming))
-                    })
+                ContentView()
                     .overlay(alignment: .top) {
                         BackgroundInterruptionBanner()
                     }

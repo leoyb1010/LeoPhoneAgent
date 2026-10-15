@@ -5,18 +5,8 @@ import { desktopBrowserPlatformBridge } from "./desktopBrowserPlatformBridge.js"
 
 export function createDesktopPlatform(options: {
   isLocalDevelopmentRuntime: boolean;
-  openServerWorkspace?: () => void;
 }): IPlatformService {
   return {
-    openServerWorkspace: options.openServerWorkspace,
-    paperclip: {
-      request: (input) => window.zcode.paperclipRequest(input),
-      signIn: (input) => window.zcode.paperclipSignIn(input),
-      signOut: (input) => window.zcode.paperclipSignOut(input),
-      download: (input) => window.zcode.paperclipDownload(input),
-      getPreferences: () => window.zcode.paperclipGetPreferences(),
-      setPreferences: (input) => window.zcode.paperclipSetPreferences(input),
-    },
     canSelectFilePath: true,
     createLocalMediaPreviewUrl: buildLocalMediaPreviewUrl,
     isLocalDevelopmentRuntime: options.isLocalDevelopmentRuntime,

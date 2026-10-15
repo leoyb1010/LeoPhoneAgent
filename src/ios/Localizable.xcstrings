@@ -118923,28 +118923,6 @@
         }
       }
     },
-    "服务器任务(Paperclip)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server Tasks (Paperclip)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "服务器任务(Paperclip)"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "伺服器任務(Paperclip)"
-          }
-        }
-      }
-    },
     "这几项在快捷指令 App 里:新建快捷指令,搜 LeoBot 加入动作,给快捷指令起个名字,之后对 Siri 说这个名字即可。": {
       "localizations": {
         "en": {
@@ -118963,28 +118941,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "這幾項在捷徑 App 裡：新增捷徑，搜尋 LeoBot 加入動作，替捷徑取個名字，之後對 Siri 說這個名字即可。"
-          }
-        }
-      }
-    },
-    "• 「到达家」→ 查 Paperclip 工单进度": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "• “Arrive Home” → Check a Paperclip issue"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "• 「到达家」→ 查 Paperclip 工单进度"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "• 「到達家」→ 查 Paperclip 工單進度"
           }
         }
       }

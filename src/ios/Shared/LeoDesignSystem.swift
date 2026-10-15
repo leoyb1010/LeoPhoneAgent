@@ -39,7 +39,7 @@ enum LeoTheme {
         static let field: CGFloat = 12
         static let surface: CGFloat = 16
         static let bubble: CGFloat = 18
-        /// [F2] Every composer (home, chat, Paperclip) — see `leoComposerChrome()`.
+        /// [F2] Every composer (home, chat) — see `leoComposerChrome()`.
         static let composer: CGFloat = 26
     }
 

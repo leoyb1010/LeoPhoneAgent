@@ -17,10 +17,10 @@ iOS 青绿比 Android 略深：浅色下白字 ≥ 4.5:1、深色下白色图标
 
 | 用途 | 组件 | 位置 |
 |---|---|---|
-| 输入栏外壳（首页 / 对话 / Paperclip） | `leoComposerChrome()`、`LeoComposerSendButton`，圆角 `LeoTheme.Radius.composer` = 26 | `src/ios/Views/Components/LeoComposerChrome.swift` |
+| 输入栏外壳（首页 / 对话） | `leoComposerChrome()`、`LeoComposerSendButton`，圆角 `LeoTheme.Radius.composer` = 26 | `src/ios/Views/Components/LeoComposerChrome.swift` |
 | 空状态 | `LeoEmptyState` | `src/ios/Views/Components/LeoEmptyState.swift` |
 | 行内报错 + 重试 | `LeoInlineError` | `src/ios/Views/Components/LeoInlineError.swift` |
-| 加载流光 | `LeoShimmer`（`PaperclipShimmer` 为别名） | `src/ios/Views/Components/LeoShimmer.swift` |
+| 加载流光 | `LeoShimmer` | `src/ios/Views/Components/LeoShimmer.swift` |
 | 动效 | `LeoMotion`（无 reduceMotion 环境时用无参版本，读系统开关） | `src/ios/Shared/LeoDesignSystem.swift` |
 
 动效审计：`grep -rn "withAnimation(.easeInOut(duration" src/ios/Views` 必须为 0。

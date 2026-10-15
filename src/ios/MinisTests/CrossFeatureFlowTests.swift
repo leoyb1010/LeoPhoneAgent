@@ -17,22 +17,12 @@ final class CrossFeatureFlowTests: XCTestCase {
 
     // MARK: E1 下一步菜单
 
-    @MainActor func testNextStepMenuHasFiveItemsInFixedOrder() {
-        XCTAssertEqual(ReplyNextStep.menu, [.collect, .quickTask, .schedule, .mac, .paperclip])
+    /// 1.72 下架服务器任务后,「下一步」固定 4 项。
+    @MainActor func testNextStepMenuHasFourItemsInFixedOrder() {
+        XCTAssertEqual(ReplyNextStep.menu, [.collect, .quickTask, .schedule, .mac])
         XCTAssertEqual(ReplyNextStep.menu.map(\.title),
-                       ["收进藏宝阁", "存为快捷任务", "设为定时任务", "发到 Mac", "转为服务器任务"])
-        XCTAssertLessThanOrEqual(ReplyNextStep.menu.count, 5)
-    }
-
-    /// 本机优先:没连过 Paperclip 服务器,「下一步」里不出现「转为服务器任务」。
-    @MainActor func testNextStepHidesServerTaskUntilPaperclipConfigured() throws {
-        XCTAssertFalse(PaperclipProfile.hasSaved(defaults))
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false, macFleetEnabled: true),
-                       [.collect, .quickTask, .schedule, .mac])
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: true), ReplyNextStep.menu)
-        let profile = try PaperclipProfile(name: "测试", address: "https://example.com")
-        defaults.set(try JSONEncoder().encode([profile]), forKey: PaperclipProfile.storageKey)
-        XCTAssertTrue(PaperclipProfile.hasSaved(defaults))
+                       ["收进藏宝阁", "存为快捷任务", "设为定时任务", "发到 Mac"])
+        XCTAssertFalse(ReplyNextStep.Action.allCases.map(\.rawValue).contains("paperclip"))
     }
 
     /// [F] Mac 舰队默认关闭:没打开过就是关,打开后才算开。
@@ -49,20 +39,9 @@ final class CrossFeatureFlowTests: XCTestCase {
 
     /// [F] Mac 舰队关闭时「下一步」里没有「发到 Mac」;打开后恢复原样,顺序不变。
     @MainActor func testNextStepHidesMacUntilFleetEnabled() {
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: false),
-                       [.collect, .quickTask, .schedule, .paperclip])
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: false, macFleetEnabled: false),
-                       [.collect, .quickTask, .schedule])
-        XCTAssertEqual(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: true), ReplyNextStep.menu)
-        XCTAssertFalse(ReplyNextStep.visibleMenu(paperclipConfigured: true, macFleetEnabled: false).contains(.mac))
-    }
-
-    /// 冷启动回到本机:不管上次停在哪个工作区。
-    func testSelectLocalOverridesRememberedPaperclipWorkspace() {
-        IOSExecutionBackend.selectPaperclip(defaults)
-        XCTAssertEqual(defaults.string(forKey: IOSExecutionBackend.storageKey), IOSExecutionBackend.paperclip.rawValue)
-        IOSExecutionBackend.selectLocal(defaults)
-        XCTAssertEqual(defaults.string(forKey: IOSExecutionBackend.storageKey), IOSExecutionBackend.local.rawValue)
+        XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: false), [.collect, .quickTask, .schedule])
+        XCTAssertEqual(ReplyNextStep.visibleMenu(macFleetEnabled: true), ReplyNextStep.menu)
+        XCTAssertFalse(ReplyNextStep.visibleMenu(macFleetEnabled: false).contains(.mac))
     }
 
     @MainActor func testSaveQuickTaskAppearsInQuickTaskList() throws {
@@ -155,31 +134,6 @@ final class CrossFeatureFlowTests: XCTestCase {
         let note = ReplyNextStep.noteContent(prompt: "总结这篇\n文章", reply: "要点一")
         XCTAssertEqual(note.title, "总结这篇")
         XCTAssertEqual(note.body, "> 总结这篇\n> 文章\n\n要点一")
-    }
-
-    // MARK: G3 Paperclip 桥只收字符串
-
-    @MainActor func testPaperclipHandoffTitleIsPromptAndDescriptionIsReplySummary() throws {
-        let one = try XCTUnwrap(PaperclipHandoff.make(title: "  整理本周周报  ", description: "已列出 5 项"))
-        XCTAssertEqual(one.title, "整理本周周报")
-        XCTAssertEqual(one.description, "对话里的结果(摘要):\n已列出 5 项")
-        let multi = try XCTUnwrap(PaperclipHandoff.make(title: "第一行\n第二行", description: ""))
-        XCTAssertEqual(multi.title, "第一行")
-        XCTAssertEqual(multi.description, "要求:\n第一行\n第二行")
-        XCTAssertNil(PaperclipHandoff.make(title: " ", description: "\n"))
-        let capped = try XCTUnwrap(PaperclipHandoff.make(title: String(repeating: "题", count: 500),
-                                                         description: String(repeating: "述", count: 9_000)))
-        XCTAssertEqual(capped.title.count, PaperclipHandoff.titleLimit)
-        XCTAssertEqual(capped.description.count, PaperclipHandoff.descriptionLimit)
-    }
-
-    @MainActor func testPaperclipHandoffSwitchesWorkspaceAndPrefillsOnce() {
-        defaults.set(IOSExecutionBackend.local.rawValue, forKey: IOSExecutionBackend.storageKey)
-        XCTAssertTrue(PaperclipHandoff.open(title: "派个活", description: "细节", defaults: defaults))
-        XCTAssertEqual(defaults.string(forKey: IOSExecutionBackend.storageKey), IOSExecutionBackend.paperclip.rawValue)
-        XCTAssertEqual(PaperclipHandoff.take()?.title, "派个活")
-        XCTAssertNil(PaperclipHandoff.take())
-        XCTAssertFalse(PaperclipHandoff.open(title: "", description: "", defaults: defaults))
     }
 
     // MARK: E3 定时任务结果回写

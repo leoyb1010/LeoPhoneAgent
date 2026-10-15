@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import {
   AppErrorBoundary,
   Root,
-  ServerWorkspaceRoot,
   LeoWhatsNew,
   GlobalDatabaseStartupLoading,
   UpdateStatusWindowRoot,
@@ -31,15 +30,8 @@ import {
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
-import { createPaperclipWorkspace } from "@zcode/services";
 import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
-import { LocalHostStartupBanner } from "./LocalHostStartupBanner.js";
-import {
-  prepareWorkspaceModeSwitch,
-  resolveWorkspaceMode,
-  type WorkspaceMode,
-} from "./workspaceMode.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
 import { initializeDesktopUserActionTrace } from "./userActionTraceBootstrap.js";
 import { buildRemoteWorkspaceSessionServices } from "./remoteWorkspaceSessionServices.js";
@@ -141,24 +133,11 @@ const initialWorkspaceAbsPath = readStringFlag("initialWorkspacePath");
 const initialWorkspacePurpose = readStringFlag("initialWorkspacePurpose");
 const unavailableWorkspacePath = readStringFlag("unavailableWorkspacePath");
 const windowKind = readStringFlag("windowKind");
-function readModeStorage(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-// [leo] 本机工作台是默认;服务器任务(Paperclip)是其中一个入口,切换后记住上次的选择。
-const isServerWorkspace =
-  windowKind !== "update-status" &&
-  resolveWorkspaceMode(
-    new URLSearchParams(window.location.search).get("workspaceMode"),
-    readModeStorage(),
-  ) === "server";
-function switchWorkspaceMode(mode: WorkspaceMode): void {
-  window.location.replace(
-    prepareWorkspaceModeSwitch(mode, window.location.href, readModeStorage()),
-  );
+// [leo] 1.10 下架服务器任务(Paperclip):旧版本记住的「上次在服务器视图」清掉,窗口只剩本机工作台。
+try {
+  window.localStorage.removeItem("leo-workspace-mode");
+} catch {
+  // 存储不可用时无事可做。
 }
 const initialLocaleFlag = readStringFlag("locale");
 const initialLocale: Locale =
@@ -170,7 +149,6 @@ const pendingRemoteWorkspaceServicePorts: RemoteWorkspaceServicePortRegistration
 
 const desktopPlatform = createDesktopPlatform({
   isLocalDevelopmentRuntime,
-  openServerWorkspace: () => switchWorkspaceMode("server"),
 });
 initializeDesktopLocalTtft(desktopPlatform);
 initializeDesktopUserActionTrace({
@@ -223,7 +201,7 @@ function enterAppIfPrepared(): void {
   if (port) initializeBusinessRoot(port);
 }
 const firstStartupStateTimer =
-  windowKind === "update-status" || isServerWorkspace
+  windowKind === "update-status"
     ? undefined
     : setTimeout(() => {
         if (databaseStartupAdmission.state) return;
@@ -382,45 +360,10 @@ function initializeBusinessRoot(port: MessagePort): void {
   );
 }
 
-if (!isServerWorkspace) window.addEventListener("message", handleServicePortMessage);
-else
-  window.addEventListener("message", (event: MessageEvent) => {
-    // 服务器任务视图不接本机业务端口,但本机任务(含手机发起的)完成提示音照常响。
-    if (event.data === InternalChannels.TaskNotificationSound) void playTaskNotificationSound();
-    else if (event.source === window && event.data?.type === InternalChannels.ServicePort)
-      event.ports[0]?.close();
-  });
-if (windowKind !== "update-status" && !isServerWorkspace) {
+window.addEventListener("message", handleServicePortMessage);
+if (windowKind !== "update-status") {
   renderDatabaseStartup();
   sendStartupControl({ action: "snapshot" });
-}
-
-if (isServerWorkspace && desktopPlatform.paperclip) {
-  // 服务器任务视图不消费本机业务端口;Host 仍在后台跑手机连接、藏宝阁与定时任务。
-  appInitialized = true;
-  const paperclipWorkspace = createPaperclipWorkspace(desktopPlatform.paperclip);
-  appRoot?.render(
-    <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>
-      <ZCodeIntlProvider
-        initialLocale="zh-CN"
-        resolveSystemLocale={desktopPlatform.getSystemLocale}
-      >
-        <StartupReadyNotifier />
-        <ServerWorkspaceRoot
-          service={paperclipWorkspace}
-          platform={desktopPlatform}
-          isMacDesktop={isMacDesktop}
-          isWindowsDesktop={isWindowsDesktop}
-          onReturnToLocal={() => switchWorkspaceMode("local")}
-        />
-        <LocalHostStartupBanner
-          sendControl={sendStartupControl}
-          onOpenLocal={() => switchWorkspaceMode("local")}
-        />
-        <LeoWhatsNew />
-      </ZCodeIntlProvider>
-    </AppErrorBoundary>,
-  );
 }
 
 if (windowKind === "update-status") {

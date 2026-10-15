@@ -3,7 +3,7 @@
 //  MinisApp
 //
 //  [E1] 回复的「下一步」:一条 Agent 回复可以一步流到别的功能。
-//  菜单固定 5 项、顺序固定。这里只放与界面无关的部分(编进 MinisTests);
+//  菜单固定 4 项、顺序固定。这里只放与界面无关的部分(编进 MinisTests);
 //  菜单在回复底部的操作条里,表单与跳转在 AIChatView。
 //
 
@@ -17,7 +17,7 @@ extension Notification.Name {
 
 enum ReplyNextStep {
     enum Action: String, CaseIterable, Identifiable {
-        case collect, quickTask, schedule, mac, paperclip
+        case collect, quickTask, schedule, mac
 
         var id: String { rawValue }
 
@@ -27,7 +27,6 @@ enum ReplyNextStep {
             case .quickTask: return "存为快捷任务"
             case .schedule: return "设为定时任务"
             case .mac: return "发到 Mac"
-            case .paperclip: return "转为服务器任务"
             }
         }
 
@@ -37,20 +36,17 @@ enum ReplyNextStep {
             case .quickTask: return "bolt"
             case .schedule: return "clock.arrow.circlepath"
             case .mac: return "macbook.and.iphone"
-            case .paperclip: return "paperclip"
             }
         }
     }
 
-    /// 菜单项最多 5 个,顺序固定。
-    static let menu: [Action] = [.collect, .quickTask, .schedule, .mac, .paperclip]
+    /// 菜单项最多 4 个,顺序固定。
+    static let menu: [Action] = [.collect, .quickTask, .schedule, .mac]
 
-    /// 实际显示的菜单:没连过 Paperclip 服务器时不出现「转为服务器任务」(本机优先,不把人引到空的连接页);
-    /// Mac 舰队没打开时不出现「发到 Mac」。
-    static func visibleMenu(paperclipConfigured: Bool, macFleetEnabled: Bool) -> [Action] {
+    /// 实际显示的菜单:Mac 舰队没打开时不出现「发到 Mac」。
+    static func visibleMenu(macFleetEnabled: Bool) -> [Action] {
         menu.filter { action in
             switch action {
-            case .paperclip: return paperclipConfigured
             case .mac: return macFleetEnabled
             default: return true
             }

@@ -59,9 +59,4 @@ final class LeoAgentHarnessFullAutoTests: XCTestCase {
         XCTAssertEqual(HarnessFullAuto.autoApprovalSummary(auto), "Bash · touch /tmp/a.txt")
         XCTAssertNil(HarnessFullAuto.autoApprovalSummary(["event": "approval.responded", "choice": "once"]))
     }
-
-    /// [A5] Paperclip 只读同一个全自动键,不引用 App 其他模块。
-    func testPaperclipReadsTheSameFullAutoKey() {
-        XCTAssertEqual(PaperclipFullAuto.defaultsKey, FullAutoGate.defaultsKey)
-    }
 }

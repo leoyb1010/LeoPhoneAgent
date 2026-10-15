@@ -55,23 +55,6 @@ import type {
 declare global {
   interface Window {
     zcode: {
-      paperclipGetPreferences(): Promise<import("@zcode/shared").PaperclipPreferences>;
-      paperclipSetPreferences(input: import("@zcode/shared").PaperclipPreferences): Promise<void>;
-      paperclipRequest(input: {
-        serverUrl: string;
-        method: "GET" | "POST" | "PATCH";
-        path: string;
-        body?: unknown;
-        expectedUserId?: string;
-      }): Promise<{ status: number; data: unknown }>;
-      paperclipSignIn(input: { serverUrl: string }): Promise<{ completed: boolean }>;
-      paperclipSignOut(input: { serverUrl: string }): Promise<void>;
-      paperclipDownload(input: {
-        serverUrl: string;
-        path: string;
-        filename: string;
-        expectedUserId: string;
-      }): Promise<void>;
       connectRemote(
         options: RemoteTarget,
         requestId?: string,

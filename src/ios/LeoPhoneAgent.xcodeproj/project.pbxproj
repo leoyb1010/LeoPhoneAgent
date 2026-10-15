@@ -62,8 +62,6 @@
 		E5E15701A /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15701T /* ReplyNextStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15701F /* ReplyNextStep.swift */; };
 		E5E15702A /* ReplyNextStepViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15702F /* ReplyNextStepViews.swift */; };
-		E5E15703A /* PaperclipHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15703F /* PaperclipHandoff.swift */; };
-		E5E15703T /* PaperclipHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15703F /* PaperclipHandoff.swift */; };
 		E5E15704A /* MacResultInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15704F /* MacResultInbox.swift */; };
 		E5E15704T /* MacResultInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15704F /* MacResultInbox.swift */; };
 		E5E15705A /* WatchContinueOnPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E15705F /* WatchContinueOnPhone.swift */; };
@@ -129,30 +127,7 @@
 		E5SUB0112A /* AgentCallbackCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0112F /* AgentCallbackCellView.swift */; };
 		E5SUB0113A /* HelperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SUB0113F /* HelperSettingsView.swift */; };
 		E5C15609A /* ShortcutRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15609F /* ShortcutRecipes.swift */; };
-		E5C15610A /* PaperclipIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15610F /* PaperclipIntents.swift */; };
 		E5C15611A /* ShortcutRecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C15611F /* ShortcutRecipesView.swift */; };
-		F0ACA0000000000000000001 /* PaperclipContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000001 /* PaperclipContract.swift */; };
-		F0ACB0000000000000000001 /* PaperclipContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000001 /* PaperclipContract.swift */; };
-		F0ACA0000000000000000002 /* PaperclipClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000002 /* PaperclipClient.swift */; };
-		F0ACB0000000000000000002 /* PaperclipClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000002 /* PaperclipClient.swift */; };
-		F0ACA0000000000000000003 /* PaperclipDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000003 /* PaperclipDraft.swift */; };
-		F0ACB0000000000000000003 /* PaperclipDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000003 /* PaperclipDraft.swift */; };
-		F0ACA0000000000000000004 /* PaperclipWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */; };
-		F0ACA0000000000000000005 /* PaperclipLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000005 /* PaperclipLoginView.swift */; };
-		F0ACA0000000000000000006 /* PaperclipWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */; };
-		F0ACA0000000000000000007 /* PaperclipIssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */; };
-		F0ACA0000000000000000008 /* PaperclipLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000008 /* PaperclipLive.swift */; };
-		F0ACB0000000000000000008 /* PaperclipLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000008 /* PaperclipLive.swift */; };
-		F0ACA0000000000000000009 /* PaperclipLiveConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000009 /* PaperclipLiveConnection.swift */; };
-		F0ACB0000000000000000009 /* PaperclipLiveConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000009 /* PaperclipLiveConnection.swift */; };
-		F0ACA0000000000000000010 /* PaperclipRunStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000010 /* PaperclipRunStream.swift */; };
-		F0ACB0000000000000000010 /* PaperclipRunStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000010 /* PaperclipRunStream.swift */; };
-		E5PCG0021 /* PaperclipLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0020 /* PaperclipLiveActivity.swift */; };
-		E5PCG0031 /* PaperclipSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0030 /* PaperclipSpotlightIndexer.swift */; };
-		E5PCG0032 /* PaperclipSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0030 /* PaperclipSpotlightIndexer.swift */; };
-		F0ACA0000000000000000011 /* PaperclipDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000011 /* PaperclipDesign.swift */; };
-		F0ACA0000000000000000012 /* PaperclipThreadViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000012 /* PaperclipThreadViews.swift */; };
-		F0ACA0000000000000000013 /* PaperclipIssueListViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AC10000000000000000013 /* PaperclipIssueListViews.swift */; };
 		EA1CATA20000000000000002 /* ProviderModelCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */; };
 		EA1CATA10000000000000002 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1CATA10000000000000001 /* ModelCatalog.swift */; };
         E5HOUB001 /* HarnessOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HOUB003 /* HarnessOutbox.swift */; };
@@ -480,15 +455,11 @@
 		E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000013 /* EnhancedBackgroundSettingsView.swift */; };
 		E5G000004 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5G000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
-		E5PCG0011 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
-		E5PCG0012 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
 		E5GWF0003 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5GWF0004 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5H000001 /* AgentWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000011 /* AgentWidgetBundle.swift */; };
 		E5H000002 /* AgentLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000012 /* AgentLiveActivityWidget.swift */; };
-		E5PCG0041 /* PaperclipLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0040 /* PaperclipLiveActivityWidget.swift */; };
 		E5H000003 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
-		E5PCG0013 /* PaperclipActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCG0010 /* PaperclipActivityAttributes.swift */; };
 		E5H000009 /* AgentWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5H000010 /* AgentWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5I000001 /* SpeechRecognitionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5I000011 /* SpeechRecognitionManager.swift */; };
 		E5I000002 /* AudioWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5I000012 /* AudioWaveformView.swift */; };
@@ -642,9 +613,11 @@
 		E5L3LLPB /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
 		LF4BFF0E4A36 /* LogNoiseControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF08BDF6DE26 /* LogNoiseControl.swift */; };
 		LF653CC0D303 /* LogContentDigest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF262B3FEB94 /* LogContentDigest.swift */; };
+		LF522796921E /* PaperclipRetirement.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF312E7B01F2 /* PaperclipRetirement.swift */; };
 		E5L3LLPT /* LogLinePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L3LLPR /* LogLinePipeline.swift */; };
 		LFEDD8663B14 /* LogNoiseControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF08BDF6DE26 /* LogNoiseControl.swift */; };
 		LFDBA0D05082 /* LogContentDigest.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF262B3FEB94 /* LogContentDigest.swift */; };
+		LFFEBA266A95 /* PaperclipRetirement.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF312E7B01F2 /* PaperclipRetirement.swift */; };
 		E5Q000004 /* FontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Q000014 /* FontSettings.swift */; };
 		E5LEO0001 /* LeoDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0011 /* LeoDesignSystem.swift */; };
 		E5LEO0002 /* ChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0012 /* ChatColors.swift */; };
@@ -1119,7 +1092,6 @@
 		E5E15709F /* SkillDraftEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Skills/SkillDraftEditorView.swift; sourceTree = SOURCE_ROOT; };
 		E5E15701F /* ReplyNextStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Chat/ReplyNextStep.swift; sourceTree = SOURCE_ROOT; };
 		E5E15702F /* ReplyNextStepViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Chat/ReplyNextStepViews.swift; sourceTree = SOURCE_ROOT; };
-		E5E15703F /* PaperclipHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipHandoff.swift; sourceTree = SOURCE_ROOT; };
 		E5E15704F /* MacResultInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacResultInbox.swift; sourceTree = SOURCE_ROOT; };
 		E5E15705F /* WatchContinueOnPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/WatchContinueOnPhone.swift; sourceTree = SOURCE_ROOT; };
 		E5E15706F /* SessionHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SessionHandoff.swift; sourceTree = SOURCE_ROOT; };
@@ -1160,24 +1132,8 @@
 		E5SUB0112F /* AgentCallbackCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCallbackCellView.swift; sourceTree = "<group>"; };
 		E5SUB0113F /* HelperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSettingsView.swift; sourceTree = "<group>"; };
 		E5C15609F /* ShortcutRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Intents/ShortcutRecipes.swift; sourceTree = SOURCE_ROOT; };
-		E5C15610F /* PaperclipIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipIntents.swift; sourceTree = SOURCE_ROOT; };
 		E5C15611F /* ShortcutRecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/ShortcutRecipesView.swift; sourceTree = SOURCE_ROOT; };
 		E5LRX0001 /* LeoPhoneAgent.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = LeoPhoneAgent.xcconfig; path = Configs/LeoPhoneAgent.xcconfig; sourceTree = "<group>"; };
-		F0AC10000000000000000001 /* PaperclipContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipContract.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000002 /* PaperclipClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipClient.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000003 /* PaperclipDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipDraft.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipWorkspaceStore.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000005 /* PaperclipLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipLoginView.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipWorkspaceView.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipIssueDetailView.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000008 /* PaperclipLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLive.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000009 /* PaperclipLiveConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLiveConnection.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000010 /* PaperclipRunStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipRunStream.swift; sourceTree = SOURCE_ROOT; };
-		E5PCG0020 /* PaperclipLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipLiveActivity.swift; sourceTree = SOURCE_ROOT; };
-		E5PCG0030 /* PaperclipSpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Paperclip/PaperclipSpotlightIndexer.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000011 /* PaperclipDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipDesign.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000012 /* PaperclipThreadViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipThreadViews.swift; sourceTree = SOURCE_ROOT; };
-		F0AC10000000000000000013 /* PaperclipIssueListViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Paperclip/PaperclipIssueListViews.swift; sourceTree = SOURCE_ROOT; };
 		EA1CATA20000000000000001 /* ProviderModelCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Providers/ProviderModelCatalogView.swift"; sourceTree = SOURCE_ROOT; };
 		EA1CATA10000000000000001 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelCatalog.swift"; sourceTree = SOURCE_ROOT; };
         E5HOUB003 /* HarnessOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HarnessOutbox.swift; sourceTree = SOURCE_ROOT; };
@@ -1536,13 +1492,11 @@
 		E5G000012 /* AgentLiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityManager.swift; sourceTree = "<group>"; };
 		E5G000013 /* EnhancedBackgroundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancedBackgroundSettingsView.swift; sourceTree = "<group>"; };
 		E5G000014 /* AgentActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityAttributes.swift; sourceTree = "<group>"; };
-		E5PCG0010 /* PaperclipActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipActivityAttributes.swift; sourceTree = "<group>"; };
 		24B74F300D94BD261002831C /* CommandRisk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRisk.swift; sourceTree = "<group>"; };
 		E5GWF0013 /* GeminiWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiWireFormat.swift; sourceTree = "<group>"; };
 		E5H000010 /* AgentWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgentWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5H000011 /* AgentWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWidgetBundle.swift; sourceTree = "<group>"; };
 		E5H000012 /* AgentLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityWidget.swift; sourceTree = "<group>"; };
-		E5PCG0040 /* PaperclipLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipLiveActivityWidget.swift; sourceTree = "<group>"; };
 		E5H000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5H000014 /* AgentWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentWidget.entitlements; sourceTree = "<group>"; };
 		E5I000011 /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
@@ -1703,6 +1657,7 @@
 		E5L3LLPR /* LogLinePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogLinePipeline.swift; sourceTree = "<group>"; };
 		LF08BDF6DE26 /* LogNoiseControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogNoiseControl.swift; sourceTree = "<group>"; };
 		LF262B3FEB94 /* LogContentDigest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogContentDigest.swift; sourceTree = "<group>"; };
+		LF312E7B01F2 /* PaperclipRetirement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperclipRetirement.swift; sourceTree = "<group>"; };
 		E5Q000014 /* FontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontSettings.swift; sourceTree = "<group>"; };
 		E5LEO0011 /* LeoDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoDesignSystem.swift; sourceTree = "<group>"; };
 		E5LEO0012 /* ChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatColors.swift; sourceTree = "<group>"; };
@@ -2566,13 +2521,13 @@
 			isa = PBXGroup;
 			children = (
 				E5G000014 /* AgentActivityAttributes.swift */,
-				E5PCG0010 /* PaperclipActivityAttributes.swift */,
 				24B74F300D94BD261002831C /* CommandRisk.swift */,
 				E5AT00011 /* AudioTogglePlaybackIntent.swift */,
 				E5Q000013 /* AppLogger.swift */,
 				E5L3LLPR /* LogLinePipeline.swift */,
 				LF08BDF6DE26 /* LogNoiseControl.swift */,
 				LF262B3FEB94 /* LogContentDigest.swift */,
+				LF312E7B01F2 /* PaperclipRetirement.swift */,
 				E5Q000011 /* BPETokenizer.swift */,
 				E5MDS0013 /* MarkdownStripper.swift */,
 				E5Q000012 /* cl100k_base.tiktoken */,
@@ -2665,7 +2620,6 @@
 			children = (
 				E5H000011 /* AgentWidgetBundle.swift */,
 				E5H000012 /* AgentLiveActivityWidget.swift */,
-				E5PCG0040 /* PaperclipLiveActivityWidget.swift */,
 				E5H000013 /* Info.plist */,
 				E5H000014 /* AgentWidget.entitlements */,
 				03F458E80CFCED85BAF0811E /* RecordingLiveActivityWidget.swift */,
@@ -2852,23 +2806,6 @@
 				LFBBFB592A46 /* LeoLinkProblem.swift */,
 				LF72B90255DE /* GatewayError.swift */,
 				E5RTG0003 /* LeoAgentRouting.swift */,
-				F0AC10000000000000000001 /* PaperclipContract.swift */,
-				F0AC10000000000000000002 /* PaperclipClient.swift */,
-				E5C15610F /* PaperclipIntents.swift */,
-				E5E15703F /* PaperclipHandoff.swift */,
-				F0AC10000000000000000003 /* PaperclipDraft.swift */,
-				F0AC10000000000000000004 /* PaperclipWorkspaceStore.swift */,
-				F0AC10000000000000000005 /* PaperclipLoginView.swift */,
-				F0AC10000000000000000006 /* PaperclipWorkspaceView.swift */,
-				F0AC10000000000000000007 /* PaperclipIssueDetailView.swift */,
-				F0AC10000000000000000008 /* PaperclipLive.swift */,
-				F0AC10000000000000000009 /* PaperclipLiveConnection.swift */,
-				F0AC10000000000000000010 /* PaperclipRunStream.swift */,
-				E5PCG0020 /* PaperclipLiveActivity.swift */,
-				E5PCG0030 /* PaperclipSpotlightIndexer.swift */,
-				F0AC10000000000000000011 /* PaperclipDesign.swift */,
-				F0AC10000000000000000012 /* PaperclipThreadViews.swift */,
-				F0AC10000000000000000013 /* PaperclipIssueListViews.swift */,
                 E5HOUB003 /* HarnessOutbox.swift */,
                 E5HFA003 /* HarnessFullAuto.swift */,
                 E5DGR003 /* DiagnosticRing.swift */,
@@ -3765,7 +3702,6 @@
 				LPAM0001T /* SkillManifest.swift in Sources */,
 				E5E15701T /* ReplyNextStep.swift in Sources */,
 				E5MFF9003 /* MacFleetFeature.swift in Sources */,
-				E5E15703T /* PaperclipHandoff.swift in Sources */,
 				E5E15704T /* MacResultInbox.swift in Sources */,
 				E5E15705T /* WatchContinueOnPhone.swift in Sources */,
 				E5E15706T /* SessionHandoff.swift in Sources */,
@@ -3784,13 +3720,6 @@
 				E5C15604T /* TreasuryItemEntity.swift in Sources */,
 				E5C15605T /* SiriReplyPrivacy.swift in Sources */,
 				1002171D84B5B80449161785 /* CommandRisk.swift in Sources */,
-				F0ACB0000000000000000001 /* PaperclipContract.swift in Sources */,
-				F0ACB0000000000000000002 /* PaperclipClient.swift in Sources */,
-				F0ACB0000000000000000003 /* PaperclipDraft.swift in Sources */,
-				F0ACB0000000000000000008 /* PaperclipLive.swift in Sources */,
-				F0ACB0000000000000000009 /* PaperclipLiveConnection.swift in Sources */,
-				F0ACB0000000000000000010 /* PaperclipRunStream.swift in Sources */,
-				E5PCG0032 /* PaperclipSpotlightIndexer.swift in Sources */,
                 E5HOUB002 /* HarnessOutbox.swift in Sources */,
                 E5HFA002 /* HarnessFullAuto.swift in Sources */,
                 E5DGR002 /* DiagnosticRing.swift in Sources */,
@@ -3853,7 +3782,6 @@
 				E5BKP0221 /* BackupZipExtractor.swift in Sources */,
 				E5BKP0222 /* BackupZipWriter.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
-				E5PCG0012 /* PaperclipActivityAttributes.swift in Sources */,
 				E5ART0003 /* ArtifactModels.swift in Sources */,
 				E5ART0004 /* ArtifactRepository.swift in Sources */,
 				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
@@ -3877,6 +3805,7 @@
 				E5L3LLPT /* LogLinePipeline.swift in Sources */,
 				LFEDD8663B14 /* LogNoiseControl.swift in Sources */,
 				LFDBA0D05082 /* LogContentDigest.swift in Sources */,
+				LFFEBA266A95 /* PaperclipRetirement.swift in Sources */,
 				E5LPF9003 /* LinkPreviewFetcher.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5CSM0002 /* ContextSizeMeter.swift in Sources */,
@@ -3986,7 +3915,6 @@
 				E5E15709A /* SkillDraftEditorView.swift in Sources */,
 				E5E15701A /* ReplyNextStep.swift in Sources */,
 				E5E15702A /* ReplyNextStepViews.swift in Sources */,
-				E5E15703A /* PaperclipHandoff.swift in Sources */,
 				E5E15704A /* MacResultInbox.swift in Sources */,
 				E5E15705A /* WatchContinueOnPhone.swift in Sources */,
 				E5E15706A /* SessionHandoff.swift in Sources */,
@@ -4005,7 +3933,6 @@
 				E5C15607A /* ScheduledTaskIntents.swift in Sources */,
 				E5C15608A /* LeoFocusFilter.swift in Sources */,
 				E5C15609A /* ShortcutRecipes.swift in Sources */,
-				E5C15610A /* PaperclipIntents.swift in Sources */,
 				E5C15611A /* ShortcutRecipesView.swift in Sources */,
 				0EF3A9F3129DD3B5DB6880DB /* ChatInspector.swift in Sources */,
 				227CA5FA422444E132B384B6 /* LeoCommands.swift in Sources */,
@@ -4440,7 +4367,6 @@
 				E5G000002 /* AgentLiveActivityManager.swift in Sources */,
 				E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,
-				E5PCG0011 /* PaperclipActivityAttributes.swift in Sources */,
 				E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */,
 				E5I000001 /* SpeechRecognitionManager.swift in Sources */,
 				E5I000002 /* AudioWaveformView.swift in Sources */,
@@ -4522,6 +4448,7 @@
 				E5L3LLPB /* LogLinePipeline.swift in Sources */,
 				LF4BFF0E4A36 /* LogNoiseControl.swift in Sources */,
 				LF653CC0D303 /* LogContentDigest.swift in Sources */,
+				LF522796921E /* PaperclipRetirement.swift in Sources */,
 				F1S00012 /* ChatSessionIdEnvironment.swift in Sources */,
 				E5Q000004 /* FontSettings.swift in Sources */,
 				E5S000001 /* DeviceIdentity.swift in Sources */,
@@ -4573,21 +4500,6 @@
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
 				E5W000009 /* ICloudSharedZoneTransport.swift in Sources */,
 				E5RTG0001 /* LeoAgentRouting.swift in Sources */,
-				F0ACA0000000000000000001 /* PaperclipContract.swift in Sources */,
-				F0ACA0000000000000000002 /* PaperclipClient.swift in Sources */,
-				F0ACA0000000000000000003 /* PaperclipDraft.swift in Sources */,
-				F0ACA0000000000000000004 /* PaperclipWorkspaceStore.swift in Sources */,
-				F0ACA0000000000000000005 /* PaperclipLoginView.swift in Sources */,
-				F0ACA0000000000000000006 /* PaperclipWorkspaceView.swift in Sources */,
-				F0ACA0000000000000000007 /* PaperclipIssueDetailView.swift in Sources */,
-				F0ACA0000000000000000008 /* PaperclipLive.swift in Sources */,
-				F0ACA0000000000000000009 /* PaperclipLiveConnection.swift in Sources */,
-				F0ACA0000000000000000010 /* PaperclipRunStream.swift in Sources */,
-				E5PCG0021 /* PaperclipLiveActivity.swift in Sources */,
-				E5PCG0031 /* PaperclipSpotlightIndexer.swift in Sources */,
-				F0ACA0000000000000000011 /* PaperclipDesign.swift in Sources */,
-				F0ACA0000000000000000012 /* PaperclipThreadViews.swift in Sources */,
-				F0ACA0000000000000000013 /* PaperclipIssueListViews.swift in Sources */,
                 E5HOUB001 /* HarnessOutbox.swift in Sources */,
                 E5HFA001 /* HarnessFullAuto.swift in Sources */,
                 E5DGR001 /* DiagnosticRing.swift in Sources */,
@@ -4687,9 +4599,7 @@
 			files = (
 				E5H000001 /* AgentWidgetBundle.swift in Sources */,
 				E5H000002 /* AgentLiveActivityWidget.swift in Sources */,
-				E5PCG0041 /* PaperclipLiveActivityWidget.swift in Sources */,
 				E5H000003 /* AgentActivityAttributes.swift in Sources */,
-				E5PCG0013 /* PaperclipActivityAttributes.swift in Sources */,
 				E5AT00003 /* AudioTogglePlaybackIntent.swift in Sources */,
 				3A6144B1BC5CE896D868EA56 /* RecordingActivityAttributes.swift in Sources */,
 				7E891949AC83D7C350DCC6A1 /* RecordingLiveActivityWidget.swift in Sources */,
@@ -4759,7 +4669,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4768,7 +4678,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4783,12 +4693,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4803,7 +4713,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -4819,7 +4729,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4834,7 +4744,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -4846,7 +4756,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -4993,7 +4903,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -5023,7 +4933,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -5049,7 +4959,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -5079,7 +4989,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -5100,7 +5010,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -5112,7 +5022,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5127,7 +5037,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -5139,7 +5049,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5154,7 +5064,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5166,7 +5076,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5181,7 +5091,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -5193,7 +5103,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5208,7 +5118,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5220,7 +5130,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5235,7 +5145,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -5247,7 +5157,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -5262,7 +5172,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -5271,7 +5181,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -5288,7 +5198,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 169;
+				CURRENT_PROJECT_VERSION = 170;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoBot;
@@ -5296,7 +5206,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.71.0;
+				MARKETING_VERSION = 1.72.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;

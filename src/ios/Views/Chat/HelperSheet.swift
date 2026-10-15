@@ -3,7 +3,7 @@ import SwiftUI
 // [T-subagent] Detail sheet for a sub agent: the task, its result and a
 // read-only transcript of the hidden child session, loaded straight from the
 // database (the child never opens in a normal chat screen, so it cannot be
-// handed off, shared to Paperclip or continued by hand).
+// handed off, shared or continued by hand).
 
 struct HelperSheet: View {
     @ObservedObject var block: AssistantBlock

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// [F3] The app's one loading shimmer (promoted from PaperclipShimmer): a
+/// [F3] The app's one loading shimmer (promoted from the old server-task shimmer): a
 /// diagonal sheen over a running card or a placeholder row. Same technique as
 /// the chat's ShimmerOverlay — one stable gradient moved by an offset
 /// animation, never rebuilt per frame. Reduce Motion hides it entirely.

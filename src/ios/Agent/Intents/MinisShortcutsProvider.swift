@@ -88,28 +88,8 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         // (Swift metadata resolution). It remains available in Shortcuts
         // via the "All Actions" list.
         // [T-siri-fleet] OpenSessionIntent 不再占 App Shortcut 名额(上限 10;它在快捷指令 App 的动作列表里仍然可用)。
-        // [F-mac-fleet-advanced] Mac 舰队改为默认关闭的高级功能,「指挥一台 Mac」「Mac 任务汇报」让出两个名额
-        // 给 Paperclip 工单的「查进度」「读结果」;两个 Mac 动作仍在快捷指令 App 的动作列表里,舰队关闭时会说明怎么打开。
-        AppShortcut(
-            intent: PaperclipIssueStatusIntent(),
-            phrases: [
-                "Check a Paperclip issue with \(.applicationName)",
-                "\(.applicationName) Paperclip status",
-            ],
-            shortTitle: "查工单进度",
-            systemImageName: "paperclip.circle"
-        )
-        AppShortcut(
-            intent: PaperclipIssueResultIntent(),
-            phrases: [
-                "Get a Paperclip result with \(.applicationName)",
-                "\(.applicationName) Paperclip result",
-            ],
-            shortTitle: "读工单结果",
-            systemImageName: "doc.text.magnifyingglass"
-        )
-        // [C8] 全自动之后「批准 Mac 待审批」「停止 Mac 任务」很少用,让出两个名额
-        // (仍在快捷指令 App 的动作列表里);给「记住这个」和「派 Paperclip 工单」。
+        // [F-mac-fleet-advanced] Mac 舰队默认关闭,「指挥一台 Mac」「Mac 任务汇报」不占名额,
+        // 仍在快捷指令 App 的动作列表里。(1.72 下架服务器任务后空出 3 个名额。)
         // "remember this" 原来挂在记笔记上,现在归记忆。
         AppShortcut(
             intent: RememberThisIntent(),
@@ -119,15 +99,6 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             ],
             shortTitle: "记住这个",
             systemImageName: "brain"
-        )
-        AppShortcut(
-            intent: CreatePaperclipIssueIntent(),
-            phrases: [
-                "Create a Paperclip issue with \(.applicationName)",
-                "\(.applicationName) dispatch to Paperclip",
-            ],
-            shortTitle: "派 Paperclip 工单",
-            systemImageName: "paperclip"
         )
         // [T-ios-remove-open-webapp-shortcut-intent] OpenWebAppIntent removed —
         // the Home-Screen WebApp tile path was replaced by another mechanism,

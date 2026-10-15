@@ -1729,10 +1729,6 @@ struct AIChatView: View {
             isEditing: vm.editingMessageIndex != nil,
             isLocked: titleIsVisuallyLocked,
             onNewChat: { requestNewChatFromMenu() },
-            onOpenPaperclip: {
-                inputFocused = false
-                NotificationCenter.default.post(name: Notification.Name("leo.openPaperclipFromChat"), object: nil)
-            },
             // [T-chat-menu-compact-entry] Same effect as the /compact slash
             // command (AIChatViewModel+SlashCommands case "compact").
             onCompact: { vm.compactAll() },
@@ -3336,7 +3332,7 @@ struct AIChatView: View {
             }
         } label: {
             Image(systemName: mode == .stop ? "stop.circle.fill" : "arrow.up.circle.fill")
-                // [F2] 36pt like the home / Paperclip send disc.
+                // [F2] 36pt like the home send disc.
                 .font(.system(size: LeoComposerMetrics.control))
                 .foregroundStyle(mode == .stop ? Color.red
                                  : (mode == .send && !canSend ? ChatColors.sendButtonDisabled : ChatColors.sendButton))
@@ -3676,12 +3672,6 @@ struct AIChatView: View {
             macHandoffPrompt = ReplyNextStep.macTaskText(prompt: request.prompt,
                                                          reply: WatchTextSanitizer.plain(request.reply))
             showMacSwitchDialog = true
-        case .paperclip:
-            // [G3] 只把两段文本交给 Paperclip 侧,由它的创建表单预填。
-            if !PaperclipHandoff.open(title: request.prompt,
-                                      description: ReplyNextStep.summary(WatchTextSanitizer.plain(request.reply))) {
-                LeoHaptics.notification(.error)
-            }
         }
     }
 
@@ -3996,7 +3986,7 @@ struct AIChatView: View {
             // drawn in the rounded shape itself, so the host layer stays
             // clear. clipShape keeps children (text view, attachments)
             // inside the rounded rect.
-            // [F2] Same shell as home and Paperclip (LeoComposerChrome):
+            // [F2] Same shell as home (LeoComposerChrome):
             // 26pt corner, regular glass, and no more double shadow.
             // The chat composer floats over the UIKit message list with no
             // scroll-edge blur (home gets one from safeAreaBar), so bare glass
@@ -5301,7 +5291,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let isLocked: Bool
 
     let onNewChat: () -> Void
-    let onOpenPaperclip: () -> Void
     let onCompact: () -> Void
     let onClearChat: () -> Void
     let onForceSync: () -> Void
@@ -5411,8 +5400,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "New Chat"),
                      image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
-            UIAction(title: String(localized: "服务器任务"),
-                     image: UIImage(systemName: "network")) { _ in coordinator.parent.onOpenPaperclip() },
         ]))
 
         // [T-session-export] Whole-conversation export; disabled while empty.

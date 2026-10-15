@@ -42,7 +42,6 @@ extension Notification.Name {
 ///   leophoneagent://settings/brain                      (alias: archive)
 ///   leophoneagent://brain/connect?token=…[&scopes=…]     (资料库令牌,确认后存钥匙串)
 ///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
-///   leophoneagent://paperclip/issue/<id>[?company=<companyId>]   (opens the Paperclip workspace on that issue)
 ///   leophoneagent://shortcut-result?run=<runId>&status=success|error|cancel[&result=…]  (apple-shortcuts run callback)
 ///
 /// Unknown settings paths fall back to the Settings home rather than
@@ -74,17 +73,12 @@ enum DeepLinkRouter {
         }
         let coord = DeepLinkCoordinator.shared
 
-        // 以下每个入口打开的都是本机内容（对话、分享、闹钟、终端、藏宝阁、网页应用、设置）；
-        // 若停在服务器任务页，内容会在隐藏的本机页里打开，看起来像"没反应"。
-        // 只在参数有效、确实要导航时切回本机，无效链接不改变工作区。
         switch host {
         case "voice":
-            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startVoiceChat()
 
         // [T-widget-quick-tasks] Home Screen widget entries.
         case "new", "new_chat":
-            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startNewChat()
 
         case "quick-task", "quick_task":
@@ -93,20 +87,17 @@ enum DeepLinkRouter {
                 deepLinkLog.info("quick-task URL missing id")
                 return
             }
-            IOSExecutionBackend.selectLocal()
             QuickActionRouter.shared.startQuickTask(id: id)
 
         case "share":
             // Funnel through ShareCoordinator so any leftover
             // fullScreenCover (gallery / WebApp / camera) is dismissed
             // before the share UI tries to surface.
-            IOSExecutionBackend.selectLocal()
             shareCoordinator.raisePendingShare()
 
         case "views":
             // Only one view route today; future ones land here.
             if url.path == "/alarm" {
-                IOSExecutionBackend.selectLocal()
                 coord.showAlarmList = true
             }
 
@@ -115,20 +106,17 @@ enum DeepLinkRouter {
             // 只预填、不执行:去掉换行和其它控制字符,链接里的 %0A 不能替你按回车。
             coord.terminalInitCommand = DeepLinkSafety.terminalPrefill(
                 components?.queryItems?.first(where: { $0.name == "init_command" })?.value)
-            IOSExecutionBackend.selectLocal()
             coord.showTerminal = true
 
         case "collections", "treasury":
-            IOSExecutionBackend.selectLocal()
             coord.pendingCollections = true
 
         // [V-rec] 录音:打开列表 / 正在录的页面 / 导入分享来的音频。链接永远不会替你开始录音。
         case "recordings", "recording":
-            IOSExecutionBackend.selectLocal()
             RecordingPresenter.handleDeepLink(path: url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
 
         case "open":
-            if handleWebAppLauncherReturn(url: url) { IOSExecutionBackend.selectLocal() }
+            _ = handleWebAppLauncherReturn(url: url)
 
         case "session", "sessions":
             // `session/<id>` (legacy singular) and `sessions/<id>` (canonical,
@@ -149,8 +137,6 @@ enum DeepLinkRouter {
                     deepLinkLog.info("\(host) URL for unknown session — ignored")
                     return
                 }
-                // Select the destination workspace only after the session is admitted.
-                IOSExecutionBackend.selectLocal()
                 NotificationNavigationStore.shared.setPending(id)
                 NotificationCenter.default.post(
                     name: .openSessionFromIntent,
@@ -160,25 +146,13 @@ enum DeepLinkRouter {
             }
 
         case "settings":
-            IOSExecutionBackend.selectLocal()
             handleSettings(url: url, coord: coord)
 
         // [T-brain] leobot://brain/connect?token=… —— 令牌只暂存,到设置 › 资料库确认后才写进钥匙串。
         // 日志不带 URL(令牌在查询串里)。
         case "brain":
-            IOSExecutionBackend.selectLocal()
             _ = BrainStore.shared.receiveDeepLink(url)
             coord.pendingSettingsTarget = .brain
-
-        // [G7] 服务器任务：切到 Paperclip 工作区并打开该工单（通知、灵动岛、Spotlight 都走这里）。
-        // 无效链接不改变工作区。
-        case PaperclipDeepLink.host:
-            guard let target = PaperclipDeepLink.parse(url) else {
-                deepLinkLog.info("paperclip URL invalid")
-                return
-            }
-            IOSExecutionBackend.selectPaperclip()
-            PaperclipNavigationInbox.shared.pending = target
 
         // [C1] 快捷指令 x-success / x-error / x-cancel 回调(通常已在 AppURLEntry 处理)。
         case ShortcutCallbackStore.callbackHost:

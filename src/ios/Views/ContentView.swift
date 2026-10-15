@@ -391,12 +391,6 @@ struct ContentView: View {
     /// [F-mac-fleet-advanced] Mac 舰队默认关闭:首页「Mac 进行中」、Mac 控制台入口跟着隐藏。
     /// 通知点进 Mac 任务(openMacSession)不看这个开关。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
-    @AppStorage("leo.ios.executionBackend.v1") private var executionBackend = IOSExecutionBackend.local.rawValue
-    // Empty means home; a nonempty value is the session that opened Paperclip.
-    // The backend is app-wide; its return bookmark must survive a process
-    // termination, even before UIKit has saved the scene restoration state.
-    @AppStorage("leo.paperclip.localReturnSession.v1") private var paperclipReturnSession = ""
-    @AppStorage("leo.paperclip.localReturnPending.v1") private var paperclipReturnPending = false
     @AppStorage("leo.torchOn") private var torchOn = false
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
@@ -847,8 +841,6 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent)) { note in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
-                // 通知、Siri/快捷指令、Spotlight、时间线打开的都是本机会话；停留在隐藏的服务器任务页等于没打开。
-                executionBackend = IOSExecutionBackend.local.rawValue
                 if let mac = note.userInfo as? [String: String], mac["macSessionId"] != nil {
                     NotificationNavigationStore.shared.markHandled()
                     // The console is a presentation too: let a closing sheet finish first.
@@ -1060,10 +1052,7 @@ struct ContentView: View {
             .task {
                 // A tab becoming visible is not a new app launch. Reapplying the
                 // launch-screen preference here replaced the preserved route/draft.
-                guard !didInitialLoad else {
-                    if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
-                    return
-                }
+                guard !didInitialLoad else { return }
                 LeoPerf.coldFirstFrame()
                 sessions = await ChatStore.shared.listSessions()
                 LeoPerf.coldStep("listLoaded")
@@ -1132,16 +1121,6 @@ struct ContentView: View {
                     var tx = Transaction()
                     tx.disablesAnimations = true
                     withTransaction(tx) { openSession(Self.makeNewSessionId()) }
-                } else if paperclipReturnPending {
-                    // Returning after a cold start honors the originating window,
-                    // before any launch-screen default. A deleted session returns home.
-                    let target = paperclipReturnSession
-                    if !target.isEmpty,
-                       Self.isNewSessionId(target) || sessions.contains(where: { $0.id == target }) {
-                        var tx = Transaction()
-                        tx.disablesAnimations = true
-                        withTransaction(tx) { openSession(target) }
-                    }
                 } else {
                     // No share — normal launch screen behavior
                     // [T-restore-last-screen] 退后台时记的那一页(MinisApp .background 写入)。
@@ -1188,21 +1167,8 @@ struct ContentView: View {
                 // [WP8] Landed on home: cold ends when the list is on screen.
                 // A chat that opened instead ends it at inputReady.
                 if onScreenSessionId == nil, activeToolSheet == nil { LeoPerf.coldHomeReady() }
-                if executionBackend == IOSExecutionBackend.local.rawValue { paperclipReturnPending = false }
                 fetchAlarmsIfNeeded()
                 await refreshRemoteDeviceSessions()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("leo.openPaperclipFromChat"))) { _ in
-                rememberPaperclipReturnLocation()
-                executionBackend = IOSExecutionBackend.paperclip.rawValue
-            }
-            .onChange(of: executionBackend) { old, new in
-                if old == IOSExecutionBackend.local.rawValue,
-                   new == IOSExecutionBackend.paperclip.rawValue, didInitialLoad {
-                    rememberPaperclipReturnLocation()
-                } else if new == IOSExecutionBackend.local.rawValue, didInitialLoad {
-                    paperclipReturnPending = false
-                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidFetchChanges)) { _ in
                 // [T-ios-state-publish-offmain-crash] cloud-sync fetch fires off-main;
@@ -2567,19 +2533,6 @@ struct ContentView: View {
                 .accessibilityLabel(Text("设置"))
             }
         }
-        ToolbarItem(placement: .topBarLeading) {
-            if !isSelecting {
-                Button {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    rememberPaperclipReturnLocation()
-                    executionBackend = IOSExecutionBackend.paperclip.rawValue
-                } label: {
-                    Image(systemName: "network")
-                }
-                .accessibilityLabel("服务器任务")
-                .accessibilityIdentifier("paperclip.openWorkspace")
-            }
-        }
         // [T-home-simplify-1.41] iPhone 标题栏只留:设置、搜索、藏宝阁。
         ToolbarItem(placement: .topBarTrailing) {
             // iPad 侧栏也给搜索按钮(以前靠浮动按钮行,现在那一行换成了输入栏)。
@@ -2758,8 +2711,6 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { handleNewChatRequest() }
             return
         }
-        // 快捷操作/小组件/控制中心的新对话在本机工作区打开，先切回本机。
-        executionBackend = IOSExecutionBackend.local.rawValue
         let newId = Self.makeNewSessionId()
         // Clear any stale flags left over from a prior quick-action
         // request that didn't run to completion (user backgrounded the
@@ -2845,17 +2796,6 @@ struct ContentView: View {
             currentStackSessionId = newId
         }
         QuickActionWorkflow.shared.attachTargetSession(newId)
-    }
-
-    private func rememberPaperclipReturnLocation() {
-        if let id = onScreenSessionId {
-            paperclipReturnSession = Self.isNewSessionId(id)
-                ? (newSessionRealId ?? ViewModelCache.shared.get(for: id)?.sessionId ?? id)
-                : id
-        } else {
-            paperclipReturnSession = ""
-        }
-        paperclipReturnPending = true
     }
 
     /// Opens a session in the appropriate layout mode.

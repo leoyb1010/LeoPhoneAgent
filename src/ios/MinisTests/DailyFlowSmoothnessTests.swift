@@ -50,15 +50,6 @@ final class DailyFlowSmoothnessTests: XCTestCase {
         XCTAssertFalse(view.contains("guard let item = CollectionStore.load().first(where: { $0.id == job.itemID }) else {"))
     }
 
-    /// 服务器任务: the live snippet keeps its identity (no `.id(snippet)` rebuild)
-    /// and the card animates only the snippet appearing.
-    func testPaperclipLiveSnippetKeepsIdentity() throws {
-        let thread = try source("Views/Paperclip/PaperclipThreadViews.swift")
-        XCTAssertFalse(thread.contains(".id(snippet)"))
-        XCTAssertFalse(thread.contains("value: progress?.lastAssistantSnippet)"))
-        XCTAssertTrue(thread.contains("value: progress?.lastAssistantSnippet?.isEmpty == false)"))
-    }
-
     /// The terminal re-laid out its text container on every redraw.
     func testTerminalAssignsContainerSizeOnlyOnChange() throws {
         let canvas = try source("iSH/Terminal/TerminalCanvasView.swift")

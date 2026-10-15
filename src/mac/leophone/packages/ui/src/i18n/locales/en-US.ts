@@ -941,7 +941,6 @@ const enUS: Record<string, string> = {
   "workspace.startFromScratch": "Start from scratch",
   "workspace.openFolder": "Open folder",
   "workspace.openPluginsSettings": "Plugin Marketplace",
-  "workspace.openServerTasks": "Server tasks",
   "workspace.backToWorkspace": "Back to workspace",
   "workspace.noActiveForNewTask": "There is no available workspace yet. Open a workspace first.",
   "workspaceSidebar.workspaces": "Tasks",

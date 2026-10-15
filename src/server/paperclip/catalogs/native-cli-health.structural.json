@@ -1,8 +1,0 @@
-[
-  {
-    "file": "ui/src/api/health.ts",
-    "from": "  localAiLoginSupported?: boolean;",
-    "to": "  localAiLoginSupported?: boolean;\n  nativeAdapterLoginSupported?: boolean;",
-    "expected": 1
-  }
-]

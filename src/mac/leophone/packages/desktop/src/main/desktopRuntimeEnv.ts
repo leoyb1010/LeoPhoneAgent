@@ -64,8 +64,8 @@ export const runtimeApplicationName =
   runtimeApplicationNameOverride ??
   (isLocalDevelopmentRuntime ? "LeoBot Dev" : isPreviewPackagedRuntime ? "LeoBot Preview" : "LeoBot");
 // [leo] userData 目录名钉在改名前的 LeoPhoneAgent,不跟显示名走:
-// `~/Library/Application Support/LeoPhoneAgent` 里有 localStorage(含工作区模式)、
-// Paperclip 会话 Cookie、窗口状态和单实例锁,改名升级后必须原样接上。
+// `~/Library/Application Support/LeoPhoneAgent` 里有 localStorage、
+// 窗口状态和单实例锁,改名升级后必须原样接上。
 const runtimeDataDirName =
   runtimeApplicationNameOverride ??
   (isLocalDevelopmentRuntime

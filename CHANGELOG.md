@@ -1,5 +1,13 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.72.0 (170) / Mac 1.10.0 · 下架服务器任务（Paperclip）、Mac 图标放大 - 2026-10-15
+
+- iOS：删除 `Agent/Paperclip`、`Views/Paperclip`、灵动岛小组件与 ActivityKit 属性共 19 个文件和 4 个测试文件；`IOSExecutionBackend` 与工作区切换整体移除，App 根视图直接是 `ContentView`；清掉首页按钮、对话菜单、回复「下一步」（菜单 5 → 4 项）、设置入口、深链 `leophoneagent://paperclip/…`、Spotlight / 通知跳转、3 个 App Shortcuts 与 Siri 说明。新增 `PaperclipRetirement`：首次启动清 `leo.paperclip.*` 与旧工作区开关、每个服务器的 `WKWebsiteDataStore`、Spotlight 域与 `paperclip.*` 通知（只跑一次）。
+- Mac：删除 services / ui / desktop main 的 Paperclip 模块、共享协议、IPC 通道与预加载桥、工作区模式切换和服务器视图；侧栏按钮、⌘K 命令、设置项 `paperclipPreferences`（旧设置照常解析，未知键被丢弃）一并移除；启动时清掉 `leo-workspace-mode`。
+- Mac 图标：机器人在 824px 底板上从约 51% 放大到 68%（与 iOS 同源），底板轮廓与配色不变；`icon.png` / `icon.icns` / 安装盘图标 / `icons/*` 全套重出。
+- 仓库：移除 `src/server/paperclip` 发行层、`scripts/paperclip-runtime`、`scripts/native-paperclip-audit`、两份 Paperclip 契约审计、`IOSWorkspaceDeepLinkSmoke.py`、`docs/paperclip`，CI 去掉 3 个 Paperclip 任务和 Mac 质量任务里的 4 条 Paperclip 测试；README / 第三方许可同步。
+- Mac mini：停用并移除 Paperclip 服务与隧道，数据备份后移入外置盘废纸篓（见本次会话记录）。
+
 ## iOS 1.71.0 (169) · 邮件操控与监控、内置技能、默认 MCP - 2026-10-15
 
 - 邮件写操作（新工具 `mail_update` / `mail_draft` / `mail_send`）：IMAP 标记、星标、移动（MOVE，或仅在 UIDPLUS 下 COPY + `UID EXPUNGE`，从不用全局 EXPUNGE）、移到废纸篓 / 归档（按 RFC 6154 特殊用途找文件夹）、APPEND 存草稿；SMTP 发信（`URLSessionStreamTask`，465 隐式 TLS / 587 STARTTLS，服务器不提供 STARTTLS 时拒绝登录），发出后非 Gmail / Outlook 存一份到「已发送」，回复会串上 In-Reply-To / References 并给原信标 `\Answered`。新增 `MailComposer`（RFC 2047 编码头、base64 正文、拒绝头注入、密送只进信封）。

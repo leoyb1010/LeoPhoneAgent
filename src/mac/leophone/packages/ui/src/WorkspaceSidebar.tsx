@@ -14,7 +14,6 @@ import {
 import {
   Archive,
   Blocks,
-  Paperclip,
   CalendarClock,
   Clock3,
   Cloud,
@@ -305,7 +304,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
-  const openServerWorkspace = usePlatform().openServerWorkspace;
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -1302,19 +1300,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
               <Blocks className="size-4" />
               {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
             </Button>
-            {/* [leo] 服务器任务(Paperclip)是本机工作台里的一个入口;切过去后那边有「返回本机工作台」。 */}
-            {openServerWorkspace ? (
-              <Button
-                variant="ghost"
-                onClick={openServerWorkspace}
-                data-icon="inline-start"
-                data-testid="server-tasks-sidebar-open"
-                className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-              >
-                <Paperclip className="size-4" />
-                {intl.formatMessage({ id: "workspace.openServerTasks" })}
-              </Button>
-            ) : null}
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col">

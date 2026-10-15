@@ -1,15 +1,14 @@
 import SwiftUI
 
-// [F2] One composer shell for home, chat and Paperclip.
+// [F2] One composer shell for home and chat.
 //
 // Each composer keeps its own content slot (home: execution target + model,
-// chat: model capsule + tools, Paperclip: agent picker); only the outside is
+// chat: model capsule + tools); only the outside is
 // shared: the 26pt continuous corner, the regular glass (no extra shadow —
 // glass already separates itself from the content scrolling under it) and the
 // 36pt round controls inside a 44pt hit target.
 //
-// Depends on nothing but SwiftUI and LeoDesignSystem, so the standalone
-// Paperclip audit host (scripts/native-paperclip-audit) compiles it too.
+// Depends on nothing but SwiftUI and LeoDesignSystem.
 
 enum LeoComposerMetrics {
     /// Visible diameter of the round send / mic / plus controls.

@@ -2,9 +2,9 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.71.0%20(169)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.72.0%20(170)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS source](https://img.shields.io/badge/macOS_source-1.9.0-7C3AED.svg)](src/mac/leophone/package.json)
+[![macOS source](https://img.shields.io/badge/macOS_source-1.10.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -23,29 +23,10 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
 
-## Paperclip 对话工作区（iOS 1.59.0 / Mac 1.8.0）
+## 服务器任务（Paperclip）已下架
 
-吸收 [Paperclip](https://github.com/paperclipai/paperclip) 的公司、Agent、任务、审批与运行记录能力。服务器持有任务和执行状态，客户端通过原生工作区连接独立部署的 HTTPS 服务；管理员使用服务器的人类账号登录，不把 Agent API Key 当作个人登录凭据。
-
-- iOS 默认保留本机工作区，首页或对话菜单的「服务器任务」进入 Paperclip；返回恢复进入前的首页或对话，书签持久保存。添加服务器地址、登录、选择公司后，可搜索/分页浏览任务会话，通过底部输入创建任务、回复、改状态、查看审批与运行日志；服务器设置独立管理。切换不会迁移已有本机会话。此版本不提供 iOS 原生运行取消、附件下载或文档/工作产物管理。
-- Mac 默认直接进入服务器工作区，不等待本机 Host 启动；提供公司与任务侧栏、真实作者消息流、固定输入区和可收起的属性检查器；配置独立管理，可处理审批、运行日志和取消，以及受控下载任务附件。原本机工作区通过明确的本机恢复模式进入。
-- 每次写操作绑定服务器、公司与用户，处理注销、换账号、超时和结果未知；不把不确定写入自动重发。创建草稿保留内容和回执，超过服务器幂等窗口后需要人工核对。
-
-部署使用上游独立服务器和数据库，建议仅监听回环地址并通过现有 HTTPS 入口访问；完成首位管理员设置后关闭公开注册。原生入口、隔离会话、权限边界与部署验证范围见 [Mac 工作区说明](src/mac/leophone/docs/specs/paperclip-server-workspace.md) 与 [iOS 原生测试说明](scripts/native-paperclip-audit/README.md)；本次完整验证范围、失败通道与实机边界见 [交付证据](docs/paperclip/DELIVERY_20261004.md)。
-
-Paperclip 发行层 1.1.0 接入 Mac 原生 CLI 状态与隔离网页授权：已有登录、重新授权与个人连接分别处理，管理员可通过现有 HTTPS 域名配置，无需切换端口地址。 实际提供商验收边界见 [原生 CLI 授权交付记录](docs/paperclip/NATIVE_CLI_AUTH_20261004.md)。
-
-Paperclip 发行层 1.1.7 修复智能体配置页未保存修改被刷新清空、Hermes 环境测试误报；智能体改走本机回环地址访问服务，发版时自动改指 CLI 技能链接。
-
-Paperclip 发行层 1.1.6 依据全面审计加固：智能体与 CLI 子进程不继承服务器私密变量、安全响应头、日志降噪与轮转、优雅发布与自动回滚、库级口令认证；线上已部署，范围与剩余边界见 [整改记录](docs/AUDIT_REMEDIATION_20261005.md)。
-
-Paperclip 发行层 1.1.5 增加跨账号请求与草稿隔离、权限感知分页、唯一备份文件和真实模型自检；两轮全面审计的范围、各轮证据和剩余边界见 [两轮审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
-
-Paperclip 发行层 1.1.3 完成服务器配置、任务、实时更新、费用、权限与存储审计：修复 Cursor 模型发现阻塞和非法模型重试、OpenCode Go 默认授权与隐藏密钥残留、Hermes 默认模型覆盖、成本提交后的刷新及未定价显示，以及 macOS 内置数据库启动。具体实测、待本人授权与依赖风险边界见 [服务器审计记录](docs/paperclip/SERVER_AUDIT_20261004.md)。
-
-Paperclip 发行层 1.1.1 修复 OpenCode 新建配置自动绑定 OpenRouter 的问题：CLI 与模型提供商独立选择，OpenRouter 连接管理需明确选择。Mini 已补齐九种 CLI 的可执行入口；Gemini 网页 OAuth 成功后仍收到 Google 服务资格拒绝，不能视为模型连接成功。验证范围见 [CLI 安装与提供商选择交付记录](docs/paperclip/CLI_PROVIDER_FIX_20261004.md)。
-
-Mac mini 原生服务的 CLI 与登录状态属于服务器用户；远端浏览器可配置智能体并运行连接测试。部署路径与代理继承见 [服务器部署手册](src/server/paperclip/docs/DEPLOYMENT.zh-CN.md)。 本次 CLI 运行、中文菜单与外接盘迁移验证范围见 [服务器修复交付记录](docs/paperclip/AGENT_RUNTIME_FIX_20261004.md)。
+iOS 1.72.0 / Mac 1.10.0 起移除了服务器任务（Paperclip）工作区：多模型能力在端侧与 Mac 上已经覆盖，
+不再维护单独的服务器。代码与审计记录保留在 git 历史里（最后包含它的提交是 `0f1e599a`）。
 
 ## 开发 Agent 先读
 
@@ -187,7 +168,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.71.0 (169)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.72.0 (170)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-15 1.72.0 / Mac 1.10.0：下架服务器任务（Paperclip），升级自动清理残留；Mac 图标机器人放大。
 - 2026-10-15 1.71.0：邮件可标记 / 移动 / 存草稿 / 发信（可按邮箱始终允许）与邮件监控；开箱内置 5 个技能；默认接好 Exa / Context7 / DeepWiki，MCP 目录清理。
 - 2026-10-14 1.70.0：只聊天不再启动终端内核；日志去掉输入框、命令与回复片段并清洗旧日志；折叠回复的 Copy Markdown 复制全文；补译 57 条文案。
 - 2026-10-14 1.69.0：修复 Claude Sonnet 5.5 / Opus 5.5 / Fable 关闭思考被拒；终端内核按需启动并离开主线程；失效挂载书签退避；超长回复折叠；代码块按语法着色；Leo Link 失败给出明确原因和主按钮；日志不再记录回复原文。
@@ -511,7 +493,5 @@ pnpm build:bootstrap
 
 分发修改后的二进制须按各自许可证提供对应源码并保留声明。LeoPhoneAgent /
 LeoAgent 名称与图标仅标识本 fork。
-
-Paperclip 服务器发行层 1.1.5 的两轮审计、故障修复与实测边界见 [审计记录](docs/paperclip/TWO_ROUND_AUDIT_20261005.md)。
 
 iOS 1.53.1（146）本次完整审计记录见 [验证范围与结果](docs/IOS_FULL_AUDIT_20261005.md)。

@@ -13,6 +13,14 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.10.0",
+    date: "2026-10-15",
+    items: [
+      "新图标：中间的机器人放大，和 iPhone 版一致，程序坞和启动台里更醒目。",
+      "下架「服务器任务」（Paperclip）：侧栏按钮、⌘K 命令和服务器工作台都已移除，Mac 只保留本机工作台；以前停在服务器视图的窗口会直接回到本机。",
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-10-14",
     items: [

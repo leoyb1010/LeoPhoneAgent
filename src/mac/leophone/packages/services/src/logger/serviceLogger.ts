@@ -24,7 +24,7 @@ export function createServiceLogger(
     isDebugEnabled?: boolean | (() => boolean);
   },
 ): ServiceLogger {
-  // Paperclip 工作台服务运行在没有 Node process 全局的 renderer 中；无 pid 时只省略前缀里的 pid。
+  // 服务可能运行在没有 Node process 全局的 renderer 中；无 pid 时只省略前缀里的 pid。
   const pid = options?.pid ?? (typeof process === "undefined" ? undefined : process.pid);
   const sink = options?.sink ?? console;
   const debugOption = options?.isDebugEnabled;

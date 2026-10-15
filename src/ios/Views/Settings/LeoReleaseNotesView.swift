@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.72.0",
+            date: "2026-10-15",
+            title: "下架服务器任务，专注本机和 Mac",
+            highlights: [
+                "「服务器任务」（Paperclip）下架：首页按钮、对话菜单、回复「下一步」里的「转为服务器任务」、设置入口、Siri 短语和灵动岛卡片都已移除。多模型能力在本机和 Mac 上已经覆盖。",
+                "升级后自动清掉它留下的东西：服务器配置、网页登录数据、Spotlight 里的工单和旧通知。",
+                "空出 3 个 Siri 快捷指令名额。"
+            ]
+        ),
+        LeoRelease(
             version: "1.71.0",
             date: "2026-10-15",
             title: "邮件能管能发，开箱就带好用的技能",

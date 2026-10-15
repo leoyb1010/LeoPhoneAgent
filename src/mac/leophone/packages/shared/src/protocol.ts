@@ -366,7 +366,6 @@ export interface AppSettings {
   settingsSyncFirstRunPromptHandled?: boolean;
   /** 设置页里的临时 endpoint override；正式/测试默认 base url 由 ZCODE_BASE_URL env 管理。 */
   zcodeEndpointOrigin?: string;
-  paperclipPreferences?: import("./paperclip.js").PaperclipPreferences;
   /** 模型选择器「常用」：置顶模型的编码值（encodeCustomModelValue），按置顶顺序，最多 8 个。 */
   modelPickerPinnedValues?: string[];
   /** 模型选择器「最近使用」：实际发送过的模型编码值，新的在前；只由 Composer 发送成功后写入。 */

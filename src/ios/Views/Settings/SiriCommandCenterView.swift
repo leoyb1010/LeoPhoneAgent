@@ -18,13 +18,6 @@ struct SiriCommandCenterView: View {
     /// [F-mac-fleet-advanced] Mac 舰队默认关闭;打开后才显示 Mac 相关的说明。
     @AppStorage(MacFleetFeature.defaultsKey) private var macFleetEnabled = false
 
-    // 别名 LB 已注册(INAlternativeAppNames):短语里的 app 名说「LB」
-    // 即可,全名 LeoPhoneAgent 同样有效。
-    private let paperclipPhrases: [Phrase] = [
-        Phrase(say: "LB查工单进度", does: "选一个 Paperclip 工单,念出状态和智能体最近一条回复"),
-        Phrase(say: "LB读工单结果", does: "读取工单结果全文,可交给快捷指令的下一个动作"),
-    ]
-
     /// Mac 动作不再占 Siri 短语名额(上限 10),在快捷指令 App 的动作列表里。
     private let fleetActions: [Phrase] = [
         Phrase(say: "指挥一台 Mac", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
@@ -55,10 +48,6 @@ struct SiriCommandCenterView: View {
 
             Section("对话与任务") {
                 ForEach(chatPhrases) { phraseRow($0) }
-            }
-
-            Section("服务器任务(Paperclip)") {
-                ForEach(paperclipPhrases) { phraseRow($0) }
             }
 
             if macFleetEnabled {
@@ -113,7 +102,6 @@ struct SiriCommandCenterView: View {
                         Text("• 「到达家」→ Mac 任务汇报")
                         Text("• 「离开公司」→ Mac 任务汇报")
                     }
-                    Text("• 「到达家」→ 查 Paperclip 工单进度")
                     Text("快捷指令 App → 自动化 → 新建,动作里搜 LeoBot。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)

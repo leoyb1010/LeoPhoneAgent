@@ -139,8 +139,6 @@ __pycache__/
 # Isolated phone-link audit browser artifacts
 src/mac/leophone/audit-phone-link-results/
 
-# Isolated Paperclip HTTP smoke evidence, never production configuration
-/paperclip-runtime-results/
 
 # Dependency / build output that must never be committed (no tracked dist/ exists).
 node_modules/

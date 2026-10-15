@@ -7,8 +7,7 @@
         ".release-it.mjs",
         ".vscode/*.mjs",
         "scripts/check-workspace-freshness.mjs",
-        "scripts/mise-run.mjs",
-        "scripts/paperclip/typecheck-transport.mjs"
+        "scripts/mise-run.mjs"
       ]
     },
     "packages/desktop": {
@@ -26,9 +25,7 @@
     "packages/services": {
       "entry": [
         "src/index.ts",
-        "src/storage/module.ts",
-        "src/paperclip/module.ts",
-        "src/paperclip/contract.example.ts"
+        "src/storage/module.ts"
       ]
     },
     "apps/zcode-cli/packages/browser-use-plugin": {

@@ -154,22 +154,6 @@ final class CoreAuditFixTests: XCTestCase {
         XCTAssertNil(AnthropicRequestSettingsRegistry.extract(fromBody: try JSONSerialization.data(withJSONObject: ["model": "x"])))
     }
 
-    // MARK: Paperclip Spotlight
-
-    /// 已完成 / 已取消的工单不进系统搜索;关单、切公司会改变签名,从而触发整体重建。
-    func testPaperclipSpotlightIndexesOpenIssuesOnly() throws {
-        func issue(_ id: String, _ status: String, company: String = "c") throws -> PaperclipIssue {
-            try JSONDecoder().decode(PaperclipIssue.self, from: Data(
-                #"{"id":"\#(id)","companyId":"\#(company)","title":"T","status":"\#(status)","priority":"medium"}"#.utf8))
-        }
-        let issues = [try issue("a", "todo"), try issue("b", "done"), try issue("c", "cancelled"), try issue("d", "in_review")]
-        XCTAssertEqual(PaperclipSpotlightIndexer.indexable(issues).map(\.id), ["a", "d"])
-        XCTAssertNotEqual(PaperclipSpotlightIndexer.signature([try issue("a", "todo")]),
-                          PaperclipSpotlightIndexer.signature([try issue("a", "done")]))
-        XCTAssertNotEqual(PaperclipSpotlightIndexer.signature([try issue("a", "todo")]),
-                          PaperclipSpotlightIndexer.signature([try issue("a", "todo", company: "other")]))
-    }
-
     // MARK: 系统 TTS
 
     func testSystemSynthesisTimeoutScalesAndIsCapped() {
