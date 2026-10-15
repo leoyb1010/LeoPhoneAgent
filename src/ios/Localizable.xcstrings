@@ -131660,6 +131660,732 @@
           }
         }
       }
+    },
+    "(无主题)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(No subject)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(无主题)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(無主旨)"
+          }
+        }
+      }
+    },
+    "两项都留空就是所有新邮件。多个关键词命中任意一个即可。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave both empty to match all new mail. Any one of several keywords is enough."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两项都留空就是所有新邮件。多个关键词命中任意一个即可。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "兩項都留空就是所有新郵件。多個關鍵字命中任一個即可。"
+          }
+        }
+      }
+    },
+    "主题包含(逗号分隔,留空不限)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subject contains (comma-separated, empty = any)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题包含(逗号分隔,留空不限)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主旨包含(逗號分隔,留空不限)"
+          }
+        }
+      }
+    },
+    "主题含「%@」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subject has “%@”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题含「%@」"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主旨含「%@」"
+          }
+        }
+      }
+    },
+    "也可以在对话里说「盯着老板发来的邮件,来了提醒我」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can also say in chat: “Watch for mail from my boss and tell me.”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也可以在对话里说「盯着老板发来的邮件,来了提醒我」。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也可以在對話裡說「盯著老闆寄來的郵件,來了提醒我」。"
+          }
+        }
+      }
+    },
+    "发件人包含(逗号分隔,留空不限)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sender contains (comma-separated, empty = any)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发件人包含(逗号分隔,留空不限)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄件人包含(逗號分隔,留空不限)"
+          }
+        }
+      }
+    },
+    "发件人含「%@」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sender has “%@”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发件人含「%@」"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄件人含「%@」"
+          }
+        }
+      }
+    },
+    "发信服务器(SMTP)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outgoing server (SMTP)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发信服务器(SMTP)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄信伺服器(SMTP)"
+          }
+        }
+      }
+    },
+    "发信服务器(留空用 %@:%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outgoing server (empty = %@:%lld)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发信服务器(留空用 %@:%lld)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄信伺服器(留空用 %@:%lld)"
+          }
+        }
+      }
+    },
+    "发信端口(465 或 587,留空自动)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outgoing port (465 or 587, empty = auto)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发信端口(465 或 587,留空自动)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄信埠(465 或 587,留空自動)"
+          }
+        }
+      }
+    },
+    "发通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发通知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發通知"
+          }
+        }
+      }
+    },
+    "启用 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟用 %@"
+          }
+        }
+      }
+    },
+    "始终允许（此邮箱）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always Allow (This Mailbox)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终允许（此邮箱）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一律允許(此信箱)"
+          }
+        }
+      }
+    },
+    "所有新邮件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All new mail"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有新邮件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有新郵件"
+          }
+        }
+      }
+    },
+    "所有邮箱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All mailboxes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有邮箱"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有信箱"
+          }
+        }
+      }
+    },
+    "打开「触发自动化」后,可以在 设置 → 自动化 里用情境信号「新邮件」或「%@」安排要做的事。自动化回合可以读信,但不能发信、改信。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With “Trigger automation” on, use the context signal “新邮件” or “%@” in Settings → Automation. Automation runs can read mail but cannot send or change it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开「触发自动化」后,可以在 设置 → 自动化 里用情境信号「新邮件」或「%@」安排要做的事。自动化回合可以读信,但不能发信、改信。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開「觸發自動化」後,可以在 設定 → 自動化 裡用情境訊號「新邮件」或「%@」安排要做的事。自動化回合可以讀信,但不能寄信、改信。"
+          }
+        }
+      }
+    },
+    "按发件人或主题盯着收件箱,来了符合条件的新邮件就通知你。打开 App 时和后台都会检查(后台频率由 iOS 决定,大约 15 分钟以上一次),不是实时推送。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch the inbox by sender or subject and get notified about matching new mail. LeoBot checks when the app opens and in the background (iOS decides how often, roughly every 15+ minutes). This is not instant push."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按发件人或主题盯着收件箱,来了符合条件的新邮件就通知你。打开 App 时和后台都会检查(后台频率由 iOS 决定,大约 15 分钟以上一次),不是实时推送。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按寄件人或主旨盯著收件匣,來了符合條件的新郵件就通知你。打開 App 時和背景都會檢查(背景頻率由 iOS 決定,大約 15 分鐘以上一次),不是即時推播。"
+          }
+        }
+      }
+    },
+    "授权码只保存在这台设备的钥匙串里,不会同步、不会出现在日志里。Agent 只在你提到邮件时才去读;标记、移动、存草稿、发信会先问你,可以对某个邮箱选「始终允许」。不会永久删除邮件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwords stay in this device's Keychain: never synced, never logged. The agent reads mail only when you mention it; marking, moving, saving drafts and sending ask you first, and you can choose “Always Allow” per mailbox. Mail is never permanently deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权码只保存在这台设备的钥匙串里,不会同步、不会出现在日志里。Agent 只在你提到邮件时才去读;标记、移动、存草稿、发信会先问你,可以对某个邮箱选「始终允许」。不会永久删除邮件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授權碼只儲存在這台裝置的鑰匙圈裡,不會同步、不會出現在日誌裡。Agent 只在你提到郵件時才去讀;標記、移動、存草稿、寄信會先問你,可以對某個信箱選「一律允許」。不會永久刪除郵件。"
+          }
+        }
+      }
+    },
+    "撤销后,下次改信或发信会重新问你。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After revoking, LeoBot asks again the next time it changes or sends mail."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销后,下次改信或发信会重新问你。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤銷後,下次改信或寄信會重新問你。"
+          }
+        }
+      }
+    },
+    "撤销长期允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoke Always Allow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销长期允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤銷一律允許"
+          }
+        }
+      }
+    },
+    "收信一律 SSL/TLS 直连(端口 993)。发信服务器留空时按邮箱服务自动选择;465 走 SSL,587 走 STARTTLS,都不会明文发送密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incoming mail always uses SSL/TLS (port 993). Leave the outgoing server empty to pick it from the provider; 465 uses SSL, 587 uses STARTTLS. Passwords are never sent in plain text."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收信一律 SSL/TLS 直连(端口 993)。发信服务器留空时按邮箱服务自动选择;465 走 SSL,587 走 STARTTLS,都不会明文发送密码。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收信一律 SSL/TLS 直連(埠 993)。寄信伺服器留空時按信箱服務自動選擇;465 走 SSL,587 走 STARTTLS,都不會明文傳送密碼。"
+          }
+        }
+      }
+    },
+    "新邮件 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New mail · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新邮件 · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新郵件 · %@"
+          }
+        }
+      }
+    },
+    "添加规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Rule"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加规则"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增規則"
+          }
+        }
+      }
+    },
+    "立即检查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即检查"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即檢查"
+          }
+        }
+      }
+    },
+    "第一次检查只记下现有邮件,不会把旧邮件当成新邮件提醒。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The first check only records existing mail; old messages are never reported as new."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一次检查只记下现有邮件,不会把旧邮件当成新邮件提醒。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一次檢查只記下現有郵件,不會把舊郵件當成新郵件提醒。"
+          }
+        }
+      }
+    },
+    "规则名称(比如「老板」)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rule name (e.g. “Boss”)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "规则名称(比如「老板」)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "規則名稱(例如「老闆」)"
+          }
+        }
+      }
+    },
+    "触发自动化": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trigger automation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "触发自动化"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "觸發自動化"
+          }
+        }
+      }
+    },
+    "还没有监控规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No watch rules yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有监控规则"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有監控規則"
+          }
+        }
+      }
+    },
+    "邮件监控": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail Watch"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮件监控"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "郵件監控"
+          }
+        }
+      }
+    },
+    "邮箱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mailbox"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮箱"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信箱"
+          }
+        }
+      }
+    },
+    "长期允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always Allowed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长期允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一律允許"
+          }
+        }
+      }
+    },
+    "发送邮件:始终允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send mail: always allowed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送邮件:始终允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寄送郵件:一律允許"
+          }
+        }
+      }
+    },
+    "标记、移动、存草稿:始终允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark, move, save drafts: always allowed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标记、移动、存草稿:始终允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標記、移動、存草稿:一律允許"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

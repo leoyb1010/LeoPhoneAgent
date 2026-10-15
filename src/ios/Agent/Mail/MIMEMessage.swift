@@ -33,6 +33,8 @@ struct MIMEMessage: Equatable {
     var cc: [MailAddress] = []
     var date: Date?
     var messageId: String = ""
+    /// [T-mail-write] References 头里的 Message-ID 链(回复时接在后面,邮件客户端才能串成一个会话)。
+    var references: [String] = []
     /// 正文纯文本(text/plain 优先,否则 text/html 去标签)。
     var text: String = ""
     var attachments: [MailAttachmentInfo] = []
@@ -177,6 +179,8 @@ struct MIMEMessage: Equatable {
         message.cc = parseAddresses(headers["cc"]?.joined(separator: ", ") ?? "")
         message.date = headers["date"]?.first.flatMap(parseDate)
         message.messageId = (headers["message-id"]?.first ?? "").trimmingCharacters(in: .whitespaces)
+        message.references = (headers["references"]?.joined(separator: " ") ?? "")
+            .split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init).filter { $0.hasPrefix("<") }
         var plain: [String] = []
         var html: [String] = []
         walkPart(headers: headers, body: bodyData, depth: 0, plain: &plain, html: &html, attachments: &message.attachments)

@@ -212,6 +212,13 @@ extension AIChatViewModel {
             toolArgs["command"] = prepared
         }
 
+        // [T-mail-always] 邮件按邮箱授权:先把 account 换成规范的邮箱地址(名字、前缀、省略都算同一个),
+        // 「始终允许(此邮箱)」才能每次命中;执行时用的也是这个地址。
+        if ["mail_update", "mail_draft", "mail_send"].contains(tu.name),
+           let email = await MailActions.canonicalAccount(toolArgs["account"]) {
+            toolArgs["account"] = email
+        }
+
         let argsJson: String = {
             if let data = try? JSONSerialization.data(withJSONObject: toolArgs),
                let str = String(data: data, encoding: .utf8) {
@@ -818,6 +825,21 @@ extension AIChatViewModel {
             case "mail_folders": result = await MailService.executeFolders(from: argsJson)
             case "mail_search": result = await MailService.executeSearch(from: argsJson)
             default: result = await MailService.executeRead(from: argsJson)
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
+        // [T-mail-write] 改信 / 草稿 / 发信已经过了确认闸;监控规则只改本机配置。
+        case "mail_update", "mail_draft", "mail_send", "mail_watch":
+            let result: (output: String, success: Bool)
+            switch tu.name {
+            case "mail_update": result = await MailActions.executeUpdate(from: argsJson)
+            case "mail_draft": result = await MailActions.executeDraft(from: argsJson)
+            case "mail_send": result = await MailActions.executeSend(from: argsJson)
+            default: result = await MailWatchTool.execute(from: argsJson)
             }
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                 messages[msgIdx].blocks[blockIdx].content = result.output

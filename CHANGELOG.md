@@ -1,5 +1,14 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.71.0 (169) · 邮件操控与监控、内置技能、默认 MCP - 2026-10-15
+
+- 邮件写操作（新工具 `mail_update` / `mail_draft` / `mail_send`）：IMAP 标记、星标、移动（MOVE，或仅在 UIDPLUS 下 COPY + `UID EXPUNGE`，从不用全局 EXPUNGE）、移到废纸篓 / 归档（按 RFC 6154 特殊用途找文件夹）、APPEND 存草稿；SMTP 发信（`URLSessionStreamTask`，465 隐式 TLS / 587 STARTTLS，服务器不提供 STARTTLS 时拒绝登录），发出后非 Gmail / Outlook 存一份到「已发送」，回复会串上 In-Reply-To / References 并给原信标 `\Answered`。新增 `MailComposer`（RFC 2047 编码头、base64 正文、拒绝头注入、密送只进信封）。
+- 确认闸新增 `mailWrite` / `mailSend`：按邮箱授权；新增「始终允许（此邮箱）」长期授权（`MailAlwaysAllow`，本机存储，邮箱设置页可撤销）；全自动不替用户批发信（长期允许后不再问）。情境 / 安静回合（含新邮件触发的自动化）禁用三个写工具。
+- 邮件监控（`mail_watch` 工具 + 设置页「邮件监控」）：规则按邮箱 / 发件人 / 主题关键词匹配；回前台（≥5 分钟）与 `BGAppRefreshTask`（`com.leoyuan.leophoneagent.mailwatch`，Info.plist 加 `fetch`）检查收件箱；游标 = UIDVALIDITY + 最大 UID，首次只建基线；命中发本地通知，可发出情境信号「新邮件」/「新邮件:规则名」。
+- 内置技能目录 `BundledSkills/`（folder reference）：humanizer-zh（MIT）、frontend-design（Apache-2.0）、pdf（改编自 openai/skills，Apache-2.0）、data-analyze（参考 knowledge-work-plugins，Apache-2.0）、leo-office（自研 MIT）。首启安装，`BundledSkillPlan` 决定安装 / 升级 / 跳过（用户删掉的不重装、同名用户技能不覆盖、版本按数字比较）。Anthropic 的 docx/pdf/xlsx/pptx 为专有许可，不打包。
+- 默认 MCP：首装种入 Exa、Context7、DeepWiki（免 Key，已实测 initialize 200），每台设备只种一次。目录移除智谱联网搜索（独立性红线）、飞书、支付宝；新增 GitHub（PAT 头）、Notion（OAuth）、Tavily、Jina Reader（`/v1`）。
+- 补 33 条新文案的 en / zh-Hant。
+
 ## iOS 1.70.0 (168) · 内核按需启动补齐、日志脱敏、Copy Markdown 全文、补译 - 2026-10-14
 
 - 发送 / 重试 / 继续不再调用 `ensureKernelBooted()`：纯对话一轮不碰 iSH；shell 工具、MCP、挂载各自经 `KernelBootManager` 按需启动。读 `/var/minis/mounts/…` 前先 `ensureMounted`（此前内核未起时挂载表为空，会落到会话回退路径读到假位置）。

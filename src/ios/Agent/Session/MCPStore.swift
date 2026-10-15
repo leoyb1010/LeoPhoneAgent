@@ -94,6 +94,38 @@ struct MCPServerConfig: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - [T-default-mcp] 默认开启的免 Key 远程 MCP
+
+/// 首装就开着、不用填任何 Key 的远程服务。都是 streamable-HTTP 端点,2026-10-15 实测 initialize 返回 200。
+/// 选择标准见计划页:手机上不起进程、可公开调用、和 App 原生能力不重复。
+enum DefaultMCPServers {
+    static let seededKey = "leo.mcp.defaultServersSeeded.v1"
+
+    static let all: [MCPServerConfig] = [
+        make(id: "exa", url: "https://mcp.exa.ai/mcp",
+             note: "Exa: web search and page content extraction. Use for current events and facts that need a live source."),
+        make(id: "context7", url: "https://mcp.context7.com/mcp",
+             note: "Context7: up-to-date documentation and code examples for open-source libraries and frameworks."),
+        make(id: "deepwiki", url: "https://mcp.deepwiki.com/mcp",
+             note: "DeepWiki: ask questions about any public GitHub repository (architecture, how a feature works)."),
+    ]
+
+    /// 现有服务器里还没有的默认项(按名字判断,大小写不敏感)。
+    static func missing(from existingIds: [String]) -> [MCPServerConfig] {
+        let existing = Set(existingIds.map { $0.lowercased() })
+        return all.filter { !existing.contains($0.id.lowercased()) }
+    }
+
+    static func config(id: String) -> MCPServerConfig? { all.first { $0.id == id } }
+
+    private static func make(id: String, url: String, note: String) -> MCPServerConfig {
+        var config = MCPServerConfig(id: id, enabled: true)
+        config.url = url
+        config.note = note
+        return config
+    }
+}
+
 // MARK: - MCPStore
 
 @MainActor
@@ -119,7 +151,21 @@ final class MCPStore: ObservableObject {
         openDatabase()
         createTables()
         load()
+        seedDefaultServersIfNeeded()
         scheduleLegacyRecordCleanupIfNeeded()
+    }
+
+    /// [T-default-mcp] 每台设备只种一次:把免 Key 的默认服务加进来(已存在同名的跳过)。
+    /// 之后用户删掉哪个就是哪个,不会被再加回来。
+    private func seedDefaultServersIfNeeded() {
+        let key = DefaultMCPServers.seededKey
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        let missing = DefaultMCPServers.missing(from: servers.map(\.id))
+        for config in missing { add(config) }
+        UserDefaults.standard.set(true, forKey: key)
+        if !missing.isEmpty {
+            AppLogger(category: "MCPStore").info("[Defaults] seeded \(missing.map(\.id).joined(separator: ","))")
+        }
     }
 
     deinit {

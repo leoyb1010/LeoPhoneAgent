@@ -445,11 +445,64 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
 
     private func installBundledSkills() {
         let bundledId = "skill-creator"
-        if let existing = skills.first(where: { $0.id == bundledId }) {
-            // Upgrade if the bundled version is newer
-            guard existing.version < Self.skillCreatorVersion else { return }
+        // Install, or upgrade if the bundled version is newer. (No early return:
+        // the bundled skill directories below must run either way.)
+        let existing = skills.first(where: { $0.id == bundledId })
+        if existing == nil || existing!.version < Self.skillCreatorVersion {
+            _ = try? importSkill(content: Self.skillCreatorContent, source: .bundled, replace: true)
         }
-        _ = try? importSkill(content: Self.skillCreatorContent, source: .bundled, replace: true)
+        installBundledSkillDirectories()
+    }
+
+    // MARK: - [T-bundled-skills] 随 App 打包的技能目录(BundledSkills/<技能>/SKILL.md + 脚本 + LICENSE)
+
+    /// 装过哪些内置技能(id → 版本)。用来区分「从没装过」和「用户删掉了」。每台设备各记各的。
+    nonisolated static let bundledLedgerKey = "leo.skills.bundledInstalled.v1"
+
+    private func installBundledSkillDirectories() {
+        guard let root = Bundle.main.url(forResource: "BundledSkills", withExtension: nil),
+              let dirs = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return }
+        var ledger = UserDefaults.standard.dictionary(forKey: Self.bundledLedgerKey) as? [String: String] ?? [:]
+        let log = AppLogger(category: "BundledSkills")
+        for dir in dirs.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let skillFile = dir.appendingPathComponent("SKILL.md")
+            guard let content = try? String(contentsOf: skillFile, encoding: .utf8) else { continue }
+            let parsed = Self.parse(skillMD: content)
+            let id = Self.slugify(parsed.name)
+            let installed = skills.first(where: { $0.id == id })
+            let plan = BundledSkillPlan.decide(bundledVersion: parsed.version,
+                                               installedVersion: installed?.version,
+                                               installedIsBundled: installed?.importSource == .bundled,
+                                               everInstalled: ledger[id] != nil)
+            guard plan == .install || plan == .upgrade else { continue }
+            do {
+                let skill = try importSkill(content: content, source: .bundled, replace: true)
+                for relative in collectRelativePaths(in: dir) where !relative.hasPrefix(".") {
+                    let data = try Data(contentsOf: dir.appendingPathComponent(relative))
+                    try writeSkillAsset(skillId: skill.id, relativePath: relative, data: data)
+                }
+                ledger[skill.id] = parsed.version
+                log.info("[Bundled] \(plan == .install ? "installed" : "upgraded") \(skill.id) \(parsed.version)")
+            } catch {
+                log.error("[Bundled] \(id) failed: \(error.localizedDescription)")
+            }
+        }
+        UserDefaults.standard.set(ledger, forKey: Self.bundledLedgerKey)
+    }
+
+    /// 把技能目录里的一个附带文件(脚本、LICENSE…)写进 App 侧和 rootfs 侧,并补 fakefs 元数据。
+    private func writeSkillAsset(skillId: String, relativePath: String, data: Data) throws {
+        let destFile = try SyncFileSafety.destination(root: skillsDir, relativePath: "\(skillId)/\(relativePath)")
+        try fm.createDirectory(at: destFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: destFile, options: .atomic)
+
+        let rootfsFile = try SyncFileSafety.destination(root: rootfsSkillsDir, relativePath: "\(skillId)/\(relativePath)")
+        try fm.createDirectory(at: rootfsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: rootfsFile, options: .atomic)
+
+        let linuxPath = "/var/minis/skills/\(skillId)/\(relativePath)"
+        ensureParentDirsInMetaDB(for: linuxPath)
+        ensureFakefsMetadata(for: linuxPath, isDirectory: false)
     }
 
     // MARK: - One-time Migration: re-sync skills with bundled files
@@ -768,17 +821,7 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
             if relativePath == "SKILL.md" { continue }
             if relativePath.hasPrefix(".") { continue }
 
-            let destFile = try SyncFileSafety.destination(root: skillsDir, relativePath: "\(skill.id)/\(relativePath)")
-            try fm.createDirectory(at: destFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try entry.data.write(to: destFile, options: .atomic)
-
-            let rootfsFile = try SyncFileSafety.destination(root: rootfsSkillsDir, relativePath: "\(skill.id)/\(relativePath)")
-            try fm.createDirectory(at: rootfsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try entry.data.write(to: rootfsFile, options: .atomic)
-
-            let linuxPath = "/var/minis/skills/\(skill.id)/\(relativePath)"
-            ensureParentDirsInMetaDB(for: linuxPath)
-            ensureFakefsMetadata(for: linuxPath, isDirectory: false)
+            try writeSkillAsset(skillId: skill.id, relativePath: relativePath, data: entry.data)
         }
 
         // Re-mark dirty after all bundled files are written so the sync cycle

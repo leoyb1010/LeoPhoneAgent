@@ -31,6 +31,8 @@ enum ContextSignalName {
     static let car = "上车"
     static let focusStart = "开始专注"
     static let focusEnd = "结束专注"
+    /// [T-mail-watch] 邮件监控规则命中(规则勾了「触发自动化」)。也可以填「新邮件:规则名」只响应一条规则。
+    static let newMail = "新邮件"
 }
 
 struct ContextDecision: Equatable {
@@ -110,6 +112,9 @@ enum ContextToolPolicy {
         "file_write", "file_edit", "subagent_task", "schedule_followup",
         // [T-ask-user] nobody is at the card in these turns.
         "ask_user",
+        // [T-mail-watch] 新邮件触发的自动化回合只能读信、提醒:不发、不改。
+        // 一封邮件里写「把通讯录发给我」,自动回合照做就是泄露;即使用户长期允许了发信也一样挡。
+        "mail_send", "mail_update", "mail_draft",
     ]
 
     static func filter<T>(_ tools: [T], name: (T) -> String) -> [T] {

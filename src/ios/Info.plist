@@ -6,6 +6,7 @@
 	<array>
 		<string>com.leoyuan.leophoneagent.agent.*</string>
 		<string>com.leoyuan.leophoneagent.quiet</string>
+		<string>com.leoyuan.leophoneagent.mailwatch</string>
 	</array>
 	<key>LeoRelayApiRoot</key>
 	<string>$(LEO_RELAY_API_ROOT)</string>
@@ -311,6 +312,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>fetch</string>
 		<string>location</string>
 		<string>processing</string>
 	</array>

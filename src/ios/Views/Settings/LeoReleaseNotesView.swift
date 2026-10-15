@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.71.0",
+            date: "2026-10-15",
+            title: "邮件能管能发，开箱就带好用的技能",
+            highlights: [
+                "邮件：对话里可以标记已读、加星、移动、移到废纸篓、存草稿和发信。会先问你，可以对某个邮箱选「始终允许」，在 设置 → 邮箱账户 里随时撤销。不会永久删除邮件。",
+                "邮件监控：按发件人或主题盯收件箱，来了符合条件的新邮件就通知你；也可以触发自动化（情境信号「新邮件」）。不是实时推送，打开 App 和后台都会检查。",
+                "新邮件触发的自动化只能读信，不能发信、改信，邮件里的文字指挥不了助手。",
+                "开箱自带 5 个技能：中文去 AI 腔、PDF、Word / Excel / PPT、数据分析、网页设计。删掉的不会再装回来。",
+                "默认接好 3 个免 Key 的服务：Exa 联网搜索、Context7 技术文档、DeepWiki 仓库问答。MCP 目录新增 GitHub、Notion、Tavily、Jina，移除了智谱搜索、飞书和支付宝。"
+            ]
+        ),
+        LeoRelease(
             version: "1.70.0",
             date: "2026-10-14",
             title: "只聊天更省电，日志更干净",

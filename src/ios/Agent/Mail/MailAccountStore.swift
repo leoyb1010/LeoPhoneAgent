@@ -61,6 +61,19 @@ struct MailProviderPreset: Identifiable, Equatable {
 
     static let all: [MailProviderPreset] = [gmail, qq, netease163, netease126, icloud, outlook, custom]
 
+    /// [T-mail-send] 各家的发信服务器。iCloud / Outlook 只开 587(STARTTLS),其余用 465(SSL)。
+    var defaultSMTP: SMTPServer? {
+        switch id {
+        case "gmail": return SMTPServer(host: "smtp.gmail.com", port: 465, security: .implicitTLS)
+        case "qq": return SMTPServer(host: "smtp.qq.com", port: 465, security: .implicitTLS)
+        case "163": return SMTPServer(host: "smtp.163.com", port: 465, security: .implicitTLS)
+        case "126": return SMTPServer(host: "smtp.126.com", port: 465, security: .implicitTLS)
+        case "icloud": return SMTPServer(host: "smtp.mail.me.com", port: 587, security: .startTLS)
+        case "outlook": return SMTPServer(host: "smtp-mail.outlook.com", port: 587, security: .startTLS)
+        default: return nil
+        }
+    }
+
     static func preset(id: String) -> MailProviderPreset {
         all.first { $0.id == id } ?? custom
     }
@@ -94,8 +107,25 @@ struct MailAccount: Codable, Identifiable, Equatable {
     var lastVerifiedAt: Date?
     /// 上次测试 / 读取失败的原因,给设置页看;成功后清空。
     var lastError: String?
+    /// [T-mail-send] 发信服务器(可选覆盖;旧数据没有这几个字段,解码为 nil,按预设推导)。
+    var smtpHost: String?
+    var smtpPort: Int?
+    var smtpSecurity: SMTPSecurity?
 
     var preset: MailProviderPreset { MailProviderPreset.preset(id: presetId) }
+
+    /// 实际用的发信服务器:账户里填了就用账户的;否则用预设的;
+    /// 自定义邮箱按 IMAP 地址推导(imap.example.com → smtp.example.com:465)。
+    var smtpServer: SMTPServer? {
+        if let host = smtpHost?.trimmingCharacters(in: .whitespaces), !host.isEmpty {
+            let security = smtpSecurity ?? ((smtpPort ?? 465) == 587 ? .startTLS : .implicitTLS)
+            return SMTPServer(host: host, port: smtpPort ?? (security == .startTLS ? 587 : 465), security: security)
+        }
+        if let preset = preset.defaultSMTP { return preset }
+        let imap = host.lowercased()
+        guard imap.hasPrefix("imap.") else { return nil }
+        return SMTPServer(host: "smtp." + imap.dropFirst(5), port: 465, security: .implicitTLS)
+    }
     var displayName: String { label.isEmpty ? email : label }
 }
 

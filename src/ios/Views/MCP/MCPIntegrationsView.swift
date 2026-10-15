@@ -246,6 +246,14 @@ private struct MCPCatalogEntry: Identifiable {
         )
     }
 
+    /// [T-default-mcp] 目录里的默认服务复用 DefaultMCPServers 的同一份配置。
+    static func catalogEntry(id: String, title: String, subtitle: String, category: String,
+                             setupHint: String, docsURL: String) -> MCPCatalogEntry {
+        let config = DefaultMCPServers.config(id: id)
+        return MCPCatalogEntry(id: id, title: title, subtitle: subtitle, category: category,
+                               docsURL: docsURL, config: config, setupHint: setupHint)
+    }
+
     static func docsOnly(
         id: String, title: String, subtitle: String, category: String, docsURL: String
     ) -> MCPCatalogEntry {
@@ -301,19 +309,60 @@ private struct MCPCatalogEntry: Identifiable {
             setupHint: "需要在 lbs.qq.com 创建并开通 WebService API 的 Key。把它存成名为 TENCENT_MAP_KEY 的环境变量。",
             docsURL: "https://lbs.qq.com/service/MCPServer/MCPServerGuide/userGuide"
         ),
+        // [T-default-mcp] 默认开启的三个免 Key 服务(Exa / Context7 / DeepWiki)在 DefaultMCPServers 里,
+        // 目录里复用同一份配置:用户删了还能从这里加回来。
+        MCPCatalogEntry.catalogEntry(id: "exa", title: "Exa 搜索", subtitle: "联网搜索、抓取网页正文；免 Key 可用（限流）",
+                                       category: "搜索与资讯",
+                                       setupHint: "不用 Key 就能用，有频率限制。用量大时可在 exa.ai 登录后提额。",
+                                       docsURL: "https://exa.ai/docs/get-started/exa-mcp"),
         .hosted(
-            id: "zhipu-web-search",
-            title: "智谱联网搜索",
-            subtitle: "聚合多引擎实时搜索，为大模型优化的结果格式",
+            id: "tavily",
+            title: "Tavily 搜索",
+            subtitle: "第二个搜索源，适合新闻与时效性问题",
             category: "搜索与资讯",
-            // [T-zhipu-auth-carrier] The streamable-HTTP endpoint authenticates
-            // with a Bearer REQUEST HEADER; `?Authorization=` in the query is
-            // the legacy /sse form and 401s here.
-            url: "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp",
-            headers: ["Authorization": "Bearer $$ZHIPU_API_KEY"],
-            note: "Zhipu Web Search: aggregated real-time search across engines, results formatted for LLMs.",
-            setupHint: "需要 open.bigmodel.cn 的 API Key。把它存成名为 ZHIPU_API_KEY 的环境变量。",
-            docsURL: "https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server"
+            url: "https://mcp.tavily.com/mcp/?tavilyApiKey=$$TAVILY_API_KEY",
+            note: "Tavily: real-time web search and extraction, good for news and time-sensitive questions.",
+            setupHint: "需要 tavily.com 的 API Key（有免费额度）。把它存成名为 TAVILY_API_KEY 的环境变量。",
+            docsURL: "https://docs.tavily.com/documentation/mcp"
+        ),
+        .hosted(
+            id: "jina-reader",
+            title: "Jina Reader",
+            subtitle: "把网页、PDF 链接转成干净的 Markdown；免 Key 可用",
+            category: "搜索与资讯",
+            url: "https://mcp.jina.ai/v1",
+            note: "Jina AI: read any URL or PDF link as clean markdown, plus web search.",
+            setupHint: "不用 Key 就能读网页。需要更高额度时，在服务器设置里加请求头 Authorization: Bearer $$JINA_API_KEY。",
+            docsURL: "https://github.com/jina-ai/MCP"
+        ),
+        MCPCatalogEntry.catalogEntry(id: "context7", title: "Context7", subtitle: "查各类开源库和框架的最新文档；免 Key 可用",
+                                       category: "开发者",
+                                       setupHint: "匿名可用。用量大时在 context7.com 申请 Key 提额。",
+                                       docsURL: "https://context7.com/docs/resources/all-clients"),
+        MCPCatalogEntry.catalogEntry(id: "deepwiki", title: "DeepWiki", subtitle: "对任意公开 GitHub 仓库提问；免 Key 免登录",
+                                       category: "开发者",
+                                       setupHint: "不需要任何配置。",
+                                       docsURL: "https://docs.devin.ai/work-with-devin/deepwiki-mcp"),
+        .hosted(
+            id: "github",
+            title: "GitHub",
+            subtitle: "仓库、Issue、PR 的查询与操作（官方远程服务）",
+            category: "开发者",
+            url: "https://api.githubcopilot.com/mcp/",
+            headers: ["Authorization": "Bearer $$GITHUB_TOKEN"],
+            note: "GitHub (official remote server): repositories, issues, pull requests, code search.",
+            setupHint: "需要一个 GitHub 个人访问令牌（Settings → Developer settings → Personal access tokens，按需勾选权限）。把它存成名为 GITHUB_TOKEN 的环境变量。",
+            docsURL: "https://github.com/github/github-mcp-server"
+        ),
+        .hosted(
+            id: "notion",
+            title: "Notion",
+            subtitle: "读写你的 Notion 页面和数据库（官方远程服务）",
+            category: "办公协作",
+            url: "https://mcp.notion.com/mcp",
+            note: "Notion (official remote server): search, read and edit the user's Notion pages and databases.",
+            setupHint: "首次连接会打开 Notion 授权页，选择允许访问的页面即可。",
+            docsURL: "https://developers.notion.com/docs/mcp"
         ),
         .docsOnly(
             id: "hotnews",
@@ -321,13 +370,6 @@ private struct MCPCatalogEntry: Identifiable {
             subtitle: "聚合国内多平台实时热榜（社区实现，stdio 需自行部署）",
             category: "搜索与资讯",
             docsURL: "https://github.com/wopal/mcp-server-hotnews"
-        ),
-        .docsOnly(
-            id: "alipay",
-            title: "支付宝 MCP",
-            subtitle: "支付、订单查询、退款（npm stdio，需 Node 环境）",
-            category: "支付与生活",
-            docsURL: "https://opendocs.alipay.com/open/0go80l"
         ),
         .docsOnly(
             id: "kuaidi100",
@@ -349,13 +391,6 @@ private struct MCPCatalogEntry: Identifiable {
             subtitle: "叫车、预约出行、订单查询（需在滴滴开放平台接入）",
             category: "地图与出行",
             docsURL: "https://mcp.didichuxing.com/"
-        ),
-        .docsOnly(
-            id: "feishu",
-            title: "飞书",
-            subtitle: "消息、文档、待办、日程、审批（开放平台接入）",
-            category: "办公协作",
-            docsURL: "https://open.feishu.cn/?lang=zh-CN"
         ),
         .docsOnly(
             id: "dingtalk",

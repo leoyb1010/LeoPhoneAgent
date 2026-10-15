@@ -107,6 +107,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // 键盘弹着时,在输入框上方任意位置下滑就收起(全局兜底)。
         KeyboardSwipeDismisser.shared.start()
         AutomationEngine.shared.reloadMonitoring()
+        // [T-mail-watch] 后台刷新的处理器也必须在启动结束前注册;命中规则时把「新邮件」信号交给自动化。
+        MailWatcher.shared.onSignal = { name, locked in AutomationEngine.shared.handleSignal(name, locked: locked) }
+        MailWatcher.shared.start()
 
         // [T-widget-run-in-place] Teach the shared widget intent how to reach
         // the agent loop. The intent type is compiled into the widget target

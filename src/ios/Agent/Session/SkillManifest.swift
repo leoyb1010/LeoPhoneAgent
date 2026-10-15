@@ -232,3 +232,41 @@ enum SkillManifest {
         return result
     }
 }
+
+// MARK: - [T-bundled-skills] 随 App 打包的技能目录
+
+/// 首装 / 升级时对每个内置技能做的决定。纯逻辑,逻辑测试直接覆盖。
+///
+/// 规则:
+/// - 同名技能是用户自己装的(来源不是 bundled):不碰。
+/// - 是我们装的、版本比包里旧:升级。
+/// - 我们装过、现在不在了:用户删掉的,不再装回来。
+/// - 从没装过:装。
+enum BundledSkillPlan: Equatable {
+    case install
+    case upgrade
+    case skip(String)
+
+    static func decide(bundledVersion: String,
+                       installedVersion: String?,
+                       installedIsBundled: Bool,
+                       everInstalled: Bool) -> BundledSkillPlan {
+        if let installedVersion {
+            guard installedIsBundled else { return .skip("user-owned") }
+            return compareVersions(bundledVersion, installedVersion) == .orderedDescending
+                ? .upgrade : .skip("up-to-date")
+        }
+        return everInstalled ? .skip("user-removed") : .install
+    }
+
+    /// 按数字段比较 "1.10.0" > "1.9.0";缺的段当 0,非数字段当 0。
+    static func compareVersions(_ a: String, _ b: String) -> ComparisonResult {
+        let pa = a.split(separator: ".").map { Int($0) ?? 0 }
+        let pb = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(pa.count, pb.count) {
+            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
+            if x != y { return x < y ? .orderedAscending : .orderedDescending }
+        }
+        return .orderedSame
+    }
+}

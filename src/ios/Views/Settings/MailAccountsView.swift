@@ -32,7 +32,7 @@ struct MailAccountsView: View {
                     }
                 }
             } footer: {
-                Text("授权码只保存在这台设备的钥匙串里,不会同步、不会出现在日志里。Agent 只读邮件(不标已读、不删、不发),而且只在你提到邮件时才去读。")
+                Text("授权码只保存在这台设备的钥匙串里,不会同步、不会出现在日志里。Agent 只在你提到邮件时才去读;标记、移动、存草稿、发信会先问你,可以对某个邮箱选「始终允许」。不会永久删除邮件。")
             }
 
             Section {
@@ -43,6 +43,18 @@ struct MailAccountsView: View {
                 }
             } footer: {
                 Text("支持 Gmail、QQ 邮箱、163 / 126 邮箱、iCloud 以及任何开了 IMAP 的邮箱。")
+            }
+
+            if !store.accounts.isEmpty {
+                Section {
+                    NavigationLink {
+                        MailWatchRulesView()
+                    } label: {
+                        Label("邮件监控", systemImage: "bell.badge")
+                    }
+                } footer: {
+                    Text("按发件人或主题盯着收件箱,来了符合条件的新邮件就通知你。打开 App 时和后台都会检查(后台频率由 iOS 决定,大约 15 分钟以上一次),不是实时推送。")
+                }
             }
         }
         .navigationTitle("邮箱账户")
@@ -120,6 +132,9 @@ struct MailAccountEditor: View {
     @State private var host: String
     @State private var port: String
     @State private var usernameEdited = false
+    @State private var smtpHost: String
+    @State private var smtpPort: String
+    @State private var alwaysAllowed: [String]
     @State private var testing = false
     @State private var result: String?
     @State private var failure: String?
@@ -133,9 +148,20 @@ struct MailAccountEditor: View {
         _host = State(initialValue: existing?.host ?? MailProviderPreset.qq.host)
         _port = State(initialValue: String(existing?.port ?? MailProviderPreset.qq.port))
         _usernameEdited = State(initialValue: existing.map { $0.username != $0.email } ?? false)
+        _smtpHost = State(initialValue: existing?.smtpHost ?? "")
+        _smtpPort = State(initialValue: existing?.smtpPort.map(String.init) ?? "")
+        _alwaysAllowed = State(initialValue: existing.map { MailAlwaysAllow.grantedCategories(account: $0.email) } ?? [])
     }
 
     private var preset: MailProviderPreset { MailProviderPreset.preset(id: presetId) }
+
+    /// 发信服务器输入框的占位:显示留空时实际会用的服务器。
+    private var smtpPlaceholder: String {
+        var probe = MailAccount(presetId: presetId, label: "", email: trimmedEmail, username: "", host: host, port: 993)
+        probe.smtpHost = nil
+        guard let server = probe.smtpServer else { return String(localized: "发信服务器(SMTP)") }
+        return String(localized: "发信服务器(留空用 \(server.host):\(server.port))")
+    }
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var effectiveUsername: String {
         let u = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -193,9 +219,31 @@ struct MailAccountEditor: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onChange(of: username) { _, _ in usernameEdited = true }
+                    TextField(smtpPlaceholder, text: $smtpHost)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("发信端口(465 或 587,留空自动)", text: $smtpPort)
+                        .keyboardType(.numberPad)
                 }
             } footer: {
-                Text("一律使用 SSL/TLS 直连(端口 993)。")
+                Text("收信一律 SSL/TLS 直连(端口 993)。发信服务器留空时按邮箱服务自动选择;465 走 SSL,587 走 STARTTLS,都不会明文发送密码。")
+            }
+            if existing != nil, !alwaysAllowed.isEmpty {
+                Section {
+                    ForEach(alwaysAllowed, id: \.self) { category in
+                        Label(category == SensitiveToolGate.Category.mailSend.rawValue
+                              ? String(localized: "发送邮件:始终允许") : String(localized: "标记、移动、存草稿:始终允许"),
+                              systemImage: "checkmark.shield")
+                    }
+                    Button("撤销长期允许", role: .destructive) {
+                        if let existing { MailAlwaysAllow.revoke(account: existing.email) }
+                        alwaysAllowed = []
+                    }
+                } header: {
+                    Text("长期允许")
+                } footer: {
+                    Text("撤销后,下次改信或发信会重新问你。")
+                }
             }
             Section {
                 Button {
@@ -247,6 +295,10 @@ struct MailAccountEditor: View {
         account.host = host.trimmingCharacters(in: .whitespaces)
         account.port = portValue
         account.label = label.trimmingCharacters(in: .whitespaces)
+        let trimmedSMTP = smtpHost.trimmingCharacters(in: .whitespaces)
+        account.smtpHost = trimmedSMTP.isEmpty ? nil : trimmedSMTP
+        account.smtpPort = Int(smtpPort.trimmingCharacters(in: .whitespaces))
+        account.smtpSecurity = account.smtpPort == 587 ? .startTLS : (account.smtpHost == nil ? nil : .implicitTLS)
         let secret: String
         if !password.isEmpty {
             secret = password.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -272,6 +324,126 @@ struct MailAccountEditor: View {
         } catch {
             failure = error.localizedDescription
             LeoHaptics.notification(.error)
+        }
+    }
+}
+
+/// [T-mail-watch] 设置 → 邮箱账户 → 邮件监控。
+struct MailWatchRulesView: View {
+    @ObservedObject private var store = MailWatchStore.shared
+    @ObservedObject private var accounts = MailAccountStore.shared
+    @State private var editing: MailWatchRule?
+    @State private var checking = false
+
+    var body: some View {
+        List {
+            Section {
+                if store.rules.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("还没有监控规则").font(.headline)
+                        Text("也可以在对话里说「盯着老板发来的邮件,来了提醒我」。").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                ForEach(store.rules) { rule in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rule.name)
+                            Text(ruleSummary(rule)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(get: { rule.isEnabled }, set: { on in
+                            var r = rule; r.isEnabled = on; store.upsert(r)
+                        }))
+                        .labelsHidden()
+                        .accessibilityLabel(Text("启用 \(rule.name)"))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { editing = rule }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) { store.delete(id: rule.id) } label: { Label("删除", systemImage: "trash") }
+                    }
+                }
+                Button {
+                    editing = MailWatchRule(name: "")
+                } label: {
+                    Label("添加规则", systemImage: "plus.circle.fill")
+                }
+            } footer: {
+                Text("第一次检查只记下现有邮件,不会把旧邮件当成新邮件提醒。")
+            }
+            Section {
+                Button {
+                    checking = true
+                    Task { await MailWatcher.shared.checkNow(reason: "settings"); checking = false }
+                } label: {
+                    HStack { Text("立即检查"); Spacer(); if checking { ProgressView() } }
+                }
+                .disabled(checking || !store.hasActiveRules)
+                if let at = store.lastCheckAt {
+                    Text("\(at.formatted(.relative(presentation: .named))):\(store.lastSummary ?? "")")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle("邮件监控")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editing) { rule in
+            NavigationStack { MailWatchRuleEditor(rule: rule) }
+        }
+    }
+
+    private func ruleSummary(_ rule: MailWatchRule) -> String {
+        var parts: [String] = [rule.account ?? String(localized: "所有邮箱")]
+        if !rule.fromContains.isEmpty { parts.append(String(localized: "发件人含「\(rule.fromContains)」")) }
+        if !rule.subjectContains.isEmpty { parts.append(String(localized: "主题含「\(rule.subjectContains)」")) }
+        if rule.fromContains.isEmpty && rule.subjectContains.isEmpty { parts.append(String(localized: "所有新邮件")) }
+        if rule.triggerAutomation { parts.append(String(localized: "触发自动化")) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct MailWatchRuleEditor: View {
+    @State var rule: MailWatchRule
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var accounts = MailAccountStore.shared
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("规则名称(比如「老板」)", text: $rule.name)
+                Picker("邮箱", selection: Binding(get: { rule.account ?? "" }, set: { rule.account = $0.isEmpty ? nil : $0 })) {
+                    Text("所有邮箱").tag("")
+                    ForEach(accounts.enabledAccounts) { a in Text(a.email).tag(a.email) }
+                }
+            }
+            Section {
+                TextField("发件人包含(逗号分隔,留空不限)", text: $rule.fromContains)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("主题包含(逗号分隔,留空不限)", text: $rule.subjectContains)
+            } footer: {
+                Text("两项都留空就是所有新邮件。多个关键词命中任意一个即可。")
+            }
+            Section {
+                Toggle("发通知", isOn: $rule.notify)
+                Toggle("触发自动化", isOn: $rule.triggerAutomation)
+            } footer: {
+                Text("打开「触发自动化」后,可以在 设置 → 自动化 里用情境信号「新邮件」或「\(rule.signalName)」安排要做的事。自动化回合可以读信,但不能发信、改信。")
+            }
+        }
+        .navigationTitle(rule.name.isEmpty ? "添加规则" : rule.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") {
+                    rule.name = rule.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    MailWatchStore.shared.upsert(rule)
+                    dismiss()
+                }
+                .disabled(rule.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
         }
     }
 }

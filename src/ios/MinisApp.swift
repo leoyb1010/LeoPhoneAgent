@@ -1295,6 +1295,12 @@ private enum ApprovalAlertPresenter {
         alert.addAction(UIAlertAction(title: String(localized: "本次会话允许"), style: .default) { _ in
             gate.resolve(.allowSession, requestId: p.id)
         })
+        // [T-mail-always] 邮件操作可以长期允许(按邮箱),设置 → 邮箱账户里可撤销。
+        if p.category.supportsAlwaysAllow {
+            alert.addAction(UIAlertAction(title: String(localized: "始终允许（此邮箱）"), style: .default) { _ in
+                gate.resolve(.allowAlways, requestId: p.id)
+            })
+        }
         if let sid = p.sessionId {
             alert.addAction(UIAlertAction(title: String(localized: "拒绝并停止任务"), style: .destructive) { _ in
                 gate.resolve(.deny, requestId: p.id)

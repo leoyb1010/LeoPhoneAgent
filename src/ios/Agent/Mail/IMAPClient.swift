@@ -211,6 +211,116 @@ actor IMAPClient {
         return untagged.first(where: { $0.untaggedName == "EXISTS" })?.untaggedNumber ?? 0
     }
 
+    // MARK: - [T-mail-write] 写操作(标记、移动、草稿)
+
+    /// 邮箱状态:UIDVALIDITY 变了说明服务器重建了 UID,之前记的 UID 全部作废。
+    struct MailboxState: Equatable {
+        var exists: Int
+        var uidValidity: Int?
+        var uidNext: Int?
+    }
+
+    /// 读写打开(SELECT)。只有标记 / 移动前用;读信一律 EXAMINE。
+    @discardableResult
+    func select(mailbox: String) async throws -> MailboxState {
+        let wire = mailboxWireName(mailbox)
+        let (_, _, untagged) = try await command("SELECT \(quoted(wire))", expectOK: true)
+        examined = nil
+        return Self.mailboxState(from: untagged)
+    }
+
+    /// 只读打开并返回 UIDVALIDITY / UIDNEXT(监控用,不改任何状态)。
+    func examineState(mailbox: String) async throws -> MailboxState {
+        let wire = mailboxWireName(mailbox)
+        let (_, _, untagged) = try await command("EXAMINE \(quoted(wire))", expectOK: true)
+        examined = wire
+        return Self.mailboxState(from: untagged)
+    }
+
+    static func mailboxState(from untagged: [IMAPResponse]) -> MailboxState {
+        let exists = untagged.first(where: { $0.untaggedName == "EXISTS" })?.untaggedNumber ?? 0
+        func code(_ name: String) -> Int? {
+            for r in untagged {
+                guard let open = r.line.range(of: "[\(name) "),
+                      let close = r.line[open.upperBound...].firstIndex(of: "]") else { continue }
+                if let n = Int(r.line[open.upperBound..<close]) { return n }
+            }
+            return nil
+        }
+        return MailboxState(exists: exists, uidValidity: code("UIDVALIDITY"), uidNext: code("UIDNEXT"))
+    }
+
+    /// 登录后重新拿一次能力列表:问候里的往往是登录前的子集(MOVE / UIDPLUS 常常登录后才列出)。
+    func refreshCapabilities() async throws {
+        let (_, _, untagged) = try await command("CAPABILITY", expectOK: true)
+        if let r = untagged.first(where: { $0.untaggedName == "CAPABILITY" }) {
+            capabilities = Set(r.line.split(separator: " ").dropFirst(2).map { $0.uppercased() })
+        }
+    }
+
+    static func uidSet(_ uids: [Int]) -> String {
+        uids.filter { $0 > 0 }.map(String.init).joined(separator: ",")
+    }
+
+    /// 加 / 去标志(\\Seen、\\Flagged)。需要先 select。
+    func uidStore(uids: [Int], flags: [String], add: Bool) async throws {
+        let set = Self.uidSet(uids)
+        guard !set.isEmpty else { return }
+        let safeFlags = flags.filter(Self.isSafeFlag).joined(separator: " ")
+        guard !safeFlags.isEmpty else { throw IMAPError.protocolError("无效的标志") }
+        try await command("UID STORE \(set) \(add ? "+" : "-")FLAGS.SILENT (\(safeFlags))", expectOK: true)
+    }
+
+    /// 移动到另一个文件夹。需要先 select。
+    ///
+    /// 有 MOVE 就用 MOVE;没有时只在有 UIDPLUS 的服务器上用「复制 + 标删除 + 只清理这几封」。
+    /// 两个都没有就拒绝:普通 EXPUNGE 会把邮箱里所有带删除标记的信一起清掉,包括用户自己标的。
+    func uidMove(uids: [Int], to mailbox: String) async throws {
+        let set = Self.uidSet(uids)
+        guard !set.isEmpty else { return }
+        let target = quoted(mailboxWireName(mailbox))
+        if capabilities.contains("MOVE") {
+            try await command("UID MOVE \(set) \(target)", expectOK: true)
+        } else if capabilities.contains("UIDPLUS") {
+            try await command("UID COPY \(set) \(target)", expectOK: true)
+            try await command("UID STORE \(set) +FLAGS.SILENT (\\Deleted)", expectOK: true)
+            try await command("UID EXPUNGE \(set)", expectOK: true)
+        } else {
+            throw IMAPError.protocolError("这个邮箱服务器不支持安全移动(缺少 MOVE / UIDPLUS),为避免误删别的邮件,没有执行")
+        }
+    }
+
+    /// 把一封完整的邮件放进某个文件夹(存草稿、发信后存「已发送」)。
+    func append(mailbox: String, flags: [String], message: Data) async throws {
+        let safeFlags = flags.filter(Self.isSafeFlag).joined(separator: " ")
+        try await command("APPEND \(quoted(mailboxWireName(mailbox))) (\(safeFlags)) {\(message.count)}",
+                          continuations: [message], expectOK: true, timeout: 90)
+    }
+
+    /// 只允许系统标志(\\Seen 这类):参数可能来自模型,不能让它拼出别的命令。
+    static func isSafeFlag(_ flag: String) -> Bool {
+        ["\\Seen", "\\Flagged", "\\Answered", "\\Draft", "\\Deleted"].contains(flag)
+    }
+
+    /// 按特殊用途(RFC 6154)找文件夹,找不到再按常见名字找。
+    static func specialMailbox(_ use: String, in boxes: [IMAPMailbox], fallbackNames: [String]) -> IMAPMailbox? {
+        if let hit = boxes.first(where: { $0.attributes.contains { $0.caseInsensitiveCompare(use) == .orderedSame } }) {
+            return hit
+        }
+        for name in fallbackNames {
+            if let hit = boxes.first(where: { box in
+                if box.name.caseInsensitiveCompare(name) == .orderedSame { return true }
+                // "[Gmail]/草稿" 这类带层级的名字:比最后一段。分隔符为空时不拆。
+                guard let delimiter = box.delimiter, !delimiter.isEmpty else { return false }
+                let leaf = box.name.components(separatedBy: delimiter).last ?? ""
+                return leaf.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                return hit
+            }
+        }
+        return nil
+    }
+
     // MARK: - Search / fetch
 
     /// UID SEARCH。非 ASCII 条件带 CHARSET UTF-8 并以字面量发送;服务器不吃 UTF-8 时抛 serverBad/serverNo,

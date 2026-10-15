@@ -248,7 +248,7 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
     @Published var tier = AutomationRule.Tier.speak
 
     static let presetSignals = [ContextSignalName.home, ContextSignalName.leave, ContextSignalName.car,
-                                ContextSignalName.focusStart, ContextSignalName.focusEnd]
+                                ContextSignalName.focusStart, ContextSignalName.focusEnd, ContextSignalName.newMail]
     private var resolvedSignal: String {
         let preset = Self.presetSignals.contains(signalName) ? signalName : ""
         return (preset.isEmpty ? customSignal : preset).trimmingCharacters(in: .whitespacesAndNewlines)

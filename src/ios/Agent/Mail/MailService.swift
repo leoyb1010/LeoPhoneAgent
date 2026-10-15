@@ -3,7 +3,7 @@
 //  MinisApp
 //
 //  [T-mail] Agent 的邮件工具:mail_accounts / mail_folders / mail_search / mail_read。
-//  只读:BODY.PEEK 不改已读,不删不发。邮件内容一律包在 untrusted 标签里回给模型 ——
+//  这几个只读:BODY.PEEK 不改已读,不删不发。改信、存草稿、发信在 MailActions.swift(要过确认闸)。邮件内容一律包在 untrusted 标签里回给模型 ——
 //  邮件正文是别人写的,可能带着"请忽略以上指令"这类话,永远只是数据。
 //  每次调用开一条 IMAP 连接、用完关掉;账户密码只在这里从钥匙串取出、只发给该账户配置的服务器。
 //
@@ -194,9 +194,9 @@ enum MailService {
 
     // MARK: - Helpers
 
-    private enum Resolution { case success(MailAccount), failure(String) }
+    enum Resolution { case success(MailAccount), failure(String) }
 
-    private static func resolveAccount(_ wanted: String?) async -> Resolution {
+    static func resolveAccount(_ wanted: String?) async -> Resolution {
         await MainActor.run {
             let store = MailAccountStore.shared
             let enabled = store.enabledAccounts
@@ -214,7 +214,7 @@ enum MailService {
         }
     }
 
-    private static func openClient(for account: MailAccount) async throws -> IMAPClient {
+    static func openClient(for account: MailAccount) async throws -> IMAPClient {
         guard let password = MailKeychain.password(accountId: account.id), !password.isEmpty else {
             throw IMAPError.loginRejected("这台设备的钥匙串里没有 \(account.email) 的授权码,请到「设置 → 邮箱账户」重新填写")
         }
@@ -231,12 +231,12 @@ enum MailService {
         }
     }
 
-    private static func failure(_ error: Error, account: MailAccount) async -> (String, Bool) {
+    static func failure(_ error: Error, account: MailAccount) async -> (String, Bool) {
         await recordFailure(error, account: account)
         return ("Error: \(account.email) — \(error.localizedDescription)", false)
     }
 
-    private static func recordSuccess(_ account: MailAccount) async {
+    static func recordSuccess(_ account: MailAccount) async {
         await MainActor.run { MailAccountStore.shared.recordResult(accountId: account.id, error: nil) }
     }
 
@@ -245,13 +245,13 @@ enum MailService {
         await MainActor.run { MailAccountStore.shared.recordResult(accountId: account.id, error: error.localizedDescription) }
     }
 
-    private static func jsonDictionary(_ json: String) -> [String: Any] {
+    static func jsonDictionary(_ json: String) -> [String: Any] {
         guard let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
     }
 
-    private static func boolValue(_ v: Any?) -> Bool {
+    static func boolValue(_ v: Any?) -> Bool {
         if let b = v as? Bool { return b }
         if let s = v as? String { return ["true", "1", "yes"].contains(s.lowercased()) }
         if let n = v as? Int { return n != 0 }

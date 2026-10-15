@@ -72,6 +72,8 @@ final class SensitiveToolGate: ObservableObject {
         case shell              // 本机终端
         case remoteShell        // 远程主机终端
         case remoteAgent        // 远程主机 Agent
+        case mailWrite          // 改邮箱:标记、移动、移到废纸篓、存草稿
+        case mailSend           // 发邮件
 
         var humanName: String {
             switch self {
@@ -81,8 +83,17 @@ final class SensitiveToolGate: ObservableObject {
             case .shell: return "在本机执行终端命令"
             case .remoteShell: return "在远程主机执行终端命令"
             case .remoteAgent: return "在远程主机启动 Agent 任务"
+            case .mailWrite: return "修改邮箱里的邮件"
+            case .mailSend: return "以你的名义发送邮件"
             }
         }
+
+        /// [T-mail-send] 全自动能不能替用户批。发信发出去收不回,全自动也先问一次;
+        /// 用户点「始终允许(此邮箱)」之后就不再问(见 supportsAlwaysAllow)。
+        var fullAutoMayApprove: Bool { self != .mailSend }
+
+        /// [T-mail-always] 可以长期允许的类别:邮件。按「类别 + 邮箱」记在本机,设置 → 邮箱账户里可撤销。
+        var supportsAlwaysAllow: Bool { self == .mailWrite || self == .mailSend }
 
         /// 见文件头 [T-gate-bg-policy]。
         /// Categories whose single request can be judged by `CommandRisk`
@@ -92,7 +103,7 @@ final class SensitiveToolGate: ObservableObject {
 
         var backgroundPolicy: BackgroundPolicy {
             switch self {
-            case .shell, .fileWrite, .remoteShell, .remoteAgent:
+            case .shell, .fileWrite, .remoteShell, .remoteAgent, .mailWrite, .mailSend:
                 return .notifyAndWait
             case .readCredentials, .writeCredentials:
                 return .denyImmediately
@@ -105,6 +116,8 @@ final class SensitiveToolGate: ObservableObject {
             case "shell_execute": return .shell
             case "remote_shell": return .remoteShell
             case "remote_agent": return .remoteAgent
+            case "mail_update", "mail_draft": return .mailWrite
+            case "mail_send": return .mailSend
             default: return nil
             }
         }
@@ -131,9 +144,23 @@ final class SensitiveToolGate: ObservableObject {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty ?? "空任务"
                 return "\(host) · \(String(detail.prefix(160)))"
+            case "mail_update":
+                let action = (args["action"] as? String) ?? "?"
+                let count = (args["uids"] as? [Any])?.count ?? 1
+                let target = (args["to_folder"] as? String).map { " → \($0)" } ?? ""
+                return "\(mailAccountHint(args)) · \(action) \(count) 封\(target)"
+            case "mail_draft", "mail_send":
+                let to = (args["to"] as? [String])?.joined(separator: ", ") ?? (args["to"] as? String) ?? "(回复原发件人)"
+                let subject = (args["subject"] as? String) ?? "(沿用原主题)"
+                let body = ((args["body"] as? String) ?? "").replacingOccurrences(of: "\n", with: " ")
+                return "\(mailAccountHint(args)) → \(String(to.prefix(120))) · 主题:\(String(subject.prefix(80))) · 正文:\(String(body.prefix(120)))"
             default:
                 return "本机"
             }
+        }
+
+        private static func mailAccountHint(_ args: [String: Any]) -> String {
+            ((args["account"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "默认邮箱"
         }
 
         /// 参与 grantKey 的授权范围。见文件头 [T-gate-scope]。
@@ -156,6 +183,9 @@ final class SensitiveToolGate: ObservableObject {
                 return "remote-shell|\(normalizedHost(args["host"]))"
             case "remote_agent":
                 return "remote-agent|\(normalizedHost(args["host"]))"
+            // 邮件按邮箱授权:本次会话允许 / 始终允许都只覆盖这一个邮箱。
+            case "mail_update", "mail_draft", "mail_send":
+                return "mail|\(normalizedHost(args["account"]))"
             default:
                 return "本机"
             }
@@ -170,6 +200,8 @@ final class SensitiveToolGate: ObservableObject {
     enum Decision {
         case allowOnce
         case allowSession
+        /// [T-mail-always] 长期允许(只对 supportsAlwaysAllow 的类别有效)。
+        case allowAlways
         case deny
     }
 
@@ -281,8 +313,8 @@ final class SensitiveToolGate: ObservableObject {
     func authorize(_ category: Category, host: String, grantScope: String? = nil,
                    sessionId: String? = nil, riskSubject: String? = nil,
                    requester: String? = nil) async -> Outcome {
-        // [T-full-auto] 全自动:前台后台一律放行,不弹审批。
-        if FullAutoGate.isOn {
+        // [T-full-auto] 全自动:前台后台一律放行,不弹审批 —— 发信除外(fullAutoMayApprove)。
+        if FullAutoGate.isOn, category.fullAutoMayApprove {
             FullAutoGate.announce("\(category.humanName) \(host)", sessionId: sessionId)
             return .allowed
         }
@@ -298,6 +330,10 @@ final class SensitiveToolGate: ObservableObject {
         let key = grantKey(category, scope: scope, sessionId: sessionId)
         // 本会话已整体允许
         if sessionGrants.contains(key) { return .allowed }
+        // [T-mail-always] 用户长期允许过这个邮箱的这类操作。
+        if category.supportsAlwaysAllow, MailAlwaysAllow.isGranted(category: category.rawValue, scope: scope) {
+            return .allowed
+        }
 
         if UIApplication.shared.applicationState != .active {
             // 后台硬拒类别:没有前台 UI 就不能弹审批,更不能挂起等待。
@@ -370,9 +406,13 @@ final class SensitiveToolGate: ObservableObject {
         if case .allowSession = decision {
             sessionGrants.insert(grantKey(for: p))
         }
+        if case .allowAlways = decision, p.category.supportsAlwaysAllow {
+            sessionGrants.insert(grantKey(for: p))
+            MailAlwaysAllow.grant(category: p.category.rawValue, scope: p.grantScope)
+        }
         let outcome: Outcome = {
             switch decision {
-            case .allowOnce, .allowSession: return .allowed
+            case .allowOnce, .allowSession, .allowAlways: return .allowed
             case .deny: return .deniedByUser
             }
         }()
@@ -564,6 +604,39 @@ private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
+
+/// [T-mail-always] 邮件操作的长期允许。键 = 类别 + 邮箱("mailSend|mail|leo@example.com"),
+/// 只存在本机 UserDefaults(不同步:换设备重新点一次)。设置 → 邮箱账户里列出并可撤销。
+enum MailAlwaysAllow {
+    static let defaultsKey = "leo.mail.alwaysAllow.v1"
+
+    static func key(category: String, scope: String) -> String {
+        "\(category)|\(scope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+    }
+
+    static func isGranted(category: String, scope: String, defaults: UserDefaults = .standard) -> Bool {
+        (defaults.stringArray(forKey: defaultsKey) ?? []).contains(key(category: category, scope: scope))
+    }
+
+    static func grant(category: String, scope: String, defaults: UserDefaults = .standard) {
+        var all = Set(defaults.stringArray(forKey: defaultsKey) ?? [])
+        all.insert(key(category: category, scope: scope))
+        defaults.set(all.sorted(), forKey: defaultsKey)
+    }
+
+    static func revoke(account: String, defaults: UserDefaults = .standard) {
+        let suffix = "|mail|" + account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let kept = (defaults.stringArray(forKey: defaultsKey) ?? []).filter { !$0.hasSuffix(suffix) }
+        defaults.set(kept, forKey: defaultsKey)
+    }
+
+    /// 某个邮箱长期允许了哪些类别(给设置页显示)。
+    static func grantedCategories(account: String, defaults: UserDefaults = .standard) -> [String] {
+        let suffix = "|mail|" + account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return (defaults.stringArray(forKey: defaultsKey) ?? []).filter { $0.hasSuffix(suffix) }
+            .compactMap { $0.split(separator: "|").first.map(String.init) }
+    }
+}
 
 /// [T-full-auto] 「全自动」开关的读取和"自动批准"广播。界面、日志在 FullAuto.swift。
 /// 放在这里是因为这个文件同时编进 App 和测试 target,各道闸都能直接用。
