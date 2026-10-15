@@ -34,7 +34,7 @@ final class ModelCloudPruneTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let store = try String(contentsOf: root.appendingPathComponent("Providers/ProviderConfigStore.swift"), encoding: .utf8)
         let fn = try XCTUnwrap(store.range(of: "func replaceEntries(for instanceId: String"))
-        let body = String(store[fn.lowerBound...].prefix(2600))
+        let body = String(store[fn.lowerBound...].prefix(3200))
         XCTAssertTrue(body.contains("pruneCloudCopies: Bool = false"), "默认不删")
         XCTAssertTrue(body.contains("let cloudDeletes = pruneCloudCopies && !rawModels.isEmpty"))
         let save = try XCTUnwrap(body.range(of: "guard save() else { return false }"))
@@ -45,7 +45,59 @@ final class ModelCloudPruneTests: XCTestCase {
         let detail = try String(contentsOf: root.appendingPathComponent("Views/Providers/ProviderInstanceDetailView.swift"), encoding: .utf8)
         XCTAssertTrue(detail.contains("pruneCloudCopies: result.source == \"api\""), "实例详情页的「获取模型」也一样")
         // 升级后第一次不等明天,当天就跑一次刷新把积下的云端旧副本清掉。
-        XCTAssertTrue(store.contains("let pruneOnceKey = \"leo.models.cloudPruneOnce.v1\""))
+        XCTAssertTrue(store.contains("let pruneOnceKey = \"leo.models.cloudPruneOnce.v2\""))
         XCTAssertTrue(store.contains("            lastRefresh = nil\n"))
+    }
+
+    // MARK: - 拒收云端旧副本(1.74)
+
+    func testStaleCloudCopyOfAModelTheServerDroppedIsRejected() {
+        let list = ModelCloudPrune.ServerList(at: Date(timeIntervalSince1970: 2_000), modelIds: ["gpt-5", "go/k2"])
+        let old = Date(timeIntervalSince1970: 1_000), newer = Date(timeIntervalSince1970: 3_000)
+        XCTAssertTrue(ModelCloudPrune.rejectsInbound(modelId: "cursor/gpt-5", isCustom: false, updatedAt: old, serverList: list),
+                      "服务器列表里没有、又比列表旧:旧副本")
+        XCTAssertFalse(ModelCloudPrune.rejectsInbound(modelId: "gpt-5", isCustom: false, updatedAt: old, serverList: list),
+                       "服务器还在提供的照收")
+        XCTAssertFalse(ModelCloudPrune.rejectsInbound(modelId: "cursor/x", isCustom: true, updatedAt: old, serverList: list),
+                       "用户手动加的自定义模型永远不拒")
+        XCTAssertFalse(ModelCloudPrune.rejectsInbound(modelId: "new-model", isCustom: false, updatedAt: newer, serverList: list),
+                       "比本机列表新:别的设备刚刷到的新模型,放行")
+        XCTAssertFalse(ModelCloudPrune.rejectsInbound(modelId: "cursor/x", isCustom: false, updatedAt: old, serverList: nil),
+                       "还没刷过这个服务商:没有依据,不拒")
+        XCTAssertFalse(ModelCloudPrune.rejectsInbound(modelId: "cursor/x", isCustom: false, updatedAt: old,
+                                                      serverList: .init(at: list.at, modelIds: [])), "空列表不算数")
+    }
+
+    func testServerListIsStoredPerInstance() throws {
+        let suite = "ModelCloudPruneTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let a = ModelCloudPrune.ServerList(at: Date(timeIntervalSince1970: 10), modelIds: ["m1"])
+        let b = ModelCloudPrune.ServerList(at: Date(timeIntervalSince1970: 20), modelIds: ["m2", "m3"])
+        ModelCloudPrune.recordServerList(a, for: "inst-a", defaults: defaults)
+        ModelCloudPrune.recordServerList(b, for: "inst-b", defaults: defaults)
+        XCTAssertEqual(ModelCloudPrune.serverList(for: "inst-a", defaults: defaults), a)
+        XCTAssertEqual(ModelCloudPrune.serverList(for: "inst-b", defaults: defaults), b)
+        XCTAssertNil(ModelCloudPrune.serverList(for: "inst-c", defaults: defaults))
+    }
+
+    /// 接线:API 刷新成功后记列表;iCloud 合并在写库之前先判旧副本,拒收时删云端。
+    func testRefreshRecordsTheListAndTheMergerChecksItBeforeWriting() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let store = try String(contentsOf: root.appendingPathComponent("Providers/ProviderConfigStore.swift"), encoding: .utf8)
+        let fn = try XCTUnwrap(store.range(of: "func replaceEntries(for instanceId: String"))
+        let body = String(store[fn.lowerBound...].prefix(3200))
+        let save = try XCTUnwrap(body.range(of: "guard save() else { return false }"))
+        let record = try XCTUnwrap(body.range(of: "ModelCloudPrune.recordServerList("))
+        XCTAssertLessThan(save.lowerBound, record.lowerBound)
+        XCTAssertTrue(body.contains("if pruneCloudCopies && !rawModels.isEmpty {"), "只有服务商自己的列表才记")
+
+        let sync = try String(contentsOf: root.appendingPathComponent("Agent/Sync/V2/ChatStoreSyncHydrators.swift"), encoding: .utf8)
+        let merge = try XCTUnwrap(sync.range(of: "private static func mergeProviderModelEntryV3"))
+        let mergeBody = String(sync[merge.lowerBound...].prefix(6000))
+        let check = try XCTUnwrap(mergeBody.range(of: "ModelCloudPrune.rejectsInbound("))
+        let upsert = try XCTUnwrap(mergeBody.range(of: "db.upsertEntryFromInbound("))
+        XCTAssertLessThan(check.lowerBound, upsert.lowerBound, "先判再写")
+        XCTAssertTrue(mergeBody.contains("for name in Set([rawId, id])"), "云端记录名两种形式都删")
     }
 }

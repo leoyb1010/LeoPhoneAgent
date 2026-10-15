@@ -1,5 +1,11 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.74.0 (172) · iCloud 拉取拒收已下架模型的旧副本 - 2026-10-15
+
+- 1.73 实机复查：iPhone 刷新后 Mac mini 实例 `before=64 after=64 cloud deletes=0`（本机早已是 64，没有可删的），紧接着 `fetchRecentV2` 拉到 493 条 `ProviderModelEntryV3`，其中 107 条属于该实例被重新写入，本机回到 160（95 个 `cursor/`）。本机刷新只能删自己手上的条目，云端那几百份旧记录够不着。
+- 修复：API 刷新成功后按实例记下服务器列表（`ModelCloudPrune.ServerList`，`leo.models.serverLists.v1`）；`mergeProviderModelEntryV3` 在写库前判断：非自定义、不在该实例服务器列表里、且 `updatedAt` 早于列表时间 → 拒收，并对原始记录名与规范 id 推送云端删除。比列表新的记录放行，避免别的设备刚刷到的新模型被误删。
+- 首次启动强刷开关换成 `leo.models.cloudPruneOnce.v2`，当天就记下列表并清掉本机已复活的条目。
+
 ## iOS 1.73.0 (171) · 服务商下架的模型不再从 iCloud 复活 - 2026-10-15
 
 - 根因：`replaceEntries`（模型列表刷新）把服务器不再提供的条目只在本机归档，不推 `ProviderModelEntryV3` 删除；`emitV3MarkDirty` 又刻意不从快照差异推断删除。云端旧副本一直在，`SKIP (recently deleted locally)` 窗口过后或重启全量拉取即整批复活。实测：10-14 16:08 `before=283 after=64` 未推任何删除，17:57 回到 243；10-15 10:40 一次写回约 195 条。

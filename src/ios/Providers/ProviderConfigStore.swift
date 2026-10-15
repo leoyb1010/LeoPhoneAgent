@@ -1536,6 +1536,10 @@ final class ProviderConfigStore: ObservableObject {
                 : []
             logger.info("[ModelList] replaceEntries caller=\(caller) instance=\(instanceId.prefix(8)) before=\(existing.count) after=\(refresh.entries.count); omitted metadata archived locally; cloud deletes=\(cloudDeletes.count)")
             guard save() else { return false }
+            if pruneCloudCopies && !rawModels.isEmpty {
+                ModelCloudPrune.recordServerList(.init(at: Date(), modelIds: refresh.entries.map(\.baseModel.id)),
+                                                 for: instanceId)
+            }
             if !cloudDeletes.isEmpty {
                 Task {
                     for recordId in cloudDeletes {
@@ -2441,7 +2445,8 @@ final class ProviderConfigStore: ObservableObject {
         var lastRefresh = UserDefaults.standard.object(forKey: key) as? Date
         // [T-model-cloud-prune] 1.73 起刷新会顺带删掉云端里服务器已不再提供的模型。升级后第一次
         // 不等明天:无视「今天已刷新」再跑一次,把之前积下的云端旧副本清掉(只此一次)。
-        let pruneOnceKey = "leo.models.cloudPruneOnce.v1"
+        // 1.74 换 v2:要当天就记下各服务商的服务器列表,iCloud 拉取才有依据拒收旧副本。
+        let pruneOnceKey = "leo.models.cloudPruneOnce.v2"
         if !UserDefaults.standard.bool(forKey: pruneOnceKey) {
             UserDefaults.standard.set(true, forKey: pruneOnceKey)
             lastRefresh = nil

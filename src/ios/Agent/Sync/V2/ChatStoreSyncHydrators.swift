@@ -1545,6 +1545,18 @@ enum ChatStoreSyncHydrators {
             // Can't resolve (missing fields) — fall back to raw id (no worse than before).
             return rawId
         }()
+        // [T-model-cloud-prune] 服务器早已不提供的模型,云端旧副本拒收并删掉,不再「复活」回列表。
+        if let m = canonModelId, !canonInstanceId.isEmpty,
+           ModelCloudPrune.rejectsInbound(modelId: m, isCustom: (intField(record, "isCustom") ?? 0) != 0,
+                                          updatedAt: entryUpdatedAt,
+                                          serverList: ModelCloudPrune.serverList(for: canonInstanceId)) {
+            noteRecentlyDeletedSkip(kind: "rejectStaleModelEntry", id: String(id.prefix(16)),
+                firstLine: "[v3] mergeProviderModelEntryV3 REJECT (not in server list, older than it): id=\(id.prefix(16)) — deleting cloud copy")
+            for name in Set([rawId, id]) {
+                await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: name, operation: "delete")
+            }
+            return
+        }
         // [T-icloud-record-delete-resurrection] Same resurrection guard as the
         // instance merger: upsertEntryFromInbound re-inserts an absent row, so
         // a just-deleted model entry re-pulled by fetchRecentV2 before its
