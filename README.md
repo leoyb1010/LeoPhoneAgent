@@ -2,7 +2,7 @@
 
 > 原名 LeoPhoneAgent，2026-10-06 先后改名 LOBE、LeoBot；仓库地址、Bundle ID 与数据目录沿用原名。
 
-[![iOS](https://img.shields.io/badge/iOS-1.72.0%20(170)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.73.0%20(171)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS source](https://img.shields.io/badge/macOS_source-1.10.0-7C3AED.svg)](src/mac/leophone/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.22-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -168,7 +168,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 当前源码版本/构建:`1.72.0 (170)`;Bundle ID `com.leoyuan.leophoneagent`
+- 当前源码版本/构建:`1.73.0 (171)`;Bundle ID `com.leoyuan.leophoneagent`
+- 2026-10-15 1.73.0：服务商下架的模型不再从 iCloud 复活（刷新时同步删除云端旧副本）。
 - 2026-10-15 1.72.0 / Mac 1.10.0：下架服务器任务（Paperclip），升级自动清理残留；Mac 图标机器人放大。
 - 2026-10-15 1.71.0：邮件可标记 / 移动 / 存草稿 / 发信（可按邮箱始终允许）与邮件监控；开箱内置 5 个技能；默认接好 Exa / Context7 / DeepWiki，MCP 目录清理。
 - 2026-10-14 1.70.0：只聊天不再启动终端内核；日志去掉输入框、命令与回复片段并清洗旧日志；折叠回复的 Copy Markdown 复制全文；补译 57 条文案。

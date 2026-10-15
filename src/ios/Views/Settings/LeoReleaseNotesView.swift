@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.73.0",
+            date: "2026-10-15",
+            title: "删掉的模型不再自己回来",
+            highlights: [
+                "修复：服务商那边下架的模型（比如去掉 Cursor 后少掉的那 200 多个），刷新后会隔一阵又全部冒回来。现在刷新模型列表时，会一并删掉 iCloud 里的旧副本，其他设备也会跟着同步删除。",
+                "升级后第一次打开会自动刷新一次模型列表，把之前积下的旧副本清掉；只有服务商自己返回了模型清单时才会删，网络出错或拿不到清单时不动。"
+            ]
+        ),
+        LeoRelease(
             version: "1.72.0",
             date: "2026-10-15",
             title: "下架服务器任务，专注本机和 Mac",

@@ -1093,7 +1093,8 @@ struct ProviderInstanceDetailView: View {
             defer { isFetchingModels = false }
             do {
                 let result = try await ProviderConfigStore.fetchModelsWithFallback(freshInstance, forceRefresh: true)
-                guard store.replaceEntries(for: freshInstance.id, models: result.models) else {
+                guard store.replaceEntries(for: freshInstance.id, models: result.models,
+                                           pruneCloudCopies: result.source == "api") else {
                     fetchError = String(localized: "Could not save model changes. Your previous configuration was kept. Try again.")
                     return
                 }

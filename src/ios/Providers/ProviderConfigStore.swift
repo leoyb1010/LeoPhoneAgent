@@ -1509,7 +1509,12 @@ final class ProviderConfigStore: ObservableObject {
     /// overrides are preserved and the entry is converted to non-custom (so the user's
     /// selected model keeps working after refresh).
     @discardableResult
-    func replaceEntries(for instanceId: String, models rawModels: [LLMModel], caller: String = #function) -> Bool {
+    /// - Parameter pruneCloudCopies: 列表来自服务商自己的 /models(source == "api")时传 true:
+    ///   服务器上已经没有的模型,同时把 iCloud 里的那份删掉。否则它们只在本机被归档,
+    ///   云端副本还在,下次全量拉取或别的设备一同步就整批「复活」(2026-10-14:283 → 64 → 又回到 200+)。
+    ///   退回 models.dev / 内置列表时不删:那不是这台服务器的真实清单。
+    func replaceEntries(for instanceId: String, models rawModels: [LLMModel], caller: String = #function,
+                        pruneCloudCopies: Bool = false) -> Bool {
         guard config.instances.contains(where: { $0.id == instanceId }) else { return false }
         let existing = config.modelEntries.filter { $0.providerInstanceId == instanceId }
         let template = VoiceProviderTemplate.template(
@@ -1526,14 +1531,33 @@ final class ProviderConfigStore: ObservableObject {
             config.modelEntries.append(contentsOf: refresh.entries)
             for (alias, id) in refresh.aliases where alias != id { legacyUuidToCompositeKey[alias] = id }
             persistLegacyUuidMap()
-            logger.info("[ModelList] replaceEntries caller=\(caller) instance=\(instanceId.prefix(8)) before=\(existing.count) after=\(refresh.entries.count); omitted metadata archived locally")
-            return save()
+            let cloudDeletes = pruneCloudCopies && !rawModels.isEmpty
+                ? Self.cloudRecordIds(omittedFrom: existing, kept: refresh.entries, legacyAliases: legacyUuidToCompositeKey)
+                : []
+            logger.info("[ModelList] replaceEntries caller=\(caller) instance=\(instanceId.prefix(8)) before=\(existing.count) after=\(refresh.entries.count); omitted metadata archived locally; cloud deletes=\(cloudDeletes.count)")
+            guard save() else { return false }
+            if !cloudDeletes.isEmpty {
+                Task {
+                    for recordId in cloudDeletes {
+                        await ChatStore.shared.markDirty(recordType: "ProviderModelEntryV3", recordId: recordId, operation: "delete")
+                    }
+                }
+            }
+            return true
         } catch {
             // Keep the previous catalog rather than lose user edits. In
             // particular, never overwrite an unreadable or newer archive.
             logger.error("[ModelList] refresh aborted: cannot preserve model metadata: \(error)")
             return false
         }
+    }
+
+    nonisolated static func cloudRecordIds(omittedFrom existing: [ModelEntry], kept: [ModelEntry],
+                                           legacyAliases: [String: String]) -> [String] {
+        let names = { (e: ModelEntry) in
+            ModelCloudPrune.EntryNames(id: e.id, uuid: e.uuid, legacyColonKey: e.legacyColonCompositeKey)
+        }
+        return ModelCloudPrune.recordIds(existing: existing.map(names), kept: kept.map(names), legacyAliases: legacyAliases)
     }
 
     // MARK: - Model Groups
@@ -2297,7 +2321,8 @@ final class ProviderConfigStore: ObservableObject {
         do {
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) starting fetch")
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
-            guard replaceEntries(for: instance.id, models: result.models, caller: "refreshModels(manual)") else { return false }
+            guard replaceEntries(for: instance.id, models: result.models, caller: "refreshModels(manual)",
+                                 pruneCloudCopies: result.source == "api") else { return false }
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
             for w in result.warnings { logger.warning("⚠️ \(w)") }
             return true
@@ -2319,7 +2344,8 @@ final class ProviderConfigStore: ObservableObject {
         do {
             logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) starting fetch")
             let result = try await Self.fetchModelsWithFallback(instance, forceRefresh: true)
-            guard replaceEntries(for: instance.id, models: result.models, caller: "autoRefreshModels(daily)") else { return }
+            guard replaceEntries(for: instance.id, models: result.models, caller: "autoRefreshModels(daily)",
+                                 pruneCloudCopies: result.source == "api") else { return }
             logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
         } catch {
             logger.error("[ModelList] autoRefreshModels (DAILY) FAILED type=\(String(describing: type(of: error)))")
@@ -2412,7 +2438,14 @@ final class ProviderConfigStore: ObservableObject {
 
     private func refreshAllModelsSerially() async {
         let key = "lastModelsRefreshDate"
-        let lastRefresh = UserDefaults.standard.object(forKey: key) as? Date
+        var lastRefresh = UserDefaults.standard.object(forKey: key) as? Date
+        // [T-model-cloud-prune] 1.73 起刷新会顺带删掉云端里服务器已不再提供的模型。升级后第一次
+        // 不等明天:无视「今天已刷新」再跑一次,把之前积下的云端旧副本清掉(只此一次)。
+        let pruneOnceKey = "leo.models.cloudPruneOnce.v1"
+        if !UserDefaults.standard.bool(forKey: pruneOnceKey) {
+            UserDefaults.standard.set(true, forKey: pruneOnceKey)
+            lastRefresh = nil
+        }
         let calendar = Calendar.current
         let lastStr = lastRefresh.map { ISO8601DateFormatter().string(from: $0) } ?? "nil"
 

@@ -1,5 +1,11 @@
 # LeoPhoneAgent 更新记录
 
+## iOS 1.73.0 (171) · 服务商下架的模型不再从 iCloud 复活 - 2026-10-15
+
+- 根因：`replaceEntries`（模型列表刷新）把服务器不再提供的条目只在本机归档，不推 `ProviderModelEntryV3` 删除；`emitV3MarkDirty` 又刻意不从快照差异推断删除。云端旧副本一直在，`SKIP (recently deleted locally)` 窗口过后或重启全量拉取即整批复活。实测：10-14 16:08 `before=283 after=64` 未推任何删除，17:57 回到 243；10-15 10:40 一次写回约 195 条。
+- 修复：刷新来源为服务商自己的 `/models`（`source == "api"`，非空）时，对被拿掉的条目推送云端删除，记录名覆盖规范 id、uuid、旧冒号键与迁移前随机 UUID 别名（`ModelCloudPrune`）；models.dev / 内置回退不删。手动刷新、每日自动刷新、实例详情「获取模型」三处都接上。
+- 升级后首次启动无视「今天已刷新」再跑一次（`leo.models.cloudPruneOnce.v1`），把积下的旧副本清掉。
+
 ## iOS 1.72.0 (170) / Mac 1.10.0 · 下架服务器任务（Paperclip）、Mac 图标放大 - 2026-10-15
 
 - iOS：删除 `Agent/Paperclip`、`Views/Paperclip`、灵动岛小组件与 ActivityKit 属性共 19 个文件和 4 个测试文件；`IOSExecutionBackend` 与工作区切换整体移除，App 根视图直接是 `ContentView`；清掉首页按钮、对话菜单、回复「下一步」（菜单 5 → 4 项）、设置入口、深链 `leophoneagent://paperclip/…`、Spotlight / 通知跳转、3 个 App Shortcuts 与 Siri 说明。新增 `PaperclipRetirement`：首次启动清 `leo.paperclip.*` 与旧工作区开关、每个服务器的 `WKWebsiteDataStore`、Spotlight 域与 `paperclip.*` 通知（只跑一次）。
