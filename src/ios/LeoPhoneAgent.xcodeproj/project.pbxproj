@@ -491,6 +491,7 @@
 		LF64333B68E8 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LF2ED9FD3235 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 		LFCB4BB98193 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF1456E02725 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		LFD51A292015 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF904607C9DF /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
@@ -504,6 +505,7 @@
 		LF714387EFE1 /* ChatCompletionsWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFB3AA038DDA /* ChatCompletionsWire.swift */; };
 		LFD1F84A10FA /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 		LF186F089B19 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		LFB522B634C4 /* LeoMotionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF2025E8D5E2 /* LeoMotionPolicy.swift */; };
 		LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF1CC96DB1CD /* MCPDaemonBridge.swift */; };
 		LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF6973892068 /* LiveActivityRemotePush.swift */; };
@@ -722,8 +724,10 @@
 		E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0004 /* HarnessApprovalNotifier.swift */; };
 		E5SIR0001 /* MacFleetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0002 /* MacFleetIntents.swift */; };
 		E5GWC0001 /* LeoAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* LeoAgentClient.swift */; };
+		E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSC50R /* MacScreenSnapshotClient.swift */; };
 		E5GWH1001 /* LeoAgentHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH1002 /* LeoAgentHarness.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
+		LF0FA1A41C6D /* MacScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF26AE1ABDCE /* MacScreenViews.swift */; };
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
 		E5RMC0001 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
@@ -1016,7 +1020,9 @@
 		E5WW00021 /* AskLeoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WW00005 /* AskLeoIntent.swift */; };
 		E5WW00022 /* AskLeoIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WW00005 /* AskLeoIntent.swift */; };
 		E5WW00023 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF39465E891C /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		E5WW00024 /* WatchMacStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF7295E2414A /* WatchMacStatus.swift */; };
+		LF1BA5E58E39 /* MacScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = LF538A58CD86 /* MacScreenSnapshot.swift */; };
 		E5WW00025 /* LeoWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5WW00001 /* LeoWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5WWSH001 /* ShareMacTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = LFE35BAC8FC5 /* ShareMacTarget.swift */; };
 /* End PBXBuildFile section */
@@ -1538,6 +1544,7 @@
 		LFB3AA038DDA /* ChatCompletionsWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCompletionsWire.swift; sourceTree = "<group>"; };
 		LFE35BAC8FC5 /* ShareMacTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMacTarget.swift; sourceTree = "<group>"; };
 		LF7295E2414A /* WatchMacStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMacStatus.swift; sourceTree = "<group>"; };
+		LF538A58CD86 /* MacScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScreenSnapshot.swift; sourceTree = "<group>"; };
 		LF2025E8D5E2 /* LeoMotionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionPolicy.swift; sourceTree = "<group>"; };
 		LF1CC96DB1CD /* MCPDaemonBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDaemonBridge.swift; sourceTree = "<group>"; };
 		LF6973892068 /* LiveActivityRemotePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityRemotePush.swift; sourceTree = "<group>"; };
@@ -1738,8 +1745,10 @@
 		E5SIR0004 /* HarnessApprovalNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessApprovalNotifier.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0002 /* MacFleetIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Intents/MacFleetIntents.swift"; sourceTree = SOURCE_ROOT; };
 		E5GWC0002 /* LeoAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentClient.swift; sourceTree = SOURCE_ROOT; };
+		E5MSC50R /* MacScreenSnapshotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/MacScreenSnapshotClient.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH1002 /* LeoAgentHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentHarness.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
+		LF26AE1ABDCE /* MacScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/MacScreenViews.swift; sourceTree = SOURCE_ROOT; };
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
 		E5RMC0002 /* RelayMachinesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/RelayMachinesClient.swift; sourceTree = SOURCE_ROOT; };
@@ -2554,6 +2563,7 @@
 				LFB3AA038DDA /* ChatCompletionsWire.swift */,
 				LFE35BAC8FC5 /* ShareMacTarget.swift */,
 				LF7295E2414A /* WatchMacStatus.swift */,
+				LF538A58CD86 /* MacScreenSnapshot.swift */,
 				LF2025E8D5E2 /* LeoMotionPolicy.swift */,
 				LF1CC96DB1CD /* MCPDaemonBridge.swift */,
 				LF6973892068 /* LiveActivityRemotePush.swift */,
@@ -2793,9 +2803,11 @@
 				E5SIR0004 /* HarnessApprovalNotifier.swift */,
 				E5SIR0002 /* MacFleetIntents.swift */,
 				E5GWC0002 /* LeoAgentClient.swift */,
+				E5MSC50R /* MacScreenSnapshotClient.swift */,
 				E5GWH1002 /* LeoAgentHarness.swift */,
 				E5E15704F /* MacResultInbox.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
+				LF26AE1ABDCE /* MacScreenViews.swift */,
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
 				E5RMC0002 /* RelayMachinesClient.swift */,
@@ -3332,6 +3344,7 @@
 			files = (
 				E5WW00022 /* AskLeoIntent.swift in Sources */,
 				E5WW00024 /* WatchMacStatus.swift in Sources */,
+				LF1BA5E58E39 /* MacScreenSnapshot.swift in Sources */,
 				E5E15705W /* WatchContinueOnPhone.swift in Sources */,
 				E5WA00101 /* LeoWatchApp.swift in Sources */,
 				E5WA00102 /* WatchConnectivityClient.swift in Sources */,
@@ -3880,6 +3893,7 @@
 				LF714387EFE1 /* ChatCompletionsWire.swift in Sources */,
 				LFD1F84A10FA /* ShareMacTarget.swift in Sources */,
 				LF186F089B19 /* WatchMacStatus.swift in Sources */,
+				LF2D06A8CD8F /* MacScreenSnapshot.swift in Sources */,
 				LFB522B634C4 /* LeoMotionPolicy.swift in Sources */,
 				LF65D01EB9C8 /* MCPDaemonBridge.swift in Sources */,
 				LF2651E7E07A /* LiveActivityRemotePush.swift in Sources */,
@@ -4038,6 +4052,7 @@
 				LF64333B68E8 /* ChatCompletionsWire.swift in Sources */,
 				LF2ED9FD3235 /* ShareMacTarget.swift in Sources */,
 				LFCB4BB98193 /* WatchMacStatus.swift in Sources */,
+				LF1456E02725 /* MacScreenSnapshot.swift in Sources */,
 				LFD51A292015 /* LeoMotionPolicy.swift in Sources */,
 				LF904607C9DF /* MCPDaemonBridge.swift in Sources */,
 				LF135C33AF5C /* LiveActivityRemotePush.swift in Sources */,
@@ -4239,8 +4254,10 @@
 				E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */,
 				E5SIR0001 /* MacFleetIntents.swift in Sources */,
 				E5GWC0001 /* LeoAgentClient.swift in Sources */,
+				E5MSC50B1 /* MacScreenSnapshotClient.swift in Sources */,
 				E5GWH1001 /* LeoAgentHarness.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
+				LF0FA1A41C6D /* MacScreenViews.swift in Sources */,
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,
 				E5RMC0001 /* RelayMachinesClient.swift in Sources */,
@@ -4690,6 +4707,7 @@
 				E5WW00020 /* LeoWatchWidgets.swift in Sources */,
 				E5WW00021 /* AskLeoIntent.swift in Sources */,
 				E5WW00023 /* WatchMacStatus.swift in Sources */,
+				LF39465E891C /* MacScreenSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
