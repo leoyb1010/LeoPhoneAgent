@@ -11,10 +11,10 @@ few groups, searchable, one line of hint per item, compact rows.
 | ------------------------ | ----------------------------------------------------------------------- |
 | AI 服务商 / AI Providers | 模型设置 `modelProvider`                                                |
 | 智能体 / Agent           | 记忆 `memory`, 子智能体 `subagents`, 扩展 `extensions`                  |
-| 我的设备 / Devices       | 连接手机 `phone` (desktop only), 浏览器 `browser`                       |
+| 我的设备 / Devices       | 连接手机 `phone` (desktop only), 浏览器 `browser`, 电脑操作 `computerUse` (macOS only) |
 | 通用 / General           | 常规 `general`, 外观 `appearance`, 快捷键 `shortcuts`, 使用统计 `usage` |
 
-Hidden sections (`automations`, `plugins`, `workspaceFileSearch`, `computerUse`) stay
+Hidden sections (`automations`, `plugins`, `workspaceFileSearch`) stay
 routable ids only as before.
 
 ### 扩展 / Extensions

@@ -1,12 +1,18 @@
 import type { Server } from "node:http";
 
-import { IProviderSettingsService, ISettingService, IZCodeTaskService } from "@zcode/services";
+import {
+  IMcpSyncService,
+  IProviderSettingsService,
+  ISettingService,
+  IZCodeTaskService,
+} from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 
 import { startLeoHttpApi } from "./httpApi.js";
 import { createLeoQuickEntry } from "./quickEntry.js";
 import { linkEnabled, relayConfigSignature, startLeoLink } from "./link/index.js";
+import { registerPeekabooMcpServer } from "./registerPeekabooMcp.js";
 import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { syncSubscriptionProvider } from "./subscriptionProvider.js";
 import { TreasuryStore } from "./treasuryStore.js";
@@ -77,6 +83,11 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           // 启动时对一次账:之前登过的订阅账号,模型清单要和它一致。
           syncSubscriptions();
           registerTreasuryMcpServer(deps.logger);
+          // [leo][WP-22] 随包 Peekaboo 登记为 MCP leo-screen(只 macOS 有)。
+          const mcpSync = deps.services.getOptional(IMcpSyncService);
+          if (process.platform === "darwin" && mcpSync) {
+            void registerPeekabooMcpServer(mcpSync, deps.logger);
+          }
           // 手机经中继连回这台 Mac:只在抢到端口的这个 Host 里跑一份。
           // 跟着开关文件走:回滚时必须立刻让出机器名,否则和恢复注册的 leoagent 在中继上互踢。
           const stopLink = (reason: string) => {

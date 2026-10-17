@@ -681,6 +681,9 @@ export default {
             from: "resources/macos-window-bounds/zcode-window-bounds",
             to: "macos-window-bounds/zcode-window-bounds",
           },
+          // [leo][WP-22] 随包 Peekaboo CLI(scripts/leo-fetch-peekaboo.mjs 下载并校验 sha256)。
+          // 不在 signIgnore 里:打包时与 App 一起用 LeoBot 的 Developer ID + hardened runtime 重签。
+          { from: "leo/bin", to: "leo/bin" },
           // [leo] 菜单栏模板图标(docs/specs/leo-quick-entry.md);nativeImage 按同目录 @2x 自动取高清版。
           { from: "build/trayTemplate.png", to: "trayTemplate.png" },
           { from: "build/trayTemplate@2x.png", to: "trayTemplate@2x.png" },

@@ -1,0 +1,170 @@
+import { CheckCircle2, ExternalLink, RefreshCw, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button.js";
+import { cn } from "@/components/lib/utils.js";
+import { logger } from "@/logger.js";
+
+/**
+ * [leo][WP-22] 设置「我的设备 → 电脑操作」(macOS)。
+ * Agent 通过随包 Peekaboo 登记的 MCP `leo-screen` 看屏、点按、输入;这里展示 `peekaboo permissions status --json`
+ * 的三项权限,缺哪项就给一个直达系统设置对应面板的按钮。macOS 27 读不到 TCC.db,状态只能这样问。
+ */
+
+type PermissionKey = "screen-recording" | "accessibility" | "event-synthesizing";
+
+interface Permission {
+  key: PermissionKey;
+  name: string;
+  required: boolean;
+  granted: boolean;
+  instructions: string;
+}
+
+type Status =
+  | { state: "ok"; version: string | null; permissions: Permission[]; source: string | null }
+  | { state: "missing" }
+  | { state: "error"; message: string };
+
+interface ComputerUseBridge {
+  status(): Promise<Status>;
+  openSettings(key: PermissionKey): Promise<boolean>;
+}
+
+const LABELS: Record<PermissionKey, { title: string; detail: string }> = {
+  "screen-recording": { title: "屏幕录制", detail: "截图、识别界面元素（see）" },
+  accessibility: { title: "辅助功能", detail: "点按、输入、读取界面结构" },
+  "event-synthesizing": { title: "合成键盘鼠标事件", detail: "部分 App 的键盘快捷键（可选）" },
+};
+
+function bridge(): ComputerUseBridge | null {
+  return (window as unknown as { leoComputerUse?: ComputerUseBridge }).leoComputerUse ?? null;
+}
+
+export function LeoComputerUseSection() {
+  const api = bridge();
+  const [status, setStatus] = useState<Status | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!api) return;
+    setLoading(true);
+    try {
+      setStatus(await api.status());
+    } catch (error) {
+      logger.warn("[LeoComputerUseSection] 读取权限失败", error);
+      setStatus({
+        state: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void refresh();
+    // 用户去系统设置勾完权限再切回来:窗口重新获得焦点时再查一次。
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
+
+  if (!api) {
+    return <p className="text-ui-base text-foreground-subtle">电脑操作只在 macOS 桌面版可用。</p>;
+  }
+
+  return (
+    <div className="space-y-4" data-testid="leo-computer-use-section">
+      <p className="text-ui-base leading-6 text-foreground-subtle">
+        Agent 通过 MCP「leo-screen」（随包的
+        Peekaboo）看屏幕、点按和输入，后台点击不抢鼠标。授权对象是 LeoBot
+        本身；改完权限后回到这里会自动刷新。
+      </p>
+      <div className="overflow-hidden rounded-xl border border-border">
+        <div className="flex items-center justify-between bg-surface px-4 py-2.5 text-ui-sm text-foreground-subtle">
+          <span>
+            权限
+            {status?.state === "ok" && status.version ? ` · Peekaboo ${status.version}` : ""}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw
+              className={cn(
+                "mr-1.5 size-3.5",
+                loading && "animate-spin motion-reduce:animate-none",
+              )}
+            />
+            重新检查
+          </Button>
+        </div>
+        {status === null ? (
+          <div className="border-t border-border px-4 py-3 text-ui-base text-foreground-subtle">
+            正在检查…
+          </div>
+        ) : status.state === "missing" ? (
+          <div className="border-t border-border px-4 py-3 text-ui-base text-foreground-subtle">
+            这个版本没有带 Peekaboo（开发环境请先运行{" "}
+            <code className="font-mono">pnpm leo:fetch-peekaboo</code>）。
+          </div>
+        ) : status.state === "error" ? (
+          <div
+            role="alert"
+            className="border-t border-border px-4 py-3 text-ui-base text-destructive"
+          >
+            读不到权限状态：{status.message}
+          </div>
+        ) : (
+          status.permissions.map((permission) => (
+            <div
+              key={permission.key}
+              className="flex items-center gap-3 border-t border-border px-4 py-3"
+              data-permission={permission.key}
+            >
+              {permission.granted ? (
+                <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+              ) : (
+                <TriangleAlert
+                  className={cn(
+                    "size-4 shrink-0",
+                    permission.required
+                      ? "text-[var(--leo-attention)]"
+                      : "text-foreground-subtlest",
+                  )}
+                  aria-hidden="true"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-ui-base font-medium text-foreground">
+                  {LABELS[permission.key].title}
+                  {permission.required ? "" : "（可选）"}
+                </div>
+                <div className="text-ui-sm text-foreground-subtle">
+                  {permission.granted ? LABELS[permission.key].detail : permission.instructions}
+                </div>
+              </div>
+              {permission.granted ? (
+                <span className="text-ui-sm text-foreground-subtle">已允许</span>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void api.openSettings(permission.key)}
+                >
+                  去系统设置
+                  <ExternalLink className="ml-1.5 size-3.5" />
+                </Button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

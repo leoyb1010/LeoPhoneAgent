@@ -37,3 +37,11 @@ if (process.platform === "darwin") {
     status: () => ipcRenderer.invoke("leo:imcp:status"),
   });
 }
+
+/** [leo][WP-22] 设置「电脑操作」:随包 Peekaboo 的权限状态与系统设置入口。 */
+if (process.platform === "darwin") {
+  contextBridge.exposeInMainWorld("leoComputerUse", {
+    status: () => ipcRenderer.invoke("leo:computer-use:status"),
+    openSettings: (key: string) => ipcRenderer.invoke("leo:computer-use:open-settings", key),
+  });
+}

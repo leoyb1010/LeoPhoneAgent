@@ -4890,6 +4890,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.ready.sessionValidationHint":
     "LeoBot will verify the Computer Use tools against the exact session when your first session starts.",
   "settings.computerUse.title": "Computer Use",
+  "settings.computerUse.hint": "Let the agent see the screen, click and type: needs Screen Recording and Accessibility",
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":
     "Turning this on enables Computer Use — its MCP server and skills.",

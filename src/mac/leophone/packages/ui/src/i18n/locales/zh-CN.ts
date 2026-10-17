@@ -4739,7 +4739,8 @@ const zhCN: Record<string, string> = {
   "cuaPermission.ready": "权限已就绪",
   "cuaPermission.ready.sessionValidationHint":
     "首个会话启动时，LeoBot 会针对该会话精确验证电脑控制工具。",
-  "settings.computerUse.title": "电脑控制",
+  "settings.computerUse.title": "电脑操作",
+  "settings.computerUse.hint": "让 Agent 看屏幕、点按和输入：需要屏幕录制与辅助功能权限",
   "settings.computerUse.toggleLabel": "启用电脑控制",
   "settings.computerUse.toggleDescription": "开启后将启用电脑控制及其 MCP 与技能。",
   "settings.computerUse.composerEntry.label": "在输入框显示电脑操作按钮",
