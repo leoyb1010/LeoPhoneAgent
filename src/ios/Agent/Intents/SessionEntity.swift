@@ -68,3 +68,8 @@ enum SessionLockedIntentError: Error, CustomLocalizedStringResourceConvertible {
         "这个会话已用 Face ID 锁定，请在 App 里打开查看。"
     }
 }
+
+// [WP-45] iOS 27: a session id is the same on every device (it syncs through iCloud), so a
+// Siri conversation or a shortcut about a session can continue on another device.
+@available(iOS 27, *)
+extension SessionEntity: SyncableEntity {}
