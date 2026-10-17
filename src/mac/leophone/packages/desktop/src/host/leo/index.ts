@@ -82,9 +82,10 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
         onListening: () => {
           // 启动时对一次账:之前登过的订阅账号,模型清单要和它一致。
           syncSubscriptions();
-          registerTreasuryMcpServer(deps.logger);
           // [leo][WP-22] 随包 Peekaboo 登记为 MCP leo-screen(只 macOS 有)。
           const mcpSync = deps.services.getOptional(IMcpSyncService);
+          // [wp-61] 藏宝阁 MCP 也走同步服务的 CLI 用户配置(会话真正读的地方)。
+          if (mcpSync) void registerTreasuryMcpServer(mcpSync, deps.logger);
           if (process.platform === "darwin" && mcpSync) {
             void registerPeekabooMcpServer(mcpSync, deps.logger);
           }
