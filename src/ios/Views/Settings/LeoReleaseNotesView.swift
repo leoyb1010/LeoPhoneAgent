@@ -12,6 +12,18 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.75.1",
+            date: "2026-10-17",
+            title: "远程 Mac 上的 CLI 全部打通",
+            highlights: [
+                "四台 Mac（含 MacBook Air）都能从手机用：LeoBot、Claude Code、Codex、Gemini、opencode、grok 全部显示在列表里，没装或没登录的会灰显并写明原因。",
+                "手机上直接登录：某台 Mac 上的 agent 没登录时点「登录」，弹出网页授权（grok、Codex 用设备码，Claude 授权码，Gemini、opencode 粘贴 Key），不用再去 Mac 上操作；失败卡片上也有「去登录」。",
+                "连接更快更稳：优先 Tailscale 直连，连不上走中继（新的 Cloudflare 入口，比原来快 3 倍，原入口自动备用），再不行用 SSH 兜底在 Mac 上直接跑 CLI；每台 Mac 显示当前走哪条路和延迟。",
+                "直连被小火箭等代理拦截时，会给出一键复制的规则。",
+                "出错写清楚是哪个 agent、什么原因、怎么修，不会再出现空白的「完成」。"
+            ]
+        ),
+        LeoRelease(
             version: "1.75.0",
             date: "2026-10-17",
             title: "看 Mac 屏幕、手表复杂功能、液态玻璃",
