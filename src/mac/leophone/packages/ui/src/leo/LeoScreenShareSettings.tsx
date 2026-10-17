@@ -16,6 +16,7 @@ interface ScreenState {
   enabled: boolean;
   tailnetOnly?: boolean;
   control?: boolean;
+  accessibility?: boolean;
   hostError: string | null;
   permission: string;
 }
@@ -25,6 +26,7 @@ interface ScreenBridge {
   setScreenEnabled?: (enabled: boolean) => Promise<ScreenState>;
   setScreenOptions?: (patch: { tailnet_only?: boolean; control?: boolean }) => Promise<ScreenState>;
   openScreenSettings?: () => Promise<boolean>;
+  openAccessibilitySettings?: () => Promise<boolean>;
 }
 
 function screenBridge(): Required<ScreenBridge> | null {
@@ -112,6 +114,23 @@ export function LeoScreenShareSettings() {
             />
           }
         />
+        {state.control && !state.accessibility ? (
+          <SettingsRow
+            label="辅助功能权限"
+            description="macOS 需要允许 LeoBot 使用辅助功能，手机的鼠标键盘操作和「连按三次 Esc 断开」才会生效。"
+            control={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void bridge.openAccessibilitySettings?.()}
+              >
+                去系统设置
+                <ExternalLink className="ml-1.5 size-3.5" />
+              </Button>
+            }
+          />
+        ) : null}
         <SettingsRow
           label="屏幕录制权限"
           description={
