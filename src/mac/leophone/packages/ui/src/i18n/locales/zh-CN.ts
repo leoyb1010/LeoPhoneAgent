@@ -1927,7 +1927,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.catalogProviderEmpty": "未找到供应商",
   "settings.modelProvider.addProviderAction": "添加供应商",
   "settings.modelProvider.templatePickerTitle": "添加供应商",
-  "settings.modelProvider.templateGroup.zhipu": "智谱",
+  "settings.modelProvider.templateGroup.zhipu": "GLM",
   "settings.modelProvider.templateGroup.other": "其他",
   "settings.modelProvider.templatePickerBack": "返回供应商详情",
   "settings.modelProvider.addProviderModelReminder": "添加供应商前，请至少添加一个模型。",
@@ -2098,9 +2098,9 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.slot.opus": "Opus（复杂任务）",
   "settings.modelProvider.slot.reasoning": "Reasoning（推理任务）",
   "settings.modelProvider.mappingNotSet": "未设置",
-  "settings.modelProvider.presetTitle": "智谱",
+  "settings.modelProvider.presetTitle": "内置供应商",
   "settings.modelProvider.presetDescription":
-    "内置 Z.ai 与 BigModel 供应商，支持通过 OAuth 辅助完成配置。",
+    "内置供应商目录（LeoBot 不接入官方账号，请用 API Key 或订阅账号添加供应商）。",
   "settings.modelProvider.presetEmpty": "尚未同步，请先完成 OAuth 登录。",
   "settings.modelProvider.customTitle": "自定义供应商",
   "settings.modelProvider.refresh": "刷新",
@@ -3919,7 +3919,7 @@ const zhCN: Record<string, string> = {
   // 「配置」弹层（docs/dynamic-workflow/presentation.md「The settings popover」）：改子代理模型与最大并发数，
   // 应用即一次 GUI 修订（新 run 接着跑，旧 run 停下，已完成的步骤作缓存带过去）。
   // 完成卡与 run 侧板上的「保存 / 再次运行」（docs/dynamic-workflow/transcript-and-notifications.md
-  // 「Saving the run, and running it again」）。两条路：交给 ZCode 提炼，或按原样直接写下去。
+  // 「Saving the run, and running it again」）。两条路：交给 LeoBot 提炼，或按原样直接写下去。
   "chat.toolCall.workflow.saveRun.action": "保存",
   "chat.toolCall.workflow.saveRun.runAgain": "再次运行",
   "chat.toolCall.workflow.saveRun.starting": "启动中…",
