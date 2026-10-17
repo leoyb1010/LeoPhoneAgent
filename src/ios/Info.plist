@@ -71,33 +71,6 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>AppIcon-Dark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Dark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyDark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyDark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyLight</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyLight</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
 			<key>AppIcon-Light</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
@@ -122,33 +95,6 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>AppIcon-Dark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Dark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyDark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyDark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyLight</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyLight</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
 			<key>AppIcon-Light</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
@@ -174,11 +120,6 @@
 		<string>en</string>
 		<string>zh-Hans</string>
 		<string>zh-Hant</string>
-		<string>ja</string>
-		<string>ko</string>
-		<string>fr</string>
-		<string>de</string>
-		<string>ru</string>
 	</array>
 	<key>CFBundleName</key>
 	<string>LeoPhoneAgent</string>

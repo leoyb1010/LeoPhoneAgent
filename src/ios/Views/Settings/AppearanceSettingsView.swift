@@ -14,7 +14,6 @@ import WidgetKit
 
 struct AppearanceSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
-    @AppStorage("appIconMode") private var appIconMode: Int = 0
     @AppStorage("appLanguage") private var appLanguage: String = ""
     @AppStorage("launchScreen") private var launchScreen: Int = 0  // 0=Auto, 1=Last Session, 2=New Chat, 3=Home
     @AppStorage("toolPreviewEnabled") private var toolPreviewEnabled: Bool = true
@@ -45,14 +44,6 @@ struct AppearanceSettingsView: View {
     @AppStorage("leo.tldrEnabled") private var tldrEnabled: Bool = false
     @AppStorage("autoCompactOnThreshold") private var autoCompactOnThreshold: Bool = false
     @ObservedObject private var fontSettings = FontSettings.shared
-
-    private let iconOptions: [AppIconOption] = [
-        AppIconOption(id: 0, title: "Automatic", subtitle: "Follows system", iconName: nil, imageName: "AlternateIcons/AppIcon-Light"),
-        AppIconOption(id: 1, title: "Light", subtitle: "Always light", iconName: "AppIcon-Light", imageName: "AlternateIcons/AppIcon-Light"),
-        AppIconOption(id: 2, title: "Dark", subtitle: "Always dark", iconName: "AppIcon-Dark", imageName: "AlternateIcons/AppIcon-Dark"),
-        AppIconOption(id: 3, title: "Light (Legacy)", subtitle: "Classic light icon", iconName: "AppIcon-LegacyLight", imageName: "AlternateIcons/AppIcon-LegacyLight"),
-        AppIconOption(id: 4, title: "Dark (Legacy)", subtitle: "Classic dark icon", iconName: "AppIcon-LegacyDark", imageName: "AlternateIcons/AppIcon-LegacyDark"),
-    ]
 
     var body: some View {
         List {
@@ -224,59 +215,9 @@ struct AppearanceSettingsView: View {
                 Text("Scale fonts for chat input, message content, and general app text. Changes apply immediately.")
             }
 
-            if UIApplication.shared.supportsAlternateIcons {
-                Section {
-                    ForEach(iconOptions) { option in
-                        Button {
-                            guard appIconMode != option.id else { return }
-                            // Record the choice only once iOS accepts it, or the
-                            // checkmark and the real icon drift apart.
-                            UIApplication.shared.setAlternateIconName(option.iconName) { error in
-                                // UIKit calls this on an arbitrary background queue.
-                                guard error == nil else { return }
-                                DispatchQueue.main.async { appIconMode = option.id }
-                            }
-                        } label: {
-                            HStack(spacing: 14) {
-                                if let img = UIImage(named: option.imageName) {
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 60, height: 60)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
-                                        )
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    // `option.title` / `option.subtitle` are fixed English
-                                    // keys ("Automatic", "Light", "Always light", etc.).
-                                    // Wrap in LocalizedStringKey so the catalog lookup kicks
-                                    // in — Text(String) would render them verbatim.
-                                    Text(LocalizedStringKey(option.title))
-                                        .foregroundStyle(.primary)
-                                    Text(LocalizedStringKey(option.subtitle))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if appIconMode == option.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.blue)
-                                        .font(.title3)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                } header: {
-                    Text("App Icon")
-                } footer: {
-                    Text("\"Automatic\" uses the system icon which adapts to Dark Mode on iOS 18+.")
-                }
-            }
-
+            // WP-03(1.75.0):原「App 图标」五选一下架 —— 五张备用图其实是同一张 PNG(md5 相同),
+            // 选哪个都不变,属于假选择器。Info.plist 只留 AppIcon-Light 一项,让以前选过它的设备
+            // 仍指向有效条目;其余三张重复图已删。
             Section {
                 ForEach(supportedLanguages) { lang in
                     Button {

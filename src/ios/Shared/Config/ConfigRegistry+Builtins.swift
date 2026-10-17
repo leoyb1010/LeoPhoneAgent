@@ -777,18 +777,10 @@ extension ConfigRegistry {
             cases: ["system", "light", "dark"],
             defaultIndex: 0
         ))
-        r.register(AppStorageIntCodedEnumField(
-            path: "appearance.appIcon",
-            displayName: "App icon",
-            description: "Home screen icon variant.",
-            userDefaultsKey: "appIconMode",
-            cases: ["auto", "light", "dark", "legacy_light", "legacy_dark"],
-            defaultIndex: 0
-        ))
         r.register(AppStorageStringField(
             path: "appearance.language",
             displayName: "App language",
-            description: "BCP-47 code (zh-Hans, en, ja, …) or empty for system.",
+            description: "BCP-47 code (en, zh-Hans, zh-Hant) or empty for system.",
             userDefaultsKey: "appLanguage",
             defaultValue: "",
             maxLength: 16

@@ -73,10 +73,10 @@ enum SystemVoiceCatalog {
     /// is overwhelming; restrict to the app's supported UI locales UNION the user's
     /// system-preferred languages (so someone whose phone is set to Spanish still
     /// sees Spanish voices even though the app has no Spanish UI yet).
-    ///   • App UI locales: de/en/fr/ja/ko/ru/zh (from Localizable.xcstrings).
+    ///   • App UI locales: en/zh(WP-03 起只上架中英,见 supportedLanguages)。
     ///   • User preference: Locale.preferredLanguages base codes.
     static func allowedLanguageCodes() -> Set<String> {
-        let appUI: Set<String> = ["de", "en", "fr", "ja", "ko", "ru", "zh"]
+        let appUI: Set<String> = ["en", "zh"]
         let preferred = Locale.preferredLanguages.compactMap { tag -> String? in
             Locale(identifier: tag).language.languageCode?.identifier.lowercased()
         }

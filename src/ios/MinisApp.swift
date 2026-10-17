@@ -187,7 +187,10 @@ struct MinisApp: App {
         #endif
         // Enable in-app language override for String(localized:) and UIKit strings
         Bundle.enableLanguageOverride()
-        let lang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
+        // WP-03:下架的半译语言(ja/ko/fr/de/ru)存量设置回落到「跟随系统」。
+        let storedLang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
+        let lang = LanguageOption.normalizedAppLanguage(storedLang)
+        if lang != storedLang { UserDefaults.standard.set(lang, forKey: "appLanguage") }
         Bundle.setLanguage(lang.isEmpty ? nil : lang)
         // [T-widget-localization] The widget extension is a separate process
         // and never sees the swizzle above; mirror the choice into the App
