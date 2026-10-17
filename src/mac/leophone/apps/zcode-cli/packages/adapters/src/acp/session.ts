@@ -82,11 +82,20 @@ export class AcpSessionHost {
   }
 
   /** ACP Client 的两个必需回调（其余能力不声明：文件与命令由 agent 自己执行）。 */
-  clientHandlers(): Pick<Client, "sessionUpdate" | "requestPermission"> {
+  clientHandlers(): Pick<Client, "sessionUpdate" | "requestPermission" | "extNotification"> {
     return {
       sessionUpdate: (params) => this.#onSessionUpdate(params),
       requestPermission: (params) => this.#onRequestPermission(params),
+      // [fix-remote] grok 等会发私有通知（x.ai/…）：静默忽略，不当成协议错误。
+      extNotification: async () => undefined,
     };
+  }
+
+  /** [fix-remote] agent 进程在回合中途没了：以错误结束这一轮（否则运行时一直等下一条事件）。 */
+  failTurn(error: unknown): void {
+    if (!this.#turnActive) return;
+    this.#turnActive = false;
+    this.#push({ kind: "error", error });
   }
 
   startTurn(prompt: ContentBlock[]): void {
@@ -110,10 +119,7 @@ export class AcpSessionHost {
               : {}),
           });
         },
-        (error: unknown) => {
-          this.#turnActive = false;
-          this.#push({ kind: "error", error });
-        },
+        (error: unknown) => this.failTurn(error),
       );
   }
 

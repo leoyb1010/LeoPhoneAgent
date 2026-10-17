@@ -27,6 +27,8 @@ export interface ConnectAcpAgentOptions {
   resumeSessionId?: string;
   clientVersion?: string;
   onStderr?: (chunk: string) => void;
+  /** [fix-remote] agent 进程退出（握手后也算）：管理器据此丢掉死连接、让进行中的回合以可读错误结束。 */
+  onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
 }
 
 /** 测试与真实进程共用：给定双向流建立连接、握手并开会话。 */
@@ -77,6 +79,7 @@ export async function spawnAcpAgent(
   });
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => options.onStderr?.(chunk));
+  child.once("exit", (code, signal) => options.onExit?.(code, signal));
   const exited = new Promise<never>((_, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) =>

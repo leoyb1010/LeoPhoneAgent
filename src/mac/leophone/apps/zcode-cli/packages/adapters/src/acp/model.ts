@@ -32,6 +32,7 @@ import {
   type AcpAgentId,
 } from "@zcode/shared/acp";
 import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
+import { acpUnavailableError, appendStderrTail, describeAcpFailure, type AcpAgentError } from "./errors.js";
 import { spawnAcpAgent, type AcpAgentConnection } from "./process.js";
 import { AcpSessionHost } from "./session.js";
 
@@ -68,6 +69,8 @@ export class AcpSessionManager {
   readonly #commandsPath: string;
   readonly #connect: typeof spawnAcpAgent;
   readonly #logger: { warn(message: string, context?: Record<string, unknown>): void } | undefined;
+  /** [fix-remote] 每个 LeoBot 会话最近的 agent stderr（失败时附在错误里）；进程重启时清空。 */
+  readonly #stderrTails = new Map<string, string[]>();
 
   constructor(
     options: {
@@ -102,29 +105,41 @@ export class AcpSessionManager {
         onCommands: (commands) => this.#writeCommands(agentId, cwd, commands),
       });
       const launch = resolveAcpLaunch(agentId, this.#environment);
+      const tail: string[] = [];
+      this.#stderrTails.set(leoSessionId, tail);
       const connection = launch
         ? this.#connect(launch, {
             host,
             cwd,
             resumeSessionId: this.#readState()[leoSessionId]?.acpSessionId,
-            onStderr: (chunk) =>
-              this.#logger?.warn("ACP agent stderr", { agentId, chunk: chunk.slice(0, 2000) }),
+            onStderr: (chunk) => {
+              appendStderrTail(tail, chunk);
+              this.#logger?.warn("ACP agent stderr", { agentId, chunk: chunk.slice(0, 2000) });
+            },
+            onExit: (code, signal) => {
+              // 进程没了：丢掉这条死连接（下一轮重新拉起），进行中的回合以错误结束。
+              if (this.#entries.get(leoSessionId)?.host === host) this.#entries.delete(leoSessionId);
+              host.failTurn(new Error(`ACP agent 已退出（code=${code ?? "null"} signal=${signal ?? "null"}）`));
+            },
           })
         : Promise.reject(
-            new Error(
-              `${acpAgentInfo(agentId).name} 在这台 Mac 上不可用：${
-                detectAcpAgent(agentId, this.#environment).unavailableReason ?? "无法启动"
-              }`,
-            ),
+            acpUnavailableError(agentId, detectAcpAgent(agentId, this.#environment).unavailableReason),
           );
       entry = { host, connection };
       this.#entries.set(leoSessionId, entry);
       connection.then(
         (connected) => this.#writeState(leoSessionId, agentId, connected.sessionId),
-        () => this.#entries.delete(leoSessionId),
+        () => {
+          if (this.#entries.get(leoSessionId)?.host === host) this.#entries.delete(leoSessionId);
+        },
       );
     }
     return { host: entry.host, connection: await entry.connection };
+  }
+
+  /** [fix-remote] 把失败包成「哪个 agent、什么原因、怎么修 + stderr 尾部」的错误。 */
+  describeFailure(leoSessionId: string, agentId: AcpAgentId, error: unknown): AcpAgentError {
+    return describeAcpFailure({ agentId, error, stderrTail: this.#stderrTails.get(leoSessionId) ?? [] });
   }
 
   host(leoSessionId: string): AcpSessionHost | undefined {
@@ -135,6 +150,7 @@ export class AcpSessionManager {
     const entry = this.#entries.get(leoSessionId);
     if (!entry) return;
     this.#entries.delete(leoSessionId);
+    this.#stderrTails.delete(leoSessionId);
     void entry.host.cancel();
     entry.connection.then((connected) => connected.dispose(), () => undefined);
   }
@@ -282,7 +298,12 @@ export class AcpModel implements Model {
 
   async *streamText(request: ModelRequest): AsyncIterable<ModelEvent> {
     const { manager, leoSessionId, agentId, cwd } = this.#options;
-    const { host } = await manager.ensure(leoSessionId, agentId, cwd());
+    let host: AcpSessionHost;
+    try {
+      ({ host } = await manager.ensure(leoSessionId, agentId, cwd()));
+    } catch (error) {
+      throw manager.describeFailure(leoSessionId, agentId, error);
+    }
     const signal = request.abortSignal;
     const userIndex = lastRealUserIndex(request.messages);
     if (userIndex >= 0) {
@@ -384,7 +405,7 @@ export class AcpModel implements Model {
           }
           case "error":
             yield* closeOpen();
-            yield { type: "error", error: event.error };
+            yield { type: "error", error: manager.describeFailure(leoSessionId, agentId, event.error) };
             return;
         }
       }

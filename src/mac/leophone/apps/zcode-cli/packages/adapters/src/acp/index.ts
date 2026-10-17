@@ -3,3 +3,4 @@ export * from "./catalog.js";
 export * from "./session.js";
 export * from "./process.js";
 export * from "./model.js";
+export * from "./errors.js";
