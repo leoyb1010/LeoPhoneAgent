@@ -180,7 +180,10 @@ export function PreviewPaneContent({
 
   if (source.type === "multi-file-diff" && multiFileDiffFiles) {
     return (
+      // [leo][wp-31] 切换文件时按新文件重挂载,用 dur.1 的淡入做 crossfade。
       <DiffViewer
+        key={multiFileDiffFiles.newFile.name}
+        className="leo-diff-swap"
         oldFile={multiFileDiffFiles.oldFile}
         newFile={multiFileDiffFiles.newFile}
         diffClassName="block"

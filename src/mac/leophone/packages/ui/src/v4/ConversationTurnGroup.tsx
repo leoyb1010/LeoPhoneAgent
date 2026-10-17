@@ -18,6 +18,7 @@ import type {
   WorkflowNotificationMeta,
 } from "@zcode/shared/zcode-protocol-v4";
 import { ChatLoading } from "@/components/ai-elements/chat-loading.js";
+import { claimLeoTurnEnter } from "@/leo/leoTurnEnter.js";
 import { ChatApiRetryStatus } from "@/chat-input-toolbar/display.js";
 import { cn } from "@/components/lib/utils.js";
 import { MessageActions } from "@/components/ai-elements/message.js";
@@ -1022,6 +1023,8 @@ function ConversationTurnGroupImpl({
   onFeedbackChange,
   onEdit,
 }: ConversationTurnGroupProps) {
+  // [leo][wp-31] 新回合进入动效:只在本回合首次挂载且是正在跑的最后一回合时播一次(见 leoTurnEnter)。
+  const [leoTurnEnter] = useState(() => claimLeoTurnEnter(unit.key, unit.isLastTurn, unit.isRunning));
   const visibleUserRows = useMemo(() => unit.visibleUserInputs, [unit.visibleUserInputs]);
   const firstReasoningRowId = useMemo(
     () => unit.assistantWorkRows.find((row) => row.kind === "reasoning")?.rowId,
@@ -1170,6 +1173,7 @@ function ConversationTurnGroupImpl({
     <section
       data-turn-id={unit.turnId}
       data-turn-key={unit.key}
+      data-leo-turn-enter={leoTurnEnter ? "true" : undefined}
       className={cn(
         "relative mx-auto flex w-full flex-col gap-5 px-4 @md/conversation:px-6 pb-5",
         startsWithoutUserBubble ? "pt-0" : "pt-14",
