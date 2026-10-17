@@ -102,6 +102,8 @@ function leoagentKey(): string | null {
 
 const LEOAGENT_PUSHABLE = new Set([
   "approval.request",
+  // [WP-41] leoagent 侧(claude / codex / grok 会话)若也转发开跑事件,中继据此拉起灵动岛。
+  "run.started",
   "run.completed",
   "run.failed",
   "run.cancelled",

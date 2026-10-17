@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- LinkSession 是单个手机会话的事件/审批/日志状态机,拆开会让 seq 与审批状态出现两份所有者。 */
 import path from "node:path";
 
 import type { IZCodeTaskService } from "@zcode/services";
@@ -30,7 +31,8 @@ export type ApprovalChoice = "once" | "session" | "deny";
 export const APPROVAL_CHOICES: ApprovalChoice[] = ["once", "session", "deny"];
 
 /** 值得推给手机的:要人拍板的审批、要人知道结果的终态。进度帧不推。 */
-const PUSHABLE = new Set(["approval.request", "run.completed", "run.failed", "run.cancelled"]);
+// [WP-41] run.started 也推给中继:手机关注的任务一开跑,中继就能 push-to-start 灵动岛(App 被杀也能拉起)。
+const PUSHABLE = new Set(["approval.request", "run.started", "run.completed", "run.failed", "run.cancelled"]);
 /** 一轮结束的三种事件。 */
 const RUN_END = new Set(["run.completed", "run.failed", "run.cancelled"]);
 /** 手机端 reconcile 视为结束的状态;订阅流在这些状态下读完就关。 */
@@ -94,6 +96,8 @@ export class LinkSession {
   private recordedOperations: Set<string> | null = null;
   /** 发出时就定好要推的事件;落盘回调来得晚,那时 phoneTurn 可能已经清掉。 */
   private readonly pushSeqs = new Set<number>();
+  /** 这一轮是否已发过 run.started;一轮结束时复位。 */
+  private runAnnounced = false;
 
   constructor(
     args: { taskId: string; cwd: string; mode?: ZCodeTaskMode },
@@ -247,6 +251,11 @@ export class LinkSession {
         return;
       case "task_run_started":
         if (this.status !== "waiting_for_approval") this.status = "running";
+        // 每轮只报一次开跑(内核可能为同一轮重复发 started)。
+        if (!this.runAnnounced) {
+          this.runAnnounced = true;
+          this.emit({ event: "run.started" });
+        }
         return;
       case "permission_request":
         for (const flushed of this.mapper.flushThought()) this.emit(flushed);
@@ -349,7 +358,10 @@ export class LinkSession {
     }
     if (PUSHABLE.has(name) && this.phoneSessionId) enriched["phone_session_id"] = this.phoneSessionId;
     if (PUSHABLE.has(name) && this.phoneTurn) this.pushSeqs.add(this.seq);
-    if (RUN_END.has(name)) this.phoneTurn = false;
+    if (RUN_END.has(name)) {
+      this.phoneTurn = false;
+      this.runAnnounced = false;
+    }
     if (name === "user.message") {
       const text = String(enriched["text"] ?? "").replace(/\s+/g, " ").trim();
       if (!this.title) this.title = text.slice(0, 80);
