@@ -1,7 +1,8 @@
-import { CheckCircle2, CircleSlash, RefreshCw, SquareTerminal } from "lucide-react";
+import { CheckCircle2, CircleSlash, KeyRound, RefreshCw, SquareTerminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button.js";
+import { Input } from "@/components/ui/input.js";
 import { cn } from "@/components/lib/utils.js";
 import { logger } from "@/logger.js";
 
@@ -18,11 +19,78 @@ interface AcpAgentListing {
   cliPath?: string;
   unavailableReason?: string;
   loginCommand?: string;
+  /** Claude Code：已放了长期令牌（只有有无，界面拿不到内容）。 */
+  longLivedToken?: boolean;
 }
 
 interface AcpBridge {
   list(): Promise<AcpAgentListing[]>;
   login(agentId: string): Promise<{ ok: boolean }>;
+  setClaudeToken?(token: string): Promise<{ ok: boolean; error?: string }>;
+}
+
+/**
+ * [fix-remote] Claude Code 的长期令牌（`claude setup-token`，有效一年）：钥匙串登录过期或在后台读不到时，
+ * 外部 agent 用它登录。只写不读：界面只显示「已使用长期令牌」。
+ */
+function ClaudeTokenControl({ api, configured, onSaved }: { api: AcpBridge; configured: boolean; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const save = async (token: string) => {
+    const result = await api.setClaudeToken!(token).catch(() => ({ ok: false, error: "保存失败" }));
+    if (!result.ok) {
+      setError(result.error ?? "保存失败");
+      return;
+    }
+    setValue("");
+    setError(null);
+    setEditing(false);
+    onSaved();
+  };
+  if (!api.setClaudeToken) return null;
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        {configured ? (
+          <span className="text-ui-sm text-success" data-testid="leo-claude-token-status">
+            已使用长期令牌
+          </span>
+        ) : null}
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
+          <KeyRound className="mr-1.5 size-3.5" />
+          {configured ? "更换令牌" : "粘贴令牌"}
+        </Button>
+        {configured ? (
+          <Button type="button" size="sm" variant="ghost" onClick={() => void save("")}>
+            移除
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <Input
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="粘贴 claude setup-token 生成的 sk-ant-oat01-…"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          aria-label="Claude Code 长期令牌"
+        />
+        <Button type="button" size="sm" disabled={!value.trim()} onClick={() => void save(value)}>
+          保存
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          取消
+        </Button>
+      </div>
+      {error ? <span className="text-ui-sm text-destructive">{error}</span> : null}
+    </div>
+  );
 }
 
 function bridge(): AcpBridge | null {
@@ -72,7 +140,7 @@ export function LeoExternalAgentsSection() {
   return (
     <div className="space-y-4" data-testid="leo-external-agents-section">
       <p className="text-ui-base leading-6 text-foreground-subtle">
-        在新任务的模型选择里选「外部 Agent」，就能直接用 Claude Code、Codex、Gemini 或 opencode
+        在新任务的模型选择里选「外部 Agent」，就能直接用 Claude Code、Codex、Gemini、opencode 或 Grok
         干活：改动、命令和审批和 LeoBot 自己的任务一样显示，手机上也能看到并审批。用的是你本机装好的
         CLI 和它们自己的登录。
       </p>
@@ -107,6 +175,11 @@ export function LeoExternalAgentsSection() {
                     ? (agent.cliPath ?? "可用")
                     : (agent.unavailableReason ?? "这台 Mac 上不可用")}
                 </div>
+                {agent.id === "claude-code" && agent.available ? (
+                  <div className="mt-1.5">
+                    <ClaudeTokenControl api={api} configured={agent.longLivedToken === true} onSaved={() => void refresh()} />
+                  </div>
+                ) : null}
               </div>
               {agent.available && agent.loginCommand ? (
                 <Button type="button" size="sm" variant="outline" onClick={() => void login(agent.id)}>

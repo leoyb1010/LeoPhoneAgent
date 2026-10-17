@@ -1,8 +1,8 @@
 // [leo][WP-21] ACP 外部 agent 的本机检测（node-only：读 PATH 与文件系统）。
 // UI 状态（services）、Leo Link capabilities 与 CLI 启动（adapters/acp）共用同一份判断。
 import { execFile, spawnSync } from "node:child_process";
-import { accessSync, constants, readdirSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { accessSync, constants, readdirSync, readFileSync } from "node:fs";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -29,6 +29,8 @@ export interface AcpAgentStatus {
   unavailableReason?: string;
   /** 未登录时在终端里跑的登录命令。 */
   loginCommand?: string;
+  /** [fix-remote] Claude Code：数据根里放了 `claude setup-token` 的长期令牌（只报有无，不报内容）。 */
+  longLivedToken?: boolean;
 }
 
 export interface AcpEnvironment {
@@ -146,6 +148,55 @@ export function resolveClaudeAgentAcpEntry(): string | undefined {
 }
 
 
+/** LeoBot 的数据根（与 CLI 同一个 ZCODE_HOME，默认 ~/.leophoneagent）。 */
+function leoDataRoot(env: NodeJS.ProcessEnv): string {
+  return env.ZCODE_HOME?.trim() || join(env.HOME?.trim() || homedir(), ".leophoneagent");
+}
+
+/**
+ * [fix-remote] Claude Code 的长期令牌（`claude setup-token` 生成，一行 sk-ant-oat01-…）。
+ * 钥匙串里的登录会过期或读不到（launchd / 无 GUI 会话），ACP 拉起 claude 时用它设 CLAUDE_CODE_OAUTH_TOKEN。
+ */
+export function claudeOAuthTokenPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(leoDataRoot(env), "acp", "claude-oauth-token");
+}
+
+/** 读长期令牌；文件不存在、为空或格式不对返回 undefined。内容绝不写日志。 */
+export function readClaudeOAuthToken(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  try {
+    const token = readFileSync(claudeOAuthTokenPath(env), "utf8").trim();
+    return token && !/\s/.test(token) ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 设置页「粘贴令牌」：写入（0600）；传空串则移除。 */
+export async function writeClaudeOAuthToken(token: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const file = claudeOAuthTokenPath(env);
+  const value = token.trim();
+  if (!value) {
+    await rm(file, { force: true });
+    return;
+  }
+  if (/\s/.test(value) || value.length < 20) throw new Error("令牌格式不对：应是一行 sk-ant-oat01-… 的长期令牌");
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  await writeFile(file, `${value}\n`, { mode: 0o600 });
+}
+
+/**
+ * 宿主自己是 Claude Code / Agent SDK 拉起的进程时会带这些变量；传给外部 agent 会让 claude 以为自己是
+ * 嵌套会话、改走宿主的鉴权刷新而报 Authentication required。启动外部 agent 前一律去掉。
+ */
+export const ACP_HOST_ENV_KEYS = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_SSE_PORT",
+  "CLAUDE_AGENT_SDK_VERSION",
+] as const;
+
 export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {}): AcpAgentStatus {
   const env = environment.env ?? process.env;
   switch (id) {
@@ -159,7 +210,13 @@ export function detectAcpAgent(id: AcpAgentId, environment: AcpEnvironment = {})
       // 适配器随包，但 Claude Code 本体用本机安装的 claude（不随包 240MB 的原生二进制）。
       if (!entry) return { id, available: false, unavailableReason: "随包的 Claude Code 适配器缺失" };
       return cliPath
-        ? { id, available: true, cliPath, loginCommand: "claude /login" }
+        ? {
+            id,
+            available: true,
+            cliPath,
+            loginCommand: "claude /login",
+            ...(readClaudeOAuthToken(env) ? { longLivedToken: true } : {}),
+          }
         : { id, available: false, unavailableReason: notInstalled("claude") };
     }
     case "codex": {

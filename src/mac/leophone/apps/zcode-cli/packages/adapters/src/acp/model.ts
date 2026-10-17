@@ -32,7 +32,13 @@ import {
   type AcpAgentId,
 } from "@zcode/shared/acp";
 import { detectAcpAgent, resolveAcpLaunch, type AcpEnvironment } from "./catalog.js";
-import { acpUnavailableError, appendStderrTail, describeAcpFailure, type AcpAgentError } from "./errors.js";
+import {
+  acpUnavailableError,
+  appendStderrTail,
+  describeAcpFailure,
+  redactAgentOutput,
+  type AcpAgentError,
+} from "./errors.js";
 import { spawnAcpAgent, type AcpAgentConnection } from "./process.js";
 import { AcpSessionHost } from "./session.js";
 
@@ -114,7 +120,8 @@ export class AcpSessionManager {
             resumeSessionId: this.#readState()[leoSessionId]?.acpSessionId,
             onStderr: (chunk) => {
               appendStderrTail(tail, chunk);
-              this.#logger?.warn("ACP agent stderr", { agentId, chunk: chunk.slice(0, 2000) });
+              // stderr 可能带出令牌（长期令牌经 env 传给了 claude）：脱敏后再进日志。
+              this.#logger?.warn("ACP agent stderr", { agentId, chunk: redactAgentOutput(chunk.slice(0, 2000)) });
             },
             onExit: (code, signal) => {
               // 进程没了：丢掉这条死连接（下一轮重新拉起），进行中的回合以错误结束。

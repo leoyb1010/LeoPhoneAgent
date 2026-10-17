@@ -4,9 +4,11 @@ import type { AcpAgentId } from "@zcode/shared/acp";
 import {
   acpSearchPath,
   CODEX_ACP_PACKAGE,
+  ACP_HOST_ENV_KEYS,
   CODEX_ACP_VERSION,
   detectAcpAgent,
   findExecutable,
+  readClaudeOAuthToken,
   resolveClaudeAgentAcpEntry,
   type AcpEnvironment,
   type AcpLaunchSpec,
@@ -20,6 +22,8 @@ function launchEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   for (const [key, value] of Object.entries(env)) {
     if (typeof value === "string") out[key] = value;
   }
+  // [fix-remote] 宿主的 Claude Code 会话变量会让子进程 claude 走错鉴权路径（见 ACP_HOST_ENV_KEYS）。
+  for (const key of ACP_HOST_ENV_KEYS) delete out[key];
   out.PATH = acpSearchPath(env).join(delimiter);
   // 开发自测钩子：LeoBot 跑在隔离 HOME 时，只让外部 agent 子进程回到真实 HOME（它的登录态在那里）。
   const agentHome = env.LEO_ACP_AGENT_HOME?.trim();
@@ -40,12 +44,19 @@ export function resolveAcpLaunch(
   switch (id) {
     case "claude-code": {
       const entry = (environment.resolveClaudeAgentAcpEntry ?? resolveClaudeAgentAcpEntry)()!;
+      // [fix-remote] 数据根里有长期令牌就用它（钥匙串登录过期 / 读不到时 claude 报 Authentication required）。
+      const token = readClaudeOAuthToken(env);
       return {
         command: nodePath,
         args: [entry],
         // 用本机的 Claude Code（登录态、设置都是用户自己的）。nodePath 在桌面端是 Electron 本体，
         // 必须以纯 Node 模式运行，否则会被当成 GUI 进程起 GPU 后崩溃（对真正的 node 无影响）。
-        env: { ...base, CLAUDE_CODE_EXECUTABLE: status.cliPath!, ELECTRON_RUN_AS_NODE: "1" },
+        env: {
+          ...base,
+          CLAUDE_CODE_EXECUTABLE: status.cliPath!,
+          ELECTRON_RUN_AS_NODE: "1",
+          ...(token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {}),
+        },
       };
     }
     case "codex": {

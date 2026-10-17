@@ -58,6 +58,8 @@ if (process.platform === "darwin") {
   contextBridge.exposeInMainWorld("leoAcp", {
     list: () => ipcRenderer.invoke("leo:acp:list"),
     login: (agentId: string) => ipcRenderer.invoke("leo:acp:login", agentId),
+    /** Claude Code 长期令牌（claude setup-token）：写入 / 空串移除；不提供读取。 */
+    setClaudeToken: (token: string) => ipcRenderer.invoke("leo:acp:claude-token", token),
     /** agent 自带的斜杠命令（外部 agent 会话里输入 / 时列出）。 */
     commands: (agentId: string, cwd: string) => ipcRenderer.invoke("leo:acp:commands", agentId, cwd),
   });

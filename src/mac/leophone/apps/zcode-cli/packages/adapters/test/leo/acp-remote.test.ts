@@ -1,7 +1,7 @@
 // [fix-remote] 手机经 Leo Link 用远程 Mac 上的 CLI：grok 走 ACP、GUI 启动时的短 PATH 也能找到 CLI、
 // 外部 agent 失败时给手机的错误说清是谁、为什么、怎么修。
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import test from "node:test";
@@ -13,7 +13,14 @@ import {
   type Agent,
 } from "@agentclientprotocol/sdk";
 import type { ModelEvent } from "@zcode/contracts";
-import { acpSearchPath, detectAcpAgent, resolveAcpLaunch } from "../../src/acp/catalog.js";
+import {
+  acpSearchPath,
+  claudeOAuthTokenPath,
+  detectAcpAgent,
+  resolveAcpLaunch,
+  writeClaudeOAuthToken,
+  type AcpLaunchSpec,
+} from "../../src/acp/catalog.js";
 import { describeAcpFailure, redactAgentOutput } from "../../src/acp/errors.js";
 import { AcpModel, AcpSessionManager } from "../../src/acp/model.js";
 import { connectAcpStream, type ConnectAcpAgentOptions } from "../../src/acp/process.js";
@@ -166,4 +173,90 @@ rl.on("line", (line) => {
   } finally {
     manager.disposeAll();
   }
+});
+
+// [fix-remote] G：钥匙串登录过期 / 读不到时，Claude Code 用数据根里的长期令牌（claude setup-token）。
+const TOKEN = "sk-ant-oat01-TESTTOKENabcdefghijklmnopqrstuvwxyz0123456789";
+
+function claudeEnvironment(withToken: boolean) {
+  const home = mkdtempSync(join(tmpdir(), "leo-acp-claude-"));
+  const dataRoot = join(home, "data");
+  makeExecutable(join(home, ".local", "bin"), "claude");
+  if (withToken) {
+    mkdirSync(join(dataRoot, "acp"), { recursive: true });
+    writeFileSync(join(dataRoot, "acp", "claude-oauth-token"), `${TOKEN}\n`, { mode: 0o600 });
+  }
+  return {
+    env: {
+      PATH: "/usr/bin",
+      HOME: home,
+      ZCODE_HOME: dataRoot,
+      CLAUDECODE: "1",
+      CLAUDE_CODE_ENTRYPOINT: "sdk-ts",
+      CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH: "1",
+      CLAUDE_CODE_SESSION_ID: "host-session",
+    },
+    resolveClaudeAgentAcpEntry: () => "/fake/claude-agent-acp.js",
+    nodePath: "/fake/node",
+  };
+}
+
+test("Claude Code: the long-lived token file becomes CLAUDE_CODE_OAUTH_TOKEN and host session vars are dropped", () => {
+  const environment = claudeEnvironment(true);
+  const status = detectAcpAgent("claude-code", environment);
+  assert.equal(status.longLivedToken, true);
+  const launch = resolveAcpLaunch("claude-code", environment);
+  assert.ok(launch);
+  assert.equal(launch.env.CLAUDE_CODE_OAUTH_TOKEN, TOKEN);
+  for (const key of ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH", "CLAUDE_CODE_SESSION_ID"]) {
+    assert.equal(launch.env[key], undefined, key);
+  }
+});
+
+test("Claude Code: no token file → no CLAUDE_CODE_OAUTH_TOKEN, and no token status", () => {
+  const environment = claudeEnvironment(false);
+  assert.equal(detectAcpAgent("claude-code", environment).longLivedToken, undefined);
+  const launch = resolveAcpLaunch("claude-code", environment);
+  assert.ok(launch);
+  assert.equal(launch.env.CLAUDE_CODE_OAUTH_TOKEN, undefined);
+});
+
+test("Claude Code: the token never reaches logs or the phone's error text", async () => {
+  const environment = claudeEnvironment(true);
+  const logged: string[] = [];
+  let launched: AcpLaunchSpec | undefined;
+  const manager = new AcpSessionManager({
+    statePath: join(environment.env.HOME, "acp-sessions.json"),
+    environment,
+    logger: { warn: (message, context) => logged.push(`${message} ${JSON.stringify(context)}`) },
+    connect: async (launch: AcpLaunchSpec, options: ConnectAcpAgentOptions) => {
+      launched = launch;
+      options.onStderr?.(`debug: using CLAUDE_CODE_OAUTH_TOKEN=${TOKEN}\nauth failed for ${TOKEN}\n`);
+      throw RequestError.authRequired();
+    },
+  });
+  const model = new AcpModel({ agentId: "claude-code", leoSessionId: "sess_token", cwd: () => "/w", manager });
+  const failure = await collect(model.streamText({ messages: [{ role: "user", content: "hi" }] })).then(
+    () => undefined,
+    (error: unknown) => error as Error,
+  );
+  assert.equal(launched?.env.CLAUDE_CODE_OAUTH_TOKEN, TOKEN);
+  assert.ok(failure);
+  assert.match(failure.message, /Claude Code 在这台 Mac 上未登录或读不到登录态/);
+  assert.ok(logged.length > 0);
+  for (const text of [...logged, failure.message, (failure as { detail?: string }).detail ?? ""]) {
+    assert.ok(!text.includes(TOKEN), text);
+    assert.ok(!text.includes("TESTTOKEN"), text);
+  }
+});
+
+test("pasting the token writes it 0600 under the data root; an empty paste removes it", async () => {
+  const environment = claudeEnvironment(false);
+  await writeClaudeOAuthToken(`  ${TOKEN}  `, environment.env);
+  const file = claudeOAuthTokenPath(environment.env);
+  assert.equal(readFileSync(file, "utf8").trim(), TOKEN);
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+  await assert.rejects(writeClaudeOAuthToken("not a token", environment.env), /令牌格式不对/);
+  await writeClaudeOAuthToken("", environment.env);
+  assert.equal(existsSync(file), false);
 });

@@ -25,7 +25,8 @@ export class AcpAgentError extends Error {
 }
 
 const LOGIN_HINTS: Record<AcpAgentId, string> = {
-  "claude-code": "在这台 Mac 的终端运行 claude 并 /login",
+  "claude-code":
+    "在这台 Mac 的终端运行 claude 并 /login（或在 LeoBot 设置 → 外部 agent → Claude Code 粘贴 claude setup-token 生成的长期令牌）",
   codex: "在这台 Mac 的终端运行 codex login",
   gemini: "在这台 Mac 的终端运行 gemini 完成登录（或配置 GEMINI_API_KEY）",
   opencode: "在这台 Mac 的终端运行 opencode auth login",

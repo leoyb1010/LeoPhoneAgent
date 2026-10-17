@@ -6,7 +6,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { app, ipcMain } from "electron";
 import { ACP_COMMANDS_FILE, isAcpAgentId, parseAcpCommandsStore, pickAcpAgentCommands } from "@zcode/shared/acp";
-import { CLAUDE_AGENT_ACP_PACKAGE, resolveClaudeAgentAcpEntry } from "@zcode/shared/acp-detect";
+import {
+  CLAUDE_AGENT_ACP_PACKAGE,
+  resolveClaudeAgentAcpEntry,
+  writeClaudeOAuthToken,
+} from "@zcode/shared/acp-detect";
 import { listAcpAgents } from "@zcode/services/acp-agent";
 
 import { isTrustedLeoSender } from "../leoLinkIpc.js";
@@ -52,6 +56,16 @@ export function registerAcpIpc(): void {
   ipcMain.handle("leo:acp:list", (event) =>
     isTrustedLeoSender(event) ? listAcpAgents({ claudeAgentAcpEntry: claudeAgentAcpEntry() }) : [],
   );
+  // [fix-remote] 设置页「粘贴令牌」：Claude Code 长期令牌写进数据根（0600，空串 = 移除）。只回成败，不回内容。
+  ipcMain.handle("leo:acp:claude-token", async (event, token: unknown) => {
+    if (!isTrustedLeoSender(event) || typeof token !== "string") return { ok: false };
+    try {
+      await writeClaudeOAuthToken(token);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+    }
+  });
   ipcMain.handle("leo:acp:login", async (event, agentId: unknown) => {
     if (!isTrustedLeoSender(event) || !isAcpAgentId(agentId) || process.platform !== "darwin") {
       return { ok: false };
