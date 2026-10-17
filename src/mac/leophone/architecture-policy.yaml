@@ -34,7 +34,6 @@ modules:
   - id: client
     roots: [packages/client/src]
     managed: false
-    managed: false
   - id: ui
     roots: [packages/ui/src]
     managed: false
