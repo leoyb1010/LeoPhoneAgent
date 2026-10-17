@@ -847,13 +847,15 @@ struct MinimalIconView: View {
 struct CompactTrailingView: View {
     let state: AgentActivityAttributes.ContentState
     var isStale = false
+    /// [WP-41] iOS 27 横屏/多活动时灵动岛变窄:图标降一号,别把左侧计数挤掉。
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
 
     var body: some View {
         // Waiting for your OK beats whatever the carousel is on.
         let session = state.sessions.first(where: \.needsApproval) ?? state.currentSession
         let icon = isStale && !state.allCompleted ? LiveActivityStale.symbol : (session?.toolIcon ?? "ellipsis.circle")
         Image(systemName: icon)
-            .font(.body)
+            .font(limited ? .footnote : .body)
             .foregroundStyle(isStale && !state.allCompleted ? .gray : (session?.liveTint ?? .blue))
             .id(icon)
             .transition(.opacity.animation(.easeInOut(duration: 0.35)))
@@ -870,7 +872,6 @@ struct CompactLeadingView: View {
     }
 }
 
-@available(iOS 27, *)
 private struct LimitedWidthCompactLeading: View {
     let state: AgentActivityAttributes.ContentState
     @Environment(\.isDynamicIslandLimitedInWidth) private var limited

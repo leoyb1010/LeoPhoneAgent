@@ -34,6 +34,15 @@ final class AgentLiveActivityManager {
     private var lastRenewDate: Date = .distantPast
     private static let minRenewInterval: TimeInterval = 5.0
 
+    /// [WP-41] 这张卡要不要带 update token(Mac 任务卡要,中继据此在 App 不在时远程更新)。
+    /// 由 `startActivity(sessions:remotePush:)` 设定;renew / 前台补启沿用。
+    private var remotePush = false
+    private var pushTokenTask: Task<Void, Never>?
+    private var currentPushToken: String?
+    private var registeredTokenSessions: Set<String> = []
+
+    private var requestPushType: PushType? { remotePush ? .token : nil }
+
     /// `Activity.request` 在 app 刚滑到后台的瞬间会以「Target is not foreground」失败。这是已知且有补救的
     /// 预期情况(renew 路径存 `pendingStartState`、回前台重启),不是故障,不该占 ERROR 位
     /// (真机 4 天 20 条 ERROR;ERROR 不受日志限流,看日志时还会被当成真问题)。
@@ -120,8 +129,11 @@ final class AgentLiveActivityManager {
         (UserDefaults.standard.object(forKey: "liveActivityEnabled") as? Bool) ?? true
     }
 
-    func startActivity(sessions: [LiveSessionSnapshot]) {
+    /// - Parameter remotePush: [WP-41] 请求 `.token` 推送类型并把 update token 登记到中继
+    ///   (Mac 任务卡)。聊天任务卡保持纯本地。
+    func startActivity(sessions: [LiveSessionSnapshot], remotePush: Bool = false) {
         guard Self.isActivityKitAvailable, Self.isUserEnabled else { return }
+        self.remotePush = remotePush
         _startActivity(sessions: sessions)
     }
 
@@ -371,11 +383,14 @@ final class AgentLiveActivityManager {
             }
             return
         }
-        guard !stale.isEmpty else {
-            logger.verbose("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty")
+        // [WP-41] 中继 push-to-start 拉起的卡不是「上一个进程留下的」:App 被杀时它正显示
+        // Mac 那边的审批/进度,由中继负责 update/end(或到 stale-date 自然变灰)。
+        let localStale = stale.filter { $0.attributes.origin != AgentActivityAttributes.relayOrigin }
+        guard !localStale.isEmpty else {
+            logger.verbose("[LiveActivity][cleanup src=\(source)] nothing to clean: systemActivities is empty (relay-started cards are kept)")
             return
         }
-        logger.info("[LiveActivity][cleanup src=\(source)] ending \(stale.count) stale activity(ies) from previous session")
+        logger.info("[LiveActivity][cleanup src=\(source)] ending \(localStale.count) stale activity(ies) from previous session")
         let finalState = AgentActivityAttributes.ContentState(
             activeSessionCount: 0,
             sessions: [],
@@ -383,7 +398,7 @@ final class AgentLiveActivityManager {
             soulName: ""
         )
         let finalContent = ActivityContent(state: finalState, staleDate: nil)
-        for activity in stale {
+        for activity in localStale {
             let id = activity.id
             Task {
                 await activity.end(finalContent, dismissalPolicy: .immediate)
@@ -474,9 +489,10 @@ final class AgentLiveActivityManager {
             let activity = try Activity.request(
                 attributes: attributes,
                 content: content,
-                pushType: nil
+                pushType: requestPushType
             )
             currentActivity = activity
+            observePushToken(of: activity)
             startTime = now
             // Record so the first _updateActivity dedup compares correctly and a
             // later audio-only end has a snapshot to reason about.
@@ -895,23 +911,61 @@ final class AgentLiveActivityManager {
             body: LocalizedStringResource(stringLiteral: state.privacyMode ? AppLocalized("有一步在等你批准") : newlyWaiting[0].title),
             sound: .default)
         logger.info("[LiveActivity][push] #\(count) active=\(state.activeSessionCount) sessions=\(state.sessions.count) alert=\(alert != nil)")
-        enqueueUpdate {
-            await activity.update(content, alertConfiguration: alert)
-            logger.info("[LiveActivity][push] #\(count) activity.update() returned")
+        updateCoalescer.submit(PendingActivityUpdate(activity: activity, content: content, alert: alert, count: count))
+        registerPushTokenIfSessionsChanged(state)
+    }
+
+    private struct PendingActivityUpdate {
+        let activity: Activity<AgentActivityAttributes>
+        let content: ActivityContent<AgentActivityAttributes.ContentState>
+        let alert: AlertConfiguration?
+        let count: Int
+    }
+
+    /// [T-la-serial] ActivityKit calls must land in the order they were made — a
+    /// late "running" after "completed" resurrected finished cards. [WP-41] Was a
+    /// Task chain that replayed every frame; now single-flight with a replaceable
+    /// next value: one update in flight, newer states overwrite the queued one
+    /// (each is a full state), the newest always lands last. A dropped frame's
+    /// "needs your OK" alert is carried into its replacement.
+    private lazy var updateCoalescer = SingleFlightCoalescer<PendingActivityUpdate>(
+        merge: { old, new in
+            PendingActivityUpdate(activity: new.activity, content: new.content,
+                                  alert: new.alert ?? old.alert, count: new.count)
+        },
+        perform: { item in
+            await item.activity.update(item.content, alertConfiguration: item.alert)
+            logger.info("[LiveActivity][push] #\(item.count) activity.update() returned")
+        })
+
+    // MARK: - [WP-41] Remote push token
+
+    private func observePushToken(of activity: Activity<AgentActivityAttributes>) {
+        pushTokenTask?.cancel()
+        currentPushToken = nil
+        registeredTokenSessions = []
+        guard remotePush else { return }
+        pushTokenTask = Task { [weak self] in
+            for await data in activity.pushTokenUpdates {
+                let token = LiveActivityTokenRegistration.hex(data)
+                guard let self else { return }
+                self.currentPushToken = token
+                self.registeredTokenSessions = []
+                if let state = self.lastPushedState as? AgentActivityAttributes.ContentState {
+                    self.registerPushTokenIfSessionsChanged(state)
+                }
+            }
         }
     }
 
-    /// [T-la-serial] ActivityKit calls run strictly in the order they were
-    /// made. Separate `Task { await update }` calls can land out of order, and
-    /// a late "running" landing after "completed" resurrected finished cards.
-    private var updateChain: Task<Void, Never>?
-
-    private func enqueueUpdate(_ operation: @escaping @Sendable () async -> Void) {
-        let previous = updateChain
-        updateChain = Task {
-            await previous?.value
-            await operation()
-        }
+    /// 卡上的会话变了(新 Mac 任务上卡)就用同一个 token 重新登记,中继才找得到它。
+    private func registerPushTokenIfSessionsChanged(_ state: AgentActivityAttributes.ContentState) {
+        guard remotePush, let token = currentPushToken else { return }
+        let key = LiveActivityTokenRegistration.sessionKey(state.sessions)
+        guard !key.isEmpty, key != registeredTokenSessions else { return }
+        registeredTokenSessions = key
+        PushRegistrar.shared.registerActivityUpdateToken(token, sessions: state.sessions,
+                                                         privacyMode: state.privacyMode)
     }
 
     @available(iOS 16.2, *)
@@ -956,9 +1010,10 @@ final class AgentLiveActivityManager {
                 let newActivity = try Activity.request(
                     attributes: attributes,
                     content: content,
-                    pushType: nil
+                    pushType: self.requestPushType
                 )
                 self.currentActivity = newActivity
+                self.observePushToken(of: newActivity)
                 self.lastRenewDate = Date()
                 self.lastPushedState = state
                 self.lastPushDate = Date()
@@ -996,8 +1051,9 @@ final class AgentLiveActivityManager {
         let attributes = AgentActivityAttributes(startDate: startTime ?? Date())
         let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
         do {
-            let activity = try Activity.request(attributes: attributes, content: content, pushType: nil)
+            let activity = try Activity.request(attributes: attributes, content: content, pushType: requestPushType)
             currentActivity = activity
+            observePushToken(of: activity)
             lastRenewDate = Date()
             lastPushedState = state
             lastPushDate = Date()
@@ -1092,7 +1148,7 @@ final class AgentLiveActivityManager {
         }
         let content = ActivityContent(state: finished, staleDate: nil)
         // Behind any running-state update still in flight, never ahead of it.
-        await updateChain?.value
+        await updateCoalescer.waitUntilIdle()
         await activity.update(content)
         self.lastPushedState = finished
         self.lastPushDate = Date()
@@ -1145,6 +1201,10 @@ final class AgentLiveActivityManager {
         pendingPushWorkItem = nil
         pendingState = nil
         completedSessionSnapshots = [:]
+        pushTokenTask?.cancel()
+        pushTokenTask = nil
+        currentPushToken = nil
+        registeredTokenSessions = []
         let currentId = (currentActivity as? Activity<AgentActivityAttributes>)?.id ?? "nil"
         let finalState = AgentActivityAttributes.ContentState(
             activeSessionCount: 0,

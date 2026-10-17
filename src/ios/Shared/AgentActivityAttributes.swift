@@ -668,6 +668,9 @@ extension LiveSessionSnapshot {
 @available(iOS 16.2, *)
 struct AgentActivityAttributes: ActivityAttributes {
     var startDate: Date
+    /// [WP-41] "relay" = 中继用 push-to-start 远程拉起的卡(App 当时可能没在跑)。
+    /// 本地起的卡为 nil。启动清理据此不误杀远程卡。
+    var origin: String? = nil
 
     public struct ContentState: Codable, Hashable {
         var activeSessionCount: Int
@@ -724,6 +727,62 @@ struct AgentActivityAttributes: ActivityAttributes {
         /// icon). Defaulted so ContentStates encoded before this field existed
         /// still decode.
         var privacyMode: Bool = false
+    }
+}
+
+// MARK: - [WP-41] 远程载荷的解码宽容
+
+extension AgentActivityAttributes {
+    static let relayOrigin = "relay"
+
+    private enum CodingKeys: String, CodingKey { case startDate, origin }
+
+    /// 中继(Python)发来的 attributes 只能写数字。Foundation 默认把 Date 编成「距 2001
+    /// 的秒数」,但 Unix 秒也很常见 —— 两种都认:大于 1.5e9 的按 1970 纪元解释。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        startDate = Self.decodeFlexibleDate(c, .startDate) ?? Date()
+        origin = try c.decodeIfPresent(String.self, forKey: .origin)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(startDate, forKey: .startDate)
+        try c.encodeIfPresent(origin, forKey: .origin)
+    }
+
+    fileprivate static func decodeFlexibleDate<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) -> Date? {
+        if let seconds = try? c.decode(Double.self, forKey: key) {
+            return seconds > 1_500_000_000
+                ? Date(timeIntervalSince1970: seconds)
+                : Date(timeIntervalSinceReferenceDate: seconds)
+        }
+        return try? c.decode(Date.self, forKey: key)
+    }
+}
+
+extension AgentActivityAttributes.ContentState {
+    private enum CodingKeys: String, CodingKey {
+        case activeSessionCount, sessions, carouselIndex, soulName, latestToolIcon, minimalShowsTool
+        case allCompleted, isAudioPlaying, isAudioLoaded, audioTitle, finishedAt, privacyMode
+    }
+
+    /// 合成解码要求每个非可选键都在:中继少写一个键(或旧版本写的状态)整条更新就被
+    /// 系统丢弃,灵动岛冻在上一帧。这里缺键一律取默认值。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        activeSessionCount = try c.decodeIfPresent(Int.self, forKey: .activeSessionCount) ?? 0
+        sessions = try c.decodeIfPresent([LiveSessionSnapshot].self, forKey: .sessions) ?? []
+        carouselIndex = try c.decodeIfPresent(Int.self, forKey: .carouselIndex) ?? 0
+        soulName = try c.decodeIfPresent(String.self, forKey: .soulName) ?? ""
+        latestToolIcon = try c.decodeIfPresent(String.self, forKey: .latestToolIcon) ?? ""
+        minimalShowsTool = try c.decodeIfPresent(Bool.self, forKey: .minimalShowsTool) ?? false
+        allCompleted = try c.decodeIfPresent(Bool.self, forKey: .allCompleted) ?? false
+        isAudioPlaying = try c.decodeIfPresent(Bool.self, forKey: .isAudioPlaying) ?? false
+        isAudioLoaded = try c.decodeIfPresent(Bool.self, forKey: .isAudioLoaded) ?? false
+        audioTitle = try c.decodeIfPresent(String.self, forKey: .audioTitle) ?? ""
+        finishedAt = AgentActivityAttributes.decodeFlexibleDate(c, .finishedAt)
+        privacyMode = try c.decodeIfPresent(Bool.self, forKey: .privacyMode) ?? false
     }
 }
 
