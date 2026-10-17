@@ -12,34 +12,36 @@ import {
   VSBuffer,
   SocketProtocol,
   ChannelServer,
+  ChannelClient,
   LoggingChannelServer,
-  ProxyChannel,
   type ISocket,
 } from "@zcode/rpc";
+import type { TopicResourcePeers } from "@zcode/services/node";
+import { TOPIC_RESOURCE_RELAY_CHANNEL } from "@zcode/shared";
 import {
   ServiceCollection,
   IZCodeAgentService,
-  IZCodeTaskService,
-  IWindowControllerService,
   createZCodeAgentConnectionScope,
   IFileService,
   IGitService,
   ISystemService,
   ITerminalService,
+  IBotsService,
   IProviderProvisioningTargetService,
 } from "@zcode/services";
 import {
+  botProviders,
   formatLogPrefix,
   formatZodError,
   remoteTargetSchema,
   SERVER_REMOTE_PROTOCOL_VERSION,
   ZCODE_RPC_HOST_CAPABILITY_HEADER,
   ZCODE_VERSION,
+  type BotProvider,
   type ServerRemoteInfo,
   type ServerRemoteWorkspaceInfo,
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
-import { createLocalTaskListController } from "./localTaskListController.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
@@ -88,7 +90,7 @@ function setupChannelServer(
   ws: WebSocket,
   services: ServiceCollection,
   clientMode: "desktop-continuous" | "web-remote-replayable",
-  taskStatus?: ReturnType<typeof createLocalTaskListController>,
+  resourcePeers?: TopicResourcePeers,
 ) {
   const socket = wrapWebSocket(ws);
   const protocol = new SocketProtocol(socket);
@@ -96,8 +98,13 @@ function setupChannelServer(
   // 用日志中间件包装，统一记录所有 RPC 调用
   const server = new LoggingChannelServer(rawServer, log);
   const agentService = services.getOptional(IZCodeAgentService);
+  const reverseClient =
+    clientMode === "desktop-continuous" && resourcePeers ? new ChannelClient(protocol) : undefined;
+  const peer = reverseClient
+    ? resourcePeers?.attach(reverseClient.getChannel(TOPIC_RESOURCE_RELAY_CHANNEL))
+    : undefined;
   const connectionScope = agentService
-    ? createZCodeAgentConnectionScope(agentService, {
+    ? createZCodeAgentConnectionScope(peer ? peer.wrapAgent(agentService) : agentService, {
         connectionId: `server-ws-${randomUUID()}`,
         clientMode,
         role: clientMode === "desktop-continuous" ? "trusted-host-relay" : "terminal-client",
@@ -120,13 +127,9 @@ function setupChannelServer(
     });
   }
   services.exposeOnChannelServer(server, overrides);
-  const taskStatusConnection = taskStatus?.createConnection();
-  if (taskStatusConnection) {
-    server.registerChannel(IWindowControllerService.channelName,
-      ProxyChannel.fromService(taskStatusConnection.service as unknown as Record<string, unknown>));
-  }
   socket.onClose(() => {
-    taskStatusConnection?.dispose();
+    peer?.dispose();
+    reverseClient?.dispose();
     void connectionScope?.dispose();
     rawServer.dispose();
   });
@@ -139,7 +142,8 @@ function generateId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-interface HttpServerOptions {
+export interface HttpServerOptions {
+  topicResourcePeers?: TopicResourcePeers;
   serverId?: string;
   name?: string;
   host?: string;
@@ -311,15 +315,6 @@ export function createHttpServer(
   const app = new Hono();
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   const hostCapabilities = createHostCapabilityStore();
-  const declaredWorkspaces = resolveServerWorkspaces(options).map(workspace => ({
-    ...workspace, path: resolve(workspace.path),
-  }));
-  const taskService = services.getOptional(IZCodeTaskService);
-  // 仅给普通Web组装声明本地scope的只读投影；不注入Desktop Host/扩大认证或文件操作。
-  const taskStatus = taskService && !services.getOptional(IWindowControllerService)
-    ? createLocalTaskListController({ workspaces: declaredWorkspaces, taskService,
-        agentService: services.getOptional(IZCodeAgentService) })
-    : undefined;
 
   const authToken = options.authToken?.trim();
   if (authToken) {
@@ -334,7 +329,7 @@ export function createHttpServer(
     });
   }
 
-  app.get("/api/server-info", (c) => c.json(createServerInfo({ ...options, workspaces: declaredWorkspaces })));
+  app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
@@ -343,14 +338,19 @@ export function createHttpServer(
     "/ws",
     upgradeWebSocket(() => ({
       onOpen(_event, ws) {
-        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable", taskStatus);
+        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
       },
     })),
   );
 
   const upgradeTrustedHostWebSocket = upgradeWebSocket(() => ({
     onOpen(_event, ws) {
-      setupChannelServer(ws.raw as WebSocket, services, "desktop-continuous");
+      setupChannelServer(
+        ws.raw as WebSocket,
+        services,
+        "desktop-continuous",
+        options.topicResourcePeers,
+      );
     },
   }));
   app.use("/ws/host", async (c, next) => {
@@ -383,6 +383,53 @@ export function createHttpServer(
       return c.json({ error: message }, 500);
     }
   });
+
+  const handleBotCallback = async (c: Context) => {
+    const provider = c.req.param("provider") as BotProvider;
+    if (!botProviders.includes(provider)) {
+      return c.json({ error: `Unsupported provider: ${provider}` }, 400);
+    }
+    if (provider !== "webhook") {
+      return c.json({ error: `Provider ${provider} does not support HTTP callbacks.` }, 400);
+    }
+    const botsService = services.getOptional(IBotsService);
+    if (!botsService) {
+      return c.json({ error: "Bots service is not available." }, 503);
+    }
+    const rawBodyText = await c.req.text().catch(() => "");
+    let rawBody: unknown = {};
+    if (rawBodyText) {
+      try {
+        rawBody = JSON.parse(rawBodyText) as unknown;
+      } catch {
+        rawBody = { payload: rawBodyText };
+      }
+    }
+    const webhookSecret = c.req.header("x-zcode-bot-secret");
+    const botId = c.req.param("botId");
+    const result = await botsService.handleProviderCallbackResponse(provider, {
+      ...(typeof rawBody === "object" && rawBody !== null ? rawBody : { payload: rawBody }),
+      rawBody: rawBodyText,
+      ...(botId ? { botId } : {}),
+      ...(webhookSecret ? { webhookSecret } : {}),
+    });
+    const responseBody = result.responseBody ?? { ok: result.ok, replies: result.replies };
+    if (result.status === 400) {
+      return c.json(responseBody, 400);
+    }
+    if (result.status === 401) {
+      return c.json(responseBody, 401);
+    }
+    if (result.status === 503) {
+      // Bugfix：Bot 业务失败必须把可重试状态透传给 HTTP provider；返回 200 会让
+      // webhook/网关误以为消息已消费，效果与提前提交 Telegram offset 相同。
+      return c.json(responseBody, 503);
+    }
+    return c.json(responseBody, 200);
+  };
+
+  app.post("/api/bots/:provider", handleBotCallback);
+  app.post("/api/bots/:provider/:botId", handleBotCallback);
 
   // 远程连接的 WebSocket 端点，将远程 services 桥接给浏览器
   app.get(
@@ -440,7 +487,6 @@ export function createHttpServer(
     log(`http://${listenHost}:${listenPort}`);
   });
 
-  server.once("close", () => taskStatus?.dispose());
   injectWebSocket(server);
 
   return server;

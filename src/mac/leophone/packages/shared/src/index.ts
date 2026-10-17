@@ -1,3 +1,4 @@
+export * from "./networkCapture.js";
 export type {
   FileBinaryPreview,
   FileEntry,
@@ -39,6 +40,7 @@ export type {
 export type {
   DockerConnectOptions,
   RemoteTarget,
+  ServerConnectOptions,
   SSHConnectOptions,
   WSLConnectOptions,
 } from "./remoteTarget.js";
@@ -65,16 +67,14 @@ export {
   ZCODE_APP_VERSION_ENV,
   ZCODE_BUILD_COMMIT_ID_ENV,
   RUNTIME_ZCODE_DEBUG,
-  ZCODE_TELEMETRY_REPORT_ENDPOINT,
   ZCODE_ARMS_RUM_ENDPOINT,
-  ZCODE_TELEMETRY_ENABLED,
+  ZCODE_TELEMETRY_REPORT_ENDPOINT,
+  ZCODE_AUTO_UPDATE_ENABLED,
   mapZCodeEnvToArmsRumEnv,
   normalizeZCodeEnv,
   normalizeZCodeProductFlavor,
 } from "./env.js";
 export * from "./errors.js";
-export type { SessionCreateSource } from "./sessionCreateSource.js";
-export { resolveSafeEndpointHostname } from "./endpointHostname.js";
 export * from "./rendererActionTrace.js";
 export * from "./validation.js";
 export * from "./api.js";
@@ -93,6 +93,7 @@ export * from "./official-mcp-tool-error.js";
 export * from "./conversation-message-projection-policy.js";
 export * from "./conversation-preview-artifacts.js";
 export * from "./zcode-session-task-status.js";
+export * from "./zcode-session-content-profile.js";
 export * from "./zcode-tool-projection-memory.js";
 export * from "./zcode-slash-command-help.js";
 export * from "./zcodeEndpoint.js";
@@ -187,9 +188,12 @@ export type {
   ConnectRemoteRequest,
   CreateTempTextAttachmentRequest,
   CreateTempTextAttachmentResult,
+  MaterializeWorkflowArtifactFileRequest,
+  MaterializeWorkflowArtifactFileResult,
   SaveFileRequest,
   SaveFileResult,
   PrintPageToPdfResult,
+  DesktopCloseToTrayCapability,
   DesktopCommandId,
   CuaOsSupport,
   DesktopWindowChromeState,
@@ -203,6 +207,14 @@ export type {
   BrowserGuestAttachResult,
   EmbeddedBrowserDataClearResult,
   EmbeddedBrowserOpenUrlRequest,
+  EmbeddedBrowserPermissionDeviceOption,
+  EmbeddedBrowserPermissionPromptEvent,
+  EmbeddedBrowserPermissionResolution,
+  EmbeddedBrowserPermissionResolveRequest,
+  EmbeddedBrowserPermissionScreenOption,
+  EmbeddedBrowserSitePermissionResetRequest,
+  EmbeddedBrowserSitePermissionUpdateRequest,
+  EmbeddedBrowserSitePermissionsSnapshot,
   IPlatformService,
   OpenInEditorRemoteTarget,
   OpenInEditorOptions,
@@ -269,6 +281,9 @@ export * from "./tool-identity.js";
 export * from "./streaming-tool-input-preview.js";
 export * from "./tool-plan-adapter.js";
 export * from "./permission-request-preview.js";
+export * from "./web-remote-control.js";
+export * from "./web-remote-control-heartbeat.js";
+export * from "./web-remote-control-rpc-transport.js";
 export * from "./settings-sync.js";
 export * from "./uuid.js";
 export * from "./usage-stats.js";
@@ -276,10 +291,14 @@ export * from "./forceUpdate.js";
 export * from "./intranetProbe.js";
 export * from "./intranetDefaults.js";
 export * from "./hooks.js";
+export * from "./memory.js";
+export * from "./output-style.js";
 export * from "./openrouter-attribution.js";
 export * from "./workspaceSessionRestore.js";
 export * from "./skill-scan-policy.js";
 export * from "./browser-use/index.js";
+// 加速卡的协议类型（CLI 共用的 v4 协议字段）随包保留；产品界面与服务不接入。
+export * from "./highspeed.js";
 
 export {
   parseSubagentMarkdownSelection,
@@ -292,9 +311,34 @@ export * from "./execution-state.js";
 
 export { bashOutputDisplaySchema } from "./bash-output-display.js";
 
+export * from "./subagent-runtime-config.js";
+
+export * from "./subagent-profile.js";
+export { parseAgentProfileFromMarkdown } from "./subagent-profile-parser.js";
+
 export * from "./localTtft.js";
 export * from "./pluginStoreOrder.js";
 export * from "./clientConfig.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
+export { API_KEY_USAGE_SCENE, type ApiKeyCreationUsageScene } from "./api-key-usage-scene.js";
+export {
+  projectAccessTokenFingerprint,
+  ProjectAccessTokenTransientError,
+} from "./project-access-token.js";
+export {
+  ProjectAccessTokenClient,
+  type ProjectAccessTokenInput,
+  type ProjectAccessTokenMaterial,
+} from "./project-access-token-client.js";
 
+export * from "./conversationSelection.js";
+export * from "./attachment-source.js";
+
+export * from "./channel-mention.js";
+
+export {
+  requestSecuritySensitiveHeaders,
+  isRequestSecurityFailure,
+} from "./request-security-edition/policy.js";
+export * from "./request-security-edition/verification-policy.js";

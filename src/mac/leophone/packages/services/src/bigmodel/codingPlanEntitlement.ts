@@ -27,9 +27,9 @@ const teamSchema = z.object({
   subscribeEndTime: z.string().nullish(),
   subscribePeriod: z.string().nullish(),
 });
-type PersonalCodingPlanSubscription = z.infer<typeof personalSchema>;
-type TeamCodingPlanSubscription = z.infer<typeof teamSchema>;
-type CodingPlanEntitlement<T> =
+export type PersonalCodingPlanSubscription = z.infer<typeof personalSchema>;
+export type TeamCodingPlanSubscription = z.infer<typeof teamSchema>;
+export type CodingPlanEntitlement<T> =
   | { kind: "available"; subscription: T }
   | { kind: "unavailable"; reason?: "expired" | "unassigned" }
   | { kind: "unknown" };

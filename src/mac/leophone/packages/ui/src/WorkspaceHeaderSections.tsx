@@ -59,7 +59,7 @@ export {
   type WorkspaceHeaderActionSectionProps,
 } from "@/WorkspaceHeaderSections/WorkspaceHeaderActionSection.js";
 
-function shouldShowRemoteSkillSyncAction(params: {
+export function shouldShowRemoteSkillSyncAction(params: {
   remoteSessionId?: string | null;
   remoteTarget?: RemoteTarget | null;
   clientMode?: "desktop-continuous" | "web-remote-replayable";
@@ -91,6 +91,9 @@ export function WorkspaceHeaderTitleSection({
   nativeSessionLogPath: _nativeSessionLogPath,
   nativeSessionLogExists: _nativeSessionLogExists,
   nativeSessionLogLoading: _nativeSessionLogLoading,
+  providerWorkspaceConfigPath: _providerWorkspaceConfigPath,
+  providerWorkspaceConfigExists: _providerWorkspaceConfigExists,
+  providerWorkspaceConfigLoading: _providerWorkspaceConfigLoading,
   reloadSessionPending,
   workspaceHeaderState,
   onRefreshGit: _onRefreshGit,
@@ -165,9 +168,11 @@ export function WorkspaceHeaderTitleSection({
   const {
     taskSessionFile,
     taskNativeSessionLogFile,
+    providerConfigFile,
     fileManagerLabel,
     handleCopyText,
     handleOpenTaskPathInFileManager,
+    handleOpenProviderConfig,
   } = useTaskListItemContextActions({
     workspacePath: workspaceAbsPath,
     remoteSessionId,
@@ -489,6 +494,7 @@ export function WorkspaceHeaderTitleSection({
                 taskSessionFile={taskSessionFile}
                 activeSessionId={activeSessionId}
                 taskNativeSessionLogFile={taskNativeSessionLogFile}
+                providerConfigFile={providerConfigFile}
                 disableTaskTargetActions={disableTaskTargetActions || taskMenuMembershipLoading}
                 disableTaskActions={Boolean(readOnlyReason)}
                 disabledReason={readOnlyReason}
@@ -502,7 +508,7 @@ export function WorkspaceHeaderTitleSection({
                   }
                   const optimisticTask = activeTaskMeta ?? null;
                   if (optimisticTask) {
-                    // Header 里切换 pin 以前只等 RPC 成功后更新列表缓存，
+                    // Bugfix: Header 里切换 pin 以前只等 RPC 成功后更新列表缓存，
                     // pinned 区会在请求期间被旧查询结果覆盖。先乐观切换，失败再回滚。
                     if (workspaceIdentity && !isPinned) {
                       useRemotePinnedTaskStore.getState().upsertTask(optimisticTask);
@@ -671,6 +677,9 @@ export function WorkspaceHeaderTitleSection({
                       }
                     : undefined
                 }
+                onOpenProviderConfig={() => {
+                  void handleOpenProviderConfig();
+                }}
               />
             </DropdownMenuContent>
           </DropdownMenu>

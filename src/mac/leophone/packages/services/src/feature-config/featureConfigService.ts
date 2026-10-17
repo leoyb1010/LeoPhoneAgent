@@ -10,6 +10,8 @@ const EMPTY_MODEL_SELECTION_VIEW: ModelSelectionView = Object.freeze({
 export function createFeatureConfigService(
   dependencies: {
     resolveOffPeakModelSelectionView?: () => Promise<ModelSelectionView>;
+    /** 动态工作流的用户选择（本机设置文件）；desktop-attached remote Host 不注入，由桌面推送。 */
+    resolveDynamicWorkflowUserMode?: () => Promise<unknown>;
     env?: NodeJS.ProcessEnv;
   } = {},
 ): IFeatureConfigService {
@@ -27,7 +29,9 @@ export function createFeatureConfigService(
       };
     },
     async getDynamicWorkflowClientConfig() {
-      return resolveDynamicWorkflowClientConfig({ remote: undefined, env });
+      // 3.15.1：offer 本地裁决，用户在设置里的选择（跟随 / 关闭 / 按需 / 常开）叠加在 offer 上。
+      const userMode = await dependencies.resolveDynamicWorkflowUserMode?.().catch(() => undefined);
+      return resolveDynamicWorkflowClientConfig({ remote: undefined, env, userMode });
     },
   };
 }

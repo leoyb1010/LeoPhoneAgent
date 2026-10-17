@@ -131,7 +131,8 @@ const DOCSHOT_ARCHIVE_PATHS = ["docshot-assets"] as const;
 const NON_LOG_STATE_ARCHIVE_PATHS = [
   "agent-config",
   "certs",
-  "repo",
+  "repo-snapshots",
+  "repo-wiki",
   "sessions",
   "session-bindings",
   "checkpoints",
@@ -692,8 +693,10 @@ function isDocshotArchivePath(relativePath: string): boolean {
 
 function isNonLogStateArchivePath(relativePath: string): boolean {
   const normalizedRelativePath = normalizeArchivePath(relativePath);
-  return NON_LOG_STATE_ARCHIVE_PATHS.some((archivePath) =>
-    normalizedRelativePath.startsWith(archivePath),
+  return NON_LOG_STATE_ARCHIVE_PATHS.some(
+    (archivePath) =>
+      normalizedRelativePath === archivePath ||
+      normalizedRelativePath.startsWith(`${archivePath}/`),
   );
 }
 
@@ -931,7 +934,7 @@ async function collectLogArchiveFile(
   files.push({ absolutePath, archivePath });
 }
 
-async function collectLogArchiveFiles(sourceDir: string): Promise<LogArchiveFileEntry[]> {
+export async function collectLogArchiveFiles(sourceDir: string): Promise<LogArchiveFileEntry[]> {
   const files: LogArchiveFileEntry[] = [];
   const visitedDirs = new Set<string>();
   await collectLogArchiveFilesFromDirectory(sourceDir, "", visitedDirs, files);
@@ -939,7 +942,7 @@ async function collectLogArchiveFiles(sourceDir: string): Promise<LogArchiveFile
   return files;
 }
 
-async function createLogArchiveArtifacts(
+export async function createLogArchiveArtifacts(
   sourceDir: string,
   options: CreateLogArchiveArtifactsOptions = {},
 ): Promise<LogArchiveArtifacts> {
@@ -1081,7 +1084,7 @@ function logSkippedLogArchiveFiles(skippedFiles: LogArchiveSkippedFileEntry[]): 
   });
 }
 
-async function writeLogArchiveZip(
+export async function writeLogArchiveZip(
   outputPath: string,
   artifacts: LogArchiveArtifacts,
   options: WriteLogArchiveZipOptions = {},
@@ -1114,7 +1117,7 @@ async function writeLogArchiveZip(
   }
 }
 
-async function writeLogArchiveDirectory(
+export async function writeLogArchiveDirectory(
   outputPath: string,
   artifacts: LogArchiveArtifacts,
 ): Promise<void> {

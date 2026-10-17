@@ -2,7 +2,7 @@ import { TID_V4_RETRY_SUBSCRIBE } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
-interface SessionSubscriptionErrorPanelProps {
+export interface SessionSubscriptionErrorPanelProps {
   error: string;
   sessionId: string;
   workspacePath: string;

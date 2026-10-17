@@ -46,7 +46,10 @@ export function appendRemoteConnectionRuntimeLog(
     let matchingProgressIndex = -1;
     for (let index = currentLogs.length - 1; index >= 0; index -= 1) {
       const currentLog = currentLogs[index];
-      if (currentLog && getRemoteTransferProgressKey(currentLog.message) === incomingProgressKey) {
+      if (
+        currentLog &&
+        getRemoteTransferProgressKey(currentLog.message) === incomingProgressKey
+      ) {
         matchingProgressIndex = index;
         break;
       }

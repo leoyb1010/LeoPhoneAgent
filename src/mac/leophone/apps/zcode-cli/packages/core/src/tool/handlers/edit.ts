@@ -102,7 +102,7 @@ function formatLeoEditSummary(output: unknown): { count: string; preview: string
   };
 }
 
-const editHandler: ToolHandler = async (input, context) => {
+export const editHandler: ToolHandler = async (input, context) => {
   // [leo] 扩展入参：单段形态走下面的上游逻辑；多段 / hashline 锚点（multi）在读完文件后交给 leo/edit-plan。
   const request = parseLeoEditRequest(input);
   if (!request.ok) return editFailure(request.errorCode, request.message);

@@ -9,7 +9,7 @@ import type { SendInputOptions, SendInputResult } from "../../app/types.js";
 import { runWithSessionResidencyFinalization } from "../../zcode-protocol/session-residency.js";
 import type { V4CommandCoreHost, V4SessionRecordView } from "./types.js";
 
-interface StartPromptTurnParamsBase {
+export interface StartPromptTurnParamsBase {
   content: string;
   /** v4 锚点：inputId=queryId=commandId（权威数据 sourceCommandId 对账）。 */
   inputId: string;
@@ -22,13 +22,15 @@ interface StartPromptTurnParamsBase {
   modelExecution?: SendInputOptions["modelExecution"];
   sharedContextRefs?: SendInputOptions["sharedContextRefs"];
   toolDisallowlist?: readonly string[];
+  /** 当前输入必须保留为未来独立 turn，不能因 admission 瞬间转为空闲而直接启动。 */
+  requireQueue?: boolean;
   /** sendQueuedNow 已持有 Core promotion lease，要求这次 admission 只能占用空闲位。 */
   requireIdle?: boolean;
 }
 
-type StartPromptTurnParams = StartPromptTurnParamsBase & TurnBackgroundAttribution;
+export type StartPromptTurnParams = StartPromptTurnParamsBase & TurnBackgroundAttribution;
 
-interface PromptTurnStartResult {
+export interface PromptTurnStartResult {
   /** Core admission 已完成；不等待 TurnStarted 或 projection commit。 */
   turnStarted: Promise<void>;
   /** Core 真实完成 promise，仅供生命周期清理使用，不属于 ACK 边界。 */
@@ -48,6 +50,11 @@ export class V4PromptRejectedError extends Error {
     super(message);
     this.name = "V4PromptRejectedError";
   }
+}
+
+/** 旧 queue promotion 兼容谓词：新的 Core admission 不再产生 projection authority 不确定态。 */
+export function isPromptTurnStartUncertainFailure(_error: unknown): boolean {
+  return false;
 }
 
 /**
@@ -127,6 +134,7 @@ export async function startPromptTurn(
         ...(params.modelExecution ? { modelExecution: params.modelExecution } : {}),
         ...(params.sharedContextRefs ? { sharedContextRefs: params.sharedContextRefs } : {}),
         ...(turnToolDisallowlist ? { toolDisallowlist: turnToolDisallowlist } : {}),
+        ...(params.requireQueue ? { requireQueue: true } : {}),
         ...(params.requireIdle ? { requireIdle: true } : {}),
         queryId: params.inputId as SendInputOptions["queryId"],
       },
@@ -202,7 +210,7 @@ function clearPromptRecordState(
   record.activeOffPeakTaskId = previousOffPeakTaskId;
 }
 
-function buildTurnToolDisallowlist(
+export function buildTurnToolDisallowlist(
   params: Pick<StartPromptTurnParams, "automationId" | "offPeakTaskId" | "toolDisallowlist">,
   activeAutomationId = params.automationId,
   activeOffPeakTaskId = params.offPeakTaskId,
@@ -232,7 +240,7 @@ export function resolveTurnAutomationId(
   return automationId.length > AUTOMATION_INPUT_ID_PREFIX.length ? automationId : undefined;
 }
 
-function resolveTurnOffPeakTaskId(
+export function resolveTurnOffPeakTaskId(
   params: Pick<StartPromptTurnParams, "offPeakTaskId" | "inputId">,
 ): string | undefined {
   const explicit = params.offPeakTaskId?.trim();

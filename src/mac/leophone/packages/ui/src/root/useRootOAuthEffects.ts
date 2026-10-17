@@ -21,7 +21,7 @@ import { applyCachedOAuthSessionRestoreResult } from "@/root/oauthCachedSessionR
 import { markZcodeJwtInvalidRestart } from "@/root/zcodeJwtInvalidRestartMarker.js";
 import { shouldApplyOAuthPollingFailure } from "@/root/oauthLoginAttemptGuard.js";
 
-async function handleOAuthCallbackSuccess(params: {
+export async function handleOAuthCallbackSuccess(params: {
   result: OAuthSessionCallbackResult;
   platform: Pick<IPlatformService, "reportTelemetryEvent">;
   refreshProviderState: () => Promise<void>;

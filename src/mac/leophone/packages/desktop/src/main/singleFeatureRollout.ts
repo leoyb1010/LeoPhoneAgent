@@ -10,7 +10,7 @@
  * - 请求失败/超时/解析失败：沿用上次快照（首次即失败 → 初始快照，由 defaultValue 决定）；
  * - 服务端成功但未下发该 key：视为"未启用"，覆盖旧缓存（不能继续沿用旧的开启快照）。
  */
-interface SingleFeatureRolloutConfig {
+export interface SingleFeatureRolloutConfig {
   enabled: boolean;
   configVersion?: string;
 }
@@ -35,15 +35,15 @@ export interface SingleFeatureRolloutLogger {
   warn: (...args: unknown[]) => void;
 }
 
-const SINGLE_FEATURE_REQUEST_TIMEOUT_MS = 3_000;
-const SINGLE_FEATURE_CACHE_TTL_MS = 60 * 60 * 1_000;
+export const SINGLE_FEATURE_REQUEST_TIMEOUT_MS = 3_000;
+export const SINGLE_FEATURE_CACHE_TTL_MS = 60 * 60 * 1_000;
 /**
  * 失败后多久再试。以前失败不写缓存,调用方每分钟一刷就每分钟真发一次请求;LeoPhoneAgent 没有
  * 灰度服务(端点是占位地址),于是每分钟一次注定失败的请求加一条 warn 日志,永远如此。
  */
 const SINGLE_FEATURE_FAILURE_RETRY_MS = 15 * 60 * 1_000;
 
-interface CreateSingleFeatureRolloutOptions<T extends SingleFeatureRolloutConfig> {
+export interface CreateSingleFeatureRolloutOptions<T extends SingleFeatureRolloutConfig> {
   /** 解析 /api/v1/client/configs 响应体；null 表示响应无效（按失败处理，沿用旧快照）。 */
   resolveConfig: (payload: unknown) => T | null;
   /** 初始快照（fail-open feature 传 {enabled:true}，fail-close 传 {enabled:false}）。 */

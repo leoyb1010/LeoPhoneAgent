@@ -227,6 +227,8 @@ export function OnboardingDialog(props: {
   }, [sessionMigration.candidates]);
 
   const selectedWorkspaceCount = selectedWorkspacePaths.length;
+  // 暂时隐藏数据迁移向导里的代理设置步骤，同时不把默认选中的代理设置暗中计入迁移任务。
+  const settingsTaskCount = 0;
   /** 既无会话也无外部导入项时，禁止进入迁移步骤。 */
   const beginMigrationDisabled =
     selectedWorkspaceCount === 0 &&
@@ -242,6 +244,7 @@ export function OnboardingDialog(props: {
   const totalExecutionTaskCount =
     finishExecution.sessionTotalCount +
     finishExecution.agentsFileTotalCount +
+    settingsTaskCount +
     externalImportSelections.length;
   const completedExecutionTaskCount =
     finishExecution.sessionCompletedCount +
@@ -462,6 +465,7 @@ export function OnboardingDialog(props: {
             <OnboardingWizardFooter
               currentStep={wizardStep}
               selectedWorkspaceCount={selectedWorkspaceCount}
+              settingsTaskCount={settingsTaskCount}
               finishRunning={finishExecution.running}
               finishReady={finishExecution.finished}
               onCancel={() => void handleCloseRequest()}

@@ -18,6 +18,10 @@ import {
   type V4SplitPaneSessionTarget,
 } from "@/v4/splitPaneEntryContext.js";
 import {
+  SavedWorkflowHubProvider,
+  type SavedWorkflowHubTarget,
+} from "@/v4/savedWorkflowHubContext.js";
+import {
   WorkflowRunOpenProvider,
   type WorkflowRunOpenTarget,
 } from "@/v4/workflowRunOpenContext.js";
@@ -195,6 +199,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   pluginStoreOpenVersion,
   openAutomationId,
   openAutomationTab,
+  openWorkflow,
+  onOpenWorkflowConsumed,
+  onOpenSavedWorkflowInHub,
   onWorkspaceMainViewChange,
   onOpenAutomationConsumed,
   handleOpenAutomations,
@@ -264,6 +271,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   gitState,
   browserNavigationRequest,
   browserRestoreUrls,
+  providerConfigFile,
   taskNativeSessionLogFile,
   taskSessionFile,
   testMessages,
@@ -294,6 +302,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleToggleTerminal,
   handleToggleBrowser,
   handleOpenBrowserTab,
+  handleOpenBrowserPermissionSettings,
   handleOpenDeveloperTools,
   handleOpenTerminalTab,
   handleToggleGit,
@@ -933,6 +942,13 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     },
     [handleSelectTask, intl, shellWorkbenchBinding, showChatMainView, tabStoreApi, workspaceTabs],
   );
+  // 「已保存」芯片的落点：交给 App 切主视图并设深链（与「自动化」入口同一条导航历史）。
+  const handleOpenSavedWorkflowInHub = useCallback(
+    (target: SavedWorkflowHubTarget) => {
+      onOpenSavedWorkflowInHub(target);
+    },
+    [onOpenSavedWorkflowInHub],
+  );
   // 中枢直接启动 accepted 后切到新会话（run 卡已在顶部）：复用运行历史那条导航，
   // target 恒带工作流所属项目坐标（不变式 7），remoteSessionId 决定连接 endpoint。
   const handleNavigateToLaunchedRun = useCallback(
@@ -1431,6 +1447,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onCloseAllTabs={handleCloseAllSidePaneTabs}
       onReopenClosedTab={handleReopenClosedSidePaneTab}
       onOpenBrowserTab={handleOpenBrowserTab}
+      onOpenBrowserPermissionSettings={handleOpenBrowserPermissionSettings}
       onOpenDeveloperTools={handleOpenDeveloperTools}
       onOpenTerminalTab={handleOpenTerminalTab}
       onOpenReviewTab={handleToggleGit}
@@ -1478,6 +1495,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   );
 
   return (
+    // 完成卡上那两个壳级落点：芯片开到中枢那一页、「再次运行」启动后切到新会话。
+    <SavedWorkflowHubProvider
+      openWorkflow={handleOpenSavedWorkflowInHub}
+      navigateToRun={handleNavigateToLaunchedRun}
+    >
     <DesktopWindowFrame
       title={`LeoBot / ${getPathLeaf(workspaceAbsPath)}`}
       showHeader
@@ -1684,6 +1706,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                           nativeSessionLogPath={taskNativeSessionLogFile.path}
                           nativeSessionLogExists={taskNativeSessionLogFile.exists}
                           nativeSessionLogLoading={taskNativeSessionLogFile.loading}
+                          providerWorkspaceConfigPath={providerConfigFile.path}
+                          providerWorkspaceConfigExists={providerConfigFile.exists}
+                          providerWorkspaceConfigLoading={providerConfigFile.loading}
                           workspaceHeaderState={workspaceShellZCodeState}
                           gitSummary={gitState.summary}
                           gitDirtyFileCount={gitDirtyFileCount}
@@ -1746,6 +1771,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                                     openAutomationId={openAutomationId}
                                     openAutomationTab={openAutomationTab}
                                     onOpenAutomationConsumed={onOpenAutomationConsumed}
+                                    openWorkflow={openWorkflow}
+                                    onOpenWorkflowConsumed={onOpenWorkflowConsumed}
                                     onOpenSession={({
                                       sessionId,
                                       workspacePath,
@@ -1936,5 +1963,6 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
         </ScopedErrorBoundary>
       </div>
     </DesktopWindowFrame>
+    </SavedWorkflowHubProvider>
   );
 });

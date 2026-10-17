@@ -9,6 +9,9 @@ import type {
   ZCodeSessionCompactResult,
   ZCodeSessionGoalAction,
   ZCodeSessionGoalResult,
+  ZCodeCodexConnectivityCheckResult,
+  ZCodeSwitchAgentResult,
+  ZCodeSyncTaskSessionBindingResult,
   ZCodeTaskCreateResult,
   ZCodeTaskMeta,
   ZCodeStreamEvent,
@@ -208,6 +211,9 @@ export interface IZCodeTaskService {
     provider?: ZCodeProvider;
   }): Promise<void>;
 
+  /** Codex 草稿态预热前的网络检查，用于提前提醒 chatgpt.com 不可达 */
+  checkCodexConnectivity(): Promise<ZCodeCodexConnectivityCheckResult>;
+
   // ---- Task/Session 管理 ----
 
   /** 创建 ZCode session 并同步 task 索引。 */
@@ -238,6 +244,7 @@ export interface IZCodeTaskService {
     v4Create?: boolean;
     /** 手机跨路径重试的稳定 V4 admission ID；不改变未指定时的旧行为。 */
     operationId?: string;
+    permissionScope?: "session";
   }): Promise<ZCodeTaskCreateResult>;
 
   /** 查询既有 V4 持久化 command facts，不以 HTTP 超时推断命令未执行。 */
@@ -313,6 +320,8 @@ export interface IZCodeTaskService {
     workspacePath?: string;
     workspaceIdentity?: string;
     runId?: TraceId;
+    /** CLI activeWorks 中观察到的执行身份，防止迟到停止误杀新轮。 */
+    expectedForegroundExecutionId?: string;
   }): Promise<void>;
 
   /** 执行 agent 内建 /compact 命令；手机 replayable 仍经 shared host 路由。 */
@@ -542,6 +551,29 @@ export interface IZCodeTaskService {
     feedback: ZCodeAssistantMessageFeedback | null;
   }): Promise<ZCodeSessionFile>;
 
+  /**
+   * 补齐 task 已存在的 provider session，使其覆盖当前 canonical task 的完整对话边界。
+   * 这里只负责补齐原生日志，不负责切换当前 active provider。
+   */
+  syncTaskSessionBinding(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+    provider: ZCodeProvider;
+    validate?: boolean;
+  }): Promise<ZCodeSyncTaskSessionBindingResult>;
+
+  /**
+   * 在同一个 task 内切换当前 active provider。
+   * 当前支持 `claude` / `codex` / `gemini` 作为切换目标。
+   */
+  switchAgent(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+    provider: ZCodeProvider;
+  }): Promise<ZCodeSwitchAgentResult>;
+
   /** 扫描可导入的 Claude 原生 session；可选按 workspace 过滤。 */
   scanImportableClaudeSessions(params: {
     workspacePath?: string;
@@ -584,7 +616,18 @@ export interface IZCodeTaskService {
     mode?: ZCodeTaskMode;
   }): Promise<ZCodeConfigOption[]>;
 
-  /** 获取 ZCode Agent 当前结构化日志文件路径。 */
+  /** 获取 workspace + provider 对应的主配置文件路径 */
+  getWorkspaceProviderConfigFile(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    provider?: ZCodeProvider;
+  }): Promise<{
+    provider: ZCodeProvider;
+    path: string;
+    exists: boolean;
+  }>;
+
+  /** 获取 task 对应的原生会话日志文件路径（如 Claude 的 session jsonl） */
   getTaskNativeSessionLogFile(params: {
     taskId: string;
     workspacePath: string;

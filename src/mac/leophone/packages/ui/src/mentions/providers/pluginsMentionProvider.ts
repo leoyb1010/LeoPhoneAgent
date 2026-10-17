@@ -21,7 +21,7 @@ const HIDDEN_RUNTIME_PLUGIN_IDS: ReadonlySet<string> = new Set([
   "node-repl-host@zcode-plugins-official",
 ]);
 
-interface PluginMentionLabels {
+export interface PluginMentionLabels {
   conflictReason: string;
 }
 
@@ -33,7 +33,7 @@ interface PluginMentionLabels {
 //   item.label，若本地化 label 会与按 markdown 重建的消息气泡文案分裂）。
 // - keywords 并入 listing 的全部语言显示名（无论当前 locale）：英文界面下打中文
 //   也能搜到官方插件（插件 @ 引用中文搜索）。
-function mapPluginCatalogToMentionItemsForTest(
+export function mapPluginCatalogToMentionItemsForTest(
   entries: ZCodePluginReferenceCatalogEntry[],
   labels: PluginMentionLabels,
   locale: string,

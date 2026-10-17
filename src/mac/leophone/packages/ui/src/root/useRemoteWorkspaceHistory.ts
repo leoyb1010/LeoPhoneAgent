@@ -43,7 +43,7 @@ import { markRemoteWorkspaceRunningTasksFailed } from "@/lib/remoteWorkspaceSess
 
 export { reconnectRemoteWorkspaceHistoryEntry };
 
-async function bindRemoteWorkspaceContextAndGetSession(params: {
+export async function bindRemoteWorkspaceContextAndGetSession(params: {
   platform: Pick<IPlatformService, "bindRemoteWorkspaceSessionContext">;
   sessionId: string;
   workspacePath: string;
@@ -97,7 +97,7 @@ interface ReconnectRemoteWorkspaceByKeyParams {
   options?: ReconnectRemoteWorkspaceOptions;
 }
 
-async function reconnectRemoteWorkspaceByKey({
+export async function reconnectRemoteWorkspaceByKey({
   workspaceKey,
   canUseRemoteWorkspace,
   getRemoteSessions,
@@ -119,7 +119,7 @@ async function reconnectRemoteWorkspaceByKey({
   return true;
 }
 
-function collectSshReconnectGroup(params: {
+export function collectSshReconnectGroup(params: {
   selected: RemoteWorkspaceSessionEntry;
   sessions: RemoteWorkspaceSessionEntry[];
   tabs: WindowTabState[];
@@ -155,7 +155,7 @@ function collectSshReconnectGroup(params: {
   ];
 }
 
-async function reconnectRemoteWorkspaceGroup(params: {
+export async function reconnectRemoteWorkspaceGroup(params: {
   selected: RemoteWorkspaceSessionEntry;
   reconnectGroup: RemoteWorkspaceSessionEntry[];
   reconnectEntry: (
@@ -270,7 +270,7 @@ function shouldKeepRemoteWorkspaceInTabs(params: {
     );
 }
 
-async function cancelPendingRemoteReconnectsForWorkspaceKeys(params: {
+export async function cancelPendingRemoteReconnectsForWorkspaceKeys(params: {
   workspaceKeys: string[];
   pendingRequestIds: Map<string, string>;
   cancelPendingRemoteConnection?: (requestId?: string) => Promise<void>;

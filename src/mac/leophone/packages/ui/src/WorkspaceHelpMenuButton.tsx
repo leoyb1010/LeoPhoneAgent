@@ -3,7 +3,7 @@ import {
   TID_WORKSPACE_HELP_MENU_RESOURCE_MANAGER,
   TID_WORKSPACE_HELP_MENU_TRIGGER,
 } from "@zcode/shared";
-import { ActivityIcon, CircleHelpIcon, InfoIcon, RefreshCwIcon } from "lucide-react";
+import { ActivityIcon, CircleHelpIcon, DownloadIcon, InfoIcon, RefreshCwIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -17,6 +17,7 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useDesktopUpdateMenu } from "@/hooks/useDesktopUpdateMenu.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { runExportLogsAction } from "@/lib/exportLogsAction.js";
 
 export function WorkspaceHelpMenuButton({
   className,
@@ -76,6 +77,11 @@ export function WorkspaceHelpMenuButton({
             资源管理器只能从这里进；Web 端没有该窗口，不渲染。 */}
         {isDesktop ? (
           <>
+            {/* 导出日志：复用侧栏导出动作，保持打包、系统定位与提示一致。 */}
+            <DropdownMenuItem onSelect={() => void runExportLogsAction(platform, intl)}>
+              <DownloadIcon className="size-4" />
+              {intl.formatMessage({ id: "titleBar.menu.help.exportLogs" })}
+            </DropdownMenuItem>
             <DropdownMenuItem
               data-testid={TID_WORKSPACE_HELP_MENU_RESOURCE_MANAGER}
               onSelect={handleOpenResourceManager}

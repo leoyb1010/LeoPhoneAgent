@@ -8,12 +8,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownIcon } from "lucide-react";
 import { TID_V4_TIMELINE, TID_V4_TIMELINE_BOTTOM } from "@zcode/shared";
@@ -32,6 +34,14 @@ import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { ConversationTurnGroup } from "@/v4/ConversationTurnGroup.js";
+import {
+  deriveLogicalUiInstances,
+  getPluginUiDisclosureVersion,
+  getPluginUiManualPin,
+  setPluginUiInstanceDerivation,
+  subscribePluginUiDisclosure,
+  type PluginUiRowPinResolver,
+} from "@/plugin-ui/index.js";
 import { ConversationPendingGuideList } from "@/v4/ConversationPendingGuideList.js";
 import type { AssistantFeedbackHandler } from "@/v4/ConversationRowView.js";
 import { ConversationTurnNavigator } from "@/v4/ConversationTurnNavigator.js";
@@ -245,8 +255,10 @@ function getUnitHeightCacheKey(unit: ConversationTurnRenderUnit | undefined): st
   return unit?.key;
 }
 
-interface ConversationTimelineProps {
+export interface ConversationTimelineProps {
   rows: readonly ConversationRow[];
+  /** 手机远控窄屏允许整条会话 flex 链按抽屉宽度收缩；桌面布局保持原样。 */
+  compactForRemoteControl?: boolean;
   /** CLI 权威 queue 中等待 model-step 注入的 guide；只改变 renderer 落位。 */
   pendingGuides?: readonly QueueItem[];
   /** runtime memory 状态，只交给当前 live turn，不进入历史虚拟列表。 */
@@ -335,6 +347,7 @@ interface ConversationTimelineProps {
  */
 function ConversationTimelineImpl({
   rows,
+  compactForRemoteControl = false,
   pendingGuides = EMPTY_PENDING_GUIDES,
   apiRetry = null,
   totalCount,
@@ -395,13 +408,32 @@ function ConversationTimelineImpl({
     return () => observer.disconnect();
   }, [hasHeaderSlot]);
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  // 插件卡片展示模型——同资源替代 + 最近三回合自动展开 + 手动固定；推导结果发布给卡片自己读。
+  const pluginUiDerivation = useMemo(() => deriveLogicalUiInstances(rows), [rows]);
+  useEffect(() => {
+    setPluginUiInstanceDerivation(sessionKey, pluginUiDerivation);
+  }, [pluginUiDerivation, sessionKey]);
+  const pluginUiDisclosureVersion = useSyncExternalStore(
+    subscribePluginUiDisclosure,
+    getPluginUiDisclosureVersion,
+    getPluginUiDisclosureVersion,
+  );
+  const pluginUiPinResolver = useMemo<PluginUiRowPinResolver>(() => {
+    // 手动固定 / 收起变化（version 递增）时重建 resolver，折叠边界随之重算。
+    void pluginUiDisclosureVersion;
+    return (toolCallId) => ({
+      disposition: pluginUiDerivation.byToolCallId[toolCallId],
+      manualPinned: getPluginUiManualPin(sessionKey, toolCallId),
+    });
+  }, [pluginUiDerivation, sessionKey, pluginUiDisclosureVersion]);
   const renderUnits = useMemo(
     () =>
       buildConversationTurnRenderUnits(rows, {
         nowMs: liveNowMs,
         sessionPhase,
+        pluginUiPinResolver,
       }),
-    [liveNowMs, rows, sessionPhase],
+    [liveNowMs, pluginUiPinResolver, rows, sessionPhase],
   );
   const { virtualizedUnits, liveUnit, liveUnitIndex } = useMemo(
     () => splitConversationTimelineLiveTail(renderUnits),
@@ -434,10 +466,13 @@ function ConversationTimelineImpl({
   const stableContentWidthRef = useRef<number | null>(null);
   const contentWidthResizeActiveRef = useRef(false);
   const contentWidthResizeSettleTimerRef = useRef<number | null>(null);
+  const committingMeasuredLayoutRef = useRef(false);
+  const messageLayerMaskObserverRef = useRef<ResizeObserver | null>(null);
   const isContentWidthChanging = useCallback(() => {
     const currentContentWidth = virtualHistoryRef.current?.clientWidth ?? null;
     const stableContentWidth = stableContentWidthRef.current;
     return (
+      committingMeasuredLayoutRef.current ||
       contentWidthResizeActiveRef.current ||
       (currentContentWidth !== null &&
         stableContentWidth !== null &&
@@ -655,6 +690,7 @@ function ConversationTimelineImpl({
     return height;
   }, []);
 
+  const [, commitMeasuredLayout] = useState(0);
   const virtualizer = useVirtualizer({
     count: virtualizedUnits.length,
     getScrollElement,
@@ -892,9 +928,14 @@ function ConversationTimelineImpl({
     sync();
     if (typeof ResizeObserver !== "undefined") {
       const observer = new ResizeObserver(sync);
+      messageLayerMaskObserverRef.current = observer;
       observer.observe(scrollElement);
       observer.observe(messageLayer);
-      return () => observer.disconnect();
+      return () => {
+        observer.disconnect();
+        if (messageLayerMaskObserverRef.current === observer)
+          messageLayerMaskObserverRef.current = null;
+      };
     }
 
     window.addEventListener("resize", sync);
@@ -996,8 +1037,83 @@ function ConversationTimelineImpl({
     if (!contentColumn || typeof ResizeObserver === "undefined") return;
 
     stableContentWidthRef.current = contentColumn.clientWidth;
+    let observedViewportHeight = scrollRef.current?.clientHeight ?? 0;
+    let observeContentFrame: number | null = null;
+    let disposed = false;
     const observer = new ResizeObserver(() => {
       const nextWidth = contentColumn.clientWidth;
+      const element = scrollRef.current;
+      if (!element) return;
+      const viewportHeightChanged = observedViewportHeight !== element.clientHeight;
+      observedViewportHeight = element.clientHeight;
+      if (nextWidth === stableContentWidthRef.current && !viewportHeightChanged) return;
+      markLayoutScrollGuard();
+      commitFollowing(
+        reconcileFollowingForContentAnchor({
+          following: followingRef.current,
+          metrics: {
+            scrollTop: element.scrollTop,
+            viewportHeight: element.clientHeight,
+            contentHeight: element.scrollHeight,
+          },
+          lastObservedScrollTop: lastObservedScrollTopRef.current,
+          userScrollIntent: getActiveUserScrollIntent(),
+        }),
+      );
+      if (followingRef.current) {
+        if (contentWidthResizeSettleTimerRef.current !== null) {
+          window.clearTimeout(contentWidthResizeSettleTimerRef.current);
+          contentWidthResizeSettleTimerRef.current = null;
+        }
+        // 本批次统一提交布局与吸底，其间其他内容 effect 不得按中间高度吸底。
+        observer.unobserve(contentColumn);
+        const messageLayer = messageLayerRef.current;
+        const maskObserver = messageLayerMaskObserverRef.current;
+        // 同步占位高度也会改变父消息层的高度；其蒙层观察器需要一起暂停，
+        // 否则在更深层的 RO 通知中改变父层，会产生 undelivered notifications。
+        if (messageLayer) maskObserver?.unobserve(messageLayer);
+        committingMeasuredLayoutRef.current = true;
+        try {
+          // virtualizer 的 ResizeObserver 默认异步提交 React；先吸底会使用旧占位高度，
+          // 下一帧测高提交后再跳一次。仅在 observer 内批量测高并同步提交，避免跨帧追赶。
+          const measurements = Array.from(
+            contentColumn.querySelectorAll(":scope > [data-index]"),
+            (node) => ({
+              index: Number(node.getAttribute("data-index")),
+              height: measureElement(node, undefined),
+            }),
+          );
+          flushSync(() => {
+            for (const item of measurements) virtualizer.resizeItem(item.index, item.height);
+            // 缓存可能已经更新且没有差量，仍需明确提交，不能依赖空回调冲刷旧任务。
+            commitMeasuredLayout((revision) => revision + 1);
+          });
+        } finally {
+          committingMeasuredLayoutRef.current = false;
+          // 暂停的是本批次会写入高度的观察目标，不推迟测高或吸底。下一帧继续
+          // 观察内容列宽度，以覆盖视口停止后仍在进行的 CSS 宽度过渡。
+          if (observeContentFrame !== null) window.cancelAnimationFrame(observeContentFrame);
+          if (!disposed) {
+            observeContentFrame = window.requestAnimationFrame(() => {
+              observeContentFrame = null;
+              observer.observe(contentColumn);
+              if (
+                messageLayer &&
+                messageLayerRef.current === messageLayer &&
+                messageLayerMaskObserverRef.current === maskObserver
+              )
+                maskObserver?.observe(messageLayer);
+            });
+          }
+        }
+        if (disposed) return;
+        stableContentWidthRef.current = contentColumn.clientWidth;
+        contentWidthResizeActiveRef.current = false;
+        // 同步提交可能触发其他布局处理；用户上滚或定位始终优先。
+        if (followingRef.current && getActiveUserScrollIntent() !== "awayFromBottom")
+          scrollToBottom();
+        return;
+      }
       if (nextWidth === stableContentWidthRef.current) return;
 
       // 宽度变化会让虚拟行分批重新测高；逐行补偿或逐批追底都会
@@ -1016,16 +1132,27 @@ function ConversationTimelineImpl({
       }, CONTENT_WIDTH_RESIZE_SETTLE_MS);
     });
     observer.observe(contentColumn);
+    if (scrollRef.current) observer.observe(scrollRef.current);
 
     return () => {
+      disposed = true;
       observer.disconnect();
+      if (observeContentFrame !== null) window.cancelAnimationFrame(observeContentFrame);
       if (contentWidthResizeSettleTimerRef.current !== null) {
         window.clearTimeout(contentWidthResizeSettleTimerRef.current);
         contentWidthResizeSettleTimerRef.current = null;
       }
       contentWidthResizeActiveRef.current = false;
     };
-  }, [renderUnits.length === 0, scrollToBottom]);
+  }, [
+    commitFollowing,
+    getActiveUserScrollIntent,
+    markLayoutScrollGuard,
+    measureElement,
+    renderUnits.length === 0,
+    scrollToBottom,
+    virtualizer,
+  ]);
 
   useLayoutEffect(() => {
     const element = liveTailRef.current;
@@ -1623,7 +1750,10 @@ function ConversationTimelineImpl({
   // raw projection row 与按 turn 合并后的 render unit 不是同一计量单位；
   // 分开暴露才能让恢复/分页验证不再把可见 unit 误当成持久 row。
   return (
-    <div ref={timelineRootRef} className="relative flex min-h-0 flex-1 flex-col">
+    <div
+      ref={timelineRootRef}
+      className={cn("relative flex min-h-0 flex-1 flex-col", compactForRemoteControl && "min-w-0")}
+    >
       {selectionActions ? (
         <ConversationSelectionTooltip
           rootRef={scrollRef}
@@ -1640,7 +1770,7 @@ function ConversationTimelineImpl({
         capture={captureScrollMemoryBeforeScopeMutation}
         commit={commitCapturedScrollMemory}
       />
-      {/* 分享选择流程无论面板展开还是收起，左 rail 都由分享面板或 reopen 按钮独占，
+      {/* Bugfix：分享选择流程无论面板展开还是收起，左 rail 都由分享面板或 reopen 按钮独占，
           必须隐藏对话轮导航，避免两个绝对定位控件互相覆盖。退出分享选择后自动恢复。 */}
       {hideTurnNavigator ? null : (
         <ConversationTurnNavigator
@@ -1682,6 +1812,7 @@ function ConversationTimelineImpl({
           // 只声明 overflow-y-auto 会让浏览器把横轴计算为 auto，宽内容会把
           // 整条 Conversation 撑出横向滚动；表格和代码块应由各自内部容器滚动。
           "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] [--markdown-table-layout-left-inset:16px] [--markdown-table-layout-right-inset:16px] max-md:[--markdown-table-layout-left-inset:8px] max-md:[--markdown-table-layout-right-inset:8px]",
+          compactForRemoteControl && "min-w-0",
           // Conversation turn map 覆盖 timeline 左侧 48px；表格增强滚动如果仍按
           // 普通 16px 边距借位，会有 32px 落到 turn map 下方，必须把完整占用计入左边界。
           turnNavigatorQueryRowIds.size >= 2 &&
@@ -1699,7 +1830,7 @@ function ConversationTimelineImpl({
             // 输入框的位置不再受下方推荐列表高度影响；
             // 空间不足时顶部可收缩到底线，底部继续随内容自然排布。
             responsiveCenteredEmptyLayout
-              ? // 动态修改原生窗口下限会把内容换行反馈到窗口拖动，产生阻尼；
+              ? // Bugfix 根因：动态修改原生窗口下限会把内容换行反馈到窗口拖动，产生阻尼；
                 // 容器保留固有最小高度，由外层 timeline 统一承接受限高度下的溢出内容。
                 "flex min-h-full flex-col items-center px-4 before:block before:min-h-[52px] before:w-full before:shrink before:basis-[min(29cqh,max(52px,calc(100cqh_-_420px)))] before:content-[''] after:block after:min-h-4 after:w-full after:flex-1 after:content-['']"
               : centeredEmptyLayout
@@ -1726,6 +1857,7 @@ function ConversationTimelineImpl({
             <div
               ref={messageLayerRef}
               data-v4-timeline-message-layer="true"
+              data-sandbox-page-container="true"
               className="relative w-full flex-1 [mask-repeat:no-repeat] [-webkit-mask-repeat:no-repeat]"
             >
               {/*

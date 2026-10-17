@@ -119,7 +119,7 @@ export function WorkspaceEditorButtonGroup({
     });
   };
 
-  if (!selectedEditor) {
+  if (!selectedEditor || remoteTarget?.kind === "server") {
     return null;
   }
 

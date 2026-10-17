@@ -25,8 +25,8 @@ import {
   defaultPublicDnsLookup,
   type DnsLookup,
 } from "./public-egress-policy.js";
-import { readResponseBody } from "./response-body.js";
-import { rawHttpResponse } from "./raw-response.js";
+import { readIncomingResponse } from "../network/incoming-response.js";
+import { readResponseBody, type ResponseLike } from "./response-body.js";
 
 const TRACE_HEADER = "x-zcode-trace-id";
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -165,7 +165,7 @@ function fetchHttpResponse(
   proxyUrl: string | undefined,
   tlsCaCertificates: Buffer | undefined,
   publicDnsLookup: DnsLookup | undefined,
-): Promise<Response> {
+): Promise<ResponseLike & { statusText: string; url?: string }> {
   const useCustomTlsAgent = url.protocol === "https:" && tlsCaCertificates !== undefined;
   if (!proxyUrl && !useCustomTlsAgent && !publicDnsLookup) {
     return fetch(url.toString(), {
@@ -201,10 +201,11 @@ function fetchHttpResponse(
         lookup: proxyUrl ? undefined : lookup,
       },
       (message) => {
+        // 不包成 `Response`：它表示不了 999 之类的状态码，而这里只要状态、头与正文（与原生 fetch 一样原样带回）。
+        // 回调里抛出的东西没人接得住、会打死整个 agent 进程，所以一律转成这一次请求的 reject。
         try {
-          resolve(rawHttpResponse(message, request.method ?? "GET", signal));
+          resolve(readIncomingResponse(message));
         } catch (error) {
-          // 回调里的 Response/header 校验不在 Promise executor 的同步 try 内。
           message.destroy();
           reject(error);
         }

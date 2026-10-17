@@ -720,6 +720,7 @@ function ConversationTurnFlow({
     latestAssistantTextRow: unit.latestAssistantTextRow,
     workspacePath: context.workspacePath,
     workspaceHomePath: context.workspaceHomePath,
+    compactForRemoteControl: context.compactForRemoteControl,
     fileChangesTarget: unit.header?.entityId
       ? { rowId: unit.header.rowId, entityId: unit.header.entityId }
       : null,
@@ -887,6 +888,7 @@ function ConversationBackgroundResultWork({
     latestAssistantTextRow,
     workspacePath: context.workspacePath,
     workspaceHomePath: context.workspaceHomePath,
+    compactForRemoteControl: context.compactForRemoteControl,
     fileChangesTarget: unit.header?.entityId
       ? { rowId: unit.header.rowId, entityId: unit.header.entityId }
       : null,
@@ -959,6 +961,11 @@ function ConversationBackgroundResultWork({
           onOpenRun={openWorkflowRun}
           onOpenArtifact={openWorkflowArtifact}
           pendingQids={workflowPendingQids}
+          // 留白行的三态（docs/dynamic-workflow/transcript-and-notifications.md「The hole row's live state」）：
+          // run 在活投影里就递它的留白表（可能为空 = 已补全 / 没记录），不在场即 undefined → 中性词。
+          holes={
+            workflowRunSummary?.run === undefined ? undefined : (workflowRunSummary.run.holes ?? [])
+          }
         />
       ) : (
         <div className="flex w-full border-b border-[var(--color-border)]/50 pb-2">
@@ -1041,6 +1048,10 @@ function ConversationTurnGroupImpl({
     () => resolveAssistantCopyText(unit),
     [unit.assistantTextRows, unit.assistantWorkRows, unit.latestAssistantTextRow],
   );
+  const assistantFileSummaryText = useMemo(
+    () => unit.assistantTextRows.map((row) => row.text).join("\n\n"),
+    [unit.assistantTextRows],
+  );
   const assistantCopyText = useMemo(
     () =>
       assistantCodeCommentProjectionEnabled && assistantRawCopyText !== undefined
@@ -1080,14 +1091,22 @@ function ConversationTurnGroupImpl({
   const workflowRunByToolCallId = context.workflowRunByToolCallId;
   const workflowRunByRunId = context.workflowRunByRunId;
   const workflowGraphByToolCallId = context.workflowGraphByToolCallId;
+  const workflowFillGraphByRunId = context.workflowFillGraphByRunId;
   const workflowTurnDigests = useMemo(
     () =>
       resolveWorkflowTurnDigests(unit, {
         byToolCallId: workflowRunByToolCallId,
         byRunId: workflowRunByRunId,
         graphByToolCallId: workflowGraphByToolCallId,
+        fillGraphByRunId: workflowFillGraphByRunId,
       }),
-    [unit, workflowGraphByToolCallId, workflowRunByRunId, workflowRunByToolCallId],
+    [
+      unit,
+      workflowFillGraphByRunId,
+      workflowGraphByToolCallId,
+      workflowRunByRunId,
+      workflowRunByToolCallId,
+    ],
   );
   // 完成卡：主代理消化 completed 通知的那一轮，轮尾落卡。
   // 同一条门（轮结束）；联接只认 byRunId——通知轮里没有 CreateWorkflow 行可按 toolCallId 联。
@@ -1138,6 +1157,14 @@ function ConversationTurnGroupImpl({
   // workflow 通知卡开头的轮去掉轮顶 padding：卡片只贴上一轮 pb-5 的常规流内间距。
   const startsWithWorkflowNotificationCard =
     backgroundResultTitle !== undefined && resolveWorkflowNotification(unit) !== undefined;
+  // 同一条规则的另外两个来源：中枢直接启动轮与「配置」的设置轮（docs/dynamic-workflow/presentation.md
+  // 「The run card」）。它们的用户行是写给模型的规范句，conversationTurnRenderUnits 会裁掉，
+  // 卡 / 「已调整设置」那一行于是成了轮内第一个节点。
+  //
+  // Bug 根因：`pt-14` 是给用户气泡留的呼吸，判据却一直是「有没有轮」而不是「有没有气泡」；
+  // 没有气泡时这 56px 叠上一轮的 pb-5，在行上方堆出约 76px 空白（设置轮总落在对话中段，最显眼）。
+  const startsWithoutUserBubble =
+    startsWithWorkflowNotificationCard || unit.workflowLaunch !== undefined;
 
   return (
     <section
@@ -1145,7 +1172,7 @@ function ConversationTurnGroupImpl({
       data-turn-key={unit.key}
       className={cn(
         "relative mx-auto flex w-full flex-col gap-5 px-4 @md/conversation:px-6 pb-5",
-        startsWithWorkflowNotificationCard ? "pt-0" : "pt-14",
+        startsWithoutUserBubble ? "pt-0" : "pt-14",
       )}
     >
       {unit.leadingBoundaryRows.map((row) => (
@@ -1221,11 +1248,15 @@ function ConversationTurnGroupImpl({
             digests={workflowTurnDigests}
             turnKey={unit.key}
           />
-          {/* CronCreate/CronUpdate 工具本身仍按普通工具行展示；成功卡片属于整轮
+          {/* 修复原因：CronCreate/CronUpdate 工具本身仍按普通工具行展示；成功卡片属于整轮
               完成后的结果摘要，必须等回复结束再跟随最终 assistant 正文收尾。 */}
           <CronAutomationTurnCards cards={cronAutomationTurnCards} context={context} />
           {unit.header?.fileChanges ? (
-            <ConversationFileSummaryPanel header={unit.header} context={context} />
+            <ConversationFileSummaryPanel
+              header={unit.header}
+              context={context}
+              assistantText={assistantFileSummaryText}
+            />
           ) : null}
           {unit.browserTurnEndRows.length > 0 ? (
             // 自动截图表达轮次结束时页面最终状态；放在 assistant work 内会
@@ -1244,6 +1275,7 @@ function ConversationTurnGroupImpl({
               entityId={latestAssistantTextRow.entityId}
               text={assistantCopyText}
               createdAt={latestAssistantTextRow.createdAt}
+              compactForRemoteControl={context.compactForRemoteControl}
               feedback={readAssistantFeedback(latestAssistantTextRow)}
               sessionId={context.sessionId}
               onFork={canForkLatestAssistant ? onFork : undefined}
@@ -1251,10 +1283,20 @@ function ConversationTurnGroupImpl({
               onFeedbackChange={onFeedbackChange}
               hookInvocations={unit.hookInvocations}
               turnId={unit.turnId}
-              className="opacity-0 transition-opacity group-hover/assistant-turn:opacity-100 focus-within:opacity-100"
+              className={cn(
+                context.compactForRemoteControl
+                  ? "opacity-100"
+                  : "opacity-0 transition-opacity group-hover/assistant-turn:opacity-100 focus-within:opacity-100",
+              )}
             />
           ) : hasHookActions ? (
-            <MessageActions className="opacity-0 transition-opacity group-hover/assistant-turn:opacity-100 focus-within:opacity-100">
+            <MessageActions
+              className={cn(
+                context.compactForRemoteControl
+                  ? "opacity-100"
+                  : "opacity-0 transition-opacity group-hover/assistant-turn:opacity-100 focus-within:opacity-100",
+              )}
+            >
               <ConversationHookDetailsAction rows={unit.hookInvocations} turnId={unit.turnId} />
             </MessageActions>
           ) : null}

@@ -33,7 +33,7 @@ export const THEME_MODES: Array<{
 ];
 
 // [leo] 与 iOS 设置页对齐的四组信息架构，见 docs/specs/leo-settings-ia.md。
-type SettingsSectionGroupId = "providers" | "agent" | "devices" | "general";
+export type SettingsSectionGroupId = "providers" | "agent" | "devices" | "general";
 
 interface SettingsSectionDefinition {
   id: SettingsSectionId;
@@ -230,7 +230,7 @@ export const SETTINGS_SECTIONS = BASE_SETTINGS_SECTIONS.filter(
     section.id !== "computerUse" && section.id !== "phone" && isSettingsSectionEnabled(section.id),
 );
 
-interface SettingsPageConfigOptions {
+export interface SettingsPageConfigOptions {
   isDesktop?: boolean;
   isMacDesktop?: boolean;
   isWindowsDesktop?: boolean;

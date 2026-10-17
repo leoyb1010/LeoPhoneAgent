@@ -147,7 +147,7 @@ function toast(message: string, options?: ToastOptions): number {
 }
 
 /** 创建表单的预填草稿(来自「More ideas」模板)。 */
-interface AutomationDraft {
+export interface AutomationDraft {
   templateId?: string;
   title: string;
   cronExpr: string;
@@ -166,7 +166,7 @@ type AutomationsTab = "scheduled";
 const SCHEDULED_ONLY_AUTOMATION_TABS: readonly AutomationsTab[] = ["scheduled"];
 const NO_AUTOMATION_TABS: readonly AutomationsTab[] = [];
 
-function resolveAutomationTabNavigation({
+export function resolveAutomationTabNavigation({
   requestedTab,
   tabsReady,
   visibleTabs,
@@ -198,15 +198,17 @@ function automationPromptSummary(prompt: string): string {
   return normalized.length > 0 ? normalized : " ";
 }
 
-function canRestartAutomation(automation: Pick<ZCodeAutomation, "lifecycleStatus">): boolean {
+export function canRestartAutomation(
+  automation: Pick<ZCodeAutomation, "lifecycleStatus">,
+): boolean {
   return automation.lifecycleStatus === "failed";
 }
 
-function canToggleAutomation(automation: Pick<ZCodeAutomation, "lifecycleStatus">): boolean {
+export function canToggleAutomation(automation: Pick<ZCodeAutomation, "lifecycleStatus">): boolean {
   return automation.lifecycleStatus !== "completed" && automation.lifecycleStatus !== "failed";
 }
 
-function getAutomationRunNowToastId(
+export function getAutomationRunNowToastId(
   result: AutomationRunNowResult,
 ): "automations.runNowQueued" | "automations.runNowAlreadyRunning" | "automations.runNowFailed" {
   if (result === "queued") return "automations.runNowQueued";
@@ -214,20 +216,20 @@ function getAutomationRunNowToastId(
   return "automations.runNowFailed";
 }
 
-type AutomationActionError = "create" | "update" | "toggle" | "restart" | "delete";
+export type AutomationActionError = "create" | "update" | "toggle" | "restart" | "delete";
 
 /** 原始 Agent/RPC 错误留在 logger；界面只展示当前动作对应的可理解提示。 */
-function getAutomationActionErrorToastId(action: AutomationActionError): string {
+export function getAutomationActionErrorToastId(action: AutomationActionError): string {
   return `automations.error.${action}`;
 }
 
-function getAutomationCreateErrorToastId(error: unknown): string {
+export function getAutomationCreateErrorToastId(error: unknown): string {
   return isAutomationCreateLimitError(error)
     ? "automations.error.createLimit"
     : getAutomationActionErrorToastId("create");
 }
 
-function resolveAutomationDetailTarget(
+export function resolveAutomationDetailTarget(
   automations: readonly ZCodeAutomation[],
   automationId?: string | null,
 ): ZCodeAutomation | null {
@@ -236,7 +238,7 @@ function resolveAutomationDetailTarget(
   return automations.find((automation) => automation.automationId === targetId) ?? null;
 }
 
-function resolveAutomationDetailNavigation(
+export function resolveAutomationDetailNavigation(
   automations: readonly ZCodeAutomation[],
   automationId: string | null | undefined,
   listReady: boolean,
@@ -929,9 +931,9 @@ export function AutomationsSection({
          有任务时右上对齐创建（4866-1735）；空态创建入口在大卡内（4889-2013），不重复顶栏按钮。 */}
       {visibleTabs.length > 0 ? (
         <div className="mt-8 flex items-center justify-between">
-          {/* tab 曾与右侧操作组共用 12px 间距，未体现最新设计要求的 8px 紧凑节奏。*/}
+          {/* 修复原因：tab 曾与右侧操作组共用 12px 间距，未体现最新设计要求的 8px 紧凑节奏。 */}
           <div className="flex items-center gap-2" data-testid={TID_OFFPEAK_TAB}>
-            {/* 未选中态不强制显示 surface 背景，以便与 hover、选中态形成层级。*/}
+            {/* 修复原因：未选中态旧实现强制显示 surface 背景，无法与 hover、选中态形成层级。 */}
             {visibleTabs.map((key) => (
               <button
                 key={key}
@@ -1245,7 +1247,7 @@ export function AutomationsSection({
               )}
             </div>
 
-            {/* 空态保持唤醒提示条位于大空卡之后。 */}
+            {/* Figma 4798:2443：空态保持唤醒提示条位于大空卡之后。 */}
             {!hasAnyTasks ? (
               <AutomationKeepAwakeNotice
                 checked={sharedSettings?.keepAwakeWhileRunning ?? false}
@@ -1258,7 +1260,7 @@ export function AutomationsSection({
             ) : null}
           </div>
 
-          {/* 真实任务卡与模板不能只靠空白分区：需要分割线；
+          {/* 修复原因：真实任务卡与模板此前只靠空白分区，遗漏了 Figma 4835:5515 的分割线；
              分割线使用 surface 在 Light 下过淡，因此与 Card 统一使用 card-border。
              外层 gap-8 加本容器 py-2，使卡片到线、线到模板标题均保持 40px。 */}
           {showTaskTemplateSeparator ? (
@@ -1314,7 +1316,7 @@ export function AutomationsSection({
                             {resolveAutomationTemplateText(template.title, locale)}
                           </span>
                         </div>
-                        {/* 定时模板首次实现时把周期时间拼进标题行，和闲时模板的底部时间层级不一致。 */}
+                        {/* Bug 原因：定时模板首次实现时把周期时间拼进标题行，和闲时模板的底部时间层级不一致。 */}
                         <p className="line-clamp-2 flex-1 text-ui-base font-normal leading-5 text-foreground-subtle">
                           {resolveAutomationTemplateText(template.description, locale)}
                         </p>

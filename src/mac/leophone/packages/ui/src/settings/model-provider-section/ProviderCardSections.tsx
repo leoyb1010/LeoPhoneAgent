@@ -51,6 +51,7 @@ import { PresetProviderApiKeyBanner } from "./PresetProviderApiKeyBanner.js";
 import { type ProviderModelDraftValues } from "@/settings/model-provider-section/ProviderModelMetadata.js";
 import { ProviderModelMetadataDialog } from "@/settings/model-provider-section/ProviderModelMetadataDialog.js";
 import {
+  PROVIDER_CONNECTION_API_FORMATS,
   ProviderApiFormatSelect,
   resolveProviderConnectionApiFormatDisplayLabel,
 } from "@/settings/model-provider-section/ProviderApiFormatSelect.js";
@@ -61,13 +62,19 @@ import { ProviderModelDiscoveryDialog } from "@/settings/model-provider-section/
 import { useProviderModelDiscovery } from "@/hooks/useProviderModelDiscovery.js";
 import type { ProviderConfigObject } from "@zcode/provider";
 
-export { formatModelContextWindowLabel } from "@/lib/tokenNumberFormat.js";
 export {
   resolveProviderConnectionApiFormatDisplayLabel,
   resolveProviderConnectionApiFormatOptions,
 } from "@/settings/model-provider-section/ProviderApiFormatSelect.js";
+export { formatModelContextWindowLabel } from "@/lib/tokenNumberFormat.js";
 
-function shouldShowProviderApiFormat(
+export function resolveProviderApiFormatOptions(
+  _provider: Pick<ProviderSettingsFormProvider, "config" | "models">,
+): ProviderApiType[] {
+  return [...PROVIDER_CONNECTION_API_FORMATS];
+}
+
+export function shouldShowProviderApiFormat(
   _provider: Pick<ProviderSettingsFormProvider, "providerId">,
 ): boolean {
   return true;
