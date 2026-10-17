@@ -159,6 +159,7 @@ const originalZaiBusinessBaseUrl = process.env["ZAI_BUSINESS_BASE_URL"];
 const originalZaiOAuthClientId = process.env["ZAI_OAUTH_CLIENT_ID"];
 const originalDesktopApplicationName = process.env["ZCODE_DESKTOP_APPLICATION_NAME"];
 const originalDesktopHomeDir = process.env["ZCODE_DESKTOP_HOME_DIR"];
+const originalZCodeHome = process.env["ZCODE_HOME"];
 const originalDesktopUserDataDir = process.env["ZCODE_DESKTOP_USER_DATA_DIR"];
 const originalDesktopSessionDataDir = process.env["ZCODE_DESKTOP_SESSION_DATA_DIR"];
 const originalDesktopUseElectronDefaultUserData =
@@ -233,6 +234,9 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
     delete process.env["NODE_NO_WARNINGS"];
     delete process.env["NODE_ENV"];
     delete process.env["ZCODE_RUNTIME_ENV"];
+    // [leo] 测试 HOME 隔离（scripts/test-isolation/home.mjs）全局设了 ZCODE_HOME；这些用例验证的是
+    // 「未显式设置时按 HOME 推导」，每个用例只用自己的 HOME。
+    delete process.env["ZCODE_HOME"];
     deleteAmbientHostEnv();
     delete process.env["GLM_BINARY_PATH"];
     delete process.env["ZCODE_BASE_URL"];
@@ -244,6 +248,7 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
 
   afterAll(() => {
     restoreEnvValue("NODE_NO_WARNINGS", originalNodeNoWarnings);
+    restoreEnvValue("ZCODE_HOME", originalZCodeHome);
     restoreEnvValue("ZCODE_DYNAMIC_WORKFLOW_MODE", originalDynamicWorkflowMode);
     productFlavorMock.value = "preview";
     restoreEnvValue("NODE_ENV", originalNodeEnv);

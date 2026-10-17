@@ -81,7 +81,9 @@ export default defineConfig({
     },
   },
   test: {
-    setupFiles: ["./vitest.setup.ts"],
+    // [leo] 先做测试 HOME 隔离 + 真实用户数据写入守卫（scripts/test-isolation/home.mjs），再跑原有 setup。
+    globalSetup: ["./scripts/test-isolation/vitest-global-setup.mjs"],
+    setupFiles: ["./scripts/test-isolation/home.mjs", "./vitest.setup.ts"],
     // 修复原因：全量 run 的 stdout 会把**通过**测试里的 console 输出一并转发——services 层
     // 用 createServiceLogger 的用例在绿态下也要刷几千行多行日志，全量输出因此膨胀到
     // ~3.3MB，超过 CI/工作流门禁对单条命令 256KB 的 stdout 上限，导致门禁整条命令被判
