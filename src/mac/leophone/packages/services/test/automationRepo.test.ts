@@ -237,7 +237,8 @@ describe("AutomationRepo 调度状态机", () => {
     await expect(repo.get(created.automationId)).resolves.toBeDefined();
   });
 
-  it("Bot 创建来源只在内部读取接口持久化，不泄露到 automation 展示模型", async () => {
+  // [leo] 机器人回推（botDeliveryTarget）在 Mac 1.9.0 删除
+  it.skip("Bot 创建来源只在内部读取接口持久化，不泄露到 automation 展示模型", async () => {
     const botDeliveryTarget = {
       provider: "feishu" as const,
       botId: "bot-feishu",
@@ -262,7 +263,8 @@ describe("AutomationRepo 调度状态机", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("Bot 回推目标脏数据按未配置处理，不能拖垮定时任务列表", async () => {
+  // [leo] 机器人回推（botDeliveryTarget）在 Mac 1.9.0 删除
+  it.skip("Bot 回推目标脏数据按未配置处理，不能拖垮定时任务列表", async () => {
     const created = await repo.create(makeParams(), { nextRunAt: NOW + MINUTE });
     repo.close();
     const db = new DatabaseSync(dbPath);

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 describe("services package entry boundaries", () => {
-  it("keeps conversation-share runtime implementations out of the browser-safe root entry", async () => {
+  // [leo] 会话分享模块在 Mac 1.9.0 删除
+  it.skip("keeps conversation-share runtime implementations out of the browser-safe root entry", async () => {
     const browserSafeEntry = await import("@zcode/services");
 
     expect(browserSafeEntry.IConversationShareService).toBeDefined();
@@ -10,7 +11,8 @@ describe("services package entry boundaries", () => {
     expect(browserSafeEntry).not.toHaveProperty("ConversationShareHttpClient");
   });
 
-  it("exposes conversation-share runtime implementations from the node entry", async () => {
+  // [leo] 会话分享模块在 Mac 1.9.0 删除
+  it.skip("exposes conversation-share runtime implementations from the node entry", async () => {
     const nodeEntry = await import("@zcode/services/node");
 
     expect(nodeEntry.ConversationShareService).toBeDefined();

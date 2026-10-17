@@ -625,8 +625,8 @@ async function seedLegacyAcpSessionId(
 }
 
 describe("ZCode legacy task compat task index", () => {
-  it.each([undefined, "ssh://host/repo"])(
-    "waits for an in-flight topic admission before confirming cancellation (%s)",
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip.each([undefined, "ssh://host/repo"])("waits for an in-flight topic admission before confirming cancellation (%s)",
     async (workspaceIdentity) => {
       const { service, agent } = createService();
       const task = await service.createTask({
@@ -671,7 +671,8 @@ describe("ZCode legacy task compat task index", () => {
     },
   );
 
-  it("does not admit an uploaded topic input after cancellation", async () => {
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip("does not admit an uploaded topic input after cancellation", async () => {
     const { service, agent } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     let finish!: () => void;
@@ -712,7 +713,8 @@ describe("ZCode legacy task compat task index", () => {
     expect(agent.sendConversationCommandV4).not.toHaveBeenCalled();
   });
 
-  it("uploads Bot attachments and admits input on the same trusted connection", async () => {
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip("uploads Bot attachments and admits input on the same trusted connection", async () => {
     const { service, agent } = createService();
     const task = await service.createTask({
       workspacePath: "/repo",
@@ -785,7 +787,8 @@ describe("ZCode legacy task compat task index", () => {
     expect(new Set(connections).size).toBe(1);
   });
 
-  it("keeps trusted remote session routing on group admission and rejects a foreign workspace before IO", async () => {
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip("keeps trusted remote session routing on group admission and rejects a foreign workspace before IO", async () => {
     const { service, agent } = createService();
     const task = await service.createTask({
       workspacePath: "/repo",
@@ -2907,7 +2910,8 @@ describe("ZCode legacy task compat task index", () => {
     );
   });
 
-  it("requires authoritative identity before stopping a running topic", async () => {
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip("requires authoritative identity before stopping a running topic", async () => {
     const { service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     const target = { taskId: task.taskId, workspacePath: "/repo" };
@@ -2937,7 +2941,8 @@ describe("ZCode legacy task compat task index", () => {
     await expect(service.readBotTopicExecution!(target)).rejects.toThrow("identity is unavailable");
   });
 
-  it("routes topic stop through the same workspace and waits for its execution to end", async () => {
+  // [leo] 机器人群聊（话题输入 / 群任务）不随包
+  it.skip("routes topic stop through the same workspace and waits for its execution to end", async () => {
     const { agent, service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     let finish!: () => void;
