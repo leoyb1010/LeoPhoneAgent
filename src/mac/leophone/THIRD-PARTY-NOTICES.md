@@ -782,6 +782,12 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - @xterm/addon-fit@0.10.0 — MIT
 
+- @xterm/addon-search@0.15.0 — MIT
+
+- @xterm/addon-unicode11@0.8.0 — MIT
+
+- @xterm/addon-webgl@0.18.0 — MIT
+
 - @xterm/xterm@5.5.0 — MIT
 
 - @xyflow/react@12.10.2 — MIT
