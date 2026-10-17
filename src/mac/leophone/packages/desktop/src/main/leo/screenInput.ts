@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { app, Menu, nativeImage, shell, systemPreferences, Tray } from "electron";
 
+import { hideControlHud, showControlHud } from "./screenControlHud.js";
 import { parseInputEvent } from "./screenInputCore.js";
 import {
   closeAllScreenPeers,
@@ -84,12 +85,17 @@ export function startScreenInput(logger: Logger): void {
         { label: "立即断开(或连按三次 Esc)", click: () => disconnect("tray") },
       ]),
     );
-    logger.info(`[leo-input] controlled indicator shown at ${JSON.stringify(tray.getBounds())}`);
+    // 红点可能被收进菜单栏溢出区:再加一个悬浮条,两者同时显示。
+    showControlHud(() => disconnect("hud"));
+    logger.info(
+      `[leo-input] controlled indicator shown, tray at ${JSON.stringify(tray.getBounds())}`,
+    );
   };
 
   const hideTray = () => {
     if (tray && !tray.isDestroyed()) tray.destroy();
     tray = null;
+    hideControlHud();
   };
 
   const stopHelper = () => {
@@ -114,6 +120,9 @@ export function startScreenInput(logger: Logger): void {
     // 开发验证:事件只投给指定进程(测试窗口),不进系统事件流。打包版不认这个变量。
     const testPid = !app.isPackaged ? process.env["LEO_INPUT_TEST_PID"]?.trim() : undefined;
     if (testPid && /^\d+$/.test(testPid)) args.push("--target-pid", testPid);
+    // 开发验证全局鼠标路径:每个事件发出前确认该位置最前面的窗口属于测试进程,否则助手立即退出。
+    const frontPid = !app.isPackaged ? process.env["LEO_INPUT_TEST_FRONT_PID"]?.trim() : undefined;
+    if (!testPid && frontPid && /^\d+$/.test(frontPid)) args.push("--require-front-pid", frontPid);
     const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
     helper = child;
     helperSession = sessionId;
@@ -133,6 +142,7 @@ export function startScreenInput(logger: Logger): void {
           continue;
         }
         if (message.type === "local_escape") disconnect("escape x3");
+        else if (message.type === "error") logger.warn(`[leo-input] ${line}`);
         else if (message.type === "ready" || message.type === "accessibility") {
           const granted = message.accessibility ?? message.granted ?? false;
           logger.info(`[leo-input] helper ${message.type}, accessibility=${granted}`);
