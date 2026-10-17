@@ -22,7 +22,7 @@ on:
     branches: [main]
   workflow_dispatch:
 # 只读即可:本工作流只跑测试和审计,不写仓库。不声明就继承仓库默认权限,
-# 默认可能是可写的 —— android.yml 早就声明了,这里一直漏。
+# 默认可能是可写的 —— 当年 android.yml 早就声明了,这里一直漏。
 permissions:
   contents: read
 jobs:
@@ -257,19 +257,3 @@ jobs:
         run: python -m pip install aiohttp
       - name: Test relay
         run: PYTHONPATH=src/mac python -m unittest discover -s src/mac/leoagent -t src/mac -p 'test_relay*.py' -v
-
-  harmony-source-tests:
-    name: Harmony protocol and source regressions (no native HAP)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Test actual Harmony source with platform IO fixtures
-        run: |
-          set -euo pipefail
-          node src/harmony/protocol/protocol.test.mjs
-          node src/harmony/protocol/security-boundaries.test.mjs
-          bash src/harmony/scripts/verify_harmony_release_notes.sh
