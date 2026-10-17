@@ -1,6 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProviderEndpointRoutingPort } from "@zcode/contracts";
 import { createStaticProviderEndpointRoutingPort } from "../src/model/official-coding-plan-gateway.js";
 import { createProviderEndpointRoutingFetch } from "../src/model/provider-endpoint-routing-fetch.js";
 
@@ -10,20 +11,32 @@ const TARGET_PATH = "/api/v1/ultra/anthropic/v1/messages";
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** 公共 fetch wrapper 的传输语义用固定路由端口验证（静态端口在 LeoBot 里恒不路由）。 */
+function createFixtureRoutingPort(origin: string): ProviderEndpointRoutingPort {
+  return {
+    async resolve(requestUrl) {
+      const parsed = new URL(requestUrl);
+      if (parsed.origin !== new URL(SOURCE).origin) return { routed: false, url: requestUrl };
+      return { routed: true, url: `${origin}${TARGET_PATH}${parsed.search}` };
+    },
+  };
+}
+
 describe("static provider endpoint routing", () => {
   it.each([
     [SOURCE, TARGET_PATH],
     ["https://OPEN.BIGMODEL.CN:443/api/anthropic/v1/messages/", TARGET_PATH],
     ["https://api.z.ai/api/anthropic/v1/messages", "/api/v1/ultra-zai/anthropic/v1/messages"],
-  ])("routes %s with query preserved and no configuration IO", async (source, target) => {
+  ])("[leo] never routes %s to the official gateway and does no configuration IO", async (source, _target) => {
+    // [leo] LeoBot 永不把官方 Coding Plan 端点改写到官方网关（official-coding-plan-gateway.ts）。
     const network = vi.fn(() => {
       throw new Error("unexpected configuration request");
     });
     vi.stubGlobal("fetch", network);
     const port = createStaticProviderEndpointRoutingPort(ORIGIN);
     await expect(port.resolve(`${source}?id=a%2Bb&empty=`)).resolves.toEqual({
-      routed: true,
-      url: `${ORIGIN}${target}?id=a%2Bb&empty=`,
+      routed: false,
+      url: `${source}?id=a%2Bb&empty=`,
     });
     expect(network).not.toHaveBeenCalled();
   });
@@ -59,7 +72,7 @@ describe("static provider endpoint routing", () => {
     const response = new Response("data: first\n\ndata: second\n\n", { status: 200 });
     let sent: Request | undefined;
     const transport = createProviderEndpointRoutingFetch({
-      routingPort: createStaticProviderEndpointRoutingPort(ORIGIN),
+      routingPort: createFixtureRoutingPort(ORIGIN),
       fetch: async (input, options) => {
         sent = new Request(input, options);
         return response;
@@ -102,7 +115,7 @@ describe("static provider endpoint routing", () => {
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       const fetch = createProviderEndpointRoutingFetch({
-        routingPort: createStaticProviderEndpointRoutingPort(origin),
+        routingPort: createFixtureRoutingPort(origin),
         fetch: globalThis.fetch,
       });
       const response = await fetch(`${SOURCE}?stream=true`, {

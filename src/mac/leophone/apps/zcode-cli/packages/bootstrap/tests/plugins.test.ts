@@ -238,7 +238,8 @@ describe("ZCode plugins", () => {
     ).toEqual([OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS.at(-1)]);
   });
 
-  it("can disable one document plugin without disabling the other formats or search", async () => {
+  // [leo] 文档四件套与 image-search 不随包（official-plugin-definitions.ts），本用例不适用。
+  it.skip("can disable one document plugin without disabling the other formats or search", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-document-toggle-"));
     try {
       const userConfigPath = join(root, "config.json");
